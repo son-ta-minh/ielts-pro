@@ -1,10 +1,11 @@
 
 import React, { useRef, useState } from 'react';
-import { Download, Upload, Trash2, FileSpreadsheet, FileJson, AlertCircle, CheckCircle2, Loader2, Database, Settings2, Copy, Terminal } from 'lucide-react';
+import { Download, Upload, Trash2, FileSpreadsheet, FileJson, AlertCircle, CheckCircle2, Loader2, Database, Settings2, CloudDownload, Globe } from 'lucide-react';
 import { VocabularyItem } from '../types';
 import { getAllWordsForExport, bulkSaveWithMerge, deleteWordFromDB } from '../services/db';
 import { createNewWord, resetProgress } from '../utils/srs';
 import { generateBatchWordDetails } from '../services/geminiService';
+import { REMOTE_VOCAB_URL } from '../data/user_data';
 
 interface Props {
   userId: string;
@@ -18,7 +19,7 @@ const SettingsView: React.FC<Props> = ({ userId, onRefresh }) => {
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
   
-  const [importingType, setImportingType] = useState<'CSV' | 'JSON' | null>(null);
+  const [importingType, setImportingType] = useState<'CSV' | 'JSON' | 'CLOUD' | null>(null);
   const [useAIForImport, setUseAIForImport] = useState(true);
   const [includeProgressOnExport, setIncludeProgressOnExport] = useState(true);
   const [applyProgressOnImport, setApplyProgressOnImport] = useState(true);
@@ -53,6 +54,38 @@ const SettingsView: React.FC<Props> = ({ userId, onRefresh }) => {
     }
     if (currentRow.length > 0 || currentField !== '') { currentRow.push(currentField.trim()); rows.push(currentRow); }
     return rows;
+  };
+
+  const handleCloudSync = async () => {
+    if (!REMOTE_VOCAB_URL) {
+      setImportStatus({ type: 'error', message: "No Cloud URL configured", detail: "Please set REMOTE_VOCAB_URL in user_data.ts" });
+      return;
+    }
+
+    setImportingType('CLOUD');
+    setImportStatus(null);
+    
+    try {
+      const response = await fetch(REMOTE_VOCAB_URL);
+      if (!response.ok) throw new Error("Could not fetch from GitHub");
+      
+      const remoteWords = await response.json();
+      if (!Array.isArray(remoteWords)) throw new Error("Invalid JSON from Cloud");
+
+      const itemsToMerge = remoteWords.map(w => ({ ...w, userId }));
+      const stats = await bulkSaveWithMerge(itemsToMerge);
+
+      setImportStatus({ 
+        type: 'success', 
+        message: `Cloud Sync Complete`, 
+        detail: `${stats.merged} items updated/added from your GitHub repository.` 
+      });
+      await onRefresh();
+    } catch (err: any) {
+      setImportStatus({ type: 'error', message: "Cloud Sync Failed", detail: err.message });
+    } finally {
+      setImportingType(null);
+    }
   };
 
   const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,43 +217,6 @@ const SettingsView: React.FC<Props> = ({ userId, onRefresh }) => {
     URL.revokeObjectURL(url);
   };
 
-  const handleCopyToClipboard = async () => {
-    try {
-      setImportStatus(null);
-      const data = await getAllWordsForExport(userId);
-      const cleanData = data.map(w => ({
-        ...w,
-        nextReview: Date.now(),
-        interval: 0,
-        easeFactor: 2.5,
-        consecutiveCorrect: 0,
-        forgotCount: 0,
-        lastReview: undefined
-      }));
-
-      const json = JSON.stringify(cleanData, null, 2);
-      
-      // Fallback check for clipboard API
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(json);
-        setImportStatus({ 
-          type: 'info', 
-          message: "Data copied to clipboard!", 
-          detail: "Paste this JSON to the AI chat to save it as the permanent default seed data." 
-        });
-      } else {
-        throw new Error("Clipboard API not available or restricted.");
-      }
-    } catch (err: any) {
-      console.error("Clipboard Copy Failed:", err);
-      setImportStatus({ 
-        type: 'error', 
-        message: "Copy Restricted", 
-        detail: "The browser blocked clipboard access. Please use 'EXPORT JSON' instead." 
-      });
-    }
-  };
-
   return (
     <div className="max-w-3xl mx-auto space-y-10 pb-20">
       <header>
@@ -235,9 +231,7 @@ const SettingsView: React.FC<Props> = ({ userId, onRefresh }) => {
           'bg-red-50 border-red-100 text-red-700'
         }`}>
           <div className="flex items-start space-x-4">
-            {importStatus.type === 'success' ? <CheckCircle2 size={24} /> : 
-             importStatus.type === 'info' ? <Terminal size={24} /> : 
-             <AlertCircle size={24} />}
+            {importStatus.type === 'success' ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
             <div>
               <div className="font-black text-lg">{importStatus.message}</div>
               {importStatus.detail && <div className="text-sm opacity-80 mt-1 font-medium">{importStatus.detail}</div>}
@@ -267,36 +261,30 @@ const SettingsView: React.FC<Props> = ({ userId, onRefresh }) => {
         </div>
       )}
 
-      {/* Developer Sync Section */}
-      <section className="bg-neutral-900 p-8 rounded-[2.5rem] border border-neutral-800 shadow-2xl space-y-6">
+      {/* Cloud Sync Hub */}
+      <section className="bg-gradient-to-br from-indigo-600 to-indigo-900 p-8 rounded-[2.5rem] text-white shadow-xl shadow-indigo-200/50 space-y-6">
         <div className="flex items-center space-x-4">
-          <div className="p-3 bg-white/10 text-white rounded-2xl">
-            <Terminal size={24} />
+          <div className="p-3 bg-white/10 rounded-2xl">
+            <Globe size={24} />
           </div>
           <div>
-            <h3 className="text-xl font-black text-white">Developer Sync</h3>
-            <p className="text-xs text-neutral-400 font-medium">Save your data permanently into the app source code.</p>
+            <h3 className="text-xl font-black tracking-tight">Cloud Content Delivery</h3>
+            <p className="text-xs text-indigo-100/70 font-medium">Automatic updates from your remote GitHub repository.</p>
           </div>
         </div>
         
-        <div className="bg-white/5 p-6 rounded-3xl space-y-4">
-          <p className="text-sm text-neutral-300 leading-relaxed">
-            I can't see your browser's local memory. To make your uploaded data the permanent default for this app:
-          </p>
-          <ol className="text-xs text-neutral-400 space-y-2 list-decimal list-inside">
-            <li>Upload your data via CSV or manual entry.</li>
-            <li>Click the button below to copy the JSON representation.</li>
-            <li>Paste that JSON into our chat and ask me to "save it as seed data".</li>
-          </ol>
-          
-          <button 
-            onClick={handleCopyToClipboard}
-            className="w-full mt-2 py-4 bg-white text-neutral-900 rounded-2xl font-black flex items-center justify-center space-x-2 hover:bg-neutral-200 transition-all active:scale-95 shadow-xl"
-          >
-            <Copy size={18} />
-            <span>Copy Current Data for AI</span>
-          </button>
+        <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-[10px] font-mono leading-relaxed overflow-x-auto">
+          <span className="text-indigo-300">Target URL:</span> {REMOTE_VOCAB_URL || "NOT CONFIGURED"}
         </div>
+
+        <button 
+          onClick={handleCloudSync}
+          disabled={!!importingType || !REMOTE_VOCAB_URL}
+          className="w-full py-4 bg-white text-indigo-900 rounded-2xl font-black flex items-center justify-center space-x-3 hover:bg-indigo-50 transition-all active:scale-[0.98] disabled:opacity-50 shadow-lg"
+        >
+          {importingType === 'CLOUD' ? <Loader2 className="animate-spin" /> : <CloudDownload size={20} />}
+          <span>PULL LATEST FROM GITHUB</span>
+        </button>
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -307,8 +295,8 @@ const SettingsView: React.FC<Props> = ({ userId, onRefresh }) => {
               <FileJson size={24} />
             </div>
             <div>
-              <h3 className="text-xl font-black text-neutral-900">Backup & Migration</h3>
-              <p className="text-xs text-neutral-400">Transfer data between devices (JSON).</p>
+              <h3 className="text-xl font-black text-neutral-900">Manual Backup</h3>
+              <p className="text-xs text-neutral-400">Transfer data via local file.</p>
             </div>
           </div>
 
@@ -410,7 +398,7 @@ const SettingsView: React.FC<Props> = ({ userId, onRefresh }) => {
         </div>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <p className="text-sm text-red-600/70 font-medium max-w-md">
-            Wipe all vocabulary data and user profiles from this device. This action is irreversible unless you have a JSON backup.
+            Wipe all vocabulary data and user profiles from this device.
           </p>
           <button 
             onClick={async () => {

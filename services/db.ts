@@ -1,6 +1,6 @@
 
 import { VocabularyItem, User } from '../types';
-import { initialVocabulary, DEFAULT_USER_ID } from '../data/user_data';
+import { initialVocabulary, DEFAULT_USER_ID, REMOTE_VOCAB_URL, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 
 const DB_NAME = 'IELTSVocabProDB_V2';
 const STORE_NAME = 'vocabulary';
@@ -32,24 +32,78 @@ export const initDB = (): Promise<IDBDatabase> => {
   });
 };
 
-// Seeding logic
+/**
+ * Khởi tạo dữ liệu thông minh.
+ * Hỗ trợ data.json dạng Array hoặc Object có key 'vocabulary'.
+ */
 export const seedDatabaseIfEmpty = async (): Promise<User | null> => {
   const users = await getAllUsers();
-  if (users.length > 0) return null;
+  
+  let targetUser: User;
+  if (users.length === 0) {
+    targetUser = {
+      id: DEFAULT_USER_ID,
+      name: "IELTS Master",
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Master`,
+      lastLogin: Date.now()
+    };
+    await saveUser(targetUser);
+  } else {
+    return null;
+  }
 
-  const defaultUser: User = {
-    id: DEFAULT_USER_ID,
-    name: "IELTS Master",
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Master`,
-    lastLogin: Date.now()
+  let vocabToSeed: VocabularyItem[] = [];
+
+  const extractVocab = (json: any): VocabularyItem[] => {
+    if (Array.isArray(json)) return json;
+    if (json && Array.isArray(json.vocabulary)) return json.vocabulary;
+    return [];
   };
 
-  await saveUser(defaultUser);
-  await bulkSaveWords(initialVocabulary);
-  return defaultUser;
+  // 1. Thử tải file data.json nội bộ
+  try {
+    console.log("Fetching shipped data from:", LOCAL_SHIPPED_DATA_PATH);
+    const localResponse = await fetch(LOCAL_SHIPPED_DATA_PATH);
+    if (localResponse.ok) {
+      const json = await localResponse.json();
+      vocabToSeed = extractVocab(json);
+      if (vocabToSeed.length > 0) {
+        console.log(`Successfully extracted ${vocabToSeed.length} words from local data.json`);
+      }
+    }
+  } catch (e) {
+    console.log("No local data.json found or format error.");
+  }
+
+  // 2. Thử remote nếu local trống
+  if (vocabToSeed.length === 0 && REMOTE_VOCAB_URL) {
+    try {
+      const remoteResponse = await fetch(REMOTE_VOCAB_URL);
+      if (remoteResponse.ok) {
+        const json = await remoteResponse.json();
+        vocabToSeed = extractVocab(json);
+      }
+    } catch (e) {
+      console.warn("Remote fetch failed.");
+    }
+  }
+
+  // 3. Fallback
+  if (vocabToSeed.length === 0) {
+    vocabToSeed = initialVocabulary;
+  }
+
+  const finalVocab = vocabToSeed.map(item => ({
+    ...item,
+    userId: DEFAULT_USER_ID,
+    nextReview: item.nextReview || Date.now()
+  }));
+
+  await bulkSaveWords(finalVocab);
+  return targetUser;
 };
 
-// User Operations
+// Các hàm khác giữ nguyên...
 export const getAllUsers = async (): Promise<User[]> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -71,7 +125,6 @@ export const saveUser = async (user: User): Promise<void> => {
   });
 };
 
-// Word Operations (Filtered by userId)
 export const getWordCount = async (userId: string): Promise<number> => {
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -96,7 +149,6 @@ export const getDueWords = async (userId: string, limit: number = 30): Promise<V
 
     request.onsuccess = () => {
       let results = (request.result as VocabularyItem[]).filter(w => w.userId === userId);
-      // Shuffle results
       for (let i = results.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [results[i], results[j]] = [results[j], results[i]];
@@ -160,7 +212,6 @@ export const getPronunciationFocusWords = async (userId: string): Promise<Vocabu
     const index = store.index('userId');
     const request = index.getAll(IDBKeyRange.only(userId));
     request.onsuccess = () => {
-      // Strict filtering: ONLY words with needsPronunciationFocus set to true
       const results = (request.result as VocabularyItem[]).filter(w => w.needsPronunciationFocus === true);
       resolve(results);
     };
