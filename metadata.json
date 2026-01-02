@@ -1,0 +1,7 @@
+{
+  "name": "IELTS Pro",
+  "description": "A serious, minimal vocabulary review tool for IELTS learners featuring spaced repetition logic and automated IPA/example generation.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
