@@ -1,105 +1,171 @@
-import { VocabularyItem, User, Unit, ReviewGrade } from './types';
+import { VocabularyItem, User, Unit, ReviewGrade, WordQuality, ParaphraseLog, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
+import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
 const DB_NAME = 'IELTSVocabProDB_V2';
 const STORE_NAME = 'vocabulary';
 const USER_STORE = 'users';
-const UNIT_STORE = 'units'; // New unit store
-const DB_VERSION = 5; 
+const UNIT_STORE = 'units';
+const LOG_STORE = 'paraphrase_logs';
+const SPEAKING_LOG_STORE = 'speaking_logs';
+const SPEAKING_TOPIC_STORE = 'speaking_topics';
+const WRITING_LOG_STORE = 'writing_logs';
+const WRITING_TOPIC_STORE = 'writing_topics';
+const DB_VERSION = 10; 
+
+let _dbInstance: IDBDatabase | null = null;
+let _dbPromise: Promise<IDBDatabase> | null = null;
 
 const openDB = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
+  if (_dbInstance) {
+    return Promise.resolve(_dbInstance);
+  }
+  if (_dbPromise) {
+    return _dbPromise;
+  }
+
+  _dbPromise = new Promise((resolve, reject) => {
     try {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
-        const transaction = (event.target as IDBOpenDBRequest).transaction;
-
-        if (!db || !transaction) {
-          console.error("Database or transaction not available during onupgradeneeded");
-          if(transaction) transaction.abort();
+        
+        if (!db) {
+          console.error("Database not available during onupgradeneeded");
           return;
         }
 
         if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-          store.createIndex('userId', 'userId', { unique: false });
-          store.createIndex('nextReview', 'nextReview', { unique: false });
+          const vocabStore = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          vocabStore.createIndex('userId', 'userId', { unique: false });
+          vocabStore.createIndex('nextReview', 'nextReview', { unique: false });
+          vocabStore.createIndex('userId_word', ['userId', 'word'], { unique: false });
         }
+        
         if (!db.objectStoreNames.contains(USER_STORE)) {
           db.createObjectStore(USER_STORE, { keyPath: 'id' });
         }
         
-        if (event.oldVersion < 5) {
-          if (!db.objectStoreNames.contains(UNIT_STORE)) {
-            const unitStore = db.createObjectStore(UNIT_STORE, { keyPath: 'id' });
-            unitStore.createIndex('userId', 'userId', { unique: false });
+        if (!db.objectStoreNames.contains(UNIT_STORE)) {
+          const unitStore = db.createObjectStore(UNIT_STORE, { keyPath: 'id' });
+          unitStore.createIndex('userId', 'userId', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains(LOG_STORE)) {
+          const logStore = db.createObjectStore(LOG_STORE, { keyPath: 'id' });
+          logStore.createIndex('userId', 'userId', { unique: false });
+          logStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
+        
+        if (!db.objectStoreNames.contains(SPEAKING_LOG_STORE)) {
+          const speakingLogStore = db.createObjectStore(SPEAKING_LOG_STORE, { keyPath: 'id' });
+          speakingLogStore.createIndex('userId', 'userId', { unique: false });
+          speakingLogStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
+
+        if (event.oldVersion < 9) {
+          if (!db.objectStoreNames.contains(SPEAKING_TOPIC_STORE)) {
+            const topicStore = db.createObjectStore(SPEAKING_TOPIC_STORE, { keyPath: 'id' });
+            topicStore.createIndex('userId', 'userId', { unique: false });
           }
         }
+        
+        if (event.oldVersion < 10) {
+            if (!db.objectStoreNames.contains(WRITING_TOPIC_STORE)) {
+                const topicStore = db.createObjectStore(WRITING_TOPIC_STORE, { keyPath: 'id' });
+                topicStore.createIndex('userId', 'userId', { unique: false });
+            }
+            if (!db.objectStoreNames.contains(WRITING_LOG_STORE)) {
+                const logStore = db.createObjectStore(WRITING_LOG_STORE, { keyPath: 'id' });
+                logStore.createIndex('userId', 'userId', { unique: false });
+                logStore.createIndex('timestamp', 'timestamp', { unique: false });
+            }
+        }
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = (event) => {
-        console.error("IndexedDB error:", (event.target as IDBOpenDBRequest).error);
-        reject((event.target as IDBOpenDBRequest).error);
+      request.onsuccess = () => {
+        _dbInstance = request.result;
+        _dbInstance.onclose = () => { _dbInstance = null; _dbPromise = null; };
+        _dbInstance.onversionchange = () => { _dbInstance?.close(); _dbInstance = null; _dbPromise = null; window.location.reload(); };
+        resolve(_dbInstance);
       };
-    } catch (e) {
-      reject(e);
-    }
+      request.onerror = (event) => { _dbPromise = null; reject((event.target as IDBOpenDBRequest).error); };
+    } catch (e) { _dbPromise = null; reject(e); }
   });
+
+  return _dbPromise;
 };
 
 export const clearVocabularyOnly = async (): Promise<void> => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction([STORE_NAME, UNIT_STORE], 'readwrite'); // Clear units as well
-    const vocabStore = tx.objectStore(STORE_NAME);
-    const unitStore = tx.objectStore(UNIT_STORE);
-    
-    vocabStore.clear();
-    unitStore.clear();
-    
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
+    const stores: string[] = [STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE];
+    const tx = db.transaction(stores, 'readwrite');
+    stores.forEach(s => tx.objectStore(s).clear());
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 };
 
 export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User | null> => {
   if (!force && sessionStorage.getItem('ielts_pro_skip_seed') === 'true') return null;
   
-  const users = await getAllUsers();
   const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readonly');
-  const countReq = tx.objectStore(STORE_NAME).count();
+  const usersTx = db.transaction(USER_STORE, 'readonly');
+  const existingUsers = await new Promise<User[]>((resolve, reject) => {
+      const req = usersTx.objectStore(USER_STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+  });
+
+  const vocabTx = db.transaction(STORE_NAME, 'readonly');
+  const countReq = vocabTx.objectStore(STORE_NAME).count();
   
   const hasData = await new Promise<boolean>((resolve) => {
     countReq.onsuccess = () => resolve(countReq.result > 0);
     countReq.onerror = () => resolve(false);
   });
-  db.close();
-
-  if (!force && hasData) return null;
+  
+  if (!force && hasData) {
+    return null;
+  }
 
   let targetUser: User;
-  if (users.length === 0) {
+  if (existingUsers.length === 0) {
     targetUser = {
       id: DEFAULT_USER_ID,
-      name: "IELTS Master",
+      name: "Vocab Master",
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Master`,
       lastLogin: Date.now(),
-      role: "IELTS Candidate",
-      currentLevel: "Band 6.0",
-      target: "Band 7.5+"
+      role: "Language Learner",
+      currentLevel: "Intermediate",
+      target: "Advanced Fluency",
+      experience: 0,
+      level: 1,
+      adventure: {
+        unlockedChapterIds: ADVENTURE_CHAPTERS.map(c => c.id),
+        completedSegmentIds: [],
+        segmentStars: {},
+        badges: [],
+        keys: 1,
+        keyFragments: 0
+      }
     };
     await saveUser(targetUser);
   } else {
-    targetUser = users[0];
+    targetUser = existingUsers[0];
+    if (targetUser.experience === undefined) targetUser.experience = 0;
+    if (targetUser.level === undefined) targetUser.level = 1;
+    if (targetUser.adventure === undefined) {
+        targetUser.adventure = {
+            unlockedChapterIds: ADVENTURE_CHAPTERS.map(c => c.id),
+            completedSegmentIds: [],
+            segmentStars: {},
+            badges: [],
+            keys: 1,
+            keyFragments: 0
+        };
+    }
+    await saveUser(targetUser); 
   }
 
   let vocabToSeed: VocabularyItem[] = [];
@@ -109,13 +175,16 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
       const json = await localResponse.json();
       vocabToSeed = Array.isArray(json) ? json : (json.vocabulary || []);
     }
-  } catch (e) {}
+  } catch (e) { console.error("Failed to fetch local seed data:", e); }
 
   if (vocabToSeed.length === 0) vocabToSeed = initialVocabulary;
   const finalVocab = vocabToSeed.map(item => ({
     ...item,
     userId: targetUser.id,
-    nextReview: item.nextReview || Date.now()
+    nextReview: item.nextReview || Date.now(),
+    lastXpEarnedTime: item.lastXpEarnedTime || undefined, 
+    quality: item.quality || WordQuality.VERIFIED,
+    source: 'app' as WordSource
   }));
 
   await bulkSaveWords(finalVocab);
@@ -124,11 +193,11 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
 
 export const getAllUsers = async (): Promise<User[]> => {
   const db = await openDB();
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const tx = db.transaction(USER_STORE, 'readonly');
     const req = tx.objectStore(USER_STORE).getAll();
-    req.onsuccess = () => { db.close(); resolve(req.result || []); };
-    req.onerror = () => { db.close(); resolve([]); };
+    req.onsuccess = () => { resolve(req.result || []); };
+    req.onerror = () => { reject(req.error); };
   });
 };
 
@@ -137,540 +206,270 @@ export const saveUser = async (user: User): Promise<void> => {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(USER_STORE, 'readwrite');
     tx.objectStore(USER_STORE).put(user);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.oncomplete = () => { resolve(); };
+    tx.onerror = () => { reject(tx.error); };
   });
 };
 
 export const findWordByText = async (userId: string, wordText: string): Promise<VocabularyItem | null> => {
   const db = await openDB();
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const index = tx.objectStore(STORE_NAME).index('userId');
-    const req = index.openCursor(IDBKeyRange.only(userId));
-    const target = wordText.toLowerCase().trim();
-    req.onsuccess = (event) => {
-      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-      if (cursor) {
-        if (cursor.value.word.toLowerCase().trim() === target) {
-          db.close();
-          resolve(cursor.value);
-        } else cursor.continue();
-      } else { db.close(); resolve(null); }
+    const store = tx.objectStore(STORE_NAME);
+    const target = wordText.trim(); 
+    
+    const resolveImmediately = (result: VocabularyItem | null) => resolve(result);
+
+    const useCursorFallback = (currentDb: IDBDatabase, currentUserId: string, currentTarget: string) => {
+        const fallbackTx = currentDb.transaction(STORE_NAME, 'readonly');
+        const index = fallbackTx.objectStore(STORE_NAME).index('userId');
+        const req = index.openCursor(IDBKeyRange.only(currentUserId));
+        const targetLower = currentTarget.toLowerCase();
+        
+        req.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+          if (cursor) { if (cursor.value.word.toLowerCase().trim() === targetLower) resolveImmediately(cursor.value); else cursor.continue(); } 
+          else { resolveImmediately(null); }
+        };
+        req.onerror = () => resolveImmediately(null);
     };
-    req.onerror = () => { db.close(); resolve(null); };
+
+    if (store.indexNames.contains('userId_word')) {
+        const index = store.index('userId_word');
+        const req = index.get([userId, target]); 
+        req.onsuccess = () => { if (req.result) resolveImmediately(req.result); else useCursorFallback(db, userId, target); };
+        req.onerror = () => useCursorFallback(db, userId, target);
+    } else { useCursorFallback(db, userId, target); }
   });
 };
 
-export const getWordCount = async (
-    userId: string, 
-    query: string = '', 
-    filterType: string = 'all', 
-    refinedFilter: 'all' | 'refined' | 'not_refined' = 'all',
-    statusFilter: string = 'all'
-): Promise<number> => {
+const GENERIC_DISTRACTORS = [ "To express an idea or feeling", "A state of great comfort and luxury", "Happening or developing gradually", "To influence or change someone or something", "A formal meeting for discussion", "Necessary for a particular purpose", "The ability to do something well", "A careful and detailed study of something", "To make something new or original", ];
+
+export const getRandomMeanings = async (userId: string, count: number, excludeId: string): Promise<string[]> => {
   const db = await openDB();
   return new Promise((resolve) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const index = tx.objectStore(STORE_NAME).index('userId');
-    const req = index.openCursor(IDBKeyRange.only(userId));
-    let count = 0;
-    const lowerQuery = query.toLowerCase().trim();
-    req.onsuccess = (event) => {
-      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-      if (cursor) {
-        const item = cursor.value;
+    const req = index.getAll(IDBKeyRange.only(userId));
 
-        if (filterType !== 'archive' && item.isPassive) {
-            cursor.continue();
-            return;
-        }
-
-        const matchesQuery = !lowerQuery || item.word.toLowerCase().includes(lowerQuery) || item.meaningVi.toLowerCase().includes(lowerQuery);
-        
-        let matchesType = true;
-        if (filterType === 'idiom') matchesType = !!item.isIdiom;
-        else if (filterType === 'phrasal') matchesType = !!item.isPhrasalVerb;
-        else if (filterType === 'colloc') matchesType = !!item.isCollocation;
-        else if (filterType === 'phrase') matchesType = !!item.isStandardPhrase;
-        else if (filterType === 'pronun') matchesType = !!item.needsPronunciationFocus;
-        else if (filterType === 'preposition') matchesType = item.prepositions && item.prepositions.length > 0 && !item.isPhrasalVerb;
-        else if (filterType === 'vocab') matchesType = !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase;
-        else if (filterType === 'archive') matchesType = !!item.isPassive;
-
-        let matchesRefined = true;
-        if (refinedFilter !== 'all') {
-            const isEssentiallyFull = !!(item.meaningVi && item.ipa && item.example);
-            if (refinedFilter === 'refined') matchesRefined = isEssentiallyFull;
-            else matchesRefined = !isEssentiallyFull;
-        }
-
-        let matchesStatus = true;
-        if (statusFilter !== 'all') {
-            if (statusFilter === 'new') matchesStatus = !item.lastReview;
-            else if (statusFilter === 'forgot') matchesStatus = !!item.lastReview && item.lastGrade === ReviewGrade.FORGOT;
-            else if (statusFilter === 'hard') matchesStatus = !!item.lastReview && item.lastGrade === ReviewGrade.HARD;
-            else if (statusFilter === 'easy') matchesStatus = !!item.lastReview && item.lastGrade === ReviewGrade.EASY;
-        }
-
-        if (matchesQuery && matchesType && matchesRefined && matchesStatus) count++;
-        cursor.continue();
-      } else { db.close(); resolve(count); }
+    req.onsuccess = () => {
+      const allItems = req.result as VocabularyItem[];
+      const potential = allItems.filter(i => i.id !== excludeId && i.quality === WordQuality.VERIFIED && i.meaningVi && i.meaningVi.trim().length > 0 && i.meaningVi.length < 150).map(i => i.meaningVi);
+      const shuffled = [...potential].sort(() => Math.random() - 0.5);
+      let finalMeanings = shuffled.slice(0, count);
+      if (finalMeanings.length < count) {
+          const needed = count - finalMeanings.length;
+          const shuffledGenerics = [...GENERIC_DISTRACTORS].sort(() => Math.random() - 0.5);
+          for (let i = 0; i < needed; i++) {
+              const genericToAdd = shuffledGenerics[i % shuffledGenerics.length];
+              if (!finalMeanings.includes(genericToAdd)) finalMeanings.push(genericToAdd);
+          }
+      }
+      resolve([...finalMeanings].sort(() => Math.random() - 0.5));
     };
-    req.onerror = () => { db.close(); resolve(0); };
+    req.onerror = () => { resolve([...GENERIC_DISTRACTORS].sort(() => Math.random() - 0.5).slice(0, count)); }; 
   });
 };
 
+export const filterItem = (item: VocabularyItem, query: string, filterTypes: string[], refinedFilter: string, statusFilter: string, registerFilter: string, sourceFilter: string = 'all') => {
+    const lowerQuery = query.toLowerCase().trim();
+    if (lowerQuery && !(item.word.toLowerCase().includes(lowerQuery) || item.meaningVi.toLowerCase().includes(lowerQuery))) return false;
+    if (item.isPassive && !filterTypes.includes('archive')) return false;
+
+    if (refinedFilter !== 'all') {
+        if ((refinedFilter === 'refined' && item.quality !== WordQuality.REFINED) ||
+            (refinedFilter === 'verified' && item.quality !== WordQuality.VERIFIED) ||
+            (refinedFilter === 'failed' && item.quality !== WordQuality.FAILED) ||
+            (refinedFilter === 'raw' && item.quality !== WordQuality.RAW) ||
+            (refinedFilter === 'not_refined' && item.quality !== WordQuality.RAW)) return false;
+    }
+    if (statusFilter !== 'all') {
+        const isNew = !item.lastReview;
+        const isLearned = !!item.lastReview && item.consecutiveCorrect === 1 && item.lastGrade !== ReviewGrade.FORGOT;
+        const isEasy = !!item.lastReview && item.consecutiveCorrect > 1 && item.lastGrade === ReviewGrade.EASY;
+        const isHard = !!item.lastReview && item.consecutiveCorrect > 1 && item.lastGrade === ReviewGrade.HARD;
+        const isForgot = !!item.lastReview && item.lastGrade === ReviewGrade.FORGOT;
+        if ((statusFilter === 'new' && !isNew) || (statusFilter === 'learned' && !isLearned) || (statusFilter === 'easy' && !isEasy) || (statusFilter === 'hard' && !isHard) || (statusFilter === 'forgot' && !isForgot)) return false;
+    }
+    if (registerFilter !== 'all' && (item.register || 'raw') !== registerFilter) return false;
+    if (sourceFilter !== 'all' && (item.source || 'raw') !== sourceFilter) return false;
+
+    const isAll = filterTypes.includes('all') || filterTypes.length === 0;
+    if (isAll) return !item.isPassive; 
+    for (const type of filterTypes) {
+        if ((type === 'archive' && item.isPassive) || (type === 'idiom' && item.isIdiom) || (type === 'phrasal' && item.isPhrasalVerb) || (type === 'colloc' && item.isCollocation) || (type === 'phrase' && item.isStandardPhrase) || (type === 'pronun' && item.needsPronunciationFocus) || (type === 'preposition' && item.prepositions && item.prepositions.length > 0 && !item.isPhrasalVerb) || (type === 'vocab' && !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase)) return true;
+    }
+    return false;
+};
+
+// --- CRUD for VocabularyItem and related ---
+export const getReviewCounts = async (userId: string): Promise<{ total: number, due: number, newWords: number, learned: number }> => {
+  const db = await openDB();
+  const now = Date.now();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
+    req.onsuccess = () => {
+      const all = (req.result || []) as VocabularyItem[];
+      const active = all.filter(w => !w.isPassive);
+      resolve({ total: active.length, due: active.filter(w => w.lastReview && w.nextReview <= now && w.quality === WordQuality.VERIFIED).length, newWords: active.filter(w => !w.lastReview && w.quality === WordQuality.VERIFIED).length, learned: active.filter(w => !!w.lastReview).length });
+    };
+    req.onerror = () => reject(req.error);
+  });
+};
+
+// FIX: Implement empty function stubs to resolve compilation errors.
+export const getDashboardStats = async (userId: string): Promise<{ categories: Record<string, { total: number; learned: number }>, refinedCount: number } | null> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const index = tx.objectStore(STORE_NAME).index('userId');
+    const req = index.getAll(IDBKeyRange.only(userId));
+
+    req.onsuccess = () => {
+      const activeWords = ((req.result || []) as VocabularyItem[]).filter(w => !w.isPassive);
+      const refinedCount = activeWords.filter(w => w.quality === WordQuality.VERIFIED).length;
+      const categories: Record<string, { total: number; learned: number }> = {
+        'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 },
+        'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 },
+        'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 },
+        'pronun': { total: 0, learned: 0 },
+      };
+
+      activeWords.forEach(w => {
+        const isLearned = !!w.lastReview;
+        const inc = (key: string) => { categories[key].total++; if (isLearned) categories[key].learned++; };
+        if (w.isIdiom) inc('idiom');
+        if (w.isPhrasalVerb) inc('phrasal');
+        if (w.isCollocation) inc('colloc');
+        if (w.isStandardPhrase) inc('phrase');
+        if (w.needsPronunciationFocus) inc('pronun');
+        if (w.prepositions && w.prepositions.length > 0 && !w.isPhrasalVerb) inc('preposition');
+        if (!w.isIdiom && !w.isPhrasalVerb && !w.isCollocation && !w.isStandardPhrase) inc('vocab');
+      });
+      resolve({ categories, refinedCount });
+    };
+    req.onerror = () => reject(req.error);
+  });
+};
+export const getWordsPaged = async (userId: string, page: number, pageSize: number, query: string = '', filterTypes: string[] = ['all'], refinedFilter: 'all' | 'refined' | 'not_refined' = 'all', statusFilter: string = 'all'): Promise<VocabularyItem[]> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const index = tx.objectStore(STORE_NAME).index('userId');
+    const req = index.getAll(IDBKeyRange.only(userId));
+
+    req.onsuccess = () => {
+        const allItems = (req.result || []) as VocabularyItem[];
+        const filtered = allItems.filter(item => filterItem(item, query, filterTypes, refinedFilter, statusFilter, 'all', 'all'));
+        const start = page * pageSize;
+        resolve(filtered.slice(start, start + pageSize));
+    };
+    req.onerror = () => reject(req.error);
+  });
+};
 export const getDueWords = async (userId: string, limit: number = 30): Promise<VocabularyItem[]> => {
   const db = await openDB();
   const now = Date.now();
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const index = tx.objectStore(STORE_NAME).index('nextReview');
-    const req = index.getAll(IDBKeyRange.upperBound(now));
+    const index = tx.objectStore(STORE_NAME).index('userId');
+    const req = index.getAll(IDBKeyRange.only(userId));
+
     req.onsuccess = () => {
-      db.close();
-      const results = (req.result as VocabularyItem[]).filter(w => w.userId === userId && !w.isPassive && w.lastReview);
-      
-      const shuffled = [...results].sort(() => Math.random() - 0.5);
-      
-      resolve(shuffled.slice(0, limit));
+      const allItems = (req.result || []) as VocabularyItem[];
+      const dueWords = allItems
+        .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality === WordQuality.VERIFIED)
+        .sort((a, b) => a.nextReview - b.nextReview)
+        .slice(0, limit);
+      resolve(dueWords);
     };
-    req.onerror = () => { db.close(); resolve([]); };
+    req.onerror = () => reject(req.error);
   });
 };
-
-export const getRegularVocabulary = async (userId: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => {
-      db.close();
-      const results = (req.result as VocabularyItem[]).filter(w => 
-        !w.isIdiom && !w.isPhrasalVerb && !w.isCollocation && !w.isStandardPhrase && !w.isPassive
-      );
-      resolve(results);
-    };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-export const getPrepositionWords = async (userId: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => { db.close(); resolve((req.result as VocabularyItem[]).filter(w => w.prepositions && w.prepositions.length > 0 && !w.isPhrasalVerb && !w.isPassive)); };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-export const getIdioms = async (userId: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => { db.close(); resolve((req.result as VocabularyItem[]).filter(w => !!w.isIdiom && !w.isPassive)); };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-export const getPhrasalVerbs = async (userId: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => { db.close(); resolve((req.result as VocabularyItem[]).filter(w => !!w.isPhrasalVerb && !w.isPassive)); };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-export const getCollocations = async (userId: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => { db.close(); resolve((req.result as VocabularyItem[]).filter(w => !!w.isCollocation && !w.isPassive)); };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-export const getStandardPhrases = async (userId: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => { db.close(); resolve((req.result as VocabularyItem[]).filter(w => !!w.isStandardPhrase && !w.isPassive)); };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-export const getPassiveWords = async (userId: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => { db.close(); resolve((req.result as VocabularyItem[]).filter(w => !!w.isPassive)); };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-export const getPronunciationFocusWords = async (userId: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').openCursor(IDBKeyRange.only(userId));
-    const results: VocabularyItem[] = [];
-    req.onsuccess = (event) => {
-      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-      if (cursor) {
-        if (cursor.value.needsPronunciationFocus && !cursor.value.isPassive) results.push(cursor.value);
-        cursor.continue();
-      } else { db.close(); resolve(results); }
-    };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
 export const getNewWords = async (userId: string, limit: number = 20): Promise<VocabularyItem[]> => {
   const db = await openDB();
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => {
-      db.close();
-      const results = (req.result as VocabularyItem[]).filter(w => !w.lastReview && !w.isPassive);
-      resolve(results.slice(0, limit));
-    };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-export const getWordsPaged = async (
-    userId: string, 
-    page: number, 
-    pageSize: number, 
-    query: string = '', 
-    filterType: string = 'all', 
-    refinedFilter: 'all' | 'refined' | 'not_refined' = 'all',
-    statusFilter: string = 'all'
-): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').openCursor(IDBKeyRange.only(userId));
-    const results: VocabularyItem[] = [];
-    let matchedCount = 0;
-    const skipTo = page * pageSize;
-    const lowerQuery = query.toLowerCase().trim();
-    req.onsuccess = (event) => {
-      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-      if (!cursor) { db.close(); resolve(results); return; }
-      
-      const item = cursor.value;
-      
-      if (filterType !== 'archive' && item.isPassive) {
-          cursor.continue();
-          return;
-      }
-
-      const matchesQuery = !lowerQuery || item.word.toLowerCase().includes(lowerQuery) || item.meaningVi.toLowerCase().includes(lowerQuery);
-      
-      let matchesType = true;
-      if (filterType === 'idiom') matchesType = !!item.isIdiom;
-      else if (filterType === 'phrasal') matchesType = !!item.isPhrasalVerb;
-      else if (filterType === 'colloc') matchesType = !!item.isCollocation;
-      else if (filterType === 'phrase') matchesType = !!item.isStandardPhrase;
-      else if (filterType === 'pronun') matchesType = !!item.needsPronunciationFocus;
-      else if (filterType === 'preposition') matchesType = item.prepositions && item.prepositions.length > 0 && !item.isPhrasalVerb;
-      else if (filterType === 'vocab') matchesType = !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase;
-      else if (filterType === 'archive') matchesType = !!item.isPassive;
-
-      let matchesRefined = true;
-      if (refinedFilter !== 'all') {
-          const isEssentiallyFull = !!(item.meaningVi && item.ipa && item.example);
-          if (refinedFilter === 'refined') matchesRefined = isEssentiallyFull;
-          else matchesRefined = !isEssentiallyFull;
-      }
-
-      let matchesStatus = true;
-      if (statusFilter !== 'all') {
-          if (statusFilter === 'new') matchesStatus = !item.lastReview;
-          else if (statusFilter === 'forgot') matchesStatus = !!item.lastReview && item.lastGrade === ReviewGrade.FORGOT;
-          else if (statusFilter === 'hard') matchesStatus = !!item.lastReview && item.lastGrade === ReviewGrade.HARD;
-          else if (statusFilter === 'easy') matchesStatus = !!item.lastReview && item.lastGrade === ReviewGrade.EASY;
-      }
-
-      if (matchesQuery && matchesType && matchesRefined && matchesStatus) {
-        if (matchedCount >= skipTo && results.length < pageSize) results.push(item);
-        matchedCount++;
-      }
-      
-      if (results.length < pageSize) cursor.continue();
-      else { db.close(); resolve(results); }
-    };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-export const saveWord = async (item: VocabularyItem): Promise<void> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    item.updatedAt = Date.now();
-    tx.objectStore(STORE_NAME).put(item);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  });
-};
-
-export const deleteWordFromDB = async (id: string): Promise<void> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).delete(id);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  });
-};
-
-export const bulkSaveWithMerge = async (incomingItems: VocabularyItem[]): Promise<{ merged: number, skipped: number }> => {
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  const store = tx.objectStore(STORE_NAME);
-  let merged = 0, skipped = 0;
-  return new Promise((resolve) => {
-    const req = store.getAll();
-    req.onsuccess = () => {
-      const localMap = new Map((req.result as VocabularyItem[]).map(i => [i.id, i]));
-      for (const inc of incomingItems) {
-        const loc = localMap.get(inc.id);
-        if (!loc || (inc.updatedAt || 0) > (loc.updatedAt || 0)) {
-          store.put(inc);
-          merged++;
-        } else skipped++;
-      }
-    };
-    tx.oncomplete = () => { db.close(); resolve({ merged, skipped }); };
-  });
-};
-
-export const bulkSaveWords = async (items: VocabularyItem[]): Promise<void> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    items.forEach(i => store.put(i));
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  });
-};
-
-export const getAllWordsForExport = async (userId: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => { db.close(); resolve(req.result || []); };
-    req.onerror = () => { db.close(); resolve([]); };
-  });
-};
-
-// --- TAG MANAGEMENT FUNCTIONS ---
-
-export const renameTagForAllWords = async (userId: string, oldTag: string, newTag: string): Promise<number> => {
-  if (!oldTag || typeof oldTag !== 'string' || !newTag || typeof newTag !== 'string') {
-    console.warn('renameTagForAllWords called with invalid arguments', { oldTag, newTag });
-    return 0;
-  }
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  const store = tx.objectStore(STORE_NAME);
-  const index = store.index('userId');
-  const req = index.openCursor(IDBKeyRange.only(userId));
-  let updatedCount = 0;
-  
-  const oldTagLower = oldTag.toLowerCase().trim();
-  const newTagLower = newTag.toLowerCase().trim();
-
-  return new Promise((resolve) => {
-    req.onsuccess = (event) => {
-      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-      if (cursor) {
-        const item = cursor.value;
-        const tags = item.tags?.map(t => t.toLowerCase().trim()) || []; // Ensure tags are trimmed and lowercased
-        
-        if (tags.includes(oldTagLower)) {
-          const newTags = Array.from(new Set(tags.map(t => t === oldTagLower ? newTagLower : t)));
-          cursor.update({ ...item, tags: newTags });
-          updatedCount++;
-        }
-        cursor.continue();
-      }
-    };
-    tx.oncomplete = () => { db.close(); resolve(updatedCount); };
-    tx.onerror = (event) => {
-      console.error("Error renaming tag in DB:", (event.target as IDBRequest).error);
-      db.close();
-      resolve(updatedCount); // Resolve even on error to not block the UI
-    };
-  });
-};
-
-export const deleteTagForAllWords = async (userId: string, tagToDelete: string): Promise<number> => {
-  if (!tagToDelete || typeof tagToDelete !== 'string') {
-    console.warn('deleteTagForAllWords called with invalid argument', { tagToDelete });
-    return 0;
-  }
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  const store = tx.objectStore(STORE_NAME);
-  const index = store.index('userId');
-  const req = index.openCursor(IDBKeyRange.only(userId));
-  let updatedCount = 0;
-  const tagLower = tagToDelete.toLowerCase();
-
-  return new Promise((resolve) => {
-    req.onsuccess = (event) => {
-      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-      if (cursor) {
-        const item = cursor.value;
-        if (item.tags?.some(t => t.toLowerCase() === tagLower)) {
-          const newTags = item.tags.filter(t => t.toLowerCase() !== tagLower);
-          cursor.update({ ...item, tags: newTags });
-          updatedCount++;
-        }
-        cursor.continue();
-      }
-    };
-    tx.oncomplete = () => { db.close(); resolve(updatedCount); };
-  });
-};
-
-export const addTagToWords = async (wordIds: string[], tag: string): Promise<void> => {
-  const db = await openDB();
-  return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const tagLower = tag.trim().toLowerCase();
-
-      tx.oncomplete = () => { db.close(); resolve(); };
-      tx.onerror = () => { db.close(); reject(tx.error); };
-
-      if (wordIds.length === 0) return;
-
-      let processedCount = 0;
-      wordIds.forEach(id => {
-          const req = store.get(id);
-          req.onsuccess = () => {
-              const item = req.result;
-              if (item) {
-                  const newTags = Array.from(new Set([...(item.tags || []).map(t => t.toLowerCase()), tagLower]));
-                  store.put({ ...item, tags: newTags });
-              }
-              processedCount++;
-          };
-      });
-  });
-};
-
-
-export const removeTagFromWords = async (wordIds: string[], tag: string): Promise<void> => {
-  const db = await openDB();
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const tagLower = tag.trim().toLowerCase();
-
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-    
-    if (wordIds.length === 0) return;
-
-    wordIds.forEach(id => {
-      const req = store.get(id);
-      req.onsuccess = () => {
-        const item = req.result;
-        if (item) {
-          const newTags = (item.tags || []).filter(t => t.toLowerCase() !== tagLower);
-          store.put({ ...item, tags: newTags });
-        }
-      };
-    });
-  });
-};
-
-export const getWordsWithoutTag = async (userId: string, tagToExclude: string, query: string): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  const tx = db.transaction(STORE_NAME, 'readonly');
-  const index = tx.objectStore(STORE_NAME).index('userId');
-  const req = index.openCursor(IDBKeyRange.only(userId));
-  const results: VocabularyItem[] = [];
-  const tagLower = tagToExclude.toLowerCase();
-  const queryLower = query.toLowerCase();
-
-  return new Promise(resolve => {
-    req.onsuccess = (event) => {
-      const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-      if (cursor) {
-        const item = cursor.value;
-        const hasTag = item.tags?.some(t => t.toLowerCase() === tagLower);
-        if (!item.isPassive && !hasTag) {
-          if (!queryLower || item.word.toLowerCase().includes(queryLower) || item.meaningVi.toLowerCase().includes(queryLower)) {
-            results.push(item);
-          }
-        }
-        cursor.continue();
-      } else {
-        db.close();
-        resolve(results);
-      }
-    };
-  });
-};
-
-// --- UNIT (CUSTOM COLLECTION) MANAGEMENT ---
-
-export const saveUnit = async (unit: Unit): Promise<void> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(UNIT_STORE, 'readwrite');
-    unit.updatedAt = Date.now();
-    tx.objectStore(UNIT_STORE).put(unit);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  });
-};
-
-export const deleteUnit = async (id: string): Promise<void> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(UNIT_STORE, 'readwrite');
-    tx.objectStore(UNIT_STORE).delete(id);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  });
-};
-
-export const getUnitsByUserId = async (userId: string): Promise<Unit[]> => {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(UNIT_STORE, 'readonly');
-    const index = tx.objectStore(UNIT_STORE).index('userId');
+    const index = tx.objectStore(STORE_NAME).index('userId');
     const req = index.getAll(IDBKeyRange.only(userId));
-    req.onsuccess = () => { db.close(); resolve(req.result || []); };
-    req.onerror = () => { db.close(); resolve([]); };
+
+    req.onsuccess = () => {
+      const allItems = (req.result || []) as VocabularyItem[];
+      const newWords = allItems
+        .filter(w => !w.isPassive && !w.lastReview && w.quality === WordQuality.VERIFIED)
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .slice(0, limit);
+      resolve(newWords);
+    };
+    req.onerror = () => reject(req.error);
   });
 };
 
-export const bulkSaveUnits = async (items: Unit[]): Promise<void> => {
+const crudTemplate = async <T,>(storeName: string, operation: (store: IDBObjectStore) => IDBRequest, mode: IDBTransactionMode = 'readwrite'): Promise<T> => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(UNIT_STORE, 'readwrite');
-    const store = tx.objectStore(UNIT_STORE);
-    items.forEach(i => store.put(i));
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    const tx = db.transaction(storeName, mode);
+    const req = operation(tx.objectStore(storeName));
+    tx.oncomplete = () => resolve(req.result);
+    tx.onerror = () => reject(tx.error);
   });
 };
+
+export const saveWord = async (item: VocabularyItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(STORE_NAME, store => store.put(item)); };
+export const deleteWordFromDB = async (id: string): Promise<void> => { await crudTemplate(STORE_NAME, store => store.delete(id)); };
+// FIX: Changed to use explicit generic to satisfy TypeScript compiler for void return types.
+export const bulkDeleteWords = async (ids: string[]): Promise<void> => {
+    await crudTemplate<any>(STORE_NAME, store => {
+        ids.forEach(id => store.delete(id));
+        return store.count();
+    });
+};
+// FIX: Changed to use explicit generic to satisfy TypeScript compiler for void return types.
+export const bulkSaveWords = async (items: VocabularyItem[]): Promise<void> => {
+    await crudTemplate<any>(STORE_NAME, store => {
+        items.forEach(i => store.put(i));
+        return store.count();
+    });
+};
+export const getAllWordsForExport = async (userId: string): Promise<VocabularyItem[]> => await crudTemplate(STORE_NAME, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const saveUnit = async (unit: Unit): Promise<void> => { unit.updatedAt = Date.now(); await crudTemplate(UNIT_STORE, store => store.put(unit)); };
+export const deleteUnit = async (id: string): Promise<void> => { await crudTemplate(UNIT_STORE, store => store.delete(id)); };
+export const getUnitsByUserId = async (userId: string): Promise<Unit[]> => await crudTemplate(UNIT_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const getUnitsContainingWord = async (userId: string, wordId: string): Promise<Unit[]> => { const units = await getUnitsByUserId(userId); return units.filter(u => u.wordIds.includes(wordId)); };
+// FIX: Changed to use explicit generic to satisfy TypeScript compiler for void return types.
+export const bulkSaveUnits = async (items: Unit[]): Promise<void> => {
+    await crudTemplate<any>(UNIT_STORE, store => {
+        items.forEach(i => store.put(i));
+        return store.count();
+    });
+};
+export const saveParaphraseLog = async (log: ParaphraseLog): Promise<void> => { await crudTemplate(LOG_STORE, store => store.put(log)); };
+export const getParaphraseLogs = async (userId: string): Promise<ParaphraseLog[]> => { const logs = await crudTemplate<ParaphraseLog[]>(LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
+export const bulkSaveParaphraseLogs = async (items: ParaphraseLog[]): Promise<void> => { await crudTemplate(LOG_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };
+
+// --- Speaking Feature ---
+export const saveSpeakingLog = async (log: SpeakingLog): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, store => store.put(log)); };
+export const getSpeakingLogs = async (userId: string): Promise<SpeakingLog[]> => { const logs = await crudTemplate<SpeakingLog[]>(SPEAKING_LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
+export const deleteSpeakingLog = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, store => store.delete(id)); };
+export const getAllSpeakingLogsForExport = async (userId: string): Promise<SpeakingLog[]> => await crudTemplate(SPEAKING_LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const bulkSaveSpeakingLogs = async (items: SpeakingLog[]): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };
+
+export const saveSpeakingTopic = async (topic: SpeakingTopic): Promise<void> => { topic.updatedAt = Date.now(); await crudTemplate(SPEAKING_TOPIC_STORE, store => store.put(topic)); };
+export const deleteSpeakingTopic = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_TOPIC_STORE, store => store.delete(id)); };
+export const getSpeakingTopicsByUserId = async (userId: string): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const getAllSpeakingTopicsForExport = async (userId: string): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const bulkSaveSpeakingTopics = async (items: SpeakingTopic[]): Promise<void> => { await crudTemplate(SPEAKING_TOPIC_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };
+
+// --- Writing Feature ---
+export const saveWritingLog = async (log: WritingLog): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, store => store.put(log)); };
+export const getWritingLogs = async (userId: string): Promise<WritingLog[]> => { const logs = await crudTemplate<WritingLog[]>(WRITING_LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
+export const deleteWritingLog = async (id: string): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, store => store.delete(id)); };
+export const getAllWritingLogsForExport = async (userId: string): Promise<WritingLog[]> => await crudTemplate(WRITING_LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const bulkSaveWritingLogs = async (items: WritingLog[]): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };
+
+export const saveWritingTopic = async (topic: WritingTopic): Promise<void> => { topic.updatedAt = Date.now(); await crudTemplate(WRITING_TOPIC_STORE, store => store.put(topic)); };
+export const deleteWritingTopic = async (id: string): Promise<void> => { await crudTemplate(WRITING_TOPIC_STORE, store => store.delete(id)); };
+export const getWritingTopicsByUserId = async (userId: string): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const getAllWritingTopicsForExport = async (userId: string): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const bulkSaveWritingTopics = async (items: WritingTopic[]): Promise<void> => { await crudTemplate(WRITING_TOPIC_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };

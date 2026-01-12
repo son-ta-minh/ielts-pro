@@ -1,0 +1,179 @@
+import React, { useState, useEffect, useReducer } from 'react';
+import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, PrepositionPattern } from '../../app/types';
+import { updateSRS, resetProgress } from '../../utils/srs';
+import { getWordDetailsPrompt } from '../../services/promptService';
+import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
+import { EditWordModalUI } from './EditWordModal_UI';
+import { useToast } from '../../contexts/ToastContext';
+
+type FormState = VocabularyItem & {
+    tagsString: string;
+    groupsString: string;
+    v2v3: string;
+    studiedStatus: ReviewGrade | 'NEW';
+    prepositionsList: PrepositionPattern[];
+};
+
+type FormAction =
+    | { type: 'REINITIALIZE', payload: VocabularyItem }
+    | { type: 'SET_FIELD', payload: { field: keyof FormState, value: any } }
+    | { type: 'SET_FLAG', payload: { flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'needsPronunciationFocus' | 'isPassive' } }
+    | { type: 'SET_LIST_ITEM', payload: { list: 'wordFamily' | 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases', data: any } }
+    | { type: 'APPLY_AI_MERGE', payload: any };
+
+function formReducer(state: FormState, action: FormAction): FormState {
+    switch (action.type) {
+        case 'REINITIALIZE':
+            const word = action.payload;
+            return {
+                ...word,
+                register: word.register || 'raw',
+                tagsString: word.tags?.join(', ') || '',
+                groupsString: word.groups?.join(', ') || '',
+                v2v3: [word.v2, word.v3].filter(Boolean).join(', '),
+                studiedStatus: word.lastReview ? (word.lastGrade || 'NEW') : 'NEW',
+                collocationsArray: word.collocationsArray || (word.collocations ? word.collocations.split('\n').map(t => ({text: t.trim(), isIgnored: false})) : []),
+                idiomsList: word.idiomsList || (word.idioms ? word.idioms.split('\n').map(t => ({text: t.trim(), isIgnored: false})) : []),
+                prepositionsList: word.prepositions || [],
+                wordFamily: word.wordFamily || { nouns: [], verbs: [], adjs: [], advs: [] },
+                paraphrases: word.paraphrases || [],
+            };
+        case 'SET_FIELD':
+            return { ...state, [action.payload.field]: action.payload.value };
+        case 'SET_FLAG':
+            const { flag } = action.payload;
+            const newState = { ...state, [flag]: !state[flag] };
+            if (['isIdiom', 'isPhrasalVerb', 'isCollocation', 'isStandardPhrase'].includes(flag)) {
+                if (newState[flag]) {
+                    if (flag !== 'isIdiom') newState.isIdiom = false;
+                    if (flag !== 'isPhrasalVerb') newState.isPhrasalVerb = false;
+                    if (flag !== 'isCollocation') newState.isCollocation = false;
+                    if (flag !== 'isStandardPhrase') newState.isStandardPhrase = false;
+                }
+            }
+            return newState;
+        case 'SET_LIST_ITEM':
+             return { ...state, [action.payload.list]: action.payload.data };
+        case 'APPLY_AI_MERGE':
+            const merged = mergeAiResultIntoWord(state, action.payload);
+            return {
+                ...state,
+                ...merged,
+                register: merged.register,
+                tagsString: merged.tags?.join(', ') || '',
+                v2v3: [merged.v2, merged.v3].filter(Boolean).join(', '),
+                prepositionsList: merged.prepositions || [],
+            };
+        default:
+            return state;
+    }
+}
+
+interface Props {
+  word: VocabularyItem;
+  onSave: (updatedWord: VocabularyItem) => void;
+  onClose: () => void;
+  onSwitchToView: (word: VocabularyItem) => void;
+}
+
+const EditWordModal: React.FC<Props> = ({ word, onSave, onClose, onSwitchToView }) => {
+  const { showToast } = useToast();
+  
+  const [formData, dispatch] = useReducer(formReducer, word, (initialWord) => {
+    return formReducer({} as FormState, { type: 'REINITIALIZE', payload: initialWord });
+  });
+
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+
+  useEffect(() => {
+    dispatch({ type: 'REINITIALIZE', payload: word });
+  }, [word]);
+
+  const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(inputs.words.split(/[,\n]+/).map(w => w.trim()).filter(Boolean), 'Vietnamese');
+  
+  const handleAiResult = (data: any) => {
+      const details = Array.isArray(data) ? data[0] : data;
+      if (details) {
+          dispatch({ type: 'APPLY_AI_MERGE', payload: details });
+          setIsAiModalOpen(false);
+      }
+  };
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if(e) e.preventDefault();
+    const { tagsString, groupsString, v2v3, studiedStatus, collocationsArray, idiomsList, prepositionsList, ...rest } = formData;
+    
+    let finalFamily = rest.wordFamily;
+    if (finalFamily) {
+        const cleanedFamily: any = {}; let hasData = false;
+        (['nouns', 'verbs', 'adjs', 'advs'] as const).forEach(type => { const members = finalFamily[type]?.filter(m => m.word.trim()) || []; if (members.length > 0) { cleanedFamily[type] = members; hasData = true; } });
+        finalFamily = hasData ? cleanedFamily : undefined;
+    }
+    
+    const vParts = v2v3.split(/[,\s]+/).filter(Boolean);
+    
+    let updatedWord: VocabularyItem = { 
+        ...rest, 
+        v2: vParts[0] || '', v3: vParts[1] || '', 
+        wordFamily: finalFamily, 
+        prepositions: prepositionsList.filter(p => p.prep.trim()).length > 0 ? prepositionsList.filter(p => p.prep.trim()) : undefined,
+        collocationsArray: collocationsArray.filter(c => c.text.trim()),
+        collocations: collocationsArray.filter(c => c.text.trim()).map(c => c.text).join('\n'),
+        idiomsList: idiomsList.filter(c => c.text.trim()),
+        idioms: idiomsList.filter(c => c.text.trim()).map(c => c.text).join('\n'),
+        tags: tagsString.split(',').map(t => t.trim()).filter(Boolean), 
+        groups: groupsString.split(',').map(g => g.trim()).filter(Boolean),
+        updatedAt: Date.now() 
+    };
+    
+    if (studiedStatus === 'NEW') updatedWord = resetProgress(updatedWord);
+    else if (studiedStatus !== word.lastGrade) updatedWord = updateSRS(updatedWord, studiedStatus as ReviewGrade);
+    
+    onSave(updatedWord);
+    showToast('Word saved successfully!', 'success');
+  };
+
+  const createListHandler = (list: 'wordFamily' | 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases') => {
+      const currentList = formData[list] as any[] || [];
+      return {
+          update: (index: number, changes: object) => dispatch({ type: 'SET_LIST_ITEM', payload: { list, data: [...currentList].map((item, i) => i === index ? { ...item, ...changes } : item) } }),
+          toggleIgnore: (index: number) => dispatch({ type: 'SET_LIST_ITEM', payload: { list, data: [...currentList].map((item, i) => i === index ? { ...item, isIgnored: !item.isIgnored } : item) } }),
+          remove: (index: number) => dispatch({ type: 'SET_LIST_ITEM', payload: { list, data: currentList.filter((_, i) => i !== index) } }),
+          add: (newItem: object) => dispatch({ type: 'SET_LIST_ITEM', payload: { list, data: [...currentList, newItem] } })
+      };
+  };
+
+  const familyHandler = (type: keyof typeof formData.wordFamily) => {
+      const currentFamily = formData.wordFamily || { nouns: [], verbs: [], adjs: [], advs: [] };
+      const updateFamily = (newFamilyMembers: Partial<typeof currentFamily>) => dispatch({ type: 'SET_LIST_ITEM', payload: { list: 'wordFamily', data: { ...currentFamily, ...newFamilyMembers } } });
+      return {
+          update: (index: number, field: 'word' | 'ipa', value: string) => { const members = [...(currentFamily[type] || [])]; members[index] = { ...members[index], [field]: value }; updateFamily({ [type]: members }); },
+          toggleIgnore: (index: number) => { const members = [...(currentFamily[type] || [])]; members[index] = { ...members[index], isIgnored: !members[index].isIgnored }; updateFamily({ [type]: members }); },
+          remove: (index: number) => { updateFamily({ [type]: (currentFamily[type] || []).filter((_, i) => i !== index) }); },
+          add: () => { const newMember = { word: '', ipa: '', isIgnored: type === 'advs' }; updateFamily({ [type]: [...(currentFamily[type] || []), newMember] }); }
+      };
+  };
+
+  const prepList = createListHandler('prepositionsList');
+  const collocList = createListHandler('collocationsArray');
+  const idiomList = createListHandler('idiomsList');
+  const paraList = createListHandler('paraphrases');
+  
+  return <EditWordModalUI 
+    onClose={onClose}
+    onSwitchToView={() => onSwitchToView(word)}
+    formData={formData}
+    setFormData={(field, value) => dispatch({ type: 'SET_FIELD', payload: { field, value } })}
+    setFlag={(flag) => dispatch({ type: 'SET_FLAG', payload: { flag } })}
+    familyHandler={familyHandler}
+    prepList={prepList}
+    collocList={collocList}
+    idiomList={idiomList}
+    paraList={paraList}
+    handleSubmit={handleSubmit}
+    isAiModalOpen={isAiModalOpen} setIsAiModalOpen={setIsAiModalOpen}
+    onGeneratePrompt={handleGenerateRefinePrompt} onAiResult={handleAiResult}
+  />
+};
+
+export default EditWordModal;

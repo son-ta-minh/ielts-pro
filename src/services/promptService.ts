@@ -1,0 +1,23 @@
+/**
+ * Centralized service for generating AI prompts to ensure consistency.
+ * This file imports and exports all individual prompt functions from the /prompts directory.
+ */
+
+export * from './prompts/getWordDetailsPrompt';
+export * from './prompts/getRefineUnitPrompt';
+export * from './prompts/getParaphraseTaskPrompt';
+export * from './prompts/getParaphraseEvaluationPrompt';
+export * from './prompts/getSpeechGenerationParts';
+export * from './prompts/getGenerateChapterPrompt';
+export * from './prompts/getGenerateSegmentPrompt';
+export * from './prompts/getWordRegisterPrompt';
+export * from './prompts/getWordTypePrompt';
+
+// Speaking feature prompts
+export { getRefineSpeakingTopicPrompt, getTranscriptionForSpeakingPrompt, getFullSpeakingTestPrompt } from './prompts/getSpeakingPart1QuestionsPrompt';
+export { getSpeakingEvaluationFromAudioPrompt, getSpeakingEvaluationFromTextPrompt } from './prompts/getSpeakingEvaluationPrompt';
+
+// Writing feature prompts
+export * from './prompts/getRefineWritingTopicPrompt';
+export * from './prompts/getFullWritingTestPrompt';
+export * from './prompts/getWritingEvaluationPrompt';

@@ -7,6 +7,7 @@
  */
 
 import { generateSpeech } from '../services/geminiService';
+import { getConfig } from '../app/settingsManager';
 
 let voices: SpeechSynthesisVoice[] = [];
 let voicesPromise: Promise<SpeechSynthesisVoice[]> | null = null;
@@ -117,12 +118,13 @@ async function playAiSpeech(text: string) {
 }
 
 // --- Universal `speak` Function ---
-export const speak = async (text: string, preferredVoiceName?: string) => {
+export const speak = async (text: string, preferredVoiceNameOverride?: string) => {
   if (typeof window === 'undefined') return;
 
-  const audioMode = localStorage.getItem('ielts_pro_audio_mode') || 'system';
+  const audioConfig = getConfig().audio;
+  const preferredVoiceName = preferredVoiceNameOverride || audioConfig.preferredSystemVoice;
 
-  if (audioMode === 'ai') {
+  if (audioConfig.mode === 'ai') {
     await playAiSpeech(text);
   } else {
     if (!window.speechSynthesis) return;

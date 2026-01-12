@@ -1,45 +1,12 @@
-import { VocabularyItem, ReviewGrade } from '../app/types';
 
-export interface SrsConfig {
-  initialEasy: number;
-  initialHard: number;
-  easyEasy: number;
-  hardEasy: number;
-  hardHard: number;
-  easyHardPenalty: number;
-  forgotInterval: number;
-}
-
-export const DEFAULT_SRS_CONFIG: SrsConfig = {
-  initialEasy: 4,
-  initialHard: 1,
-  easyEasy: 2.5,
-  hardEasy: 2.0,
-  hardHard: 1.3,
-  easyHardPenalty: 0.5,
-  forgotInterval: 1,
-};
-
-function getSrsConfig(): SrsConfig {
-  try {
-    const storedConfig = localStorage.getItem('ielts_pro_srs_config');
-    if (storedConfig) {
-      const parsed = JSON.parse(storedConfig);
-      // Merge with defaults to ensure all properties are present
-      return { ...DEFAULT_SRS_CONFIG, ...parsed };
-    }
-  } catch (e) {
-    console.error("Failed to parse SRS config from localStorage", e);
-  }
-  return DEFAULT_SRS_CONFIG;
-}
-
+import { VocabularyItem, ReviewGrade, WordQuality, WordSource } from '../app/types';
+import { getConfig } from '../app/settingsManager';
 
 /**
  * Enhanced SRS algorithm based on user-configurable settings.
  */
 export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyItem {
-  const config = getSrsConfig();
+  const config = getConfig().srs;
   const newItem = { ...item };
   const now = Date.now();
   const ONE_DAY = 24 * 60 * 60 * 1000;
@@ -49,7 +16,10 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
 
   const isPostThirdReview = item.consecutiveCorrect >= 3;
 
-  if (grade === ReviewGrade.FORGOT) {
+  if (grade === ReviewGrade.LEARNED) {
+    nextInterval = 1; // First review is always next day.
+    newItem.consecutiveCorrect = 1; // Start the streak.
+  } else if (grade === ReviewGrade.FORGOT) {
     nextInterval = config.forgotInterval;
     newItem.consecutiveCorrect = 0;
     newItem.forgotCount += 1;
@@ -97,7 +67,8 @@ export function resetProgress(item: VocabularyItem): VocabularyItem {
     forgotCount: 0,
     lastGrade: undefined,
     lastReview: undefined,
-    updatedAt: now
+    updatedAt: now,
+    lastXpEarnedTime: undefined, // Reset XP earned time as well
   };
 }
 
@@ -145,7 +116,8 @@ export function createNewWord(
   isPhrasalVerb: boolean = false,
   isCollocation: boolean = false,
   isStandardPhrase: boolean = false,
-  isPassive: boolean = false
+  isPassive: boolean = false,
+  source: WordSource = 'manual'
 ): VocabularyItem {
   const now = Date.now();
   return {
@@ -155,7 +127,7 @@ export function createNewWord(
     ipa: ipa.trim(),
     meaningVi: meaningVi.trim(),
     example: example.trim(),
-    note: note.trim(),
+    note: note, // Do not trim note to preserve user formatting (e.g., newlines).
     tags,
     isIdiom,
     isPhrasalVerb,
@@ -163,6 +135,9 @@ export function createNewWord(
     isStandardPhrase,
     needsPronunciationFocus,
     isPassive,
+    register: 'raw',
+    quality: WordQuality.RAW, // New words start as RAW
+    source,
     isExampleLocked: false,
     createdAt: now,
     updatedAt: now,
@@ -170,7 +145,8 @@ export function createNewWord(
     interval: 0,
     easeFactor: 2.5,
     consecutiveCorrect: 0,
-    forgotCount: 0
+    forgotCount: 0,
+    lastXpEarnedTime: undefined, // Initialize XP earned time
   };
 }
 
@@ -189,7 +165,7 @@ export function cleanNoteIPA(note: string, ipa: string): string {
     }
   }
 
-  return cleanedNote
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Only trim the final result. Do not collapse internal whitespace,
+  // which would destroy user formatting like newlines or multiple spaces.
+  return cleanedNote.trim();
 }
