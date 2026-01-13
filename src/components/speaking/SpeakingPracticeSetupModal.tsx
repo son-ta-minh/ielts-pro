@@ -55,12 +55,11 @@ const SpeakingPracticeSetupModal: React.FC<Props> = ({ topic, onClose, onStart }
     setSelectedIndices(new Set(selected));
   };
   
-  // FIX: Explicitly type the parameters for the sort and map callbacks to `number`
-  // to resolve a TypeScript error where they were being inferred as `unknown`.
   const handleStart = () => {
-    const selectedQuestions = Array.from(selectedIndices)
-      .sort((a: number, b: number) => a - b) // Ensure original order
-      .map((i: number) => topic.questions[i]);
+    // FIX: Cast result of Array.from to number[] to resolve 'unknown' type error when 'i' is used as an index for topic.questions.
+    const selectedQuestions = (Array.from(selectedIndices) as number[])
+      .sort((a, b) => a - b) // Ensure original order
+      .map(i => topic.questions[i]);
     if(selectedQuestions.length > 0) {
       onStart(selectedQuestions);
     }

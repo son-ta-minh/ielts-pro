@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { User, VocabularyItem, AdventureProgress, SessionType } from '../../../../app/types';
 import { AdventureUI } from './Adventure_UI';
 import { BattleMode } from './BattleMode';
-import { AdventureBoss, AdventureSegment, CHAPTER_PROGRESSION, AdventureChapter, AdventureBadge } from '../../../../data/adventure_content';
+// FIX: Removed non-existent 'CHAPTER_PROGRESSION' export.
+import { AdventureBoss, AdventureSegment, AdventureChapter, AdventureBadge } from '../../../../data/adventure_content';
 import { findWordByText, bulkSaveWords, getAllWordsForExport, bulkDeleteWords } from '../../../../app/db';
 import { useToast } from '../../../../contexts/ToastContext';
 import { createNewWord } from '../../../../utils/srs';

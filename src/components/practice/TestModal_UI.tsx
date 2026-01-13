@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { VocabularyItem } from '../../app/types';
-import { Challenge, ChallengeResult, PrepositionQuizChallenge, ChallengeType } from './TestModalTypes';
+import { Challenge, ChallengeResult, PrepositionQuizChallenge, ChallengeType, ParaphraseQuizChallenge, CollocationQuizChallenge } from './TestModalTypes';
 import { TestModalHeader } from './TestModalHeader';
 import { TestModalContent } from './TestModalContent';
 import { TestModalFooter } from './TestModalFooter';
-import { Settings, Play, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Settings, Play, CheckCircle2, AlertCircle, Loader2, Check } from 'lucide-react';
 
 // Re-export types so parent component (TestModal.tsx) doesn't break
 export * from './TestModalTypes';
@@ -56,6 +56,13 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
   handleIgnore, handleFinishEarly, showHint, onToggleHint,
   sessionPosition
 }) => {
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+      if (contentRef.current) {
+          contentRef.current.scrollTop = 0;
+      }
+  }, [currentChallengeIndex, word]);
   
   let content;
 
@@ -82,14 +89,71 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                 <div className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Available Modules</div>
                 {Array.from(new Set(availableChallenges.map(c => c.type))).map((type: ChallengeType) => {
                     const isSelected = selectedChallengeTypes.has(type);
-                    const lastResult = word.lastTestResults?.[type as string];
+                    const history = word.lastTestResults || {};
+                    let lastResult: boolean | undefined;
+
+                    const hasSpecificFailure = (challengeType: ChallengeType, keyBuilder: (c: any) => string[]): boolean => {
+                        const challenges = availableChallenges.filter(c => c.type === challengeType);
+                        for (const c of challenges) {
+                            const keys = keyBuilder(c);
+                            for (const key of keys) {
+                                if (history[key] === false) return true;
+                            }
+                        }
+                        return false;
+                    };
+
+                    const hasAnySpecificTest = (challengeType: ChallengeType, keyBuilder: (c: any) => string[]): boolean => {
+                        const challenges = availableChallenges.filter(c => c.type === challengeType);
+                        for (const c of challenges) {
+                            const keys = keyBuilder(c);
+                            for (const key of keys) {
+                                if (history[key] !== undefined) return true;
+                            }
+                        }
+                        return false;
+                    };
+
+                    switch (type) {
+                        case 'PARAPHRASE_QUIZ':
+                            if (hasSpecificFailure(type, c => [`PARAPHRASE_QUIZ:${(c as ParaphraseQuizChallenge).answer}`])) {
+                                lastResult = false;
+                            } else if (hasAnySpecificTest(type, c => [`PARAPHRASE_QUIZ:${(c as ParaphraseQuizChallenge).answer}`]) || history[type] === true) {
+                                lastResult = true;
+                            } else {
+                                lastResult = history[type];
+                            }
+                            break;
+                        case 'PREPOSITION_QUIZ':
+                            if (hasSpecificFailure(type, c => [`PREPOSITION_QUIZ:${(c as PrepositionQuizChallenge).answer}`])) {
+                                lastResult = false;
+                            } else if (hasAnySpecificTest(type, c => [`PREPOSITION_QUIZ:${(c as PrepositionQuizChallenge).answer}`]) || history[type] === true) {
+                                lastResult = true;
+                            } else {
+                                lastResult = history[type];
+                            }
+                            break;
+                        case 'COLLOCATION_QUIZ':
+                            if (hasSpecificFailure(type, c => (c as CollocationQuizChallenge).collocations.map(co => `COLLOCATION_QUIZ:${co.fullText}`))) {
+                                lastResult = false;
+                            } else if (hasAnySpecificTest(type, c => (c as CollocationQuizChallenge).collocations.map(co => `COLLOCATION_QUIZ:${co.fullText}`)) || history[type] === true) {
+                                lastResult = true;
+                            } else {
+                                lastResult = history[type];
+                            }
+                            break;
+                        default:
+                            lastResult = history[type];
+                    }
+                    
                     const isFail = lastResult === false;
                     const isPass = lastResult === true;
-                    const labelMap: Record<string, string> = { 'SPELLING': 'Spelling', 'IPA_QUIZ': 'Pronunciation', 'PREPOSITION_QUIZ': 'Prepositions', 'WORD_FAMILY': 'Word Family', 'MEANING_QUIZ': 'Meaning', 'PARAPHRASE_QUIZ': 'Word Power Recall', 'SENTENCE_SCRAMBLE': 'Sentence Builder', 'HETERONYM_QUIZ': 'Heteronym Challenge' };
+
+                    const labelMap: Record<string, string> = { 'SPELLING': 'Spelling', 'IPA_QUIZ': 'IPA Check', 'PREPOSITION_QUIZ': 'Prepositions', 'WORD_FAMILY': 'Word Family', 'MEANING_QUIZ': 'Meaning', 'PARAPHRASE_QUIZ': 'Word Power Recall', 'SENTENCE_SCRAMBLE': 'Sentence Builder', 'HETERONYM_QUIZ': 'Heteronym Challenge', 'PRONUNCIATION': 'Speak Out', 'COLLOCATION_QUIZ': 'Collocation Recall' };
                     return (
                         <div key={type} onClick={() => onToggleChallenge(type)} className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer group bg-white ${isSelected ? 'border-neutral-900 shadow-sm' : 'border-neutral-100 hover:border-neutral-200'}`}>
                             <div className="flex flex-col"><span className={`text-sm font-bold ${isFail ? 'text-red-600' : isPass ? 'text-green-600' : 'text-neutral-900'}`}>{labelMap[type as string] || type}</span>{isFail && <span className="text-[9px] font-bold text-red-500 flex items-center gap-1 mt-0.5"><AlertCircle size={10} /> Last: Failed</span>}{isPass && <span className="text-[9px] font-bold text-green-600 flex items-center gap-1 mt-0.5"><CheckCircle2 size={10} /> Last: Passed</span>}{lastResult === undefined && <span className="text-[9px] font-bold text-neutral-400 mt-0.5">Not tested yet</span>}</div>
-                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-neutral-900 border-neutral-900 text-white' : 'bg-white border-neutral-200'}`}>{isSelected && <CheckCircle2 size={14} />}</div>
+                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-neutral-900 border-neutral-900 text-white' : 'bg-white border-neutral-200'}`}>{isSelected && <Check size={14} />}</div>
                         </div>
                     );
                 })}
@@ -111,7 +175,7 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
     content = (
       <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] h-full">
         <TestModalHeader title={currentChallenge.title} type={currentChallenge.type} currentStep={sessionPosition ? sessionPosition.current : currentChallengeIndex + 1} totalSteps={sessionPosition ? sessionPosition.total : challenges.length} onClose={onClose} onFinish={handleFinishEarly} label={sessionPosition ? "Item" : "Challenge"} isQuickFire={!!sessionPosition}/>
-        <div className="flex-1 p-8 overflow-y-auto no-scrollbar">
+        <div ref={contentRef} className="flex-1 p-8 overflow-y-auto no-scrollbar">
             <TestModalContent word={word} currentChallenge={currentChallenge} currentChallengeIndex={currentChallengeIndex} userAnswers={userAnswers} handleAnswerChange={handleAnswerChange} results={results} isFinishing={isFinishing} currentPrepositionGroup={currentPrepositionGroup} showHint={showHint}/>
         </div>
         <TestModalFooter onBack={handleBackClick} onNext={handleNextClick} onIgnore={handleIgnore} onHint={onToggleHint} showHint={showHint} isBackDisabled={!sessionPosition ? currentChallengeIndex === 0 : (sessionPosition.current === 1 && currentChallengeIndex === 0)} isNextDisabled={isFinishing} isLastChallenge={isLastChallenge} nextLabel={nextLabelText}/>

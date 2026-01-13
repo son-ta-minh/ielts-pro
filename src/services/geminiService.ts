@@ -11,7 +11,10 @@ import {
   getFullSpeakingTestPrompt,
   getRefineWritingTopicPrompt,
   getFullWritingTestPrompt,
-  getWritingEvaluationPrompt
+  getWritingEvaluationPrompt,
+  getIpaAccentsPrompt,
+  getComparisonPrompt,
+  getIrregularVerbFormsPrompt
 } from './promptService';
 import { getConfig } from "../app/settingsManager";
 import { getStoredJSON, setStoredJSON } from "../utils/storage";
@@ -35,6 +38,18 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function cleanJsonResponse(text: string): string {
   let clean = text.trim();
+  
+  // Prioritize finding markdown blocks
+  const mdJsonStart = clean.indexOf('```json');
+  if (mdJsonStart !== -1) {
+      const startIndex = mdJsonStart + 7; // Skip ```json
+      const endIndex = clean.lastIndexOf('```');
+      if (endIndex > startIndex) {
+          return clean.substring(startIndex, endIndex).trim();
+      }
+  }
+
+  // Fallback to finding the first and last brace/bracket
   const firstBrace = clean.indexOf('{');
   const firstBracket = clean.indexOf('[');
   let jsonStartIndex = -1;
@@ -43,17 +58,17 @@ function cleanJsonResponse(text: string): string {
   else jsonStartIndex = Math.min(firstBrace, firstBracket);
   
   if (jsonStartIndex === -1) {
-    if (clean.startsWith('```json')) {
-      clean = clean.substring(7);
-      if (clean.endsWith('```')) clean = clean.substring(0, clean.length - 3);
-      return clean.trim();
-    }
-    return clean;
+    return clean; // Nothing that looks like JSON
   }
+
   const lastBrace = clean.lastIndexOf('}');
   const lastBracket = clean.lastIndexOf(']');
   const jsonEndIndex = Math.max(lastBrace, lastBracket);
-  if (jsonEndIndex > jsonStartIndex) return clean.substring(jsonStartIndex, jsonEndIndex + 1);
+  
+  if (jsonEndIndex > jsonStartIndex) {
+    return clean.substring(jsonStartIndex, jsonEndIndex + 1);
+  }
+
   return clean;
 }
 
@@ -104,8 +119,19 @@ async function callAiWithRetry(requestPayload: any, maxRetries = 3) {
 export async function generateWordDetails(words: string[], nativeLanguage: string = 'Vietnamese'): Promise<any[]> {
     const config = getConfig();
     const prompt = getWordDetailsPrompt(words, nativeLanguage);
-    // Fix: Updated model to gemini-3-pro-preview for complex tasks and ensure correct request format.
-    const response = await callAiWithRetry({ model: 'gemini-3-pro-preview', contents: prompt, config: { responseMimeType: "application/json" } });
+    const response = await callAiWithRetry({ model: config.ai.modelForComplexTasks, contents: prompt, config: { responseMimeType: "application/json" } });
+    const result = safeJsonParse(response.text, []);
+    return Array.isArray(result) ? result : [result];
+}
+
+export async function generateIpaAccents(words: string[]): Promise<any[]> {
+    const config = getConfig();
+    const prompt = getIpaAccentsPrompt(words);
+    const response = await callAiWithRetry({
+        model: config.ai.modelForBasicTasks,
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+    });
     const result = safeJsonParse(response.text, []);
     return Array.isArray(result) ? result : [result];
 }
@@ -113,8 +139,7 @@ export async function generateWordDetails(words: string[], nativeLanguage: strin
 export async function generateParaphraseTaskWithHints(tone: 'CASUAL' | 'ACADEMIC', targetMode: ParaphraseMode, user: User, context: string, sentence?: string): Promise<{ sentence: string; hints: string[] }> {
     const config = getConfig();
     const prompt = getParaphraseTaskPrompt(tone, targetMode, user, context, sentence);
-    // Fix: Updated model to gemini-3-flash-preview for basic tasks and ensure correct request format.
-    const response = await callAiWithRetry({ model: 'gemini-3-flash-preview', contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { sentence: { type: Type.STRING }, hints: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ["sentence", "hints"] } } });
+    const response = await callAiWithRetry({ model: config.ai.modelForBasicTasks, contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { sentence: { type: Type.STRING }, hints: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ["sentence", "hints"] } } });
     return safeJsonParse(response.text, { sentence: '', hints: [] });
 }
 
@@ -129,7 +154,7 @@ export async function generateSpeech(text: string): Promise<string | null> {
     try {
         const config = getConfig();
         const ai = getClient();
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash-preview-tts', contents: [{ parts: getSpeechGenerationParts(text) }], config: { responseModalities: [Modality.AUDIO], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } } });
+        const response = await ai.models.generateContent({ model: config.ai.modelForTts, contents: [{ parts: getSpeechGenerationParts(text) }], config: { responseModalities: [Modality.AUDIO], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } } });
         const audioPart = response.candidates?.[0]?.content?.parts?.[0];
         if (audioPart && 'inlineData' in audioPart && audioPart.inlineData) return audioPart.inlineData.data;
         return null;
@@ -144,6 +169,7 @@ export async function refineSpeakingTopic(topicName: string, description: string
 }
 
 export async function evaluateSpeakingSessionFromAudio(topic: string, sessionData: { question: string, audioBase64: string }[]): Promise<{ band: number; feedback: string; transcripts: { question: string, transcript: string }[] }> {
+    const config = getConfig();
     const prompt = getSpeakingEvaluationFromAudioPrompt(topic, sessionData.map(s => s.question));
     
     const contents: any[] = [{ text: prompt }];
@@ -157,7 +183,7 @@ export async function evaluateSpeakingSessionFromAudio(topic: string, sessionDat
     });
 
     const response = await callAiWithRetry({
-        model: 'gemini-3-pro-preview', // Use a powerful model for this complex task
+        model: config.ai.modelForComplexTasks,
         contents: { parts: contents },
         config: {
             responseMimeType: "application/json",
@@ -186,6 +212,7 @@ export async function evaluateSpeakingSessionFromAudio(topic: string, sessionDat
 }
 
 export async function transcribeAudios(sessionData: { question: string, audioBase64: string }[]): Promise<{ question: string; transcript: string }[]> {
+    const config = getConfig();
     const questions = sessionData.map(s => s.question);
     const prompt = getTranscriptionForSpeakingPrompt(questions);
 
@@ -195,7 +222,7 @@ export async function transcribeAudios(sessionData: { question: string, audioBas
     });
 
     const response = await callAiWithRetry({
-        model: 'gemini-3-pro-preview',
+        model: config.ai.modelForComplexTasks,
         contents: { parts: contents },
         config: {
             responseMimeType: "application/json",
@@ -242,4 +269,51 @@ export async function generateFullWritingTest(theme: string): Promise<any> {
     const prompt = getFullWritingTestPrompt(theme);
     const response = await callAiWithRetry({ model: config.ai.modelForComplexTasks, contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { topic: { type: Type.STRING }, task1: { type: Type.STRING }, task2: { type: Type.STRING } }, required: ["topic", "task1", "task2"] } } });
     return safeJsonParse(response.text, null);
+}
+
+export async function generateWordComparison(groupName: string, words: string[]): Promise<{ updatedWords: string[], comparisonHtml: string }> {
+    const config = getConfig();
+    // FIX: Corrected function name from getWordComparisonPrompt to getComparisonPrompt.
+    const prompt = getComparisonPrompt(groupName, words);
+    const response = await callAiWithRetry({
+        model: config.ai.modelForComplexTasks,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    updatedWords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    comparisonHtml: { type: Type.STRING }
+                },
+                required: ["updatedWords", "comparisonHtml"]
+            }
+        }
+    });
+    return safeJsonParse(response.text, { updatedWords: words, comparisonHtml: '<p>Error generating comparison.</p>' });
+}
+
+export async function generateIrregularVerbForms(verbs: string[]): Promise<{v1: string, v2: string, v3: string}[]> {
+    const config = getConfig();
+    const prompt = getIrregularVerbFormsPrompt(verbs);
+    const response = await callAiWithRetry({
+        model: config.ai.modelForBasicTasks,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        v1: { type: Type.STRING },
+                        v2: { type: Type.STRING },
+                        v3: { type: Type.STRING }
+                    },
+                    required: ["v1", "v2", "v3"]
+                }
+            }
+        }
+    });
+    return safeJsonParse(response.text, []);
 }

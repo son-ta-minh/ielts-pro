@@ -183,6 +183,15 @@ export function getWordsPaged(
 
 // --- Write Operations ---
 
+export async function saveWordAndUser(word: VocabularyItem, user: User) {
+    if (!canWrite()) return;
+    await db.saveWordAndUser(word, user);
+    _allWords.set(word.id, word);
+    // User state is handled by the calling hook, no need to manage here.
+    _recalculateStats(word.userId);
+    _notifyChanges();
+}
+
 export async function saveWord(item: VocabularyItem) {
     if (!canWrite()) return;
     await db.saveWord(item);

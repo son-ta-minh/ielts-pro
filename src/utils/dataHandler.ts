@@ -1,4 +1,4 @@
-import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog } from '../app/types';
+import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember } from '../app/types';
 import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs } from '../app/db';
 import { createNewWord, resetProgress } from './srs';
 
@@ -18,11 +18,9 @@ export const processJsonImport = async (
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = async (ev) => {
-            console.log("JSON file loaded by FileReader. Starting parsing...");
             try {
                 const rawJson = JSON.parse(ev.target?.result as string);
-                console.log("JSON parsed successfully. Version:", rawJson.version);
-                const incomingItems: Partial<VocabularyItem>[] = Array.isArray(rawJson) ? rawJson : (rawJson.vocabulary || []);
+                const incomingItems: Partial<VocabularyItem & { ipaUs?: string, ipaUk?: string }>[] = Array.isArray(rawJson) ? rawJson : (rawJson.vocabulary || []);
                 const incomingUnits: Unit[] | undefined = rawJson.units;
                 const incomingLogs: any[] | undefined = rawJson.paraphraseLogs;
                 const incomingSpeakingTopics: SpeakingTopic[] | undefined = rawJson.speakingTopics;
@@ -33,17 +31,36 @@ export const processJsonImport = async (
                 const incomingAdventure: any | undefined = rawJson.customAdventure;
                 
                 if (!Array.isArray(incomingItems)) {
-                    console.error("Invalid JSON format: 'vocabulary' array not found.");
                     throw new Error("Invalid JSON format: 'vocabulary' array not found.");
                 }
                 
-                console.log(`Found ${incomingItems.length} vocabulary items, ${incomingUnits?.length || 0} units, ${incomingLogs?.length || 0} logs to process.`);
-
                 const localItems = await getAllWordsForExport(userId);
                 const localItemsByWord = new Map(localItems.map(item => [item.word.toLowerCase().trim(), item]));
                 const itemsToSave: VocabularyItem[] = []; 
                 let newCount = 0, mergedCount = 0, skippedCount = 0;
-                
+
+                const processWordFamily = (family: any) => {
+                    if (!family) return undefined;
+                    const newFamily = { ...family };
+                    (['nouns', 'verbs', 'adjs', 'advs'] as const).forEach(key => {
+                        if (Array.isArray(newFamily[key])) {
+                            newFamily[key] = newFamily[key].map((m: any) => {
+                                if (typeof m === 'string') return { word: m, ipa: '' };
+                                const member: WordFamilyMember = {
+                                    word: m.word,
+                                    ipa: m.ipa || m.i || '', // for backward compatibility with `i`
+                                    ipaUs: m.ipaUs,
+                                    ipaUk: m.ipaUk,
+                                    pronSim: m.pronSim,
+                                    isIgnored: m.isIgnored
+                                };
+                                return member;
+                            });
+                        }
+                    });
+                    return newFamily;
+                };
+
                 for (const incoming of incomingItems) {
                     if (!incoming.word) continue;
                     
@@ -53,75 +70,60 @@ export const processJsonImport = async (
                     if (local) {
                         if ((restOfIncoming.updatedAt || 0) > (local.updatedAt || 0)) {
                             const { source: _incomingSource, ...restOfIncomingWithoutSource } = restOfIncoming;
-                            const merged = { ...local, ...restOfIncomingWithoutSource, id: local.id, userId: userId, updatedAt: Date.now() };
-                            if (!includeProgress) Object.assign(merged, resetProgress(merged as VocabularyItem));
-                            itemsToSave.push(merged as VocabularyItem); 
+                            let merged = { ...local, ...restOfIncomingWithoutSource, id: local.id, userId: userId, updatedAt: Date.now() };
+                            
+                            merged.wordFamily = processWordFamily(merged.wordFamily);
+                            
+                            if (!includeProgress) {
+                                merged = resetProgress(merged);
+                            } else if (merged.lastReview && typeof merged.interval !== 'undefined') {
+                                const ONE_DAY = 24 * 60 * 60 * 1000;
+                                merged.nextReview = merged.lastReview + (merged.interval * ONE_DAY);
+                            }
+                            
+                            itemsToSave.push(merged); 
                             mergedCount++;
                         } else { 
                             skippedCount++; 
                         }
                     } else {
                         const now = Date.now();
-                        const newId = restOfIncoming.id || 'id-' + now + '-' + Math.random().toString(36).substr(2, 9);
-                        
-                        // Handle legacy 'seed' source
                         const finalSource: WordSource = (restOfIncoming as any).source === 'seed' ? 'app' : 'manual';
+                        let newItem = createNewWord(
+                            restOfIncoming.word!, '', '', '', '', [], 
+                            restOfIncoming.isIdiom, restOfIncoming.needsPronunciationFocus, restOfIncoming.isPhrasalVerb, 
+                            restOfIncoming.isCollocation, restOfIncoming.isStandardPhrase, restOfIncoming.isPassive, finalSource
+                        );
                         
-                        const newItem: VocabularyItem = {
-                            id: newId,
+                        newItem = {
+                            ...newItem,
+                            ...restOfIncoming,
+                            id: restOfIncoming.id || newItem.id,
                             userId: userId,
-                            word: restOfIncoming.word!,
-                            ipa: restOfIncoming.ipa || '',
-                            meaningVi: restOfIncoming.meaningVi || '',
-                            example: restOfIncoming.example || '',
-                            note: restOfIncoming.note || '',
-                            tags: restOfIncoming.tags || [],
-                            groups: restOfIncoming.groups,
+                            wordFamily: processWordFamily(restOfIncoming.wordFamily),
                             quality: restOfIncoming.quality || WordQuality.RAW,
                             register: restOfIncoming.register || 'raw',
                             source: finalSource,
-
-                            // SRS data
-                            nextReview: includeProgress ? (restOfIncoming.nextReview || now) : now,
-                            interval: includeProgress ? (restOfIncoming.interval || 0) : 0,
-                            easeFactor: includeProgress ? (restOfIncoming.easeFactor || 2.5) : 2.5,
-                            consecutiveCorrect: includeProgress ? (restOfIncoming.consecutiveCorrect || 0) : 0,
-                            lastReview: includeProgress ? restOfIncoming.lastReview : undefined,
-                            lastGrade: includeProgress ? restOfIncoming.lastGrade : undefined,
-                            forgotCount: includeProgress ? (restOfIncoming.forgotCount || 0) : 0,
-                            
-                            // Other fields from import
-                            v2: restOfIncoming.v2,
-                            v3: restOfIncoming.v3,
-                            ipaMistakes: restOfIncoming.ipaMistakes,
-                            collocations: restOfIncoming.collocations,
-                            collocationsArray: restOfIncoming.collocationsArray,
-                            idioms: restOfIncoming.idioms,
-                            idiomsList: restOfIncoming.idiomsList,
-                            wordFamily: restOfIncoming.wordFamily,
-                            prepositions: restOfIncoming.prepositions,
-                            paraphrases: restOfIncoming.paraphrases,
-                            isIdiom: restOfIncoming.isIdiom || false,
-                            isPhrasalVerb: restOfIncoming.isPhrasalVerb || false,
-                            isCollocation: restOfIncoming.isCollocation || false,
-                            isStandardPhrase: restOfIncoming.isStandardPhrase || false,
-                            isIrregular: restOfIncoming.isIrregular || false,
-                            needsPronunciationFocus: restOfIncoming.needsPronunciationFocus || false,
-                            isExampleLocked: restOfIncoming.isExampleLocked || false,
-                            isPassive: restOfIncoming.isPassive || false,
-                            lastTestResults: includeProgress ? restOfIncoming.lastTestResults : undefined,
-                            lastXpEarnedTime: includeProgress ? restOfIncoming.lastXpEarnedTime : undefined,
-                            gameEligibility: restOfIncoming.gameEligibility,
-                            
                             createdAt: restOfIncoming.createdAt || now,
                             updatedAt: now,
                         };
+
+                        if (!includeProgress) {
+                            newItem = resetProgress(newItem);
+                        } else {
+                            if (newItem.lastReview && typeof newItem.interval !== 'undefined') {
+                                const ONE_DAY = 24 * 60 * 60 * 1000;
+                                newItem.nextReview = newItem.lastReview + (newItem.interval * ONE_DAY);
+                            } else {
+                                newItem.nextReview = now;
+                            }
+                        }
+
                         itemsToSave.push(newItem); 
                         newCount++;
                     }
                 }
                 
-                console.log(`Word processing complete. New: ${newCount}, Merged: ${mergedCount}, Skipped: ${skippedCount}. Total to save: ${itemsToSave.length}.`);
                 if (itemsToSave.length > 0) await bulkSaveWords(itemsToSave);
                 
                 if (incomingUnits && Array.isArray(incomingUnits)) { 
@@ -149,7 +151,6 @@ export const processJsonImport = async (
                     await bulkSaveWritingLogs(logsWithUser);
                 }
 
-
                 let updatedUser: User | undefined = undefined;
                 if (includeProgress && incomingUser) {
                     const userToSave = { ...incomingUser, id: userId };
@@ -171,7 +172,6 @@ export const processJsonImport = async (
                 
                 const successMessage = 'Restore data successfully';
 
-                console.log("Import process finished successfully.");
                 resolve({ 
                     type: 'success', 
                     message: successMessage,
@@ -180,12 +180,10 @@ export const processJsonImport = async (
                     customAdventureRestored
                 });
             } catch(err: any) { 
-                console.error("Error parsing JSON during import:", err);
                 resolve({ type: 'error', message: "JSON Import Error", detail: err.message }); 
             } 
         };
         reader.onerror = () => {
-            console.error("FileReader error on restore:", reader.error);
             resolve({ type: 'error', message: "File Read Error", detail: reader.error?.message || 'Could not read the file.' });
         };
         reader.readAsText(file);
@@ -204,7 +202,6 @@ export const generateJsonExport = async (userId: string, includeProgress: boolea
     ]);
     
     const finalWordsData = includeProgress ? wordsData : wordsData.map(w => resetProgress(w));
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const finalUnitsData = includeEssays ? unitsData : unitsData.map(({ essay, ...rest }) => rest);
     
     const customChapters = localStorage.getItem('vocab_pro_adventure_chapters');
@@ -234,25 +231,4 @@ export const generateJsonExport = async (userId: string, includeProgress: boolea
     a.download = `vocab-pro-backup-${new Date().toISOString().split('T')[0]}.json`; 
     a.click(); 
     URL.revokeObjectURL(url);
-};
-
-export const parseVocabMapping = (vocabString?: string): Map<string, string> => {
-    const map = new Map<string, string>();
-    if (!vocabString) return map;
-    
-    const entries = vocabString.split(/[;\n\r\t]+/).map(s => s.trim()).filter(Boolean);
-    entries.forEach(entry => {
-        const parts = entry.split(':').map(s => s.trim());
-        const essayWord = parts[0]; 
-        const baseWord = parts.length > 1 ? parts[1] : parts[0];
-        
-        if (essayWord && baseWord) { 
-            const essayLower = essayWord.toLowerCase(); 
-            const baseLower = baseWord.toLowerCase(); 
-            map.set(essayLower, baseLower); 
-            // Also map the base word to itself to ensure simple matches work too
-            if (!map.has(baseLower)) map.set(baseLower, baseLower); 
-        }
-    });
-    return map;
 };

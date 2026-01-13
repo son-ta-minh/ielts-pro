@@ -9,7 +9,8 @@ const StatusDropdown: React.FC<{
     selectedId: string;
     onSelect: (id: string) => void;
     buttonClass?: string;
-}> = ({ label, options, selectedId, onSelect, buttonClass }) => {
+    disabled?: boolean;
+}> = ({ label, options, selectedId, onSelect, buttonClass, disabled = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const selectedOption = options.find(o => o.id === selectedId) || options[0];
@@ -24,13 +25,13 @@ const StatusDropdown: React.FC<{
 
     return (
         <div className="relative" ref={menuRef}>
-            <button type="button" onClick={() => setIsOpen(!isOpen)} className={buttonClass}>
+            <button type="button" onClick={() => setIsOpen(!isOpen)} className={buttonClass} disabled={disabled}>
                 {label && <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400">{label}</span>}
                 {selectedOption.icon}
                 <span className="text-xs font-black uppercase tracking-wider">{selectedOption.label}</span>
                 <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
-            {isOpen && (
+            {isOpen && !disabled && (
                 <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-neutral-100 z-50 p-2 overflow-hidden animate-in fade-in zoom-in-95 flex flex-col gap-1">
                     {options.map(option => (
                         <button key={option.id} type="button" onClick={() => { onSelect(option.id); setIsOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${selectedId === option.id ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>
@@ -126,7 +127,7 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
     { id: ReviewGrade.EASY, label: 'Easy', icon: <div className="w-3 h-3 rounded-full bg-green-500"/> },
   ];
   
-  const TONE_OPTIONS: ParaphraseTone[] = ['intensified', 'softened', 'synonym', 'academic', 'casual', 'idiomatic'];
+  const TONE_OPTIONS: ParaphraseTone[] = ['intensified', 'softened', 'synonym', 'academic', 'casual'];
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -177,10 +178,46 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
             <div className="p-6 space-y-6">
                 {activeTab === 'MAIN' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 animate-in fade-in duration-300">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Headword</label><input type="text" value={formData.word} onChange={(e) => setFormData('word', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">IPA</label><input type="text" value={formData.ipa} onChange={(e) => setFormData('ipa', e.target.value)} placeholder="/.../" className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl font-mono text-lg text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/></div>
-                        <div className="md:col-span-2 space-y-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Definition / Meaning</label><input type="text" value={formData.meaningVi} onChange={(e) => setFormData('meaningVi', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-base font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/></div>
-                        <div className="md:col-span-2 space-y-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Examples</label><textarea rows={5} value={formData.example} onChange={(e) => setFormData('example', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none"/></div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Headword</label>
+                            <input type="text" value={formData.word} onChange={(e) => setFormData('word', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Primary IPA / US</label>
+                                <input type="text" value={formData.ipa} onChange={(e) => setFormData('ipa', e.target.value)} placeholder="/.../" className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">IPA US (Optional)</label>
+                                <input type="text" value={formData.ipaUs || ''} onChange={(e) => setFormData('ipaUs', e.target.value)} placeholder="/.../" className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">IPA UK (Optional)</label>
+                                <input type="text" value={formData.ipaUk || ''} onChange={(e) => setFormData('ipaUk', e.target.value)} placeholder="/.../" className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Pronunciation Similarity</label>
+                                <div className="flex bg-neutral-100 p-1 rounded-xl w-full">
+                                    {(['same', 'near', 'different'] as const).map(sim => (
+                                        <button
+                                            key={sim}
+                                            type="button"
+                                            onClick={() => setFormData('pronSim', sim)}
+                                            className={`flex-1 px-4 py-2 text-xs font-black rounded-lg transition-all flex items-center justify-center gap-2 ${formData.pronSim === sim ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-800'}`}>
+                                            {sim.charAt(0).toUpperCase() + sim.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="md:col-span-2 space-y-1">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Definition / Meaning</label>
+                            <input type="text" value={formData.meaningVi} onChange={(e) => setFormData('meaningVi', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-base font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                        </div>
+                        <div className="md:col-span-2 space-y-1">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Examples</label>
+                            <textarea rows={5} value={formData.example} onChange={(e) => setFormData('example', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                        </div>
                     </div>
                 )}
                 

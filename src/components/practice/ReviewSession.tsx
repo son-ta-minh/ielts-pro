@@ -12,12 +12,28 @@ interface Props {
   sessionType: SessionType;
   onUpdate: (word: VocabularyItem) => void;
   onComplete: () => void;
-  onContinueNewStudy?: () => void;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade) => Promise<number>; // New prop
+  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => Promise<number>; // New prop
   onRetry: () => void;
 }
 
-const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onComplete, onContinueNewStudy, onGainXp, onRetry }) => {
+export const logSrsUpdate = (grade: ReviewGrade, before: VocabularyItem, after: VocabularyItem) => {
+    console.group(`[SRS DEBUG] Grading "${before.word}" as ${grade}`);
+    console.log('Word BEFORE update:', {
+        interval: before.interval,
+        consecutiveCorrect: before.consecutiveCorrect,
+        nextReview: new Date(before.nextReview).toLocaleString(),
+        lastGrade: before.lastGrade,
+    });
+    console.log('Word AFTER update:', {
+        interval: after.interval,
+        consecutiveCorrect: after.consecutiveCorrect,
+        nextReview: new Date(after.nextReview).toLocaleString(),
+        lastGrade: after.lastGrade,
+    });
+    console.groupEnd();
+};
+
+const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onComplete, onGainXp, onRetry }) => {
   const { showToast } = useToast();
   const sessionWords = initialWords;
   const sessionIdentityRef = useRef<string | null>(null);
@@ -76,6 +92,7 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
     if (!currentWord) return;
     setSessionOutcomes(prev => ({...prev, [currentWord.id]: grade}));
     const updated = updateSRS(currentWord, grade);
+    logSrsUpdate(grade, currentWord, updated);
     const baseWordXp = calculateWordDifficultyXp(currentWord);
     await onGainXp(baseWordXp, updated, grade);
     nextItem();
@@ -96,6 +113,7 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
         
         const flaggedWord = { ...currentWord, needsPronunciationFocus: true };
         const updated = updateSRS(flaggedWord, ReviewGrade.FORGOT);
+        logSrsUpdate(ReviewGrade.FORGOT, currentWord, updated);
         
         const baseWordXp = calculateWordDifficultyXp(currentWord);
         await onGainXp(baseWordXp, updated, ReviewGrade.FORGOT);
@@ -104,17 +122,9 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
     }
   };
 
-  const handleTestComplete = async (grade: ReviewGrade, testResults?: Record<string, boolean>, stopSession = false) => {
+  const handleTestComplete = async (grade: ReviewGrade, testResults?: Record<string, boolean>, stopSession = false, counts?: { correct: number, tested: number }) => {
     setIsTesting(false);
     if (!currentWord) return;
-    
-    // If testing a new word, don't advance the session or update SRS. Just save test results and return to the card.
-    if (isNewWord) {
-        const updatedWithResults = { ...currentWord, lastTestResults: { ...(currentWord.lastTestResults || {}), ...testResults } };
-        onUpdate(updatedWithResults);
-        showToast(grade === ReviewGrade.EASY ? 'Correct!' : 'Incorrect, try again!', grade === ReviewGrade.EASY ? 'success' : 'error');
-        return; 
-    }
 
     let outcomeStatus: string = grade;
     if (sessionType === 'random_test') {
@@ -123,13 +133,17 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
 
     setSessionOutcomes(prev => ({...prev, [currentWord.id]: outcomeStatus}));
     const updated = updateSRS(currentWord, grade);
+    logSrsUpdate(grade, currentWord, updated);
     if (testResults) updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
     
     const baseWordXp = calculateWordDifficultyXp(currentWord);
-    await onGainXp(baseWordXp, updated, grade);
+    await onGainXp(baseWordXp, updated, grade, counts);
 
-    if (stopSession) setSessionFinished(true);
-    else nextItem();
+    if (stopSession) {
+      setSessionFinished(true);
+    } else {
+      nextItem();
+    }
   };
   
   const handleRetry = () => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { VocabularyItem, ParaphraseOption, WordQuality } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
-import { getWordDetailsPrompt, getWordTypePrompt } from '../../services/promptService';
+import { getWordDetailsPrompt, getWordTypePrompt, getIpaAccentsPrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter } from './WordTable_UI';
 import { normalizeAiResponse, mergeAiResultIntoWord } from '../../utils/vocabUtils';
@@ -29,7 +29,6 @@ interface Props {
   onDelete: (word: VocabularyItem) => Promise<void>;
   onHardDelete?: (word: VocabularyItem) => Promise<void>;
   onBulkDelete?: (ids: Set<string>) => Promise<void>;
-  onRefine: (ids: Set<string>) => void;
   onPractice: (ids: Set<string>) => void;
   settingsKey: string;
   context: 'library' | 'unit';
@@ -41,7 +40,7 @@ interface Props {
 
 const WordTable: React.FC<Props> = ({ 
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
-  onSearch, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onRefine, onPractice,
+  onSearch, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onPractice,
   settingsKey, context, initialFilter, forceExpandAdd, onExpandAddConsumed, onWordRenamed
 }) => {
   const [query, setQuery] = useState('');
@@ -66,6 +65,7 @@ const WordTable: React.FC<Props> = ({
   
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isWordTypeAiModalOpen, setIsWordTypeAiModalOpen] = useState(false);
+  const [isAccentAiModalOpen, setIsAccentAiModalOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info', message: string} | null>(null);
   
   const viewMenuRef = useRef<HTMLDivElement>(null);
@@ -180,14 +180,13 @@ const WordTable: React.FC<Props> = ({
 
   const handleAiRefinementResult = async (results: any[]) => {
     if (!Array.isArray(results)) throw new Error('Response must be an array.');
-    
+
     const aiMap = new Map<string, any[]>();
-    results.forEach(r => {
-        const normalized = normalizeAiResponse(r);
-        const key = (normalized.original || normalized.word || '').toLowerCase();
+    results.forEach(rawResult => {
+        const key = (rawResult.og || rawResult.original || rawResult.hw || rawResult.headword || '').toLowerCase();
         if (key) {
             if (!aiMap.has(key)) aiMap.set(key, []);
-            aiMap.get(key)?.push(normalized);
+            aiMap.get(key)?.push(rawResult);
         }
     });
 
@@ -200,51 +199,48 @@ const WordTable: React.FC<Props> = ({
         const candidates = aiMap.get(originalKey);
         if (!candidates || candidates.length === 0) continue;
         
-        const aiResult = candidates[0]; // Simplified: take the first result
-        const suggestedHeadword = (aiResult.headword || aiResult.word || '').trim();
+        const rawAiResult = candidates[0];
+        const tempNormalized = normalizeAiResponse(rawAiResult);
+        const suggestedHeadword = (tempNormalized.headword || tempNormalized.word || '').trim();
 
         if (suggestedHeadword) {
             const originalWordCount = originalItem.word.trim().split(/\s+/).length;
             const newWordCount = suggestedHeadword.trim().split(/\s+/).length;
 
             if (originalWordCount !== newWordCount) {
-                // Word count differs: create a new word, leave original untouched.
                 const existingHeadwordItem = await dataStore.findWordByText(originalItem.userId, suggestedHeadword);
                 if (existingHeadwordItem) {
-                    const mergedItem = mergeAiResultIntoWord(existingHeadwordItem, aiResult);
+                    const mergedItem = mergeAiResultIntoWord(existingHeadwordItem, rawAiResult);
                     itemsToSave.push(mergedItem);
                 } else {
                     const newItem = createNewWord(suggestedHeadword, '', '', '', '', [], false, false, false, false, false, false, 'refine');
                     newItem.userId = originalItem.userId;
-                    const finalNewItem = mergeAiResultIntoWord(newItem, aiResult);
+                    const finalNewItem = mergeAiResultIntoWord(newItem, rawAiResult);
                     itemsToSave.push(finalNewItem);
                 }
             } else {
-                // Same word count: proceed with original rename/merge logic.
                 const isRenaming = suggestedHeadword.toLowerCase() !== originalItem.word.toLowerCase();
                 if (isRenaming) {
                     const existingHeadwordItem = await dataStore.findWordByText(originalItem.userId, suggestedHeadword);
                     if (existingHeadwordItem && existingHeadwordItem.id !== originalItem.id) {
-                        const mergedItem = mergeAiResultIntoWord(existingHeadwordItem, aiResult);
+                        const mergedItem = mergeAiResultIntoWord(existingHeadwordItem, rawAiResult);
                         itemsToSave.push(mergedItem);
                         itemsToDeleteIds.push(originalItem.id);
                         renames.push({ id: originalItem.id, oldWord: originalItem.word, newWord: suggestedHeadword });
                     } else {
-                        let updatedItem = mergeAiResultIntoWord(originalItem, aiResult);
+                        let updatedItem = mergeAiResultIntoWord(originalItem, rawAiResult);
                         updatedItem.word = suggestedHeadword;
                         itemsToSave.push(updatedItem);
                         renames.push({ id: originalItem.id, oldWord: originalItem.word, newWord: suggestedHeadword });
                     }
                 } else {
-                    itemsToSave.push(mergeAiResultIntoWord(originalItem, aiResult));
+                    itemsToSave.push(mergeAiResultIntoWord(originalItem, rawAiResult));
                 }
             }
         } else {
-            // No headword from AI, just merge into original
-            itemsToSave.push(mergeAiResultIntoWord(originalItem, aiResult));
+            itemsToSave.push(mergeAiResultIntoWord(originalItem, rawAiResult));
         }
     }
-
 
     if (itemsToDeleteIds.length > 0) await dataStore.bulkDeleteWords(itemsToDeleteIds);
     if (itemsToSave.length > 0) {
@@ -254,7 +250,6 @@ const WordTable: React.FC<Props> = ({
         if (itemsToDeleteIds.length > 0) msg += ` Merged ${itemsToDeleteIds.length} duplicates.`;
         else if (renames.length > 0) msg += ` Renamed ${renames.length} to base forms.`;
         setNotification({ type: 'success', message: msg });
-        onRefine(new Set()); 
         setSelectedIds(new Set());
     }
     setIsAiModalOpen(false);
@@ -303,6 +298,41 @@ const WordTable: React.FC<Props> = ({
     setIsWordTypeAiModalOpen(false);
   };
 
+  const handleAccentAiResult = async (results: any[]) => {
+    if (!Array.isArray(results)) {
+        setNotification({ type: 'error', message: "AI response was not an array." });
+        return;
+    }
+
+    const updates = new Map<string, { ipaUs?: string; ipaUk?: string; pronSim?: 'same' | 'near' | 'different' }>();
+    results.forEach(r => {
+        if (r.og && (r.ipa_us || r.ipa_uk || r.pron_sim)) {
+            updates.set(r.og.toLowerCase(), { ipaUs: r.ipa_us, ipaUk: r.ipa_uk, pronSim: r.pron_sim });
+        }
+    });
+    
+    const itemsToUpdate = selectedWordsToRefine
+        .filter(w => updates.has(w.word.toLowerCase()))
+        .map(w => {
+            const accentData = updates.get(w.word.toLowerCase())!;
+            return {
+                ...w,
+                ipaUs: accentData.ipaUs || w.ipaUs,
+                ipaUk: accentData.ipaUk || w.ipaUk,
+                pronSim: accentData.pronSim || w.pronSim,
+                updatedAt: Date.now(),
+            };
+        });
+
+    if (itemsToUpdate.length > 0) {
+        await dataStore.bulkSaveWords(itemsToUpdate);
+        setNotification({ type: 'success', message: `Added accent IPAs for ${itemsToUpdate.length} words.` });
+        setSelectedIds(new Set());
+    } else {
+        setNotification({ type: 'info', message: "No accent data was found to apply." });
+    }
+    setIsAccentAiModalOpen(false);
+  };
 
   const uiProps: Omit<WordTableUIProps, 'viewingWord' | 'setViewingWord' | 'editingWord' | 'setEditingWord'> = {
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
@@ -318,6 +348,7 @@ const WordTable: React.FC<Props> = ({
     onOpenBulkDeleteModal: onBulkDelete ? () => setIsBulkDeleteModalOpen(true) : undefined,
     onBulkVerify: handleBulkVerify,
     onOpenWordTypeAiModal: () => setIsWordTypeAiModalOpen(true),
+    onOpenAccentAiModal: () => setIsAccentAiModalOpen(true),
     selectedWordsToRefine, handleGenerateRefinePrompt, handleAiRefinementResult,
     setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setIsViewMenuOpen, setIsFilterMenuOpen,
     setIsAddExpanded,
@@ -349,6 +380,20 @@ const WordTable: React.FC<Props> = ({
             onGeneratePrompt={(inputs) => getWordTypePrompt(stringToWordArray(inputs.words))}
             onJsonReceived={handleWordTypeOverwriteResult}
             actionLabel="Overwrite Types"
+            hidePrimaryInput={true}
+        />
+      )}
+      {isAccentAiModalOpen && selectedWordsToRefine.length > 0 && (
+        <UniversalAiModal 
+            isOpen={isAccentAiModalOpen} 
+            onClose={() => setIsAccentAiModalOpen(false)} 
+            type="REFINE_WORDS"
+            title="Generate Accent IPAs"
+            description={`Generating US/UK pronunciations for ${selectedWordsToRefine.length} selected words.`}
+            initialData={{ words: selectedWordsToRefine.map(w => w.word).join('\n') }}
+            onGeneratePrompt={(inputs) => getIpaAccentsPrompt(stringToWordArray(inputs.words))}
+            onJsonReceived={handleAccentAiResult}
+            actionLabel="Update Accents"
             hidePrimaryInput={true}
         />
       )}

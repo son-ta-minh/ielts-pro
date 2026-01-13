@@ -5,6 +5,7 @@ import { getWritingEvaluationPrompt } from '../../services/promptService';
 import { Loader2, ArrowLeft, Bot, Clock, BarChart } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import UniversalAiModal from '../common/UniversalAiModal';
+import { BandScoreGauge } from '../common/BandScoreGauge';
 
 interface Props {
   user: User;
@@ -109,7 +110,7 @@ const WritingSessionView: React.FC<Props> = ({ user, topic, onComplete }) => {
         <div className="max-w-4xl mx-auto space-y-6">
             <header><h2 className="text-3xl font-black text-neutral-900 tracking-tight">Session Report</h2><p className="text-neutral-500 mt-1">Topic: <span className="font-bold text-neutral-700">{finalResult.topicName}</span></p></header>
             <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex items-center justify-between">
-                <div><h4 className="text-[10px] font-black uppercase text-neutral-400 mb-1">Overall Band Score</h4><p className="text-5xl font-black">{finalResult.estimatedBand.toFixed(1)}</p></div>
+                <BandScoreGauge score={finalResult.estimatedBand} />
                 <div className="text-right"><h4 className="text-[10px] font-black uppercase text-neutral-400 mb-1">Session Date</h4><p className="font-mono text-xs">{new Date(finalResult.timestamp).toLocaleString()}</p></div>
             </div>
             <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm space-y-4">

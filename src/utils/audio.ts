@@ -1,4 +1,3 @@
-
 /**
  * Professional Hybrid Audio Utility
  * - Manages both System (Web Speech API) and AI (Gemini TTS) voices.
@@ -118,7 +117,7 @@ async function playAiSpeech(text: string) {
 }
 
 // --- Universal `speak` Function ---
-export const speak = async (text: string, preferredVoiceNameOverride?: string) => {
+export const speak = async (text: string, preferredVoiceNameOverride?: string, accent?: 'US' | 'GB') => {
   if (typeof window === 'undefined') return;
 
   const audioConfig = getConfig().audio;
@@ -135,7 +134,23 @@ export const speak = async (text: string, preferredVoiceNameOverride?: string) =
     const utterance = new SpeechSynthesisUtterance(text);
     let selectedVoice: SpeechSynthesisVoice | null = null;
 
-    if (preferredVoiceName) {
+    if (accent) {
+        const langCode = accent === 'US' ? 'en-US' : 'en-GB';
+        const accentVoices = voices.filter(v => v.lang === langCode);
+        if (accentVoices.length > 0) {
+            const priorityKeywords = ['siri', 'daniel', 'alex', 'com.apple', 'enhanced', 'premium', 'natural', 'google', 'samantha'];
+            for (const keyword of priorityKeywords) {
+                const found = accentVoices.find(v => v.name.toLowerCase().includes(keyword));
+                if (found) {
+                    selectedVoice = found;
+                    break;
+                }
+            }
+            if (!selectedVoice) selectedVoice = accentVoices[0];
+        }
+    }
+
+    if (!selectedVoice && preferredVoiceName) {
       selectedVoice = voices.find(v => v.name === preferredVoiceName) || null;
     }
     

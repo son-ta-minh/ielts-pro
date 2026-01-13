@@ -5,6 +5,7 @@ import { getWordDetailsPrompt } from '../../services/promptService';
 import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { EditWordModalUI } from './EditWordModal_UI';
 import { useToast } from '../../contexts/ToastContext';
+import { logSrsUpdate } from '../practice/ReviewSession';
 
 type FormState = VocabularyItem & {
     tagsString: string;
@@ -126,8 +127,19 @@ const EditWordModal: React.FC<Props> = ({ word, onSave, onClose, onSwitchToView 
         updatedAt: Date.now() 
     };
     
-    if (studiedStatus === 'NEW') updatedWord = resetProgress(updatedWord);
-    else if (studiedStatus !== word.lastGrade) updatedWord = updateSRS(updatedWord, studiedStatus as ReviewGrade);
+    const originalStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
+
+    if (studiedStatus !== originalStatus) {
+        if (studiedStatus === 'NEW') {
+            const finalWord = resetProgress(updatedWord);
+            logSrsUpdate('RESET' as any, word, finalWord);
+            updatedWord = finalWord;
+        } else {
+            const finalWord = updateSRS(updatedWord, studiedStatus as ReviewGrade);
+            logSrsUpdate(studiedStatus as ReviewGrade, word, finalWord);
+            updatedWord = finalWord;
+        }
+    }
     
     onSave(updatedWord);
     showToast('Word saved successfully!', 'success');

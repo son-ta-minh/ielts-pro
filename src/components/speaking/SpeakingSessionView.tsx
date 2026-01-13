@@ -1,5 +1,4 @@
-
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { User, SpeakingTopic, SpeakingLog, SpeakingSessionRecord } from '../../app/types';
 import * as db from '../../app/db';
 import { getSpeakingEvaluationFromTextPrompt } from '../../services/promptService';
@@ -16,7 +15,8 @@ interface Props {
   onComplete: () => void;
 }
 
-type SessionStep = 'PRACTICING' | 'REVIEW' | 'RESULT';
+// FIX: Add 'ANALYZING' to SessionStep type to allow its use in setStep.
+type SessionStep = 'PRACTICING' | 'REVIEW' | 'ANALYZING' | 'RESULT';
 
 interface SessionQuestion {
   question: string;
@@ -68,6 +68,23 @@ const SpeakingSessionView: React.FC<Props> = ({ user, topic, onComplete }) => {
   const currentQuestionData = allQuestions[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === allQuestions.length - 1;
 
+  const handleStartRecording = useCallback(async () => {
+    try {
+      await startRecording();
+      setIsRecording(true);
+      setError(null);
+      setLiveTranscript('');
+      
+      recognitionManager.current.start(
+        (final, interim) => setLiveTranscript(final + interim),
+        (finalTranscript) => setSessionTranscripts(prev => ({ ...prev, [currentQuestionIndex]: finalTranscript }))
+      );
+    } catch (err) {
+      console.error(err);
+      setError('Could not start recording. Please ensure microphone permissions are granted.');
+    }
+  }, [currentQuestionIndex]);
+
   useEffect(() => {
     if (currentQuestionData?.part === 2 && !isRecording && step === 'PRACTICING' && !isPreparingPart2) {
         setIsPreparingPart2(true);
@@ -87,7 +104,7 @@ const SpeakingSessionView: React.FC<Props> = ({ user, topic, onComplete }) => {
 
         return () => { if (prepTimerRef.current) clearInterval(prepTimerRef.current); };
     }
-  }, [currentQuestionIndex, currentQuestionData, isRecording, step]);
+  }, [currentQuestionIndex, currentQuestionData, isRecording, step, handleStartRecording]);
 
   useEffect(() => {
     return () => {
@@ -103,23 +120,6 @@ const SpeakingSessionView: React.FC<Props> = ({ user, topic, onComplete }) => {
     };
   }, []);
   
-  const handleStartRecording = async () => {
-    try {
-      await startRecording();
-      setIsRecording(true);
-      setError(null);
-      setLiveTranscript('');
-      
-      recognitionManager.current.start(
-        (final, interim) => setLiveTranscript(final + interim),
-        (finalTranscript) => setSessionTranscripts(prev => ({ ...prev, [currentQuestionIndex]: finalTranscript }))
-      );
-    } catch (err) {
-      console.error(err);
-      setError('Could not start recording. Please ensure microphone permissions are granted.');
-    }
-  };
-
   const handleStopRecording = async () => {
     try {
       const audioBase64 = await stopRecording();

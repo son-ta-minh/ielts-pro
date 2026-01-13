@@ -28,9 +28,9 @@ export interface ReviewSessionUIProps {
   nextItem: () => void;
   handleReview: (grade: ReviewGrade) => void;
   handleMisSpeak: () => void;
-  handleTestComplete: (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean) => void;
+  handleTestComplete: (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => void;
   handleRetry: () => void;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade) => Promise<number>;
+  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number; tested: number; }) => Promise<number>;
 }
 
 const renderStatusBadge = (outcome: string | undefined, wasNew: boolean, isQuickFire: boolean) => {

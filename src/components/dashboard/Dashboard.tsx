@@ -17,14 +17,12 @@ interface Props {
   wotd: VocabularyItem | null;
   onViewWotd: (word: VocabularyItem) => void;
   setView: (view: AppView) => void;
-  onAddWord: () => void;
   lastBackupTime: number | null;
   onBackup: () => void;
   onRestore: () => void;
   onNavigateToWordList: (filter: string) => void;
   onStartDueReview: () => void;
   onStartNewLearn: () => void;
-  onStartRandomTest: () => void;
 }
 
 const Dashboard: React.FC<Props> = ({ userId, totalCount, user, xpToNextLevel, wotd, onViewWotd, ...restProps }) => {

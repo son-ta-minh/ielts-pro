@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { User, SpeakingTopic, SpeakingLog } from '../../app/types';
 import { Mic, Plus, Trash2, Edit3, Play, Search, MessageSquare, History, ChevronRight, ChevronDown, Swords } from 'lucide-react';
 import ConfirmationModal from '../common/ConfirmationModal';
+import { BandScoreGauge } from '../common/BandScoreGauge';
 
 interface Props {
   user: User;
@@ -122,9 +123,10 @@ const SpeakingTopicLibrary: React.FC<Props> = ({ user, topics, history, historyB
                                     {topicHistory.map(log => (
                                         <details key={log.id} className="bg-white p-3 rounded-lg border border-neutral-200/50 group/log">
                                             <summary className="flex justify-between items-center text-xs font-medium cursor-pointer list-none">
-                                                <span>{new Date(log.timestamp).toLocaleString()} - Band: <strong className="text-neutral-900">{log.estimatedBand.toFixed(1)}</strong></span>
-                                                <div className="flex items-center">
-                                                    <button onClick={(e) => { e.stopPropagation(); setLogToDelete(log); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover/log:opacity-100 mr-2" title="Delete this history entry"><Trash2 size={12} /></button>
+                                                <span>{new Date(log.timestamp).toLocaleString()}</span>
+                                                <div className="flex items-center gap-4">
+                                                    <BandScoreGauge score={log.estimatedBand} size="inline" />
+                                                    <button onClick={(e) => { e.stopPropagation(); setLogToDelete(log); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover/log:opacity-100" title="Delete this history entry"><Trash2 size={12} /></button>
                                                     <ChevronRight size={14} className="text-neutral-400 group-open/log:rotate-90 transition-transform" />
                                                 </div>
                                             </summary>
@@ -174,9 +176,10 @@ const SpeakingTopicLibrary: React.FC<Props> = ({ user, topics, history, historyB
                                     {logs.map(log => (
                                         <details key={log.id} className="bg-white p-3 rounded-lg border border-neutral-200/50 group/log">
                                             <summary className="flex justify-between items-center text-xs font-medium cursor-pointer list-none">
-                                                <span>{new Date(log.timestamp).toLocaleString()} - Band: <strong className="text-neutral-900">{log.estimatedBand.toFixed(1)}</strong></span>
-                                                <div className="flex items-center">
-                                                    <button onClick={(e) => { e.stopPropagation(); setLogToDelete(log); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover/log:opacity-100 mr-2" title="Delete this history entry"><Trash2 size={12} /></button>
+                                                <span>{new Date(log.timestamp).toLocaleString()}</span>
+                                                <div className="flex items-center gap-4">
+                                                    <BandScoreGauge score={log.estimatedBand} size="inline" />
+                                                    <button onClick={(e) => { e.stopPropagation(); setLogToDelete(log); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover/log:opacity-100" title="Delete this history entry"><Trash2 size={12} /></button>
                                                     <ChevronRight size={14} className="text-neutral-400 group-open/log:rotate-90 transition-transform" />
                                                 </div>
                                             </summary>

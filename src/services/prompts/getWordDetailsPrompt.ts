@@ -1,4 +1,3 @@
-
 export function getWordDetailsPrompt(words: string[], nativeLanguage: string = 'Vietnamese'): string {
     const wordList = words.map(w => `"${w}"`).join(', ');
 
@@ -7,16 +6,18 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     Analyze this list of vocabulary items: [${wordList}].
 
     IMPORTANT RULES FOR HEADWORD (hw) IDENTIFICATION:
-    1. FOR PHRASES/IDIOMS/EXPRESSIONS: If the input is a multi-word unit (e.g., "cut the road", "break the ice", "get over"), the headword (hw) MUST be the EXACT phrase provided. DO NOT reduce it to a single word (e.g., do NOT return "cut" for "cut the road").
-    2. FOR SINGLE WORDS: If the input is a single inflected word, identify its base form (e.g., "running" -> "run", "cities" -> "city").
-    3. All details (meaning, IPA, examples) MUST correspond to the identified headword (the whole phrase or the base word).
-    4. If input has multiple distinct meanings as a phrase vs a single word, prioritize the meaning of the input as provided.
+    1. Preserve the original word count of the input. Normalize only grammatical form (base form, singular/plural); never remove or reduce words.
+       For example:
+       - DO NOT return "cut" for "cut the road"
+       - Normalize "running" -> "run", "cities" -> "city"
+    2. All details (meaning, IPA, examples) MUST correspond to the identified normalized headword.
+    3. If input has multiple distinct meanings as a phrase vs a single word, prioritize the meaning of the input as provided.
 
     LANGUAGE RULES:
     - All content in English, except "m" (Meaning) which must be in ${nativeLanguage}.
 
     FIELD GENERATION RULES:
-    - If the headword (hw) is a PHRASE, PHRASAL VERB, or IDIOM (e.g., "break the ice"):
+    - If the headword (hw) is a PHRASE, PHRASAL VERB, or IDIOM:
       - DO NOT generate 'fam' (word family). Return an empty object {} or null.
       - DO NOT generate 'col' (collocations). Return an empty array [].
     - Other fields should be generated as normal.
@@ -24,6 +25,11 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     FIELD DEFINITIONS:
     - og: The EXACT string from the input list.
     - hw: The headword (Full phrase for expressions; base form for single words).
+    - ipa: The primary IPA transcription (default to US).
+    - ipa_us: IPA for General American accent.
+    - ipa_uk: IPA for Received Pronunciation.
+    - pron_sim: Pronunciation similarity. MUST be one of: "same", "near", "different".
+    - ipa_m: 2-4 common mispronunciations.
     - m: Definition of the headword in ${nativeLanguage}.
     - reg: The word's register. MUST be one of: "academic", "casual", or "neutral".
     - ex: A high-quality example sentence using the headword.
@@ -31,23 +37,16 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - idm: Array of 1-3 common idioms containing the headword (only if hw is a single word).
     - prep: Array of dependent prepositions. Format: [{"p": "preposition", "c": "short usage example"}].
     - para: List of synonyms/paraphrases. Generate a variety of tones, but max 6-8 items total.
-        - 't' = tone. MUST be one of: "intensified", "softened", "synonym", "academic", "casual", "idiomatic".
-        - "intensified": A word with a stronger meaning (e.g., for 'happy', return 'ecstatic').
-        - "softened": A word with a weaker/milder meaning (e.g., for 'furious', return 'annoyed').
-        - "synonym": A neutral synonym with a similar meaning.
-        - "academic": A formal or academic equivalent.
-        - "casual": An informal or conversational equivalent.
-        - "idiomatic": A related idiom or figurative phrase.
+        - 't' = tone. MUST be one of: "intensified", "softened", "synonym", "academic", "casual"
         - 'c' = short context where the paraphrase would be used.
-    - fam: Word family. ONLY for single-word headwords. 'n'=nouns, 'v'=verbs, 'j'=adjectives, 'adv'=adverbs. Format: [{"w": "word", "i": "/ipa/"}].
-    - is_pas: True if vulgar/slang.
+    - fam: Word family. ONLY for single-word headwords. 'n'=nouns, 'v'=verbs, 'j'=adjectives, 'adv'=adverbs. Format: [{"w": "word", "i": "/US IPA/"}].
+    - is_pas: True if vulgar, slang, profanity, or archaic.
     - is_pron: True if it's a pronunciation trap.
     - is_id: True if it's an Idiom.
     - is_pv: True if it's a Phrasal Verb.
     - is_col: True if it's a Collocation.
     - is_phr: True if it's a fixed Standard Phrase/Expression.
     - is_irr: True if it's an Irregular verb (single words only).
-    - ipa_m: 2-4 common mispronunciations.
     - tags: 3-5 IELTS topic tags.
 
     EXAMPLES:
@@ -59,18 +58,22 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     [{
       "og": "input_string",
       "hw": "headword_or_full_phrase",
-      "ipa": "/ipa/",
+      "ipa": "/ipa_us/",
+      "ipa_us": "/ipa_us/",
+      "ipa_uk": "/ipa_uk/",
+      "pron_sim": "near",
       "ipa_m": ["wrong1", "wrong2"],
       "m": "meaning in ${nativeLanguage}",
       "reg": "academic",
       "ex": "Example sentence.",
       "col": [],
       "idm": [],
-      "prep": [], 
+      "prep": [{"p": "on", "c": "rely on someone"}], 
       "para": [{ "w": "synonym", "t": "academic", "c": "context" }],
       "is_id": false, "is_pv": false, "is_col": false, "is_phr": true, "is_irr": false,
       "v2": null, "v3": null,
-      "is_pas": false, "is_pron": false,
+      "is_pas": false,
+      "is_pron": false,
       "tags": ["topic"],
       "fam": null
     }]`;

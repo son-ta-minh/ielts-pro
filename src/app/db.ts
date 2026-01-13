@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, ReviewGrade, WordQuality, ParaphraseLog, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog } from './types';
+import { VocabularyItem, User, Unit, ReviewGrade, WordQuality, ParaphraseLog, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, ComparisonGroup, IrregularVerb } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -11,7 +11,9 @@ const SPEAKING_LOG_STORE = 'speaking_logs';
 const SPEAKING_TOPIC_STORE = 'speaking_topics';
 const WRITING_LOG_STORE = 'writing_logs';
 const WRITING_TOPIC_STORE = 'writing_topics';
-const DB_VERSION = 10; 
+const COMPARISON_STORE = 'comparison_groups';
+const IRREGULAR_VERBS_STORE = 'irregular_verbs';
+const DB_VERSION = 13; 
 
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -81,6 +83,27 @@ const openDB = (): Promise<IDBDatabase> => {
                 logStore.createIndex('timestamp', 'timestamp', { unique: false });
             }
         }
+
+        if (event.oldVersion < 11) {
+            // This store name is now deprecated. Will be cleaned up by browser if not used.
+        }
+
+        if (event.oldVersion < 12) {
+            if (db.objectStoreNames.contains('word_comparison_groups')) {
+                db.deleteObjectStore('word_comparison_groups');
+            }
+            if (!db.objectStoreNames.contains(COMPARISON_STORE)) {
+                const pairStore = db.createObjectStore(COMPARISON_STORE, { keyPath: 'id' });
+                pairStore.createIndex('userId', 'userId', { unique: false });
+            }
+        }
+
+        if (event.oldVersion < 13) {
+            if (!db.objectStoreNames.contains(IRREGULAR_VERBS_STORE)) {
+                const verbStore = db.createObjectStore(IRREGULAR_VERBS_STORE, { keyPath: 'id' });
+                verbStore.createIndex('userId', 'userId', { unique: false });
+            }
+        }
       };
       request.onsuccess = () => {
         _dbInstance = request.result;
@@ -98,7 +121,7 @@ const openDB = (): Promise<IDBDatabase> => {
 export const clearVocabularyOnly = async (): Promise<void> => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const stores: string[] = [STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE];
+    const stores: string[] = [STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, COMPARISON_STORE, IRREGULAR_VERBS_STORE];
     const tx = db.transaction(stores, 'readwrite');
     stores.forEach(s => tx.objectStore(s).clear());
     tx.oncomplete = () => resolve();
@@ -318,56 +341,6 @@ export const getReviewCounts = async (userId: string): Promise<{ total: number, 
   });
 };
 
-// FIX: Implement empty function stubs to resolve compilation errors.
-export const getDashboardStats = async (userId: string): Promise<{ categories: Record<string, { total: number; learned: number }>, refinedCount: number } | null> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const index = tx.objectStore(STORE_NAME).index('userId');
-    const req = index.getAll(IDBKeyRange.only(userId));
-
-    req.onsuccess = () => {
-      const activeWords = ((req.result || []) as VocabularyItem[]).filter(w => !w.isPassive);
-      const refinedCount = activeWords.filter(w => w.quality === WordQuality.VERIFIED).length;
-      const categories: Record<string, { total: number; learned: number }> = {
-        'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 },
-        'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 },
-        'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 },
-        'pronun': { total: 0, learned: 0 },
-      };
-
-      activeWords.forEach(w => {
-        const isLearned = !!w.lastReview;
-        const inc = (key: string) => { categories[key].total++; if (isLearned) categories[key].learned++; };
-        if (w.isIdiom) inc('idiom');
-        if (w.isPhrasalVerb) inc('phrasal');
-        if (w.isCollocation) inc('colloc');
-        if (w.isStandardPhrase) inc('phrase');
-        if (w.needsPronunciationFocus) inc('pronun');
-        if (w.prepositions && w.prepositions.length > 0 && !w.isPhrasalVerb) inc('preposition');
-        if (!w.isIdiom && !w.isPhrasalVerb && !w.isCollocation && !w.isStandardPhrase) inc('vocab');
-      });
-      resolve({ categories, refinedCount });
-    };
-    req.onerror = () => reject(req.error);
-  });
-};
-export const getWordsPaged = async (userId: string, page: number, pageSize: number, query: string = '', filterTypes: string[] = ['all'], refinedFilter: 'all' | 'refined' | 'not_refined' = 'all', statusFilter: string = 'all'): Promise<VocabularyItem[]> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const index = tx.objectStore(STORE_NAME).index('userId');
-    const req = index.getAll(IDBKeyRange.only(userId));
-
-    req.onsuccess = () => {
-        const allItems = (req.result || []) as VocabularyItem[];
-        const filtered = allItems.filter(item => filterItem(item, query, filterTypes, refinedFilter, statusFilter, 'all', 'all'));
-        const start = page * pageSize;
-        resolve(filtered.slice(start, start + pageSize));
-    };
-    req.onerror = () => reject(req.error);
-  });
-};
 export const getDueWords = async (userId: string, limit: number = 30): Promise<VocabularyItem[]> => {
   const db = await openDB();
   const now = Date.now();
@@ -406,70 +379,71 @@ export const getNewWords = async (userId: string, limit: number = 20): Promise<V
   });
 };
 
-const crudTemplate = async <T,>(storeName: string, operation: (store: IDBObjectStore) => IDBRequest, mode: IDBTransactionMode = 'readwrite'): Promise<T> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, mode);
-    const req = operation(tx.objectStore(storeName));
-    tx.oncomplete = () => resolve(req.result);
-    tx.onerror = () => reject(tx.error);
-  });
+const crudTemplate = async <T,>(storeName: string | string[], operation: (tx: IDBTransaction) => IDBRequest | void, mode: IDBTransactionMode = 'readwrite'): Promise<T> => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, mode);
+        const req = operation(tx);
+        tx.oncomplete = () => resolve(req ? req.result : undefined);
+        tx.onerror = () => reject(tx.error);
+    });
 };
 
-export const saveWord = async (item: VocabularyItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(STORE_NAME, store => store.put(item)); };
-export const deleteWordFromDB = async (id: string): Promise<void> => { await crudTemplate(STORE_NAME, store => store.delete(id)); };
-// FIX: Changed to use explicit generic to satisfy TypeScript compiler for void return types.
-export const bulkDeleteWords = async (ids: string[]): Promise<void> => {
-    await crudTemplate<any>(STORE_NAME, store => {
-        ids.forEach(id => store.delete(id));
-        return store.count();
+export const saveWordAndUser = async (word: VocabularyItem, user: User): Promise<void> => {
+    await crudTemplate<void>([STORE_NAME, USER_STORE], (tx) => {
+        tx.objectStore(STORE_NAME).put(word);
+        tx.objectStore(USER_STORE).put(user);
     });
 };
-// FIX: Changed to use explicit generic to satisfy TypeScript compiler for void return types.
-export const bulkSaveWords = async (items: VocabularyItem[]): Promise<void> => {
-    await crudTemplate<any>(STORE_NAME, store => {
-        items.forEach(i => store.put(i));
-        return store.count();
-    });
-};
-export const getAllWordsForExport = async (userId: string): Promise<VocabularyItem[]> => await crudTemplate(STORE_NAME, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const saveUnit = async (unit: Unit): Promise<void> => { unit.updatedAt = Date.now(); await crudTemplate(UNIT_STORE, store => store.put(unit)); };
-export const deleteUnit = async (id: string): Promise<void> => { await crudTemplate(UNIT_STORE, store => store.delete(id)); };
-export const getUnitsByUserId = async (userId: string): Promise<Unit[]> => await crudTemplate(UNIT_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+
+export const saveWord = async (item: VocabularyItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).put(item)); };
+export const deleteWordFromDB = async (id: string): Promise<void> => { await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).delete(id)); };
+export const bulkDeleteWords = async (ids: string[]): Promise<void> => { await crudTemplate(STORE_NAME, tx => { const store = tx.objectStore(STORE_NAME); ids.forEach(id => store.delete(id)); }); };
+export const bulkSaveWords = async (items: VocabularyItem[]): Promise<void> => { await crudTemplate(STORE_NAME, tx => { const store = tx.objectStore(STORE_NAME); items.forEach(i => store.put(i)); }); };
+export const getAllWordsForExport = async (userId: string): Promise<VocabularyItem[]> => await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const saveUnit = async (unit: Unit): Promise<void> => { unit.updatedAt = Date.now(); await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).put(unit)); };
+export const deleteUnit = async (id: string): Promise<void> => { await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).delete(id)); };
+export const getUnitsByUserId = async (userId: string): Promise<Unit[]> => await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
 export const getUnitsContainingWord = async (userId: string, wordId: string): Promise<Unit[]> => { const units = await getUnitsByUserId(userId); return units.filter(u => u.wordIds.includes(wordId)); };
-// FIX: Changed to use explicit generic to satisfy TypeScript compiler for void return types.
-export const bulkSaveUnits = async (items: Unit[]): Promise<void> => {
-    await crudTemplate<any>(UNIT_STORE, store => {
-        items.forEach(i => store.put(i));
-        return store.count();
-    });
-};
-export const saveParaphraseLog = async (log: ParaphraseLog): Promise<void> => { await crudTemplate(LOG_STORE, store => store.put(log)); };
-export const getParaphraseLogs = async (userId: string): Promise<ParaphraseLog[]> => { const logs = await crudTemplate<ParaphraseLog[]>(LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
-export const bulkSaveParaphraseLogs = async (items: ParaphraseLog[]): Promise<void> => { await crudTemplate(LOG_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };
+export const bulkSaveUnits = async (items: Unit[]): Promise<void> => { await crudTemplate(UNIT_STORE, tx => { const store = tx.objectStore(UNIT_STORE); items.forEach(i => store.put(i)); }); };
+export const saveParaphraseLog = async (log: ParaphraseLog): Promise<void> => { await crudTemplate(LOG_STORE, tx => tx.objectStore(LOG_STORE).put(log)); };
+export const getParaphraseLogs = async (userId: string): Promise<ParaphraseLog[]> => { const logs = await crudTemplate<ParaphraseLog[]>(LOG_STORE, tx => tx.objectStore(LOG_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
+export const bulkSaveParaphraseLogs = async (items: ParaphraseLog[]): Promise<void> => { await crudTemplate(LOG_STORE, tx => { const store = tx.objectStore(LOG_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Speaking Feature ---
-export const saveSpeakingLog = async (log: SpeakingLog): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, store => store.put(log)); };
-export const getSpeakingLogs = async (userId: string): Promise<SpeakingLog[]> => { const logs = await crudTemplate<SpeakingLog[]>(SPEAKING_LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
-export const deleteSpeakingLog = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, store => store.delete(id)); };
-export const getAllSpeakingLogsForExport = async (userId: string): Promise<SpeakingLog[]> => await crudTemplate(SPEAKING_LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const bulkSaveSpeakingLogs = async (items: SpeakingLog[]): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };
+export const saveSpeakingLog = async (log: SpeakingLog): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).put(log)); };
+export const getSpeakingLogs = async (userId: string): Promise<SpeakingLog[]> => { const logs = await crudTemplate<SpeakingLog[]>(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
+export const deleteSpeakingLog = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).delete(id)); };
+export const getAllSpeakingLogsForExport = async (userId: string): Promise<SpeakingLog[]> => await crudTemplate(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const bulkSaveSpeakingLogs = async (items: SpeakingLog[]): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, tx => { const store = tx.objectStore(SPEAKING_LOG_STORE); items.forEach(i => store.put(i)); }); };
 
-export const saveSpeakingTopic = async (topic: SpeakingTopic): Promise<void> => { topic.updatedAt = Date.now(); await crudTemplate(SPEAKING_TOPIC_STORE, store => store.put(topic)); };
-export const deleteSpeakingTopic = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_TOPIC_STORE, store => store.delete(id)); };
-export const getSpeakingTopicsByUserId = async (userId: string): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const getAllSpeakingTopicsForExport = async (userId: string): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const bulkSaveSpeakingTopics = async (items: SpeakingTopic[]): Promise<void> => { await crudTemplate(SPEAKING_TOPIC_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };
+export const saveSpeakingTopic = async (topic: SpeakingTopic): Promise<void> => { topic.updatedAt = Date.now(); await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).put(topic)); };
+export const deleteSpeakingTopic = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).delete(id)); };
+export const getSpeakingTopicsByUserId = async (userId: string): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const getAllSpeakingTopicsForExport = async (userId: string): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const bulkSaveSpeakingTopics = async (items: SpeakingTopic[]): Promise<void> => { await crudTemplate(SPEAKING_TOPIC_STORE, tx => { const store = tx.objectStore(SPEAKING_TOPIC_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Writing Feature ---
-export const saveWritingLog = async (log: WritingLog): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, store => store.put(log)); };
-export const getWritingLogs = async (userId: string): Promise<WritingLog[]> => { const logs = await crudTemplate<WritingLog[]>(WRITING_LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
-export const deleteWritingLog = async (id: string): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, store => store.delete(id)); };
-export const getAllWritingLogsForExport = async (userId: string): Promise<WritingLog[]> => await crudTemplate(WRITING_LOG_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const bulkSaveWritingLogs = async (items: WritingLog[]): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };
+export const saveWritingLog = async (log: WritingLog): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).put(log)); };
+export const getWritingLogs = async (userId: string): Promise<WritingLog[]> => { const logs = await crudTemplate<WritingLog[]>(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
+export const deleteWritingLog = async (id: string): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).delete(id)); };
+export const getAllWritingLogsForExport = async (userId: string): Promise<WritingLog[]> => await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const bulkSaveWritingLogs = async (items: WritingLog[]): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => { const store = tx.objectStore(WRITING_LOG_STORE); items.forEach(i => store.put(i)); }); };
 
-export const saveWritingTopic = async (topic: WritingTopic): Promise<void> => { topic.updatedAt = Date.now(); await crudTemplate(WRITING_TOPIC_STORE, store => store.put(topic)); };
-export const deleteWritingTopic = async (id: string): Promise<void> => { await crudTemplate(WRITING_TOPIC_STORE, store => store.delete(id)); };
-export const getWritingTopicsByUserId = async (userId: string): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const getAllWritingTopicsForExport = async (userId: string): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, store => store.index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const bulkSaveWritingTopics = async (items: WritingTopic[]): Promise<void> => { await crudTemplate(WRITING_TOPIC_STORE, store => { items.forEach(i => store.put(i)); return store.count(); }); };
+export const saveWritingTopic = async (topic: WritingTopic): Promise<void> => { topic.updatedAt = Date.now(); await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).put(topic)); };
+export const deleteWritingTopic = async (id: string): Promise<void> => { await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).delete(id)); };
+export const getWritingTopicsByUserId = async (userId: string): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const getAllWritingTopicsForExport = async (userId: string): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const bulkSaveWritingTopics = async (items: WritingTopic[]): Promise<void> => { await crudTemplate(WRITING_TOPIC_STORE, tx => { const store = tx.objectStore(WRITING_TOPIC_STORE); items.forEach(i => store.put(i)); }); };
+
+// --- Comparison Feature ---
+export const saveComparisonGroup = async (group: ComparisonGroup): Promise<void> => { group.updatedAt = Date.now(); await crudTemplate(COMPARISON_STORE, tx => tx.objectStore(COMPARISON_STORE).put(group)); };
+export const getComparisonGroupsByUserId = async (userId: string): Promise<ComparisonGroup[]> => await crudTemplate(COMPARISON_STORE, tx => tx.objectStore(COMPARISON_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const deleteComparisonGroup = async (id: string): Promise<void> => { await crudTemplate(COMPARISON_STORE, tx => tx.objectStore(COMPARISON_STORE).delete(id)); };
+
+// --- Irregular Verbs Feature ---
+export const saveIrregularVerb = async (verb: IrregularVerb): Promise<void> => { verb.updatedAt = Date.now(); await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).put(verb)); };
+export const getIrregularVerbsByUserId = async (userId: string): Promise<IrregularVerb[]> => await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const deleteIrregularVerb = async (id: string): Promise<void> => { await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).delete(id)); };
+export const bulkSaveIrregularVerbs = async (items: IrregularVerb[]): Promise<void> => { await crudTemplate(IRREGULAR_VERBS_STORE, tx => { const store = tx.objectStore(IRREGULAR_VERBS_STORE); items.forEach(i => store.put(i)); }); };
+export const bulkDeleteIrregularVerbs = async (ids: string[]): Promise<void> => { await crudTemplate(IRREGULAR_VERBS_STORE, tx => { const store = tx.objectStore(IRREGULAR_VERBS_STORE); ids.forEach(id => store.delete(id)); }); };

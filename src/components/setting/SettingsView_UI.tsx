@@ -27,6 +27,7 @@ interface SettingsViewUIProps {
     includeEssays: boolean;
     mobileNavRef: React.RefObject<HTMLDivElement>;
     isNormalizing: boolean;
+    isApplyingAccent: boolean;
     
     // Handlers
     setCurrentView: (view: SettingView) => void;
@@ -51,6 +52,7 @@ interface SettingsViewUIProps {
     onOpenNukeModal: () => void;
     onRefreshGameIndex: () => Promise<void>;
     onOpenNormalizeModal: () => void;
+    onApplyAccent: () => void;
     
     // Children render prop for InterfaceSettings
     children?: React.ReactNode;
@@ -77,7 +79,7 @@ export const SettingsViewUI: React.FC<SettingsViewUIProps> = (props) => {
     const renderCurrentView = () => {
         switch (currentView) {
             case 'PROFILE': return <ProfileSettings profileData={props.profileData} onProfileChange={props.onProfileChange} onSaveProfile={props.onSaveProfile} />;
-            case 'AI_AUDIO': return <AiAudioSettings config={props.config} isVoiceLoading={props.isVoiceLoading} availableVoices={props.availableVoices} apiKeyInput={props.apiKeyInput} apiUsage={props.apiUsage} onConfigChange={props.onConfigChange} onAiConfigChange={props.onAiConfigChange} onAudioModeChange={props.onAudioModeChange} onVoiceChange={props.onVoiceChange} onApiKeyInputChange={props.onApiKeyInputChange} onSaveApiKeys={props.onSaveApiKeys} onResetUsage={props.onResetUsage} onSaveSettings={props.onSaveSettings} />;
+            case 'AI_AUDIO': return <AiAudioSettings config={props.config} isVoiceLoading={props.isVoiceLoading} availableVoices={props.availableVoices} apiKeyInput={props.apiKeyInput} apiUsage={props.apiUsage} onConfigChange={props.onConfigChange} onAiConfigChange={props.onAiConfigChange} onAudioModeChange={props.onAudioModeChange} onVoiceChange={props.onVoiceChange} onApiKeyInputChange={props.onApiKeyInputChange} onSaveApiKeys={props.onSaveApiKeys} onResetUsage={props.onResetUsage} onSaveSettings={props.onSaveSettings} isApplyingAccent={props.isApplyingAccent} onApplyAccent={props.onApplyAccent} />;
             case 'DATA': return <DataSettings jsonInputRef={props.jsonInputRef} includeProgress={props.includeProgress} setIncludeProgress={props.setIncludeProgress} includeEssays={props.includeEssays} setIncludeEssays={props.setIncludeEssays} onJSONImport={props.onJSONImport} onJSONExport={props.onJSONExport} onRefreshGameIndex={props.onRefreshGameIndex} isNormalizing={props.isNormalizing} onOpenNormalizeModal={props.onOpenNormalizeModal} />;
             case 'SRS': return <SrsSettings srsConfig={props.config.srs} onSrsConfigChange={props.onSrsConfigChange} onResetSrsConfig={props.onResetSrsConfig} onSaveSettings={props.onSaveSettings} />;
             case 'DANGER': return <DangerZone onOpenClearProgressModal={props.onOpenClearProgressModal} onOpenNukeModal={props.onOpenNukeModal} />;

@@ -10,8 +10,11 @@ export * from './prompts/getParaphraseEvaluationPrompt';
 export * from './prompts/getSpeechGenerationParts';
 export * from './prompts/getGenerateChapterPrompt';
 export * from './prompts/getGenerateSegmentPrompt';
-export * from './prompts/getWordRegisterPrompt';
+// FIX: Export getWordTypePrompt to make it available to other modules.
 export * from './prompts/getWordTypePrompt';
+export * from './prompts/getIpaAccentsPrompt';
+export * from './prompts/getComparisonPrompt';
+export * from './prompts/getIrregularVerbFormsPrompt';
 
 // Speaking feature prompts
 export { getRefineSpeakingTopicPrompt, getTranscriptionForSpeakingPrompt, getFullSpeakingTestPrompt } from './prompts/getSpeakingPart1QuestionsPrompt';

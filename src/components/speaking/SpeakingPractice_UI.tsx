@@ -2,6 +2,7 @@ import React from 'react';
 import { SpeakingLog } from '../../app/types';
 import { Mic, Loader2, Play, AlertTriangle, Square, Check, Volume2, ArrowRight, RefreshCw, BarChart, ChevronRight } from 'lucide-react';
 import { speak } from '../../utils/audio';
+import { BandScoreGauge } from '../common/BandScoreGauge';
 
 type SpeakingStep = 'IDLE' | 'LOADING_QUESTIONS' | 'READY' | 'RECORDING' | 'ANALYZING' | 'RESULT';
 
@@ -19,21 +20,6 @@ interface Props {
   onNextQuestion: () => void;
   onRestart: () => void;
 }
-
-const BandScoreGauge: React.FC<{ score: number }> = ({ score }) => {
-    const getScoreColor = (s: number) => {
-      if (s >= 8.0) return 'text-green-500';
-      if (s >= 7.0) return 'text-emerald-500';
-      if (s >= 6.0) return 'text-amber-500';
-      return 'text-rose-500';
-    };
-    return (
-      <div className="flex flex-col items-center gap-1">
-        <span className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Est. Band</span>
-        <div className={`text-4xl font-black ${getScoreColor(score)}`}>{score.toFixed(1)}</div>
-      </div>
-    );
-};
 
 export const SpeakingPracticeUI: React.FC<Props> = (props) => {
   const { step, error, topic, questions, currentQuestionIndex, currentResult, history, onStartPractice, onStartRecording, onStopRecording, onNextQuestion, onRestart } = props;

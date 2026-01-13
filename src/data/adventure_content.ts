@@ -109,7 +109,3 @@ export const ADVENTURE_CHAPTERS: AdventureChapter[] = [
         ]
     }
 ];
-
-export const CHAPTER_PROGRESSION: Record<string, string[]> = {
-    'topic_family': ['topic_education'],
-};

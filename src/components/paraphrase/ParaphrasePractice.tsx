@@ -36,9 +36,7 @@ const ParaphrasePractice: React.FC<Props> = ({ user }) => {
 
   const [showHints, setShowHints] = useState(false);
 
-  const isCancelledRef = useRef(false);
   const timerRef = useRef<number | null>(null);
-  const timeoutRef = useRef<number | null>(null);
   
   const [aiModalState, setAiModalState] = useState<{isOpen: boolean, type: AiActionType, initialData?: any}>({ isOpen: false, type: 'GENERATE_PARAPHRASE' });
   const aiEnabled = getConfig().ai.enableGeminiApi;
@@ -69,20 +67,11 @@ const ParaphrasePractice: React.FC<Props> = ({ user }) => {
               return next;
           });
       }, 1000);
-
-      timeoutRef.current = window.setTimeout(() => {
-          if (isGenerating) {
-              handleCancelGeneration();
-              setError({ message: "Request Timeout. Please check your network connection or API Key." });
-          }
-      }, AI_TIMEOUT_MS);
   };
 
   const stopTimer = () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timerRef.current = null;
-      timeoutRef.current = null;
   };
 
   const handleNewTask = () => {
@@ -94,19 +83,12 @@ const ParaphrasePractice: React.FC<Props> = ({ user }) => {
     setEvaluation(null);
     setError(null);
     setShowHints(false);
-    isCancelledRef.current = false;
     stopTimer();
   };
   
   const handleEvaluationModeChange = (newMode: ParaphraseMode) => {
     setEvaluationMode(newMode);
     setIsModeDropdownOpen(false);
-  };
-
-  const handleCancelGeneration = () => {
-    isCancelledRef.current = true;
-    setIsGenerating(false);
-    stopTimer();
   };
 
   const cleanSentenceField = (text: string): string => {
@@ -123,7 +105,6 @@ const ParaphrasePractice: React.FC<Props> = ({ user }) => {
     }
 
     setIsGenerating(true);
-    isCancelledRef.current = false;
     setError(null);
     
     startTimer();
@@ -132,21 +113,17 @@ const ParaphrasePractice: React.FC<Props> = ({ user }) => {
       const randomTone = Math.random() > 0.5 ? 'ACADEMIC' : 'CASUAL';
       const result = await generateParaphraseTaskWithHints(randomTone, evaluationMode, user, '');
       
-      if (isCancelledRef.current) return;
       if (!result || !result.sentence) throw new Error("AI returned an empty response.");
       
       setOriginalSentence(cleanSentenceField(result.sentence));
       setHints(result.hints || []);
       setCurrentHintIndex(0);
     } catch (e: any) {
-      if (isCancelledRef.current) return;
       console.error(e);
       setError({ message: "Connection to AI failed. Check your network or API Key settings." });
     } finally {
-      if (!isCancelledRef.current) {
-          setIsGenerating(false);
-          stopTimer();
-      }
+      setIsGenerating(false);
+      stopTimer();
     }
   };
 

@@ -1,8 +1,74 @@
-import React, { useMemo } from 'react';
-import { Volume2, ArrowRight, RefreshCw, X } from 'lucide-react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { Volume2, ArrowRight, RefreshCw, X, Mic, Square, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { VocabularyItem } from '../../app/types';
 import { speak } from '../../utils/audio';
-import { Challenge, ChallengeResult, IpaQuizChallenge, MeaningQuizChallenge, PrepositionQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, HeteronymQuizChallenge } from './TestModalTypes';
+import { Challenge, ChallengeResult, IpaQuizChallenge, MeaningQuizChallenge, PrepositionQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, HeteronymQuizChallenge, PronunciationChallenge, CollocationQuizChallenge } from './TestModalTypes';
+import { SpeechRecognitionManager } from '../../utils/speechRecognition';
+
+// New component for the Pronunciation Challenge
+const PronunciationChallengeUI: React.FC<{
+    challenge: PronunciationChallenge;
+    onAnswer: (answer: string) => void;
+    isFinishing: boolean;
+    result: ChallengeResult | null;
+}> = ({ challenge, onAnswer, isFinishing, result }) => {
+    const [isRecording, setIsRecording] = useState(false);
+    const [transcript, setTranscript] = useState('');
+    const recognitionManager = useRef(new SpeechRecognitionManager());
+
+    useEffect(() => {
+        return () => {
+            recognitionManager.current.stop();
+        };
+    }, []);
+
+    const handleToggleRecording = () => {
+        if (isRecording) {
+            recognitionManager.current.stop();
+        } else {
+            setIsRecording(true);
+            setTranscript('');
+            recognitionManager.current.start(
+                (final, interim) => setTranscript(final + interim),
+                (finalTranscript) => {
+                    setIsRecording(false);
+                    onAnswer(finalTranscript);
+                }
+            );
+        }
+    };
+    
+    const isCorrect = result === true;
+    const isWrong = result === false;
+    
+    return (
+        <div className="text-center space-y-8 animate-in fade-in duration-300 flex flex-col items-center">
+            <p className="text-sm font-bold text-neutral-500">Press the button and pronounce the word below.</p>
+            <h2 className="text-4xl font-black text-neutral-900 tracking-tight">{challenge.word.word}</h2>
+            
+            <button 
+                onClick={handleToggleRecording} 
+                disabled={isFinishing}
+                className={`w-24 h-24 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95 disabled:opacity-50
+                    ${isRecording ? 'bg-neutral-900 text-white animate-pulse' : 'bg-red-600 text-white hover:scale-105 shadow-red-500/30'}`}
+            >
+                {isRecording ? <Square size={32} fill="white" /> : <Mic size={32} />}
+            </button>
+            
+            <div className="w-full max-w-sm min-h-[6rem] p-4 bg-neutral-50 border border-neutral-200 rounded-xl text-lg font-medium text-neutral-600 italic">
+                {transcript || '...'}
+            </div>
+
+            {isFinishing && (
+                <div className={`flex items-center gap-2 font-bold text-lg animate-in fade-in slide-in-from-bottom-2 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                    {isCorrect ? <CheckCircle size={20} /> : <XCircle size={20} />}
+                    <span>{isCorrect ? 'Correct!' : `Not quite. The word was "${challenge.word.word}".`}</span>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 interface TestModalContentProps {
     word: VocabularyItem;
@@ -23,12 +89,12 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
     // --- PREPOSITION DRILL (GROUPED) ---
     if (currentPrepositionGroup) {
       return (
-        <div className="flex flex-col h-full animate-in fade-in duration-300">
+        <div className="flex flex-col animate-in fade-in duration-300">
           <div className="text-center space-y-2 mb-6">
             <h3 className="text-lg font-black text-neutral-900">Preposition Drill</h3>
             <p className="text-xs text-neutral-500 font-medium max-w-xs mx-auto">Complete the collocations. Type the missing preposition(s).</p>
           </div>
-          <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+          <div className="space-y-4">
             {currentPrepositionGroup.group.map((item) => {
               const answer = userAnswers[item.index] || '';
               const result = results ? results[item.index] : null;
@@ -55,6 +121,119 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
 
     // --- OTHER CHALLENGES ---
     switch (currentChallenge.type) {
+        case 'COLLOCATION_QUIZ': {
+            const challenge = currentChallenge as CollocationQuizChallenge;
+            const answers = (userAnswers[currentChallengeIndex] || []) as string[];
+            const result = results ? results[currentChallengeIndex] : null;
+            const details = (result && typeof result === 'object' && 'details' in result) ? result.details : {};
+
+            const duplicates = useMemo(() => {
+                const seen = new Set<string>();
+                const dupes = new Set<string>();
+                answers.forEach(ans => {
+                    const trimmed = (ans || '').trim();
+                    if (trimmed) {
+                        if (seen.has(trimmed)) dupes.add(trimmed);
+                        else seen.add(trimmed);
+                    }
+                });
+                return dupes;
+            }, [answers]);
+
+            const allCorrectAnswers = useMemo(() => challenge.collocations.map(c => c.answer), [challenge]);
+            const userProvidedCorrectAnswers = useMemo(() => {
+                if (!isFinishing || !details) return new Set<string>();
+                const correct = new Set<string>();
+                (answers as string[]).forEach((ans, i) => {
+                    if (details[i.toString()] === true) {
+                        correct.add((ans || '').trim().toLowerCase());
+                    }
+                });
+                return correct;
+            }, [isFinishing, answers, details]);
+            const missingCorrectAnswers = useMemo(() => {
+                if (!isFinishing) return [];
+                return allCorrectAnswers.filter(c => !userProvidedCorrectAnswers.has(c.toLowerCase().trim()));
+            }, [isFinishing, allCorrectAnswers, userProvidedCorrectAnswers]);
+            let missingAnswerIndex = 0;
+
+            const handleCollocAnswerChange = (index: number, value: string) => {
+                const newAnswers = [...answers];
+                newAnswers[index] = value;
+                handleAnswerChange(currentChallengeIndex, newAnswers);
+            };
+
+            return (
+                <div className="flex flex-col animate-in fade-in duration-300">
+                    <div className="text-center space-y-2 mb-6">
+                        <h3 className="text-lg font-black text-neutral-900">Collocation Recall</h3>
+                        <p className="text-xs text-neutral-500 font-medium max-w-xs mx-auto">Complete the phrases for <span className="font-bold">"{word.word}"</span></p>
+                    </div>
+                    {duplicates.size > 0 && !isFinishing && (
+                        <div className="flex items-center gap-2 p-2 mb-2 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-lg">
+                            <AlertTriangle size={14} /> Duplicate answers detected.
+                        </div>
+                    )}
+                    {showHint && !isFinishing && (
+                        <div className="p-4 mb-4 bg-yellow-50 rounded-2xl border border-yellow-100 animate-in slide-in-from-top-2">
+                            <p className="text-xs font-black text-yellow-600 uppercase tracking-widest mb-2">Correct Collocations</p>
+                            <ul className="text-sm font-bold text-yellow-900 leading-relaxed list-disc pl-5">
+                                {challenge.collocations.map(c => <li key={c.fullText}>{c.fullText}</li>)}
+                            </ul>
+                        </div>
+                    )}
+                    <div className="space-y-4">
+                        {challenge.collocations.map((colloc, index) => {
+                            const answer = answers[index] || '';
+                            const isAnswerCorrect = isFinishing && details[index.toString()] === true;
+                            const isAnswerWrong = isFinishing && details[index.toString()] === false;
+                            const isDuplicate = duplicates.has((answer || '').trim()) && (answer || '').trim() !== '';
+                            
+                            let hintToShow = colloc.answer;
+                            if (isAnswerWrong) {
+                                hintToShow = missingCorrectAnswers[missingAnswerIndex] || colloc.answer;
+                                missingAnswerIndex++;
+                            }
+
+                            return (
+                                <div key={index} className="w-full flex items-center gap-2">
+                                    {colloc.position === 'post' && (
+                                        <>
+                                            <div className="flex-1 relative">
+                                                <input type="text" value={answer} onChange={(e) => handleCollocAnswerChange(index, e.target.value)} disabled={isFinishing} className={`w-full h-9 px-3 text-right text-base font-medium rounded-lg border-2 outline-none transition-colors ${isFinishing ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400') : `bg-white border-neutral-200 focus:border-neutral-900 ${isDuplicate ? 'border-amber-500' : ''}`}`} placeholder="..." autoComplete="off" />
+                                                {isFinishing && isAnswerWrong && (
+                                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10"><div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95"><ArrowRight size={10} className="text-green-400"/> {hintToShow}</div><div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div></div>
+                                                )}
+                                            </div>
+                                            <span className="font-black text-neutral-900 text-base">{colloc.headword}</span>
+                                        </>
+                                    )}
+                                    {colloc.position === 'pre' && (
+                                        <>
+                                            <span className="font-black text-neutral-900 text-base">{colloc.headword}</span>
+                                            <div className="flex-1 relative">
+                                                <input type="text" value={answer} onChange={(e) => handleCollocAnswerChange(index, e.target.value)} disabled={isFinishing} className={`w-full h-9 px-3 text-base font-medium rounded-lg border-2 outline-none transition-colors ${isFinishing ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400') : `bg-white border-neutral-200 focus:border-neutral-900 ${isDuplicate ? 'border-amber-500' : ''}`}`} placeholder="..." autoComplete="off" />
+                                                {isFinishing && isAnswerWrong && (
+                                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10"><div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95"><ArrowRight size={10} className="text-green-400"/> {hintToShow}</div><div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div></div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        }
+      case 'PRONUNCIATION': {
+        return <PronunciationChallengeUI 
+            challenge={currentChallenge as PronunciationChallenge}
+            onAnswer={(transcript) => handleAnswerChange(currentChallengeIndex, transcript)}
+            isFinishing={isFinishing}
+            result={results ? results[currentChallengeIndex] : null}
+        />;
+      }
       case 'HETERONYM_QUIZ': {
           const challenge = currentChallenge as HeteronymQuizChallenge;
           const currentAnswers = userAnswers[currentChallengeIndex] || {};
@@ -134,7 +313,7 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
           };
 
           return (
-            <div className="flex flex-col h-full space-y-6 animate-in fade-in duration-300">
+            <div className="flex flex-col space-y-6 animate-in fade-in duration-300">
                 <div className="text-center space-y-1">
                     <p className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Sentence Builder</p>
                     <p className="text-xs text-neutral-500 font-medium">Reconstruct the example sentence for "{word.word}".</p>
@@ -221,9 +400,9 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
         const challenge = currentChallenge as MeaningQuizChallenge;
         const selected = userAnswers[currentChallengeIndex];
         return (
-          <div className="text-center space-y-6 animate-in fade-in duration-300 flex flex-col h-full">
+          <div className="text-center space-y-6 animate-in fade-in duration-300 flex flex-col">
             <div className="space-y-1"><p className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Identify Definition</p><h2 className="text-3xl font-black text-neutral-900">{word.word}</h2></div>
-            <div className="grid grid-cols-1 gap-3 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 gap-3">
               {challenge.options.map((option, idx) => {
                 let stateClass = "bg-white border-neutral-200 hover:border-neutral-400 text-neutral-700";
                 if (isFinishing) {
@@ -245,7 +424,7 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
         const isCorrect = result === true;
         const isWrong = result === false;
         return (
-          <div className="text-center space-y-8 animate-in fade-in duration-300 flex flex-col items-center justify-center h-full">
+          <div className="text-center space-y-8 animate-in fade-in duration-300 flex flex-col items-center">
             <div className="space-y-4"><p className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Recall Word Power</p><h2 className="text-3xl font-black text-neutral-900">{word.word}</h2><div className="inline-flex items-center gap-2 bg-neutral-100 px-3 py-1.5 rounded-lg border border-neutral-200"><span className="text-[9px] font-black uppercase bg-white px-1.5 py-0.5 rounded border border-neutral-200 text-neutral-500">{challenge.tone}</span><span className="text-xs font-bold text-neutral-700 italic">{challenge.context}</span></div></div>
             <div className="w-full max-w-xs relative">
                 <input type="text" autoFocus value={answer || ''} onChange={e => handleAnswerChange(currentChallengeIndex, e.target.value)} disabled={isFinishing} className={`w-full text-center py-4 rounded-2xl border-2 text-xl font-bold focus:outline-none placeholder:text-neutral-200 transition-colors duration-200 ${isFinishing ? (isCorrect ? 'bg-green-50 border-green-500 text-green-600' : 'bg-red-50 border-red-500 text-red-600') : 'bg-neutral-50 border-transparent focus:bg-white focus:border-neutral-900 text-neutral-900 shadow-sm'}`} placeholder="Type synonym..." autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" />

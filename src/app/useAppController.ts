@@ -1,41 +1,22 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { AppView, User, VocabularyItem } from './types';
 import { useToast } from '../contexts/ToastContext';
 import { useAuthAndUser } from './hooks/useAuthAndUser';
 import { useSession } from './hooks/useSession';
-import { useGamification } from './hooks/useGamification';
+import { useGamification, calculateWordDifficultyXp as movedCalc } from './hooks/useGamification';
 import { useDataFetching } from './hooks/useDataFetching';
 import { useDataActions } from './hooks/useDataActions';
-import { getDueWords, getNewWords, getAllWordsForExport } from './db';
+import { getDueWords, getNewWords } from './db';
+import * as dataStore from './dataStore';
 
-export const calculateWordDifficultyXp = (word: VocabularyItem): number => {
-    if (word.isPassive) return 0;
-    let baseXP = 50;
-    if (word.ipaMistakes?.length) baseXP += 20;
-    if (word.collocationsArray) baseXP += Math.min(word.collocationsArray.filter(c => !c.isIgnored).length * 10, 50);
-    if (word.idiomsList) baseXP += Math.min(word.idiomsList.filter(c => !c.isIgnored).length * 15, 45);
-    if (word.prepositions) baseXP += Math.min(word.prepositions.filter(p => !p.isIgnored).length * 10, 40);
-    if (word.wordFamily) {
-        const familyCount = (word.wordFamily.nouns?.filter(m => !m.isIgnored).length || 0) +
-                            (word.wordFamily.verbs?.filter(m => !m.isIgnored).length || 0) +
-                            (word.wordFamily.adjs?.filter(m => !m.isIgnored).length || 0) +
-                            (word.wordFamily.advs?.filter(m => !m.isIgnored).length || 0);
-        baseXP += Math.min(familyCount * 5, 50);
-    }
-    if (word.paraphrases) baseXP += Math.min(word.paraphrases.filter(p => !p.isIgnored).length * 10, 30);
-    if (word.isIrregular) baseXP += 20;
-    if (word.needsPronunciationFocus) baseXP += 15;
-    if (word.isIdiom || word.isPhrasalVerb || word.isCollocation || word.isStandardPhrase) baseXP += 10;
-    if (word.word.length > 7) baseXP += 5;
-    if (word.word.length > 10) baseXP += 5;
-    return Math.round(baseXP);
-};
+// Re-export for backward compatibility with external components that might import from here.
+export const calculateWordDifficultyXp = movedCalc;
 
 export const useAppController = () => {
     const { showToast } = useToast();
     
     // --- Primary State & UI Hooks ---
-    const { currentUser, isLoaded, handleLogin, handleLogout, handleUpdateUser, setCurrentUser } = useAuthAndUser();
+    const { currentUser, isLoaded, handleLogin, handleLogout, handleUpdateUser, setCurrentUser, shouldSkipAuth } = useAuthAndUser();
     const [view, setView] = useState<AppView>('AUTH');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [globalViewWord, setGlobalViewWord] = useState<VocabularyItem | null>(null);
@@ -45,8 +26,6 @@ export const useAppController = () => {
     // --- Composed Logic Hooks ---
     const { sessionWords, setSessionWords, sessionType, sessionFocus, startSession, clearSessionState } = useSession({ setView, setIsSidebarOpen });
     
-    const { gainExperienceAndLevelUp, xpGained, xpToNextLevel } = useGamification({ currentUser, onUpdateUser: handleUpdateUser, sessionWords, setSessionWords });
-
     const { stats, wotd, setWotd, apiUsage, refreshGlobalStats } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
 
     const { isResetting, resetStep, lastBackupTime, handleBackup, handleRestore, handleLibraryReset, updateWord, deleteWord, bulkDeleteWords } = useDataActions({
@@ -55,7 +34,29 @@ export const useAppController = () => {
         onUpdateUser: handleUpdateUser
     });
 
+    const saveWordAndUserAndUpdateState = useCallback(async (word: VocabularyItem, user: User) => {
+        await dataStore.saveWordAndUser(word, user);
+        setCurrentUser(user);
+    }, [setCurrentUser]);
+
+    const { gainExperienceAndLevelUp, xpGained, xpToNextLevel } = useGamification({ 
+        currentUser, 
+        onSaveWordAndUser: saveWordAndUserAndUpdateState 
+    });
+
+
     // --- Connecting Logic & Event Handlers ---
+
+    useEffect(() => {
+        if (isLoaded) {
+            if (shouldSkipAuth && currentUser) {
+                setView('DASHBOARD');
+            } else if (!currentUser) {
+                setView('AUTH');
+            }
+        }
+    }, [isLoaded, shouldSkipAuth, currentUser]);
+
     const handleLoginAndNavigate = (user: User) => {
         handleLogin(user);
         setView('DASHBOARD');
@@ -73,35 +74,32 @@ export const useAppController = () => {
         refreshGlobalStats();
     }, [clearSessionState, refreshGlobalStats]);
 
-    const handleRetrySession = useCallback(async () => {
-        if (!sessionWords || sessionWords.length === 0 || !currentUser || !sessionType) {
+    const handleRetrySession = useCallback(() => {
+        if (!sessionWords || sessionWords.length === 0 || !sessionType) {
             handleSessionComplete();
             return;
         }
         const wordIds = sessionWords.map(w => w.id);
-        const allWords = await getAllWordsForExport(currentUser.id);
+        const allWords = dataStore.getAllWords();
         const wordsToRetry = allWords.filter(w => wordIds.includes(w.id));
         
-        if (wordsToRetry.length > 0) startSession(wordsToRetry, sessionType, sessionFocus);
-        else handleSessionComplete();
-    }, [sessionWords, currentUser, sessionType, sessionFocus, startSession, handleSessionComplete]);
+        if (wordsToRetry.length > 0) {
+            startSession(wordsToRetry, sessionType, sessionFocus);
+        } else {
+            handleSessionComplete();
+        }
+    }, [sessionWords, sessionType, sessionFocus, startSession, handleSessionComplete]);
 
-    const handleStartNewStudy = useCallback(async () => {
+    const startDueReviewSession = useCallback(async () => {
         if (!currentUser) return;
-        const [due, freshNews] = await Promise.all([ getDueWords(currentUser.id, 50), getNewWords(currentUser.id, 20) ]);
-        const dueForSession = due.sort(() => Math.random() - 0.5).slice(0, 7);
-        const newForSession = freshNews.sort(() => Math.random() - 0.5).slice(0, 3);
-        startSession([...dueForSession, ...newForSession], 'new_study');
+        const words = await getDueWords(currentUser.id, 30);
+        startSession(words, 'due');
     }, [currentUser, startSession]);
-  
-    const handleStartRandomTest = useCallback(async () => {
+
+    const startNewLearnSession = useCallback(async () => {
         if (!currentUser) return;
-        const allWords = await getAllWordsForExport(currentUser.id);
-        const activeWords = allWords.filter(w => !w.isPassive);
-        if (activeWords.length === 0) return;
-        const shuffled = [...activeWords].sort(() => Math.random() - 0.5);
-        const sessionSize = Math.min(20, shuffled.length);
-        startSession(shuffled.slice(0, sessionSize), 'random_test');
+        const words = await getNewWords(currentUser.id, 20);
+        startSession(words, 'new');
     }, [currentUser, startSession]);
   
     const handleNavigateToList = (filter: string) => {
@@ -124,7 +122,7 @@ export const useAppController = () => {
         handleLogin: handleLoginAndNavigate, 
         handleLogout: handleLogoutAndNavigate, 
         handleUpdateUser,
-        sessionWords, sessionFocus, sessionType, startSession, handleSessionComplete, handleStartNewStudy, handleStartRandomTest,
+        sessionWords, sessionFocus, sessionType, startSession, handleSessionComplete,
         stats, wotd, refreshGlobalStats,
         globalViewWord, setGlobalViewWord,
         lastBackupTime, handleBackup, handleRestore, handleLibraryReset,
@@ -141,5 +139,7 @@ export const useAppController = () => {
         gainExperienceAndLevelUp,
         xpGained,
         xpToNextLevel,
+        startDueReviewSession,
+        startNewLearnSession
     };
 };

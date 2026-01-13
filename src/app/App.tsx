@@ -35,23 +35,10 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const [appKey, setAppKey] = useState(1);
-
-  const forceReload = useCallback(() => {
-    setAppKey(k => k + 1);
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener('force-reload', forceReload);
-    return () => {
-      window.removeEventListener('force-reload', forceReload);
-    };
-  }, [forceReload]);
-
   return (
     <React.StrictMode>
       <ToastProvider>
-        <AppContent key={appKey} />
+        <AppContent />
       </ToastProvider>
     </React.StrictMode>
   );

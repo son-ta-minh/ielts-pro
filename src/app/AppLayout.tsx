@@ -1,13 +1,12 @@
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
-  Plus, LayoutDashboard, List, TrendingUp, Settings, RefreshCw, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Gamepad2, Map, Network, Mic, PenLine
+  Plus, LayoutDashboard, List, Settings, RefreshCw, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Network, Mic, PenLine, BrainCircuit, ClipboardCheck, ChevronDown, Puzzle, FileClock
 } from 'lucide-react';
 import { AppView, SessionType, VocabularyItem } from './types';
 import { useAppController } from './useAppController';
 import { getDueWords, getNewWords } from './db';
 import EditWordModal from '../components/word_lib/EditWordModal';
 import ViewWordModal from '../components/word_lib/ViewWordModal';
-import SidebarStats from '../components/common/SidebarStats';
 
 // Lazy load major views for performance
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
@@ -20,6 +19,8 @@ const Discover = React.lazy(() => import('../components/discover/Discover'));
 const WordNet = React.lazy(() => import('../components/word_net/WordNet'));
 const SpeakingPractice = React.lazy(() => import('../components/speaking/SpeakingPractice'));
 const WritingPractice = React.lazy(() => import('../components/writing/WritingPractice'));
+const Comparison = React.lazy(() => import('../components/comparison/Comparison'));
+const IrregularVerbs = React.lazy(() => import('../components/irregular_verbs/IrregularVerbs'));
 
 type AppController = ReturnType<typeof useAppController>;
 
@@ -27,17 +28,33 @@ interface AppLayoutProps {
   controller: AppController;
 }
 
-const navItems: { id: string, view: AppView, icon: React.ElementType, label: string }[] = [
+const navItems = [
   { id: 'DASHBOARD', view: 'DASHBOARD', icon: LayoutDashboard, label: 'Dashboard' },
   { id: 'DISCOVER', view: 'DISCOVER', icon: Map, label: 'Discover' },
   { id: 'BROWSE', view: 'BROWSE', icon: List, label: 'Library' },
-  { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: Layers3, label: 'Reading' },
-  { id: 'SPEAKING', view: 'SPEAKING', icon: Mic, label: 'Speaking' },
-  { id: 'WRITING', view: 'WRITING', icon: PenLine, label: 'Writing' },
-  { id: 'WORD_NET', view: 'WORD_NET', icon: Network, label: 'Word Net' },
-  { id: 'PARAPHRASE', view: 'PARAPHRASE', icon: RefreshCw, label: 'Paraphrase' },
+  { 
+    id: 'IELTS_PREP', 
+    label: 'IELTS Prep', 
+    icon: ClipboardCheck,
+    children: [
+      { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: Layers3, label: 'Reading' },
+      { id: 'SPEAKING', view: 'SPEAKING', icon: Mic, label: 'Speaking' },
+      { id: 'WRITING', view: 'WRITING', icon: PenLine, label: 'Writing' },
+    ]
+  },
+  {
+    id: 'LABS',
+    label: 'Labs',
+    icon: BrainCircuit,
+    children: [
+      { id: 'COMPARISON', view: 'COMPARISON', icon: Puzzle, label: 'Comparison' },
+      { id: 'WORD_NET', view: 'WORD_NET', icon: Network, label: 'Word Net' },
+      { id: 'PARAPHRASE', view: 'PARAPHRASE', icon: RefreshCw, label: 'Paraphrase' },
+      { id: 'IRREGULAR_VERBS', view: 'IRREGULAR_VERBS', icon: FileClock, label: 'Irregular Verbs' },
+    ]
+  },
   { id: 'SETTINGS', view: 'SETTINGS', icon: Settings, label: 'Settings' }
-];
+] as const;
 
 const Sidebar: React.FC<AppLayoutProps> = ({ controller }) => {
   const { 
@@ -45,6 +62,20 @@ const Sidebar: React.FC<AppLayoutProps> = ({ controller }) => {
     handleLogout, openAddWordLibrary, forceExpandAdd, setForceExpandAdd, clearSessionState,
     stats, apiUsage
   } = controller;
+
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['IELTS_PREP', 'LABS']));
+
+  const handleToggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
 
   if (!currentUser) return null;
 
@@ -56,9 +87,9 @@ const Sidebar: React.FC<AppLayoutProps> = ({ controller }) => {
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2"><X size={24} /></button>
         </div>
         
-        <nav className="mt-8 flex-1 overflow-y-auto space-y-2">
+        <nav className="mt-8 flex-1 overflow-y-auto space-y-1">
           {sessionType && view !== 'REVIEW' && (
-            <div className="relative group animate-in fade-in duration-300">
+            <div className="relative group animate-in fade-in duration-300 mb-1">
               <button onClick={() => { setView('REVIEW'); setIsSidebarOpen(false); }} className="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm bg-green-500 text-white shadow-lg shadow-green-500/20">
                 <div className="flex items-center space-x-3"><BookCopy size={20} /><span>Study Now</span></div>
                 <div className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span></div>
@@ -66,21 +97,56 @@ const Sidebar: React.FC<AppLayoutProps> = ({ controller }) => {
             </div>
           )}
           {navItems.map(item => {
-            const isActive = view === item.view && (item.id !== 'BROWSE' || !forceExpandAdd);
+            if ('children' in item && item.children) { // It's a group
+              const isExpanded = expandedGroups.has(item.id);
+              const isGroupActive = item.children.some(child => child.view === view);
+
+              return (
+                <div key={item.id} className="space-y-1">
+                  <button 
+                    onClick={() => handleToggleGroup(item.id)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${isGroupActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-500 hover:bg-neutral-100'}`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <item.icon size={20} />
+                      <span>{item.label}</span>
+                    </div>
+                    <ChevronDown size={16} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isExpanded && (
+                    <div className="pl-6 space-y-1 animate-in fade-in duration-300">
+                      {item.children.map(child => {
+                        const isActive = view === child.view;
+                        return (
+                          <button
+                            key={child.id}
+                            onClick={() => { if (sessionType) clearSessionState(); setView(child.view); setForceExpandAdd(false); setIsSidebarOpen(false); }}
+                            className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg font-bold text-sm transition-colors ${isActive ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:bg-neutral-100'}`}
+                          >
+                            <div className="flex items-center space-x-3"><child.icon size={18} /><span>{child.label}</span></div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            
+            // It's a single item
+            // FIX: This structure helps TypeScript correctly narrow the type of 'item'
+            // by separating the group logic (which returns) from the single item logic.
+            const singleItem = item as { readonly view: AppView; readonly id: string; readonly icon: any; readonly label: string };
+            const isActive = view === singleItem.view && (singleItem.id !== 'BROWSE' || !forceExpandAdd);
             return (
-              <div key={item.id} className="relative group">
+              <div key={singleItem.id} className="relative group">
                 <button 
-                  onClick={() => { 
-                    if (sessionType) clearSessionState();
-                    setView(item.view); 
-                    setForceExpandAdd(false); 
-                    setIsSidebarOpen(false); 
-                  }} 
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${isActive ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:bg-neutral-100'}`}
+                  onClick={() => { if (sessionType) clearSessionState(); setView(singleItem.view); setForceExpandAdd(false); setIsSidebarOpen(false); }} 
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${isActive ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-100'}`}
                 >
-                  <div className="flex items-center space-x-3"><item.icon size={20} /><span>{item.label}</span></div>
+                  <div className="flex items-center space-x-3"><singleItem.icon size={20} /><span>{singleItem.label}</span></div>
                 </button>
-                {item.id === 'BROWSE' && (
+                {singleItem.id === 'BROWSE' && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); openAddWordLibrary(); setIsSidebarOpen(false); }}
                     title="Add Word"
@@ -95,95 +161,99 @@ const Sidebar: React.FC<AppLayoutProps> = ({ controller }) => {
         <div className="mt-auto">
            <div className="flex items-center space-x-2">
              <div className="w-full flex items-center space-x-3 p-2 rounded-2xl hover:bg-neutral-100 transition-colors flex-1">
-               <img src={currentUser.avatar} className="w-10 h-10 rounded-2xl bg-neutral-100" alt="User Avatar" />
-               <div className="text-left flex-1 overflow-hidden"><p className="font-bold text-sm truncate">{currentUser.name}</p><p className="text-xs text-neutral-400 truncate">{currentUser.role || 'Learner'}</p></div>
+               <img src={currentUser.avatar} className="w-10 h-10 rounded-2xl bg-neutral-100" />
+               <div className="flex-1 overflow-hidden">
+                 <div className="text-sm font-bold text-neutral-900 truncate">{currentUser.name}</div>
+                 <div className="text-[10px] text-neutral-400 font-bold truncate">{currentUser.role}</div>
+               </div>
              </div>
-             <button onClick={handleLogout} className="p-3 text-neutral-400 rounded-full hover:bg-red-50 hover:text-red-600 transition-colors"><LogOut size={18} /></button>
+             <button onClick={handleLogout} className="p-3 text-neutral-400 hover:bg-neutral-100 hover:text-red-500 rounded-xl transition-colors shrink-0" title="Log Out">
+               <LogOut size={20} />
+             </button>
            </div>
         </div>
       </aside>
-      {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 z-40 bg-black/20 md:hidden" />}
     </>
   );
 };
-
-const LoadingFallback = () => (
-  <div className="flex flex-col items-center justify-center h-full space-y-4">
-    <Loader2 className="animate-spin text-neutral-200" size={40} />
-    <p className="text-xs font-black text-neutral-300 uppercase tracking-widest">Loading Module...</p>
-  </div>
-);
-
+// FIX: Add MainContent component to render the active view.
 const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
   const {
-    view, currentUser, stats, setView, openAddWordLibrary, lastBackupTime, handleBackup, handleRestore,
-    handleNavigateToList, sessionWords, sessionFocus, updateWord, handleSessionComplete, sessionType,
-    handleStartNewStudy, handleStartRandomTest, startSession, deleteWord, bulkDeleteWords, initialListFilter, setInitialListFilter,
-    forceExpandAdd, setForceExpandAdd,
-    globalViewWord, setGlobalViewWord,
-    apiUsage,
-    handleLibraryReset,
-    handleRetrySession,
-    gainExperienceAndLevelUp,
-    xpGained,
-    wotd,
+    view,
+    currentUser,
+    stats,
     xpToNextLevel,
+    wotd,
+    setGlobalViewWord,
+    setView,
+    lastBackupTime,
+    handleBackup,
+    handleRestore,
+    handleNavigateToList,
+    startDueReviewSession,
+    startNewLearnSession,
+    sessionWords,
+    sessionType,
+    sessionFocus,
+    updateWord,
+    handleSessionComplete,
+    gainExperienceAndLevelUp,
+    handleRetrySession,
+    deleteWord,
+    bulkDeleteWords,
+    startSession,
+    initialListFilter,
+    setInitialListFilter,
+    forceExpandAdd,
+    setForceExpandAdd,
     handleUpdateUser,
-    refreshGlobalStats
+    refreshGlobalStats,
+    handleLibraryReset,
+    apiUsage,
+    xpGained
   } = controller;
-
-  const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
 
   if (!currentUser) return null;
 
-  const handleEditRequest = (word: VocabularyItem) => {
-    setGlobalViewWord(null);
-    setEditingWord(word);
-  };
-  
-  const renderContent = () => {
-    switch(view) {
-      case 'DASHBOARD':
-        return <Dashboard
+  switch (view) {
+    case 'DASHBOARD':
+      return (
+        <Dashboard
           userId={currentUser.id}
           user={currentUser}
           totalCount={stats.total}
           dueCount={stats.due}
           newCount={stats.new}
+          xpToNextLevel={xpToNextLevel}
           wotd={wotd}
           onViewWotd={setGlobalViewWord}
           setView={setView}
-          onAddWord={openAddWordLibrary}
           lastBackupTime={lastBackupTime}
           onBackup={handleBackup}
           onRestore={handleRestore}
           onNavigateToWordList={handleNavigateToList}
-          onStartDueReview={async () => startSession(await getDueWords(currentUser.id, 30), 'due')}
-          onStartNewLearn={async () => startSession(await getNewWords(currentUser.id, 20), 'new')}
-          onStartRandomTest={handleStartRandomTest}
-          xpToNextLevel={xpToNextLevel}
-        />;
-      case 'REVIEW':
-        if (!sessionWords || sessionType === null) {
-          useEffect(() => {
-            setView('DASHBOARD');
-          }, [setView]);
-          return <LoadingFallback />;
-        }
-        return <ReviewSession
+          onStartDueReview={startDueReviewSession}
+          onStartNewLearn={startNewLearnSession}
+        />
+      );
+    case 'REVIEW':
+      return sessionWords && sessionType ? (
+        <ReviewSession
           sessionWords={sessionWords}
-          sessionFocus={sessionFocus}
           sessionType={sessionType}
+          sessionFocus={sessionFocus}
           onUpdate={updateWord}
           onComplete={handleSessionComplete}
           onGainXp={gainExperienceAndLevelUp}
           onRetry={handleRetrySession}
-        />;
-      case 'BROWSE':
-        return <WordList
+        />
+      ) : null;
+    case 'BROWSE':
+      return (
+        <WordList
           userId={currentUser.id}
-          onDelete={deleteWord}
-          onBulkDelete={bulkDeleteWords}
+          onDelete={async (id) => await deleteWord(id)}
+          onBulkDelete={async (ids) => await bulkDeleteWords(ids)}
           onUpdate={updateWord}
           onGainXp={gainExperienceAndLevelUp}
           onStartSession={(words) => startSession(words, 'custom')}
@@ -191,69 +261,62 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
           onInitialFilterApplied={() => setInitialListFilter(null)}
           forceExpandAdd={forceExpandAdd}
           onExpandAddConsumed={() => setForceExpandAdd(false)}
-        />;
-      case 'UNIT_LIBRARY':
-        return <UnitLibrary user={currentUser} onStartSession={(words) => startSession(words, 'custom')} onUpdateUser={handleUpdateUser} onGainXp={gainExperienceAndLevelUp} />;
-      case 'WORD_NET':
-        return <WordNet userId={currentUser.id} />;
-      case 'PARAPHRASE':
+        />
+      );
+    case 'UNIT_LIBRARY':
+        return <UnitLibrary user={currentUser} onStartSession={(words) => startSession(words, 'new_study')} onUpdateUser={handleUpdateUser} onGainXp={gainExperienceAndLevelUp} />;
+    case 'PARAPHRASE':
         return <ParaphrasePractice user={currentUser} />;
-      case 'SPEAKING':
+    case 'SETTINGS':
+        return <SettingsView user={currentUser} onUpdateUser={handleUpdateUser} onRefresh={refreshGlobalStats} onNuke={handleLibraryReset} apiUsage={apiUsage} />;
+    case 'DISCOVER':
+        return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={async (xp) => await gainExperienceAndLevelUp(xp)} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} />;
+    case 'WORD_NET':
+        return <WordNet userId={currentUser.id} />;
+    case 'SPEAKING':
         return <SpeakingPractice user={currentUser} />;
-      case 'WRITING':
+    case 'WRITING':
         return <WritingPractice user={currentUser} />;
-      case 'SETTINGS':
-        return <SettingsView user={currentUser} onUpdateUser={handleUpdateUser} onRefresh={refreshGlobalStats} onNuke={handleLibraryReset} apiUsage={apiUsage}/>;
-      case 'DISCOVER':
-        return <Discover user={currentUser} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} xpGained={xpGained} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onStartSession={(words, type) => startSession(words, type)} onUpdateUser={handleUpdateUser}/>;
-      default:
-        return <div>Not implemented: {view}</div>;
-    }
-  };
-
-  return (
-    <>
-      {renderContent()}
-      
-      {globalViewWord && (
-        <ViewWordModal
-          word={globalViewWord}
-          onClose={() => setGlobalViewWord(null)}
-          onNavigateToWord={setGlobalViewWord}
-          onEditRequest={handleEditRequest}
-          onUpdate={updateWord}
-          onGainXp={gainExperienceAndLevelUp}
-          isViewOnly={false}
-        />
-      )}
-      {editingWord && (
-        <EditWordModal 
-          word={editingWord}
-          onSave={(word) => { updateWord(word); setEditingWord(word); }}
-          onClose={() => setEditingWord(null)}
-          onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}
-        />
-      )}
-    </>
-  );
+    case 'COMPARISON':
+        return <Comparison user={currentUser} />;
+    case 'IRREGULAR_VERBS':
+        return <IrregularVerbs user={currentUser} onGlobalViewWord={setGlobalViewWord} />;
+    default:
+      return <div>Unknown view: {view}</div>;
+  }
 };
 
+// FIX: Add and export the main AppLayout component that wraps the Sidebar and MainContent.
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { setIsSidebarOpen } = controller;
+  const { isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp } = controller;
+  const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
+
+  const handleEditRequest = (word: VocabularyItem) => {
+    setGlobalViewWord(null);
+    setEditingWord(word);
+  };
+
+  const handleSaveEdit = (updated: VocabularyItem) => {
+    updateWord(updated);
+    setEditingWord(null);
+  }
 
   return (
-    <div className="flex h-screen bg-neutral-50">
+    <div className="min-h-screen bg-neutral-50 md:flex">
       <Sidebar controller={controller} />
-      <main className="flex-1 overflow-y-auto relative">
-        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden absolute top-6 left-6 p-2 bg-white rounded-full shadow-md z-20 text-neutral-900">
-            <Menu size={20} />
+      <div className={`fixed inset-0 bg-black/30 z-40 md:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
+
+      <main className="flex-1 p-6 md:p-10 overflow-y-auto relative">
+        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30">
+          <Menu size={24} />
         </button>
-        <div className="p-6 md:p-10">
-            <Suspense fallback={<LoadingFallback />}>
-              <MainContent controller={controller} />
-            </Suspense>
-        </div>
+        <Suspense fallback={<div className="flex justify-center p-20"><Loader2 className="animate-spin text-neutral-300" size={32} /></div>}>
+          <MainContent controller={controller} />
+        </Suspense>
       </main>
+      
+      {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
+      {editingWord && <EditWordModal word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
     </div>
   );
 };

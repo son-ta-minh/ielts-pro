@@ -32,6 +32,9 @@ export type SessionType = 'due' | 'new' | 'custom' | 'new_study' | 'random_test'
 export interface WordFamilyMember {
   word: string;
   ipa: string;
+  ipaUs?: string;
+  ipaUk?: string;
+  pronSim?: 'same' | 'near' | 'different';
   isIgnored?: boolean;
 }
 
@@ -72,7 +75,7 @@ export interface PrepositionPattern {
   isIgnored?: boolean;
 }
 
-export type ParaphraseTone = 'intensified' | 'softened' | 'synonym' | 'academic' | 'casual' | 'idiomatic';
+export type ParaphraseTone = 'intensified' | 'softened' | 'synonym' | 'academic' | 'casual';
 
 export interface ParaphraseOption {
   word: string;
@@ -95,6 +98,9 @@ export interface VocabularyItem {
   v2?: string;  
   v3?: string;  
   ipa: string;
+  ipaUs?: string;
+  ipaUk?: string;
+  pronSim?: 'same' | 'near' | 'different';
   ipaMistakes?: string[];
   meaningVi: string;
   example: string;
@@ -226,6 +232,34 @@ export interface WritingLog {
   feedbackHtml: string;
 }
 
-export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'REVIEW_DUE' | 'LEARN_NEW' | 'BROWSE' | 'PARAPHRASE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'WORD_NET' | 'SPEAKING' | 'WRITING';
+export interface ComparisonGroup {
+  id: string;
+  userId: string;
+  name: string;
+  words: string[];
+  comparisonData: {
+      word: string;
+      explanation: string;
+      example: string;
+      userNote?: string;
+  }[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface IrregularVerb {
+  id: string;
+  userId: string;
+  v1: string; // Base form
+  v2: string; // Past simple
+  v3: string; // Past participle
+  createdAt: number;
+  updatedAt: number;
+  lastTestResult?: 'pass' | 'fail';
+  lastTestTimestamp?: number;
+  lastTestIncorrectForms?: ('v1' | 'v2' | 'v3')[];
+}
+
+export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'PARAPHRASE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'WORD_NET' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS';
 
 export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'COLLO_CONNECT' | 'IPA_SORTER' | 'MEANING_MATCH' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'WORD_TRANSFORMER';

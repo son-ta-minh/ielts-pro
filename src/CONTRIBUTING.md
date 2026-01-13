@@ -71,4 +71,3 @@ When optimizing or refactoring code, the primary goal is to improve code quality
 - **Bug Prevention:** Proactively fix potential bugs, race conditions, or memory leaks.
 - **TypeScript Compliance:** Resolve any TypeScript errors or type inconsistencies to improve code safety and maintainability.
 - **DRY (Don't Repeat Yourself):** Refactor duplicated code into reusable functions or components to reduce redundancy and simplify maintenance.
-- **Remove Dead Code:** Eliminate any unused variables, functions, imports, or code paths that are no longer reachable. This improves readability and reduces the overall codebase size.

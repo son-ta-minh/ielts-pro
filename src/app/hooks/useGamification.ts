@@ -1,9 +1,31 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { User, VocabularyItem, ReviewGrade } from '../types';
-import { saveWord } from '../db';
 import { useToast } from '../../contexts/ToastContext';
 
 // --- Constants (moved from useAppController) ---
+
+export const calculateWordDifficultyXp = (word: VocabularyItem): number => {
+    if (word.isPassive) return 0;
+    let baseXP = 50;
+    if (word.ipaMistakes?.length) baseXP += 20;
+    if (word.collocationsArray) baseXP += Math.min(word.collocationsArray.filter(c => !c.isIgnored).length * 10, 50);
+    if (word.idiomsList) baseXP += Math.min(word.idiomsList.filter(c => !c.isIgnored).length * 15, 45);
+    if (word.prepositions) baseXP += Math.min(word.prepositions.filter(p => !p.isIgnored).length * 10, 40);
+    if (word.wordFamily) {
+        const familyCount = (word.wordFamily.nouns?.filter(m => !m.isIgnored).length || 0) +
+                            (word.wordFamily.verbs?.filter(m => !m.isIgnored).length || 0) +
+                            (word.wordFamily.adjs?.filter(m => !m.isIgnored).length || 0) +
+                            (word.wordFamily.advs?.filter(m => !m.isIgnored).length || 0);
+        baseXP += Math.min(familyCount * 5, 50);
+    }
+    if (word.paraphrases) baseXP += Math.min(word.paraphrases.filter(p => !p.isIgnored).length * 10, 30);
+    if (word.isIrregular) baseXP += 20;
+    if (word.needsPronunciationFocus) baseXP += 15;
+    if (word.isIdiom || word.isPhrasalVerb || word.isCollocation || word.isStandardPhrase) baseXP += 10;
+    if (word.word.length > 7) baseXP += 5;
+    if (word.word.length > 10) baseXP += 5;
+    return Math.round(baseXP);
+};
 
 const getXpForNextLevel = (level: number): number => {
     if (level < 1) return 0;
@@ -42,51 +64,55 @@ const XP_COOLDOWN_3_DAYS = 3 * XP_COOLDOWN_1_DAY;
 
 interface UseGamificationProps {
     currentUser: User | null;
-    onUpdateUser: (user: User) => Promise<void>;
-    sessionWords: VocabularyItem[] | null;
-    setSessionWords: React.Dispatch<React.SetStateAction<VocabularyItem[] | null>>;
+    onSaveWordAndUser: (word: VocabularyItem, user: User) => Promise<void>;
 }
 
-export const useGamification = ({ currentUser, onUpdateUser, sessionWords, setSessionWords }: UseGamificationProps) => {
+export const useGamification = ({ currentUser, onSaveWordAndUser }: UseGamificationProps) => {
     const [xpGained, setXpGained] = useState<{ amount: number, levelUp: boolean, newLevel: number | null } | null>(null);
     const { showToast } = useToast();
 
-    const gainExperienceAndLevelUp = useCallback(async (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade) => {
-        if (!currentUser) return 0;
+    const gainExperienceAndLevelUp = useCallback(async (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => {
+        if (!currentUser || !wordToUpdate) return 0;
         
-        const oldRole = currentUser.role;
         let effectiveXpAmount = baseXpAmount;
-        let finalWordToSave: VocabularyItem | undefined = wordToUpdate;
+        let finalWordToSave: VocabularyItem = { ...wordToUpdate };
         
-        if (wordToUpdate) {
+        if (testCounts) {
+            if (testCounts.tested > 0) {
+                const correctRatio = testCounts.correct / testCounts.tested;
+                effectiveXpAmount = Math.round(baseXpAmount * correctRatio);
+            } else {
+                effectiveXpAmount = 0;
+            }
+        } else {
             if (grade === ReviewGrade.HARD) effectiveXpAmount = Math.round(baseXpAmount * 0.75);
             else if (grade === ReviewGrade.FORGOT) effectiveXpAmount = Math.round(baseXpAmount * 0.50);
-
-            const now = Date.now();
-            if (wordToUpdate.lastXpEarnedTime) {
-                const timeSinceLastXp = now - wordToUpdate.lastXpEarnedTime;
-                if (timeSinceLastXp < XP_COOLDOWN_QUICK_RETRY) effectiveXpAmount = 0;
-                else if (timeSinceLastXp < XP_COOLDOWN_1_DAY) effectiveXpAmount = Math.round(effectiveXpAmount * 0.1);
-                else if (timeSinceLastXp < XP_COOLDOWN_3_DAYS) effectiveXpAmount = Math.round(effectiveXpAmount * 0.5);
-            }
-            
-            effectiveXpAmount = Math.max(0, effectiveXpAmount);
-
-            if (effectiveXpAmount > 0) {
-                finalWordToSave = { ...wordToUpdate, lastXpEarnedTime: now };
-            }
-            
-            await saveWord(finalWordToSave!);
-            if (sessionWords) {
-                const wordForState = finalWordToSave!;
-                setSessionWords(prev => (prev || []).map(w => w.id === wordForState.id ? wordForState : w));
-            }
         }
 
-        if (baseXpAmount <= 0) return 0;
+        const now = Date.now();
+        if (wordToUpdate.lastXpEarnedTime) {
+            const timeSinceLastXp = now - wordToUpdate.lastXpEarnedTime;
+            if (timeSinceLastXp < XP_COOLDOWN_QUICK_RETRY) effectiveXpAmount = 0;
+            else if (timeSinceLastXp < XP_COOLDOWN_1_DAY) effectiveXpAmount = Math.round(effectiveXpAmount * 0.1);
+            else if (timeSinceLastXp < XP_COOLDOWN_3_DAYS) effectiveXpAmount = Math.round(effectiveXpAmount * 0.5);
+        }
+        
+        effectiveXpAmount = Math.max(0, effectiveXpAmount);
+
+        if (effectiveXpAmount > 0) {
+            finalWordToSave.lastXpEarnedTime = now;
+        }
+
+        if (baseXpAmount <= 0) {
+            // Still save the word if it was updated (e.g., SRS data), even with 0 XP
+            await onSaveWordAndUser(finalWordToSave, currentUser);
+            return 0;
+        }
         
         if (effectiveXpAmount === 0 && baseXpAmount > 0) {
-            showToast(`+0 XP (Cooldown)`, 'info', 1500);
+            showToast(`+0 XP`, 'info', 1500);
+            // Save the word even if no XP is gained to update SRS stats
+            await onSaveWordAndUser(finalWordToSave, currentUser);
             return 0;
         }
 
@@ -116,9 +142,12 @@ export const useGamification = ({ currentUser, onUpdateUser, sessionWords, setSe
         if (isCurrentRoleAutoAssigned || !currentUser.role || currentUser.role.trim() === '') {
           finalRole = newAutoRole;
         }
-        const roleChanged = finalRole !== oldRole;
+        const roleChanged = finalRole !== currentUser.role;
 
         const updatedUser: User = { ...currentUser, experience: newExperience, level: newLevel, role: finalRole };
+        
+        // Atomic save operation for both word and user
+        await onSaveWordAndUser(finalWordToSave, updatedUser);
 
         if (levelUp) {
             if (updatedUser.adventure) {
@@ -148,13 +177,11 @@ export const useGamification = ({ currentUser, onUpdateUser, sessionWords, setSe
             showToast(`+${finalXpForUser} XP gained!`, 'info', 2000);
         }
 
-        await onUpdateUser(updatedUser);
-
         setXpGained({ amount: finalXpForUser, levelUp, newLevel: levelUp ? newLevel : null });
         setTimeout(() => setXpGained(null), levelUp ? 5000 : 2000);
 
         return finalXpForUser;
-    }, [currentUser, onUpdateUser, showToast, sessionWords, setSessionWords]);
+    }, [currentUser, showToast, onSaveWordAndUser]);
 
     const xpToNextLevel = useMemo(() => {
         if (!currentUser) return 0;

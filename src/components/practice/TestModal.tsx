@@ -1,19 +1,18 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { VocabularyItem, ReviewGrade } from '../../app/types';
 import { TestModalUI } from './TestModal_UI';
-import { Challenge, ChallengeResult, ChallengeType } from './TestModalTypes';
+import { Challenge, ChallengeResult, ChallengeType, CollocationQuizChallenge } from './TestModalTypes';
 import { generateAvailableChallenges, prepareChallenges, gradeChallenge } from '../../utils/challengeUtils';
 
 interface Props {
   word: VocabularyItem;
   onClose: () => void;
-  onComplete: (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean) => void;
+  onComplete: (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => void;
   isQuickFire?: boolean;
   isModal?: boolean;
   sessionPosition?: { current: number, total: number };
   onPrevWord?: () => void;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade) => Promise<number>;
+  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number; tested: number; }) => Promise<number>;
 }
 
 const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = false, isModal = true, sessionPosition, onPrevWord }) => {
@@ -82,8 +81,38 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       if (selected.length === 0) return;
       setIsPreparing(true);
       const finalChallenges = await prepareChallenges(selected, word);
-      setActiveChallenges(finalChallenges);
-      setUserAnswers(new Array(finalChallenges.length).fill(undefined));
+      
+      const shuffleChallenges = (challenges: Challenge[]): Challenge[] => {
+          // Separate PARAPHRASE_QUIZ, PREPOSITION_QUIZ, and other challenges.
+          const paraQuizzes = challenges.filter(c => c.type === 'PARAPHRASE_QUIZ');
+          const prepQuizzes = challenges.filter(c => c.type === 'PREPOSITION_QUIZ');
+          const otherQuizzes = challenges.filter(c => c.type !== 'PARAPHRASE_QUIZ' && c.type !== 'PREPOSITION_QUIZ');
+  
+          // Shuffle the paraphrase quizzes internally to ensure their order is random.
+          const shuffledPara = paraQuizzes.sort(() => Math.random() - 0.5);
+  
+          // Create the list of items to be shuffled: 
+          // - Individual 'other' quizzes
+          // - Individual shuffled paraphrase quizzes
+          // - A single block for all preposition quizzes (to keep them together)
+          const itemsToShuffle: (Challenge | Challenge[])[] = [...otherQuizzes, ...shuffledPara];
+          if (prepQuizzes.length > 0) {
+              itemsToShuffle.push(prepQuizzes);
+          }
+          
+          // Fisher-Yates shuffle on the final list of items.
+          for (let k = itemsToShuffle.length - 1; k > 0; k--) {
+              const l = Math.floor(Math.random() * (k + 1));
+              [itemsToShuffle[k], itemsToShuffle[l]] = [itemsToShuffle[l], itemsToShuffle[k]];
+          }
+  
+          return itemsToShuffle.flat();
+      };
+      
+      const shuffledChallenges = shuffleChallenges(finalChallenges);
+
+      setActiveChallenges(shuffledChallenges);
+      setUserAnswers(new Array(shuffledChallenges.length).fill(undefined));
       setIsPreparing(false);
       setIsSetupMode(false);
   };
@@ -133,6 +162,15 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
           Object.entries(result.details).forEach(([type, correct]) => {
               resultHistory[`WORD_FAMILY_${type.toUpperCase()}`] = correct;
           });
+      } else if (challenge.type === 'COLLOCATION_QUIZ' && typeof result === 'object' && 'details' in result) {
+          resultHistory['COLLOCATION_QUIZ'] = result.correct;
+          const cq = challenge as CollocationQuizChallenge;
+          Object.entries(result.details).forEach(([index, correct]) => {
+              const collocationText = cq.collocations[parseInt(index, 10)]?.fullText;
+              if (collocationText) {
+                  resultHistory[`COLLOCATION_QUIZ:${collocationText}`] = correct;
+              }
+          });
       } else if (challenge.type === 'PARAPHRASE_QUIZ') {
           resultHistory[`PARAPHRASE_QUIZ:${challenge.answer}`] = isCorrect;
       } else if (challenge.type === 'PREPOSITION_QUIZ') {
@@ -148,12 +186,14 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
         else if (correctCount < actualTestedCount / 2) finalGrade = ReviewGrade.FORGOT;
     }
     
+    const counts = { correct: correctCount, tested: actualTestedCount };
+
     if (isEarlyFinish || isQuickFire) {
         setResults(newResults);
         setIsFinishing(true);
-        setTimeout(() => onComplete(finalGrade, resultHistory, stopSession), isQuickFire ? 1500 : 2500);
+        setTimeout(() => onComplete(finalGrade, resultHistory, stopSession, counts), isQuickFire ? 1500 : 2500);
     } else {
-        onComplete(finalGrade, resultHistory, stopSession);
+        onComplete(finalGrade, resultHistory, stopSession, counts);
     }
   };
 

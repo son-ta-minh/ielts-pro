@@ -107,7 +107,6 @@ export const UnitStudyViewUI: React.FC<UnitStudyViewUIProps> = (props) => {
             onDelete={async (w) => { await handleRemoveWordFromUnit(w.id); }} 
             onHardDelete={onHardDelete}
             onBulkDelete={onBulkDelete}
-            onRefine={() => onDataChange()} 
             onPractice={(ids) => onStartSession(allWords.filter(w => ids.has(w.id)))} 
             settingsKey="ielts_pro_unit_table_settings" 
             context="unit" 

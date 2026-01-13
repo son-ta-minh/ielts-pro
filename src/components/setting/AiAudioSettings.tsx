@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { BrainCircuit, Save, Bot, MonitorSmartphone, ChevronDown, Key, BarChart3, Power } from 'lucide-react';
+import { BrainCircuit, Save, Bot, MonitorSmartphone, ChevronDown, Key, BarChart3, Power, Loader2 } from 'lucide-react';
 import { SystemConfig } from '../../app/settingsManager';
 
 interface AiAudioSettingsProps {
@@ -17,12 +16,16 @@ interface AiAudioSettingsProps {
     onSaveApiKeys: () => void;
     onResetUsage: () => void;
     onSaveSettings: () => void;
+    isApplyingAccent: boolean;
+    onApplyAccent: () => void;
 }
 
 export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
     config, isVoiceLoading, availableVoices, apiKeyInput, apiUsage,
+    // FIX: Add missing 'onConfigChange' prop to destructuring.
+    onConfigChange,
     onAiConfigChange, onAudioModeChange, onVoiceChange, onApiKeyInputChange,
-    onSaveApiKeys, onResetUsage, onSaveSettings
+    onSaveApiKeys, onResetUsage, onSaveSettings, isApplyingAccent, onApplyAccent
 }) => {
     const usagePercentage = Math.min((apiUsage.count / 500) * 100, 100);
     let usageColor = 'bg-green-500';
@@ -89,6 +92,26 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
                         <p className="text-[10px] text-blue-600 mt-1">Consumes your API quota.</p>
                     </div>
                 )}
+                 <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-100 space-y-3 animate-in fade-in duration-300">
+                    <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Default Pronunciation Accent</label>
+                    <div className="flex bg-neutral-100 p-1 rounded-2xl">
+                        <button onClick={() => onConfigChange('audio', 'preferredAccent', 'US')} className={`flex-1 py-2 text-xs font-black rounded-xl transition-all ${config.audio.preferredAccent === 'US' ? 'bg-white shadow-sm' : ''}`}>US</button>
+                        <button onClick={() => onConfigChange('audio', 'preferredAccent', 'UK')} className={`flex-1 py-2 text-xs font-black rounded-xl transition-all ${config.audio.preferredAccent === 'UK' ? 'bg-white shadow-sm' : ''}`}>UK</button>
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
+                        <div className="text-[10px] font-bold text-neutral-400">
+                            {config.audio.appliedAccent ? `Applied: ${config.audio.appliedAccent}` : 'Default accent not set.'}
+                        </div>
+                        <button 
+                            onClick={onApplyAccent} 
+                            disabled={isApplyingAccent || config.audio.preferredAccent === config.audio.appliedAccent}
+                            className="px-4 py-2 bg-neutral-900 text-white rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {isApplyingAccent ? <Loader2 size={12} className="animate-spin"/> : null}
+                            {isApplyingAccent ? 'Applying...' : 'Apply'}
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div className="space-y-4 pt-4 border-t border-neutral-100">

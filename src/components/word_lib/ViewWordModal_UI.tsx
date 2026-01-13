@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Plus, CheckCircle2, Tag as TagIcon, StickyNote, Edit3, Archive, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, Info, ChevronDown, ChevronRight, Link as LinkIcon, Users2, BrainCircuit, Loader2 } from 'lucide-react';
-import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality } from '../../app/types';
+import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
 import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
+import { logSrsUpdate } from '../practice/ReviewSession';
 
 // FIX: Allow 'raw' register type and handle it by not rendering a badge.
 const RegisterBadge: React.FC<{ register?: 'academic' | 'casual' | 'neutral' | 'raw' }> = ({ register }) => {
@@ -74,7 +75,6 @@ const renderParaphraseBadge = (tone: string) => {
         intensified: "bg-rose-100 text-rose-700 border-rose-200",
         softened: "bg-sky-100 text-sky-700 border-sky-200",
         casual: "bg-blue-100 text-blue-700 border-blue-200",
-        idiomatic: "bg-amber-100 text-amber-700 border-amber-200",
         synonym: "bg-teal-100 text-teal-700 border-teal-200",
         default: "bg-neutral-100 text-neutral-600 border-neutral-200"
     };
@@ -138,9 +138,10 @@ export interface ViewWordModalUIProps {
     addingVariant: string | null;
     existingVariants: Set<string>;
     isViewOnly?: boolean;
+    appliedAccent?: 'US' | 'UK';
 }
 
-export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose, onChallengeRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, onNavigateToWord, onAddVariantToLibrary, addingVariant, existingVariants, isViewOnly = false }) => {
+export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose, onChallengeRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, onNavigateToWord, onAddVariantToLibrary, addingVariant, existingVariants, isViewOnly = false, appliedAccent }) => {
     const [viewSettings, setViewSettings] = useState(() => getStoredJSON('ielts_pro_word_view_settings', { showHidden: false, highlightFailed: true, isLearnView: true }));
     const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
     const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
@@ -183,8 +184,16 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
     ];
     const currentLearnStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
     const handleLearnStatusSelect = (statusId: string) => {
-        const calculated = statusId === 'NEW' ? resetProgress(word) : updateSRS(word, statusId as ReviewGrade);
-        onUpdate(calculated);
+        if (isViewOnly) return;
+        if (statusId === 'NEW') {
+            const finalWord = resetProgress(word);
+            logSrsUpdate('RESET' as any, word, finalWord);
+            onUpdate(finalWord);
+        } else {
+            const finalWord = updateSRS(word, statusId as ReviewGrade);
+            logSrsUpdate(statusId as ReviewGrade, word, finalWord);
+            onUpdate(finalWord);
+        }
     };
 
     const qualityStatusOptions = [
@@ -251,59 +260,81 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
     const tagCount = (word.tags?.length || 0) + flagCount;
     const groupCount = (word.groups?.length || 0);
 
+    const displayAccent = appliedAccent || 'US';
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="px-8 py-4 border-b border-neutral-100 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-neutral-50/30 gap-4 shrink-0">
-                    <div className="space-y-0.5">
-                        <div className="flex items-center gap-3">
-                            <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
-                            {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
-                            {!word.isPassive && (
-                                <>
+                <header className="px-8 py-4 border-b border-neutral-100 bg-neutral-50/30 flex flex-col gap-1 shrink-0">
+                    {/* --- ROW 1: Word & Actions --- */}
+                    <div className="flex justify-between items-start w-full gap-4">
+                        {/* Top Left: Word, Sound, Meaning Icon */}
+                        <div className="flex-1">
+                            <div className="flex items-center gap-1">
+                                <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
+                                {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
+                                {!word.isPassive && (
                                     <button onClick={(e) => { e.stopPropagation(); speak(word.word); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce"><Volume2 size={18} /></button>
-                                    <button className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title={word.meaningVi}><BookOpen size={18} /></button>
-                                    <div className="w-px h-4 bg-neutral-200" />
-                                    <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-400" title={`Next Review: ${reviewStatus.label}`}>
-                                        <Clock size={14} />
-                                        <span className={`text-[11px] font-black uppercase ${reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'}`}>
-                                            {reviewStatus.label}
-                                        </span>
+                                )}
+                                <div className="relative group">
+                                    <button className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Show meaning">
+                                        <BookOpen size={18} />
+                                    </button>
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs px-3 py-2 bg-neutral-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                        {word.meaningVi}
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
                                     </div>
-                                </>
-                            )}
-                            {word.isPassive && <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-neutral-100 text-neutral-500 tracking-wider">Archived</span>}
+                                </div>
+                                <div className="flex items-center gap-2.5 text-neutral-400 pl-2">
+                                    {word.isIdiom && (
+                                        <div className="relative group flex items-center">
+                                            <Quote size={18} className="cursor-help"/>
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max px-3 py-1.5 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 uppercase tracking-wider">
+                                                Idiom
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {word.isPhrasalVerb && (
+                                        <div className="relative group flex items-center">
+                                            <Layers size={18} className="cursor-help"/>
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max px-3 py-1.5 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 uppercase tracking-wider">
+                                                Phrasal Verb
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {word.isCollocation && (
+                                        <div className="relative group flex items-center">
+                                            <Combine size={18} className="cursor-help"/>
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max px-3 py-1.5 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 uppercase tracking-wider">
+                                                Collocation
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {word.isStandardPhrase && (
+                                        <div className="relative group flex items-center">
+                                            <MessageSquare size={18} className="cursor-help"/>
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max px-3 py-1.5 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 uppercase tracking-wider">
+                                                Phrase
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                             <p className={`text-sm font-mono font-medium ${isIpaFailed ? 'text-red-500' : 'text-neutral-400'}`}>{word.ipa || '/?/'}</p>
-                             <RegisterBadge register={word.register} />
-                             {/* FIX: The 'title' prop is not supported by lucide-react icons. Wrap icons in a span with a title attribute for tooltips. */}
-                             <div className="flex items-center gap-1.5 text-neutral-400">
-                                {word.isIdiom && <span title="Idiom"><Quote size={14} /></span>}
-                                {word.isPhrasalVerb && <span title="Phrasal Verb"><Layers size={14} /></span>}
-                                {word.isCollocation && <span title="Collocation"><Combine size={14} /></span>}
-                                {word.isStandardPhrase && <span title="Phrase"><MessageSquare size={14} /></span>}
-                             </div>
-                             <div className="w-1 h-1 bg-neutral-200 rounded-full"></div>
-                             <StatusDropdown
-                                 options={qualityStatusOptions}
-                                 selectedId={word.quality}
-                                 onSelect={(id) => handleQualitySelect(id as WordQuality)}
-                                 buttonClass="flex items-center gap-2 p-1 hover:bg-neutral-100 rounded-lg transition-colors"
-                                 disabled={isViewOnly}
-                             />
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <StatusDropdown 
-                            options={learnStatusOptions}
-                            selectedId={currentLearnStatus}
-                            onSelect={handleLearnStatusSelect}
-                            buttonClass="flex items-center gap-2 px-3 py-2 bg-neutral-100/80 rounded-lg hover:bg-neutral-200/80 transition-colors shadow-sm border border-neutral-200/50"
-                            disabled={isViewOnly}
-                        />
-                        <div className="w-px h-6 bg-neutral-200 mx-1 hidden sm:block"></div>
-                        <div className="flex items-center gap-2">
+
+                        {/* Top Right: Action Buttons */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <StatusDropdown 
+                                options={learnStatusOptions}
+                                selectedId={currentLearnStatus}
+                                onSelect={handleLearnStatusSelect}
+                                buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200"
+                                disabled={isViewOnly}
+                            />
                             <div className="relative" ref={viewMenuRef}>
                                 <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className={`p-2 rounded-lg transition-colors ${isViewMenuOpen ? 'bg-neutral-900 text-white shadow-sm' : 'bg-white border border-neutral-200 text-neutral-400 hover:text-neutral-900'}`} title="View Options">
                                     <Eye size={16} />
@@ -326,7 +357,58 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                             <button onClick={onClose} className="p-2 bg-white border border-neutral-200 text-neutral-400 hover:text-neutral-900 rounded-lg transition-colors"><X size={16} /></button>
                         </div>
                     </div>
-                </div>
+
+                    {/* --- ROW 2: Details --- */}
+                    <div className="flex justify-between items-end w-full gap-4">
+                        {/* Bottom Left: IPA, Register */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <p className={`text-sm font-mono font-medium ${isIpaFailed ? 'text-red-500' : 'text-neutral-500'}`}>{word.ipa || '/?/'}</p>
+                            
+                            {word.pronSim && word.pronSim !== 'same' && (
+                                <>
+                                    {displayAccent === 'US' && word.ipaUk && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-mono text-neutral-400">(UK: {word.ipaUk})</span>
+                                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${word.pronSim === 'near' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                                {word.pronSim === 'near' ? 'Near Sound' : 'Different Sound'}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {displayAccent === 'UK' && word.ipaUs && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-mono text-neutral-400">(US: {word.ipaUs})</span>
+                                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${word.pronSim === 'near' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                                {word.pronSim === 'near' ? 'Near Sound' : 'Different Sound'}
+                                            </span>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            <RegisterBadge register={word.register} />
+                        </div>
+
+                        {/* Bottom Right: Quality, Due */}
+                        <div className="flex items-center gap-4">
+                            <StatusDropdown
+                                options={qualityStatusOptions}
+                                selectedId={word.quality}
+                                onSelect={(id) => handleQualitySelect(id as WordQuality)}
+                                buttonClass="flex items-center gap-2 p-1 hover:bg-neutral-100 rounded-lg transition-colors"
+                                disabled={isViewOnly}
+                            />
+                            {!word.isPassive && (
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-500" title={`Next Review: ${reviewStatus.label}`}>
+                                    <Clock size={14} />
+                                    <span className={`text-[11px] font-black uppercase ${reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'}`}>
+                                        {reviewStatus.label}
+                                    </span>
+                                </div>
+                            )}
+                            {word.isPassive && <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-neutral-100 text-neutral-500 tracking-wider">Archived</span>}
+                        </div>
+                    </div>
+                </header>
 
                 <div className="flex-1 overflow-y-auto no-scrollbar px-6 pt-4 pb-8">
                     {word.quality !== WordQuality.VERIFIED && (
@@ -346,7 +428,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                         
                         <div className="space-y-1 md:col-span-3"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Network size={10}/> Word Family</label><div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100">{!hasAnyFamilyData ? (<span className="text-[10px] text-neutral-300 italic">No family data available.</span>) : (<div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{renderFamilyCardGroup("Nouns", word.wordFamily?.nouns, "blue", "nouns")}{renderFamilyCardGroup("Verbs", word.wordFamily?.verbs, "green", "verbs")}{renderFamilyCardGroup("Adjectives", word.wordFamily?.adjs, "orange", "adjs")}{renderFamilyCardGroup("Adverbs", word.wordFamily?.advs, "purple", "advs")}</div>)}</div></div>
 
-                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Combine size={10}/> Collocations</label>{displayedCollocs.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">{displayedCollocs.map((c: CollocationDetail, i: number) => (<div key={i} className={`flex items-center px-3 py-2 rounded-lg border text-xs font-bold ${c.isIgnored ? 'bg-neutral-50 border-neutral-100 text-neutral-400 line-through' : 'bg-indigo-50/50 border-indigo-100 text-indigo-900'}`}>{c.text}</div>))}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No collocations.</div>)}</div>
+                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Combine size={10}/> Collocations</label>{displayedCollocs.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">{displayedCollocs.map((c: CollocationDetail, i: number) => { const specificKey = `COLLOCATION_QUIZ:${c.text}`; const specificResult = word.lastTestResults?.[specificKey]; let isFailed = false; if (viewSettings.highlightFailed && !c.isIgnored) { if (specificResult === false) { isFailed = true; } else if (specificResult === undefined && word.lastTestResults?.['COLLOCATION_QUIZ'] === false) { isFailed = true; } } let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900"; if (isFailed) { containerClass = "bg-red-50 border-red-200 text-red-700"; } else if (c.isIgnored) { containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400 line-through"; } return (<div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold ${containerClass}`}>{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className="truncate">{c.text}</span></div>);})}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No collocations.</div>)}</div>
                         
                         <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Zap size={10} className="text-amber-500"/> Word Power & Variations</label>{displayedParas.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-4 gap-3">{displayedParas.map((para: ParaphraseOption, idx: number) => { const isExisting = existingVariants.has(para.word.toLowerCase()); const specificKey = `PARAPHRASE_QUIZ:${para.word}`; const specificResult = word.lastTestResults?.[specificKey]; const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PARAPHRASE_QUIZ'] === false)) && !para.isIgnored; const isIgnored = para.isIgnored; return (<div key={idx} className={`flex items-start justify-between gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-100'}`}><div className="flex-1 overflow-hidden"><div className="flex justify-between items-center mb-1">{renderParaphraseBadge(para.tone)}{isFailed && <AlertCircle size={12} className="text-red-500 fill-red-100"/>}</div><div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div><div className={`text-[10px] italic truncate ${isFailed ? 'text-red-400' : 'text-neutral-400'}`} title={para.context}>{para.context}</div></div><button type="button" disabled={addingVariant === para.word || isExisting} onClick={() => onAddVariantToLibrary({ word: para.word, ipa: '' }, 'paraphrase')} className={`p-1 rounded-md transition-all mt-1 shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100' }`} >{addingVariant === para.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}</button></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic">No variations available.</div>)}</div>
                         

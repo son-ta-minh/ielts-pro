@@ -30,9 +30,7 @@ const ProgressBar: React.FC<{ value: number, max: number, label: string }> = ({ 
 export const DayProgress: React.FC<Props> = ({ learnedToday, reviewedToday, maxLearn, maxReview, learnedWords, reviewedWords, onViewWord }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     
-    const sortedLearned = [...learnedWords].sort((a,b) => (b.lastReview || 0) - (a.lastReview || 0));
-    const sortedReviewed = [...reviewedWords].sort((a,b) => (b.lastReview || 0) - (a.lastReview || 0));
-    const hasActivity = learnedWords.length > 0 || reviewedWords.length > 0;
+    const allTodayWords = [...learnedWords, ...reviewedWords].sort((a,b) => (b.lastReview || 0) - (a.lastReview || 0));
 
     return (
         <section className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm">
@@ -59,50 +57,25 @@ export const DayProgress: React.FC<Props> = ({ learnedToday, reviewedToday, maxL
                     <ProgressBar value={reviewedToday} max={maxReview} label="Review Goal" />
                 </div>
                 
-                {hasActivity && (
+                {allTodayWords.length > 0 && (
                     <div>
                         <button onClick={() => setIsExpanded(!isExpanded)} className="w-full flex justify-between items-center text-left py-2">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Today's Activity ({learnedWords.length + reviewedWords.length})</h4>
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Today's Activity ({allTodayWords.length})</h4>
                             {isExpanded ? <ChevronDown size={16} className="text-neutral-400"/> : <ChevronRight size={16} className="text-neutral-400"/>}
                         </button>
                         {isExpanded && (
-                            <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                                <div>
-                                    <h5 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">Learned ({learnedWords.length})</h5>
-                                    <div className="space-y-1">
-                                        {sortedLearned.length === 0 ? (
-                                            <p className="text-xs text-neutral-400 italic py-1">None yet.</p>
-                                        ) : (
-                                            sortedLearned.map(word => (
-                                                <button 
-                                                    key={word.id} 
-                                                    onClick={() => onViewWord(word)}
-                                                    className="w-full text-left p-1.5 rounded-lg hover:bg-neutral-100 text-sm font-bold text-neutral-800 truncate"
-                                                >
-                                                    {word.word}
-                                                </button>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                                <div>
-                                    <h5 className="text-[10px] font-black uppercase tracking-widest text-orange-500 mb-2">Reviewed ({reviewedWords.length})</h5>
-                                     <div className="space-y-1">
-                                        {sortedReviewed.length === 0 ? (
-                                            <p className="text-xs text-neutral-400 italic py-1">None yet.</p>
-                                        ) : (
-                                            sortedReviewed.map(word => (
-                                                <button 
-                                                    key={word.id} 
-                                                    onClick={() => onViewWord(word)}
-                                                    className="w-full text-left p-1.5 rounded-lg hover:bg-neutral-100 text-sm font-bold text-neutral-800 truncate"
-                                                >
-                                                    {word.word}
-                                                </button>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
+                            <div className="mt-2 max-h-40 overflow-y-auto space-y-1 pr-2">
+                                {allTodayWords.map(word => (
+                                    <button 
+                                        key={word.id} 
+                                        onClick={() => onViewWord(word)}
+                                        className="w-full flex items-center gap-2 text-left p-2 rounded-lg hover:bg-neutral-50"
+                                    >
+                                        <div className={`w-2 h-2 rounded-full ${learnedWords.some(lw => lw.id === word.id) ? 'bg-blue-500' : 'bg-orange-500'}`} />
+                                        <span className="text-sm font-bold text-neutral-800 flex-1 truncate">{word.word}</span>
+                                        <span className="text-xs text-neutral-400 font-mono">{new Date(word.lastReview!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </button>
+                                ))}
                             </div>
                         )}
                     </div>

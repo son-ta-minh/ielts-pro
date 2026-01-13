@@ -31,7 +31,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
 
     const handleBackup = async () => {
         if (!currentUser) return;
-        const [wordsData, unitsData, logsData, speakingTopicsData, speakingLogsData, writingTopicsData, writingLogsData] = await Promise.all([
+        const [wordsData, unitsData, logsData, speakingTopicsData, speakingLogsData, writingTopicsData, writingLogsData] = await Promise.all([ 
           dataStore.getAllWords(), 
           dataStore.getUnitsByUserId(currentUser.id),
           dataStore.getParaphraseLogs(currentUser.id),
@@ -103,17 +103,13 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 console.log("useDataActions: processJsonImport result:", result);
     
                 if (result.type === 'success') {
-                    showToast('Restore successful! The app will now reload.', 'success', 2000);
+                    showToast('Restore successful! Press F5 to reload.', 'success', 2000);
                     
-                    // The reload will handle re-initializing state, but we save the user first
-                    // if it was part of the import.
                     if (result.updatedUser) {
-                        await onUpdateUser(result.updatedUser);
+                        await dataStore.saveUser(result.updatedUser);
                     }
 
-                    setTimeout(() => {
-                        window.dispatchEvent(new CustomEvent('force-reload'));
-                    }, 2000); // Give user time to read the toast
+                    setTimeout(() => window.location.href = window.location.href, 2000); // Give user time to read the toast
                 } else {
                     showToast(`Restore data failed. Reason: ${result.detail || result.message}`, 'error', 10000);
                 }
@@ -151,6 +147,14 @@ export const useDataActions = (props: UseDataActionsProps) => {
 
     const updateWord = async (updatedWord: VocabularyItem) => {
         await dataStore.saveWord(updatedWord);
+        
+        // If there's an active session, update the word in that session's state too.
+        if (sessionWords) {
+            setSessionWords(prevWords => 
+                (prevWords || []).map(w => w.id === updatedWord.id ? updatedWord : w)
+            );
+        }
+
         // If the word currently in the global view modal is the one being updated,
         // we need to update the state to force a re-render of the modal with the new data.
         if (globalViewWord && globalViewWord.id === updatedWord.id) {

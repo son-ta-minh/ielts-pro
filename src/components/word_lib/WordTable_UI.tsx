@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ArrowDownAZ, ListFilter, Copy, ShieldCheck, ShieldX, Ghost, Zap, GitCommit } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, WordQuality } from '../../app/types';
@@ -111,6 +110,7 @@ export interface WordTableUIProps {
   // FIX: Added onBulkVerify to props to fix TypeScript error in parent component.
   onBulkVerify: (ids: Set<string>) => void;
   onOpenWordTypeAiModal: () => void;
+  onOpenAccentAiModal: () => void;
   selectedWordsToRefine: VocabularyItem[];
   handleGenerateRefinePrompt: (inputs: { words: string }) => string;
   handleAiRefinementResult: (results: any[]) => void;
@@ -132,7 +132,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   wordToHardDelete, setWordToHardDelete, isHardDeleting, setIsHardDeleting,
   isAiModalOpen, setIsAiModalOpen,
   notification, viewMenuRef, visibility, setVisibility, handleToggleFilter,
-  handleBatchAddSubmit, onOpenBulkDeleteModal, onBulkVerify, onOpenWordTypeAiModal, selectedWordsToRefine, handleGenerateRefinePrompt,
+  handleBatchAddSubmit, onOpenBulkDeleteModal, onBulkVerify, onOpenWordTypeAiModal, onOpenAccentAiModal, selectedWordsToRefine, handleGenerateRefinePrompt,
   handleAiRefinementResult, setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setIsViewMenuOpen,
   setIsFilterMenuOpen, setIsAddExpanded,
 }) => {
@@ -251,24 +251,16 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
         )}
       </div>
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-full max-w-2xl px-4 animate-in slide-in-from-bottom-8">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-full max-w-3xl px-4 animate-in slide-in-from-bottom-8">
           <div className="bg-neutral-900 text-white rounded-[2rem] p-4 shadow-2xl flex items-center justify-between border border-neutral-800">
             <div className="flex items-center space-x-4 pl-2"><button onClick={() => setSelectedIds(new Set())} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button><div><div className="text-sm font-black">{selectedIds.size} selected</div></div></div>
             <div className="flex items-center space-x-2">
-              {onOpenBulkDeleteModal && (
-                <button onClick={onOpenBulkDeleteModal} className={`px-5 py-3 rounded-2xl text-xs font-black flex items-center space-x-2 transition-colors ${
-                  context === 'unit' 
-                  ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-500' 
-                  : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'
-                }`}>
-                  {context === 'unit' ? <Unlink size={14} /> : <Trash2 size={14} />}
-                  <span>{context === 'unit' ? 'UNLINK' : 'DELETE'}</span>
-                </button>
-              )}
-              <button onClick={() => onBulkVerify(selectedIds)} className="px-5 py-3 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-2xl text-xs font-black flex items-center space-x-2 transition-colors"><ShieldCheck size={14} /> <span>VERIFY</span></button>
-              <button onClick={onOpenWordTypeAiModal} className="px-5 py-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded-2xl text-xs font-black flex items-center space-x-2 transition-colors"><Zap size={14} /> <span>OVERWRITE WORD TYPE</span></button>
-              <button onClick={() => { setIsAiModalOpen(true); }} className="px-5 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>REFINE</span></button>
-              <button onClick={() => onPractice(selectedIds)} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black flex items-center space-x-2"><Play size={14} fill="currentColor"/> <span>PRACTICE</span></button>
+              {onOpenBulkDeleteModal && (<button onClick={onOpenBulkDeleteModal} className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${context === 'unit' ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-500' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'}`}>{context === 'unit' ? <Unlink size={14} /> : <Trash2 size={14} />}<span>{context === 'unit' ? 'Unlink' : 'Delete'}</span></button>)}
+              <button onClick={() => onBulkVerify(selectedIds)} className="px-4 py-3 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><ShieldCheck size={14} /> <span>Verify</span></button>
+              <button onClick={onOpenAccentAiModal} className="px-4 py-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Mic size={14} /> <span>Accents</span></button>
+              <button onClick={onOpenWordTypeAiModal} className="px-4 py-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Zap size={14} /> <span>Types</span></button>
+              <button onClick={() => { setIsAiModalOpen(true); }} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>Refine</span></button>
+              <button onClick={() => onPractice(selectedIds)} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black flex items-center space-x-2"><Play size={14} fill="currentColor"/> <span>Practice</span></button>
             </div>
           </div>
         </div>

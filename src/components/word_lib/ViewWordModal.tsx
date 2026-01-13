@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { VocabularyItem, Unit, ReviewGrade } from '../../app/types';
 import { findWordByText, saveWord, getUnitsContainingWord, getAllWords } from '../../app/dataStore';
@@ -6,13 +5,14 @@ import { ViewWordModalUI } from './ViewWordModal_UI';
 import { createNewWord, updateSRS } from '../../utils/srs';
 import TestModal from '../practice/TestModal';
 import { calculateWordDifficultyXp } from '../../app/useAppController';
+import { getConfig } from '../../app/settingsManager';
 
 interface Props {
   word: VocabularyItem;
   onClose: () => void;
   onNavigateToWord: (word: VocabularyItem) => void;
   onEditRequest: (word: VocabularyItem) => void;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade) => Promise<number>;
+  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => Promise<number>;
   onUpdate: (word: VocabularyItem) => void;
   isViewOnly?: boolean;
 }
@@ -110,22 +110,32 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     } finally { setAddingVariant(null); }
   };
   
-  const handleChallengeComplete = async (grade: ReviewGrade, results?: Record<string, boolean>) => {
+  const handleChallengeComplete = async (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => {
     const updated = updateSRS(currentWord, grade);
     if (results) {
         updated.lastTestResults = { ...(updated.lastTestResults || {}), ...results };
     }
     const baseWordXp = calculateWordDifficultyXp(currentWord);
-    await onGainXp(baseWordXp, updated, grade);
+    
+    // onGainXp handles the atomic save of BOTH the user and the word.
+    await onGainXp(baseWordXp, updated, grade, counts);
+    
     setIsChallenging(false);
-    onUpdate(updated);
-    setCurrentWord(updated); // Immediately update local state
+    // The onUpdate call below was redundant and caused a "saving too quickly" race condition.
+    // onGainXp already persists the 'updated' word object.
+    // onUpdate(updated); 
+    
+    // Update local state to reflect changes immediately in the modal if it were to stay open.
+    setCurrentWord(updated); 
   };
 
   const handleLocalUpdate = (updatedWord: VocabularyItem) => {
       onUpdate(updatedWord);
       setCurrentWord(updatedWord);
   };
+
+  const config = getConfig();
+  const appliedAccent = config.audio.appliedAccent;
 
   return (
     <>
@@ -143,6 +153,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       onAddVariantToLibrary={handleAddVariantToLibrary}
       addingVariant={addingVariant}
       existingVariants={existingVariants}
+      appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}
     />
     </>

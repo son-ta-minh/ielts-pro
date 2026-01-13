@@ -1,4 +1,3 @@
-
 import { VocabularyItem, WordFamilyMember, PrepositionPattern, ParaphraseOption, CollocationDetail, WordQuality } from '../app/types';
 import { calculateGameEligibility } from './gameEligibility';
 
@@ -17,7 +16,10 @@ export const normalizeAiResponse = (shortData: any): any => {
                     return { word: x, ipa: '' };
                 }
                 if (x && (x.w || x.word)) {
-                    return { word: x.w || x.word, ipa: x.i || x.ipa || '' };
+                    return { 
+                        word: x.w || x.word, 
+                        ipa: x.i || x.ipa || x.i_us || ''
+                    };
                 }
                 return null;
             })
@@ -31,10 +33,7 @@ export const normalizeAiResponse = (shortData: any): any => {
     const mapPrep = (list: any[]) => {
         if (!Array.isArray(list)) return [];
         return list.map((x: any) => {
-            // Handle simple string array case ["on", "at"]
             if (typeof x === 'string') return { prep: x.trim(), usage: '' };
-            
-            // Handle object case
             return { 
                 prep: (x.p || x.prep || '').trim(), 
                 usage: (x.c || x.usage || '').trim() 
@@ -42,18 +41,13 @@ export const normalizeAiResponse = (shortData: any): any => {
         }).filter(x => x.prep.length > 0);
     };
 
-    // Handle 'prep' which can now be an array of objects OR a legacy string
     let normalizedPrepsArray = undefined;
-    
-    // Check 1: Idempotency - if already normalized
     if (Array.isArray(shortData.prepositionsArray)) {
         normalizedPrepsArray = shortData.prepositionsArray;
     }
-    // Check 2: Raw 'prep' key
     else if (Array.isArray(shortData.prep)) {
         normalizedPrepsArray = mapPrep(shortData.prep);
     } 
-    // Check 3: Raw 'prepositions' key
     else if (Array.isArray(shortData.prepositions)) {
         normalizedPrepsArray = mapPrep(shortData.prepositions);
     }
@@ -61,7 +55,10 @@ export const normalizeAiResponse = (shortData: any): any => {
     return {
         original: shortData.og || shortData.original,
         headword: shortData.hw || shortData.headword,
-        ipa: shortData.ipa,
+        ipa: shortData.ipa || shortData.ipa_us,
+        ipaUs: shortData.ipa_us,
+        ipaUk: shortData.ipa_uk,
+        pronSim: shortData.pron_sim,
         ipaMistakes: shortData.ipa_m || shortData.ipaMistakes,
         meaningVi: shortData.m || shortData.meaningVi,
         register: shortData.reg || shortData.register,
@@ -69,11 +66,9 @@ export const normalizeAiResponse = (shortData: any): any => {
         collocations: shortData.col || shortData.collocations,
         idioms: shortData.idm || shortData.idioms,
         
-        // Return both formats to allow merge logic to decide
         prepositionString: typeof shortData.prep === 'string' ? shortData.prep : (typeof shortData.preposition === 'string' ? shortData.preposition : undefined),
         prepositionsArray: normalizedPrepsArray,
 
-        // Flags
         isIdiom: shortData.is_id ?? shortData.isIdiom,
         isPhrasalVerb: shortData.is_pv ?? shortData.isPhrasalVerb,
         isCollocation: shortData.is_col ?? shortData.isCollocation,
@@ -86,7 +81,6 @@ export const normalizeAiResponse = (shortData: any): any => {
         v3: shortData.v3,
         tags: shortData.tags,
 
-        // Complex Structures
         paraphrases: mapPara(shortData.para || shortData.paraphrases),
         wordFamily: shortData.fam ? {
             nouns: mapFam(shortData.fam.n || shortData.fam.nouns),
@@ -106,7 +100,6 @@ export const parsePrepositionPatterns = (prepositionStr: string | null | undefin
         return undefined;
     }
 
-    // Common single-word prepositions to help identify the split point
     const commonPrepositions = new Set([
         'of', 'in', 'to', 'for', 'with', 'on', 'at', 'from', 'by', 'about', 'as', 'into', 'like', 'through', 'after', 'over', 'between', 'out', 'against', 'during', 'without', 'before', 'under', 'around', 'among'
     ]);
@@ -125,7 +118,6 @@ export const parsePrepositionPatterns = (prepositionStr: string | null | undefin
     }
 
     const results: PrepositionPattern[] = patterns.map(pattern => {
-        // Strategy 1: Check for Multi-word Prepositions at Start
         const sortedMultiWord = [...multiWordPrepositions].sort((a, b) => b.length - a.length);
         const foundMultiWord = sortedMultiWord.find(mwp => pattern.toLowerCase().includes(mwp));
 
@@ -139,14 +131,12 @@ export const parsePrepositionPatterns = (prepositionStr: string | null | undefin
 
         const words = pattern.split(/\s+/);
         
-        // Strategy 2: Simple First Word is Prep (e.g., "with moisture")
         if (commonPrepositions.has(words[0].toLowerCase())) {
              const prep = words[0];
              const usage = pattern.substring(prep.length).trim();
              return { prep, usage };
         }
 
-        // Strategy 3: "Word + Prep + Usage" (e.g. "dense with moisture")
         const prepIndex = words.findIndex(w => commonPrepositions.has(w.toLowerCase()));
         if (prepIndex > 0) {
              const prep = words[prepIndex];
@@ -154,7 +144,6 @@ export const parsePrepositionPatterns = (prepositionStr: string | null | undefin
              return { prep, usage };
         }
 
-        // Default Fallback: First word is prep
         const firstSpaceIndex = pattern.indexOf(' ');
         if (firstSpaceIndex > 0) {
             const prep = pattern.substring(0, firstSpaceIndex);
@@ -172,18 +161,19 @@ export const parsePrepositionPatterns = (prepositionStr: string | null | undefin
  * Merges AI-generated details into an existing VocabularyItem.
  */
 export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any): VocabularyItem => {
-    // Normalize first to handle short keys
     const aiResult = normalizeAiResponse(rawAiResult);
-    
+    if (!aiResult) return baseItem;
+
     const updatedItem: VocabularyItem = { ...baseItem };
     
-    // Basic fields
     updatedItem.ipa = aiResult.ipa ?? baseItem.ipa;
+    updatedItem.ipaUs = aiResult.ipaUs ?? baseItem.ipaUs;
+    updatedItem.ipaUk = aiResult.ipaUk ?? baseItem.ipaUk;
+    updatedItem.pronSim = aiResult.pronSim ?? baseItem.pronSim;
     updatedItem.ipaMistakes = aiResult.ipaMistakes ?? baseItem.ipaMistakes;
     updatedItem.meaningVi = aiResult.meaningVi ?? baseItem.meaningVi;
     updatedItem.register = aiResult.register ?? baseItem.register;
     
-    // Helper to merge string arrays (for Collocations and Idioms)
     const mergeStringArray = (currentList: CollocationDetail[] | undefined, incoming: any, legacyString?: string) => {
         const existing = currentList || 
             (legacyString ? legacyString.split('\n').map(t => ({ text: t.trim(), isIgnored: false })).filter(c => c.text) : []);
@@ -208,68 +198,58 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
         return merged;
     };
 
-    // Collocations
     const mergedCollocs = mergeStringArray(baseItem.collocationsArray, aiResult.collocations, baseItem.collocations);
     updatedItem.collocationsArray = mergedCollocs;
     updatedItem.collocations = mergedCollocs.map(c => c.text).join('\n');
 
-    // Idioms
     const mergedIdioms = mergeStringArray(baseItem.idiomsList, aiResult.idioms, baseItem.idioms);
     updatedItem.idiomsList = mergedIdioms;
     updatedItem.idioms = mergedIdioms.map(c => c.text).join('\n');
 
-    // Prepositions (Priority: Structured Array > String Parse)
-    // Remove isPhrasalVerb restriction to accept all explicit preposition data
     let finalPrepositions = baseItem.prepositions || [];
     
-    // Case A: AI returned a structured array (Preferred)
     if (aiResult.prepositionsArray && Array.isArray(aiResult.prepositionsArray) && aiResult.prepositionsArray.length > 0) {
         const newPreps = aiResult.prepositionsArray as PrepositionPattern[];
         const merged = [...finalPrepositions];
         newPreps.forEach(np => {
             if (np.prep) {
-                // Check duplicate
                 const exists = merged.some(ep => ep.prep.toLowerCase() === np.prep.toLowerCase() && ep.usage.toLowerCase() === np.usage.toLowerCase());
-                if (!exists) {
-                    merged.push({ ...np, isIgnored: false });
-                }
+                if (!exists) merged.push({ ...np, isIgnored: false });
             }
         });
         finalPrepositions = merged;
     } 
-    // Case B: AI returned a string (Legacy / Fallback)
     else if (aiResult.prepositionString && typeof aiResult.prepositionString === 'string') {
         const newPreps = parsePrepositionPatterns(aiResult.prepositionString);
         if (newPreps) {
             const merged = [...finalPrepositions];
             newPreps.forEach(np => {
                 const exists = merged.some(ep => ep.prep === np.prep && ep.usage === np.usage);
-                if (!exists) {
-                    merged.push(np);
-                }
+                if (!exists) merged.push(np);
             });
             finalPrepositions = merged;
         }
     }
     updatedItem.prepositions = finalPrepositions.length > 0 ? finalPrepositions : undefined;
 
-    // Word Family
-    if (aiResult.wordFamily && aiResult.wordFamily.advs) {
-        aiResult.wordFamily.advs = aiResult.wordFamily.advs.map((adv: WordFamilyMember) => ({
-            ...adv,
-            isIgnored: true,
-        }));
+    if (aiResult.wordFamily) {
+        if (aiResult.wordFamily.advs) {
+            aiResult.wordFamily.advs = aiResult.wordFamily.advs.map((adv: WordFamilyMember) => ({
+                ...adv,
+                isIgnored: true,
+            }));
+        }
+        updatedItem.wordFamily = aiResult.wordFamily;
+    } else {
+        updatedItem.wordFamily = baseItem.wordFamily;
     }
-    updatedItem.wordFamily = aiResult.wordFamily ?? baseItem.wordFamily;
 
-    // Paraphrases Logic - Merge unique + Preserve Ignored
     if (aiResult.paraphrases && Array.isArray(aiResult.paraphrases)) {
         const existingPara = baseItem.paraphrases || [];
         const newPara = aiResult.paraphrases as ParaphraseOption[];
         const combined = [...existingPara];
         
         newPara.forEach(np => {
-            // Avoid duplicates based on the 'word' field
             if (!combined.some(cp => cp.word.toLowerCase() === np.word.toLowerCase())) {
                 combined.push(np);
             }
@@ -277,19 +257,16 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
         updatedItem.paraphrases = combined;
     }
     
-    // Example
     let finalExample = baseItem.example || '';
     if (aiResult.example && !finalExample.toLowerCase().includes(aiResult.example.toLowerCase())) {
         finalExample = finalExample.trim() ? `${finalExample}\n${aiResult.example}` : aiResult.example;
     }
     updatedItem.example = finalExample;
 
-    // Tags
     const newTags = new Set((baseItem.tags || []).map(t => t.toLowerCase()));
     (aiResult.tags || []).forEach((t: string) => newTags.add(t.toLowerCase()));
     updatedItem.tags = Array.from(newTags);
 
-    // Flags
     updatedItem.isIdiom = aiResult.isIdiom !== undefined ? !!aiResult.isIdiom : baseItem.isIdiom;
     updatedItem.isPhrasalVerb = aiResult.isPhrasalVerb !== undefined ? !!aiResult.isPhrasalVerb : baseItem.isPhrasalVerb;
     updatedItem.isCollocation = aiResult.isCollocation !== undefined ? !!aiResult.isCollocation : baseItem.isCollocation;
@@ -297,15 +274,12 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
     updatedItem.isIrregular = aiResult.isIrregular !== undefined ? !!aiResult.isIrregular : baseItem.isIrregular;
     updatedItem.isPassive = aiResult.isPassive !== undefined ? !!aiResult.isPassive : baseItem.isPassive;
     
-    // Quality update: ALWAYS set quality to REFINED after AI processing.
-    // This forces user re-verification even if the word was previously VERIFIED or FAILED.
     updatedItem.quality = WordQuality.REFINED;
 
     updatedItem.v2 = aiResult.v2 ?? baseItem.v2;
     updatedItem.v3 = aiResult.v3 ?? baseItem.v3;
     updatedItem.needsPronunciationFocus = aiResult.needsPronunciationFocus ?? baseItem.needsPronunciationFocus;
     
-    // Game Eligibility: Automated check
     updatedItem.gameEligibility = calculateGameEligibility(updatedItem);
     
     updatedItem.updatedAt = Date.now();

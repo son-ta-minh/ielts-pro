@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { User, AppView } from '../types';
 import { getAllUsers, saveUser, seedDatabaseIfEmpty } from '../db';
@@ -7,20 +6,31 @@ import { ADVENTURE_CHAPTERS } from '../../data/adventure_content';
 export const useAuthAndUser = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
+    const [shouldSkipAuth, setShouldSkipAuth] = useState(false);
 
     const initApp = useCallback(async () => {
         setIsLoaded(false);
-        const seededUser = await seedDatabaseIfEmpty();
+        setShouldSkipAuth(false);
+
+        await seedDatabaseIfEmpty();
+        
         const savedUserId = localStorage.getItem('vocab_pro_current_user_id');
         const allUsers = await getAllUsers();
         
         let userToLogin: User | null = null;
 
-        if (savedUserId) {
+        if (allUsers.length === 1) {
+            // Case 1: Only one user exists. Auto-login this user.
+            userToLogin = allUsers[0];
+            setShouldSkipAuth(true);
+        } else if (savedUserId && allUsers.length > 1) {
+            // Case 2: Multiple users, but one was previously logged in.
             userToLogin = allUsers.find(u => u.id === savedUserId) || null;
-        } else if (seededUser) {
-            userToLogin = seededUser;
+            if (userToLogin) {
+                setShouldSkipAuth(true);
+            }
         }
+        // Case 3 (implicit): Multiple users, no saved user. userToLogin is null, shouldSkipAuth is false. App will show AuthView.
 
         if (userToLogin) {
             let userNeedsSave = false;
@@ -35,7 +45,7 @@ export const useAuthAndUser = () => {
                     keyFragments: 0
                 };
                 userNeedsSave = true;
-            } else if (userToLogin.adventure.completedSegmentIds.length === 0 && userToLogin.adventure.keys === 0) {
+            } else if (userToLogin.adventure.completedSegmentIds.length === 0 && (userToLogin.adventure.keys === 0 || userToLogin.adventure.keys === undefined)) {
                 userToLogin.adventure.keys = 1;
                 userNeedsSave = true;
             }
@@ -71,5 +81,5 @@ export const useAuthAndUser = () => {
         setCurrentUser(updatedUser);
     };
 
-    return { currentUser, isLoaded, handleLogin, handleLogout, handleUpdateUser, setCurrentUser };
+    return { currentUser, isLoaded, handleLogin, handleLogout, handleUpdateUser, setCurrentUser, shouldSkipAuth };
 };

@@ -20,6 +20,8 @@ export interface SrsConfig {
 export interface AudioConfig {
   mode: 'system' | 'ai';
   preferredSystemVoice: string;
+  preferredAccent: 'US' | 'UK';
+  appliedAccent?: 'US' | 'UK';
 }
 
 export interface DailyGoalConfig {
@@ -60,6 +62,8 @@ export const DEFAULT_CONFIG: SystemConfig = {
   audio: {
     mode: 'system',
     preferredSystemVoice: '',
+    preferredAccent: 'US',
+    appliedAccent: undefined,
   },
   dailyGoals: DEFAULT_DAILY_GOAL_CONFIG,
 };

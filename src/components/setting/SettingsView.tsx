@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { RotateCw, ShieldAlert, Wrench } from 'lucide-react';
-import { User as UserType } from '../../app/types';
+import { User as UserType, VocabularyItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { resetProgress } from '../../utils/srs';
 import { getAvailableVoices, speak, getBestVoice } from '../../utils/audio';
@@ -46,6 +46,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   const [config, setConfig] = useState<SystemConfig>(getConfig());
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [isVoiceLoading, setIsVoiceLoading] = useState(true);
+  const [isApplyingAccent, setIsApplyingAccent] = useState(false);
 
   const [profileData, setProfileData] = useState({
     name: user.name,
@@ -77,6 +78,14 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
       setIsVoiceLoading(false);
     };
     loadVoices();
+
+    const handleConfigUpdate = () => {
+        setConfig(getConfig());
+    };
+    window.addEventListener('config-updated', handleConfigUpdate);
+    return () => {
+        window.removeEventListener('config-updated', handleConfigUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -118,19 +127,21 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   const handleResetSrsConfig = () => { setConfig(prev => ({...prev, srs: DEFAULT_SRS_CONFIG})); setNotification('SRS settings reset to defaults.'); };
   
   const handleJSONImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; 
-    if(!file) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
     setImportStatus(null);
     const result = await processJsonImport(file, user.id, includeProgress);
     setImportStatus(result);
     if (result.type === 'success') {
-        if (result.updatedUser) await onUpdateUser(result.updatedUser);
-        await onRefresh();
-        if (result.customAdventureRestored) {
-            setTimeout(() => window.location.reload(), 2000);
-        }
+      showToast('Restore successful! The app will now reload.', 'success', 2000);
+      if (result.updatedUser) {
+        await dataStore.saveUser(result.updatedUser);
+      }
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     }
-    if(jsonInputRef.current) jsonInputRef.current.value = '';
+    if (jsonInputRef.current) jsonInputRef.current.value = '';
   };
 
   const handleJSONExport = async () => {
@@ -199,7 +210,37 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
     } finally {
         setIsNormalizing(false);
     }
-};
+  };
+
+  const handleApplyAccent = async () => {
+    setIsApplyingAccent(true);
+    try {
+      const newAccent = config.audio.preferredAccent;
+      const allWords = dataStore.getAllWords();
+      const wordsToUpdate: VocabularyItem[] = [];
+
+      for (const word of allWords) {
+          const ipaToApply = newAccent === 'US' ? word.ipaUs : word.ipaUk;
+          if (ipaToApply && ipaToApply !== word.ipa) {
+              const updatedWord = { ...word, ipa: ipaToApply, updatedAt: Date.now() };
+              wordsToUpdate.push(updatedWord);
+          }
+      }
+
+      if (wordsToUpdate.length > 0) {
+        await dataStore.bulkSaveWords(wordsToUpdate);
+      }
+      
+      const newConfig = { ...config, audio: { ...config.audio, appliedAccent: newAccent } };
+      saveConfig(newConfig);
+      
+      showToast(`Applied ${newAccent} accent to ${wordsToUpdate.length} words.`, 'success');
+    } catch (err) {
+      showToast('Failed to apply accent.', 'error');
+    } finally {
+      setIsApplyingAccent(false);
+    }
+  };
 
   return (
     <>
@@ -241,6 +282,8 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         onRefreshGameIndex={handleRefreshGameIndex}
         isNormalizing={isNormalizing}
         onOpenNormalizeModal={() => setIsNormalizeModalOpen(true)}
+        isApplyingAccent={isApplyingAccent}
+        onApplyAccent={handleApplyAccent}
       >
         {currentView === 'INTERFACE' && <InterfaceSettings />}
         {currentView === 'GOALS' && <GoalSettings goalConfig={config.dailyGoals} onGoalConfigChange={handleGoalConfigChange} />}

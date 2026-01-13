@@ -71,10 +71,6 @@ const WordList: React.FC<Props> = ({ userId, onDelete, onBulkDelete, onUpdate, o
     if (newItems.length > 0) await dataStore.bulkSaveWords(newItems);
   };
 
-  const handleRefine = async (ids: Set<string>) => {
-      // Data will refresh automatically via the event listener
-  };
-
   const handlePractice = (ids: Set<string>) => {
       const items = dataStore.getAllWords().filter(w => ids.has(w.id));
       onStartSession(items);
@@ -106,7 +102,6 @@ const WordList: React.FC<Props> = ({ userId, onDelete, onBulkDelete, onUpdate, o
           onEditWord={setEditingWord}
           onDelete={async (w) => { await onDelete(w.id); }}
           onBulkDelete={handleBulkDelete}
-          onRefine={handleRefine}
           onPractice={handlePractice}
           settingsKey="ielts_pro_library_view_settings"
           context="library"

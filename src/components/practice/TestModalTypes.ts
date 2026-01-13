@@ -1,6 +1,6 @@
 import { VocabularyItem, ParaphraseTone } from '../../app/types';
 
-export type ChallengeType = 'SPELLING' | 'IPA_QUIZ' | 'PREPOSITION_QUIZ' | 'WORD_FAMILY' | 'MEANING_QUIZ' | 'PARAPHRASE_QUIZ' | 'SENTENCE_SCRAMBLE' | 'HETERONYM_QUIZ';
+export type ChallengeType = 'SPELLING' | 'IPA_QUIZ' | 'PREPOSITION_QUIZ' | 'WORD_FAMILY' | 'MEANING_QUIZ' | 'PARAPHRASE_QUIZ' | 'SENTENCE_SCRAMBLE' | 'HETERONYM_QUIZ' | 'PRONUNCIATION' | 'COLLOCATION_QUIZ';
 
 export interface BaseChallenge {
   type: ChallengeType;
@@ -9,6 +9,7 @@ export interface BaseChallenge {
 }
 
 export interface SpellingChallenge extends BaseChallenge { type: 'SPELLING'; }
+export interface PronunciationChallenge extends BaseChallenge { type: 'PRONUNCIATION'; }
 export interface IpaQuizChallenge extends BaseChallenge { type: 'IPA_QUIZ'; options: string[]; answer: string; }
 export interface PrepositionQuizChallenge extends BaseChallenge { type: 'PREPOSITION_QUIZ'; example: string; answer: string; }
 export interface WordFamilyChallenge extends BaseChallenge { type: 'WORD_FAMILY'; }
@@ -26,7 +27,18 @@ export interface HeteronymQuizChallenge extends BaseChallenge {
   ipaOptions: string[];
 }
 
-export type Challenge = SpellingChallenge | IpaQuizChallenge | PrepositionQuizChallenge | WordFamilyChallenge | MeaningQuizChallenge | ParaphraseQuizChallenge | SentenceScrambleChallenge | HeteronymQuizChallenge;
+export interface CollocationToTest {
+    fullText: string;
+    answer: string;
+    headword: string;
+    position: 'pre' | 'post';
+}
+export interface CollocationQuizChallenge extends BaseChallenge {
+    type: 'COLLOCATION_QUIZ';
+    collocations: CollocationToTest[];
+}
+
+export type Challenge = SpellingChallenge | IpaQuizChallenge | PrepositionQuizChallenge | WordFamilyChallenge | MeaningQuizChallenge | ParaphraseQuizChallenge | SentenceScrambleChallenge | HeteronymQuizChallenge | PronunciationChallenge | CollocationQuizChallenge;
 
 export type ChallengeResult = boolean | {
     correct: boolean;
