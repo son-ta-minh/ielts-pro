@@ -37,7 +37,13 @@ export const useAppController = () => {
     const saveWordAndUserAndUpdateState = useCallback(async (word: VocabularyItem, user: User) => {
         await dataStore.saveWordAndUser(word, user);
         setCurrentUser(user);
-    }, [setCurrentUser]);
+        // Also update the word in the current session if it exists
+        if (sessionWords) {
+            setSessionWords(prevWords => 
+                (prevWords || []).map(w => w.id === word.id ? word : w)
+            );
+        }
+    }, [setCurrentUser, sessionWords, setSessionWords]);
 
     const { gainExperienceAndLevelUp, xpGained, xpToNextLevel } = useGamification({ 
         currentUser, 
@@ -55,7 +61,7 @@ export const useAppController = () => {
                 setView('AUTH');
             }
         }
-    }, [isLoaded, shouldSkipAuth, currentUser]);
+    }, [isLoaded, shouldSkipAuth, currentUser?.id]);
 
     const handleLoginAndNavigate = (user: User) => {
         handleLogin(user);

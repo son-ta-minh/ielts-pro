@@ -37,7 +37,7 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
   const { showToast } = useToast();
   const sessionWords = initialWords;
   const sessionIdentityRef = useRef<string | null>(null);
-  const newWordIds = useMemo(() => new Set(initialWords.filter(w => !w.lastReview).map(w => w.id)), [initialWords]);
+  const [newWordIds, setNewWordIds] = useState<Set<string>>(new Set());
 
   const [progress, setProgress] = useState(() => {
     const saved = getStoredJSON<{current: number, max: number} | null>('vocab_pro_session_progress', null);
@@ -62,6 +62,7 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
     const newSessionIdentity = initialWords.map(w => w.id).sort().join(',');
     if (sessionIdentityRef.current === null || sessionIdentityRef.current !== newSessionIdentity) {
         sessionIdentityRef.current = newSessionIdentity;
+        setNewWordIds(new Set(initialWords.filter(w => !w.lastReview).map(w => w.id)));
         setProgress({ current: 0, max: 0 });
         setSessionOutcomes({});
         setSessionFinished(false);
@@ -90,11 +91,16 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
 
   const handleReview = async (grade: ReviewGrade) => {
     if (!currentWord) return;
+    
     setSessionOutcomes(prev => ({...prev, [currentWord.id]: grade}));
     const updated = updateSRS(currentWord, grade);
     logSrsUpdate(grade, currentWord, updated);
+
+    // Re-unify logic: award XP for ALL review actions, including the initial "Learned".
+    // This is safe now because the navigation bug in useAppController has been fixed.
     const baseWordXp = calculateWordDifficultyXp(currentWord);
     await onGainXp(baseWordXp, updated, grade);
+    
     nextItem();
   };
   

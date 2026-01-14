@@ -32,6 +32,11 @@ export const IrregularVerbsPractice: React.FC<Props> = ({ verbs, mode, onComplet
 
   const { verb, promptType } = currentItem;
 
+  const firstInputForm = useMemo(() => {
+    const forms: ('v1' | 'v2' | 'v3')[] = ['v1', 'v2', 'v3'];
+    return forms.find(form => form !== promptType);
+  }, [promptType]);
+
   const handleCheck = () => {
     const v1_correct = (answers.v1 || '').trim().toLowerCase() === verb.v1.toLowerCase();
     const v2_correct = (answers.v2 || '').trim().toLowerCase() === verb.v2.toLowerCase();
@@ -73,11 +78,20 @@ export const IrregularVerbsPractice: React.FC<Props> = ({ verbs, mode, onComplet
       inputClass = isFieldCorrect ? "bg-green-50 border-green-500 text-green-800" : "bg-red-50 border-red-500 text-red-800";
     }
 
+    const isFirst = form === firstInputForm;
+
     return (
       <div className="space-y-1">
         <label className="block text-xs font-bold text-neutral-500">{label}</label>
         <div className="relative">
-            <input value={value} onChange={e => setAnswers(prev => ({ ...prev, [form]: e.target.value }))} disabled={isAnswered} onKeyDown={e => { if (e.key === 'Enter' && !isAnswered) handleCheck(); }} className={`w-full px-4 py-3 border border-neutral-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-neutral-900 outline-none transition-colors ${inputClass}`} />
+            <input 
+                value={value} 
+                onChange={e => setAnswers(prev => ({ ...prev, [form]: e.target.value }))} 
+                disabled={isAnswered} 
+                onKeyDown={e => { if (e.key === 'Enter' && !isAnswered) handleCheck(); }} 
+                className={`w-full px-4 py-3 border border-neutral-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-neutral-900 outline-none transition-colors ${inputClass}`}
+                autoFocus={isFirst}
+            />
             {isAnswered && !isFieldCorrect && <div className="absolute top-full mt-1 text-xs font-bold text-green-600">{verb[form]}</div>}
         </div>
       </div>

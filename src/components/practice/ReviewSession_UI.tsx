@@ -76,7 +76,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     }
     
     if (sessionFinished) {
-        if (sessionType === 'new_study' || sessionType === 'custom' || isQuickFire || initialWords.length <= 5) {
+        if (sessionType === 'new' || sessionType === 'due' || sessionType === 'new_study' || sessionType === 'custom' || isQuickFire) {
           const passCount = Object.values(sessionOutcomes).filter(v => v === 'PASS' || v === ReviewGrade.EASY || v === ReviewGrade.LEARNED).length;
           return (
             <div className="max-w-2xl mx-auto py-10 text-center animate-in zoom-in-95 duration-500">

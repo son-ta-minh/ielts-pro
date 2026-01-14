@@ -119,10 +119,34 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
       });
     }
 
-    if (word.example && word.example.trim().length > 5 && word.example.length < 100) {
-        const wordsInSentence = word.example.trim().split(/\s+/).filter(Boolean);
-        if (wordsInSentence.length >= 3) {
-            list.push({ type: 'SENTENCE_SCRAMBLE', title: 'Sentence Builder', original: word.example.trim(), shuffled: shuffleArray([...wordsInSentence]), word });
+    if (word.example && word.example.trim().length > 5) {
+        // Split into sentences using a positive lookbehind for punctuation.
+        const sentences = word.example.trim().split(/(?<=[.?!])\s+/).filter(Boolean);
+
+        let sentenceToTest: string | null = null;
+        
+        const headwordRegex = new RegExp(`\\b${escapeRegex(word.word)}\\b`, 'i');
+        
+        // Prioritize sentences with the headword that are not too long or short.
+        const sentencesWithHeadword = sentences.filter(s => 
+            s.length > 5 && s.length < 100 && headwordRegex.test(s)
+        );
+
+        if (sentencesWithHeadword.length > 0) {
+            sentenceToTest = sentencesWithHeadword[0]; // Pick the first one
+        } else {
+            // Fallback: Find the first sentence that fits the criteria, regardless of headword.
+            const anySuitableSentence = sentences.find(s => s.length > 5 && s.length < 100);
+            if (anySuitableSentence) {
+                sentenceToTest = anySuitableSentence;
+            }
+        }
+
+        if (sentenceToTest) {
+            const wordsInSentence = sentenceToTest.split(/\s+/).filter(Boolean);
+            if (wordsInSentence.length >= 3) {
+                list.push({ type: 'SENTENCE_SCRAMBLE', title: 'Sentence Builder', original: sentenceToTest.trim(), shuffled: shuffleArray([...wordsInSentence]), word });
+            }
         }
     }
 
