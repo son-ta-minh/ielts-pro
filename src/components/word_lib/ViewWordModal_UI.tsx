@@ -134,7 +134,7 @@ export interface ViewWordModalUIProps {
     relatedWords: Record<string, VocabularyItem[]>;
     relatedByGroup: Record<string, VocabularyItem[]>;
     onNavigateToWord: (word: VocabularyItem) => void;
-    onAddVariantToLibrary: (variant: { word: string, ipa: string }, sourceType?: 'family' | 'paraphrase' | 'idiom') => void;
+    onAddVariantToLibrary: (variant: { word: string, ipa: string }, sourceType?: 'family' | 'paraphrase' | 'idiom' | 'collocation') => void;
     addingVariant: string | null;
     existingVariants: Set<string>;
     isViewOnly?: boolean;
@@ -254,7 +254,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
     const displayedIdioms = (word.idiomsList || []).filter(c => viewSettings.showHidden || !c.isIgnored);
     const displayedParas = (word.paraphrases || []).filter(p => viewSettings.showHidden || !p.isIgnored);
     const isSpellingFailed = viewSettings.highlightFailed && word.lastTestResults?.['SPELLING'] === false;
-    const isIpaFailed = viewSettings.highlightFailed && word.lastTestResults?.['IPA_QUIZ'] === false;
+    const isIpaFailed = viewSettings.highlightFailed && (word.lastTestResults?.['IPA_QUIZ'] === false || word.lastTestResults?.['PRONUNCIATION'] === false);
     
     const flagCount = [word.isIdiom, word.isCollocation, word.isPhrasalVerb, word.isIrregular].filter(Boolean).length;
     const tagCount = (word.tags?.length || 0) + flagCount;
@@ -428,7 +428,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                         
                         <div className="space-y-1 md:col-span-3"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Network size={10}/> Word Family</label><div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100">{!hasAnyFamilyData ? (<span className="text-[10px] text-neutral-300 italic">No family data available.</span>) : (<div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{renderFamilyCardGroup("Nouns", word.wordFamily?.nouns, "blue", "nouns")}{renderFamilyCardGroup("Verbs", word.wordFamily?.verbs, "green", "verbs")}{renderFamilyCardGroup("Adjectives", word.wordFamily?.adjs, "orange", "adjs")}{renderFamilyCardGroup("Adverbs", word.wordFamily?.advs, "purple", "advs")}</div>)}</div></div>
 
-                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Combine size={10}/> Collocations</label>{displayedCollocs.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">{displayedCollocs.map((c: CollocationDetail, i: number) => { const specificKey = `COLLOCATION_QUIZ:${c.text}`; const specificResult = word.lastTestResults?.[specificKey]; let isFailed = false; if (viewSettings.highlightFailed && !c.isIgnored) { if (specificResult === false) { isFailed = true; } else if (specificResult === undefined && word.lastTestResults?.['COLLOCATION_QUIZ'] === false) { isFailed = true; } } let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900"; if (isFailed) { containerClass = "bg-red-50 border-red-200 text-red-700"; } else if (c.isIgnored) { containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400 line-through"; } return (<div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-bold ${containerClass}`}>{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className="truncate">{c.text}</span></div>);})}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No collocations.</div>)}</div>
+                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Combine size={10}/> Collocations</label>{displayedCollocs.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">{displayedCollocs.map((c: CollocationDetail, i: number) => { const isExisting = existingVariants.has(c.text.toLowerCase()); const specificKey = `COLLOCATION_QUIZ:${c.text}`; const specificResult = word.lastTestResults?.[specificKey]; let isFailed = false; if (viewSettings.highlightFailed && !c.isIgnored) { if (specificResult === false) { isFailed = true; } else if (specificResult === undefined && word.lastTestResults?.['COLLOCATION_QUIZ'] === false) { isFailed = true; } } let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900"; if (isFailed) { containerClass = "bg-red-50 border-red-200 text-red-700"; } else if (c.isIgnored) { containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400 line-through"; } return (<div key={i} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}><div className="flex items-center gap-2 flex-1 overflow-hidden">{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className="truncate" title={c.text}>{c.text}</span></div><button type="button" disabled={addingVariant === c.text || isExisting || c.isIgnored} onClick={() => onAddVariantToLibrary({ word: c.text, ipa: '' }, 'collocation')} className={`p-1 rounded-md transition-all shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : c.isIgnored ? 'text-neutral-300 cursor-not-allowed' : 'text-neutral-400 hover:text-neutral-900 hover:bg-white/50' }`} title={isExisting ? 'Already in library' : 'Add to library'}>{addingVariant === c.text ? <Loader2 size={12} className="animate-spin" /> : isExisting ? <CheckCircle2 size={12} /> : <Plus size={12} />}</button></div>);})}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No collocations.</div>)}</div>
                         
                         <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Zap size={10} className="text-amber-500"/> Word Power & Variations</label>{displayedParas.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-4 gap-3">{displayedParas.map((para: ParaphraseOption, idx: number) => { const isExisting = existingVariants.has(para.word.toLowerCase()); const specificKey = `PARAPHRASE_QUIZ:${para.word}`; const specificResult = word.lastTestResults?.[specificKey]; const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PARAPHRASE_QUIZ'] === false)) && !para.isIgnored; const isIgnored = para.isIgnored; return (<div key={idx} className={`flex items-start justify-between gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-100'}`}><div className="flex-1 overflow-hidden"><div className="flex justify-between items-center mb-1">{renderParaphraseBadge(para.tone)}{isFailed && <AlertCircle size={12} className="text-red-500 fill-red-100"/>}</div><div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div><div className={`text-[10px] italic truncate ${isFailed ? 'text-red-400' : 'text-neutral-400'}`} title={para.context}>{para.context}</div></div><button type="button" disabled={addingVariant === para.word || isExisting} onClick={() => onAddVariantToLibrary({ word: para.word, ipa: '' }, 'paraphrase')} className={`p-1 rounded-md transition-all mt-1 shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100' }`} >{addingVariant === para.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}</button></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic">No variations available.</div>)}</div>
                         
@@ -438,9 +438,30 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">
                                     {displayedIdioms.map((idiom: CollocationDetail, i: number) => {
                                         const isExisting = existingVariants.has(idiom.text.toLowerCase());
+                                        const specificKey = `IDIOM_QUIZ:${idiom.text}`;
+                                        const specificResult = word.lastTestResults?.[specificKey];
+                                        let isFailed = false;
+                                        if (viewSettings.highlightFailed && !idiom.isIgnored) {
+                                            if (specificResult === false) {
+                                                isFailed = true;
+                                            } else if (specificResult === undefined && word.lastTestResults?.['IDIOM_QUIZ'] === false) {
+                                                isFailed = true;
+                                            }
+                                        }
+
+                                        let containerClass = "bg-amber-50/50 border-amber-100 text-amber-900";
+                                        if (isFailed) {
+                                            containerClass = "bg-red-50 border-red-200 text-red-700";
+                                        } else if (idiom.isIgnored) {
+                                            containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400 line-through";
+                                        }
+
                                         return (
-                                            <div key={i} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${idiom.isIgnored ? 'bg-neutral-50 border-neutral-100 text-neutral-400 line-through' : 'bg-amber-50/50 border-amber-100 text-amber-900'}`}>
-                                                <span className="truncate flex-1" title={idiom.text}>{idiom.text}</span>
+                                            <div key={i} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}>
+                                                <div className="flex items-center gap-2 flex-1 overflow-hidden">
+                                                    {isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}
+                                                    <span className="truncate flex-1" title={idiom.text}>{idiom.text}</span>
+                                                </div>
                                                 <button
                                                     type="button"
                                                     disabled={addingVariant === idiom.text || isExisting || idiom.isIgnored}

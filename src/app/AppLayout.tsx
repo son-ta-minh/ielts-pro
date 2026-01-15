@@ -251,7 +251,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'BROWSE':
       return (
         <WordList
-          userId={currentUser.id}
+          user={currentUser}
           onDelete={async (id) => await deleteWord(id)}
           onBulkDelete={async (ids) => await bulkDeleteWords(ids)}
           onUpdate={updateWord}
@@ -356,7 +356,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
       </main>
       
       {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
-      {editingWord && <EditWordModal word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
+      {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
       
       <ConfirmationModal
         isOpen={endSessionModal.isOpen}

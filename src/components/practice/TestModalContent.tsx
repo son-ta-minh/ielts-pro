@@ -4,6 +4,7 @@ import { VocabularyItem } from '../../app/types';
 import { speak } from '../../utils/audio';
 import { Challenge, ChallengeResult, IpaQuizChallenge, MeaningQuizChallenge, PrepositionQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, HeteronymQuizChallenge, PronunciationChallenge, CollocationQuizChallenge, IdiomQuizChallenge } from './TestModalTypes';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
+import { normalizeAnswerForGrading } from '../../utils/challengeUtils';
 
 // New component for the Pronunciation Challenge
 const PronunciationChallengeUI: React.FC<{
@@ -17,24 +18,34 @@ const PronunciationChallengeUI: React.FC<{
     const recognitionManager = useRef(new SpeechRecognitionManager());
 
     useEffect(() => {
+        // Cleanup function to stop recognition when the component unmounts
         return () => {
             recognitionManager.current.stop();
         };
     }, []);
 
+    const startNewRecording = () => {
+        setTranscript(''); // Clear previous transcript for the new attempt.
+        setIsRecording(true);
+        recognitionManager.current.start(
+            (final, interim) => setTranscript(final + interim),
+            (finalTranscript) => {
+                setIsRecording(false);
+                onAnswer(normalizeAnswerForGrading(finalTranscript));
+            }
+        );
+    };
+
+    const stopCurrentRecording = () => {
+        recognitionManager.current.stop();
+        // isRecording will be set to false in the onEnd callback of the recognition manager
+    };
+
     const handleToggleRecording = () => {
         if (isRecording) {
-            recognitionManager.current.stop();
+            stopCurrentRecording();
         } else {
-            setIsRecording(true);
-            setTranscript('');
-            recognitionManager.current.start(
-                (final, interim) => setTranscript(final + interim),
-                (finalTranscript) => {
-                    setIsRecording(false);
-                    onAnswer(finalTranscript);
-                }
-            );
+            startNewRecording();
         }
     };
     
@@ -127,53 +138,51 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
             const result = results ? results[currentChallengeIndex] : null;
             const details = (result && typeof result === 'object' && 'details' in result) ? result.details : {};
 
-            const duplicates = useMemo(() => {
-                const seen = new Set<string>();
-                const dupes = new Set<string>();
-                answers.forEach(ans => {
-                    const trimmed = (ans || '').trim();
-                    if (trimmed) {
-                        if (seen.has(trimmed)) dupes.add(trimmed);
-                        else seen.add(trimmed);
-                    }
-                });
-                return dupes;
-            }, [answers]);
-
-            const allCorrectAnswers = useMemo(() => challenge.collocations.map(c => c.answer), [challenge]);
-            const userProvidedCorrectAnswers = useMemo(() => {
-                if (!isFinishing || !details) return new Set<string>();
-                const correct = new Set<string>();
-                (answers as string[]).forEach((ans, i) => {
-                    if (details[i.toString()] === true) {
-                        correct.add((ans || '').trim().toLowerCase());
-                    }
-                });
-                return correct;
-            }, [isFinishing, answers, details]);
-            const missingCorrectAnswers = useMemo(() => {
-                if (!isFinishing) return [];
-                return allCorrectAnswers.filter(c => !userProvidedCorrectAnswers.has(c.toLowerCase().trim()));
-            }, [isFinishing, allCorrectAnswers, userProvidedCorrectAnswers]);
-            let missingAnswerIndex = 0;
-
             const handleCollocAnswerChange = (index: number, value: string) => {
                 const newAnswers = [...answers];
                 newAnswers[index] = value;
                 handleAnswerChange(currentChallengeIndex, newAnswers);
             };
 
+            const { missingCorrectAnswers } = useMemo(() => {
+                console.group('[HINT DEBUG] Collocation Hints');
+                if (!isFinishing) {
+                    console.log('Not in finishing phase, no hints calculated.');
+                    console.groupEnd();
+                    return { missingCorrectAnswers: [] };
+                }
+            
+                const correctAnswers = challenge.collocations.map(c => normalizeAnswerForGrading(c.answer));
+                const userAnswers = answers.map(a => normalizeAnswerForGrading(a || ''));
+                console.log('Raw user answers for hint calc:', answers);
+                console.log('Normalized expected answers:', correctAnswers);
+                console.log('Normalized user answers:', userAnswers);
+                
+                const correctPool = [...correctAnswers];
+            
+                userAnswers.forEach(uAns => {
+                    const indexInPool = correctPool.indexOf(uAns);
+                    if (indexInPool !== -1) {
+                        console.log(`- User answer "${uAns}" matched. Consuming from hint pool.`);
+                        correctPool.splice(indexInPool, 1);
+                    } else {
+                        console.log(`- User answer "${uAns}" is incorrect or a duplicate.`);
+                    }
+                });
+                
+                console.log('Final list of missing correct answers:', correctPool);
+                console.groupEnd();
+                return { missingCorrectAnswers: correctPool };
+            }, [isFinishing, answers, challenge.collocations]);
+            
+            let missingAnswerIndex = 0;
+
             return (
                 <div className="flex flex-col animate-in fade-in duration-300">
                     <div className="text-center space-y-2 mb-6">
                         <h3 className="text-lg font-black text-neutral-900">Collocation Recall</h3>
-                        <p className="text-xs text-neutral-500 font-medium max-w-xs mx-auto">Complete the phrases for <span className="font-bold">"{word.word}"</span></p>
+                        <p className="text-xs text-neutral-500 font-medium max-w-xs mx-auto">Recall the collocations for <span className="font-bold">"{word.word}"</span></p>
                     </div>
-                    {duplicates.size > 0 && !isFinishing && (
-                        <div className="flex items-center gap-2 p-2 mb-2 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-lg">
-                            <AlertTriangle size={14} /> Duplicate answers detected.
-                        </div>
-                    )}
                     {showHint && !isFinishing && (
                         <div className="p-4 mb-4 bg-yellow-50 rounded-2xl border border-yellow-100 animate-in slide-in-from-top-2">
                             <p className="text-xs font-black text-yellow-600 uppercase tracking-widest mb-2">Correct Collocations</p>
@@ -187,37 +196,44 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
                             const answer = answers[index] || '';
                             const isAnswerCorrect = isFinishing && details[index.toString()] === true;
                             const isAnswerWrong = isFinishing && details[index.toString()] === false;
-                            const isDuplicate = duplicates.has((answer || '').trim()) && (answer || '').trim() !== '';
                             
-                            let hintToShow = colloc.answer;
-                            if (isAnswerWrong) {
-                                hintToShow = missingCorrectAnswers[missingAnswerIndex] || colloc.answer;
-                                missingAnswerIndex++;
+                            let hintToShow: string | null = null;
+                            if (isAnswerWrong && missingCorrectAnswers.length > missingAnswerIndex) {
+                                const missingNormalized = missingCorrectAnswers[missingAnswerIndex];
+                                const originalCase = challenge.collocations.find(c => normalizeAnswerForGrading(c.answer) === missingNormalized);
+                                if (originalCase) {
+                                    hintToShow = originalCase.answer;
+                                    console.log(`[HINT DEBUG] For wrong input at index ${index}, assigning hint: "${hintToShow}"`);
+                                    missingAnswerIndex++;
+                                } else {
+                                    console.log(`[HINT DEBUG] For wrong input at index ${index}, could not find original case for missing answer: "${missingNormalized}"`);
+                                }
+                            } else if (isAnswerWrong) {
+                                console.log(`[HINT DEBUG] For wrong input at index ${index}, no more missing answers to assign.`);
                             }
 
                             return (
-                                <div key={index} className="w-full flex items-center gap-2">
-                                    {colloc.position === 'post' && (
-                                        <>
-                                            <div className="flex-1 relative">
-                                                <input type="text" value={answer} onChange={(e) => handleCollocAnswerChange(index, e.target.value)} disabled={isFinishing} className={`w-full h-9 px-3 text-right text-base font-medium rounded-lg border-2 outline-none transition-colors ${isFinishing ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400') : `bg-white border-neutral-200 focus:border-neutral-900 ${isDuplicate ? 'border-amber-500' : ''}`}`} placeholder="..." autoComplete="off" />
-                                                {isFinishing && isAnswerWrong && (
-                                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10"><div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95"><ArrowRight size={10} className="text-green-400"/> {hintToShow}</div><div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div></div>
-                                                )}
+                                <div key={index} className="w-full relative">
+                                    <input 
+                                        type="text" 
+                                        value={answer} 
+                                        onChange={(e) => handleCollocAnswerChange(index, e.target.value)} 
+                                        disabled={isFinishing} 
+                                        className={`w-full h-10 px-4 text-base font-medium rounded-lg border-2 outline-none transition-colors ${
+                                            isFinishing
+                                                ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400')
+                                                : 'bg-white border-neutral-200 focus:border-neutral-900'
+                                        }`}
+                                        placeholder={`Collocation ${index + 1}...`}
+                                        autoComplete="off" 
+                                    />
+                                    {isFinishing && isAnswerWrong && hintToShow && (
+                                        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10">
+                                            <div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95">
+                                                <ArrowRight size={10} className="text-green-400"/> {hintToShow}
                                             </div>
-                                            <span className="font-black text-neutral-900 text-base">{colloc.headword}</span>
-                                        </>
-                                    )}
-                                    {colloc.position === 'pre' && (
-                                        <>
-                                            <span className="font-black text-neutral-900 text-base">{colloc.headword}</span>
-                                            <div className="flex-1 relative">
-                                                <input type="text" value={answer} onChange={(e) => handleCollocAnswerChange(index, e.target.value)} disabled={isFinishing} className={`w-full h-9 px-3 text-base font-medium rounded-lg border-2 outline-none transition-colors ${isFinishing ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400') : `bg-white border-neutral-200 focus:border-neutral-900 ${isDuplicate ? 'border-amber-500' : ''}`}`} placeholder="..." autoComplete="off" />
-                                                {isFinishing && isAnswerWrong && (
-                                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10"><div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95"><ArrowRight size={10} className="text-green-400"/> {hintToShow}</div><div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div></div>
-                                                )}
-                                            </div>
-                                        </>
+                                            <div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div>
+                                        </div>
                                     )}
                                 </div>
                             );
@@ -232,53 +248,51 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
             const result = results ? results[currentChallengeIndex] : null;
             const details = (result && typeof result === 'object' && 'details' in result) ? result.details : {};
 
-            const duplicates = useMemo(() => {
-                const seen = new Set<string>();
-                const dupes = new Set<string>();
-                answers.forEach(ans => {
-                    const trimmed = (ans || '').trim();
-                    if (trimmed) {
-                        if (seen.has(trimmed)) dupes.add(trimmed);
-                        else seen.add(trimmed);
-                    }
-                });
-                return dupes;
-            }, [answers]);
-
-            const allCorrectAnswers = useMemo(() => challenge.idioms.map(c => c.answer), [challenge]);
-            const userProvidedCorrectAnswers = useMemo(() => {
-                if (!isFinishing || !details) return new Set<string>();
-                const correct = new Set<string>();
-                (answers as string[]).forEach((ans, i) => {
-                    if (details[i.toString()] === true) {
-                        correct.add((ans || '').trim().toLowerCase());
-                    }
-                });
-                return correct;
-            }, [isFinishing, answers, details]);
-            const missingCorrectAnswers = useMemo(() => {
-                if (!isFinishing) return [];
-                return allCorrectAnswers.filter(c => !userProvidedCorrectAnswers.has(c.toLowerCase().trim()));
-            }, [isFinishing, allCorrectAnswers, userProvidedCorrectAnswers]);
-            let missingAnswerIndex = 0;
-
             const handleIdiomAnswerChange = (index: number, value: string) => {
                 const newAnswers = [...answers];
                 newAnswers[index] = value;
                 handleAnswerChange(currentChallengeIndex, newAnswers);
             };
 
+            const { missingCorrectAnswers } = useMemo(() => {
+                console.group('[HINT DEBUG] Idiom Hints');
+                if (!isFinishing) {
+                    console.log('Not in finishing phase, no hints calculated.');
+                    console.groupEnd();
+                    return { missingCorrectAnswers: [] };
+                }
+            
+                const correctAnswers = challenge.idioms.map(c => normalizeAnswerForGrading(c.answer));
+                const userAnswers = answers.map(a => normalizeAnswerForGrading(a || ''));
+                console.log('Raw user answers for hint calc:', answers);
+                console.log('Normalized expected answers:', correctAnswers);
+                console.log('Normalized user answers:', userAnswers);
+                
+                const correctPool = [...correctAnswers];
+            
+                userAnswers.forEach(uAns => {
+                    const indexInPool = correctPool.indexOf(uAns);
+                    if (indexInPool !== -1) {
+                        console.log(`- User answer "${uAns}" matched. Consuming from hint pool.`);
+                        correctPool.splice(indexInPool, 1);
+                    } else {
+                        console.log(`- User answer "${uAns}" is incorrect or a duplicate.`);
+                    }
+                });
+                
+                console.log('Final list of missing correct answers:', correctPool);
+                console.groupEnd();
+                return { missingCorrectAnswers: correctPool };
+            }, [isFinishing, answers, challenge.idioms]);
+            
+            let missingAnswerIndex = 0;
+            
             return (
                 <div className="flex flex-col animate-in fade-in duration-300">
                     <div className="text-center space-y-2 mb-6">
                         <h3 className="text-lg font-black text-neutral-900">Idiom Recall</h3>
-                        <p className="text-xs text-neutral-500 font-medium max-w-xs mx-auto">Complete the idioms for <span className="font-bold">"{word.word}"</span></p>
+                        <p className="text-xs text-neutral-500 font-medium max-w-xs mx-auto">Recall the idioms for <span className="font-bold">"{word.word}"</span></p>
                     </div>
-                    {duplicates.size > 0 && !isFinishing && (
-                        <div className="flex items-center gap-2 p-2 mb-2 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-lg">
-                            <AlertTriangle size={14} /> Duplicate answers detected.
-                        </div>
-                    )}
                     {showHint && !isFinishing && (
                         <div className="p-4 mb-4 bg-yellow-50 rounded-2xl border border-yellow-100 animate-in slide-in-from-top-2">
                             <p className="text-xs font-black text-yellow-600 uppercase tracking-widest mb-2">Correct Idioms</p>
@@ -292,37 +306,44 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
                             const answer = answers[index] || '';
                             const isAnswerCorrect = isFinishing && details[index.toString()] === true;
                             const isAnswerWrong = isFinishing && details[index.toString()] === false;
-                            const isDuplicate = duplicates.has((answer || '').trim()) && (answer || '').trim() !== '';
                             
-                            let hintToShow = idiom.answer;
-                            if (isAnswerWrong) {
-                                hintToShow = missingCorrectAnswers[missingAnswerIndex] || idiom.answer;
-                                missingAnswerIndex++;
+                            let hintToShow: string | null = null;
+                            if (isAnswerWrong && missingCorrectAnswers.length > missingAnswerIndex) {
+                                const missingNormalized = missingCorrectAnswers[missingAnswerIndex];
+                                const originalCase = challenge.idioms.find(c => normalizeAnswerForGrading(c.answer) === missingNormalized);
+                                if (originalCase) {
+                                    hintToShow = originalCase.answer;
+                                    console.log(`[HINT DEBUG] For wrong input at index ${index}, assigning hint: "${hintToShow}"`);
+                                    missingAnswerIndex++;
+                                } else {
+                                    console.log(`[HINT DEBUG] For wrong input at index ${index}, could not find original case for missing answer: "${missingNormalized}"`);
+                                }
+                            } else if (isAnswerWrong) {
+                                console.log(`[HINT DEBUG] For wrong input at index ${index}, no more missing answers to assign.`);
                             }
 
                             return (
-                                <div key={index} className="w-full flex items-center gap-2">
-                                    {idiom.position === 'post' && (
-                                        <>
-                                            <div className="flex-1 relative">
-                                                <input type="text" value={answer} onChange={(e) => handleIdiomAnswerChange(index, e.target.value)} disabled={isFinishing} className={`w-full h-9 px-3 text-right text-base font-medium rounded-lg border-2 outline-none transition-colors ${isFinishing ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400') : `bg-white border-neutral-200 focus:border-neutral-900 ${isDuplicate ? 'border-amber-500' : ''}`}`} placeholder="..." autoComplete="off" />
-                                                {isFinishing && isAnswerWrong && (
-                                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10"><div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95"><ArrowRight size={10} className="text-green-400"/> {hintToShow}</div><div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div></div>
-                                                )}
+                                <div key={index} className="w-full relative">
+                                    <input 
+                                        type="text" 
+                                        value={answer} 
+                                        onChange={(e) => handleIdiomAnswerChange(index, e.target.value)} 
+                                        disabled={isFinishing} 
+                                        className={`w-full h-10 px-4 text-base font-medium rounded-lg border-2 outline-none transition-colors ${
+                                            isFinishing
+                                                ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400')
+                                                : 'bg-white border-neutral-200 focus:border-neutral-900'
+                                        }`}
+                                        placeholder={`Idiom ${index + 1}...`}
+                                        autoComplete="off" 
+                                    />
+                                    {isFinishing && isAnswerWrong && hintToShow && (
+                                        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10">
+                                            <div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95">
+                                                <ArrowRight size={10} className="text-green-400"/> {hintToShow}
                                             </div>
-                                            <span className="font-black text-neutral-900 text-base">{idiom.headword}</span>
-                                        </>
-                                    )}
-                                    {idiom.position === 'pre' && (
-                                        <>
-                                            <span className="font-black text-neutral-900 text-base">{idiom.headword}</span>
-                                            <div className="flex-1 relative">
-                                                <input type="text" value={answer} onChange={(e) => handleIdiomAnswerChange(index, e.target.value)} disabled={isFinishing} className={`w-full h-9 px-3 text-base font-medium rounded-lg border-2 outline-none transition-colors ${isFinishing ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400') : `bg-white border-neutral-200 focus:border-neutral-900 ${isDuplicate ? 'border-amber-500' : ''}`}`} placeholder="..." autoComplete="off" />
-                                                {isFinishing && isAnswerWrong && (
-                                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10"><div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95"><ArrowRight size={10} className="text-green-400"/> {hintToShow}</div><div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div></div>
-                                                )}
-                                            </div>
-                                        </>
+                                            <div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div>
+                                        </div>
                                     )}
                                 </div>
                             );

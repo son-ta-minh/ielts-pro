@@ -98,13 +98,17 @@ export const useAppController = () => {
 
     const startDueReviewSession = useCallback(async () => {
         if (!currentUser) return;
+        console.log('[SESSION_DEBUG] Attempting to start DUE session...');
         const words = await getDueWords(currentUser.id, 30);
+        console.log(`[SESSION_DEBUG] Found ${words.length} due words.`);
         startSession(words, 'due');
     }, [currentUser, startSession]);
 
     const startNewLearnSession = useCallback(async () => {
         if (!currentUser) return;
+        console.log('[SESSION_DEBUG] Attempting to start NEW session...');
         const words = await getNewWords(currentUser.id, 20);
+        console.log(`[SESSION_DEBUG] Found ${words.length} new words.`);
         startSession(words, 'new');
     }, [currentUser, startSession]);
   

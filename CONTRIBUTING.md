@@ -29,6 +29,30 @@ System-level data, such as AI model names, algorithm variables, or feature flags
 #### 3.1. Reusability
 Avoid creating new classes/components hastily. Instead, prioritize designing reusable code that can be applied across different parts of the application. This ensures a consistent UI and logic, simplifies long-term maintenance, and helps to cleanly separate general-purpose functionality from specific feature implementations.
 
+#### 3.2. Grading Logic for Recall-Based Tests
+This principle applies specifically to challenges like "Collocation Recall" and "Idiom Recall" where a user must provide multiple correct answers in any order.
+
+-   **Incorrect Approach (DO NOT USE):** Iterating through the user's input textboxes and checking if the content of each box exists in the list of correct answers. This logic fails when a user enters a correct answer multiple times or leaves some boxes empty, as it incorrectly marks textboxes as correct based on their content without ensuring that all unique correct answers have been provided.
+
+-   **Correct Approach (STRICTLY ENFORCE):** The logic must iterate through the **list of correct answers** (the source of truth) and check if each one can be found in a mutable "pool" of user-provided answers.
+
+    1.  Create a mutable array (`userAnswerPool`) of the user's answers, normalized for grading.
+    2.  Initialize a `details` object to store the results.
+    3.  Loop through the **correct answers list** (`correctItems`) from the challenge data, one by one, using its index.
+    4.  For each `correctItem`, search for its normalized form in the `userAnswerPool`.
+    5.  If a match is found:
+        -   Mark the result for the **correct answer's index** as `true` in the `details` object (e.g., `details[correctItemIndex] = true`).
+        -   **Crucially, remove the matched answer** from the `userAnswerPool` to prevent it from being matched again (this correctly handles duplicate user inputs).
+    6.  If no match is found, mark the result for the **correct answer's index** as `false` (`details[correctItemIndex] = false`).
+
+-   **Example:**
+    -   Correct answers: `["a", "b", "c"]`
+    -   User input: `["c", "", ""]`
+    -   The loop checks for "a" -> not found -> `details["0"] = false`.
+    -   The loop checks for "b" -> not found -> `details["1"] = false`.
+    -   The loop checks for "c" -> found -> `details["2"] = true`, and "c" is removed from the user's answer pool.
+    -   **Final Result:** A `details` object `{ "0": false, "1": false, "2": true }` is returned, correctly indicating that only the third correct answer was provided.
+
 ---
 
 ### 4. AI Interaction Principles

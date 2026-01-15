@@ -1,6 +1,5 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
-import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern } from '../../app/types';
+import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import WordTable from './WordTable';
@@ -10,7 +9,7 @@ import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter }
 import { stringToWordArray } from '../../utils/text';
 
 interface Props {
-  userId: string;
+  user: User;
   onDelete: (id: string) => Promise<void>;
   onBulkDelete: (ids: string[]) => Promise<void>;
   onUpdate: (updated: VocabularyItem) => void;
@@ -22,7 +21,7 @@ interface Props {
   onExpandAddConsumed?: () => void;
 }
 
-const WordList: React.FC<Props> = ({ userId, onDelete, onBulkDelete, onUpdate, onGainXp, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed }) => {
+const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onGainXp, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed }) => {
   const [words, setWords] = useState<VocabularyItem[]>([]);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
@@ -34,6 +33,8 @@ const WordList: React.FC<Props> = ({ userId, onDelete, onBulkDelete, onUpdate, o
   
   const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
+
+  const { id: userId } = user;
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -110,7 +111,7 @@ const WordList: React.FC<Props> = ({ userId, onDelete, onBulkDelete, onUpdate, o
           onExpandAddConsumed={onExpandAddConsumed}
       />
       {viewingWord && <ViewWordModal word={viewingWord} onClose={() => setViewingWord(null)} onNavigateToWord={setViewingWord} onUpdate={onUpdate} onGainXp={onGainXp} onEditRequest={(word) => { setViewingWord(null); setEditingWord(word); }} isViewOnly={false} />}
-      {editingWord && <EditWordModal word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setViewingWord(word); }}/>}
+      {editingWord && <EditWordModal user={user} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setViewingWord(word); }}/>}
     </>
   );
 };

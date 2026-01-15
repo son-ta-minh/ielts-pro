@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Save, Sparkles, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, Tag as TagIcon, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2 } from 'lucide-react';
+import { X, Save, Sparkles, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, Tag as TagIcon, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, Loader2 } from 'lucide-react';
 import { VocabularyItem, WordFamily, WordFamilyMember, ReviewGrade, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
-import UniversalAiModal from '../common/UniversalAiModal';
 
 const StatusDropdown: React.FC<{
     label?: string;
@@ -62,10 +61,9 @@ export interface EditWordModalUIProps {
     add: (newItem: Partial<ParaphraseOption>) => void;
   };
   handleSubmit: (e?: React.FormEvent) => void;
-  isAiModalOpen: boolean;
-  setIsAiModalOpen: (isOpen: boolean) => void;
-  onGeneratePrompt: (inputs: { words: string }) => string;
-  onAiResult: (data: any) => void;
+  onOpenAiRefine: () => void;
+  onSuggestLearn: () => void;
+  hasSuggestions: boolean;
 }
 
 type Tab = 'MAIN' | 'DETAILS' | 'CONNECTIONS';
@@ -102,7 +100,7 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
   const {
     onClose, onSwitchToView, formData, setFormData, setFlag,
     familyHandler, prepList, collocList, idiomList, paraList, handleSubmit,
-    isAiModalOpen, setIsAiModalOpen, onGeneratePrompt, onAiResult
+    onOpenAiRefine, onSuggestLearn, hasSuggestions
   } = props;
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
@@ -141,7 +139,14 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                     <h3 className="font-black text-lg text-neutral-900 leading-none">Edit Word</h3>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => setIsAiModalOpen(true)} className="px-3 py-2 bg-white border border-neutral-200 text-neutral-600 rounded-lg font-black text-[10px] flex items-center justify-center space-x-1.5 hover:bg-neutral-50 active:scale-95 transition-all shadow-sm"><Sparkles size={12} className="text-amber-500" /><span>Manual AI</span></button>
+                    <button 
+                        type="button" 
+                        onClick={onSuggestLearn} 
+                        title={hasSuggestions ? "View Suggestions" : "Get Learning Suggestions"}
+                        className={`px-3 py-2 border rounded-lg font-black text-[10px] flex items-center justify-center space-x-1.5 hover:bg-neutral-50 active:scale-95 transition-all shadow-sm ${hasSuggestions ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-white border-neutral-200 text-neutral-600'}`}>
+                        <Lightbulb size={12} className={hasSuggestions ? "text-amber-500" : "text-neutral-400"} /><span>{hasSuggestions ? 'View Suggestion' : 'Suggest'}</span>
+                    </button>
+                    <button type="button" onClick={onOpenAiRefine} className="px-3 py-2 bg-white border border-neutral-200 text-neutral-600 rounded-lg font-black text-[10px] flex items-center justify-center space-x-1.5 hover:bg-neutral-50 active:scale-95 transition-all shadow-sm"><Sparkles size={12} className="text-amber-500" /><span>Manual AI</span></button>
                     <button type="button" onClick={() => handleSubmit()} className="px-5 py-2 bg-neutral-900 text-white rounded-lg font-black text-[10px] flex items-center justify-center space-x-1.5 hover:bg-neutral-800 active:scale-95 transition-all shadow-md shadow-neutral-900/10"><Save size={12} /><span>Save</span></button>
                     <button onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors ml-2"><X size={18} /></button>
                 </div>
@@ -160,14 +165,14 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                         options={qualityOptions}
                         selectedId={formData.quality}
                         onSelect={(id) => setFormData('quality', id)}
-                        buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-50 transition-colors shadow-sm border border-neutral-200"
+                        buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200"
                     />
                     <StatusDropdown
                         label="Learn Status"
                         options={learnStatusOptions}
                         selectedId={formData.studiedStatus}
                         onSelect={(id) => setFormData('studiedStatus', id)}
-                        buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-50 transition-colors shadow-sm border border-neutral-200"
+                        buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200"
                     />
                 </div>
             </div>
@@ -309,20 +314,6 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
             </div>
         </div>
       </div>
-      {isAiModalOpen && (
-        <UniversalAiModal 
-            isOpen={isAiModalOpen} 
-            onClose={() => setIsAiModalOpen(false)} 
-            type="REFINE_WORDS" 
-            title="Manual AI Refinement"
-            description={`Refining details for "${formData.word}"`}
-            initialData={{ words: formData.word }} 
-            onGeneratePrompt={onGeneratePrompt} 
-            onJsonReceived={onAiResult} 
-            actionLabel="Apply to Word"
-            hidePrimaryInput={true}
-        />
-      )}
     </div>
   );
 };

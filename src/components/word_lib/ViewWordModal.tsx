@@ -55,6 +55,11 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
         membersToCheck.push(...idioms.map(i => i.text.toLowerCase().trim()));
       }
 
+      const collocations = currentWord.collocationsArray;
+      if (collocations) {
+          membersToCheck.push(...collocations.map(c => c.text.toLowerCase().trim()));
+      }
+
       const uniqueMembers = [...new Set(membersToCheck.filter(Boolean))];
       
       const found = new Set<string>();
@@ -98,7 +103,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     loadDependencies();
   }, [currentWord]);
 
-  const handleAddVariantToLibrary = async (variant: { word: string, ipa: string }, sourceType: 'family' | 'paraphrase' | 'idiom' = 'family') => {
+  const handleAddVariantToLibrary = async (variant: { word: string, ipa: string }, sourceType: 'family' | 'paraphrase' | 'idiom' | 'collocation' = 'family') => {
     if (!variant.word || addingVariant || existingVariants.has(variant.word.toLowerCase())) return;
     setAddingVariant(variant.word);
     try {

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useReducer } from 'react';
-import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, PrepositionPattern } from '../../app/types';
+import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, PrepositionPattern, User } from '../../app/types';
 import { updateSRS, resetProgress } from '../../utils/srs';
-import { getWordDetailsPrompt } from '../../services/promptService';
+import { getWordDetailsPrompt, getLearningSuggestionsPrompt } from '../../services/promptService';
 import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { EditWordModalUI } from './EditWordModal_UI';
 import { useToast } from '../../contexts/ToastContext';
 import { logSrsUpdate } from '../practice/ReviewSession';
+import UniversalAiModal from '../common/UniversalAiModal';
+import LearningSuggestionModal from '../common/LearningSuggestionModal';
 
 type FormState = VocabularyItem & {
     tagsString: string;
@@ -70,14 +72,23 @@ function formReducer(state: FormState, action: FormAction): FormState {
     }
 }
 
+interface SuggestionsData {
+    overall_summary: string;
+    wordFamily: any[];
+    collocations: any[];
+    idioms: any[];
+    paraphrases: any[];
+}
+
 interface Props {
   word: VocabularyItem;
+  user: User;
   onSave: (updatedWord: VocabularyItem) => void;
   onClose: () => void;
   onSwitchToView: (word: VocabularyItem) => void;
 }
 
-const EditWordModal: React.FC<Props> = ({ word, onSave, onClose, onSwitchToView }) => {
+const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchToView }) => {
   const { showToast } = useToast();
   
   const [formData, dispatch] = useReducer(formReducer, word, (initialWord) => {
@@ -85,12 +96,16 @@ const EditWordModal: React.FC<Props> = ({ word, onSave, onClose, onSwitchToView 
   });
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [learningSuggestions, setLearningSuggestions] = useState<SuggestionsData | null>(null);
+  const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
+  const [isSuggestAiModalOpen, setIsSuggestAiModalOpen] = useState(false);
 
   useEffect(() => {
     dispatch({ type: 'REINITIALIZE', payload: word });
+    setLearningSuggestions(null);
   }, [word]);
 
-  const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(inputs.words.split(/[,\n]+/).map(w => w.trim()).filter(Boolean), 'Vietnamese');
+  const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(inputs.words.split(/[,\n]+/).map(w => w.trim()).filter(Boolean), user.nativeLanguage || 'Vietnamese');
   
   const handleAiResult = (data: any) => {
       const details = Array.isArray(data) ? data[0] : data;
@@ -98,6 +113,28 @@ const EditWordModal: React.FC<Props> = ({ word, onSave, onClose, onSwitchToView 
           dispatch({ type: 'APPLY_AI_MERGE', payload: details });
           setIsAiModalOpen(false);
       }
+  };
+
+  const handleSuggestLearn = () => {
+    if (learningSuggestions) {
+      setIsSuggestionModalOpen(true);
+    } else {
+      setIsSuggestAiModalOpen(true);
+    }
+  };
+
+  const handleGenerateSuggestPrompt = () => {
+    return getLearningSuggestionsPrompt(formData, user);
+  };
+
+  const handleSuggestAiResult = (data: any) => {
+    if (data && data.overall_summary) {
+      setLearningSuggestions(data);
+      setIsSuggestAiModalOpen(false);
+      setIsSuggestionModalOpen(true);
+    } else {
+      showToast("Invalid suggestion format from AI.", "error");
+    }
   };
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -171,21 +208,60 @@ const EditWordModal: React.FC<Props> = ({ word, onSave, onClose, onSwitchToView 
   const idiomList = createListHandler('idiomsList');
   const paraList = createListHandler('paraphrases');
   
-  return <EditWordModalUI 
-    onClose={onClose}
-    onSwitchToView={() => onSwitchToView(word)}
-    formData={formData}
-    setFormData={(field, value) => dispatch({ type: 'SET_FIELD', payload: { field, value } })}
-    setFlag={(flag) => dispatch({ type: 'SET_FLAG', payload: { flag } })}
-    familyHandler={familyHandler}
-    prepList={prepList}
-    collocList={collocList}
-    idiomList={idiomList}
-    paraList={paraList}
-    handleSubmit={handleSubmit}
-    isAiModalOpen={isAiModalOpen} setIsAiModalOpen={setIsAiModalOpen}
-    onGeneratePrompt={handleGenerateRefinePrompt} onAiResult={handleAiResult}
-  />
+  return (
+    <>
+      <EditWordModalUI 
+        onClose={onClose}
+        onSwitchToView={() => onSwitchToView(word)}
+        formData={formData}
+        setFormData={(field, value) => dispatch({ type: 'SET_FIELD', payload: { field, value } })}
+        setFlag={(flag) => dispatch({ type: 'SET_FLAG', payload: { flag } })}
+        familyHandler={familyHandler}
+        prepList={prepList}
+        collocList={collocList}
+        idiomList={idiomList}
+        paraList={paraList}
+        handleSubmit={handleSubmit}
+        onOpenAiRefine={() => setIsAiModalOpen(true)}
+        onSuggestLearn={handleSuggestLearn}
+        hasSuggestions={!!learningSuggestions}
+      />
+      <LearningSuggestionModal
+        isOpen={isSuggestionModalOpen}
+        onClose={() => setIsSuggestionModalOpen(false)}
+        suggestions={learningSuggestions}
+      />
+      {isAiModalOpen && (
+        <UniversalAiModal 
+            isOpen={isAiModalOpen} 
+            onClose={() => setIsAiModalOpen(false)} 
+            type="REFINE_WORDS" 
+            title="Manual AI Refinement"
+            description={`Refining details for "${formData.word}"`}
+            initialData={{ words: formData.word }} 
+            user={user}
+            onGeneratePrompt={handleGenerateRefinePrompt} 
+            onJsonReceived={handleAiResult} 
+            actionLabel="Apply to Word"
+            hidePrimaryInput={true}
+        />
+      )}
+      {isSuggestAiModalOpen && (
+        <UniversalAiModal
+            isOpen={isSuggestAiModalOpen}
+            onClose={() => setIsSuggestAiModalOpen(false)}
+            type="REFINE_WORDS"
+            title="Get Learning Suggestions"
+            description="AI will suggest what to focus on based on your profile."
+            initialData={{ words: word.word }}
+            user={user}
+            onGeneratePrompt={handleGenerateSuggestPrompt}
+            onJsonReceived={handleSuggestAiResult}
+            hidePrimaryInput={true}
+        />
+      )}
+    </>
+  );
 };
 
 export default EditWordModal;

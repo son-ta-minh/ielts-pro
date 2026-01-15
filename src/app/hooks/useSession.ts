@@ -29,6 +29,7 @@ export const useSession = ({ setView, setIsSidebarOpen }: UseSessionProps) => {
     }, []);
 
     const startSession = useCallback((words: VocabularyItem[], type: SessionType, focus: ReviewMode | null = null) => {
+        console.log(`[SESSION_DEBUG] Starting session of type '${type}' with ${words.length} words.`);
         if (words.length > 0) {
             const uniqueWords = Array.from(new Map(words.map(w => [w.id, w])).values());
             const shuffled = [...uniqueWords].sort(() => Math.random() - 0.5);
@@ -41,12 +42,16 @@ export const useSession = ({ setView, setIsSidebarOpen }: UseSessionProps) => {
             sessionStorage.removeItem('vocab_pro_session_progress');
             sessionStorage.removeItem('vocab_pro_session_outcomes');
             
+            console.log("[SESSION_DEBUG] Navigating to REVIEW view.");
             setView('REVIEW');
             setIsSidebarOpen(false);
+        } else {
+            console.log(`[SESSION_DEBUG] Attempted to start session of type '${type}' but no words were provided. Navigation cancelled.`);
         }
     }, [setView, setIsSidebarOpen]);
 
     const clearSessionState = useCallback(() => {
+        console.log('[SESSION_DEBUG] Clearing all active session state and sessionStorage.');
         sessionStorage.removeItem('vocab_pro_active_session');
         sessionStorage.removeItem('vocab_pro_session_progress');
         sessionStorage.removeItem('vocab_pro_session_outcomes');

@@ -14,6 +14,7 @@ export * from './prompts/getGenerateChapterPrompt';
 export * from './prompts/getGenerateSegmentPrompt';
 export * from './prompts/getComparisonPrompt';
 export * from './prompts/getIrregularVerbFormsPrompt';
+export * from './prompts/getLearningSuggestionsPrompt';
 
 // Speaking feature prompts
 export { getRefineSpeakingTopicPrompt, getTranscriptionForSpeakingPrompt, getFullSpeakingTestPrompt } from './prompts/getSpeakingPart1QuestionsPrompt';

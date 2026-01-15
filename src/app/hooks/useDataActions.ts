@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { User, VocabularyItem } from '../types';
 import * as dataStore from '../dataStore';
-import { processJsonImport } from '../../utils/dataHandler';
+import { processJsonImport, _mapToShortKeys } from '../../utils/dataHandler';
 import { useToast } from '../../contexts/ToastContext';
 import * as adventureService from '../../services/adventureService';
 import * as db from '../db';
@@ -42,19 +42,19 @@ export const useDataActions = (props: UseDataActionsProps) => {
         ]);
     
         const exportObject = {
-          version: 5, 
-          createdAt: new Date().toISOString(),
+          v: 5, 
+          ca: new Date().toISOString(),
           user: currentUser,
-          vocabulary: wordsData,
-          units: unitsData,
-          paraphraseLogs: logsData,
-          speakingTopics: speakingTopicsData,
-          speakingLogs: speakingLogsData,
-          writingTopics: writingTopicsData,
-          writingLogs: writingLogsData,
-          customAdventure: {
-            chapters: adventureService.getChapters(),
-            badges: adventureService.getCustomBadges()
+          vocab: wordsData.map(({ collocations, idioms, ...rest }) => _mapToShortKeys(rest as VocabularyItem)),
+          u: unitsData,
+          pl: logsData,
+          st: speakingTopicsData,
+          sl: speakingLogsData,
+          wt: writingTopicsData,
+          wl: writingLogsData,
+          adv: {
+            ch: adventureService.getChapters(),
+            b: adventureService.getCustomBadges()
           }
         };
         const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: 'application/json' });

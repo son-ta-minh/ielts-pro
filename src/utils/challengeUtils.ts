@@ -6,6 +6,15 @@ const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random(
 const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
+ * Normalizes a string for grading by lowercasing and removing all non-alphanumeric characters, including spaces.
+ * Useful for single words or phrases where spacing is irrelevant, especially for speech-to-text.
+ */
+export const normalizeAnswerForGrading = (str: string): string => {
+    if (!str) return '';
+    return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+};
+
+/**
  * Generates a list of all possible challenges for a given vocabulary item.
  */
 export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
@@ -25,59 +34,12 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
     if (word.collocationsArray && word.collocationsArray.length > 0) {
         const activeCollocs = word.collocationsArray.filter(c => !c.isIgnored);
         if (activeCollocs.length > 0) {
-            const forms = [word.word, ...(word.v2 ? [word.v2] : []), ...(word.v3 ? [word.v3] : [])];
-            if (word.wordFamily) {
-                if(word.wordFamily.nouns) forms.push(...word.wordFamily.nouns.map(n => n.word));
-                if(word.wordFamily.verbs) forms.push(...word.wordFamily.verbs.map(v => v.word));
-                if(word.wordFamily.adjs) forms.push(...word.wordFamily.adjs.map(a => a.word));
-                if(word.wordFamily.advs) forms.push(...word.wordFamily.advs.map(a => a.word));
-            }
-            const uniqueForms = [...new Set(forms.map(f => f.trim()).filter(Boolean))].sort((a, b) => b.length - a.length);
-            const regex = new RegExp(`\\b(${uniqueForms.map(escapeRegex).join('|')})\\b`, 'i');
-
-            const collocationsToTest: CollocationToTest[] = [];
-            activeCollocs.forEach(c => {
-                const match = c.text.match(regex);
-                if (match && typeof match.index === 'number') {
-                    const headwordInVocab = match[0];
-                    const index = match.index;
-                    
-                    const preText = c.text.substring(0, index).trim();
-                    const postText = c.text.substring(index + headwordInVocab.length).trim();
-            
-                    let testHeadword: string;
-                    let testAnswer: string;
-                    let testPosition: 'pre' | 'post';
-            
-                    // If there is no text after the headword, the blank must be before it.
-                    if (!postText && preText) {
-                        const wordsInPreText = preText.split(/\s+/);
-                        if (wordsInPreText.length > 1) {
-                            testAnswer = wordsInPreText.slice(0, -1).join(' '); // e.g., "reach" from "reach a"
-                            testHeadword = wordsInPreText.slice(-1)[0] + ' ' + headwordInVocab; // "a plateau"
-                        } else {
-                            testAnswer = preText;
-                            testHeadword = headwordInVocab;
-                        }
-                        testPosition = 'post';
-                    } 
-                    // If there is text after the headword, the blank is after it.
-                    else if (postText) {
-                        testHeadword = preText ? `${preText} ${headwordInVocab}` : headwordInVocab;
-                        testAnswer = postText;
-                        testPosition = 'pre';
-                    } else {
-                        return; // continue in forEach, skip if only headword exists
-                    }
-            
-                    collocationsToTest.push({
-                        fullText: c.text,
-                        headword: testHeadword,
-                        answer: testAnswer,
-                        position: testPosition
-                    });
-                }
-            });
+            const collocationsToTest: CollocationToTest[] = activeCollocs.map(c => ({
+                fullText: c.text,
+                answer: c.text,
+                headword: '', // Not used in new UI
+                position: 'pre', // Dummy value, not used
+            }));
 
             if (collocationsToTest.length > 0) {
                 list.push({ type: 'COLLOCATION_QUIZ', title: 'Collocation Recall', word, collocations: collocationsToTest });
@@ -88,58 +50,12 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
     if (word.idiomsList && word.idiomsList.length > 0) {
         const activeIdioms = word.idiomsList.filter(i => !i.isIgnored);
         if (activeIdioms.length > 0) {
-            const forms = [word.word, ...(word.v2 ? [word.v2] : []), ...(word.v3 ? [word.v3] : [])];
-            if (word.wordFamily) {
-                if(word.wordFamily.nouns) forms.push(...word.wordFamily.nouns.map(n => n.word));
-                if(word.wordFamily.verbs) forms.push(...word.wordFamily.verbs.map(v => v.word));
-                if(word.wordFamily.adjs) forms.push(...word.wordFamily.adjs.map(a => a.word));
-                if(word.wordFamily.advs) forms.push(...word.wordFamily.advs.map(a => a.word));
-            }
-            const uniqueForms = [...new Set(forms.map(f => f.trim()).filter(Boolean))].sort((a, b) => b.length - a.length);
-            const regex = new RegExp(`\\b(${uniqueForms.map(escapeRegex).join('|')})\\b`, 'i');
-
-            const idiomsToTest: IdiomToTest[] = [];
-            activeIdioms.forEach(idiom => {
-                const match = idiom.text.match(regex);
-                if (match && typeof match.index === 'number') {
-                    const headwordInIdiom = match[0];
-                    const index = match.index;
-                    
-                    const preText = idiom.text.substring(0, index).trim();
-                    const postText = idiom.text.substring(index + headwordInIdiom.length).trim();
-            
-                    let testHeadword: string;
-                    let testAnswer: string;
-                    let testPosition: 'pre' | 'post';
-            
-                    if (!postText && preText) { // Blank is at the start
-                        const wordsInPreText = preText.split(/\s+/);
-                        if (wordsInPreText.length > 1) {
-                            testAnswer = wordsInPreText.slice(0, -1).join(' ');
-                            testHeadword = wordsInPreText.slice(-1)[0] + ' ' + headwordInIdiom;
-                        } else {
-                            testAnswer = preText;
-                            testHeadword = headwordInIdiom;
-                        }
-                        testPosition = 'post'; // The headword is 'post' (after) the blank
-                    } 
-                    else if (postText) { // Blank is at the end
-                        // Fix: Replaced undefined variable 'headwordInVocab' with the correctly scoped 'headwordInIdiom' to resolve a reference error in the IDIOM_QUIZ challenge generation logic.
-                        testHeadword = preText ? `${preText} ${headwordInIdiom}` : headwordInIdiom;
-                        testAnswer = postText;
-                        testPosition = 'pre'; // The headword is 'pre' (before) the blank
-                    } else {
-                        return; // continue in forEach, skip if only headword exists
-                    }
-            
-                    idiomsToTest.push({
-                        fullText: idiom.text,
-                        headword: testHeadword,
-                        answer: testAnswer,
-                        position: testPosition
-                    });
-                }
-            });
+            const idiomsToTest: IdiomToTest[] = activeIdioms.map(i => ({
+                fullText: i.text,
+                answer: i.text,
+                headword: '', // Not used in new UI
+                position: 'pre', // Dummy value, not used
+            }));
 
             if (idiomsToTest.length > 0) {
                 list.push({ type: 'IDIOM_QUIZ', title: 'Idiom Recall', word, idioms: idiomsToTest });
@@ -240,13 +156,23 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
         }
     }
 
-    if (word.wordFamily && (
-        word.wordFamily.nouns?.some(m => !m.isIgnored) ||
-        word.wordFamily.verbs?.some(m => !m.isIgnored) ||
-        word.wordFamily.adjs?.some(m => !m.isIgnored) ||
-        word.wordFamily.advs?.some(m => !m.isIgnored)
-    )) {
-      list.push({ type: 'WORD_FAMILY', title: 'Word Family Recall', word });
+    if (word.wordFamily) {
+        const allFamilyMembers = [
+            ...(word.wordFamily.nouns || []),
+            ...(word.wordFamily.verbs || []),
+            ...(word.wordFamily.adjs || []),
+            ...(word.wordFamily.advs || [])
+        ];
+
+        const activeFamilyMembers = allFamilyMembers.filter(m => !m.isIgnored && m.word.trim());
+
+        const hasDistinctFamilyMembers = activeFamilyMembers.some(
+            member => member.word.toLowerCase().trim() !== word.word.toLowerCase().trim()
+        );
+
+        if (hasDistinctFamilyMembers) {
+            list.push({ type: 'WORD_FAMILY', title: 'Word Family Recall', word });
+        }
     }
     
     const formsToTest: HeteronymForm[] = [];
@@ -305,7 +231,7 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
  * Grades a single challenge based on the user's answer.
  */
 export function gradeChallenge(challenge: Challenge, answer: any): ChallengeResult {
-    const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalize = normalizeAnswerForGrading;
 
     switch (challenge.type) {
         case 'SPELLING': {
@@ -329,7 +255,9 @@ export function gradeChallenge(challenge: Challenge, answer: any): ChallengeResu
         case 'SENTENCE_SCRAMBLE': {
             const sc = challenge as SentenceScrambleChallenge;
             const userSentence = (answer || []).join(' ');
-            return normalize(userSentence) === normalize(sc.original);
+            // FIX: Use a local normalize function that preserves spaces for sentence comparison.
+            const normalizeSentence = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+            return normalizeSentence(userSentence) === normalizeSentence(sc.original);
         }
         case 'HETERONYM_QUIZ': {
             const hc = challenge as HeteronymQuizChallenge;
@@ -338,54 +266,69 @@ export function gradeChallenge(challenge: Challenge, answer: any): ChallengeResu
         }
         case 'COLLOCATION_QUIZ': {
             const cq = challenge as CollocationQuizChallenge;
-            const userAnswersRaw = (answer as string[] || []);
-            const details: Record<string, boolean> = {};
+            const correctItems = cq.collocations;
             
-            // Non-positional "bag of words" check.
-            const correctAnswers = cq.collocations.map(c => normalize(c.answer));
-            const userAnswersPool = userAnswersRaw.map(a => normalize(a || ''));
-        
-            let correctCount = 0;
-            correctAnswers.forEach((correctAnswer, correctIndex) => {
-                const foundIndexInUser = userAnswersPool.findIndex(userAns => userAns === correctAnswer);
-                if (foundIndexInUser !== -1) {
-                    details[correctIndex.toString()] = true;
-                    correctCount++;
-                    // Consume the user's answer to handle duplicates correctly.
-                    userAnswersPool.splice(foundIndexInUser, 1);
+            // 1. Normalize user answers into a mutable pool.
+            const userAnswerPool = (answer as string[] || []).map(a => normalize(a || ''));
+            
+            // 2. Initialize details object keyed by the correct answer's index.
+            const details: Record<string, boolean> = {};
+
+            // 3. Iterate through each CORRECT answer to see if it was provided by the user.
+            correctItems.forEach((correctItem, index) => {
+                const normalizedCorrectAnswer = normalize(correctItem.answer);
+                
+                // 4. Find this correct answer in the user's input pool.
+                const userPoolIndex = userAnswerPool.indexOf(normalizedCorrectAnswer);
+                
+                if (userPoolIndex !== -1) {
+                    // Match found. Mark this correct answer's index as true.
+                    details[index.toString()] = true;
+                    // Consume the user's answer so it can't be used to match another correct answer (handles duplicates).
+                    userAnswerPool.splice(userPoolIndex, 1);
                 } else {
-                    details[correctIndex.toString()] = false;
+                    // No match found for this correct answer. Mark its index as false.
+                    details[index.toString()] = false;
                 }
             });
 
-            const correct = correctCount === correctAnswers.length;
-            
-            return { correct, details };
+            // 5. Determine overall correctness.
+            const isOverallCorrect = Object.values(details).every(v => v === true) && Object.values(details).length === correctItems.length;
+
+            return { correct: isOverallCorrect, details };
         }
         case 'IDIOM_QUIZ': {
             const iq = challenge as IdiomQuizChallenge;
-            const userAnswersRaw = (answer as string[] || []);
+            const correctItems = iq.idioms;
+            
+            // 1. Normalize user answers into a mutable pool.
+            const userAnswerPool = (answer as string[] || []).map(a => normalize(a || ''));
+
+            // 2. Initialize details object keyed by the correct answer's index.
             const details: Record<string, boolean> = {};
             
-            // Non-positional "bag of words" check.
-            const correctAnswers = iq.idioms.map(i => normalize(i.answer));
-            const userAnswersPool = userAnswersRaw.map(a => normalize(a || ''));
-        
-            let correctCount = 0;
-            correctAnswers.forEach((correctAnswer, correctIndex) => {
-                const foundIndexInUser = userAnswersPool.findIndex(userAns => userAns === correctAnswer);
-                if (foundIndexInUser !== -1) {
-                    details[correctIndex.toString()] = true;
-                    correctCount++;
-                    userAnswersPool.splice(foundIndexInUser, 1);
+            // 3. Iterate through each CORRECT answer to see if it was provided by the user.
+            correctItems.forEach((correctItem, index) => {
+                const normalizedCorrectAnswer = normalize(correctItem.answer);
+                
+                // 4. Find this correct answer in the user's input pool.
+                const userPoolIndex = userAnswerPool.indexOf(normalizedCorrectAnswer);
+                
+                if (userPoolIndex !== -1) {
+                    // Match found. Mark this correct answer's index as true.
+                    details[index.toString()] = true;
+                    // Consume the user's answer so it can't be used to match another correct answer (handles duplicates).
+                    userAnswerPool.splice(userPoolIndex, 1);
                 } else {
-                    details[correctIndex.toString()] = false;
+                    // No match found for this correct answer. Mark its index as false.
+                    details[index.toString()] = false;
                 }
             });
-        
-            const correct = correctCount === correctAnswers.length;
-        
-            return { correct, details };
+
+            // 5. Determine overall correctness.
+            const isOverallCorrect = Object.values(details).every(v => v === true) && Object.values(details).length === correctItems.length;
+
+            return { correct: isOverallCorrect, details };
         }
         case 'WORD_FAMILY': {
             const familyTypes: (keyof WordFamily)[] = ['nouns', 'verbs', 'adjs', 'advs'];
