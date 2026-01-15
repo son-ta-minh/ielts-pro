@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { VocabularyItem } from '../../app/types';
-import { Challenge, ChallengeResult, PrepositionQuizChallenge, ChallengeType, ParaphraseQuizChallenge, CollocationQuizChallenge } from './TestModalTypes';
+import { Challenge, ChallengeResult, PrepositionQuizChallenge, ChallengeType, ParaphraseQuizChallenge, CollocationQuizChallenge, IdiomQuizChallenge } from './TestModalTypes';
 import { TestModalHeader } from './TestModalHeader';
 import { TestModalContent } from './TestModalContent';
 import { TestModalFooter } from './TestModalFooter';
@@ -142,6 +142,15 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                                 lastResult = history[type];
                             }
                             break;
+                        case 'IDIOM_QUIZ':
+                             if (hasSpecificFailure(type, c => (c as IdiomQuizChallenge).idioms.map(i => `IDIOM_QUIZ:${i.fullText}`))) {
+                                lastResult = false;
+                            } else if (hasAnySpecificTest(type, c => (c as IdiomQuizChallenge).idioms.map(i => `IDIOM_QUIZ:${i.fullText}`)) || history[type] === true) {
+                                lastResult = true;
+                            } else {
+                                lastResult = history[type];
+                            }
+                            break;
                         default:
                             lastResult = history[type];
                     }
@@ -149,7 +158,7 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                     const isFail = lastResult === false;
                     const isPass = lastResult === true;
 
-                    const labelMap: Record<string, string> = { 'SPELLING': 'Spelling', 'IPA_QUIZ': 'IPA Check', 'PREPOSITION_QUIZ': 'Prepositions', 'WORD_FAMILY': 'Word Family', 'MEANING_QUIZ': 'Meaning', 'PARAPHRASE_QUIZ': 'Word Power Recall', 'SENTENCE_SCRAMBLE': 'Sentence Builder', 'HETERONYM_QUIZ': 'Heteronym Challenge', 'PRONUNCIATION': 'Speak Out', 'COLLOCATION_QUIZ': 'Collocation Recall' };
+                    const labelMap: Record<string, string> = { 'SPELLING': 'Spelling', 'IPA_QUIZ': 'IPA Check', 'PREPOSITION_QUIZ': 'Prepositions', 'WORD_FAMILY': 'Word Family', 'MEANING_QUIZ': 'Meaning', 'PARAPHRASE_QUIZ': 'Word Power Recall', 'SENTENCE_SCRAMBLE': 'Sentence Builder', 'HETERONYM_QUIZ': 'Heteronym Challenge', 'PRONUNCIATION': 'Speak Out', 'COLLOCATION_QUIZ': 'Collocation Recall', 'IDIOM_QUIZ': 'Idiom Recall' };
                     return (
                         <div key={type} onClick={() => onToggleChallenge(type)} className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer group bg-white ${isSelected ? 'border-neutral-900 shadow-sm' : 'border-neutral-100 hover:border-neutral-200'}`}>
                             <div className="flex flex-col"><span className={`text-sm font-bold ${isFail ? 'text-red-600' : isPass ? 'text-green-600' : 'text-neutral-900'}`}>{labelMap[type as string] || type}</span>{isFail && <span className="text-[9px] font-bold text-red-500 flex items-center gap-1 mt-0.5"><AlertCircle size={10} /> Last: Failed</span>}{isPass && <span className="text-[9px] font-bold text-green-600 flex items-center gap-1 mt-0.5"><CheckCircle2 size={10} /> Last: Passed</span>}{lastResult === undefined && <span className="text-[9px] font-bold text-neutral-400 mt-0.5">Not tested yet</span>}</div>

@@ -97,7 +97,7 @@ export const UnitEditViewUI: React.FC<UnitEditViewUIProps> = ({ user, allWords, 
         </div>
       </div>
       <UnitHeaderEditModal isOpen={isHeaderModalOpen} onClose={() => setIsHeaderModalOpen(false)} initialName={editName} initialDesc={editDesc} onSave={(name, desc) => { setEditName(name); setEditDesc(desc); }} />
-      {showRefineAiModal && (<UniversalAiModal isOpen={showRefineAiModal} onClose={() => setShowRefineAiModal(false)} type="REFINE_UNIT" title="Refine Unit" description="Update vocabulary and essay content with AI context." initialData={{ request: '' }} onGeneratePrompt={handleGenerateUnitRefinePrompt} onJsonReceived={handleApplyRefinement} actionLabel="Apply Changes" />)}
+      {showRefineAiModal && (<UniversalAiModal isOpen={showRefineAiModal} onClose={() => setShowRefineAiModal(false)} type="REFINE_UNIT" title="Refine Unit" description="Update vocabulary and essay content with AI context." initialData={{ request: '' }} onGeneratePrompt={handleGenerateUnitRefinePrompt} onJsonReceived={handleApplyRefinement} actionLabel="Apply Changes" closeOnSuccess={true} />)}
     </>
   );
 };

@@ -4,15 +4,14 @@
  */
 
 export * from './prompts/getWordDetailsPrompt';
+// Fix: Add missing export for getIpaAccentsPrompt.
+export * from './prompts/getIpaAccentsPrompt';
 export * from './prompts/getRefineUnitPrompt';
 export * from './prompts/getParaphraseTaskPrompt';
 export * from './prompts/getParaphraseEvaluationPrompt';
 export * from './prompts/getSpeechGenerationParts';
 export * from './prompts/getGenerateChapterPrompt';
 export * from './prompts/getGenerateSegmentPrompt';
-// FIX: Export getWordTypePrompt to make it available to other modules.
-export * from './prompts/getWordTypePrompt';
-export * from './prompts/getIpaAccentsPrompt';
 export * from './prompts/getComparisonPrompt';
 export * from './prompts/getIrregularVerbFormsPrompt';
 

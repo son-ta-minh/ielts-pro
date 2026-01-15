@@ -1,12 +1,13 @@
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
-  Plus, LayoutDashboard, List, Settings, RefreshCw, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Network, Mic, PenLine, BrainCircuit, ClipboardCheck, ChevronDown, Puzzle, FileClock
+  Plus, LayoutDashboard, List, Settings, RefreshCw, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Network, Mic, PenLine, BrainCircuit, ClipboardCheck, ChevronDown, Puzzle, FileClock, AlertTriangle
 } from 'lucide-react';
 import { AppView, SessionType, VocabularyItem } from './types';
 import { useAppController } from './useAppController';
 import { getDueWords, getNewWords } from './db';
 import EditWordModal from '../components/word_lib/EditWordModal';
 import ViewWordModal from '../components/word_lib/ViewWordModal';
+import ConfirmationModal from '../components/common/ConfirmationModal';
 
 // Lazy load major views for performance
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
@@ -56,11 +57,13 @@ const navItems = [
   { id: 'SETTINGS', view: 'SETTINGS', icon: Settings, label: 'Settings' }
 ] as const;
 
-const Sidebar: React.FC<AppLayoutProps> = ({ controller }) => {
+const Sidebar: React.FC<AppLayoutProps & { 
+    onNavigate: (view: AppView, action?: () => void) => void;
+    onLogoutRequest: () => void;
+}> = ({ controller, onNavigate, onLogoutRequest }) => {
   const { 
     currentUser, view, setView, sessionType, isSidebarOpen, setIsSidebarOpen, 
-    handleLogout, openAddWordLibrary, forceExpandAdd, setForceExpandAdd, clearSessionState,
-    stats, apiUsage
+    openAddWordLibrary, forceExpandAdd
   } = controller;
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['IELTS_PREP', 'LABS']));
@@ -120,7 +123,7 @@ const Sidebar: React.FC<AppLayoutProps> = ({ controller }) => {
                         return (
                           <button
                             key={child.id}
-                            onClick={() => { if (sessionType) clearSessionState(); setView(child.view); setForceExpandAdd(false); setIsSidebarOpen(false); }}
+                            onClick={() => onNavigate(child.view)}
                             className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg font-bold text-sm transition-colors ${isActive ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:bg-neutral-100'}`}
                           >
                             <div className="flex items-center space-x-3"><child.icon size={18} /><span>{child.label}</span></div>
@@ -133,22 +136,19 @@ const Sidebar: React.FC<AppLayoutProps> = ({ controller }) => {
               );
             }
             
-            // It's a single item
-            // FIX: This structure helps TypeScript correctly narrow the type of 'item'
-            // by separating the group logic (which returns) from the single item logic.
             const singleItem = item as { readonly view: AppView; readonly id: string; readonly icon: any; readonly label: string };
             const isActive = view === singleItem.view && (singleItem.id !== 'BROWSE' || !forceExpandAdd);
             return (
               <div key={singleItem.id} className="relative group">
                 <button 
-                  onClick={() => { if (sessionType) clearSessionState(); setView(singleItem.view); setForceExpandAdd(false); setIsSidebarOpen(false); }} 
+                  onClick={() => onNavigate(singleItem.view)} 
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${isActive ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-100'}`}
                 >
                   <div className="flex items-center space-x-3"><singleItem.icon size={20} /><span>{singleItem.label}</span></div>
                 </button>
                 {singleItem.id === 'BROWSE' && (
                   <button 
-                    onClick={(e) => { e.stopPropagation(); openAddWordLibrary(); setIsSidebarOpen(false); }}
+                    onClick={(e) => { e.stopPropagation(); onNavigate('BROWSE', openAddWordLibrary); }}
                     title="Add Word"
                     className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all ${view === 'BROWSE' && forceExpandAdd ? 'bg-white text-neutral-900 shadow-sm' : isActive ? 'text-white/60 hover:text-white hover:bg-white/10' : 'text-neutral-400 hover:bg-neutral-200 hover:text-neutral-900'}`}
                   ><Plus size={16} /></button>
@@ -167,7 +167,7 @@ const Sidebar: React.FC<AppLayoutProps> = ({ controller }) => {
                  <div className="text-[10px] text-neutral-400 font-bold truncate">{currentUser.role}</div>
                </div>
              </div>
-             <button onClick={handleLogout} className="p-3 text-neutral-400 hover:bg-neutral-100 hover:text-red-500 rounded-xl transition-colors shrink-0" title="Log Out">
+             <button onClick={onLogoutRequest} className="p-3 text-neutral-400 hover:bg-neutral-100 hover:text-red-500 rounded-xl transition-colors shrink-0" title="Log Out">
                <LogOut size={20} />
              </button>
            </div>
@@ -286,10 +286,50 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
   }
 };
 
-// FIX: Add and export the main AppLayout component that wraps the Sidebar and MainContent.
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp } = controller;
+  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
+
+  const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
+
+  const handleNavigation = (targetView: AppView, action?: () => void) => {
+    if (sessionType && targetView !== 'REVIEW') {
+      setEndSessionModal({isOpen: true, targetView, andThen: action});
+    } else {
+      if(action) { setForceExpandAdd(true); } else { setForceExpandAdd(false); }
+      setView(targetView);
+      setIsSidebarOpen(false);
+    }
+  };
+  
+  const handleLogoutRequest = () => {
+    if (sessionType) {
+        setEndSessionModal({ isOpen: true, targetView: null, andThen: handleLogout });
+    } else {
+        handleLogout();
+    }
+  };
+
+  const confirmEndSession = () => {
+    if (endSessionModal.targetView) {
+        clearSessionState();
+        setView(endSessionModal.targetView);
+        if (endSessionModal.andThen) {
+            endSessionModal.andThen();
+        } else {
+            setForceExpandAdd(false);
+        }
+        setIsSidebarOpen(false);
+    } else if (endSessionModal.andThen) { // For logout
+        clearSessionState();
+        endSessionModal.andThen();
+    }
+    setEndSessionModal({isOpen: false, targetView: null, andThen: undefined});
+  };
+
+  const cancelEndSession = () => {
+    setEndSessionModal({isOpen: false, targetView: null, andThen: undefined});
+  };
 
   const handleEditRequest = (word: VocabularyItem) => {
     setGlobalViewWord(null);
@@ -303,7 +343,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
 
   return (
     <div className="min-h-screen bg-neutral-50 md:flex">
-      <Sidebar controller={controller} />
+      <Sidebar controller={controller} onNavigate={handleNavigation} onLogoutRequest={handleLogoutRequest}/>
       <div className={`fixed inset-0 bg-black/30 z-40 md:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto relative">
@@ -317,6 +357,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
       
       {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
       {editingWord && <EditWordModal word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
+      
+      <ConfirmationModal
+        isOpen={endSessionModal.isOpen}
+        title="End Current Session?"
+        message="Navigating away will end your current study session. Are you sure you want to continue?"
+        confirmText="End Session"
+        isProcessing={false}
+        onConfirm={confirmEndSession}
+        onClose={cancelEndSession}
+        icon={<AlertTriangle size={40} className="text-orange-500" />}
+        confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200"
+      />
     </div>
   );
 };

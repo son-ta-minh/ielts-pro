@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { VocabularyItem, ParaphraseOption, WordQuality } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
-import { getWordDetailsPrompt, getWordTypePrompt, getIpaAccentsPrompt } from '../../services/promptService';
+import { getWordDetailsPrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter } from './WordTable_UI';
 import { normalizeAiResponse, mergeAiResultIntoWord } from '../../utils/vocabUtils';
@@ -29,6 +29,7 @@ interface Props {
   onDelete: (word: VocabularyItem) => Promise<void>;
   onHardDelete?: (word: VocabularyItem) => Promise<void>;
   onBulkDelete?: (ids: Set<string>) => Promise<void>;
+  onBulkHardDelete?: (ids: Set<string>) => Promise<void>;
   onPractice: (ids: Set<string>) => void;
   settingsKey: string;
   context: 'library' | 'unit';
@@ -40,7 +41,7 @@ interface Props {
 
 const WordTable: React.FC<Props> = ({ 
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
-  onSearch, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onPractice,
+  onSearch, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onBulkHardDelete, onPractice,
   settingsKey, context, initialFilter, forceExpandAdd, onExpandAddConsumed, onWordRenamed
 }) => {
   const [query, setQuery] = useState('');
@@ -62,10 +63,9 @@ const WordTable: React.FC<Props> = ({
   const [wordToHardDelete, setWordToHardDelete] = useState<VocabularyItem | null>(null);
   const [isHardDeleting, setIsHardDeleting] = useState(false);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isBulkHardDeleteModalOpen, setIsBulkHardDeleteModalOpen] = useState(false);
   
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-  const [isWordTypeAiModalOpen, setIsWordTypeAiModalOpen] = useState(false);
-  const [isAccentAiModalOpen, setIsAccentAiModalOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info', message: string} | null>(null);
   
   const viewMenuRef = useRef<HTMLDivElement>(null);
@@ -150,6 +150,11 @@ const WordTable: React.FC<Props> = ({
   
   const selectedWordsToRefine = useMemo(() => words.filter(w => selectedIds.has(w.id)), [words, selectedIds]);
 
+  const selectedRawWords = useMemo(
+    () => words.filter(w => selectedIds.has(w.id) && w.quality === WordQuality.RAW),
+    [words, selectedIds]
+  );
+
   const handleConfirmBulkDelete = async () => {
     if (!onBulkDelete || selectedIds.size === 0) return;
     setIsDeleting(true);
@@ -162,6 +167,26 @@ const WordTable: React.FC<Props> = ({
     } finally {
         setIsDeleting(false);
         setIsBulkDeleteModalOpen(false);
+    }
+  };
+
+  const handleConfirmBulkHardDelete = async () => {
+    if (!onBulkHardDelete || selectedRawWords.length === 0) return;
+    setIsHardDeleting(true);
+    try {
+        const idsToDelete = new Set(selectedRawWords.map(w => w.id));
+        await onBulkHardDelete(idsToDelete);
+        setNotification({ type: 'success', message: `Permanently deleted ${idsToDelete.size} raw item(s).` });
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            idsToDelete.forEach(id => next.delete(id));
+            return next;
+        });
+    } catch (e) {
+        setNotification({ type: 'error', message: 'Failed to delete items.' });
+    } finally {
+        setIsHardDeleting(false);
+        setIsBulkHardDeleteModalOpen(false);
     }
   };
 
@@ -257,83 +282,6 @@ const WordTable: React.FC<Props> = ({
 
   const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(stringToWordArray(inputs.words), 'Vietnamese');
   
-  const handleWordTypeOverwriteResult = async (results: any[]) => {
-    if (!Array.isArray(results)) {
-        setNotification({ type: 'error', message: "AI response was not in the expected format."});
-        return;
-    }
-
-    const aiMap = new Map<string, any>();
-    results.forEach(r => {
-        const key = (r.og || '').toLowerCase();
-        if (key) aiMap.set(key, r);
-    });
-
-    const itemsToUpdate: VocabularyItem[] = [];
-    selectedWordsToRefine.forEach(word => {
-        const aiResult = aiMap.get(word.word.toLowerCase());
-        if (aiResult) {
-            const updatedWord = { ...word };
-            // Reset all type flags first for re-classification
-            updatedWord.isIdiom = false;
-            updatedWord.isPhrasalVerb = false;
-            updatedWord.isCollocation = false;
-            updatedWord.isStandardPhrase = false;
-
-            if (aiResult.is_idiom) updatedWord.isIdiom = true;
-            else if (aiResult.is_pv) updatedWord.isPhrasalVerb = true;
-            else if (aiResult.is_col) updatedWord.isCollocation = true;
-            else if (aiResult.is_phr) updatedWord.isStandardPhrase = true;
-            
-            updatedWord.updatedAt = Date.now();
-            itemsToUpdate.push(updatedWord);
-        }
-    });
-    
-    if (itemsToUpdate.length > 0) {
-        await dataStore.bulkSaveWords(itemsToUpdate);
-        setNotification({ type: 'success', message: `Updated word types for ${itemsToUpdate.length} words.` });
-        setSelectedIds(new Set());
-    }
-    setIsWordTypeAiModalOpen(false);
-  };
-
-  const handleAccentAiResult = async (results: any[]) => {
-    if (!Array.isArray(results)) {
-        setNotification({ type: 'error', message: "AI response was not an array." });
-        return;
-    }
-
-    const updates = new Map<string, { ipaUs?: string; ipaUk?: string; pronSim?: 'same' | 'near' | 'different' }>();
-    results.forEach(r => {
-        if (r.og && (r.ipa_us || r.ipa_uk || r.pron_sim)) {
-            updates.set(r.og.toLowerCase(), { ipaUs: r.ipa_us, ipaUk: r.ipa_uk, pronSim: r.pron_sim });
-        }
-    });
-    
-    const itemsToUpdate = selectedWordsToRefine
-        .filter(w => updates.has(w.word.toLowerCase()))
-        .map(w => {
-            const accentData = updates.get(w.word.toLowerCase())!;
-            return {
-                ...w,
-                ipaUs: accentData.ipaUs || w.ipaUs,
-                ipaUk: accentData.ipaUk || w.ipaUk,
-                pronSim: accentData.pronSim || w.pronSim,
-                updatedAt: Date.now(),
-            };
-        });
-
-    if (itemsToUpdate.length > 0) {
-        await dataStore.bulkSaveWords(itemsToUpdate);
-        setNotification({ type: 'success', message: `Added accent IPAs for ${itemsToUpdate.length} words.` });
-        setSelectedIds(new Set());
-    } else {
-        setNotification({ type: 'info', message: "No accent data was found to apply." });
-    }
-    setIsAccentAiModalOpen(false);
-  };
-
   const uiProps: Omit<WordTableUIProps, 'viewingWord' | 'setViewingWord' | 'editingWord' | 'setEditingWord'> = {
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
     onPractice, context, onDelete,
@@ -347,9 +295,9 @@ const WordTable: React.FC<Props> = ({
     setVisibility, handleToggleFilter, handleBatchAddSubmit,
     onOpenBulkDeleteModal: onBulkDelete ? () => setIsBulkDeleteModalOpen(true) : undefined,
     onBulkVerify: handleBulkVerify,
-    onOpenWordTypeAiModal: () => setIsWordTypeAiModalOpen(true),
-    onOpenAccentAiModal: () => setIsAccentAiModalOpen(true),
+    onOpenBulkHardDeleteModal: onBulkHardDelete && selectedRawWords.length > 0 ? () => setIsBulkHardDeleteModalOpen(true) : undefined,
     selectedWordsToRefine, handleGenerateRefinePrompt, handleAiRefinementResult,
+    selectedRawWordsCount: selectedRawWords.length,
     setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setIsViewMenuOpen, setIsFilterMenuOpen,
     setIsAddExpanded,
     settingsKey,
@@ -369,32 +317,17 @@ const WordTable: React.FC<Props> = ({
         confirmButtonClass={context === 'unit' ? "bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" : "bg-red-600 text-white hover:bg-red-700 shadow-red-200"}
         icon={context === 'unit' ? <Unlink size={40} className="text-orange-500"/> : <Trash2 size={40} className="text-red-500"/>}
       />}
-      {isWordTypeAiModalOpen && selectedWordsToRefine.length > 0 && (
-        <UniversalAiModal 
-            isOpen={isWordTypeAiModalOpen} 
-            onClose={() => setIsWordTypeAiModalOpen(false)} 
-            type="REFINE_WORDS" 
-            title="Overwrite Word Type"
-            description={`Analyzing and overwriting the type for ${selectedWordsToRefine.length} selected words.`}
-            initialData={{ words: selectedWordsToRefine.map(w => w.word).join('\n') }}
-            onGeneratePrompt={(inputs) => getWordTypePrompt(stringToWordArray(inputs.words))}
-            onJsonReceived={handleWordTypeOverwriteResult}
-            actionLabel="Overwrite Types"
-            hidePrimaryInput={true}
-        />
-      )}
-      {isAccentAiModalOpen && selectedWordsToRefine.length > 0 && (
-        <UniversalAiModal 
-            isOpen={isAccentAiModalOpen} 
-            onClose={() => setIsAccentAiModalOpen(false)} 
-            type="REFINE_WORDS"
-            title="Generate Accent IPAs"
-            description={`Generating US/UK pronunciations for ${selectedWordsToRefine.length} selected words.`}
-            initialData={{ words: selectedWordsToRefine.map(w => w.word).join('\n') }}
-            onGeneratePrompt={(inputs) => getIpaAccentsPrompt(stringToWordArray(inputs.words))}
-            onJsonReceived={handleAccentAiResult}
-            actionLabel="Update Accents"
-            hidePrimaryInput={true}
+      {onBulkHardDelete && (
+        <ConfirmationModal 
+          isOpen={isBulkHardDeleteModalOpen}
+          title={`Delete ${selectedRawWords.length} Raw Words?`}
+          message={`Permanently delete ${selectedRawWords.length} selected RAW words from your entire library? This action cannot be undone.`}
+          confirmText={`DELETE ${selectedRawWords.length} RAW WORDS`}
+          isProcessing={isHardDeleting}
+          onConfirm={handleConfirmBulkHardDelete}
+          onClose={() => setIsBulkHardDeleteModalOpen(false)}
+          confirmButtonClass={"bg-red-600 text-white hover:bg-red-700 shadow-red-200"}
+          icon={<Trash2 size={40} className="text-red-500"/>}
         />
       )}
     </>

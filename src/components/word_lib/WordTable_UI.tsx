@@ -107,11 +107,11 @@ export interface WordTableUIProps {
   handleToggleFilter: (type: FilterType) => void;
   handleBatchAddSubmit: () => void;
   onOpenBulkDeleteModal?: () => void;
+  onOpenBulkHardDeleteModal?: () => void;
   // FIX: Added onBulkVerify to props to fix TypeScript error in parent component.
   onBulkVerify: (ids: Set<string>) => void;
-  onOpenWordTypeAiModal: () => void;
-  onOpenAccentAiModal: () => void;
   selectedWordsToRefine: VocabularyItem[];
+  selectedRawWordsCount: number;
   handleGenerateRefinePrompt: (inputs: { words: string }) => string;
   handleAiRefinementResult: (results: any[]) => void;
   setStatusFilter: (sf: StatusFilter) => void;
@@ -132,7 +132,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   wordToHardDelete, setWordToHardDelete, isHardDeleting, setIsHardDeleting,
   isAiModalOpen, setIsAiModalOpen,
   notification, viewMenuRef, visibility, setVisibility, handleToggleFilter,
-  handleBatchAddSubmit, onOpenBulkDeleteModal, onBulkVerify, onOpenWordTypeAiModal, onOpenAccentAiModal, selectedWordsToRefine, handleGenerateRefinePrompt,
+  handleBatchAddSubmit, onOpenBulkDeleteModal, onOpenBulkHardDeleteModal, onBulkVerify, selectedWordsToRefine, selectedRawWordsCount, handleGenerateRefinePrompt,
   handleAiRefinementResult, setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setIsViewMenuOpen,
   setIsFilterMenuOpen, setIsAddExpanded,
 }) => {
@@ -256,9 +256,15 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
             <div className="flex items-center space-x-4 pl-2"><button onClick={() => setSelectedIds(new Set())} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button><div><div className="text-sm font-black">{selectedIds.size} selected</div></div></div>
             <div className="flex items-center space-x-2">
               {onOpenBulkDeleteModal && (<button onClick={onOpenBulkDeleteModal} className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${context === 'unit' ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-500' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'}`}>{context === 'unit' ? <Unlink size={14} /> : <Trash2 size={14} />}<span>{context === 'unit' ? 'Unlink' : 'Delete'}</span></button>)}
+              {context === 'unit' && onOpenBulkHardDeleteModal && selectedRawWordsCount > 0 && (
+                  <button 
+                    onClick={onOpenBulkHardDeleteModal}
+                    className="px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors bg-red-500/10 hover:bg-red-500/20 text-red-500"
+                  >
+                      <Trash2 size={14}/><span>Delete Raw ({selectedRawWordsCount})</span>
+                  </button>
+              )}
               <button onClick={() => onBulkVerify(selectedIds)} className="px-4 py-3 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><ShieldCheck size={14} /> <span>Verify</span></button>
-              <button onClick={onOpenAccentAiModal} className="px-4 py-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Mic size={14} /> <span>Accents</span></button>
-              <button onClick={onOpenWordTypeAiModal} className="px-4 py-3 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Zap size={14} /> <span>Types</span></button>
               <button onClick={() => { setIsAiModalOpen(true); }} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>Refine</span></button>
               <button onClick={() => onPractice(selectedIds)} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black flex items-center space-x-2"><Play size={14} fill="currentColor"/> <span>Practice</span></button>
             </div>

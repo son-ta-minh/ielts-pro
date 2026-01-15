@@ -34,6 +34,8 @@ export const processJsonImport = async (
                     throw new Error("Invalid JSON format: 'vocabulary' array not found.");
                 }
                 
+                const importedUserId = incomingUser ? incomingUser.id : userId;
+
                 const localItems = await getAllWordsForExport(userId);
                 const localItemsByWord = new Map(localItems.map(item => [item.word.toLowerCase().trim(), item]));
                 const itemsToSave: VocabularyItem[] = []; 
@@ -70,7 +72,7 @@ export const processJsonImport = async (
                     if (local) {
                         if ((restOfIncoming.updatedAt || 0) > (local.updatedAt || 0)) {
                             const { source: _incomingSource, ...restOfIncomingWithoutSource } = restOfIncoming;
-                            let merged = { ...local, ...restOfIncomingWithoutSource, id: local.id, userId: userId, updatedAt: Date.now() };
+                            let merged = { ...local, ...restOfIncomingWithoutSource, id: local.id, userId: importedUserId, updatedAt: Date.now() };
                             
                             merged.wordFamily = processWordFamily(merged.wordFamily);
                             
@@ -99,7 +101,7 @@ export const processJsonImport = async (
                             ...newItem,
                             ...restOfIncoming,
                             id: restOfIncoming.id || newItem.id,
-                            userId: userId,
+                            userId: importedUserId,
                             wordFamily: processWordFamily(restOfIncoming.wordFamily),
                             quality: restOfIncoming.quality || WordQuality.RAW,
                             register: restOfIncoming.register || 'raw',
@@ -127,33 +129,33 @@ export const processJsonImport = async (
                 if (itemsToSave.length > 0) await bulkSaveWords(itemsToSave);
                 
                 if (incomingUnits && Array.isArray(incomingUnits)) { 
-                    const unitsWithUser = incomingUnits.map(u => ({...u, userId: userId})); 
+                    const unitsWithUser = incomingUnits.map(u => ({...u, userId: importedUserId})); 
                     await bulkSaveUnits(unitsWithUser); 
                 }
                 if (incomingLogs && Array.isArray(incomingLogs)) { 
-                    const logsWithUser = incomingLogs.map(l => ({...l, userId: userId})); 
+                    const logsWithUser = incomingLogs.map(l => ({...l, userId: importedUserId})); 
                     await bulkSaveParaphraseLogs(logsWithUser); 
                 }
                 if (incomingSpeakingTopics && Array.isArray(incomingSpeakingTopics)) {
-                    const topicsWithUser = incomingSpeakingTopics.map(t => ({...t, userId}));
+                    const topicsWithUser = incomingSpeakingTopics.map(t => ({...t, userId: importedUserId}));
                     await bulkSaveSpeakingTopics(topicsWithUser);
                 }
                 if (incomingSpeakingLogs && Array.isArray(incomingSpeakingLogs)) {
-                    const logsWithUser = incomingSpeakingLogs.map(l => ({...l, userId}));
+                    const logsWithUser = incomingSpeakingLogs.map(l => ({...l, userId: importedUserId}));
                     await bulkSaveSpeakingLogs(logsWithUser);
                 }
                 if (incomingWritingTopics && Array.isArray(incomingWritingTopics)) {
-                    const topicsWithUser = incomingWritingTopics.map(t => ({...t, userId}));
+                    const topicsWithUser = incomingWritingTopics.map(t => ({...t, userId: importedUserId}));
                     await bulkSaveWritingTopics(topicsWithUser);
                 }
                 if (incomingWritingLogs && Array.isArray(incomingWritingLogs)) {
-                    const logsWithUser = incomingWritingLogs.map(l => ({...l, userId}));
+                    const logsWithUser = incomingWritingLogs.map(l => ({...l, userId: importedUserId}));
                     await bulkSaveWritingLogs(logsWithUser);
                 }
 
                 let updatedUser: User | undefined = undefined;
                 if (includeProgress && incomingUser) {
-                    const userToSave = { ...incomingUser, id: userId };
+                    const userToSave = { ...incomingUser, id: importedUserId };
                     await saveUser(userToSave);
                     updatedUser = userToSave;
                 }

@@ -2,7 +2,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Volume2, ArrowRight, RefreshCw, X, Mic, Square, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { VocabularyItem } from '../../app/types';
 import { speak } from '../../utils/audio';
-import { Challenge, ChallengeResult, IpaQuizChallenge, MeaningQuizChallenge, PrepositionQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, HeteronymQuizChallenge, PronunciationChallenge, CollocationQuizChallenge } from './TestModalTypes';
+import { Challenge, ChallengeResult, IpaQuizChallenge, MeaningQuizChallenge, PrepositionQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, HeteronymQuizChallenge, PronunciationChallenge, CollocationQuizChallenge, IdiomQuizChallenge } from './TestModalTypes';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 
 // New component for the Pronunciation Challenge
@@ -213,6 +213,111 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
                                             <span className="font-black text-neutral-900 text-base">{colloc.headword}</span>
                                             <div className="flex-1 relative">
                                                 <input type="text" value={answer} onChange={(e) => handleCollocAnswerChange(index, e.target.value)} disabled={isFinishing} className={`w-full h-9 px-3 text-base font-medium rounded-lg border-2 outline-none transition-colors ${isFinishing ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400') : `bg-white border-neutral-200 focus:border-neutral-900 ${isDuplicate ? 'border-amber-500' : ''}`}`} placeholder="..." autoComplete="off" />
+                                                {isFinishing && isAnswerWrong && (
+                                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10"><div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95"><ArrowRight size={10} className="text-green-400"/> {hintToShow}</div><div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div></div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        }
+      case 'IDIOM_QUIZ': {
+            const challenge = currentChallenge as IdiomQuizChallenge;
+            const answers = (userAnswers[currentChallengeIndex] || []) as string[];
+            const result = results ? results[currentChallengeIndex] : null;
+            const details = (result && typeof result === 'object' && 'details' in result) ? result.details : {};
+
+            const duplicates = useMemo(() => {
+                const seen = new Set<string>();
+                const dupes = new Set<string>();
+                answers.forEach(ans => {
+                    const trimmed = (ans || '').trim();
+                    if (trimmed) {
+                        if (seen.has(trimmed)) dupes.add(trimmed);
+                        else seen.add(trimmed);
+                    }
+                });
+                return dupes;
+            }, [answers]);
+
+            const allCorrectAnswers = useMemo(() => challenge.idioms.map(c => c.answer), [challenge]);
+            const userProvidedCorrectAnswers = useMemo(() => {
+                if (!isFinishing || !details) return new Set<string>();
+                const correct = new Set<string>();
+                (answers as string[]).forEach((ans, i) => {
+                    if (details[i.toString()] === true) {
+                        correct.add((ans || '').trim().toLowerCase());
+                    }
+                });
+                return correct;
+            }, [isFinishing, answers, details]);
+            const missingCorrectAnswers = useMemo(() => {
+                if (!isFinishing) return [];
+                return allCorrectAnswers.filter(c => !userProvidedCorrectAnswers.has(c.toLowerCase().trim()));
+            }, [isFinishing, allCorrectAnswers, userProvidedCorrectAnswers]);
+            let missingAnswerIndex = 0;
+
+            const handleIdiomAnswerChange = (index: number, value: string) => {
+                const newAnswers = [...answers];
+                newAnswers[index] = value;
+                handleAnswerChange(currentChallengeIndex, newAnswers);
+            };
+
+            return (
+                <div className="flex flex-col animate-in fade-in duration-300">
+                    <div className="text-center space-y-2 mb-6">
+                        <h3 className="text-lg font-black text-neutral-900">Idiom Recall</h3>
+                        <p className="text-xs text-neutral-500 font-medium max-w-xs mx-auto">Complete the idioms for <span className="font-bold">"{word.word}"</span></p>
+                    </div>
+                    {duplicates.size > 0 && !isFinishing && (
+                        <div className="flex items-center gap-2 p-2 mb-2 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-lg">
+                            <AlertTriangle size={14} /> Duplicate answers detected.
+                        </div>
+                    )}
+                    {showHint && !isFinishing && (
+                        <div className="p-4 mb-4 bg-yellow-50 rounded-2xl border border-yellow-100 animate-in slide-in-from-top-2">
+                            <p className="text-xs font-black text-yellow-600 uppercase tracking-widest mb-2">Correct Idioms</p>
+                            <ul className="text-sm font-bold text-yellow-900 leading-relaxed list-disc pl-5">
+                                {challenge.idioms.map(c => <li key={c.fullText}>{c.fullText}</li>)}
+                            </ul>
+                        </div>
+                    )}
+                    <div className="space-y-4">
+                        {challenge.idioms.map((idiom, index) => {
+                            const answer = answers[index] || '';
+                            const isAnswerCorrect = isFinishing && details[index.toString()] === true;
+                            const isAnswerWrong = isFinishing && details[index.toString()] === false;
+                            const isDuplicate = duplicates.has((answer || '').trim()) && (answer || '').trim() !== '';
+                            
+                            let hintToShow = idiom.answer;
+                            if (isAnswerWrong) {
+                                hintToShow = missingCorrectAnswers[missingAnswerIndex] || idiom.answer;
+                                missingAnswerIndex++;
+                            }
+
+                            return (
+                                <div key={index} className="w-full flex items-center gap-2">
+                                    {idiom.position === 'post' && (
+                                        <>
+                                            <div className="flex-1 relative">
+                                                <input type="text" value={answer} onChange={(e) => handleIdiomAnswerChange(index, e.target.value)} disabled={isFinishing} className={`w-full h-9 px-3 text-right text-base font-medium rounded-lg border-2 outline-none transition-colors ${isFinishing ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400') : `bg-white border-neutral-200 focus:border-neutral-900 ${isDuplicate ? 'border-amber-500' : ''}`}`} placeholder="..." autoComplete="off" />
+                                                {isFinishing && isAnswerWrong && (
+                                                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10"><div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95"><ArrowRight size={10} className="text-green-400"/> {hintToShow}</div><div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div></div>
+                                                )}
+                                            </div>
+                                            <span className="font-black text-neutral-900 text-base">{idiom.headword}</span>
+                                        </>
+                                    )}
+                                    {idiom.position === 'pre' && (
+                                        <>
+                                            <span className="font-black text-neutral-900 text-base">{idiom.headword}</span>
+                                            <div className="flex-1 relative">
+                                                <input type="text" value={answer} onChange={(e) => handleIdiomAnswerChange(index, e.target.value)} disabled={isFinishing} className={`w-full h-9 px-3 text-base font-medium rounded-lg border-2 outline-none transition-colors ${isFinishing ? (isAnswerCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500 line-through decoration-red-400') : `bg-white border-neutral-200 focus:border-neutral-900 ${isDuplicate ? 'border-amber-500' : ''}`}`} placeholder="..." autoComplete="off" />
                                                 {isFinishing && isAnswerWrong && (
                                                     <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-10"><div className="bg-neutral-900 text-white text-xs font-bold py-1 px-3 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1 animate-in zoom-in-95"><ArrowRight size={10} className="text-green-400"/> {hintToShow}</div><div className="w-2 h-2 bg-neutral-900 rotate-45 absolute left-1/2 -translate-x-1/2 -top-1"></div></div>
                                                 )}

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { VocabularyItem, ReviewGrade } from '../../app/types';
 import { TestModalUI } from './TestModal_UI';
-import { Challenge, ChallengeResult, ChallengeType, CollocationQuizChallenge } from './TestModalTypes';
+import { Challenge, ChallengeResult, ChallengeType, CollocationQuizChallenge, IdiomQuizChallenge } from './TestModalTypes';
 import { generateAvailableChallenges, prepareChallenges, gradeChallenge } from '../../utils/challengeUtils';
 
 interface Props {
@@ -169,6 +169,15 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
               const collocationText = cq.collocations[parseInt(index, 10)]?.fullText;
               if (collocationText) {
                   resultHistory[`COLLOCATION_QUIZ:${collocationText}`] = correct;
+              }
+          });
+      } else if (challenge.type === 'IDIOM_QUIZ' && typeof result === 'object' && 'details' in result) {
+          resultHistory['IDIOM_QUIZ'] = result.correct;
+          const iq = challenge as IdiomQuizChallenge;
+          Object.entries(result.details).forEach(([index, correct]) => {
+              const idiomText = iq.idioms[parseInt(index, 10)]?.fullText;
+              if (idiomText) {
+                  resultHistory[`IDIOM_QUIZ:${idiomText}`] = correct;
               }
           });
       } else if (challenge.type === 'PARAPHRASE_QUIZ') {

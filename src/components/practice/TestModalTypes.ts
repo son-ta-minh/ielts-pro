@@ -1,6 +1,6 @@
 import { VocabularyItem, ParaphraseTone } from '../../app/types';
 
-export type ChallengeType = 'SPELLING' | 'IPA_QUIZ' | 'PREPOSITION_QUIZ' | 'WORD_FAMILY' | 'MEANING_QUIZ' | 'PARAPHRASE_QUIZ' | 'SENTENCE_SCRAMBLE' | 'HETERONYM_QUIZ' | 'PRONUNCIATION' | 'COLLOCATION_QUIZ';
+export type ChallengeType = 'SPELLING' | 'IPA_QUIZ' | 'PREPOSITION_QUIZ' | 'WORD_FAMILY' | 'MEANING_QUIZ' | 'PARAPHRASE_QUIZ' | 'SENTENCE_SCRAMBLE' | 'HETERONYM_QUIZ' | 'PRONUNCIATION' | 'COLLOCATION_QUIZ' | 'IDIOM_QUIZ';
 
 export interface BaseChallenge {
   type: ChallengeType;
@@ -38,7 +38,14 @@ export interface CollocationQuizChallenge extends BaseChallenge {
     collocations: CollocationToTest[];
 }
 
-export type Challenge = SpellingChallenge | IpaQuizChallenge | PrepositionQuizChallenge | WordFamilyChallenge | MeaningQuizChallenge | ParaphraseQuizChallenge | SentenceScrambleChallenge | HeteronymQuizChallenge | PronunciationChallenge | CollocationQuizChallenge;
+export type IdiomToTest = CollocationToTest;
+
+export interface IdiomQuizChallenge extends BaseChallenge {
+    type: 'IDIOM_QUIZ';
+    idioms: IdiomToTest[];
+}
+
+export type Challenge = SpellingChallenge | IpaQuizChallenge | PrepositionQuizChallenge | WordFamilyChallenge | MeaningQuizChallenge | ParaphraseQuizChallenge | SentenceScrambleChallenge | HeteronymQuizChallenge | PronunciationChallenge | CollocationQuizChallenge | IdiomQuizChallenge;
 
 export type ChallengeResult = boolean | {
     correct: boolean;

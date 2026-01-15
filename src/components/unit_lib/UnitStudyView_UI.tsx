@@ -39,6 +39,7 @@ export interface UnitStudyViewUIProps {
     handleRemoveWordFromUnit: (wordId: string) => Promise<void>;
     onBulkDelete: (ids: Set<string>) => Promise<void>;
     onHardDelete: (word: VocabularyItem) => Promise<void>;
+    onBulkHardDelete: (ids: Set<string>) => Promise<void>;
     handleSaveWordUpdate: (word: VocabularyItem) => Promise<void>;
     handleToggleLearnedStatus: () => Promise<void>;
     onWordAction: (text: string, action: 'add' | 'remove') => void;
@@ -47,7 +48,7 @@ export interface UnitStudyViewUIProps {
 }
 
 export const UnitStudyViewUI: React.FC<UnitStudyViewUIProps> = (props) => {
-  const { unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onDataChange, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, handleSaveWordUpdate, handleToggleLearnedStatus, onWordAction, onGainXp } = props;
+  const { unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onDataChange, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, handleToggleLearnedStatus, onWordAction, onGainXp } = props;
   
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
@@ -107,6 +108,7 @@ export const UnitStudyViewUI: React.FC<UnitStudyViewUIProps> = (props) => {
             onDelete={async (w) => { await handleRemoveWordFromUnit(w.id); }} 
             onHardDelete={onHardDelete}
             onBulkDelete={onBulkDelete}
+            onBulkHardDelete={onBulkHardDelete}
             onPractice={(ids) => onStartSession(allWords.filter(w => ids.has(w.id)))} 
             settingsKey="ielts_pro_unit_table_settings" 
             context="unit" 

@@ -74,7 +74,6 @@ export const useDataActions = (props: UseDataActionsProps) => {
     };
     
     const handleRestore = () => {
-        console.log("useDataActions: handleRestore triggered.");
         if (!currentUser) {
             console.error("useDataActions: No current user, aborting restore.");
             return;
@@ -86,30 +85,25 @@ export const useDataActions = (props: UseDataActionsProps) => {
         input.style.display = 'none';
 
         input.onchange = async (e) => {
-            // Clean up the input element from the DOM
             if (input.parentNode) {
                 input.parentNode.removeChild(input);
             }
 
             try {
-                console.log("useDataActions: onchange event fired."); // Added for debugging
                 const file = (e.target as HTMLInputElement).files?.[0];
-                if (!file) {
-                    console.log("useDataActions: No file selected.");
-                    return;
-                }
-                console.log(`useDataActions: File selected: ${file.name}. Processing...`);
+                if (!file) return;
+                
                 const result = await processJsonImport(file, currentUser.id, true);
-                console.log("useDataActions: processJsonImport result:", result);
     
                 if (result.type === 'success') {
-                    showToast('Restore successful! Press F5 to reload.', 'success', 2000);
+                    showToast('Restore successful! The app will now reload.', 'success', 2000);
                     
                     if (result.updatedUser) {
-                        await dataStore.saveUser(result.updatedUser);
+                        await onUpdateUser(result.updatedUser);
+                        localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
                     }
 
-                    setTimeout(() => window.location.href = window.location.href, 2000); // Give user time to read the toast
+                    setTimeout(() => window.location.reload(), 2000);
                 } else {
                     showToast(`Restore data failed. Reason: ${result.detail || result.message}`, 'error', 10000);
                 }
@@ -119,12 +113,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
             }
         };
         
-        // Append to DOM to prevent garbage collection issues before click
         document.body.appendChild(input);
         input.click();
-        
-        // If the user cancels, the input may remain in the DOM, but it's hidden and harmless.
-        // It will be gone on next page load. This is safer than complex cancellation detection.
     };
 
     const handleLibraryReset = async () => {

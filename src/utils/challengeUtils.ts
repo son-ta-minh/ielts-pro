@@ -1,5 +1,5 @@
 import { VocabularyItem, WordFamily, PrepositionPattern } from '../app/types';
-import { Challenge, ChallengeType, IpaQuizChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, ChallengeResult, HeteronymQuizChallenge, HeteronymForm, CollocationToTest, CollocationQuizChallenge } from '../components/practice/TestModalTypes';
+import { Challenge, ChallengeType, IpaQuizChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, ChallengeResult, HeteronymQuizChallenge, HeteronymForm, CollocationToTest, CollocationQuizChallenge, IdiomToTest, IdiomQuizChallenge } from '../components/practice/TestModalTypes';
 import { getRandomMeanings } from '../app/db';
 
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
@@ -85,6 +85,68 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
         }
     }
 
+    if (word.idiomsList && word.idiomsList.length > 0) {
+        const activeIdioms = word.idiomsList.filter(i => !i.isIgnored);
+        if (activeIdioms.length > 0) {
+            const forms = [word.word, ...(word.v2 ? [word.v2] : []), ...(word.v3 ? [word.v3] : [])];
+            if (word.wordFamily) {
+                if(word.wordFamily.nouns) forms.push(...word.wordFamily.nouns.map(n => n.word));
+                if(word.wordFamily.verbs) forms.push(...word.wordFamily.verbs.map(v => v.word));
+                if(word.wordFamily.adjs) forms.push(...word.wordFamily.adjs.map(a => a.word));
+                if(word.wordFamily.advs) forms.push(...word.wordFamily.advs.map(a => a.word));
+            }
+            const uniqueForms = [...new Set(forms.map(f => f.trim()).filter(Boolean))].sort((a, b) => b.length - a.length);
+            const regex = new RegExp(`\\b(${uniqueForms.map(escapeRegex).join('|')})\\b`, 'i');
+
+            const idiomsToTest: IdiomToTest[] = [];
+            activeIdioms.forEach(idiom => {
+                const match = idiom.text.match(regex);
+                if (match && typeof match.index === 'number') {
+                    const headwordInIdiom = match[0];
+                    const index = match.index;
+                    
+                    const preText = idiom.text.substring(0, index).trim();
+                    const postText = idiom.text.substring(index + headwordInIdiom.length).trim();
+            
+                    let testHeadword: string;
+                    let testAnswer: string;
+                    let testPosition: 'pre' | 'post';
+            
+                    if (!postText && preText) { // Blank is at the start
+                        const wordsInPreText = preText.split(/\s+/);
+                        if (wordsInPreText.length > 1) {
+                            testAnswer = wordsInPreText.slice(0, -1).join(' ');
+                            testHeadword = wordsInPreText.slice(-1)[0] + ' ' + headwordInIdiom;
+                        } else {
+                            testAnswer = preText;
+                            testHeadword = headwordInIdiom;
+                        }
+                        testPosition = 'post'; // The headword is 'post' (after) the blank
+                    } 
+                    else if (postText) { // Blank is at the end
+                        // Fix: Replaced undefined variable 'headwordInVocab' with the correctly scoped 'headwordInIdiom' to resolve a reference error in the IDIOM_QUIZ challenge generation logic.
+                        testHeadword = preText ? `${preText} ${headwordInIdiom}` : headwordInIdiom;
+                        testAnswer = postText;
+                        testPosition = 'pre'; // The headword is 'pre' (before) the blank
+                    } else {
+                        return; // continue in forEach, skip if only headword exists
+                    }
+            
+                    idiomsToTest.push({
+                        fullText: idiom.text,
+                        headword: testHeadword,
+                        answer: testAnswer,
+                        position: testPosition
+                    });
+                }
+            });
+
+            if (idiomsToTest.length > 0) {
+                list.push({ type: 'IDIOM_QUIZ', title: 'Idiom Recall', word, idioms: idiomsToTest });
+            }
+        }
+    }
+
     if (word.prepositions && word.prepositions.length > 0) {
       const activePreps = word.prepositions.filter(p => !p.isIgnored);
       activePreps.forEach((prepPattern: PrepositionPattern) => {
@@ -127,16 +189,16 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
         
         const headwordRegex = new RegExp(`\\b${escapeRegex(word.word)}\\b`, 'i');
         
-        // Prioritize sentences with the headword that are not too long or short.
+        // Prioritize sentences with the headword that are not too short.
         const sentencesWithHeadword = sentences.filter(s => 
-            s.length > 5 && s.length < 100 && headwordRegex.test(s)
+            s.length > 5 && headwordRegex.test(s)
         );
 
         if (sentencesWithHeadword.length > 0) {
             sentenceToTest = sentencesWithHeadword[0]; // Pick the first one
         } else {
             // Fallback: Find the first sentence that fits the criteria, regardless of headword.
-            const anySuitableSentence = sentences.find(s => s.length > 5 && s.length < 100);
+            const anySuitableSentence = sentences.find(s => s.length > 5);
             if (anySuitableSentence) {
                 sentenceToTest = anySuitableSentence;
             }
@@ -145,7 +207,35 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
         if (sentenceToTest) {
             const wordsInSentence = sentenceToTest.split(/\s+/).filter(Boolean);
             if (wordsInSentence.length >= 3) {
-                list.push({ type: 'SENTENCE_SCRAMBLE', title: 'Sentence Builder', original: sentenceToTest.trim(), shuffled: shuffleArray([...wordsInSentence]), word });
+                const WORD_LIMIT_FOR_CHUNKING = 10;
+                let chunks: string[];
+
+                if (wordsInSentence.length > WORD_LIMIT_FOR_CHUNKING) {
+                    chunks = [];
+                    let i = 0;
+                    while (i < wordsInSentence.length) {
+                        const maxChunkSize = Math.min(3, wordsInSentence.length - i);
+                        let chunkSize = 1;
+
+                        // Approx 50% chance to create a larger chunk if possible
+                        if (maxChunkSize > 1 && Math.random() < 0.5) {
+                            if (maxChunkSize === 2) {
+                                chunkSize = 2;
+                            } else {
+                                // If max is 3, 50% chance for 2, 50% chance for 3
+                                chunkSize = Math.random() < 0.5 ? 2 : 3;
+                            }
+                        }
+                        
+                        const chunk = wordsInSentence.slice(i, i + chunkSize).join(' ');
+                        chunks.push(chunk);
+                        i += chunkSize;
+                    }
+                } else {
+                    chunks = wordsInSentence;
+                }
+                
+                list.push({ type: 'SENTENCE_SCRAMBLE', title: 'Sentence Builder', original: sentenceToTest.trim(), shuffled: shuffleArray(chunks), word });
             }
         }
     }
@@ -249,23 +339,52 @@ export function gradeChallenge(challenge: Challenge, answer: any): ChallengeResu
         case 'COLLOCATION_QUIZ': {
             const cq = challenge as CollocationQuizChallenge;
             const userAnswersRaw = (answer as string[] || []);
-            const correctAnswersPool = cq.collocations.map(c => normalize(c.answer));
-            
             const details: Record<string, boolean> = {};
-            const usedCorrectAnswers = new Set<string>();
-    
-            userAnswersRaw.forEach((rawAns, index) => {
-                const userAns = normalize(rawAns || '');
-                if (userAns && correctAnswersPool.includes(userAns) && !usedCorrectAnswers.has(userAns)) {
-                    details[index.toString()] = true;
-                    usedCorrectAnswers.add(userAns);
+            
+            // Non-positional "bag of words" check.
+            const correctAnswers = cq.collocations.map(c => normalize(c.answer));
+            const userAnswersPool = userAnswersRaw.map(a => normalize(a || ''));
+        
+            let correctCount = 0;
+            correctAnswers.forEach((correctAnswer, correctIndex) => {
+                const foundIndexInUser = userAnswersPool.findIndex(userAns => userAns === correctAnswer);
+                if (foundIndexInUser !== -1) {
+                    details[correctIndex.toString()] = true;
+                    correctCount++;
+                    // Consume the user's answer to handle duplicates correctly.
+                    userAnswersPool.splice(foundIndexInUser, 1);
                 } else {
-                    details[index.toString()] = false;
+                    details[correctIndex.toString()] = false;
                 }
             });
-    
-            const correct = Object.values(details).every(v => v);
-    
+
+            const correct = correctCount === correctAnswers.length;
+            
+            return { correct, details };
+        }
+        case 'IDIOM_QUIZ': {
+            const iq = challenge as IdiomQuizChallenge;
+            const userAnswersRaw = (answer as string[] || []);
+            const details: Record<string, boolean> = {};
+            
+            // Non-positional "bag of words" check.
+            const correctAnswers = iq.idioms.map(i => normalize(i.answer));
+            const userAnswersPool = userAnswersRaw.map(a => normalize(a || ''));
+        
+            let correctCount = 0;
+            correctAnswers.forEach((correctAnswer, correctIndex) => {
+                const foundIndexInUser = userAnswersPool.findIndex(userAns => userAns === correctAnswer);
+                if (foundIndexInUser !== -1) {
+                    details[correctIndex.toString()] = true;
+                    correctCount++;
+                    userAnswersPool.splice(foundIndexInUser, 1);
+                } else {
+                    details[correctIndex.toString()] = false;
+                }
+            });
+        
+            const correct = correctCount === correctAnswers.length;
+        
             return { correct, details };
         }
         case 'WORD_FAMILY': {

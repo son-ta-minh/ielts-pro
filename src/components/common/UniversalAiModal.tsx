@@ -17,6 +17,7 @@ interface Props {
   onJsonReceived: (data: any) => Promise<void> | void;
   actionLabel?: string;
   hidePrimaryInput?: boolean;
+  closeOnSuccess?: boolean;
 }
 
 const UniversalAiModal: React.FC<Props> = ({ 
@@ -29,7 +30,8 @@ const UniversalAiModal: React.FC<Props> = ({
   onGeneratePrompt,
   onJsonReceived,
   actionLabel = "Apply",
-  hidePrimaryInput = false
+  hidePrimaryInput = false,
+  closeOnSuccess = false
 }) => {
   // --- Dynamic Input States ---
   const [wordListInput, setWordListInput] = useState('');
@@ -133,9 +135,13 @@ const UniversalAiModal: React.FC<Props> = ({
 
             await onJsonReceived(parsedData);
             
-            // Show success state and stay open
-            setIsProcessing(false);
-            setIsSuccess(true);
+            if (closeOnSuccess) {
+                onClose();
+            } else {
+                // Show success state and stay open
+                setIsProcessing(false);
+                setIsSuccess(true);
+            }
             
         } catch (e: any) {
             console.error(e);

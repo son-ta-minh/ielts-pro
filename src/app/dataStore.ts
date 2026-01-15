@@ -70,8 +70,15 @@ function _recalculateStats(userId: string) {
     };
 }
 
+let _notifyTimeout: number | null = null;
 function _notifyChanges() {
-    window.dispatchEvent(new CustomEvent('datastore-updated'));
+    if (_notifyTimeout) {
+        clearTimeout(_notifyTimeout);
+    }
+    _notifyTimeout = window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('datastore-updated'));
+        _notifyTimeout = null;
+    }, 100); // Debounce by 100ms
 }
 
 // --- Cooldown Logic ---

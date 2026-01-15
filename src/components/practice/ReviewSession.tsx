@@ -132,23 +132,41 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
     setIsTesting(false);
     if (!currentWord) return;
 
-    let outcomeStatus: string = grade;
-    if (sessionType === 'random_test') {
-        outcomeStatus = stopSession ? 'GAVE_UP' : (grade === ReviewGrade.EASY ? 'PASS' : 'FAIL');
-    }
-
-    setSessionOutcomes(prev => ({...prev, [currentWord.id]: outcomeStatus}));
-    const updated = updateSRS(currentWord, grade);
-    logSrsUpdate(grade, currentWord, updated);
-    if (testResults) updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
-    
-    const baseWordXp = calculateWordDifficultyXp(currentWord);
-    await onGainXp(baseWordXp, updated, grade, counts);
-
-    if (stopSession) {
-      setSessionFinished(true);
+    if (isNewWord) {
+      // For new words in a learn session:
+      // - Don't update SRS status (it remains a 'new' word).
+      // - Only save the test results.
+      // - Do not automatically advance to the next word.
+      const updated = { ...currentWord };
+      if (testResults) {
+        updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
+      }
+      
+      const baseWordXp = calculateWordDifficultyXp(currentWord);
+      // onGainXp will save the 'updated' word object with new test results.
+      await onGainXp(baseWordXp, updated, grade, counts);
     } else {
-      nextItem();
+      // For existing words in a review session:
+      // - Update SRS status based on test grade.
+      // - Advance to the next word.
+      let outcomeStatus: string = grade;
+      if (sessionType === 'random_test') {
+          outcomeStatus = stopSession ? 'GAVE_UP' : (grade === ReviewGrade.EASY ? 'PASS' : 'FAIL');
+      }
+
+      setSessionOutcomes(prev => ({...prev, [currentWord.id]: outcomeStatus}));
+      const updated = updateSRS(currentWord, grade);
+      logSrsUpdate(grade, currentWord, updated);
+      if (testResults) updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
+      
+      const baseWordXp = calculateWordDifficultyXp(currentWord);
+      await onGainXp(baseWordXp, updated, grade, counts);
+
+      if (stopSession) {
+        setSessionFinished(true);
+      } else {
+        nextItem();
+      }
     }
   };
   

@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Unit, VocabularyItem, User, ReviewGrade } from '../../app/types';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Unit, VocabularyItem, User, ReviewGrade, WordQuality } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../word_lib/WordTable_UI';
@@ -35,6 +35,14 @@ const UnitStudyView: React.FC<Props> = ({ user, unit, allWords, onDataChange, on
 
   const unitWords = useMemo(() => (unit.wordIds.map(id => wordsById.get(id)).filter(Boolean) as VocabularyItem[]), [unit, wordsById]);
   
+  // Add listener for global data changes to keep the view in sync
+  useEffect(() => {
+    window.addEventListener('datastore-updated', onDataChange);
+    return () => {
+      window.removeEventListener('datastore-updated', onDataChange);
+    };
+  }, [onDataChange]);
+
   const handleQueryChange = useCallback((query: string) => {
     setUnitTableQuery(query);
     setUnitTablePage(0);
@@ -99,6 +107,14 @@ const UnitStudyView: React.FC<Props> = ({ user, unit, allWords, onDataChange, on
 
     // DataStore will notify for a refresh, but we can also trigger manually if needed
     showToast(`"${wordToDelete.word}" permanently deleted.`, 'success');
+  };
+
+  const handleBulkHardDeleteRawWords = async (wordIds: Set<string>) => {
+    // Unlink from unit first to maintain UI consistency and data integrity.
+    await handleBulkRemoveWordsFromUnit(wordIds);
+    // Then permanently delete the words from the database.
+    await dataStore.bulkDeleteWords(Array.from(wordIds));
+    showToast(`Permanently deleted ${wordIds.size} raw word(s).`, 'success');
   };
 
   const handleEssayWordAction = async (text: string, action: 'add' | 'remove') => {
@@ -187,6 +203,7 @@ const UnitStudyView: React.FC<Props> = ({ user, unit, allWords, onDataChange, on
       handleRemoveWordFromUnit={handleRemoveWordFromUnit}
       onBulkDelete={handleBulkRemoveWordsFromUnit}
       onHardDelete={handleHardDeleteWord}
+      onBulkHardDelete={handleBulkHardDeleteRawWords}
       handleSaveWordUpdate={handleSaveWordUpdate}
       handleToggleLearnedStatus={handleToggleLearnedStatus}
       onWordAction={handleEssayWordAction}
