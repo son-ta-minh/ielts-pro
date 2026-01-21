@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { IrregularVerb } from '../../app/types';
-import { X, ArrowRight, Check, RefreshCw, BarChart, CheckCircle, XCircle } from 'lucide-react';
+import { X, ArrowRight, Check, RefreshCw, BarChart, CheckCircle, XCircle, Zap, Eye } from 'lucide-react';
 
 interface Props {
   verbs: IrregularVerb[];
-  mode: 'headword' | 'random';
+  mode: 'headword' | 'random' | 'quick';
   onComplete: (results: { verbId: string, result: 'pass' | 'fail', incorrectForms: ('v1'|'v2'|'v3')[] }[]) => void;
   onExit: () => void;
 }
@@ -15,6 +15,31 @@ export const IrregularVerbsPractice: React.FC<Props> = ({ verbs, mode, onComplet
   const [isAnswered, setIsAnswered] = useState(false);
   const [sessionResults, setSessionResults] = useState<{ verbId: string, result: 'pass' | 'fail', incorrectForms: ('v1'|'v2'|'v3')[] }[]>([]);
   const [isFinished, setIsFinished] = useState(false);
+  const [isRevealed, setIsRevealed] = useState(false);
+
+  // --- Add refs and effect for saving on exit ---
+  const onCompleteRef = useRef(onComplete);
+  const sessionResultsRef = useRef(sessionResults);
+  const isFinishedRef = useRef(isFinished);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  useEffect(() => {
+    sessionResultsRef.current = sessionResults;
+    isFinishedRef.current = isFinished;
+  }, [sessionResults, isFinished]);
+
+  useEffect(() => {
+    return () => {
+      // Automatically save progress if the session is exited early without finishing
+      if (sessionResultsRef.current.length > 0 && !isFinishedRef.current) {
+        onCompleteRef.current(sessionResultsRef.current);
+      }
+    };
+  }, []); // Empty dependency array ensures this cleanup runs only on unmount with latest refs
+  // --- End of new code ---
 
   const practiceQueue = useMemo(() => verbs.map(v => {
     let promptType: 'v1' | 'v2' | 'v3' = 'v1';
@@ -25,7 +50,7 @@ export const IrregularVerbsPractice: React.FC<Props> = ({ verbs, mode, onComplet
         promptType = forms[Math.floor(Math.random() * forms.length)];
     }
     return { verb: v, promptType };
-  }), [verbs, mode]);
+  }).sort(() => Math.random() - 0.5), [verbs, mode]);
 
   const currentItem = practiceQueue[currentIndex];
   if (!currentItem) return null;
@@ -60,9 +85,16 @@ export const IrregularVerbsPractice: React.FC<Props> = ({ verbs, mode, onComplet
       setCurrentIndex(currentIndex + 1);
       setAnswers({});
       setIsAnswered(false);
+      setIsRevealed(false);
     } else {
       setIsFinished(true);
     }
+  };
+
+  const handleQuickAnswer = (result: 'pass' | 'fail') => {
+    if (isFinished) return;
+    setSessionResults(prev => [...prev, { verbId: verb.id, result, incorrectForms: result === 'fail' ? ['v1', 'v2', 'v3'] : [] }]);
+    handleNext();
   };
   
   const renderInputField = (form: 'v1' | 'v2' | 'v3', label: string) => {
@@ -127,30 +159,71 @@ export const IrregularVerbsPractice: React.FC<Props> = ({ verbs, mode, onComplet
     );
   }
 
+  if (mode === 'quick') {
+    return (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col">
+                <header className="px-8 py-4 border-b border-neutral-100 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-2">
+                        <Zap size={16} className="text-amber-500"/>
+                        <h3 className="text-lg font-black text-neutral-900">Quick Review</h3>
+                    </div>
+                    <button type="button" onClick={onExit} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={16}/></button>
+                </header>
+                <main className="p-8 flex flex-col items-center text-center space-y-6">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Verb {currentIndex + 1} of {practiceQueue.length}</p>
+                    <div className="min-h-[80px] flex flex-col justify-center">
+                        <h2 className="text-4xl font-black text-neutral-900">{verb.v1}</h2>
+                        {isRevealed && (
+                            <p className="text-lg font-mono text-neutral-500 animate-in fade-in mt-2">{verb.v2}, {verb.v3}</p>
+                        )}
+                    </div>
+                </main>
+                <footer className="px-6 pb-6 pt-2 flex items-stretch gap-3">
+                    <button onClick={() => handleQuickAnswer('fail')} disabled={isFinished} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all">
+                        <RefreshCw size={20} />
+                        <span className="text-[9px] font-black uppercase">Forgot</span>
+                    </button>
+                    <button onClick={() => setIsRevealed(true)} disabled={isRevealed || isFinished} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all">
+                        <Eye size={20} />
+                        <span className="text-[9px] font-black uppercase">Show Answer</span>
+                    </button>
+                    <button onClick={() => handleQuickAnswer('pass')} disabled={isFinished} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-green-600 hover:bg-green-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all">
+                        <Check size={20} />
+                        <span className="text-[9px] font-black uppercase">Known</span>
+                    </button>
+                </footer>
+            </div>
+        </div>
+    );
+  }
+
+  // Headword & Random mode
   return (
     <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col">
+      <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[90vh]">
         <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
           <div>
-            <h3 className="text-xl font-black text-neutral-900">Practice Session</h3>
+            <h3 className="text-xl font-black text-neutral-900">Verb Practice</h3>
             <p className="text-sm text-neutral-500">Verb {currentIndex + 1} of {practiceQueue.length}</p>
           </div>
           <button type="button" onClick={onExit} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
         </header>
-        <main className="p-8 grid grid-cols-3 gap-4">
-          {renderInputField('v1', 'V1 (Base)')}
+        <main className="p-8 grid grid-cols-1 gap-4">
+          {renderInputField('v1', 'V1 (Base Form)')}
           {renderInputField('v2', 'V2 (Past Simple)')}
           {renderInputField('v3', 'V3 (Past Participle)')}
         </main>
         <footer className="px-8 py-6 border-t border-neutral-100 flex justify-end shrink-0 bg-neutral-50/50 rounded-b-[2.5rem]">
           {isAnswered ? (
             <button onClick={handleNext} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest">
-                <span>{currentIndex === practiceQueue.length - 1 ? 'Finish' : 'Next'}</span>
-                <ArrowRight size={14}/>
+              <span>{currentIndex === practiceQueue.length - 1 ? 'Finish' : 'Next'}</span>
+              <ArrowRight size={14}/>
             </button>
           ) : (
             <button onClick={handleCheck} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest">
-                <Check size={14}/> <span>Check Answer</span>
+              <Check size={14}/>
+              <span>Check Answer</span>
             </button>
           )}
         </footer>

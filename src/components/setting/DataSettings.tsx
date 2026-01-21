@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench } from 'lucide-react';
 
@@ -10,7 +9,6 @@ interface DataSettingsProps {
     setIncludeEssays: (value: boolean) => void;
     onJSONImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onJSONExport: () => void;
-    onRefreshGameIndex: () => Promise<void>;
     isNormalizing: boolean;
     onOpenNormalizeModal: () => void;
 }
@@ -23,18 +21,8 @@ const ToggleSwitch = ({ checked, onChange, label, subLabel }: { checked: boolean
 );
 
 export const DataSettings: React.FC<DataSettingsProps> = ({
-    jsonInputRef, includeProgress, setIncludeProgress, includeEssays, setIncludeEssays, onJSONImport, onJSONExport, onRefreshGameIndex, isNormalizing, onOpenNormalizeModal
+    jsonInputRef, includeProgress, setIncludeProgress, includeEssays, setIncludeEssays, onJSONImport, onJSONExport, isNormalizing, onOpenNormalizeModal
 }) => {
-    const [isRefreshing, setIsRefreshing] = useState(false);
-
-    const handleRefresh = async () => {
-        setIsRefreshing(true);
-        try {
-            await onRefreshGameIndex();
-        } finally {
-            setIsRefreshing(false);
-        }
-    };
 
     return (
         <section className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col space-y-6">
@@ -62,19 +50,6 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
             </div>
 
             <div className="pt-4 border-t border-neutral-100 grid grid-cols-1 md:grid-cols-2 gap-3">
-                <button 
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    className="w-full py-4 bg-white border border-neutral-200 rounded-2xl text-neutral-600 hover:bg-neutral-50 transition-all flex items-center justify-center space-x-3 group"
-                >
-                    <div className="p-2 bg-neutral-100 group-hover:bg-indigo-50 rounded-lg transition-colors">
-                        {isRefreshing ? <Loader2 size={16} className="animate-spin text-indigo-600" /> : <Gamepad2 size={16} className="text-indigo-600" />}
-                    </div>
-                    <div className="text-left">
-                        <div className="text-xs font-black uppercase tracking-widest leading-none">Refresh Game Index</div>
-                        <div className="text-[9px] font-bold text-neutral-400 mt-1">Re-evaluate words for Arcade eligibility</div>
-                    </div>
-                </button>
                  <button 
                     onClick={onOpenNormalizeModal}
                     disabled={isNormalizing}

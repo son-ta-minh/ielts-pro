@@ -1,6 +1,3 @@
-
-import { AdventureChapter } from "../../../data/adventure_content";
-
 interface ChapterContext {
     title: string;
     description: string;

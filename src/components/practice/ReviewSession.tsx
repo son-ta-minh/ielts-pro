@@ -1,18 +1,18 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { VocabularyItem, ReviewGrade, ReviewMode, SessionType } from '../../app/types';
-import { updateSRS } from '../../utils/srs';
-import { calculateWordDifficultyXp } from '../../app/useAppController'; // Import directly
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { VocabularyItem, ReviewGrade, ReviewMode, SessionType, User } from '../../app/types';
+import { updateSRS, calculateMasteryScore } from '../../utils/srs';
 import { ReviewSessionUI } from './ReviewSession_UI';
 import { getStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
 
 interface Props {
+  user: User;
   sessionWords: VocabularyItem[];
   sessionFocus?: ReviewMode | null;
   sessionType: SessionType;
   onUpdate: (word: VocabularyItem) => void;
+  onBulkUpdate: (words: VocabularyItem[]) => void;
   onComplete: () => void;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => Promise<number>; // New prop
   onRetry: () => void;
 }
 
@@ -33,7 +33,7 @@ export const logSrsUpdate = (grade: ReviewGrade, before: VocabularyItem, after: 
     console.groupEnd();
 };
 
-const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onComplete, onGainXp, onRetry }) => {
+const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onBulkUpdate, onComplete, onRetry }) => {
   const { showToast } = useToast();
   const sessionWords = initialWords;
   const sessionIdentityRef = useRef<string | null>(null);
@@ -48,6 +48,7 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
   });
 
   const [sessionOutcomes, setSessionOutcomes] = useState<Record<string, string>>(() => getStoredJSON<Record<string, string>>('vocab_pro_session_outcomes', {}));
+  const [sessionUpdates, setSessionUpdates] = useState<Map<string, VocabularyItem>>(new Map());
 
   const { current: currentIndex, max: maxIndexVisited } = progress;
   const [sessionFinished, setSessionFinished] = useState(false);
@@ -57,6 +58,12 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
   
   const currentWord = sessionWords[currentIndex];
   const isNewWord = useMemo(() => !currentWord?.lastReview, [currentWord]);
+
+  // --- Refs for cleanup effects ---
+  const sessionUpdatesRef = useRef(sessionUpdates);
+  useEffect(() => { sessionUpdatesRef.current = sessionUpdates; }, [sessionUpdates]);
+  const sessionFinishedRef = useRef(sessionFinished);
+  useEffect(() => { sessionFinishedRef.current = sessionFinished; }, [sessionFinished]);
   
   useEffect(() => {
     const newSessionIdentity = initialWords.map(w => w.id).sort().join(',');
@@ -66,6 +73,7 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
         setProgress({ current: 0, max: 0 });
         setSessionOutcomes({});
         setSessionFinished(false);
+        setSessionUpdates(new Map());
         sessionStorage.removeItem('vocab_pro_session_progress');
         sessionStorage.removeItem('vocab_pro_session_outcomes');
     }
@@ -79,6 +87,28 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
     setEditingWordInModal(null);
     setIsTesting(sessionType === 'random_test');
   }, [currentIndex, sessionType]);
+
+  const commitSessionResults = useCallback(async () => {
+    const wordsToUpdate = Array.from(sessionUpdatesRef.current.values());
+    if (wordsToUpdate.length === 0) return;
+
+    await onBulkUpdate(wordsToUpdate);
+    setSessionUpdates(new Map());
+  }, [onBulkUpdate]);
+
+  useEffect(() => {
+    return () => {
+        if (!sessionFinishedRef.current && sessionUpdatesRef.current.size > 0) {
+            commitSessionResults();
+        }
+    };
+  }, [commitSessionResults]);
+
+  useEffect(() => {
+    if (sessionFinished && sessionUpdates.size > 0) {
+        commitSessionResults();
+    }
+  }, [sessionFinished, commitSessionResults, sessionUpdates.size]);
 
   const nextItem = () => {
     if (currentIndex < sessionWords.length - 1) {
@@ -96,77 +126,50 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
     const updated = updateSRS(currentWord, grade);
     logSrsUpdate(grade, currentWord, updated);
 
-    // Re-unify logic: award XP for ALL review actions, including the initial "Learned".
-    // This is safe now because the navigation bug in useAppController has been fixed.
-    const baseWordXp = calculateWordDifficultyXp(currentWord);
-    await onGainXp(baseWordXp, updated, grade);
+    setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
     
     nextItem();
-  };
-  
-  const handleMisSpeak = async () => {
-    if (!currentWord) return;
-
-    showToast(`"${currentWord.word}" marked for pronunciation focus.`, 'info');
-
-    if (isNewWord) {
-        // LEARN session behavior: just flag and stay.
-        const flaggedWord = { ...currentWord, needsPronunciationFocus: true };
-        onUpdate(flaggedWord);
-    } else {
-        // REVIEW session behavior: flag AND treat it as a "Forgot" grade.
-        setSessionOutcomes(prev => ({...prev, [currentWord.id]: ReviewGrade.FORGOT}));
-        
-        const flaggedWord = { ...currentWord, needsPronunciationFocus: true };
-        const updated = updateSRS(flaggedWord, ReviewGrade.FORGOT);
-        logSrsUpdate(ReviewGrade.FORGOT, currentWord, updated);
-        
-        const baseWordXp = calculateWordDifficultyXp(currentWord);
-        await onGainXp(baseWordXp, updated, ReviewGrade.FORGOT);
-        
-        nextItem();
-    }
   };
 
   const handleTestComplete = async (grade: ReviewGrade, testResults?: Record<string, boolean>, stopSession = false, counts?: { correct: number, tested: number }) => {
     setIsTesting(false);
     if (!currentWord) return;
 
-    if (isNewWord) {
-      // For new words in a learn session:
-      // - Don't update SRS status (it remains a 'new' word).
-      // - Only save the test results.
-      // - Do not automatically advance to the next word.
-      const updated = { ...currentWord };
-      if (testResults) {
-        updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
-      }
-      
-      const baseWordXp = calculateWordDifficultyXp(currentWord);
-      // onGainXp will save the 'updated' word object with new test results.
-      await onGainXp(baseWordXp, updated, grade, counts);
-    } else {
-      // For existing words in a review session:
-      // - Update SRS status based on test grade.
-      // - Advance to the next word.
-      let outcomeStatus: string = grade;
-      if (sessionType === 'random_test') {
-          outcomeStatus = stopSession ? 'GAVE_UP' : (grade === ReviewGrade.EASY ? 'PASS' : 'FAIL');
-      }
+    let wordWithUpdatedFlags = { ...currentWord };
+    if (testResults) {
+        const pronunciationTestFailed = testResults['PRONUNCIATION'] === false;
+        const ipaTestFailed = testResults['IPA_QUIZ'] === false;
 
+        if ((pronunciationTestFailed || ipaTestFailed) && !wordWithUpdatedFlags.needsPronunciationFocus) {
+            wordWithUpdatedFlags.needsPronunciationFocus = true;
+            showToast(`"${wordWithUpdatedFlags.word}" marked for pronunciation focus.`, 'info');
+        }
+    }
+
+    if (sessionType === 'random_test') {
+      let outcomeStatus: string = stopSession ? 'GAVE_UP' : (grade === ReviewGrade.EASY ? 'PASS' : 'FAIL');
       setSessionOutcomes(prev => ({...prev, [currentWord.id]: outcomeStatus}));
-      const updated = updateSRS(currentWord, grade);
+
+      const updated = updateSRS(wordWithUpdatedFlags, grade);
       logSrsUpdate(grade, currentWord, updated);
+
       if (testResults) updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
+      updated.masteryScore = calculateMasteryScore(updated);
       
-      const baseWordXp = calculateWordDifficultyXp(currentWord);
-      await onGainXp(baseWordXp, updated, grade, counts);
+      setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
 
       if (stopSession) {
         setSessionFinished(true);
       } else {
         nextItem();
       }
+    } else {
+      const updated: VocabularyItem = { ...wordWithUpdatedFlags };
+      if (testResults) {
+        updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
+      }
+      updated.masteryScore = calculateMasteryScore(updated);
+      await onUpdate(updated);
     }
   };
   
@@ -174,9 +177,14 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
     sessionIdentityRef.current = null;
     onRetry();
   }
+
+  const handleEndSession = () => {
+    setSessionFinished(true);
+  };
   
   return (
     <ReviewSessionUI
+      user={user}
       initialWords={initialWords}
       sessionWords={sessionWords}
       sessionType={sessionType}
@@ -197,10 +205,9 @@ const ReviewSession: React.FC<Props> = ({ sessionWords: initialWords, sessionFoc
       onComplete={onComplete}
       nextItem={nextItem}
       handleReview={handleReview}
-      handleMisSpeak={handleMisSpeak}
       handleTestComplete={handleTestComplete}
       handleRetry={handleRetry}
-      onGainXp={onGainXp}
+      handleEndSession={handleEndSession}
     />
   );
 };

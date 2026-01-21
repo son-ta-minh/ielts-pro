@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User } from '../../app/types';
 import { getAllUsers, saveUser } from '../../app/db';
@@ -90,13 +89,18 @@ const AuthView: React.FC<Props> = ({ onLogin }) => {
       nativeLanguage: newLanguage,
       experience: 0,
       level: 1,
+      peakLevel: 1,
       adventure: {
+        currentNodeIndex: 0,
+        energyShards: 0,
+        energy: 5, // Start with some energy
+        keys: 1,
+        keyFragments: 0,
+        badges: [],
+        // Fix: Add missing properties to conform to AdventureProgress type.
         unlockedChapterIds: ADVENTURE_CHAPTERS.map(c => c.id),
         completedSegmentIds: [],
         segmentStars: {},
-        badges: [],
-        keys: 1,
-        keyFragments: 0
       }
     };
 

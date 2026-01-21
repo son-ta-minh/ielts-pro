@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { VocabularyItem, ParaphraseOption, WordQuality } from '../../app/types';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
-import { getWordDetailsPrompt } from '../../services/promptService';
+import { getWordDetailsPrompt, getHintsPrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter } from './WordTable_UI';
 import { normalizeAiResponse, mergeAiResultIntoWord } from '../../utils/vocabUtils';
@@ -66,6 +66,7 @@ const WordTable: React.FC<Props> = ({
   const [isBulkHardDeleteModalOpen, setIsBulkHardDeleteModalOpen] = useState(false);
   
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isHintModalOpen, setIsHintModalOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info', message: string} | null>(null);
   
   const viewMenuRef = useRef<HTMLDivElement>(null);
@@ -88,9 +89,16 @@ const WordTable: React.FC<Props> = ({
 
   useEffect(() => {
     if (initialFilter) {
-      const newFilters = new Set([initialFilter as FilterType]);
-      setActiveFilters(newFilters);
-      onFilterChange({ types: newFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, source: sourceFilter });
+      const refinedFilterValues: RefinedFilter[] = ['raw', 'refined', 'verified', 'failed', 'not_refined'];
+      if (refinedFilterValues.includes(initialFilter as RefinedFilter)) {
+        // It's a quality filter. Set the refinedFilter state and reset the type filter.
+        setRefinedFilter(initialFilter as RefinedFilter);
+        setActiveFilters(new Set(['all']));
+      } else {
+        // It's a type filter (idiom, vocab, etc.). Set the type filter and reset the quality filter.
+        setActiveFilters(new Set([initialFilter as FilterType]));
+        setRefinedFilter('all');
+      }
       setIsFilterMenuOpen(true);
     }
   }, [initialFilter]);
@@ -152,6 +160,17 @@ const WordTable: React.FC<Props> = ({
 
   const selectedRawWords = useMemo(
     () => words.filter(w => selectedIds.has(w.id) && w.quality === WordQuality.RAW),
+    [words, selectedIds]
+  );
+  
+  const selectedWordsMissingHints = useMemo(() =>
+    words.filter(w =>
+      selectedIds.has(w.id) &&
+      (
+          (w.collocationsArray && w.collocationsArray.some(c => !c.d)) ||
+          (w.idiomsList && w.idiomsList.some(i => !i.d))
+      )
+    ),
     [words, selectedIds]
   );
 
@@ -282,6 +301,70 @@ const WordTable: React.FC<Props> = ({
 
   const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(stringToWordArray(inputs.words), 'Vietnamese');
   
+  const handleGenerateHintPrompt = () => getHintsPrompt(selectedWordsMissingHints);
+
+  const handleHintAiResult = async (results: any[]) => {
+    if (!Array.isArray(results)) {
+        setNotification({ type: 'error', message: 'Invalid response from AI.' });
+        return;
+    }
+
+    const wordsToUpdate: VocabularyItem[] = [];
+    const originalWordsMap = new Map<string, VocabularyItem>(selectedWordsMissingHints.map(w => [w.word.toLowerCase(), w]));
+
+    for (const result of results) {
+        const originalWord = originalWordsMap.get(result.og?.toLowerCase());
+        if (!originalWord) continue;
+
+        let changed = false;
+        const updatedWord = { ...originalWord };
+
+        // Process collocations
+        if (result.col && originalWord.collocationsArray) {
+            const newCollocsMap = new Map(result.col.map((c: any) => [c.text.toLowerCase(), c.d]));
+            updatedWord.collocationsArray = (updatedWord.collocationsArray || []).map(existingColloc => {
+                if (!existingColloc.d) {
+                    const newHint = newCollocsMap.get(existingColloc.text.toLowerCase());
+                    if (newHint) {
+                        changed = true;
+                        return { ...existingColloc, d: String(newHint) };
+                    }
+                }
+                return existingColloc;
+            });
+        }
+
+        // Process idioms
+        if (result.idm && originalWord.idiomsList) {
+            const newIdiomsMap = new Map(result.idm.map((i: any) => [i.text.toLowerCase(), i.d]));
+            updatedWord.idiomsList = (updatedWord.idiomsList || []).map(existingIdiom => {
+                if (!existingIdiom.d) {
+                    const newHint = newIdiomsMap.get(existingIdiom.text.toLowerCase());
+                    if (newHint) {
+                        changed = true;
+                        return { ...existingIdiom, d: String(newHint) };
+                    }
+                }
+                return existingIdiom;
+            });
+        }
+
+        if (changed) {
+            updatedWord.updatedAt = Date.now();
+            wordsToUpdate.push(updatedWord);
+        }
+    }
+
+    if (wordsToUpdate.length > 0) {
+        await dataStore.bulkSaveWords(wordsToUpdate);
+        setNotification({ type: 'success', message: `Added hints to ${wordsToUpdate.length} word(s).` });
+        setSelectedIds(new Set());
+    } else {
+        setNotification({ type: 'info', message: 'No new hints were added.' });
+    }
+    setIsHintModalOpen(false);
+  };
+  
   const uiProps: Omit<WordTableUIProps, 'viewingWord' | 'setViewingWord' | 'editingWord' | 'setEditingWord'> = {
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
     onPractice, context, onDelete,
@@ -298,6 +381,8 @@ const WordTable: React.FC<Props> = ({
     onOpenBulkHardDeleteModal: onBulkHardDelete && selectedRawWords.length > 0 ? () => setIsBulkHardDeleteModalOpen(true) : undefined,
     selectedWordsToRefine, handleGenerateRefinePrompt, handleAiRefinementResult,
     selectedRawWordsCount: selectedRawWords.length,
+    selectedWordsMissingHintsCount: selectedWordsMissingHints.length,
+    onOpenHintModal: () => setIsHintModalOpen(true),
     setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setIsViewMenuOpen, setIsFilterMenuOpen,
     setIsAddExpanded,
     settingsKey,
@@ -328,6 +413,20 @@ const WordTable: React.FC<Props> = ({
           onClose={() => setIsBulkHardDeleteModalOpen(false)}
           confirmButtonClass={"bg-red-600 text-white hover:bg-red-700 shadow-red-200"}
           icon={<Trash2 size={40} className="text-red-500"/>}
+        />
+      )}
+       {isHintModalOpen && selectedWordsMissingHints.length > 0 && (
+        <UniversalAiModal 
+            isOpen={isHintModalOpen} 
+            onClose={() => setIsHintModalOpen(false)} 
+            type="REFINE_WORDS"
+            title="Refine Hints"
+            description={`Generating hints for ${selectedWordsMissingHints.length} selected word(s).`}
+            initialData={{}}
+            onGeneratePrompt={handleGenerateHintPrompt}
+            onJsonReceived={handleHintAiResult}
+            actionLabel="Apply Hints"
+            hidePrimaryInput={true}
         />
       )}
     </>

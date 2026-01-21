@@ -25,12 +25,14 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isPracticeSetupOpen, setIsPracticeSetupOpen] = useState(false);
-  const [practiceProps, setPracticeProps] = useState<{ verbs: IrregularVerb[], mode: 'headword' | 'random' } | null>(null);
+  const [practiceProps, setPracticeProps] = useState<{ verbs: IrregularVerb[], mode: 'headword' | 'random' | 'quick' } | null>(null);
+  // FIX: Change practiceScope state to only hold 'all' or an array of verbs.
+  const [practiceScope, setPracticeScope] = useState<'all' | IrregularVerb[]>('all');
 
   // Search and Pagination State
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
-  const pageSize = 15;
+  const [pageSize, setPageSize] = useState(15);
   
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [addInput, setAddInput] = useState('');
@@ -72,14 +74,14 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
   const pagedVerbs = useMemo(() => {
     const start = page * pageSize;
     return filteredVerbs.slice(start, start + pageSize);
-  }, [filteredVerbs, page]);
+  }, [filteredVerbs, page, pageSize]);
 
   const totalPages = Math.ceil(filteredVerbs.length / pageSize);
 
-  // Reset page when search changes
+  // Reset page when search or page size changes
   useEffect(() => {
     setPage(0);
-  }, [searchQuery]);
+  }, [searchQuery, pageSize]);
 
   const verbsToRefine = useMemo(() => {
     return verbs.filter(v => selectedIds.has(v.id) && (!v.v2 || !v.v3));
@@ -283,13 +285,54 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
     }
   };
 
-  const handleStartPractice = (mode: 'headword' | 'random') => {
-    const practiceVerbs = verbs.filter(v => selectedIds.has(v.id));
-    if (practiceVerbs.length === 0) {
+  const handlePracticeSelected = () => {
+    if (selectedIds.size === 0) {
         showToast("Please select verbs to practice.", "info");
         return;
     }
-    setPracticeProps({ verbs: practiceVerbs, mode });
+    // FIX: Set practiceScope to the filtered array of verbs.
+    setPracticeScope(verbs.filter(v => selectedIds.has(v.id)));
+    setIsPracticeSetupOpen(true);
+  };
+
+  const handlePracticeAll = () => {
+    if (verbs.length === 0) {
+        showToast("There are no verbs to practice.", "info");
+        return;
+    }
+    setPracticeScope('all');
+    setIsPracticeSetupOpen(true);
+  };
+
+  const handleStartPractice = (mode: 'headword' | 'random' | 'quick' | 'quick_forgot' | 'quick_all') => {
+    // FIX: Simplify basePracticeVerbs logic as practiceScope is now always IrregularVerb[] or 'all'.
+    const basePracticeVerbs = practiceScope === 'all' 
+      ? verbs 
+      : practiceScope;
+      
+    let finalPracticeVerbs: IrregularVerb[] = [];
+    let finalMode: 'headword' | 'random' | 'quick' = 'headword';
+
+    if (mode === 'quick_forgot') {
+        finalPracticeVerbs = basePracticeVerbs.filter(v => v.lastTestResult === 'fail');
+        finalMode = 'quick';
+    } else if (mode === 'quick_all') {
+        finalPracticeVerbs = basePracticeVerbs;
+        finalMode = 'quick';
+    } else if (mode === 'quick') { // Keep for compatibility if needed
+        finalPracticeVerbs = basePracticeVerbs;
+        finalMode = 'quick';
+    } else {
+        finalPracticeVerbs = basePracticeVerbs;
+        finalMode = mode;
+    }
+      
+    if (finalPracticeVerbs.length === 0) {
+        const message = mode === 'quick_forgot' ? "No forgotten verbs in this selection." : "No verbs available for this practice session.";
+        showToast(message, "info");
+        return;
+    }
+    setPracticeProps({ verbs: finalPracticeVerbs, mode: finalMode });
     setIsPracticeSetupOpen(false);
   };
 
@@ -318,6 +361,29 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
     loadData();
   };
 
+  const handleQuickSetStatus = async (verb: IrregularVerb, result: 'pass' | 'fail') => {
+    const now = Date.now();
+    const updatedVerb: IrregularVerb = {
+        ...verb,
+        lastTestResult: result,
+        lastTestTimestamp: now,
+        lastTestIncorrectForms: result === 'fail' ? ['v2', 'v3'] : undefined
+    };
+
+    try {
+        await db.saveIrregularVerb(updatedVerb);
+        setVerbs(prevVerbs => prevVerbs.map(v => v.id === verb.id ? updatedVerb : v));
+        showToast(`Marked "${verb.v1}" as ${result === 'pass' ? 'Known' : 'Forgot'}.`, 'success');
+    } catch (e: any) {
+        showToast('Failed to update status.', 'error');
+    }
+  };
+
+  const verbsForPracticeSetup = useMemo(() => {
+    // FIX: Simplify logic as practiceScope is now always IrregularVerb[] or 'all'.
+    if (practiceScope === 'all') return verbs;
+    return practiceScope;
+  }, [practiceScope, verbs]);
 
   return (
     <>
@@ -329,6 +395,7 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
         onSearchChange={setSearchQuery}
         page={page}
         pageSize={pageSize}
+        onPageSizeChange={setPageSize}
         totalPages={totalPages}
         onPageChange={setPage}
         isModalOpen={isModalOpen}
@@ -346,14 +413,18 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
         onBulkDelete={handleBulkDelete}
         onAddToLibrary={handleAddToLibrary}
         onRefine={handleOpenRefineModal}
-        onPractice={() => setIsPracticeSetupOpen(true)}
+        onPractice={handlePracticeSelected}
+        onPracticeAll={handlePracticeAll}
         isPracticeSetupOpen={isPracticeSetupOpen}
         onClosePracticeSetup={() => setIsPracticeSetupOpen(false)}
         onStartPractice={handleStartPractice}
         isAddPanelOpen={isAddPanelOpen}
         addInput={addInput}
         onAddInputChange={setAddInput}
+        // FIX: Pass the handleBulkAdd function to the onBulkAdd prop.
         onBulkAdd={handleBulkAdd}
+        onQuickSetStatus={handleQuickSetStatus}
+        practiceVerbs={verbsForPracticeSetup}
       />
       {practiceProps && (
         <IrregularVerbsPractice

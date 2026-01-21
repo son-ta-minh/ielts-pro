@@ -1,3 +1,4 @@
+
 export enum ReviewGrade {
   FORGOT = 'FORGOT',
   HARD = 'HARD',
@@ -45,13 +46,33 @@ export interface WordFamily {
   advs: WordFamilyMember[];
 }
 
+export interface MapNode {
+  id: number;
+  type: 'standard' | 'key_fragment' | 'treasure' | 'boss';
+  isDefeated?: boolean;
+  boss_details?: {
+    name: string;
+    image: string;
+    hp: number;
+    dialogueIntro: string;
+    dialogueWin: string;
+    dialogueLose: string;
+  };
+}
+
 export interface AdventureProgress {
-  unlockedChapterIds: string[];
-  completedSegmentIds: string[];
-  segmentStars: Record<string, number>; // New: Tracking 1, 2, or 3 stars per segment
-  badges: string[];
+  currentNodeIndex: number;
+  energyShards: number;
+  energy: number;
   keys: number;
   keyFragments: number;
+  badges: string[]; // For medals/huy hiệu
+  lastDailyEnergyAwardDate?: string;
+  dailyEnergyAwarded?: number; // Tracks total energy earned today
+  unlockedChapterIds?: string[];
+  completedSegmentIds?: string[];
+  segmentStars?: Record<string, number>;
+  map?: MapNode[];
 }
 
 export interface User {
@@ -65,8 +86,10 @@ export interface User {
   nativeLanguage?: string;
   experience: number;
   level: number;
-  adventure?: AdventureProgress;
+  peakLevel?: number;
+  adventure: AdventureProgress;
   adventureLastDailyStar?: string; // YYYY-MM-DD format
+  isAdmin?: boolean;
 }
 
 export interface PrepositionPattern {
@@ -87,6 +110,7 @@ export interface ParaphraseOption {
 export interface CollocationDetail {
   text: string;
   isIgnored?: boolean;
+  d?: string; // Descriptive text
 }
 
 export type WordSource = 'app' | 'manual' | 'refine';
@@ -146,6 +170,8 @@ export interface VocabularyItem {
   lastGrade?: ReviewGrade;
   forgotCount: number;
   
+  complexity?: number;
+  masteryScore?: number;
   lastTestResults?: Record<string, boolean>;
   lastXpEarnedTime?: number;
 
@@ -262,4 +288,4 @@ export interface IrregularVerb {
 
 export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'PARAPHRASE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'WORD_NET' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS';
 
-export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'COLLO_CONNECT' | 'IPA_SORTER' | 'MEANING_MATCH' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'WORD_TRANSFORMER';
+export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'COLLO_CONNECT' | 'IPA_SORTER' | 'MEANING_MATCH' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'WORD_TRANSFORMER' | 'IDIOM_CONNECT' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER';

@@ -1,22 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AdventureBoss } from '../../../../data/adventure_content';
 import { VocabularyItem, ReviewGrade } from '../../../../app/types';
-import { Heart, Swords, ShieldAlert, CheckCircle2, X, Loader2 } from 'lucide-react';
+import { Heart, Swords, ShieldAlert, CheckCircle2, X, Loader2, Clock } from 'lucide-react';
 import { updateSRS } from '../../../../utils/srs';
 import TestModal from '../../../practice/TestModal';
-import { getRandomMeanings } from '../../../../app/db';
-import { Challenge, ChallengeType, IpaQuizChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge } from '../../../practice/TestModalTypes';
-import { WordFamily, PrepositionPattern } from '../../../../app/types';
+import * as dataStore from '../../../../app/dataStore';
+
+interface Boss {
+    name: string;
+    image: string;
+    hp: number;
+    dialogueIntro: string;
+    dialogueWin: string;
+    dialogueLose: string;
+}
 
 interface Props {
-    boss: AdventureBoss;
+    boss: Boss;
     words: VocabularyItem[];
     onVictory: () => void;
     onDefeat: () => void;
     onExit: () => void;
 }
 
-const PLAYER_MAX_HP = 3;
+const PLAYER_MAX_HP = 5;
 
 export const BattleMode: React.FC<Props> = ({ boss, words, onVictory, onDefeat, onExit }) => {
     const [bossHp, setBossHp] = useState(boss.hp);
@@ -24,9 +31,26 @@ export const BattleMode: React.FC<Props> = ({ boss, words, onVictory, onDefeat, 
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
     const [feedback, setFeedback] = useState<'hit' | 'miss' | null>(null);
     const [gameState, setGameState] = useState<'intro' | 'fighting' | 'transitioning' | 'won' | 'lost'>('intro');
-
+    const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
+    
     const battleWords = useMemo(() => [...words].sort(() => Math.random() - 0.5), [words]);
     const currentWord = battleWords[currentWordIndex % battleWords.length];
+
+    useEffect(() => {
+        if (gameState === 'fighting') {
+            const timer = setInterval(() => {
+                setTimeLeft(prev => {
+                    if (prev <= 1) {
+                        clearInterval(timer);
+                        setGameState('lost');
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [gameState]);
 
     useEffect(() => {
         if (gameState === 'transitioning') {
@@ -40,27 +64,40 @@ export const BattleMode: React.FC<Props> = ({ boss, words, onVictory, onDefeat, 
                     setCurrentWordIndex(prev => prev + 1);
                     setGameState('fighting');
                 }
-            }, 1200); // Animation time
+            }, 1200);
             return () => clearTimeout(timer);
         }
     }, [gameState, bossHp, playerHp]);
 
-    const handleTestComplete = (grade: ReviewGrade) => {
-        if (grade === ReviewGrade.EASY) {
+    const handleTestComplete = async (grade: ReviewGrade) => {
+        const isCorrect = grade !== ReviewGrade.FORGOT;
+
+        if (isCorrect) {
             setFeedback('hit');
             setBossHp(prev => prev - 1);
-            updateSRS(currentWord, ReviewGrade.EASY);
         } else {
             setFeedback('miss');
             setPlayerHp(prev => prev - 1);
-            updateSRS(currentWord, ReviewGrade.HARD);
         }
+
+        // Update SRS data and save
+        // Treat a correct answer as 'Easy' to advance it, and incorrect as 'Forgot'
+        const finalGradeForSrs = isCorrect ? ReviewGrade.EASY : ReviewGrade.FORGOT;
+        const updatedWord = updateSRS(currentWord, finalGradeForSrs);
+        await dataStore.saveWord(updatedWord);
+
         setGameState('transitioning');
+    };
+
+    const formatTime = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
     };
 
     if (gameState === 'intro') {
         return (
-            <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in duration-500">
+            <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in duration-500">
                 <div className="text-8xl mb-6 animate-bounce">{boss.image}</div>
                 <h2 className="text-4xl font-black text-red-500 mb-2 uppercase tracking-widest">{boss.name}</h2>
                 <div className="bg-neutral-800/80 p-6 rounded-2xl border-l-4 border-red-500 max-w-md mb-8"><p className="text-xl font-medium italic">"{boss.dialogueIntro}"</p></div>
@@ -72,7 +109,7 @@ export const BattleMode: React.FC<Props> = ({ boss, words, onVictory, onDefeat, 
     if (gameState === 'won' || gameState === 'lost') {
         const isWin = gameState === 'won';
         return (
-            <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center text-white p-6 text-center animate-in zoom-in duration-500 ${isWin ? 'bg-emerald-900/90' : 'bg-neutral-900/95'}`}>
+            <div className={`absolute inset-0 z-[100] flex flex-col items-center justify-center text-white p-6 text-center animate-in zoom-in duration-500 ${isWin ? 'bg-emerald-900/90' : 'bg-neutral-900/95'}`}>
                 <div className={`text-8xl mb-6 ${!isWin && 'grayscale opacity-50'}`}>{isWin ? '🏆' : '💀'}</div>
                 <h2 className={`text-4xl font-black mb-2 ${isWin ? 'text-emerald-400' : 'text-red-500'}`}>{isWin ? 'VICTORY!' : 'DEFEATED'}</h2>
                 <p className="text-lg opacity-80 mb-8 italic">{isWin ? `"${boss.dialogueWin}"` : `"${boss.dialogueLose}"`}</p>
@@ -82,9 +119,30 @@ export const BattleMode: React.FC<Props> = ({ boss, words, onVictory, onDefeat, 
     }
 
     return (
-        <div className="fixed inset-0 z-[100] bg-neutral-900 flex flex-col items-center justify-between py-10 px-4">
-            <div className="w-full max-w-lg flex flex-col items-center gap-4">
-                <div className={`text-6xl transition-transform duration-300 ${feedback === 'hit' ? 'scale-90 opacity-50 text-red-500' : ''}`}>{boss.image}</div>
+        <div className="absolute inset-0 z-[100] bg-neutral-900 flex flex-col items-center justify-between py-10 px-4">
+            <div className="w-full max-w-lg flex flex-col items-center gap-4 relative">
+                <div className={`absolute top-0 right-0 flex items-center gap-2 px-3 py-1.5 rounded-lg font-mono font-bold border ${timeLeft < 60 ? 'bg-red-900/50 border-red-500 text-red-400 animate-pulse' : 'bg-neutral-800 border-neutral-700 text-neutral-400'}`}>
+                    <Clock size={14} />
+                    <span>{formatTime(timeLeft)}</span>
+                </div>
+                
+                <div className="relative">
+                    <div className={`text-8xl transition-all duration-100 ${feedback === 'hit' ? 'scale-95 translate-y-2 opacity-80 text-red-500' : ''}`}>
+                        {boss.image}
+                    </div>
+                    {feedback === 'hit' && (
+                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                            <div className="relative">
+                                <div className="text-6xl animate-in zoom-in duration-75 origin-bottom drop-shadow-2xl">👊</div>
+                                <div className="absolute -top-6 -left-8 text-3xl animate-bounce text-yellow-400">⭐</div>
+                                <div className="absolute -top-4 right-8 text-2xl animate-pulse text-yellow-300">✨</div>
+                                <div className="absolute top-8 -right-8 text-3xl animate-spin text-orange-400" style={{ animationDuration: '3s' }}>🌟</div>
+                                <div className="absolute -bottom-2 -left-6 text-4xl animate-ping text-white opacity-70">💥</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 <div className="flex flex-col items-center w-full"><h3 className="text-red-500 font-black uppercase tracking-widest text-lg">{boss.name}</h3><div className="w-full h-4 bg-neutral-800 rounded-full border border-neutral-700 mt-2 overflow-hidden relative"><div className="h-full bg-red-600 transition-all duration-500 ease-out" style={{ width: `${(bossHp / boss.hp) * 100}%` }}/></div><span className="text-xs font-bold text-red-400 mt-1">{bossHp} / {boss.hp} HP</span></div>
             </div>
 
@@ -93,8 +151,7 @@ export const BattleMode: React.FC<Props> = ({ boss, words, onVictory, onDefeat, 
                 
                 {gameState === 'fighting' && currentWord ? (
                     <div className="w-full h-full animate-in fade-in duration-300">
-                        {/* FIX: Remove onGainXp prop from TestModal call. */}
-                        <TestModal word={currentWord} isQuickFire={true} onComplete={handleTestComplete} onClose={onExit} isModal={false} />
+                        <TestModal word={currentWord} isQuickFire={true} onComplete={handleTestComplete} onClose={onExit} isModal={false} disableHints={true} />
                     </div>
                 ) : gameState === 'transitioning' ? (
                     <div className="w-full max-w-md h-full flex items-center justify-center">

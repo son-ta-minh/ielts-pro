@@ -1,4 +1,3 @@
-
 import { VocabularyItem, WordQuality } from '../app/types';
 
 /**
@@ -42,8 +41,8 @@ const checkIpaEligibility = (ipa: string): boolean => {
  * Evaluates a vocabulary item against all Discover arcade game requirements.
  */
 export const calculateGameEligibility = (item: VocabularyItem): string[] => {
-    // CRITICAL: Only VERIFIED words are eligible for games
-    if (item.quality !== WordQuality.VERIFIED) {
+    // Words must be verified AND already learned/reviewed (i.e., not new) to be eligible for games.
+    if (item.quality !== WordQuality.VERIFIED || !item.lastReview) {
         return [];
     }
 
@@ -52,6 +51,11 @@ export const calculateGameEligibility = (item: VocabularyItem): string[] => {
     // COLLO_CONNECT: Needs at least one non-ignored collocation
     if (item.collocationsArray && item.collocationsArray.some(c => !c.isIgnored)) {
         eligible.push('COLLO_CONNECT');
+    }
+
+    // IDIOM_CONNECT: Needs at least one non-ignored idiom
+    if (item.idiomsList && item.idiomsList.some(i => !i.isIgnored)) {
+        eligible.push('IDIOM_CONNECT');
     }
 
     // MEANING_MATCH: Needs a word and a native definition
@@ -89,6 +93,11 @@ export const calculateGameEligibility = (item: VocabularyItem): string[] => {
         if (uniqueCount >= 2) {
             eligible.push('WORD_TRANSFORMER');
         }
+    }
+
+    // PARAPHRASE_CONTEXT: Needs at least 2 non-ignored paraphrases with contexts
+    if (item.paraphrases && item.paraphrases.filter(p => !p.isIgnored && p.context && p.context.trim()).length >= 2) {
+        eligible.push('PARAPHRASE_CONTEXT');
     }
 
     return eligible;

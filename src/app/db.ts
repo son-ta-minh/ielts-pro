@@ -130,9 +130,9 @@ export const clearVocabularyOnly = async (): Promise<void> => {
 };
 
 export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User | null> => {
-  if (!force && sessionStorage.getItem('ielts_pro_skip_seed') === 'true') return null;
-  
   const db = await openDB();
+  
+  // 1. Check existing users
   const usersTx = db.transaction(USER_STORE, 'readonly');
   const existingUsers = await new Promise<User[]>((resolve, reject) => {
       const req = usersTx.objectStore(USER_STORE).getAll();
@@ -140,6 +140,7 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
       req.onerror = () => reject(req.error);
   });
 
+  // 2. Check existing vocabulary
   const vocabTx = db.transaction(STORE_NAME, 'readonly');
   const countReq = vocabTx.objectStore(STORE_NAME).count();
   
@@ -148,8 +149,14 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
     countReq.onerror = () => resolve(false);
   });
   
-  if (!force && hasData) {
-    return null;
+  // 3. Decision Logic:
+  // If we have users, we generally respect the existing data state and skip seeding unless forced.
+  // HOWEVER, if we have NO users (existingUsers.length === 0), we MUST seed a user, 
+  // even if 'hasData' is true (which implies orphaned vocabulary).
+  if (!force && existingUsers.length > 0) {
+      if (hasData || sessionStorage.getItem('ielts_pro_skip_seed') === 'true') {
+          return null;
+      }
   }
 
   let targetUser: User;
@@ -164,13 +171,18 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
       target: "Advanced Fluency",
       experience: 0,
       level: 1,
+      peakLevel: 1,
       adventure: {
+        currentNodeIndex: 0,
+        energy: 5,
+        energyShards: 0,
         unlockedChapterIds: ADVENTURE_CHAPTERS.map(c => c.id),
         completedSegmentIds: [],
         segmentStars: {},
         badges: [],
         keys: 1,
-        keyFragments: 0
+        keyFragments: 0,
+        map: [], // Will be generated if empty
       }
     };
     await saveUser(targetUser);
@@ -178,39 +190,50 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
     targetUser = existingUsers[0];
     if (targetUser.experience === undefined) targetUser.experience = 0;
     if (targetUser.level === undefined) targetUser.level = 1;
-    if (targetUser.adventure === undefined) {
+    if (targetUser.peakLevel === undefined) targetUser.peakLevel = targetUser.level;
+    
+    // Ensure Adventure structure is valid
+    if (!targetUser.adventure) {
         targetUser.adventure = {
+            currentNodeIndex: 0,
+            energy: 5,
+            energyShards: 0,
             unlockedChapterIds: ADVENTURE_CHAPTERS.map(c => c.id),
             completedSegmentIds: [],
             segmentStars: {},
             badges: [],
             keys: 1,
-            keyFragments: 0
+            keyFragments: 0,
+            map: []
         };
     }
     await saveUser(targetUser); 
   }
 
-  let vocabToSeed: VocabularyItem[] = [];
-  try {
-    const localResponse = await fetch(LOCAL_SHIPPED_DATA_PATH);
-    if (localResponse.ok) {
-      const json = await localResponse.json();
-      vocabToSeed = Array.isArray(json) ? json : (json.vocabulary || []);
-    }
-  } catch (e) { console.error("Failed to fetch local seed data:", e); }
+  // Only seed vocabulary if there is no data
+  if (!hasData) {
+      let vocabToSeed: VocabularyItem[] = [];
+      try {
+        const localResponse = await fetch(LOCAL_SHIPPED_DATA_PATH);
+        if (localResponse.ok) {
+          const json = await localResponse.json();
+          vocabToSeed = Array.isArray(json) ? json : (json.vocabulary || []);
+        }
+      } catch (e) { console.error("Failed to fetch local seed data:", e); }
 
-  if (vocabToSeed.length === 0) vocabToSeed = initialVocabulary;
-  const finalVocab = vocabToSeed.map(item => ({
-    ...item,
-    userId: targetUser.id,
-    nextReview: item.nextReview || Date.now(),
-    lastXpEarnedTime: item.lastXpEarnedTime || undefined, 
-    quality: item.quality || WordQuality.VERIFIED,
-    source: 'app' as WordSource
-  }));
+      if (vocabToSeed.length === 0) vocabToSeed = initialVocabulary;
+      const finalVocab = vocabToSeed.map(item => ({
+        ...item,
+        userId: targetUser.id,
+        nextReview: item.nextReview || Date.now(),
+        lastXpEarnedTime: item.lastXpEarnedTime || undefined, 
+        quality: item.quality || WordQuality.VERIFIED,
+        source: 'app' as WordSource
+      }));
 
-  await bulkSaveWords(finalVocab);
+      await bulkSaveWords(finalVocab);
+  }
+  
   return targetUser;
 };
 
@@ -440,6 +463,7 @@ export const bulkSaveWritingTopics = async (items: WritingTopic[]): Promise<void
 export const saveComparisonGroup = async (group: ComparisonGroup): Promise<void> => { group.updatedAt = Date.now(); await crudTemplate(COMPARISON_STORE, tx => tx.objectStore(COMPARISON_STORE).put(group)); };
 export const getComparisonGroupsByUserId = async (userId: string): Promise<ComparisonGroup[]> => await crudTemplate(COMPARISON_STORE, tx => tx.objectStore(COMPARISON_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
 export const deleteComparisonGroup = async (id: string): Promise<void> => { await crudTemplate(COMPARISON_STORE, tx => tx.objectStore(COMPARISON_STORE).delete(id)); };
+export const bulkSaveComparisonGroups = async (items: ComparisonGroup[]): Promise<void> => { await crudTemplate(COMPARISON_STORE, tx => { const store = tx.objectStore(COMPARISON_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Irregular Verbs Feature ---
 export const saveIrregularVerb = async (verb: IrregularVerb): Promise<void> => { verb.updatedAt = Date.now(); await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).put(verb)); };

@@ -1,5 +1,6 @@
 import { VocabularyItem, WordFamilyMember, PrepositionPattern, ParaphraseOption, CollocationDetail, WordQuality } from '../app/types';
 import { calculateGameEligibility } from './gameEligibility';
+import { calculateComplexity, calculateMasteryScore } from './srs';
 
 /**
  * Normalizes the short-key JSON returned by AI into the full-key format expected by the app.
@@ -41,6 +42,20 @@ export const normalizeAiResponse = (shortData: any): any => {
         }).filter(x => x.prep.length > 0);
     };
 
+    const mapColloc = (list: any): CollocationDetail[] | undefined => {
+        if (!Array.isArray(list)) return undefined;
+        const mappedItems: (CollocationDetail | null)[] = list.map((item: any) => {
+            if (typeof item === 'string') {
+                return { text: item, isIgnored: false };
+            }
+            if (item && item.text) {
+                return { text: item.text, d: item.d, isIgnored: false };
+            }
+            return null;
+        });
+        return mappedItems.filter((item): item is CollocationDetail => item !== null && !!item.text);
+    };
+
     let normalizedPrepsArray = undefined;
     if (Array.isArray(shortData.prepositionsArray)) {
         normalizedPrepsArray = shortData.prepositionsArray;
@@ -50,6 +65,19 @@ export const normalizeAiResponse = (shortData: any): any => {
     } 
     else if (Array.isArray(shortData.prepositions)) {
         normalizedPrepsArray = mapPrep(shortData.prepositions);
+    }
+
+    const rawCollocs = shortData.col || shortData.collocations;
+    let collocationsArray: CollocationDetail[] | undefined;
+    let collocationsString: string | undefined;
+
+    if (Array.isArray(rawCollocs)) {
+        collocationsArray = mapColloc(rawCollocs);
+        if (collocationsArray) {
+            collocationsString = collocationsArray.map(c => c.text).join('\n');
+        }
+    } else if (typeof rawCollocs === 'string') {
+        collocationsString = rawCollocs;
     }
 
     return {
@@ -63,7 +91,8 @@ export const normalizeAiResponse = (shortData: any): any => {
         meaningVi: shortData.m || shortData.meaningVi,
         register: shortData.reg || shortData.register,
         example: shortData.ex || shortData.example,
-        collocations: shortData.col || shortData.collocations,
+        collocations: collocationsString,
+        collocationsArray: collocationsArray,
         idioms: shortData.idm || shortData.idioms,
         
         prepositionString: typeof shortData.prep === 'string' ? shortData.prep : (typeof shortData.preposition === 'string' ? shortData.preposition : undefined),
@@ -93,7 +122,6 @@ export const normalizeAiResponse = (shortData: any): any => {
 
 /**
  * Parses a string of preposition patterns (e.g., "in; at") into structured objects.
- * Used in AddWord and as fallback.
  */
 export const parsePrepositionPatterns = (prepositionStr: string | null | undefined): PrepositionPattern[] | undefined => {
     if (!prepositionStr || typeof prepositionStr !== 'string' || prepositionStr.trim().toLowerCase() === 'null') {
@@ -198,7 +226,30 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
         return merged;
     };
 
-    const mergedCollocs = mergeStringArray(baseItem.collocationsArray, aiResult.collocations, baseItem.collocations);
+    const existingCollocs: CollocationDetail[] = baseItem.collocationsArray || 
+        (baseItem.collocations ? baseItem.collocations.split('\n').map(t => ({ text: t.trim(), isIgnored: false })).filter(c => c.text) : []);
+    let mergedCollocs: CollocationDetail[] = [...existingCollocs];
+
+    if (aiResult.collocationsArray) {
+        aiResult.collocationsArray.forEach((newColloc: CollocationDetail) => {
+            const existingIndex = mergedCollocs.findIndex(ec => ec.text.toLowerCase() === newColloc.text.toLowerCase());
+            if (existingIndex !== -1) {
+                if (newColloc.d && !mergedCollocs[existingIndex].d) {
+                    mergedCollocs[existingIndex].d = newColloc.d;
+                }
+            } else {
+                mergedCollocs.push({ text: newColloc.text, d: newColloc.d, isIgnored: false });
+            }
+        });
+    } else if (aiResult.collocations) { // fallback for string-only
+        const newTexts = aiResult.collocations.split(/\n|;/).map((c: string) => c.trim()).filter(Boolean);
+        newTexts.forEach((newText: string) => {
+            if (!mergedCollocs.some(ec => ec.text.toLowerCase() === newText.toLowerCase())) {
+                mergedCollocs.push({ text: newText, isIgnored: false });
+            }
+        });
+    }
+
     updatedItem.collocationsArray = mergedCollocs;
     updatedItem.collocations = mergedCollocs.map(c => c.text).join('\n');
 
@@ -275,13 +326,14 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
     updatedItem.isPassive = aiResult.isPassive !== undefined ? !!aiResult.isPassive : baseItem.isPassive;
     
     updatedItem.quality = WordQuality.REFINED;
-
     updatedItem.v2 = aiResult.v2 ?? baseItem.v2;
     updatedItem.v3 = aiResult.v3 ?? baseItem.v3;
     updatedItem.needsPronunciationFocus = aiResult.needsPronunciationFocus ?? baseItem.needsPronunciationFocus;
     
+    // RECALCULATE CRITICAL METRICS
+    updatedItem.complexity = calculateComplexity(updatedItem);
+    updatedItem.masteryScore = calculateMasteryScore(updatedItem);
     updatedItem.gameEligibility = calculateGameEligibility(updatedItem);
-    
     updatedItem.updatedAt = Date.now();
     
     return updatedItem;

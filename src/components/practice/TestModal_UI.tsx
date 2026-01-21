@@ -22,6 +22,7 @@ export interface TestModalUIProps {
   onToggleChallenge: (type: ChallengeType) => void;
   onSetSelection: (types: Set<ChallengeType>) => void;
   onStartTest: () => void;
+  challengeStatuses: Map<ChallengeType, { status: 'failed' | 'passed' | 'incomplete' | 'not_tested', tested: number, total: number }>;
 
   // Test Phase
   challenges: Challenge[];
@@ -41,6 +42,7 @@ export interface TestModalUIProps {
   // Hint
   showHint: boolean;
   onToggleHint: () => void;
+  disableHints?: boolean;
   
   // Session Position
   sessionPosition?: { current: number, total: number };
@@ -49,11 +51,11 @@ export interface TestModalUIProps {
 export const TestModalUI: React.FC<TestModalUIProps> = ({
   isModal = true, // Default to modal behavior
   word, onClose,
-  isSetupMode, isPreparing, availableChallenges, selectedChallengeTypes, onToggleChallenge, onSetSelection, onStartTest,
+  isSetupMode, isPreparing, availableChallenges, selectedChallengeTypes, onToggleChallenge, onSetSelection, onStartTest, challengeStatuses,
   challenges, currentChallenge, currentChallengeIndex,
   userAnswers, handleAnswerChange, results, isFinishing,
   currentPrepositionGroup, isLastChallenge, handleNextClick, handleBackClick,
-  handleIgnore, handleFinishEarly, showHint, onToggleHint,
+  handleIgnore, handleFinishEarly, showHint, onToggleHint, disableHints,
   sessionPosition
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -68,8 +70,8 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
 
   if (isSetupMode) {
       const handleSelectAll = () => onSetSelection(new Set(availableChallenges.map(c => c.type)));
-      const handleSelectFailed = () => onSetSelection(new Set(availableChallenges.filter(c => word.lastTestResults?.[c.type] === false).map(c => c.type)));
-      const handleSelectNew = () => onSetSelection(new Set(availableChallenges.filter(c => word.lastTestResults?.[c.type] === undefined).map(c => c.type)));
+      const handleSelectFailed = () => onSetSelection(new Set(Array.from(challengeStatuses.entries()).filter(([, s]) => s.status === 'failed').map(([type]) => type)));
+      const handleSelectNew = () => onSetSelection(new Set(Array.from(challengeStatuses.entries()).filter(([, s]) => s.status === 'not_tested').map(([type]) => type)));
       const handleClearAll = () => onSetSelection(new Set());
 
       content = (
@@ -89,79 +91,40 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                 <div className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Available Modules</div>
                 {Array.from(new Set(availableChallenges.map(c => c.type))).map((type: ChallengeType) => {
                     const isSelected = selectedChallengeTypes.has(type);
-                    const history = word.lastTestResults || {};
-                    let lastResult: boolean | undefined;
+                    const statusInfo = challengeStatuses.get(type);
 
-                    const hasSpecificFailure = (challengeType: ChallengeType, keyBuilder: (c: any) => string[]): boolean => {
-                        const challenges = availableChallenges.filter(c => c.type === challengeType);
-                        for (const c of challenges) {
-                            const keys = keyBuilder(c);
-                            for (const key of keys) {
-                                if (history[key] === false) return true;
-                            }
-                        }
-                        return false;
-                    };
-
-                    const hasAnySpecificTest = (challengeType: ChallengeType, keyBuilder: (c: any) => string[]): boolean => {
-                        const challenges = availableChallenges.filter(c => c.type === challengeType);
-                        for (const c of challenges) {
-                            const keys = keyBuilder(c);
-                            for (const key of keys) {
-                                if (history[key] !== undefined) return true;
-                            }
-                        }
-                        return false;
-                    };
-
-                    switch (type) {
-                        case 'PARAPHRASE_QUIZ':
-                            if (hasSpecificFailure(type, c => [`PARAPHRASE_QUIZ:${(c as ParaphraseQuizChallenge).answer}`])) {
-                                lastResult = false;
-                            } else if (hasAnySpecificTest(type, c => [`PARAPHRASE_QUIZ:${(c as ParaphraseQuizChallenge).answer}`]) || history[type] === true) {
-                                lastResult = true;
-                            } else {
-                                lastResult = history[type];
-                            }
-                            break;
-                        case 'PREPOSITION_QUIZ':
-                            if (hasSpecificFailure(type, c => [`PREPOSITION_QUIZ:${(c as PrepositionQuizChallenge).answer}`])) {
-                                lastResult = false;
-                            } else if (hasAnySpecificTest(type, c => [`PREPOSITION_QUIZ:${(c as PrepositionQuizChallenge).answer}`]) || history[type] === true) {
-                                lastResult = true;
-                            } else {
-                                lastResult = history[type];
-                            }
-                            break;
-                        case 'COLLOCATION_QUIZ':
-                            if (hasSpecificFailure(type, c => (c as CollocationQuizChallenge).collocations.map(co => `COLLOCATION_QUIZ:${co.fullText}`))) {
-                                lastResult = false;
-                            } else if (hasAnySpecificTest(type, c => (c as CollocationQuizChallenge).collocations.map(co => `COLLOCATION_QUIZ:${co.fullText}`)) || history[type] === true) {
-                                lastResult = true;
-                            } else {
-                                lastResult = history[type];
-                            }
-                            break;
-                        case 'IDIOM_QUIZ':
-                             if (hasSpecificFailure(type, c => (c as IdiomQuizChallenge).idioms.map(i => `IDIOM_QUIZ:${i.fullText}`))) {
-                                lastResult = false;
-                            } else if (hasAnySpecificTest(type, c => (c as IdiomQuizChallenge).idioms.map(i => `IDIOM_QUIZ:${i.fullText}`)) || history[type] === true) {
-                                lastResult = true;
-                            } else {
-                                lastResult = history[type];
-                            }
-                            break;
-                        default:
-                            lastResult = history[type];
-                    }
+                    const labelMap: Record<string, string> = { 'SPELLING': 'Spelling', 'IPA_QUIZ': 'IPA Check', 'PREPOSITION_QUIZ': 'Prepositions', 'WORD_FAMILY': 'Word Family', 'MEANING_QUIZ': 'Meaning', 'PARAPHRASE_QUIZ': 'Word Power Recall', 'SENTENCE_SCRAMBLE': 'Sentence Builder', 'HETERONYM_QUIZ': 'Heteronym Challenge', 'PRONUNCIATION': 'Speak Out', 'COLLOCATION_QUIZ': 'Collocation Recall', 'IDIOM_QUIZ': 'Idiom Recall', 'PARAPHRASE_CONTEXT_QUIZ': 'Paraphrase Context' };
+                    const label = labelMap[type] || type;
                     
-                    const isFail = lastResult === false;
-                    const isPass = lastResult === true;
+                    let statusNode: React.ReactNode = null;
+                    let titleColor = 'text-neutral-900';
 
-                    const labelMap: Record<string, string> = { 'SPELLING': 'Spelling', 'IPA_QUIZ': 'IPA Check', 'PREPOSITION_QUIZ': 'Prepositions', 'WORD_FAMILY': 'Word Family', 'MEANING_QUIZ': 'Meaning', 'PARAPHRASE_QUIZ': 'Word Power Recall', 'SENTENCE_SCRAMBLE': 'Sentence Builder', 'HETERONYM_QUIZ': 'Heteronym Challenge', 'PRONUNCIATION': 'Speak Out', 'COLLOCATION_QUIZ': 'Collocation Recall', 'IDIOM_QUIZ': 'Idiom Recall' };
+                    if (statusInfo) {
+                        switch (statusInfo.status) {
+                            case 'failed':
+                                statusNode = <span className="text-[9px] font-bold text-red-500 flex items-center gap-1 mt-0.5"><AlertCircle size={10} /> Last: Failed</span>;
+                                titleColor = 'text-red-600';
+                                break;
+                            case 'passed':
+                                statusNode = <span className="text-[9px] font-bold text-green-600 flex items-center gap-1 mt-0.5"><CheckCircle2 size={10} /> Passed ({statusInfo.total}/{statusInfo.total})</span>;
+                                titleColor = 'text-green-600';
+                                break;
+                            case 'incomplete':
+                                statusNode = <span className="text-[9px] font-bold text-amber-600 flex items-center gap-1 mt-0.5">Incomplete ({statusInfo.tested}/{statusInfo.total})</span>;
+                                titleColor = 'text-amber-700';
+                                break;
+                            case 'not_tested':
+                                statusNode = <span className="text-[9px] font-bold text-neutral-400 mt-0.5">Not tested yet</span>;
+                                break;
+                        }
+                    }
+
                     return (
                         <div key={type} onClick={() => onToggleChallenge(type)} className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer group bg-white ${isSelected ? 'border-neutral-900 shadow-sm' : 'border-neutral-100 hover:border-neutral-200'}`}>
-                            <div className="flex flex-col"><span className={`text-sm font-bold ${isFail ? 'text-red-600' : isPass ? 'text-green-600' : 'text-neutral-900'}`}>{labelMap[type as string] || type}</span>{isFail && <span className="text-[9px] font-bold text-red-500 flex items-center gap-1 mt-0.5"><AlertCircle size={10} /> Last: Failed</span>}{isPass && <span className="text-[9px] font-bold text-green-600 flex items-center gap-1 mt-0.5"><CheckCircle2 size={10} /> Last: Passed</span>}{lastResult === undefined && <span className="text-[9px] font-bold text-neutral-400 mt-0.5">Not tested yet</span>}</div>
+                            <div className="flex flex-col">
+                                <span className={`text-sm font-bold ${titleColor}`}>{label}</span>
+                                {statusNode}
+                            </div>
                             <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-neutral-900 border-neutral-900 text-white' : 'bg-white border-neutral-200'}`}>{isSelected && <Check size={14} />}</div>
                         </div>
                     );
@@ -185,9 +148,20 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
       <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] h-full">
         <TestModalHeader title={currentChallenge.title} type={currentChallenge.type} currentStep={sessionPosition ? sessionPosition.current : currentChallengeIndex + 1} totalSteps={sessionPosition ? sessionPosition.total : challenges.length} onClose={onClose} onFinish={handleFinishEarly} label={sessionPosition ? "Item" : "Challenge"} isQuickFire={!!sessionPosition}/>
         <div ref={contentRef} className="flex-1 p-8 overflow-y-auto no-scrollbar">
-            <TestModalContent word={word} currentChallenge={currentChallenge} currentChallengeIndex={currentChallengeIndex} userAnswers={userAnswers} handleAnswerChange={handleAnswerChange} results={results} isFinishing={isFinishing} currentPrepositionGroup={currentPrepositionGroup} showHint={showHint}/>
+            <TestModalContent 
+              word={word} 
+              currentChallenge={currentChallenge} 
+              currentChallengeIndex={currentChallengeIndex} 
+              userAnswers={userAnswers} 
+              handleAnswerChange={handleAnswerChange} 
+              results={results} 
+              isFinishing={isFinishing} 
+              currentPrepositionGroup={currentPrepositionGroup} 
+              showHint={showHint}
+              onEnterPress={handleNextClick}
+            />
         </div>
-        <TestModalFooter onBack={handleBackClick} onNext={handleNextClick} onIgnore={handleIgnore} onHint={onToggleHint} showHint={showHint} isBackDisabled={!sessionPosition ? currentChallengeIndex === 0 : (sessionPosition.current === 1 && currentChallengeIndex === 0)} isNextDisabled={isFinishing} isLastChallenge={isLastChallenge} nextLabel={nextLabelText}/>
+        <TestModalFooter onBack={handleBackClick} onNext={handleNextClick} onIgnore={handleIgnore} onHint={onToggleHint} showHint={showHint} isBackDisabled={!sessionPosition ? currentChallengeIndex === 0 : (sessionPosition.current === 1 && currentChallengeIndex === 0)} isNextDisabled={isFinishing} isLastChallenge={isLastChallenge} nextLabel={nextLabelText} disableHints={disableHints}/>
       </div>
     );
   }

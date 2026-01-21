@@ -50,7 +50,7 @@ const UnitEditView: React.FC<Props> = ({ user, unit, allWords, onCancel, onSave 
             const existingWord = wordsByText.get(token);
             if (existingWord) { finalWordIds.push(existingWord.id); } 
             else { 
-                const newWord = { ...createNewWord(token, '', '', '', `Linked to unit: ${editName}`, ['ielts', 'unit-generated']), userId: user.id }; 
+                const newWord = { ...createNewWord(token, '', '', '', '', ['ielts', 'unit-generated']), userId: user.id }; 
                 newWordsToCreate.push(newWord); 
                 finalWordIds.push(newWord.id); 
             }

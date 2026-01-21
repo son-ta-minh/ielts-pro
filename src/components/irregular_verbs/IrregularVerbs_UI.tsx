@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { IrregularVerb, VocabularyItem } from '../../app/types';
-import { FileClock, Plus, Edit3, Trash2, Loader2, Save, X, Eye, Library, Wand2, CheckSquare, Square, Info, Play, BrainCircuit, Dices, Search, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { FileClock, Plus, Edit3, Trash2, Loader2, Save, X, Eye, Library, Wand2, CheckSquare, Square, Info, Play, BrainCircuit, Dices, Search, ChevronLeft, ChevronRight, Sparkles, Check, Zap, RefreshCw } from 'lucide-react';
 import ConfirmationModal from '../common/ConfirmationModal';
 
 interface AddEditVerbModalProps {
@@ -73,8 +73,18 @@ const AddEditVerbModal: React.FC<AddEditVerbModalProps> = ({ isOpen, onClose, on
   );
 };
 
-const PracticeSetupModal: React.FC<{ isOpen: boolean, onClose: () => void, onStart: (mode: 'headword' | 'random') => void, count: number }> = ({ isOpen, onClose, onStart, count }) => {
+interface PracticeSetupModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onStart: (mode: 'headword' | 'random' | 'quick_forgot' | 'quick_all') => void;
+    verbs: IrregularVerb[];
+}
+
+const PracticeSetupModal: React.FC<PracticeSetupModalProps> = ({ isOpen, onClose, onStart, verbs }) => {
     if (!isOpen) return null;
+
+    const hasForgotVerbs = useMemo(() => verbs.some(v => v.lastTestResult === 'fail'), [verbs]);
+    const count = verbs.length;
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -97,6 +107,25 @@ const PracticeSetupModal: React.FC<{ isOpen: boolean, onClose: () => void, onSta
                         <h4 className="font-bold">Test Random Form</h4>
                         <p className="text-xs text-neutral-500">Recall the other two forms from a random V1, V2, or V3.</p>
                     </button>
+                    <div className="md:col-span-2 p-6 bg-neutral-50 border-2 border-neutral-200 rounded-2xl text-left space-y-4">
+                        <div className="flex items-center gap-2">
+                            <Zap size={24} className="text-neutral-500"/>
+                            <div>
+                                <h4 className="font-bold">Quick Review</h4>
+                                <p className="text-xs text-neutral-500">Rapidly mark verbs as known or forgotten.</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => onStart('quick_forgot')} disabled={!hasForgotVerbs} className="px-4 py-2 bg-white text-rose-700 rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:bg-rose-50 border border-rose-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <RefreshCw size={14}/>
+                                <span>Review Forgot</span>
+                            </button>
+                             <button onClick={() => onStart('quick_all')} className="px-4 py-2 bg-white text-neutral-700 rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:bg-neutral-100 border border-neutral-200 transition-colors">
+                                <Sparkles size={14}/>
+                                <span>Review All</span>
+                            </button>
+                        </div>
+                    </div>
                 </main>
             </div>
         </div>
@@ -111,6 +140,7 @@ interface IrregularVerbsUIProps {
   onSearchChange: (q: string) => void;
   page: number;
   pageSize: number;
+  onPageSizeChange: (size: number) => void;
   totalPages: number;
   onPageChange: (p: number) => void;
   isModalOpen: boolean;
@@ -129,17 +159,20 @@ interface IrregularVerbsUIProps {
   onAddToLibrary: () => void;
   onRefine: () => void;
   onPractice: () => void;
+  onPracticeAll: () => void;
   isPracticeSetupOpen: boolean;
   onClosePracticeSetup: () => void;
-  onStartPractice: (mode: 'headword' | 'random') => void;
+  onStartPractice: (mode: 'headword' | 'random' | 'quick' | 'quick_forgot' | 'quick_all') => void;
   isAddPanelOpen: boolean;
   addInput: string;
   onAddInputChange: (value: string) => void;
   onBulkAdd: (withAI: boolean) => void;
+  onQuickSetStatus: (verb: IrregularVerb, result: 'pass' | 'fail') => void;
+  practiceVerbs: IrregularVerb[];
 }
 
 export const IrregularVerbsUI: React.FC<IrregularVerbsUIProps> = (props) => {
-  const { loading, verbs, totalCount, searchQuery, onSearchChange, page, pageSize, totalPages, onPageChange, isModalOpen, editingVerb, selectedIds, setSelectedIds, isProcessing, libraryWords, onGlobalViewWord, onNew, onEdit, onDelete, onSave, onCloseModal, onBulkDelete, onAddToLibrary, onRefine, onPractice, isPracticeSetupOpen, onClosePracticeSetup, onStartPractice, isAddPanelOpen, addInput, onAddInputChange, onBulkAdd } = props;
+  const { loading, verbs, totalCount, searchQuery, onSearchChange, page, pageSize, onPageSizeChange, totalPages, onPageChange, isModalOpen, editingVerb, selectedIds, setSelectedIds, isProcessing, libraryWords, onGlobalViewWord, onNew, onEdit, onDelete, onSave, onCloseModal, onBulkDelete, onAddToLibrary, onRefine, onPractice, onPracticeAll, isPracticeSetupOpen, onClosePracticeSetup, onStartPractice, isAddPanelOpen, addInput, onAddInputChange, onBulkAdd, onQuickSetStatus, practiceVerbs } = props;
   const [verbToDelete, setVerbToDelete] = useState<IrregularVerb | null>(null);
 
   return (
@@ -149,10 +182,16 @@ export const IrregularVerbsUI: React.FC<IrregularVerbsUIProps> = (props) => {
           <h2 className="text-3xl font-black text-neutral-900 tracking-tight flex items-center gap-3"><FileClock size={28}/> Irregular Verbs</h2>
           <p className="text-neutral-500 mt-2 font-medium">A dedicated space for reviewing irregular verb forms.</p>
         </div>
-        <button onClick={onNew} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center space-x-2 transition-all hover:bg-neutral-800 active:scale-95 uppercase tracking-widest shadow-sm">
-          <Plus size={16} />
-          <span>New Verb</span>
-        </button>
+        <div className="flex items-center gap-2">
+            <button onClick={onPracticeAll} disabled={totalCount === 0} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center space-x-2 transition-all hover:bg-neutral-50 active:scale-95 uppercase tracking-widest shadow-sm disabled:opacity-50">
+                <Play size={16} />
+                <span>Practice All</span>
+            </button>
+            <button onClick={onNew} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center space-x-2 transition-all hover:bg-neutral-800 active:scale-95 uppercase tracking-widest shadow-sm">
+                <Plus size={16} />
+                <span>New Verb</span>
+            </button>
+        </div>
       </header>
       
       {isAddPanelOpen && (
@@ -189,25 +228,41 @@ export const IrregularVerbsUI: React.FC<IrregularVerbsUIProps> = (props) => {
                 className="w-full pl-10 pr-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900 transition-all shadow-sm" 
             />
         </div>
-        {totalCount > pageSize && (
-            <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-2 py-1.5 shadow-sm shrink-0">
-                <button 
-                    disabled={page === 0} 
-                    onClick={() => onPageChange(page - 1)}
-                    className="p-1.5 rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-30 disabled:hover:bg-transparent"
+        <div className="flex items-center gap-2">
+            {totalCount > pageSize && (
+                <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-2 py-1.5 shadow-sm shrink-0">
+                    <button 
+                        disabled={page === 0} 
+                        onClick={() => onPageChange(page - 1)}
+                        className="p-1.5 rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-30 disabled:hover:bg-transparent"
+                    >
+                        <ChevronLeft size={16} />
+                    </button>
+                    <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-2">Page {page + 1} of {totalPages}</span>
+                    <button 
+                        disabled={page >= totalPages - 1} 
+                        onClick={() => onPageChange(page + 1)}
+                        className="p-1.5 rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-30 disabled:hover:bg-transparent"
+                    >
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
+            )}
+            <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-1.5 shadow-sm shrink-0">
+                <label htmlFor="pageSizeSelect" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Size</label>
+                <select
+                    id="pageSizeSelect"
+                    value={pageSize}
+                    onChange={(e) => onPageSizeChange(Number(e.target.value))}
+                    className="bg-transparent text-xs font-bold text-neutral-800 focus:outline-none border-none p-0"
                 >
-                    <ChevronLeft size={16} />
-                </button>
-                <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-2">Page {page + 1} of {totalPages}</span>
-                <button 
-                    disabled={page >= totalPages - 1} 
-                    onClick={() => onPageChange(page + 1)}
-                    className="p-1.5 rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-30 disabled:hover:bg-transparent"
-                >
-                    <ChevronRight size={16} />
-                </button>
+                    <option value={15}>15</option>
+                    <option value={30}>30</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                </select>
             </div>
-        )}
+        </div>
       </div>
 
       {loading ? (
@@ -222,7 +277,8 @@ export const IrregularVerbsUI: React.FC<IrregularVerbsUIProps> = (props) => {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-neutral-50/50">
-                <th className="p-4 w-12"><button onClick={() => setSelectedIds(selectedIds.size === verbs.length ? new Set() : new Set(verbs.map(v => v.id)))} className="text-neutral-300 hover:text-neutral-900">{selectedIds.size === verbs.length ? <CheckSquare size={18} className="text-neutral-900" /> : <Square size={18} />}</button></th>
+                {/* FIX: Replaced 'pagedVerbs' with 'verbs' */}
+                <th className="p-4 w-12"><button onClick={() => setSelectedIds(selectedIds.size === verbs.length && verbs.length > 0 ? new Set() : new Set(verbs.map(v => v.id)))} className="text-neutral-300 hover:text-neutral-900">{selectedIds.size === verbs.length && verbs.length > 0 ? <CheckSquare size={18} className="text-neutral-900" /> : <Square size={18} />}</button></th>
                 <th className="p-3 text-left text-[10px] font-black uppercase tracking-wider text-neutral-400">V1 (Base)</th>
                 <th className="p-3 text-left text-[10px] font-black uppercase tracking-wider text-neutral-400">V2 (Past Simple)</th>
                 <th className="p-3 text-left text-[10px] font-black uppercase tracking-wider text-neutral-400">V3 (Past Participle)</th>
@@ -230,13 +286,22 @@ export const IrregularVerbsUI: React.FC<IrregularVerbsUIProps> = (props) => {
               </tr>
             </thead>
             <tbody>
+              {/* FIX: Replaced 'pagedVerbs' with 'verbs' */}
               {verbs.map(verb => {
                 const isSelected = selectedIds.has(verb.id);
                 const isInLibrary = libraryWords.has(verb.v1.toLowerCase());
                 const incorrectForms = new Set(verb.lastTestIncorrectForms || []);
                 return (
                   <tr key={verb.id} className={`border-t border-neutral-100 transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-neutral-50/80 group'}`}>
-                    <td className="p-4"><button onClick={() => setSelectedIds(prev => { const next = new Set(prev); if (next.has(verb.id)) next.delete(verb.id); else next.add(verb.id); return next; })}>{isSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} className="text-neutral-200 group-hover:text-neutral-400" />}</button></td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 flex items-center justify-center">
+                          {verb.lastTestResult === 'pass' && verb.lastTestTimestamp && <div className="w-2 h-2 rounded-full bg-green-500" title={`Known (on ${new Date(verb.lastTestTimestamp).toLocaleDateString()})`}></div>}
+                          {verb.lastTestResult === 'fail' && verb.lastTestTimestamp && <div className="w-2 h-2 rounded-full bg-red-500" title={`Forgot (on ${new Date(verb.lastTestTimestamp).toLocaleDateString()})`}></div>}
+                        </div>
+                        <button onClick={() => setSelectedIds(prev => { const next = new Set(prev); if (next.has(verb.id)) next.delete(verb.id); else next.add(verb.id); return next; })}>{isSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} className="text-neutral-200 group-hover:text-neutral-400" />}</button>
+                      </div>
+                    </td>
                     <td className={`p-3 font-bold text-sm ${incorrectForms.has('v1') ? 'bg-rose-50/50' : ''}`}>
                         <div className="flex items-center gap-2">
                            <span>{verb.v1}</span>
@@ -246,9 +311,12 @@ export const IrregularVerbsUI: React.FC<IrregularVerbsUIProps> = (props) => {
                     <td className={`p-3 font-mono text-sm text-neutral-600 ${incorrectForms.has('v2') ? 'bg-rose-50/50' : ''}`}>{verb.v2 || '...'}</td>
                     <td className={`p-3 font-mono text-sm text-neutral-600 ${incorrectForms.has('v3') ? 'bg-rose-50/50' : ''}`}>{verb.v3 || '...'}</td>
                     <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => onEdit(verb)} className="p-2 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg"><Edit3 size={14}/></button>
-                        <button onClick={() => setVerbToDelete(verb)} className="p-2 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 size={14}/></button>
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                        <button onClick={(e) => { e.stopPropagation(); onQuickSetStatus(verb, 'fail'); }} className="p-2 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg" title="Mark as Forgot"><RefreshCw size={16}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); onQuickSetStatus(verb, 'pass'); }} className="p-2 text-neutral-400 hover:text-green-600 hover:bg-green-50 rounded-lg" title="Mark as Known"><Check size={16}/></button>
+                        <div className="w-px h-4 bg-neutral-200 mx-1"></div>
+                        <button onClick={(e) => { e.stopPropagation(); onEdit(verb); }} className="p-2 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg"><Edit3 size={14}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); setVerbToDelete(verb); }} className="p-2 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 size={14}/></button>
                       </div>
                     </td>
                   </tr>
@@ -281,7 +349,7 @@ export const IrregularVerbsUI: React.FC<IrregularVerbsUIProps> = (props) => {
         isOpen={isPracticeSetupOpen}
         onClose={onClosePracticeSetup}
         onStart={onStartPractice}
-        count={selectedIds.size}
+        verbs={practiceVerbs}
       />
 
       <ConfirmationModal

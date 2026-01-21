@@ -62,7 +62,7 @@ export const ADVENTURE_CHAPTERS: AdventureChapter[] = [
                 intermediateWords: ['upbringing', 'nuclear family', 'sibling', 'guardian', 'relative'],
                 advancedWords: ['genealogy', 'consanguinity', 'authoritarian', 'matriarch', 'progeny'],
                 visualIcon: '👨‍👩‍👧‍👦', 
-                boss: { name: 'Family Elder', hp: 4, dialogueIntro: "Do you truly know those you share your blood with?", dialogueWin: "The bonds of kinship are well understood.", dialogueLose: "You ignore your foundations.", image: '👴', dropBadgeId: 'family_crest' }
+                boss: { name: 'Family Elder', hp: 20, dialogueIntro: "Do you truly know those you share your blood with?", dialogueWin: "The bonds of kinship are well understood.", dialogueLose: "You ignore your foundations.", image: '👴', dropBadgeId: 'family_crest' }
             },
             { 
                 id: 'seg_fam_2', 
@@ -73,7 +73,7 @@ export const ADVENTURE_CHAPTERS: AdventureChapter[] = [
                 intermediateWords: ['community', 'urbanization', 'demographics', 'infrastructure', 'diversity'],
                 advancedWords: ['egalitarian', 'stratification', 'cosmopolitan', 'secular', 'socioeconomic'],
                 visualIcon: '🏘️', 
-                boss: { name: 'The Architect', hp: 5, dialogueIntro: "A city is more than stone and mortar. It is a collective mind.", dialogueWin: "You see the patterns in the crowd.", dialogueLose: "Lost in the concrete jungle.", image: '🏙️', dropBadgeId: 'family_crest' }
+                boss: { name: 'The Architect', hp: 20, dialogueIntro: "A city is more than stone and mortar. It is a collective mind.", dialogueWin: "You see the patterns in the crowd.", dialogueLose: "Lost in the concrete jungle.", image: '🏙️', dropBadgeId: 'family_crest' }
             },
         ]
     },
@@ -93,7 +93,7 @@ export const ADVENTURE_CHAPTERS: AdventureChapter[] = [
                 intermediateWords: ['curriculum', 'assignment', 'literacy', 'discipline', 'tuition'],
                 advancedWords: ['pedagogy', 'didactic', 'erudition', 'rote learning', 'epistemology'],
                 visualIcon: '🏫', 
-                boss: { name: 'The Headmaster', hp: 4, dialogueIntro: "Class is in session. Don't be late.", dialogueWin: "A star student indeed.", dialogueLose: "Detention for you.", image: '👨‍🏫', dropBadgeId: 'education_scroll' }
+                boss: { name: 'The Headmaster', hp: 20, dialogueIntro: "Class is in session. Don't be late.", dialogueWin: "A star student indeed.", dialogueLose: "Detention for you.", image: '👨‍🏫', dropBadgeId: 'education_scroll' }
             },
             { 
                 id: 'seg_edu_2', 
@@ -104,7 +104,7 @@ export const ADVENTURE_CHAPTERS: AdventureChapter[] = [
                 intermediateWords: ['undergraduate', 'scholarship', 'dissertation', 'vocational', 'faculty'],
                 advancedWords: ['theoretical', 'specialization', 'prestigious', 'alumnus', 'doctoral'],
                 visualIcon: '🎓', 
-                boss: { name: 'The Dean', hp: 6, dialogueIntro: "Submit your thesis or fail the semester.", dialogueWin: "Your research is groundbreaking.", dialogueLose: "Insufficient evidence for your claims.", image: '👩‍🔬', dropBadgeId: 'education_scroll' }
+                boss: { name: 'The Dean', hp: 20, dialogueIntro: "Submit your thesis or fail the semester.", dialogueWin: "Your research is groundbreaking.", dialogueLose: "Insufficient evidence for your claims.", image: '👩‍🔬', dropBadgeId: 'education_scroll' }
             },
         ]
     }

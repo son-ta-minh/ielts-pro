@@ -85,6 +85,7 @@ export const InterfaceSettings: React.FC<InterfaceSettingsProps> = () => {
                     <ToggleSwitch checked={libVis.showProgress} onChange={(v) => handleLibVisChange('showProgress', v)} label="Progress Badge" />
                     <ToggleSwitch checked={libVis.showDue} onChange={(v) => handleLibVisChange('showDue', v)} label="Due Date" />
                     <ToggleSwitch checked={libVis.showAiIcon} onChange={(v) => handleLibVisChange('showAiIcon', v)} label="AI Refined Indicator" />
+                    <ToggleSwitch checked={libVis.showComplexity} onChange={(v) => handleLibVisChange('showComplexity', v)} label="Complexity Column" />
                 </div>
             </div>
 

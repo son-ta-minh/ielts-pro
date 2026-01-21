@@ -1,13 +1,18 @@
-import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption } from '../app/types';
-import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs } from '../app/db';
-import { createNewWord, resetProgress } from './srs';
+import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, ComparisonGroup, IrregularVerb, AdventureProgress } from '../app/types';
+import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getComparisonGroupsByUserId, bulkSaveComparisonGroups, getIrregularVerbsByUserId, bulkSaveIrregularVerbs } from '../app/db';
+import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
+import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
+import { generateMap } from '../data/adventure_map';
 
 const keyMap: { [key: string]: string } = {
     // VocabularyItem top-level
     userId: 'uid', word: 'w', ipa: 'i', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'n', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', needsPronunciationFocus: 'is_pron', isExampleLocked: 'is_exl', isPassive: 'is_pas', quality: 'q', source: 's', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', lastGrade: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
     v2: 'v2', v3: 'v3',
+    masteryScore: 'ms',
+    complexity: 'cx',
 
     // Nested properties
+    d: 'ds',          // in CollocationDetail
     text: 'x',        // in CollocationDetail
     isIgnored: 'g',   // in many nested objects
     prep: 'p',        // in PrepositionPattern
@@ -22,9 +27,24 @@ const keyMap: { [key: string]: string } = {
 };
 const reverseKeyMap = Object.fromEntries(Object.entries(keyMap).map(([k, v]) => [v, k]));
 
+const userKeyMap: { [key: string]: string } = {
+    // User fields
+    name: 'n', avatar: 'av', lastLogin: 'll', role: 'r', currentLevel: 'cl',
+    target: 't', nativeLanguage: 'nl', experience: 'xp', level: 'lv',
+    peakLevel: 'pl', adventure: 'adv', adventureLastDailyStar: 'alds',
+    // AdventureProgress fields
+    unlockedChapterIds: 'uc', completedSegmentIds: 'cs', segmentStars: 'ss',
+    badges: 'b', keys: 'k', keyFragments: 'kf',
+    // Added missing map fields for completeness
+    currentNodeIndex: 'cni', energy: 'e', energyShards: 'es', map: 'm'
+};
+const reverseUserKeyMap = Object.fromEntries(Object.entries(userKeyMap).map(([k, v]) => [v, k]));
+
+
 const gameEligibilityMap: { [key: string]: string } = {
     'COLLO_CONNECT': 'cc', 'MEANING_MATCH': 'mm', 'IPA_SORTER': 'is',
     'SENTENCE_SCRAMBLE': 'ss', 'PREPOSITION_POWER': 'pp', 'WORD_TRANSFORMER': 'wt',
+    'IDIOM_CONNECT': 'ic', 'PARAPHRASE_CONTEXT': 'pc'
 };
 const reverseGameEligibilityMap = Object.fromEntries(Object.entries(gameEligibilityMap).map(([k, v]) => [v, k]));
 
@@ -33,6 +53,11 @@ const testResultKeyMap: { [key: string]: string } = {
     'WORD_FAMILY': 'wf', 'MEANING_QUIZ': 'mq', 'PARAPHRASE_QUIZ': 'prq',
     'SENTENCE_SCRAMBLE': 'sc', 'HETERONYM_QUIZ': 'hq', 'PRONUNCIATION': 'p',
     'COLLOCATION_QUIZ': 'cq', 'IDIOM_QUIZ': 'idq',
+    'PARAPHRASE_CONTEXT_QUIZ': 'pcq',
+    'WORD_FAMILY_NOUNS': 'wf_n',
+    'WORD_FAMILY_VERBS': 'wf_v',
+    'WORD_FAMILY_ADJS': 'wf_j',
+    'WORD_FAMILY_ADVS': 'wf_d',
 };
 const reverseTestResultKeyMap = Object.fromEntries(Object.entries(testResultKeyMap).map(([k, v]) => [v, k]));
 
@@ -106,10 +131,25 @@ export function _mapToShortKeys(item: Partial<VocabularyItem>): any {
             shortItem[shortKey] = _mapWordFamilyToShort(value);
         } else if (key === 'lastTestResults' && value) {
             const shortResults: any = {};
+            const legacyKeys = new Set([
+                'WORD_FAMILY', 'WORD_FAMILY_NOUNS', 'WORD_FAMILY_VERBS', 'WORD_FAMILY_ADJS', 'WORD_FAMILY_ADVS',
+                'wf', 'wf_n', 'wf_v', 'wf_j', 'wf_d'
+            ]);
+
             for (const testKey in value) {
                 if (Object.prototype.hasOwnProperty.call(value, testKey)) {
+                    // Check if the key itself is a legacy key to be removed.
+                    if (legacyKeys.has(testKey)) {
+                        continue;
+                    }
+
                     const parts = testKey.split(':');
+                    if (parts[0] === 'WORD_FAMILY' && parts.length === 2) {
+                        continue; // This is a legacy key like "WORD_FAMILY:decorate". Skip it.
+                    }
+                    
                     const type = parts[0];
+                    
                     const shortType = testResultKeyMap[type] || type;
                     const newKey = [shortType, ...parts.slice(1)].join(':');
                     shortResults[newKey] = value[testKey];
@@ -123,6 +163,52 @@ export function _mapToShortKeys(item: Partial<VocabularyItem>): any {
         }
     }
     return shortItem;
+}
+
+function _mapUserToShortKeys(user: User): any {
+    const shortUser: any = {};
+    for (const key in user) {
+        if (!Object.prototype.hasOwnProperty.call(user, key)) continue;
+        
+        const value = (user as any)[key];
+        const shortKey = userKeyMap[key] || key;
+
+        if (key === 'adventure' && value) {
+            const shortAdventure: any = {};
+            for (const advKey in value) {
+                if (!Object.prototype.hasOwnProperty.call(value, advKey)) continue;
+                const advShortKey = userKeyMap[advKey] || advKey;
+                shortAdventure[advShortKey] = value[advKey];
+            }
+            shortUser[shortKey] = shortAdventure;
+        } else {
+            shortUser[shortKey] = value;
+        }
+    }
+    return shortUser;
+}
+
+function _mapUserToLongKeys(shortUser: any): User {
+    const longUser: any = {};
+    for (const shortKey in shortUser) {
+        if (!Object.prototype.hasOwnProperty.call(shortUser, shortKey)) continue;
+        
+        const value = shortUser[shortKey];
+        const longKey = reverseUserKeyMap[shortKey] || shortKey;
+
+        if (longKey === 'adventure' && value) {
+            const longAdventure: any = {};
+            for (const advShortKey in value) {
+                if (!Object.prototype.hasOwnProperty.call(value, advShortKey)) continue;
+                const advLongKey = reverseUserKeyMap[advShortKey] || advShortKey;
+                longAdventure[advLongKey] = value[advShortKey];
+            }
+            longUser[longKey] = longAdventure;
+        } else {
+            longUser[longKey] = value;
+        }
+    }
+    return longUser as User;
 }
 
 // --- Import Helper Functions (Refactored) ---
@@ -240,7 +326,16 @@ export const processJsonImport = async (
                 const incomingSpeakingLogs: SpeakingLog[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.speakingLogs || rawJson.sl);
                 const incomingWritingTopics: WritingTopic[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.writingTopics || rawJson.wt);
                 const incomingWritingLogs: WritingLog[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.writingLogs || rawJson.wl);
-                const incomingUser: User | undefined = Array.isArray(rawJson) ? undefined : rawJson.user;
+                const incomingComparisonGroups: ComparisonGroup[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.comparisonGroups || rawJson.cg);
+                const incomingIrregularVerbs: IrregularVerb[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.irregularVerbs || rawJson.iv);
+                
+                const incomingUserRaw: User | undefined = Array.isArray(rawJson) ? undefined : rawJson.user;
+                let incomingUser: User | undefined;
+                if (incomingUserRaw) {
+                    const isShortFormat = 'n' in incomingUserRaw || 'av' in incomingUserRaw || 'll' in incomingUserRaw || 'adv' in incomingUserRaw;
+                    incomingUser = isShortFormat ? _mapUserToLongKeys(incomingUserRaw) : incomingUserRaw;
+                }
+                
                 const incomingAdventure: any | undefined = Array.isArray(rawJson) ? undefined : (rawJson.customAdventure || rawJson.adv);
                 
                 if (!Array.isArray(incomingItems)) {
@@ -289,6 +384,17 @@ export const processJsonImport = async (
                             
                             merged.wordFamily = processWordFamily(merged.wordFamily);
                             
+                            if (merged.lastTestResults) {
+                                const validKeys = getAllValidTestKeys(merged);
+                                const sanitizedResults: Record<string, boolean> = {};
+                                for (const key in merged.lastTestResults) {
+                                    if (validKeys.has(key)) {
+                                        sanitizedResults[key] = merged.lastTestResults[key];
+                                    }
+                                }
+                                merged.lastTestResults = sanitizedResults;
+                            }
+
                             if (!includeProgress) {
                                 merged = resetProgress(merged);
                             } else if (merged.lastReview && typeof merged.interval !== 'undefined') {
@@ -322,6 +428,17 @@ export const processJsonImport = async (
                             createdAt: restOfIncoming.createdAt || now,
                             updatedAt: now,
                         };
+
+                        if (newItem.lastTestResults) {
+                            const validKeys = getAllValidTestKeys(newItem);
+                            const sanitizedResults: Record<string, boolean> = {};
+                            for (const key in newItem.lastTestResults) {
+                                if (validKeys.has(key)) {
+                                    sanitizedResults[key] = newItem.lastTestResults[key];
+                                }
+                            }
+                            newItem.lastTestResults = sanitizedResults;
+                        }
 
                         if (!includeProgress) {
                             newItem = resetProgress(newItem);
@@ -365,10 +482,58 @@ export const processJsonImport = async (
                     const logsWithUser = incomingWritingLogs.map(l => ({...l, userId: importedUserId}));
                     await bulkSaveWritingLogs(logsWithUser);
                 }
+                if (incomingComparisonGroups && Array.isArray(incomingComparisonGroups)) {
+                    const groupsWithUser = incomingComparisonGroups.map(g => ({...g, userId: importedUserId}));
+                    await bulkSaveComparisonGroups(groupsWithUser);
+                }
+                if (incomingIrregularVerbs && Array.isArray(incomingIrregularVerbs)) {
+                    const verbsWithUser = incomingIrregularVerbs.map(v => ({...v, userId: importedUserId}));
+                    await bulkSaveIrregularVerbs(verbsWithUser);
+                }
 
                 let updatedUser: User | undefined = undefined;
                 if (includeProgress && incomingUser) {
-                    const userToSave = { ...incomingUser, id: importedUserId };
+                    // --- REPAIR / SANITIZE USER DATA ---
+                    const sanitizedUser = { ...incomingUser };
+                    
+                    // Robust numeric parsing
+                    let safeLevel = parseInt(String(sanitizedUser.level), 10);
+                    if (isNaN(safeLevel) || safeLevel < 1) safeLevel = 1;
+                    sanitizedUser.level = safeLevel;
+
+                    let safePeak = parseInt(String(sanitizedUser.peakLevel), 10);
+                    if (isNaN(safePeak) || safePeak < 1) safePeak = safeLevel;
+                    sanitizedUser.peakLevel = safePeak;
+
+                    sanitizedUser.experience = typeof sanitizedUser.experience === 'number' && !isNaN(sanitizedUser.experience) ? sanitizedUser.experience : 0;
+
+                    if (!sanitizedUser.adventure) {
+                        sanitizedUser.adventure = {} as any;
+                    }
+
+                    const adv = sanitizedUser.adventure;
+                    adv.currentNodeIndex = typeof adv.currentNodeIndex === 'number' && !isNaN(adv.currentNodeIndex) ? adv.currentNodeIndex : 0;
+                    
+                    // Auto-repair Energy: If invalid or missing, reset to 5. Allows 0.
+                    if (typeof adv.energy !== 'number' || isNaN(adv.energy)) {
+                        adv.energy = 5;
+                    }
+                    
+                    adv.keys = typeof adv.keys === 'number' && !isNaN(adv.keys) ? adv.keys : 1;
+                    adv.keyFragments = typeof adv.keyFragments === 'number' && !isNaN(adv.keyFragments) ? adv.keyFragments : 0;
+                    adv.energyShards = typeof adv.energyShards === 'number' && !isNaN(adv.energyShards) ? adv.energyShards : 0;
+                    
+                    adv.badges = Array.isArray(adv.badges) ? adv.badges : [];
+                    adv.unlockedChapterIds = Array.isArray(adv.unlockedChapterIds) ? adv.unlockedChapterIds : ADVENTURE_CHAPTERS.map(c => c.id);
+                    adv.completedSegmentIds = Array.isArray(adv.completedSegmentIds) ? adv.completedSegmentIds : [];
+                    adv.segmentStars = adv.segmentStars || {};
+
+                    // Regenerate Map if missing or invalid
+                    if (!adv.map || !Array.isArray(adv.map) || adv.map.length === 0) {
+                        adv.map = generateMap(100);
+                    }
+                    
+                    const userToSave = { ...sanitizedUser, id: importedUserId };
                     await saveUser(userToSave);
                     updatedUser = userToSave;
                 }
@@ -387,6 +552,11 @@ export const processJsonImport = async (
                     }
                 }
                 
+                // Clear any potentially invalid session state from before the import.
+                sessionStorage.removeItem('vocab_pro_active_session');
+                sessionStorage.removeItem('vocab_pro_session_progress');
+                sessionStorage.removeItem('vocab_pro_session_outcomes');
+
                 const successMessage = 'Restore data successfully';
 
                 resolve({ 
@@ -408,7 +578,7 @@ export const processJsonImport = async (
 };
 
 export const generateJsonExport = async (userId: string, includeProgress: boolean, includeEssays: boolean, currentUser: User) => {
-    const [wordsData, unitsData, logsData, speakingTopicsData, speakingLogsData, writingTopicsData, writingLogsData] = await Promise.all([ 
+    const [wordsData, unitsData, logsData, speakingTopicsData, speakingLogsData, writingTopicsData, writingLogsData, comparisonGroupsData, irregularVerbsData] = await Promise.all([ 
         getAllWordsForExport(userId), 
         getUnitsByUserId(userId),
         getParaphraseLogs(userId),
@@ -416,6 +586,8 @@ export const generateJsonExport = async (userId: string, includeProgress: boolea
         getAllSpeakingLogsForExport(userId),
         getAllWritingTopicsForExport(userId),
         getAllWritingLogsForExport(userId),
+        getComparisonGroupsByUserId(userId),
+        getIrregularVerbsByUserId(userId),
     ]);
     
     const processedWords = includeProgress ? wordsData : wordsData.map(w => resetProgress(w));
@@ -428,9 +600,9 @@ export const generateJsonExport = async (userId: string, includeProgress: boolea
     const customBadges = localStorage.getItem('vocab_pro_custom_badges');
 
     const exportObject = { 
-        v: 5, 
+        v: 6, 
         ca: new Date().toISOString(), 
-        user: currentUser,
+        user: _mapUserToShortKeys(currentUser),
         vocab: shortWordsData, 
         u: finalUnitsData,
         pl: logsData,
@@ -438,6 +610,8 @@ export const generateJsonExport = async (userId: string, includeProgress: boolea
         sl: speakingLogsData,
         wt: writingTopicsData,
         wl: writingLogsData,
+        cg: comparisonGroupsData,
+        iv: irregularVerbsData,
         adv: {
             ch: customChapters ? JSON.parse(customChapters) : null,
             b: customBadges ? JSON.parse(customBadges) : null

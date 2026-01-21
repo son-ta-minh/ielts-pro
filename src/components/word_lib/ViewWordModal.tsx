@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { VocabularyItem, Unit, ReviewGrade } from '../../app/types';
 import { findWordByText, saveWord, getUnitsContainingWord, getAllWords } from '../../app/dataStore';
 import { ViewWordModalUI } from './ViewWordModal_UI';
-import { createNewWord, updateSRS } from '../../utils/srs';
+import { createNewWord, updateSRS, calculateMasteryScore } from '../../utils/srs';
 import TestModal from '../practice/TestModal';
 import { calculateWordDifficultyXp } from '../../app/useAppController';
 import { getConfig } from '../../app/settingsManager';
@@ -116,21 +116,22 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   };
   
   const handleChallengeComplete = async (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => {
-    const updated = updateSRS(currentWord, grade);
+    const updated = { ...currentWord }; // Start with a copy
+    
+    // "Test It" from the library is a mastery check, not a formal review, so we don't call updateSRS.
+    // We only update the test results and mastery score.
     if (results) {
         updated.lastTestResults = { ...(updated.lastTestResults || {}), ...results };
     }
-    const baseWordXp = calculateWordDifficultyXp(currentWord);
+    updated.masteryScore = calculateMasteryScore(updated);
+
+    // Use onUpdate to save the word state, which is the standard path.
+    await onUpdate(updated);
     
-    // onGainXp handles the atomic save of BOTH the user and the word.
-    await onGainXp(baseWordXp, updated, grade, counts);
+    // REMOVED: The onGainXp call was causing race conditions and duplicate notifications.
+    // "Test It" should only update mastery, not award XP, consistent with its behavior in ReviewSession.
     
     setIsChallenging(false);
-    // The onUpdate call below was redundant and caused a "saving too quickly" race condition.
-    // onGainXp already persists the 'updated' word object.
-    // onUpdate(updated); 
-    
-    // Update local state to reflect changes immediately in the modal if it were to stay open.
     setCurrentWord(updated); 
   };
 
@@ -144,7 +145,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
 
   return (
     <>
-    {isChallenging && <TestModal word={currentWord} onComplete={handleChallengeComplete} onClose={() => setIsChallenging(false)} onGainXp={onGainXp} />}
+    {isChallenging && <TestModal word={currentWord} onComplete={handleChallengeComplete} onClose={() => setIsChallenging(false)} />}
     <ViewWordModalUI
       word={currentWord}
       onClose={onClose}

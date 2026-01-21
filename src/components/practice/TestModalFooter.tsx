@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Lightbulb } from 'lucide-react';
 
@@ -12,10 +11,11 @@ interface TestModalFooterProps {
     isNextDisabled: boolean;
     isLastChallenge: boolean;
     nextLabel?: string;
+    disableHints?: boolean;
 }
 
 export const TestModalFooter: React.FC<TestModalFooterProps> = ({ 
-    onBack, onNext, onIgnore, onHint, showHint, isBackDisabled, isNextDisabled, isLastChallenge, nextLabel
+    onBack, onNext, onIgnore, onHint, showHint, isBackDisabled, isNextDisabled, isLastChallenge, nextLabel, disableHints
 }) => {
     // Determine if we should show the "Finish" checkmark icon
     // We only show it if it's the absolute last challenge and no custom label (like "Next Item") is provided
@@ -41,7 +41,7 @@ export const TestModalFooter: React.FC<TestModalFooterProps> = ({
                 </button>
             )}
             
-            {!isNextDisabled && (
+            {!isNextDisabled && !disableHints && (
                 <button
                     onClick={onHint}
                     className={`p-4 rounded-2xl transition-colors ${showHint ? 'text-yellow-500 bg-yellow-50 hover:bg-yellow-100' : 'text-neutral-400 hover:text-yellow-500 hover:bg-neutral-50'}`}

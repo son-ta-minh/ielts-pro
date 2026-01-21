@@ -4,6 +4,13 @@ This document records the principles and conventions we will follow during the d
 
 ---
 
+### 0. Core Mandate
+
+#### 0.1. User Ownership of UI/UX
+The user is the sole owner of the UI/UX and overall product direction. All changes must be explicitly requested. If a flow or visualization change is needed, the user will provide explicit instructions.
+
+---
+
 ### 1. UI/UX Principles
 
 #### 1.1. Separation of Concerns (UI vs. Logic)
@@ -11,6 +18,9 @@ Strictly separate presentational components from their underlying logic. Each UI
 
 #### 1.2. User-Friendly Notifications
 Notifications should be user-friendly, concise, and avoid technical jargon. Display notifications only when truly necessary and avoid stating obvious outcomes. For example, a "Restore Complete" notification is redundant if the user can see the library count update on the Dashboard immediately after the action.
+
+#### 1.3. Visual Separation
+Avoid using horizontal lines (`<hr>`, `border-t`, `border-b`) as visual separators. Instead, rely on spacing (margins/padding), cards, and background colors to create clear visual hierarchy and separation between elements. This promotes a cleaner, more modern interface.
 
 ---
 
@@ -44,7 +54,7 @@ Each AI prompt must reside in its own dedicated file within a `prompts` director
 When implementing a new request, adhere to the principle of minimal changes. If the requested logic conflicts with the existing codebase, do not attempt to resolve the conflict autonomously. Instead, document the issue in `issues.md`. Each entry in `issues.md` should have a unique ID and a concise description of the conflict. This practice prevents incorrect assumptions and maintains code integrity, especially in cases where development context might be lost (e.g., a cancelled generation).
 
 #### 5.2. Source of Truth and Scope of Changes
-The provided codebase is the absolute source of truth. The AI's internal memory or previous states of the code are not to be trusted or used as a reference. No modifications, however minor, shall be made to any file unless explicitly requested by the user in the most recent prompt. Every change must be minimal and strictly scoped to address only the latest user request.
+The provided codebase is the absolute source of truth. The AI's internal memory or previous states of the code are not to be trusted or used as a reference. Modifications must be **the exact changes specified by the user** and nothing more. No modifications, however minor, shall be made to any file unless explicitly requested in the most recent prompt. Every change must be minimal and strictly scoped to address only the latest user request.
 
 #### 5.3. Cloning Procedure
 When a "clone" request is received, the following rules must be strictly followed:
@@ -65,9 +75,5 @@ When instructed to adapt existing code to use a cloned component, the following 
 
 ### 6. Code Optimization & Refactoring
 
-#### 6.1. Principle of Non-Intrusive Optimization
-When optimizing or refactoring code, the primary goal is to improve code quality without altering the user-facing experience. The following rules must be followed:
-- **No Functional Changes:** Do not change logic in a way that affects the application's functionality or user experience (UX).
-- **Bug Prevention:** Proactively fix potential bugs, race conditions, or memory leaks.
-- **TypeScript Compliance:** Resolve any TypeScript errors or type inconsistencies to improve code safety and maintainability.
-- **DRY (Don't Repeat Yourself):** Refactor duplicated code into reusable functions or components to reduce redundancy and simplify maintenance.
+#### 6.1. Principle of Explicit Refactoring
+Code optimization and refactoring must not be performed independently. Do not optimize, redesign, or refactor any part of the application unless explicitly instructed to do so by the user. If a refactoring task is given, it must strictly adhere to the user's request without introducing unsolicited changes.

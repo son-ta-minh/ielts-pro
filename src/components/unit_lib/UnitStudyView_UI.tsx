@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen } from 'lucide-react';
-import { VocabularyItem, Unit, User, ReviewGrade } from '../../app/types';
+import { VocabularyItem, Unit, User, ReviewGrade, WordQuality } from '../../app/types';
 // @Correctness - FIX: Add RegisterFilter to import to resolve type error
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../word_lib/WordTable_UI';
 import EditWordModal from '../word_lib/EditWordModal';
@@ -44,11 +44,10 @@ export interface UnitStudyViewUIProps {
     handleToggleLearnedStatus: () => Promise<void>;
     onWordAction: (text: string, action: 'add' | 'remove') => void;
     onUpdateUser: (user: User) => Promise<void>;
-    onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade) => Promise<number>;
 }
 
 export const UnitStudyViewUI: React.FC<UnitStudyViewUIProps> = (props) => {
-  const { unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onDataChange, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, handleToggleLearnedStatus, onWordAction, onGainXp } = props;
+  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onDataChange, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, handleToggleLearnedStatus, onWordAction } = props;
   
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
@@ -115,8 +114,8 @@ export const UnitStudyViewUI: React.FC<UnitStudyViewUIProps> = (props) => {
         />
       </div>
       {activeTooltip && (<div className="fixed z-50 pointer-events-none transition-all duration-150 animate-in fade-in zoom-in-95" style={{ top: `${activeTooltip.rect.top - 10}px`, left: `${activeTooltip.rect.left}px`, transform: 'translateY(-100%)' }}><div className="bg-white px-4 py-3 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-cyan-100 flex flex-col items-start text-left space-y-1 min-w-[140px] relative"><div className="text-sky-600 font-sans text-xs font-bold tracking-wide">{activeTooltip.word.ipa || '/?/'}</div><div className="text-sm font-black text-slate-800 leading-none">{activeTooltip.word.meaningVi}</div><div className="absolute top-full left-4 -mt-1 w-3 h-3 bg-white border-r border-b border-cyan-100 rotate-45 transform" /></div></div>)}
-      {viewingWord && <ViewWordModal word={viewingWord} onClose={() => setViewingWord(null)} onNavigateToWord={setViewingWord} onUpdate={handleSaveWordUpdate} onEditRequest={(word) => { setViewingWord(null); setEditingWord(word); }} onGainXp={onGainXp} isViewOnly={true} />}
-      {editingWord && <EditWordModal word={editingWord} onSave={handleSaveAndCloseEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setViewingWord(word); }}/>}
+      {viewingWord && <ViewWordModal word={viewingWord} onClose={() => setViewingWord(null)} onNavigateToWord={setViewingWord} onUpdate={handleSaveWordUpdate} onEditRequest={(word) => { setViewingWord(null); setEditingWord(word); }} onGainXp={async () => 0} isViewOnly={true} />}
+      {editingWord && <EditWordModal user={user} word={editingWord} onSave={handleSaveAndCloseEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setViewingWord(word); }}/>}
     </>
   );
 }

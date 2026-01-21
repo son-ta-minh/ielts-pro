@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { User, VocabularyItem, ReviewGrade } from '../types';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -35,18 +35,12 @@ const getXpForNextLevel = (level: number): number => {
 };
 
 const RPG_ROLES: { level: number; title: string; }[] = [
-    { level: 1, title: 'Vocab Novice' },
-    { level: 5, title: 'Word Apprentice' },
-    { level: 10, title: 'Lexical Explorer' },
-    { level: 20, title: 'Master Grammarian' },
-    { level: 30, title: 'IELTS Wordsmith' },
-    { level: 50, title: 'IELTS Luminary' },
-];
-
-const XP_MULTIPLIERS: { level: number; multiplier: number; }[] = [
-    { level: 10, multiplier: 1.05 },
-    { level: 25, multiplier: 1.10 },
-    { level: 50, multiplier: 1.20 },
+  { level: 1, title: 'Vocab Novice' },
+  { level: 5, title: 'Word Apprentice' },
+  { level: 10, title: 'Lexical Explorer' },
+  { level: 20, title: 'Master Grammarian' },
+  { level: 30, title: 'IELTS Wordsmith' },
+  { level: 50, title: 'IELTS Luminary' },
 ];
 
 const getRoleForLevel = (level: number): string => {
@@ -58,135 +52,209 @@ const getRoleForLevel = (level: number): string => {
     return role;
 };
 
-const XP_COOLDOWN_QUICK_RETRY = 5 * 60 * 1000;
-const XP_COOLDOWN_1_DAY = 24 * 60 * 60 * 1000;
-const XP_COOLDOWN_3_DAYS = 3 * XP_COOLDOWN_1_DAY;
+const calculateAbsoluteXp = (level: number, experienceInLevel: number): number => {
+    let total = 0;
+    for (let i = 1; i < level; i++) {
+        total += getXpForNextLevel(i);
+    }
+    total += experienceInLevel;
+    return total;
+}
 
 interface UseGamificationProps {
     currentUser: User | null;
+    onUpdateUser: (user: User) => Promise<void>;
     onSaveWordAndUser: (word: VocabularyItem, user: User) => Promise<void>;
 }
 
-export const useGamification = ({ currentUser, onSaveWordAndUser }: UseGamificationProps) => {
+export const useGamification = ({ currentUser, onUpdateUser, onSaveWordAndUser }: UseGamificationProps) => {
     const [xpGained, setXpGained] = useState<{ amount: number, levelUp: boolean, newLevel: number | null } | null>(null);
     const { showToast } = useToast();
+    
+    // Ref to hold latest currentUser without making callbacks dependent on it.
+    const currentUserRef = useRef(currentUser);
+    useEffect(() => {
+        currentUserRef.current = currentUser;
+    }, [currentUser]);
 
-    const gainExperienceAndLevelUp = useCallback(async (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => {
-        if (!currentUser || !wordToUpdate) return 0;
-        
-        let effectiveXpAmount = baseXpAmount;
-        let finalWordToSave: VocabularyItem = { ...wordToUpdate };
-        
-        if (testCounts) {
-            if (testCounts.tested > 0) {
-                const correctRatio = testCounts.correct / testCounts.tested;
-                effectiveXpAmount = Math.round(baseXpAmount * correctRatio);
-            } else {
-                effectiveXpAmount = 0;
-            }
-        } else {
-            if (grade === ReviewGrade.HARD) effectiveXpAmount = Math.round(baseXpAmount * 0.75);
-            else if (grade === ReviewGrade.FORGOT) effectiveXpAmount = Math.round(baseXpAmount * 0.50);
-        }
+    const gainExperienceAndLevelUp = useCallback(async (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number; tested: number; }) => {
+        const user = currentUserRef.current;
+        if (!user) return 0;
 
-        const now = Date.now();
-        if (wordToUpdate.lastXpEarnedTime) {
-            const timeSinceLastXp = now - wordToUpdate.lastXpEarnedTime;
-            if (timeSinceLastXp < XP_COOLDOWN_QUICK_RETRY) effectiveXpAmount = 0;
-            else if (timeSinceLastXp < XP_COOLDOWN_1_DAY) effectiveXpAmount = Math.round(effectiveXpAmount * 0.1);
-            else if (timeSinceLastXp < XP_COOLDOWN_3_DAYS) effectiveXpAmount = Math.round(effectiveXpAmount * 0.5);
-        }
-        
-        effectiveXpAmount = Math.max(0, effectiveXpAmount);
+        let finalXp = baseXpAmount;
 
-        if (effectiveXpAmount > 0) {
-            finalWordToSave.lastXpEarnedTime = now;
-        }
-
-        if (baseXpAmount <= 0) {
-            // Still save the word if it was updated (e.g., SRS data), even with 0 XP
-            await onSaveWordAndUser(finalWordToSave, currentUser);
-            return 0;
-        }
-        
-        if (effectiveXpAmount === 0 && baseXpAmount > 0) {
-            showToast(`+0 XP`, 'info', 1500);
-            // Save the word even if no XP is gained to update SRS stats
-            await onSaveWordAndUser(finalWordToSave, currentUser);
-            return 0;
-        }
-
-        let finalXpForUser = effectiveXpAmount;
-        for (const xpM of XP_MULTIPLIERS) {
-          if (currentUser.level >= xpM.level) {
-            finalXpForUser = Math.round(effectiveXpAmount * xpM.multiplier);
-          }
-        }
-
-        let newExperience = currentUser.experience + finalXpForUser;
-        let newLevel = currentUser.level;
-        let levelUp = false;
-        let xpNeededForNextLevel = getXpForNextLevel(newLevel);
-
-        while (newExperience >= xpNeededForNextLevel) {
-          newExperience -= xpNeededForNextLevel;
-          newLevel++;
-          levelUp = true;
-          xpNeededForNextLevel = getXpForNextLevel(newLevel);
-        }
-
-        const newAutoRole = getRoleForLevel(newLevel);
-        let finalRole = currentUser.role;
-
-        const isCurrentRoleAutoAssigned = RPG_ROLES.some(r => r.title === currentUser.role);
-        if (isCurrentRoleAutoAssigned || !currentUser.role || currentUser.role.trim() === '') {
-          finalRole = newAutoRole;
-        }
-        const roleChanged = finalRole !== currentUser.role;
-
-        const updatedUser: User = { ...currentUser, experience: newExperience, level: newLevel, role: finalRole };
-        
-        // Atomic save operation for both word and user
-        await onSaveWordAndUser(finalWordToSave, updatedUser);
-
-        if (levelUp) {
-            if (updatedUser.adventure) {
-                let fragmentsAwarded = 1;
-                let keyAssembled = false;
-                let toastMessage = `🌟 Level Up to ${newLevel}! +1 Key Fragment`;
-
-                if (roleChanged) {
-                    fragmentsAwarded++;
-                    toastMessage = `New Title: "${finalRole}"! +2 Key Fragments`;
+        if (wordToUpdate) {
+            const now = Date.now();
+            const todayStr = new Date(now).toDateString();
+            
+            // Limit XP award to once per word per day to prevent farming
+            if (wordToUpdate.lastXpEarnedTime) {
+                const lastEarnedDate = new Date(wordToUpdate.lastXpEarnedTime).toDateString();
+                if (lastEarnedDate === todayStr) {
+                    return 0; // Already earned XP for this word today
                 }
+            }
+            
+            // Bonus/penalty logic
+            if (testCounts && testCounts.tested > 0) {
+                const accuracy = testCounts.correct / testCounts.tested;
+                finalXp *= (1 + (accuracy - 0.7)); // Bonus for >70% accuracy, penalty for less
+            }
+            if (grade === ReviewGrade.EASY) finalXp *= 1.1;
+            if (grade === ReviewGrade.FORGOT) finalXp *= 0.1; // Penalty for forgetting
 
-                updatedUser.adventure.keyFragments = (updatedUser.adventure.keyFragments || 0) + fragmentsAwarded;
+            finalXp = Math.round(Math.max(5, finalXp)); // Award at least 5 xp for trying
+            
+            wordToUpdate.lastXpEarnedTime = now;
+        }
+
+        const currentAbsoluteXp = calculateAbsoluteXp(user.level, user.experience);
+        const newAbsoluteXp = currentAbsoluteXp + Math.round(finalXp);
+        
+        let newLevel = 1;
+        let experienceLeft = newAbsoluteXp;
+        let xpForNext = getXpForNextLevel(newLevel);
+
+        while (experienceLeft >= xpForNext) {
+            experienceLeft -= xpForNext;
+            newLevel++;
+            xpForNext = getXpForNextLevel(newLevel);
+        }
+        
+        const newExperienceInLevel = Math.floor(experienceLeft);
+
+        const oldLevel = user.level;
+        const levelUpOccurred = newLevel > oldLevel;
+        const newRole = getRoleForLevel(newLevel);
+
+        const updatedUser: User = { 
+            ...user, 
+            experience: newExperienceInLevel, 
+            level: newLevel,
+            peakLevel: Math.max(user.peakLevel || oldLevel, newLevel),
+            role: newRole,
+        };
+
+        let keyAssembled = false;
+        // If wordToUpdate is null, it's a generic XP gain from an arcade game.
+        // NOTE: Arcade XP is disabled, so this block likely won't trigger for generic XP anymore, 
+        // but kept for potential future use or other non-word interactions.
+        if (!wordToUpdate && baseXpAmount > 0) {
+            if (Math.random() < 0.2) { // 20% chance
+                const newAdventure = { ...updatedUser.adventure };
+                newAdventure.keyFragments = (newAdventure.keyFragments || 0) + 1;
+                showToast('You found a Key Fragment! 🔑', 'success', 2000);
                 
-                while (updatedUser.adventure.keyFragments >= 3) {
-                    updatedUser.adventure.keyFragments -= 3;
-                    updatedUser.adventure.keys = (updatedUser.adventure.keys || 0) + 1;
+                if (newAdventure.keyFragments >= 3) {
+                    newAdventure.keyFragments -= 3;
+                    newAdventure.keys = (newAdventure.keys || 0) + 1;
                     keyAssembled = true;
                 }
-                
-                showToast(toastMessage, 'success', 6000);
-                if (keyAssembled) showToast("✨ Key Fragments assembled into a Magic Key!", "success", 4000);
-            } else {
-                showToast(`🌟 Level Up! You reached Level ${newLevel}!`, 'success', 5000);
+                updatedUser.adventure = newAdventure;
             }
-        } else if (finalXpForUser > 0) {
-            showToast(`+${finalXpForUser} XP gained!`, 'info', 2000);
         }
 
-        setXpGained({ amount: finalXpForUser, levelUp, newLevel: levelUp ? newLevel : null });
-        setTimeout(() => setXpGained(null), levelUp ? 5000 : 2000);
 
-        return finalXpForUser;
-    }, [currentUser, showToast, onSaveWordAndUser]);
+        if (wordToUpdate) {
+            await onSaveWordAndUser(wordToUpdate, updatedUser);
+        } else {
+            await onUpdateUser(updatedUser);
+        }
+
+        if (keyAssembled) {
+            showToast("✨ Key Fragments assembled into a Magic Key!", "success", 4000);
+        }
+
+        setXpGained({ amount: Math.round(finalXp), levelUp: levelUpOccurred, newLevel: levelUpOccurred ? newLevel : null });
+        setTimeout(() => setXpGained(null), levelUpOccurred ? 5000 : 2000);
+
+        if (levelUpOccurred) {
+            showToast(`⬆️ Level Up to ${newLevel}! New title: "${newRole}"`, 'success', 5000);
+        }
+        
+        return Math.round(finalXp);
+    }, [onUpdateUser, onSaveWordAndUser, showToast]);
+
+    const recalculateXpAndLevelUp = useCallback(async (absoluteTotalXp: number) => {
+        const user = currentUserRef.current;
+        if (!user) return;
+
+        const oldAbsoluteXp = calculateAbsoluteXp(user.level, user.experience);
+        const xpChange = absoluteTotalXp - oldAbsoluteXp;
+        
+        if (xpChange === 0) {
+            return;
+        }
+
+        let newLevel = 1;
+        let experienceLeft = absoluteTotalXp;
+        let xpForNext = getXpForNextLevel(newLevel);
+
+        while (experienceLeft >= xpForNext) {
+            experienceLeft -= xpForNext;
+            newLevel++;
+            xpForNext = getXpForNextLevel(newLevel);
+        }
+        
+        const newExperienceInLevel = Math.floor(experienceLeft);
+
+        const oldLevel = user.level;
+        const oldPeakLevel = user.peakLevel || oldLevel;
+        const newPeakLevel = Math.max(oldPeakLevel, newLevel);
+        const newRole = getRoleForLevel(newLevel);
+
+        const levelUpOccurred = newLevel > oldLevel;
+        const newPeakReached = newLevel > oldPeakLevel;
+        const roleChanged = newRole !== getRoleForLevel(oldPeakLevel);
+
+        const updatedUser: User = { 
+            ...user, 
+            experience: newExperienceInLevel, 
+            level: newLevel,
+            peakLevel: newPeakLevel,
+            role: newRole,
+        };
+        
+        // --- Award Adventure fragments only on reaching a new peak level ---
+        if (newPeakReached) {
+            let fragmentsAwarded = 1;
+            let keyAssembled = false;
+            let toastMessage = `🌟 New Peak Level: ${newLevel}! +1 Key Fragment`;
+
+            if (roleChanged) {
+                fragmentsAwarded++;
+                toastMessage = `New Title: "${newRole}"! +2 Key Fragments`;
+            }
+
+            updatedUser.adventure.keyFragments = (updatedUser.adventure.keyFragments || 0) + fragmentsAwarded;
+            
+            while (updatedUser.adventure.keyFragments >= 3) {
+                updatedUser.adventure.keyFragments -= 3;
+                updatedUser.adventure.keys = (updatedUser.adventure.keys || 0) + 1;
+                keyAssembled = true;
+            }
+            
+            showToast(toastMessage, 'success', 6000);
+            if (keyAssembled) showToast("✨ Key Fragments assembled into a Magic Key!", "success", 4000);
+
+        } else if (levelUpOccurred) {
+            showToast(`⬆️ Level Up to ${newLevel}!`, 'success', 4000);
+        } else if (xpChange !== 0) {
+            const sign = xpChange > 0 ? '+' : '';
+            showToast(`XP Recalculated: ${sign}${xpChange} XP`, 'info', 2000);
+        }
+        
+        await onUpdateUser(updatedUser);
+
+        setXpGained({ amount: xpChange, levelUp: levelUpOccurred, newLevel: levelUpOccurred ? newLevel : null });
+        setTimeout(() => setXpGained(null), levelUpOccurred ? 5000 : 2000);
+
+    }, [showToast, onUpdateUser]);
 
     const xpToNextLevel = useMemo(() => {
         if (!currentUser) return 0;
         return getXpForNextLevel(currentUser.level);
     }, [currentUser]);
 
-    return { gainExperienceAndLevelUp, xpGained, xpToNextLevel };
+    return { recalculateXpAndLevelUp, gainExperienceAndLevelUp, xpGained, xpToNextLevel };
 };

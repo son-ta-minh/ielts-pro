@@ -27,6 +27,14 @@ const ProgressBar: React.FC<{ value: number, max: number, label: string }> = ({ 
     );
 };
 
+const getScoreBadgeClasses = (score: number | undefined | null): string => {
+    const s = score ?? 0;
+    if (s >= 80) return 'bg-green-100 text-green-700';
+    if (s >= 50) return 'bg-yellow-100 text-yellow-700';
+    if (s > 0) return 'bg-orange-100 text-orange-700';
+    return 'bg-neutral-100 text-neutral-500';
+};
+
 export const DayProgress: React.FC<Props> = ({ learnedToday, reviewedToday, maxLearn, maxReview, learnedWords, reviewedWords, onViewWord }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     
@@ -73,6 +81,7 @@ export const DayProgress: React.FC<Props> = ({ learnedToday, reviewedToday, maxL
                                     >
                                         <div className={`w-2 h-2 rounded-full ${learnedWords.some(lw => lw.id === word.id) ? 'bg-blue-500' : 'bg-orange-500'}`} />
                                         <span className="text-sm font-bold text-neutral-800 flex-1 truncate">{word.word}</span>
+                                        <span className={`text-xs font-black px-1.5 py-0.5 rounded-md ${getScoreBadgeClasses(word.masteryScore)}`}>{word.masteryScore ?? 0}</span>
                                         <span className="text-xs text-neutral-400 font-mono">{new Date(word.lastReview!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                     </button>
                                 ))}

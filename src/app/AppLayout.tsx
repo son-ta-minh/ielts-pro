@@ -2,7 +2,7 @@ import React, { Suspense, useState, useEffect } from 'react';
 import { 
   Plus, LayoutDashboard, List, Settings, RefreshCw, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Network, Mic, PenLine, BrainCircuit, ClipboardCheck, ChevronDown, Puzzle, FileClock, AlertTriangle
 } from 'lucide-react';
-import { AppView, SessionType, VocabularyItem } from './types';
+import { AppView, SessionType, VocabularyItem, User } from './types';
 import { useAppController } from './useAppController';
 import { getDueWords, getNewWords } from './db';
 import EditWordModal from '../components/word_lib/EditWordModal';
@@ -51,7 +51,7 @@ const navItems = [
       { id: 'COMPARISON', view: 'COMPARISON', icon: Puzzle, label: 'Comparison' },
       { id: 'WORD_NET', view: 'WORD_NET', icon: Network, label: 'Word Net' },
       { id: 'PARAPHRASE', view: 'PARAPHRASE', icon: RefreshCw, label: 'Paraphrase' },
-      { id: 'IRREGULAR_VERBS', view: 'IRREGULAR_VERBS', icon: FileClock, label: 'Irregular Verbs' },
+      { id: 'IRREGULAR_VERBS', view: 'IRREGULAR_VERBS', icon: FileClock, label: 'Irregular Verb' },
     ]
   },
   { id: 'SETTINGS', view: 'SETTINGS', icon: Settings, label: 'Settings' }
@@ -176,7 +176,7 @@ const Sidebar: React.FC<AppLayoutProps & {
     </>
   );
 };
-// FIX: Add MainContent component to render the active view.
+
 const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
   const {
     view,
@@ -196,8 +196,10 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     sessionType,
     sessionFocus,
     updateWord,
+    bulkUpdateWords,
     handleSessionComplete,
     gainExperienceAndLevelUp,
+    recalculateXpAndLevelUp,
     handleRetrySession,
     deleteWord,
     bulkDeleteWords,
@@ -210,7 +212,8 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     refreshGlobalStats,
     handleLibraryReset,
     apiUsage,
-    xpGained
+    xpGained,
+    lastMasteryScoreUpdateTimestamp
   } = controller;
 
   if (!currentUser) return null;
@@ -239,12 +242,13 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'REVIEW':
       return sessionWords && sessionType ? (
         <ReviewSession
+          user={currentUser}
           sessionWords={sessionWords}
           sessionType={sessionType}
           sessionFocus={sessionFocus}
           onUpdate={updateWord}
+          onBulkUpdate={bulkUpdateWords}
           onComplete={handleSessionComplete}
-          onGainXp={gainExperienceAndLevelUp}
           onRetry={handleRetrySession}
         />
       ) : null;
@@ -255,7 +259,6 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
           onDelete={async (id) => await deleteWord(id)}
           onBulkDelete={async (ids) => await bulkDeleteWords(ids)}
           onUpdate={updateWord}
-          onGainXp={gainExperienceAndLevelUp}
           onStartSession={(words) => startSession(words, 'custom')}
           initialFilter={initialListFilter}
           onInitialFilterApplied={() => setInitialListFilter(null)}
@@ -264,13 +267,13 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
         />
       );
     case 'UNIT_LIBRARY':
-        return <UnitLibrary user={currentUser} onStartSession={(words) => startSession(words, 'new_study')} onUpdateUser={handleUpdateUser} onGainXp={gainExperienceAndLevelUp} />;
+        return <UnitLibrary user={currentUser} onStartSession={(words) => startSession(words, 'new_study')} onUpdateUser={handleUpdateUser} />;
     case 'PARAPHRASE':
         return <ParaphrasePractice user={currentUser} />;
     case 'SETTINGS':
         return <SettingsView user={currentUser} onUpdateUser={handleUpdateUser} onRefresh={refreshGlobalStats} onNuke={handleLibraryReset} apiUsage={apiUsage} />;
     case 'DISCOVER':
-        return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={async (xp) => await gainExperienceAndLevelUp(xp)} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} />;
+        return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} onRecalculateXp={recalculateXpAndLevelUp} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} lastMasteryScoreUpdateTimestamp={lastMasteryScoreUpdateTimestamp} onBulkUpdate={bulkUpdateWords} />;
     case 'WORD_NET':
         return <WordNet userId={currentUser.id} />;
     case 'SPEAKING':

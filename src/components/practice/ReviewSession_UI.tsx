@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, ShieldAlert, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap } from 'lucide-react';
-import { VocabularyItem, ReviewGrade, SessionType } from '../../app/types';
+import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditWordModal from '../word_lib/EditWordModal';
 import ViewWordModal from '../word_lib/ViewWordModal';
 import TestModal from './TestModal';
+import { generateAvailableChallenges } from '../../utils/challengeUtils';
+import { ChallengeType, Challenge, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge, PrepositionQuizChallenge } from './TestModalTypes';
+import { calculateMasteryScore } from '../../utils/srs';
 
 export interface ReviewSessionUIProps {
+  user: User;
   initialWords: VocabularyItem[];
   sessionWords: VocabularyItem[];
   sessionType: SessionType;
@@ -27,10 +31,9 @@ export interface ReviewSessionUIProps {
   onComplete: () => void;
   nextItem: () => void;
   handleReview: (grade: ReviewGrade) => void;
-  handleMisSpeak: () => void;
-  handleTestComplete: (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => void;
+  handleTestComplete: (grade: ReviewGrade, testResults?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => void;
   handleRetry: () => void;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number; tested: number; }) => Promise<number>;
+  handleEndSession: () => void;
 }
 
 const renderStatusBadge = (outcome: string | undefined, wasNew: boolean, isQuickFire: boolean) => {
@@ -50,12 +53,84 @@ const renderStatusBadge = (outcome: string | undefined, wasNew: boolean, isQuick
     }
 };
 
+const MasteryScoreGauge: React.FC<{ score: number }> = ({ score }) => {
+    const size = 36;
+    const strokeWidth = 4;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (score / 100) * circumference;
+
+    let color = 'text-neutral-400';
+    if (score >= 80) color = 'text-green-500';
+    else if (score >= 50) color = 'text-yellow-500';
+    else if (score > 0) color = 'text-orange-500';
+
+    return (
+        <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+            <svg className="absolute" width={size} height={size}>
+                <circle
+                    className="text-neutral-100"
+                    stroke="currentColor"
+                    strokeWidth={strokeWidth}
+                    fill="transparent"
+                    r={radius}
+                    cx={size / 2}
+                    cy={size / 2}
+                />
+                <circle
+                    className={color}
+                    stroke="currentColor"
+                    strokeWidth={strokeWidth}
+                    fill="transparent"
+                    r={radius}
+                    cx={size / 2}
+                    cy={size / 2}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={offset}
+                    strokeLinecap="round"
+                    style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 0.5s ease-out' }}
+                />
+            </svg>
+            <span className={`text-[10px] font-black ${color}`}>{score}</span>
+        </div>
+    );
+};
+
+const MasteryScoreCalculator: React.FC<{ word: VocabularyItem }> = ({ word }) => {
+    const score = word.masteryScore ?? 0;
+
+    return (
+        <div className="relative group/score">
+            <MasteryScoreGauge score={score} />
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max px-3 py-1.5 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/score:opacity-100 transition-opacity pointer-events-none z-10 uppercase tracking-wider">
+                Mastery Score
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+            </div>
+        </div>
+    );
+};
+
+const ComplexityIndicator: React.FC<{ complexity: number }> = ({ complexity }) => {
+    return (
+        <div className="relative group/complexity">
+            <div className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 transition-all hover:bg-amber-100 shadow-sm">
+                <span className="text-[9px] font-black opacity-50">CX</span>
+                <span className="text-xs font-black">{complexity}</span>
+            </div>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max px-3 py-1.5 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/complexity:opacity-100 transition-opacity pointer-events-none z-10 uppercase tracking-wider">
+                Complexity Level
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+            </div>
+        </div>
+    );
+};
+
 export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const {
-        initialWords, sessionWords, sessionType, newWordIds, progress, setProgress,
+        user, initialWords, sessionWords, sessionType, newWordIds, progress, setProgress,
         sessionOutcomes, sessionFinished, wordInModal, setWordInModal, editingWordInModal, setEditingWordInModal,
         isTesting, setIsTesting, currentWord, isNewWord, onUpdate, onComplete,
-        nextItem, handleReview, handleMisSpeak, handleTestComplete, onGainXp, handleRetry
+        nextItem, handleReview, handleTestComplete, handleRetry, handleEndSession
     } = props;
 
     const { current: currentIndex, max: maxIndexVisited } = progress;
@@ -97,46 +172,96 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
 
     return (
         <>
-            <div className="max-w-xl mx-auto h-[calc(100vh-100px)] flex flex-col animate-in fade-in duration-300">
-                <div className="px-6 shrink-0 pb-4"><div className="flex justify-between items-center mb-1"><button onClick={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} disabled={currentIndex === 0} className="p-2 text-neutral-300 hover:text-neutral-900 disabled:opacity-30"><ArrowLeft size={16}/></button><div className="flex items-center space-x-2"><HeaderIcon size={14} className={headerColor} /><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{currentIndex + 1} / {sessionWords.length}</span></div><button onClick={() => setProgress(p => ({ ...p, current: p.current + 1 }))} disabled={currentIndex >= maxIndexVisited} className="p-2 text-neutral-300 hover:text-neutral-900 disabled:opacity-30"><ArrowRight size={16}/></button></div><div className="h-1 w-full bg-neutral-100 rounded-full overflow-hidden"><div className="h-full bg-neutral-900 transition-all duration-300 ease-in-out" style={{ width: `${((currentIndex + 1) / sessionWords.length) * 100}%` }} /></div></div>
-                <div className="flex-1 bg-white rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col relative overflow-hidden group select-none">{isQuickFire ? <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 w-full text-center space-y-4"><Loader2 className="animate-spin text-neutral-200" size={32} /><p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading Next Test...</p></div> : <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 w-full text-center space-y-8"><div className="flex items-center gap-4"><h2 className={`font-black text-neutral-900 tracking-tight text-4xl ${isIpa ? 'font-serif' : ''}`}>{displayText}</h2><button onClick={(e) => { e.stopPropagation(); speak(currentWord.word); }} className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce"><Volume2 size={22} /></button></div><button onClick={() => setWordInModal(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm"><Eye size={14}/><span>View Details</span></button></div>}</div>
+            <div className="max-w-3xl mx-auto h-[calc(100vh-100px)] flex flex-col animate-in fade-in duration-300">
+                <div className="px-6 shrink-0 pb-4">
+                    <div className="flex justify-between items-center mb-1">
+                        <div className="w-24"></div> {/* Left spacer */}
+                        <div className="flex items-center space-x-2">
+                            <HeaderIcon size={14} className={headerColor} />
+                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{currentIndex + 1} / {sessionWords.length}</span>
+                        </div>
+                        <div className="w-24 text-right">
+                            <button onClick={handleEndSession} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-neutral-500 hover:bg-neutral-100 transition-colors">
+                                End Session
+                            </button>
+                        </div>
+                    </div>
+                    <div className="h-1 w-full bg-neutral-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-neutral-900 transition-all duration-300 ease-in-out" style={{ width: `${((currentIndex + 1) / sessionWords.length) * 100}%` }} />
+                    </div>
+                </div>
+
+                <div className="flex-1 flex items-center justify-center relative gap-4">
+                    <button 
+                        onClick={() => setProgress(p => ({ ...p, current: (p.current - 1 + sessionWords.length) % sessionWords.length }))} 
+                        className="p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all"
+                        aria-label="Previous word"
+                    >
+                        <ArrowLeft size={28} />
+                    </button>
+
+                    <div className="w-full max-w-xl h-full bg-white rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col relative overflow-hidden group select-none">
+                        {isQuickFire ? (
+                            <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 w-full text-center space-y-4">
+                                <Loader2 className="animate-spin text-neutral-200" size={32} />
+                                <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading Next Test...</p>
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 w-full text-center space-y-8">
+                                <div className="flex items-center gap-4">
+                                    <h2 className={`font-black text-neutral-900 tracking-tight text-4xl ${isIpa ? 'font-serif' : ''}`}>{displayText}</h2>
+                                    {isNewWord ? (
+                                        <ComplexityIndicator complexity={currentWord.complexity ?? 0} />
+                                    ) : (
+                                        <MasteryScoreCalculator word={currentWord} />
+                                    )}
+                                    <button onClick={(e) => { e.stopPropagation(); speak(currentWord.word); }} className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce">
+                                        <Volume2 size={22} />
+                                    </button>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => setWordInModal(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
+                                        <Eye size={14}/><span>View Details</span>
+                                    </button>
+                                    <button onClick={() => setIsTesting(true)} className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-black text-[10px] hover:bg-amber-600 transition-all active:scale-95 uppercase tracking-widest shadow-lg shadow-amber-500/20">
+                                        <BrainCircuit size={14}/><span>Test It!</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <button 
+                        onClick={() => setProgress(p => ({ ...p, current: (p.current + 1) % sessionWords.length }))} 
+                        className="p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all"
+                        aria-label="Next word"
+                    >
+                        <ArrowRight size={28} />
+                    </button>
+                </div>
+
                 <div className="shrink-0 pt-6 pb-2 mt-auto">
                     {isNewWord ? (
-                        <div className="max-w-lg mx-auto flex items-stretch gap-3">
-                            <button onClick={() => nextItem()} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all">
-                                <X size={20} />
-                                <span className="text-[9px] font-black uppercase">SKIP</span>
-                            </button>
-                            <button onClick={handleMisSpeak} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-rose-600 hover:bg-rose-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all">
-                                <ShieldAlert size={20} />
-                                <span className="text-[9px] font-black uppercase">MisSpeak</span>
-                            </button>
-                            <button onClick={() => setIsTesting(true)} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-amber-600 hover:bg-amber-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all">
-                                <BrainCircuit size={20} />
-                                <span className="text-[9px] font-black uppercase">Test It!</span>
-                            </button>
-                            <button onClick={() => handleReview(ReviewGrade.LEARNED)} className="flex-1 py-5 bg-green-500 text-white rounded-2xl flex flex-col items-center justify-center space-y-1.5 shadow-lg shadow-green-500/20 hover:bg-green-600 transition-all active:scale-95">
+                        <div className="max-w-lg mx-auto grid grid-cols-3 items-stretch gap-4">
+                            <div /> {/* Empty cell for spacing */}
+                            <button onClick={() => handleReview(ReviewGrade.LEARNED)} className="py-5 bg-green-500 text-white rounded-2xl flex flex-col items-center justify-center space-y-1.5 shadow-lg shadow-green-500/20 hover:bg-green-600 transition-all active:scale-95">
                                 <CheckCircle2 size={20} />
                                 <span className="text-[9px] font-black uppercase">LEARNED</span>
                             </button>
+                            <div /> {/* Empty cell for spacing */}
                         </div>
                     ) : !isQuickFire && (
-                        <div className="max-w-lg mx-auto flex items-stretch gap-4">
-                            <div className="flex-1 flex items-center gap-3">
-                                <button onClick={() => handleReview(ReviewGrade.FORGOT)} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><X size={20} /><span className="text-[9px] font-black uppercase">FORGOT</span></button>
-                                <button onClick={() => handleReview(ReviewGrade.HARD)} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-orange-600 hover:bg-orange-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><HelpCircle size={20} /><span className="text-[9px] font-black uppercase">Hard</span></button>
-                                <button onClick={() => handleReview(ReviewGrade.EASY)} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-green-600 hover:bg-green-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><Check size={20} /><span className="text-[9px] font-black uppercase">Easy</span></button>
-                                <button onClick={handleMisSpeak} className="flex-1 py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-rose-600 hover:bg-rose-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><ShieldAlert size={20} /><span className="text-[9px] font-black uppercase">MisSpeak</span></button>
-                            </div>
-                            <div className="flex items-center"><span className="text-sm font-bold text-neutral-300">Or,</span></div>
-                            <button onClick={() => setIsTesting(true)} className="px-8 py-5 bg-amber-500 text-white rounded-2xl flex flex-col items-center justify-center space-y-1.5 shadow-lg shadow-amber-500/20 hover:bg-amber-600 transition-all active:scale-95"><BrainCircuit size={20} /><span className="text-[9px] font-black uppercase">Test It!</span></button>
+                        <div className="max-w-lg mx-auto grid grid-cols-3 items-stretch gap-4">
+                            <button onClick={() => handleReview(ReviewGrade.FORGOT)} className="py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><X size={20} /><span className="text-[9px] font-black uppercase">FORGOT</span></button>
+                            <button onClick={() => handleReview(ReviewGrade.HARD)} className="py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-orange-600 hover:bg-orange-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><HelpCircle size={20} /><span className="text-[9px] font-black uppercase">Hard</span></button>
+                            <button onClick={() => handleReview(ReviewGrade.EASY)} className="py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-green-600 hover:bg-green-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><Check size={20} /><span className="text-[9px] font-black uppercase">Easy</span></button>
                         </div>
                     )}
                 </div>
             </div>
-            {wordInModal && <ViewWordModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={onGainXp} isViewOnly={true} />}
-            {editingWordInModal && <EditWordModal word={editingWordInModal} onSave={handleSaveEdit} onClose={() => setEditingWordInModal(null)} onSwitchToView={() => { setEditingWordInModal(null); setWordInModal(editingWordInModal); }} />}
-            {isTesting && currentWord && <TestModal word={currentWord} isQuickFire={isQuickFire} sessionPosition={isQuickFire ? { current: currentIndex + 1, total: sessionWords.length } : undefined} onPrevWord={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} onClose={() => { if (isQuickFire) onComplete(); else setIsTesting(false); }} onComplete={handleTestComplete} onGainXp={onGainXp} />}
+            {wordInModal && <ViewWordModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={async () => 0} isViewOnly={true} />}
+            {editingWordInModal && <EditWordModal user={user} word={editingWordInModal} onSave={handleSaveEdit} onClose={() => setEditingWordInModal(null)} onSwitchToView={() => { setEditingWordInModal(null); setWordInModal(editingWordInModal); }} />}
+            {isTesting && currentWord && <TestModal word={currentWord} isQuickFire={isQuickFire} sessionPosition={isQuickFire ? { current: currentIndex + 1, total: sessionWords.length } : undefined} onPrevWord={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} onClose={() => { if (isQuickFire) onComplete(); else setIsTesting(false); }} onComplete={handleTestComplete} />}
         </>
     );
 };

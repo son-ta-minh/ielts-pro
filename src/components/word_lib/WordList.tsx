@@ -13,7 +13,6 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
   onBulkDelete: (ids: string[]) => Promise<void>;
   onUpdate: (updated: VocabularyItem) => void;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade) => Promise<number>;
   onStartSession: (words: VocabularyItem[]) => void;
   initialFilter?: string | null;
   onInitialFilterApplied?: () => void;
@@ -21,7 +20,7 @@ interface Props {
   onExpandAddConsumed?: () => void;
 }
 
-const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onGainXp, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed }) => {
+const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed }) => {
   const [words, setWords] = useState<VocabularyItem[]>([]);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
@@ -110,7 +109,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onG
           forceExpandAdd={forceExpandAdd}
           onExpandAddConsumed={onExpandAddConsumed}
       />
-      {viewingWord && <ViewWordModal word={viewingWord} onClose={() => setViewingWord(null)} onNavigateToWord={setViewingWord} onUpdate={onUpdate} onGainXp={onGainXp} onEditRequest={(word) => { setViewingWord(null); setEditingWord(word); }} isViewOnly={false} />}
+      {viewingWord && <ViewWordModal word={viewingWord} onClose={() => setViewingWord(null)} onNavigateToWord={setViewingWord} onUpdate={onUpdate} onGainXp={async () => 0} onEditRequest={(word) => { setViewingWord(null); setEditingWord(word); }} isViewOnly={false} />}
       {editingWord && <EditWordModal user={user} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setViewingWord(word); }}/>}
     </>
   );

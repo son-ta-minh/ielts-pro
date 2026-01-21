@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ArrowDownAZ, ListFilter, Copy, ShieldCheck, ShieldX, Ghost, Zap, GitCommit } from 'lucide-react';
+import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ArrowDownAZ, ListFilter, Copy, ShieldCheck, ShieldX, Ghost, Zap, GitCommit, Binary } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, WordQuality } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -20,17 +20,21 @@ interface VisibilitySettings {
   showAiIcon: boolean;
   showFamilyIcon: boolean;
   showPrepIcon: boolean;
+  showMastery: boolean;
+  showComplexity: boolean;
 }
 
 export const DEFAULT_VISIBILITY: VisibilitySettings = {
   showIPA: false,
-  showMeaning: true,
+  showMeaning: false,
   blurMeaning: true,
   showProgress: true,
   showDue: false,
   showAiIcon: true,
   showFamilyIcon: true,
   showPrepIcon: true,
+  showMastery: true,
+  showComplexity: true, 
 };
 
 const VisibilityToggle = ({ label, checked, onChange, subItem }: { label: React.ReactNode, checked: boolean, onChange: () => void, subItem?: boolean }) => (
@@ -42,12 +46,18 @@ const VisibilityToggle = ({ label, checked, onChange, subItem }: { label: React.
 
 const getStatusBadge = (item: VocabularyItem) => {
   if (!item.lastReview) return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-100 whitespace-nowrap">New</span>;
-  if (item.lastGrade === ReviewGrade.FORGOT) return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">Forgot</span>;
-  if (item.consecutiveCorrect === 1) return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-cyan-50 text-cyan-600 border border-cyan-100 whitespace-nowrap">Learned</span>;
+  
   switch (item.lastGrade) {
-    case ReviewGrade.HARD: return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-orange-50 text-orange-600 border border-orange-100 whitespace-nowrap">Hard</span>;
-    case ReviewGrade.EASY: return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-green-50 text-green-600 border border-green-100 whitespace-nowrap">Easy</span>;
-    default: return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-neutral-50 text-neutral-400 border border-neutral-100 whitespace-nowrap">Studied</span>;
+    case ReviewGrade.FORGOT: 
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">Forgot</span>;
+    case ReviewGrade.LEARNED: 
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-cyan-50 text-cyan-600 border border-cyan-100 whitespace-nowrap">Learned</span>;
+    case ReviewGrade.HARD: 
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-orange-50 text-orange-600 border border-orange-100 whitespace-nowrap">Hard</span>;
+    case ReviewGrade.EASY: 
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-green-50 text-green-600 border border-green-100 whitespace-nowrap">Easy</span>;
+    default: 
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-neutral-50 text-neutral-400 border border-neutral-100 whitespace-nowrap">Studied</span>;
   }
 };
 
@@ -58,6 +68,14 @@ const getQualityIcon = (quality: WordQuality) => {
         case WordQuality.FAILED: return <span title="Verification Failed"><ShieldX size={14} className="text-rose-500" /></span>;
         default: return <span title="Raw Content"><Ghost size={14} className="text-neutral-300" /></span>;
     }
+};
+
+const getScoreCellClasses = (score: number | undefined | null): string => {
+    const s = score ?? 0;
+    if (s >= 80) return 'text-green-700 bg-green-100';
+    if (s >= 50) return 'text-yellow-700 bg-yellow-100';
+    if (s > 0) return 'text-orange-700 bg-orange-100';
+    return 'text-neutral-500 bg-neutral-100';
 };
 
 export interface WordTableUIProps {
@@ -108,7 +126,6 @@ export interface WordTableUIProps {
   handleBatchAddSubmit: () => void;
   onOpenBulkDeleteModal?: () => void;
   onOpenBulkHardDeleteModal?: () => void;
-  // FIX: Added onBulkVerify to props to fix TypeScript error in parent component.
   onBulkVerify: (ids: Set<string>) => void;
   selectedWordsToRefine: VocabularyItem[];
   selectedRawWordsCount: number;
@@ -121,6 +138,8 @@ export interface WordTableUIProps {
   setIsViewMenuOpen: (o: boolean) => void;
   setIsFilterMenuOpen: (o: boolean) => void;
   setIsAddExpanded: (o: boolean) => void;
+  selectedWordsMissingHintsCount: number;
+  onOpenHintModal: () => void;
 }
 
 export const WordTableUI: React.FC<WordTableUIProps> = ({
@@ -134,7 +153,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   notification, viewMenuRef, visibility, setVisibility, handleToggleFilter,
   handleBatchAddSubmit, onOpenBulkDeleteModal, onOpenBulkHardDeleteModal, onBulkVerify, selectedWordsToRefine, selectedRawWordsCount, handleGenerateRefinePrompt,
   handleAiRefinementResult, setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setIsViewMenuOpen,
-  setIsFilterMenuOpen, setIsAddExpanded,
+  setIsFilterMenuOpen, setIsAddExpanded, selectedWordsMissingHintsCount, onOpenHintModal
 }) => {
   const totalPages = Math.ceil(total / pageSize);
   const defaultDeleteMessage = <span>Are you sure you want to permanently delete <span className="font-bold text-neutral-900">"{wordToDelete?.word}"</span>? This action cannot be undone.</span>;
@@ -165,6 +184,8 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                             {visibility.showMeaning && (<VisibilityToggle label="Hide until hover" subItem checked={visibility.blurMeaning} onChange={() => setVisibility(v => ({...v, blurMeaning: !v.blurMeaning}))} />)}
                             <VisibilityToggle label={<><Activity size={14}/>Progress Status</>} checked={visibility.showProgress} onChange={() => setVisibility(v => ({...v, showProgress: !v.showProgress}))} />
                             <VisibilityToggle label={<><Calendar size={14}/>Due Date</>} checked={visibility.showDue} onChange={() => setVisibility(v => ({...v, showDue: !v.showDue}))} />
+                            <VisibilityToggle label={<><Zap size={14}/>Mastery Score</>} checked={visibility.showMastery} onChange={() => setVisibility(v => ({...v, showMastery: !v.showMastery}))} />
+                            <VisibilityToggle label={<><Binary size={14}/>Complexity</>} checked={visibility.showComplexity} onChange={() => setVisibility(v => ({...v, showComplexity: !v.showComplexity}))} />
                             <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 mt-1">Details</div>
                             <VisibilityToggle label="IPA Phonetic" checked={visibility.showIPA} onChange={() => setVisibility(v => ({...v, showIPA: !v.showIPA}))} />
                             <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 mt-1">Indicators</div>
@@ -237,10 +258,10 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
         {loading ? <div className="flex flex-col items-center justify-center h-80 space-y-4"><Loader2 className="animate-spin text-neutral-200" size={32} /><p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading...</p></div> : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
-              <thead><tr className="bg-neutral-50/50 border-b border-neutral-100"><th className="px-4 py-3 w-10"><button onClick={() => setSelectedIds(selectedIds.size === words.length && words.length > 0 ? new Set() : new Set(words.map(w => w.id)))} className="text-neutral-300 hover:text-neutral-900">{selectedIds.size === words.length && words.length > 0 ? <CheckSquare size={18} className="text-neutral-900" /> : <Square size={18} />}</button></th><th className="px-2 py-3 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Vocabulary</th>{visibility.showMeaning && <th className="px-4 py-3 text-[10px] font-black text-neutral-400 uppercase tracking-widest max-w-[200px]">Meaning / Definition</th>}{(visibility.showProgress || visibility.showDue) && <th className="px-6 py-3 text-center text-[10px] font-black text-neutral-400 uppercase tracking-widest">Progress</th>}<th className="px-6 py-3 text-right text-[10px] font-black text-neutral-400 uppercase tracking-widest">Actions</th></tr></thead>
+              <thead><tr className="bg-neutral-50/50 border-b border-neutral-100"><th className="px-4 py-3 w-10"><button onClick={() => setSelectedIds(selectedIds.size === words.length && words.length > 0 ? new Set() : new Set(words.map(w => w.id)))} className="text-neutral-300 hover:text-neutral-900">{selectedIds.size === words.length && words.length > 0 ? <CheckSquare size={18} className="text-neutral-900" /> : <Square size={18} />}</button></th><th className="px-2 py-3 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Vocabulary</th>{visibility.showMeaning && <th className="px-4 py-3 text-[10px] font-black text-neutral-400 uppercase tracking-widest max-w-[200px]">Meaning / Definition</th>}{(visibility.showProgress || visibility.showDue) && <th className="px-6 py-3 text-center text-[10px] font-black text-neutral-400 uppercase tracking-widest">Progress</th>}{visibility.showComplexity && <th className="px-4 py-3 text-center text-[10px] font-black text-neutral-400 uppercase tracking-widest">Complexity</th>}{visibility.showMastery && <th className="px-4 py-3 text-center text-[10px] font-black text-neutral-400 uppercase tracking-widest">Mastery</th>}<th className="px-6 py-3 text-right text-[10px] font-black text-neutral-400 uppercase tracking-widest">Actions</th></tr></thead>
               <tbody className="divide-y divide-neutral-50">
-                {words.length === 0 ? <tr><td colSpan={5} className="p-20 text-center text-sm font-medium italic text-neutral-300">No items found.</td></tr> : (words.map(item => { const isSelected = selectedIds.has(item.id); const reviewStatus = getRemainingTime(item.nextReview); const hasFamilyData = item.wordFamily && ((item.wordFamily.nouns?.length || 0) > 0 || (item.wordFamily.verbs?.length || 0) > 0 || (item.wordFamily.adjs?.length || 0) > 0 || (item.wordFamily.advs?.length || 0) > 0);
-                    return (<tr key={item.id} className={`hover:bg-neutral-50/80 cursor-pointer group transition-colors ${isSelected ? 'bg-blue-50/30' : ''}`} onClick={() => onViewWord(item)}><td className="px-4 py-2" onClick={(e) => { e.stopPropagation(); const next = new Set(selectedIds); if (next.has(item.id)) next.delete(item.id); else next.add(item.id); setSelectedIds(next); }}>{isSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} className="text-neutral-200 group-hover:text-neutral-400" />}</td><td className="px-2 py-2"><div className="flex items-center space-x-2"><div className="font-bold text-neutral-900">{item.word}</div><div className="flex gap-1">{visibility.showAiIcon && getQualityIcon(item.quality)}{visibility.showFamilyIcon && hasFamilyData && <span title="Has Word Family"><Network size={12} className="text-purple-500"/></span>}{visibility.showPrepIcon && item.prepositions && item.prepositions.length > 0 && <span title="Has Prepositions"><AtSign size={12} className="text-orange-500"/></span>}</div></div>{visibility.showIPA && (<div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-0.5"><span className="text-[10px] font-mono text-neutral-400">{item.ipa || '/?/'}</span>{item.needsPronunciationFocus && <Mic size={12} className="text-rose-500" />}</div>)}</td>{visibility.showMeaning && (<td className="px-4 py-2 max-w-[200px] align-middle"><div className={`text-sm text-neutral-600 leading-snug transition-all duration-300 ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100 select-none cursor-help' : ''}`}>{item.meaningVi}</div></td>)}{(visibility.showProgress || visibility.showDue) && (<td className="px-6 py-2 text-center"><div className="flex flex-row items-center justify-center gap-2">{visibility.showProgress && getStatusBadge(item)}{visibility.showDue && <div className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${reviewStatus.urgency === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-neutral-50 text-neutral-400 border border-neutral-100'}`}><span>{reviewStatus.label}</span></div>}</div></td>)}<td className="px-6 py-2 text-right"><div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onEditWord(item); }} className="p-2 text-neutral-300 hover:text-neutral-900 transition-all"><Edit3 size={16} /></button>{context === 'unit' && item.quality === WordQuality.RAW && onHardDelete && setWordToHardDelete && (<button onClick={(e) => { e.stopPropagation(); setWordToHardDelete(item); }} className="p-2 text-neutral-300 hover:text-red-700 transition-all" title="Delete Raw Word from Library"><Trash2 size={16} /></button>)}<button onClick={(e) => { e.stopPropagation(); setWordToDelete(item); }} className="p-2 text-neutral-300 hover:text-rose-500 transition-all" title={context === 'unit' ? 'Unlink from Unit' : 'Delete from Library'}>{context === 'unit' ? <Unlink size={16}/> : <Trash2 size={16} />}</button></div></td></tr>); }))}
+                {words.length === 0 ? <tr><td colSpan={6} className="p-20 text-center text-sm font-medium italic text-neutral-300">No items found.</td></tr> : (words.map(item => { const isSelected = selectedIds.has(item.id); const reviewStatus = getRemainingTime(item.nextReview); const hasFamilyData = item.wordFamily && ((item.wordFamily.nouns?.length || 0) > 0 || (item.wordFamily.verbs?.length || 0) > 0 || (item.wordFamily.adjs?.length || 0) > 0 || (item.wordFamily.advs?.length || 0) > 0);
+                    return (<tr key={item.id} className={`hover:bg-neutral-50/80 cursor-pointer group transition-colors ${isSelected ? 'bg-blue-50/30' : ''}`} onClick={() => onViewWord(item)}><td className="px-4 py-2" onClick={(e) => { e.stopPropagation(); const next = new Set(selectedIds); if (next.has(item.id)) next.delete(item.id); else next.add(item.id); setSelectedIds(next); }}>{isSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} className="text-neutral-200 group-hover:text-neutral-400" />}</td><td className="px-2 py-2"><div className="flex items-center space-x-2"><div className="font-bold text-neutral-900">{item.word}</div><div className="flex gap-1">{visibility.showAiIcon && getQualityIcon(item.quality)}{visibility.showFamilyIcon && hasFamilyData && <span title="Has Word Family"><Network size={12} className="text-purple-500"/></span>}{visibility.showPrepIcon && item.prepositions && item.prepositions.length > 0 && <span title="Has Prepositions"><AtSign size={12} className="text-orange-500"/></span>}</div></div>{visibility.showIPA && (<div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-0.5"><span className="text-[10px] font-mono text-neutral-400">{item.ipa || '/?/'}</span>{item.needsPronunciationFocus && <Mic size={12} className="text-rose-500" />}</div>)}</td>{visibility.showMeaning && (<td className="px-4 py-2 max-w-[200px] align-middle"><div className={`text-sm text-neutral-600 leading-snug transition-all duration-300 ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100 select-none cursor-help' : ''}`}>{item.meaningVi}</div></td>)}{(visibility.showProgress || visibility.showDue) && (<td className="px-6 py-2 text-center"><div className="flex flex-row items-center justify-center gap-2">{visibility.showProgress && getStatusBadge(item)}{visibility.showDue && <div className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${reviewStatus.urgency === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-neutral-50 text-neutral-400 border border-neutral-100'}`}><span>{reviewStatus.label}</span></div>}</div></td>)}{visibility.showComplexity && <td className="px-4 py-2 text-center align-middle"><span className="text-xs font-black text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-md border border-neutral-200">{item.complexity ?? 0}</span></td>}{visibility.showMastery && (<td className="px-4 py-2 text-center align-middle"><span className={`inline-block px-2 py-0.5 rounded-md text-xs font-black ${getScoreCellClasses(item.masteryScore)}`}>{item.masteryScore ?? 0}</span></td>)}<td className="px-6 py-2 text-right"><div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onEditWord(item); }} className="p-2 text-neutral-300 hover:text-neutral-900 transition-all"><Edit3 size={16} /></button>{context === 'unit' && item.quality === WordQuality.RAW && onHardDelete && setWordToHardDelete && (<button onClick={(e) => { e.stopPropagation(); setWordToHardDelete(item); }} className="p-2 text-neutral-300 hover:text-red-700 transition-all" title="Delete Raw Word from Library"><Trash2 size={16} /></button>)}<button onClick={(e) => { e.stopPropagation(); setWordToDelete(item); }} className="p-2 text-neutral-300 hover:text-rose-500 transition-all" title={context === 'unit' ? 'Unlink from Unit' : 'Delete from Library'}>{context === 'unit' ? <Unlink size={16}/> : <Trash2 size={16} />}</button></div></td></tr>); }))}
               </tbody>
             </table>
             <div className="p-6 bg-neutral-50/30 flex items-center justify-between border-t border-neutral-100">
@@ -251,7 +272,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
         )}
       </div>
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-full max-w-3xl px-4 animate-in slide-in-from-bottom-8">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-full max-w-4xl px-4 animate-in slide-in-from-bottom-8">
           <div className="bg-neutral-900 text-white rounded-[2rem] p-4 shadow-2xl flex items-center justify-between border border-neutral-800">
             <div className="flex items-center space-x-4 pl-2"><button onClick={() => setSelectedIds(new Set())} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button><div><div className="text-sm font-black">{selectedIds.size} selected</div></div></div>
             <div className="flex items-center space-x-2">
@@ -265,6 +286,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                   </button>
               )}
               <button onClick={() => onBulkVerify(selectedIds)} className="px-4 py-3 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><ShieldCheck size={14} /> <span>Verify</span></button>
+              {selectedWordsMissingHintsCount > 0 && ( <button onClick={onOpenHintModal} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors" title="Generate hints for collocations and idioms"><Zap size={14} /> <span>Refine Hints ({selectedWordsMissingHintsCount})</span></button> )}
               <button onClick={() => { setIsAiModalOpen(true); }} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>Refine</span></button>
               <button onClick={() => onPractice(selectedIds)} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black flex items-center space-x-2"><Play size={14} fill="currentColor"/> <span>Practice</span></button>
             </div>

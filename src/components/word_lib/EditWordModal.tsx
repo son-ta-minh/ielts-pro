@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useReducer } from 'react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, PrepositionPattern, User } from '../../app/types';
-import { updateSRS, resetProgress } from '../../utils/srs';
+import { updateSRS, resetProgress, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { getWordDetailsPrompt, getLearningSuggestionsPrompt } from '../../services/promptService';
 import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { EditWordModalUI } from './EditWordModal_UI';
@@ -8,6 +8,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { logSrsUpdate } from '../practice/ReviewSession';
 import UniversalAiModal from '../common/UniversalAiModal';
 import LearningSuggestionModal from '../common/LearningSuggestionModal';
+import { calculateGameEligibility } from '../../utils/gameEligibility';
 
 type FormState = VocabularyItem & {
     tagsString: string;
@@ -164,18 +165,51 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         updatedAt: Date.now() 
     };
     
+    // --- SANITIZE lastTestResults ---
+    const finalResults = { ...(updatedWord.lastTestResults || {}) };
+    const validCollocs = new Set((updatedWord.collocationsArray || []).filter(c => !c.isIgnored).map(c => c.text.toLowerCase()));
+    const validIdioms = new Set((updatedWord.idiomsList || []).filter(i => !i.isIgnored).map(i => i.text.toLowerCase()));
+    const validPreps = new Set((updatedWord.prepositions || []).filter(p => !p.isIgnored).map(p => p.prep.toLowerCase()));
+    const validParas = new Set((updatedWord.paraphrases || []).filter(p => !p.isIgnored).map(p => p.word.toLowerCase()));
+    const validFamilyMembers = new Set<string>();
+    if (updatedWord.wordFamily) {
+        (['nouns', 'verbs', 'adjs', 'advs'] as const).forEach(type => {
+            (updatedWord.wordFamily![type] || []).forEach(member => {
+                if (!member.isIgnored && member.word.trim()) validFamilyMembers.add(member.word.trim().toLowerCase());
+            });
+        });
+    }
+
+    for (const key in finalResults) {
+        const parts = key.split(':');
+        const type = parts[0];
+        const value = parts.slice(1).join(':').toLowerCase();
+        let shouldDelete = false;
+        switch(type) {
+            case 'COLLOCATION_QUIZ': if (!validCollocs.has(value)) shouldDelete = true; break;
+            case 'IDIOM_QUIZ': if (!validIdioms.has(value)) shouldDelete = true; break;
+            case 'PREPOSITION_QUIZ': if (!validPreps.has(value)) shouldDelete = true; break;
+            case 'PARAPHRASE_QUIZ': if (!validParas.has(value)) shouldDelete = true; break;
+            case 'WORD_FAMILY': if (!validFamilyMembers.has(value)) shouldDelete = true; break;
+        }
+        if (shouldDelete) delete finalResults[key];
+    }
+    updatedWord.lastTestResults = finalResults;
+    // --- END SANITIZATION ---
+
     const originalStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
 
     if (studiedStatus !== originalStatus) {
         if (studiedStatus === 'NEW') {
-            const finalWord = resetProgress(updatedWord);
-            logSrsUpdate('RESET' as any, word, finalWord);
-            updatedWord = finalWord;
+            updatedWord = resetProgress(updatedWord);
         } else {
-            const finalWord = updateSRS(updatedWord, studiedStatus as ReviewGrade);
-            logSrsUpdate(studiedStatus as ReviewGrade, word, finalWord);
-            updatedWord = finalWord;
+            updatedWord = updateSRS(updatedWord, studiedStatus as ReviewGrade);
         }
+    } else {
+        // Even if status didn't change, recalculate because content might have changed
+        updatedWord.complexity = calculateComplexity(updatedWord);
+        updatedWord.masteryScore = calculateMasteryScore(updatedWord);
+        updatedWord.gameEligibility = calculateGameEligibility(updatedWord);
     }
     
     onSave(updatedWord);

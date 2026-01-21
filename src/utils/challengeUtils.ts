@@ -1,18 +1,11 @@
 import { VocabularyItem, WordFamily, PrepositionPattern } from '../app/types';
-import { Challenge, ChallengeType, IpaQuizChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, ChallengeResult, HeteronymQuizChallenge, HeteronymForm, CollocationToTest, CollocationQuizChallenge, IdiomToTest, IdiomQuizChallenge } from '../components/practice/TestModalTypes';
+import { Challenge, ChallengeType, IpaQuizChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, ChallengeResult, HeteronymQuizChallenge, HeteronymForm, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseContextQuizChallenge, ParaphraseContextQuizItem } from '../components/practice/TestModalTypes';
 import { getRandomMeanings } from '../app/db';
 
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
 const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const normalizeAnswerForGrading = (str: string): string => str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-/**
- * Normalizes a string for grading by lowercasing and removing all non-alphanumeric characters, including spaces.
- * Useful for single words or phrases where spacing is irrelevant, especially for speech-to-text.
- */
-export const normalizeAnswerForGrading = (str: string): string => {
-    if (!str) return '';
-    return str.toLowerCase().replace(/[^a-z0-9]/g, '');
-};
 
 /**
  * Generates a list of all possible challenges for a given vocabulary item.
@@ -32,35 +25,31 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
     }
 
     if (word.collocationsArray && word.collocationsArray.length > 0) {
-        const activeCollocs = word.collocationsArray.filter(c => !c.isIgnored);
-        if (activeCollocs.length > 0) {
-            const collocationsToTest: CollocationToTest[] = activeCollocs.map(c => ({
-                fullText: c.text,
-                answer: c.text,
-                headword: '', // Not used in new UI
-                position: 'pre', // Dummy value, not used
-            }));
-
-            if (collocationsToTest.length > 0) {
-                list.push({ type: 'COLLOCATION_QUIZ', title: 'Collocation Recall', word, collocations: collocationsToTest });
-            }
-        }
+        const activeCollocs = word.collocationsArray.filter(c => !c.isIgnored && c.d);
+        activeCollocs.forEach(colloc => {
+            list.push({
+                type: 'COLLOCATION_QUIZ',
+                title: 'Collocation Recall',
+                word,
+                fullText: colloc.text,
+                cue: colloc.d!,
+                answer: colloc.text
+            });
+        });
     }
 
     if (word.idiomsList && word.idiomsList.length > 0) {
-        const activeIdioms = word.idiomsList.filter(i => !i.isIgnored);
-        if (activeIdioms.length > 0) {
-            const idiomsToTest: IdiomToTest[] = activeIdioms.map(i => ({
-                fullText: i.text,
-                answer: i.text,
-                headword: '', // Not used in new UI
-                position: 'pre', // Dummy value, not used
-            }));
-
-            if (idiomsToTest.length > 0) {
-                list.push({ type: 'IDIOM_QUIZ', title: 'Idiom Recall', word, idioms: idiomsToTest });
-            }
-        }
+        const activeIdioms = word.idiomsList.filter(i => !i.isIgnored && i.d);
+        activeIdioms.forEach(idiom => {
+            list.push({
+                type: 'IDIOM_QUIZ',
+                title: 'Idiom Recall',
+                word,
+                fullText: idiom.text,
+                cue: idiom.d!,
+                answer: idiom.text
+            });
+        });
     }
 
     if (word.prepositions && word.prepositions.length > 0) {
@@ -98,30 +87,15 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
     }
 
     if (word.example && word.example.trim().length > 5) {
-        // Split into sentences using a positive lookbehind for punctuation.
-        const sentences = word.example.trim().split(/(?<=[.?!])\s+/).filter(Boolean);
+        // Split by newline first, then by punctuation for robustness. This handles both formats.
+        const sentences = word.example.trim()
+            .split('\n')
+            .flatMap(line => line.split(/(?<=[.?!])\s+/))
+            .map(s => s.trim())
+            .filter(s => s.length > 5);
 
-        let sentenceToTest: string | null = null;
-        
-        const headwordRegex = new RegExp(`\\b${escapeRegex(word.word)}\\b`, 'i');
-        
-        // Prioritize sentences with the headword that are not too short.
-        const sentencesWithHeadword = sentences.filter(s => 
-            s.length > 5 && headwordRegex.test(s)
-        );
-
-        if (sentencesWithHeadword.length > 0) {
-            sentenceToTest = sentencesWithHeadword[0]; // Pick the first one
-        } else {
-            // Fallback: Find the first sentence that fits the criteria, regardless of headword.
-            const anySuitableSentence = sentences.find(s => s.length > 5);
-            if (anySuitableSentence) {
-                sentenceToTest = anySuitableSentence;
-            }
-        }
-
-        if (sentenceToTest) {
-            const wordsInSentence = sentenceToTest.split(/\s+/).filter(Boolean);
+        for (const sentence of sentences) {
+            const wordsInSentence = sentence.split(/\s+/).filter(Boolean);
             if (wordsInSentence.length >= 3) {
                 const WORD_LIMIT_FOR_CHUNKING = 10;
                 let chunks: string[];
@@ -151,7 +125,13 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
                     chunks = wordsInSentence;
                 }
                 
-                list.push({ type: 'SENTENCE_SCRAMBLE', title: 'Sentence Builder', original: sentenceToTest.trim(), shuffled: shuffleArray(chunks), word });
+                list.push({
+                    type: 'SENTENCE_SCRAMBLE',
+                    title: 'Sentence Builder',
+                    original: sentence.trim(),
+                    shuffled: shuffleArray(chunks),
+                    word
+                });
             }
         }
     }
@@ -207,6 +187,10 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
         });
     }
 
+    if (word.paraphrases && word.paraphrases.filter(p => !p.isIgnored && p.context && p.context.trim()).length >= 2) {
+        list.push({ type: 'PARAPHRASE_CONTEXT_QUIZ', title: 'Paraphrase Context', word, contexts: [], paraphrases: [] });
+    }
+
     return list;
 }
 
@@ -220,7 +204,31 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
             const distractors = await getRandomMeanings(word.userId, 3, word.id);
             const options = shuffleArray([word.meaningVi, ...distractors]);
             finalChallenges.push({ ...challenge, options } as MeaningQuizChallenge);
-        } else {
+        } else if (challenge.type === 'PARAPHRASE_CONTEXT_QUIZ') {
+            const word = challenge.word;
+            const validParaphrases = (word.paraphrases || [])
+                .filter(p => !p.isIgnored && p.context && p.context.trim())
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 5); // Take up to 5 pairs
+    
+            if (validParaphrases.length >= 2) {
+                const contextItems: ParaphraseContextQuizItem[] = [];
+                const paraphraseItems: ParaphraseContextQuizItem[] = [];
+    
+                validParaphrases.forEach((p, index) => {
+                    const pairId = `${word.id}-${index}`;
+                    contextItems.push({ id: `context-${pairId}`, text: p.context!, pairId, tone: p.tone });
+                    paraphraseItems.push({ id: `word-${pairId}`, text: p.word, pairId });
+                });
+                
+                finalChallenges.push({
+                    ...challenge,
+                    contexts: contextItems,
+                    paraphrases: shuffleArray(paraphraseItems) // Shuffle paraphrases
+                } as ParaphraseContextQuizChallenge);
+            }
+        }
+        else {
             finalChallenges.push(challenge);
         }
     }
@@ -231,122 +239,108 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
  * Grades a single challenge based on the user's answer.
  */
 export function gradeChallenge(challenge: Challenge, answer: any): ChallengeResult {
-    const normalize = normalizeAnswerForGrading;
-
     switch (challenge.type) {
-        case 'SPELLING': {
-            const userAnswer = normalize((answer || '').trim());
-            const correctAnswer = normalize(challenge.word.word);
-            return userAnswer === correctAnswer;
-        }
-        case 'PRONUNCIATION': {
-            const userAnswer = normalize((answer || '').trim());
-            const correctAnswer = normalize(challenge.word.word);
-            return userAnswer === correctAnswer;
-        }
-        case 'IPA_QUIZ': return answer === (challenge as IpaQuizChallenge).answer;
-        case 'MEANING_QUIZ': return answer === (challenge as MeaningQuizChallenge).answer;
-        case 'PREPOSITION_QUIZ': return (answer || '').trim().toLowerCase() === (challenge as PrepositionQuizChallenge).answer.toLowerCase();
-        case 'PARAPHRASE_QUIZ': {
-            const userAnswer = normalize((answer || '').trim());
-            const correctAnswer = normalize((challenge as ParaphraseQuizChallenge).answer);
-            return userAnswer === correctAnswer;
-        }
-        case 'SENTENCE_SCRAMBLE': {
-            const sc = challenge as SentenceScrambleChallenge;
-            const userSentence = (answer || []).join(' ');
-            // FIX: Use a local normalize function that preserves spaces for sentence comparison.
-            const normalizeSentence = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
-            return normalizeSentence(userSentence) === normalizeSentence(sc.original);
-        }
+        case 'SPELLING':
+            return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.word.word);
+        case 'IPA_QUIZ':
+            return answer === challenge.answer; // Not text input
+        case 'PREPOSITION_QUIZ':
+            return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.answer);
+        case 'MEANING_QUIZ':
+            return answer === challenge.answer; // Not text input
+        case 'PARAPHRASE_QUIZ':
+            return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.answer);
+        case 'COLLOCATION_QUIZ':
+            return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.answer);
+        case 'IDIOM_QUIZ':
+            return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.answer);
+        case 'SENTENCE_SCRAMBLE':
+            const assembled = (answer || []).join(' ');
+            return normalizeAnswerForGrading(assembled) === normalizeAnswerForGrading(challenge.original);
+        case 'PRONUNCIATION':
+            return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.word.word);
         case 'HETERONYM_QUIZ': {
-            const hc = challenge as HeteronymQuizChallenge;
-            if (typeof answer !== 'object' || answer === null) return false;
-            return hc.forms.every(form => answer[form.pos] === form.ipa);
-        }
-        case 'COLLOCATION_QUIZ': {
-            const cq = challenge as CollocationQuizChallenge;
-            const correctItems = cq.collocations;
-            
-            // 1. Normalize user answers into a mutable pool.
-            const userAnswerPool = (answer as string[] || []).map(a => normalize(a || ''));
-            
-            // 2. Initialize details object keyed by the correct answer's index.
-            const details: Record<string, boolean> = {};
-
-            // 3. Iterate through each CORRECT answer to see if it was provided by the user.
-            correctItems.forEach((correctItem, index) => {
-                const normalizedCorrectAnswer = normalize(correctItem.answer);
-                
-                // 4. Find this correct answer in the user's input pool.
-                const userPoolIndex = userAnswerPool.indexOf(normalizedCorrectAnswer);
-                
-                if (userPoolIndex !== -1) {
-                    // Match found. Mark this correct answer's index as true.
-                    details[index.toString()] = true;
-                    // Consume the user's answer so it can't be used to match another correct answer (handles duplicates).
-                    userAnswerPool.splice(userPoolIndex, 1);
-                } else {
-                    // No match found for this correct answer. Mark its index as false.
-                    details[index.toString()] = false;
+            if (!answer) return false;
+            let allCorrect = true;
+            for (const form of challenge.forms) {
+                if (answer[form.pos] !== form.ipa) {
+                    allCorrect = false;
+                    break;
                 }
-            });
-
-            // 5. Determine overall correctness.
-            const isOverallCorrect = Object.values(details).every(v => v === true) && Object.values(details).length === correctItems.length;
-
-            return { correct: isOverallCorrect, details };
-        }
-        case 'IDIOM_QUIZ': {
-            const iq = challenge as IdiomQuizChallenge;
-            const correctItems = iq.idioms;
-            
-            // 1. Normalize user answers into a mutable pool.
-            const userAnswerPool = (answer as string[] || []).map(a => normalize(a || ''));
-
-            // 2. Initialize details object keyed by the correct answer's index.
-            const details: Record<string, boolean> = {};
-            
-            // 3. Iterate through each CORRECT answer to see if it was provided by the user.
-            correctItems.forEach((correctItem, index) => {
-                const normalizedCorrectAnswer = normalize(correctItem.answer);
-                
-                // 4. Find this correct answer in the user's input pool.
-                const userPoolIndex = userAnswerPool.indexOf(normalizedCorrectAnswer);
-                
-                if (userPoolIndex !== -1) {
-                    // Match found. Mark this correct answer's index as true.
-                    details[index.toString()] = true;
-                    // Consume the user's answer so it can't be used to match another correct answer (handles duplicates).
-                    userAnswerPool.splice(userPoolIndex, 1);
-                } else {
-                    // No match found for this correct answer. Mark its index as false.
-                    details[index.toString()] = false;
-                }
-            });
-
-            // 5. Determine overall correctness.
-            const isOverallCorrect = Object.values(details).every(v => v === true) && Object.values(details).length === correctItems.length;
-
-            return { correct: isOverallCorrect, details };
+            }
+            return allCorrect;
         }
         case 'WORD_FAMILY': {
-            const familyTypes: (keyof WordFamily)[] = ['nouns', 'verbs', 'adjs', 'advs'];
             const details: Record<string, boolean> = {};
             let allCorrect = true;
-            let hasMembers = false;
-            familyTypes.forEach(type => {
-                const correctForms = (challenge.word.wordFamily?.[type] || []).filter(m => !m.isIgnored).map(m => m.word.toLowerCase().trim()).filter(Boolean);
+            let testedSomething = false;
+
+            const typeMap: Record<keyof WordFamily, string> = { nouns: 'n', verbs: 'v', adjs: 'j', advs: 'd' };
+
+            (['nouns', 'verbs', 'adjs', 'advs'] as const).forEach(type => {
+                const correctForms = (challenge.word.wordFamily?.[type] || []).filter(f => !f.isIgnored).map(f => f.word);
                 if (correctForms.length > 0) {
-                    hasMembers = true;
-                    const userForms = (answer?.[type] || '').split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-                    const isTypeCorrect = correctForms.length === userForms.length && correctForms.every(f => userForms.includes(f));
-                    details[type] = isTypeCorrect;
-                    if (!isTypeCorrect) allCorrect = false;
+                    testedSomething = true;
+                    
+                    const userFormsRaw = (answer?.[type] || '').split(',').filter(Boolean);
+                    const userFormsNormalizedPool = userFormsRaw.map(f => normalizeAnswerForGrading(f));
+                    
+                    const shortType = typeMap[type];
+                    
+                    correctForms.forEach(correctForm => {
+                        const normalizedCorrect = normalizeAnswerForGrading(correctForm);
+                        const foundIndex = userFormsNormalizedPool.findIndex(uf => uf === normalizedCorrect);
+                        
+                        const isPresent = foundIndex !== -1;
+                        details[`${shortType}:${correctForm}`] = isPresent; // Key is CANONICAL
+                        
+                        if (isPresent) {
+                            userFormsNormalizedPool.splice(foundIndex, 1);
+                        } else {
+                            allCorrect = false;
+                        }
+                    });
+                    
+                    if (userFormsNormalizedPool.length > 0) {
+                        allCorrect = false;
+                    }
                 }
             });
-            return { correct: hasMembers && allCorrect, details };
+
+            if (!testedSomething) return true;
+            
+            return { correct: allCorrect, details };
         }
-        default: return false;
+        case 'PARAPHRASE_CONTEXT_QUIZ': {
+            const ch = challenge as ParaphraseContextQuizChallenge;
+            if (!(answer instanceof Map) || answer.size === 0) {
+                return { correct: false, details: {} };
+            }
+
+            const details: Record<string, boolean> = {};
+            let correctCount = 0;
+
+            ch.contexts.forEach(context => {
+                const selectedParaphraseId = answer.get(context.id);
+                if (selectedParaphraseId) {
+                    const selectedParaphrase = ch.paraphrases.find(p => p.id === selectedParaphraseId);
+                    if (selectedParaphrase && selectedParaphrase.pairId === context.pairId) {
+                        details[context.id] = true;
+                        correctCount++;
+                    } else {
+                        details[context.id] = false;
+                    }
+                } else {
+                    details[context.id] = false;
+                }
+            });
+            
+            return {
+                correct: correctCount === ch.contexts.length,
+                details
+            };
+        }
+        default:
+            return false;
     }
 }

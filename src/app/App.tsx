@@ -36,11 +36,9 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <React.StrictMode>
-      <ToastProvider>
-        <AppContent />
-      </ToastProvider>
-    </React.StrictMode>
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   );
 };
 

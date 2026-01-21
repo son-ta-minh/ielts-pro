@@ -11,12 +11,11 @@ interface Props {
   user: User;
   onStartSession: (words: VocabularyItem[]) => void;
   onUpdateUser: (user: User) => Promise<void>;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade) => Promise<number>;
 }
 
 const generateId = () => 'u-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 
-const UnitLibrary: React.FC<Props> = ({ user, onStartSession, onUpdateUser, onGainXp }) => {
+const UnitLibrary: React.FC<Props> = ({ user, onStartSession, onUpdateUser }) => {
   const [units, setUnits] = useState<Unit[]>([]);
   const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +141,6 @@ const UnitLibrary: React.FC<Props> = ({ user, onStartSession, onUpdateUser, onGa
               onStartSession={onStartSession}
               onSwitchToEdit={() => setIsEditingUnit(true)}
               onUpdateUser={onUpdateUser}
-              onGainXp={onGainXp}
           />
       );
   }

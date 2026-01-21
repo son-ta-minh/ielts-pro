@@ -1,9 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { User, VocabularyItem } from '../types';
 import * as dataStore from '../dataStore';
-import { processJsonImport, _mapToShortKeys } from '../../utils/dataHandler';
+import { processJsonImport, generateJsonExport } from '../../utils/dataHandler';
 import { useToast } from '../../contexts/ToastContext';
-import * as adventureService from '../../services/adventureService';
 import * as db from '../db';
 
 interface UseDataActionsProps {
@@ -31,43 +30,10 @@ export const useDataActions = (props: UseDataActionsProps) => {
 
     const handleBackup = async () => {
         if (!currentUser) return;
-        const [wordsData, unitsData, logsData, speakingTopicsData, speakingLogsData, writingTopicsData, writingLogsData] = await Promise.all([ 
-          dataStore.getAllWords(), 
-          dataStore.getUnitsByUserId(currentUser.id),
-          dataStore.getParaphraseLogs(currentUser.id),
-          db.getAllSpeakingTopicsForExport(currentUser.id),
-          db.getAllSpeakingLogsForExport(currentUser.id),
-          db.getAllWritingTopicsForExport(currentUser.id),
-          db.getAllWritingLogsForExport(currentUser.id),
-        ]);
-    
-        const exportObject = {
-          v: 5, 
-          ca: new Date().toISOString(),
-          user: currentUser,
-          vocab: wordsData.map(({ collocations, idioms, ...rest }) => _mapToShortKeys(rest as VocabularyItem)),
-          u: unitsData,
-          pl: logsData,
-          st: speakingTopicsData,
-          sl: speakingLogsData,
-          wt: writingTopicsData,
-          wl: writingLogsData,
-          adv: {
-            ch: adventureService.getChapters(),
-            b: adventureService.getCustomBadges()
-          }
-        };
-        const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
         
-        const sanitizedName = currentUser.name.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
-        const dateStr = new Date().toISOString().split('T')[0];
-        a.download = `Vocab-Pro-Backup_${sanitizedName}_${dateStr}.json`;
+        // Use the centralized export function. Assume default backup from dashboard includes all data.
+        await generateJsonExport(currentUser.id, true, true, currentUser);
         
-        a.click();
-        URL.revokeObjectURL(url);
         const now = Date.now();
         localStorage.setItem('vocab_pro_last_backup_timestamp', String(now));
         setLastBackupTime(now);
@@ -125,8 +91,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
             await dataStore.clearVocabularyOnly();
             sessionStorage.removeItem('vocab_pro_skip_seed');
             await dataStore.seedDatabaseIfEmpty(true);
-            await dataStore.init(currentUser.id); // Re-initialize store with new data
-            refreshGlobalStats(); // Pulls from the fresh cache
+            // dataStore.init() is called inside refreshGlobalStats, so the explicit call here is redundant.
+            refreshGlobalStats(); // Pulls from the fresh cache and re-initializes dataStore
             setView('DASHBOARD');
         } catch (err) {
             window.location.reload();
@@ -164,6 +130,10 @@ export const useDataActions = (props: UseDataActionsProps) => {
         await dataStore.bulkDeleteWords(ids);
     };
 
+    const bulkUpdateWords = async (updatedWords: VocabularyItem[]) => {
+        await dataStore.bulkSaveWords(updatedWords);
+    };
+
     return {
         isResetting,
         resetStep,
@@ -174,5 +144,6 @@ export const useDataActions = (props: UseDataActionsProps) => {
         updateWord,
         deleteWord,
         bulkDeleteWords,
+        bulkUpdateWords,
     };
 };

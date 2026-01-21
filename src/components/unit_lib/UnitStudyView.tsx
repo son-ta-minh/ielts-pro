@@ -17,10 +17,9 @@ interface Props {
   onStartSession: (words: VocabularyItem[]) => void;
   onSwitchToEdit: () => void;
   onUpdateUser: (user: User) => Promise<void>;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade) => Promise<number>;
 }
 
-const UnitStudyView: React.FC<Props> = ({ user, unit, allWords, onDataChange, onStartSession, onUpdateUser, onGainXp, ...props }) => {
+const UnitStudyView: React.FC<Props> = ({ user, unit, allWords, onDataChange, onStartSession, onUpdateUser, ...props }) => {
   const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
   const [isPracticeMode, setIsPracticeMode] = useState(false);
@@ -140,7 +139,7 @@ const UnitStudyView: React.FC<Props> = ({ user, unit, allWords, onDataChange, on
         const existingWord = await dataStore.findWordByText(user.id, rawText);
         let wordIdToAdd: string;
         if (existingWord) wordIdToAdd = existingWord.id;
-        else { const newWord = { ...createNewWord(rawText, '', '', '', `Linked from unit: ${unit.name}`, ['ielts', 'unit-linked']), userId: user.id }; await dataStore.bulkSaveWords([newWord]); wordIdToAdd = newWord.id; }
+        else { const newWord = { ...createNewWord(rawText, '', '', '', '', ['ielts', 'unit-linked']), userId: user.id }; await dataStore.bulkSaveWords([newWord]); wordIdToAdd = newWord.id; }
         const newWordIds = Array.from(new Set([...unit.wordIds, wordIdToAdd]));
         entries.push(rawText);
         const newVocabString = entries.join('; ');
@@ -208,7 +207,6 @@ const UnitStudyView: React.FC<Props> = ({ user, unit, allWords, onDataChange, on
       handleToggleLearnedStatus={handleToggleLearnedStatus}
       onWordAction={handleEssayWordAction}
       onUpdateUser={onUpdateUser}
-      onGainXp={onGainXp}
     />
   );
 }

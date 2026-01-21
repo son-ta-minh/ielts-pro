@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { VocabularyItem, ReviewGrade } from '../../app/types';
+// FIX: Moved WordFamilyMember from './TestModalTypes' to the correct location in '../../app/types' and consolidated type imports.
+import { VocabularyItem, ReviewGrade, WordFamily, WordFamilyMember } from '../../app/types';
 import { TestModalUI } from './TestModal_UI';
-import { Challenge, ChallengeResult, ChallengeType, CollocationQuizChallenge, IdiomQuizChallenge } from './TestModalTypes';
+import { Challenge, ChallengeResult, ChallengeType, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge, PrepositionQuizChallenge } from './TestModalTypes';
 import { generateAvailableChallenges, prepareChallenges, gradeChallenge } from '../../utils/challengeUtils';
+import { Loader2 } from 'lucide-react';
 
 interface Props {
   word: VocabularyItem;
@@ -12,10 +14,10 @@ interface Props {
   isModal?: boolean;
   sessionPosition?: { current: number, total: number };
   onPrevWord?: () => void;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number; tested: number; }) => Promise<number>;
+  disableHints?: boolean;
 }
 
-const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = false, isModal = true, sessionPosition, onPrevWord }) => {
+const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = false, isModal = true, sessionPosition, onPrevWord, disableHints = false }) => {
   const [isSetupMode, setIsSetupMode] = useState(!isQuickFire);
   const [selectedChallengeTypes, setSelectedChallengeTypes] = useState<Set<ChallengeType>>(new Set());
   const [isPreparing, setIsPreparing] = useState(false);
@@ -30,6 +32,87 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
   const [showHint, setShowHint] = useState(false);
 
   const availableChallenges = useMemo(() => generateAvailableChallenges(word), [word]);
+
+  const challengeStatuses = useMemo(() => {
+    const history = word.lastTestResults || {};
+    const statuses = new Map<ChallengeType, { status: 'failed' | 'passed' | 'incomplete' | 'not_tested', tested: number, total: number }>();
+    const uniqueTypes = Array.from(new Set(availableChallenges.map(c => c.type)));
+
+    uniqueTypes.forEach((type: ChallengeType) => {
+        const allOfType = availableChallenges.filter(c => c.type === type);
+        let total = allOfType.length;
+        
+        const getKey = (challenge: Challenge): string | null => {
+            switch(challenge.type) {
+                case 'COLLOCATION_QUIZ': return `COLLOCATION_QUIZ:${(challenge as CollocationQuizChallenge).fullText}`;
+                case 'IDIOM_QUIZ': return `IDIOM_QUIZ:${(challenge as IdiomQuizChallenge).fullText}`;
+                case 'PREPOSITION_QUIZ': return `PREPOSITION_QUIZ:${(challenge as PrepositionQuizChallenge).answer}`;
+                case 'PARAPHRASE_QUIZ': return `PARAPHRASE_QUIZ:${(challenge as ParaphraseQuizChallenge).answer}`;
+                default: return challenge.type;
+            }
+        };
+        
+        if (type === 'WORD_FAMILY') {
+            const familyKeys: (keyof WordFamily)[] = ['nouns', 'verbs', 'adjs', 'advs'];
+            const typeMap: Record<keyof WordFamily, string> = { nouns: 'n', verbs: 'v', adjs: 'j', advs: 'd' };
+            
+            const familyMembers = familyKeys.flatMap(key => 
+                (word.wordFamily?.[key] || []).map(m => ({...m, typeKey: key}))
+            ).filter(m => !m.isIgnored && m.word);
+            
+            const totalMembers = familyMembers.length;
+            if (totalMembers === 0) { 
+                statuses.set(type, { status: 'not_tested', tested: 0, total: 0 }); 
+                return; 
+            }
+
+            let testedMembers = 0;
+            let hasFailure = false;
+
+            familyMembers.forEach(member => {
+                const shortType = typeMap[member.typeKey];
+                const key = `WORD_FAMILY:${shortType}:${member.word}`;
+                if (history[key] !== undefined) {
+                    testedMembers++;
+                    if (history[key] === false) hasFailure = true;
+                }
+            });
+            
+            let status: 'failed' | 'passed' | 'incomplete' | 'not_tested' = 'not_tested';
+            if (hasFailure) status = 'failed';
+            else if (testedMembers > 0 && testedMembers < totalMembers) status = 'incomplete';
+            else if (testedMembers === totalMembers && totalMembers > 0) status = 'passed';
+            
+            statuses.set(type, { status, tested: testedMembers, total: totalMembers });
+            return;
+        }
+
+        let tested = 0;
+        let failed = false;
+
+        allOfType.forEach(challenge => {
+            const key = getKey(challenge);
+            if (key && history[key] !== undefined) {
+                tested++;
+                if (history[key] === false) failed = true;
+            }
+        });
+        
+        if (tested === 0 && history[type] !== undefined) {
+            tested = total;
+            if(history[type] === false) failed = true;
+        }
+
+        let status: 'failed' | 'passed' | 'incomplete' | 'not_tested' = 'not_tested';
+        if (failed) status = 'failed';
+        else if (tested > 0 && tested < total) status = 'incomplete';
+        else if (tested === total && total > 0) status = 'passed';
+
+        statuses.set(type, { status, tested, total });
+    });
+
+    return statuses;
+  }, [word, availableChallenges]);
 
   useEffect(() => {
     if (isQuickFire && availableChallenges.length > 0) {
@@ -49,22 +132,21 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
 
   useEffect(() => {
       if (isQuickFire || availableChallenges.length === 0) return;
-      const history = word.lastTestResults || {};
-      const hasHistory = Object.keys(history).length > 0;
+      
+      const hasHistory = Object.keys(word.lastTestResults || {}).length > 0;
       const nextSelection = new Set<ChallengeType>();
 
       if (!hasHistory) {
           availableChallenges.forEach(c => nextSelection.add(c.type));
       } else {
-          availableChallenges.forEach(c => {
-              if (c.type === 'WORD_FAMILY' && (Object.keys(history).some(k => k.startsWith('WORD_FAMILY') && history[k] === false) || history['WORD_FAMILY'] === false)) nextSelection.add(c.type);
-              else if (c.type === 'PARAPHRASE_QUIZ' && (history[`PARAPHRASE_QUIZ:${c.answer}`] === false || history['PARAPHRASE_QUIZ'] === false)) nextSelection.add(c.type);
-              else if (c.type === 'PREPOSITION_QUIZ' && (history[`PREPOSITION_QUIZ:${c.answer}`] === false || history['PREPOSITION_QUIZ'] === false)) nextSelection.add(c.type);
-              else if (history[c.type] === false) nextSelection.add(c.type);
+          challengeStatuses.forEach((statusInfo, type) => {
+              if (statusInfo.status === 'failed' || statusInfo.status === 'incomplete') {
+                  nextSelection.add(type);
+              }
           });
       }
       setSelectedChallengeTypes(nextSelection);
-  }, [availableChallenges, word, isQuickFire]);
+  }, [availableChallenges, word, isQuickFire, challengeStatuses]);
 
   useEffect(() => { setShowHint(false); }, [currentChallengeIndex]);
 
@@ -83,24 +165,17 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       const finalChallenges = await prepareChallenges(selected, word);
       
       const shuffleChallenges = (challenges: Challenge[]): Challenge[] => {
-          // Separate PARAPHRASE_QUIZ, PREPOSITION_QUIZ, and other challenges.
           const paraQuizzes = challenges.filter(c => c.type === 'PARAPHRASE_QUIZ');
           const prepQuizzes = challenges.filter(c => c.type === 'PREPOSITION_QUIZ');
           const otherQuizzes = challenges.filter(c => c.type !== 'PARAPHRASE_QUIZ' && c.type !== 'PREPOSITION_QUIZ');
   
-          // Shuffle the paraphrase quizzes internally to ensure their order is random.
           const shuffledPara = paraQuizzes.sort(() => Math.random() - 0.5);
   
-          // Create the list of items to be shuffled: 
-          // - Individual 'other' quizzes
-          // - Individual shuffled paraphrase quizzes
-          // - A single block for all preposition quizzes (to keep them together)
           const itemsToShuffle: (Challenge | Challenge[])[] = [...otherQuizzes, ...shuffledPara];
           if (prepQuizzes.length > 0) {
               itemsToShuffle.push(prepQuizzes);
           }
           
-          // Fisher-Yates shuffle on the final list of items.
           for (let k = itemsToShuffle.length - 1; k > 0; k--) {
               const l = Math.floor(Math.random() * (k + 1));
               [itemsToShuffle[k], itemsToShuffle[l]] = [itemsToShuffle[l], itemsToShuffle[k]];
@@ -109,13 +184,24 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
           return itemsToShuffle.flat();
       };
       
-      const shuffledChallenges = shuffleChallenges(finalChallenges);
+      const shuffledChallenges = shuffleArray(finalChallenges);
 
       setActiveChallenges(shuffledChallenges);
       setUserAnswers(new Array(shuffledChallenges.length).fill(undefined));
       setIsPreparing(false);
       setIsSetupMode(false);
   };
+
+  // Helper to shuffle without affecting the original array reference inside hooks if needed (though prepareChallenges does it)
+  // Re-implemented simple shuffle here for the handleStartTest
+  function shuffleArray<T>(array: T[]): T[] {
+      const newArray = [...array];
+      for (let i = newArray.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+      }
+      return newArray;
+  }
 
   const currentChallenge = activeChallenges[currentChallengeIndex];
 
@@ -158,28 +244,13 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       if (isCorrect) correctCount++;
       
       if (challenge.type === 'WORD_FAMILY' && typeof result === 'object' && 'details' in result) {
-          resultHistory['WORD_FAMILY'] = result.correct;
-          Object.entries(result.details).forEach(([type, correct]) => {
-              resultHistory[`WORD_FAMILY_${type.toUpperCase()}`] = correct;
+          Object.entries(result.details).forEach(([typedWord, correct]) => {
+              resultHistory[`WORD_FAMILY:${typedWord}`] = correct as boolean;
           });
-      } else if (challenge.type === 'COLLOCATION_QUIZ' && typeof result === 'object' && 'details' in result) {
-          resultHistory['COLLOCATION_QUIZ'] = result.correct;
-          const cq = challenge as CollocationQuizChallenge;
-          Object.entries(result.details).forEach(([index, correct]) => {
-              const collocationText = cq.collocations[parseInt(index, 10)]?.fullText;
-              if (collocationText) {
-                  resultHistory[`COLLOCATION_QUIZ:${collocationText}`] = correct;
-              }
-          });
-      } else if (challenge.type === 'IDIOM_QUIZ' && typeof result === 'object' && 'details' in result) {
-          resultHistory['IDIOM_QUIZ'] = result.correct;
-          const iq = challenge as IdiomQuizChallenge;
-          Object.entries(result.details).forEach(([index, correct]) => {
-              const idiomText = iq.idioms[parseInt(index, 10)]?.fullText;
-              if (idiomText) {
-                  resultHistory[`IDIOM_QUIZ:${idiomText}`] = correct;
-              }
-          });
+      } else if (challenge.type === 'COLLOCATION_QUIZ') {
+          resultHistory[`COLLOCATION_QUIZ:${challenge.fullText}`] = isCorrect;
+      } else if (challenge.type === 'IDIOM_QUIZ') {
+          resultHistory[`IDIOM_QUIZ:${challenge.fullText}`] = isCorrect;
       } else if (challenge.type === 'PARAPHRASE_QUIZ') {
           resultHistory[`PARAPHRASE_QUIZ:${challenge.answer}`] = isCorrect;
       } else if (challenge.type === 'PREPOSITION_QUIZ') {
@@ -205,7 +276,7 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
         onComplete(finalGrade, resultHistory, stopSession, counts);
     }
   };
-
+  
   const isLastChallenge = useMemo(() => {
      if (currentPrepositionGroup) {
         const nextIndex = currentPrepositionGroup.startIndex + currentPrepositionGroup.group.length;
@@ -239,6 +310,38 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       handleNextClick();
   };
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Enter' && !isSetupMode && !isFinishing && !isPreparing) {
+            e.preventDefault();
+            handleNextClick();
+        }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isSetupMode, isFinishing, isPreparing, handleNextClick]);
+
+  if (isQuickFire && (isPreparing || !currentChallenge)) {
+    const loaderContent = (
+      <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center space-y-4">
+          <Loader2 className="animate-spin text-neutral-400" size={32} />
+          <p className="text-xs font-black text-neutral-500 uppercase tracking-widest">Preparing Challenge...</p>
+      </div>
+    );
+
+    if (isModal) {
+      return (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col h-[500px] max-h-[90vh]">
+            {loaderContent}
+          </div>
+        </div>
+      );
+    }
+    return loaderContent;
+  }
+
   return (
     <TestModalUI
       isModal={isModal} word={word} onClose={onClose} isSetupMode={isSetupMode} isPreparing={isPreparing} availableChallenges={availableChallenges}
@@ -248,6 +351,8 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       results={results} isFinishing={isFinishing} currentPrepositionGroup={currentPrepositionGroup} isLastChallenge={isLastChallenge}
       handleNextClick={handleNextClick} handleBackClick={handleBackClick} handleIgnore={handleIgnore} handleFinishEarly={(stopSession = false) => checkAnswers(true, stopSession)}
       showHint={showHint} onToggleHint={() => setShowHint(!showHint)} sessionPosition={sessionPosition}
+      challengeStatuses={challengeStatuses}
+      disableHints={disableHints}
     />
   );
 };

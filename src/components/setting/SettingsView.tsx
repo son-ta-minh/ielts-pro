@@ -160,21 +160,6 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
     finally { setIsClearing(false); setIsClearProgressModalOpen(false); }
   };
 
-  const handleRefreshGameIndex = async () => {
-    try {
-        const allWords = await dataStore.getAllWords();
-        const updatedWords = allWords.map(word => ({
-            ...word,
-            gameEligibility: calculateGameEligibility(word),
-            updatedAt: Date.now()
-        }));
-        await dataStore.bulkSaveWords(updatedWords);
-        showToast(`Refreshed index for ${updatedWords.length} words.`, "success");
-    } catch (err) {
-        showToast("Failed to refresh game index.", "error");
-    }
-  };
-
   const handleNormalizeData = async () => {
     setIsNormalizing(true);
     setIsNormalizeModalOpen(false);
@@ -242,6 +227,11 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
     }
   };
 
+  const handleToggleAdmin = async () => {
+      await onUpdateUser({ ...user, isAdmin: !user.isAdmin });
+      setNotification(`Developer Mode ${!user.isAdmin ? 'Enabled' : 'Disabled'}`);
+  };
+
   return (
     <>
       <SettingsViewUI
@@ -279,11 +269,12 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         onResetSrsConfig={handleResetSrsConfig}
         onOpenClearProgressModal={() => setIsClearProgressModalOpen(true)}
         onOpenNukeModal={() => setIsNukeModalOpen(true)}
-        onRefreshGameIndex={handleRefreshGameIndex}
         isNormalizing={isNormalizing}
         onOpenNormalizeModal={() => setIsNormalizeModalOpen(true)}
         isApplyingAccent={isApplyingAccent}
         onApplyAccent={handleApplyAccent}
+        isAdmin={!!user.isAdmin}
+        onToggleAdmin={handleToggleAdmin}
       >
         {currentView === 'INTERFACE' && <InterfaceSettings />}
         {currentView === 'GOALS' && <GoalSettings goalConfig={config.dailyGoals} onGoalConfigChange={handleGoalConfigChange} />}

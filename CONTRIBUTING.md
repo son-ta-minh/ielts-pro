@@ -53,6 +53,9 @@ This principle applies specifically to challenges like "Collocation Recall" and 
     -   The loop checks for "c" -> found -> `details["2"] = true`, and "c" is removed from the user's answer pool.
     -   **Final Result:** A `details` object `{ "0": false, "1": false, "2": true }` is returned, correctly indicating that only the third correct answer was provided.
 
+#### 3.3. Grading Normalization
+When grading any test or challenge, both the user's input and the correct answer from the word's data must be normalized before comparison. Use the existing `normalizeAnswerForGrading` utility for this purpose. This ensures that minor differences in casing, punctuation, or whitespace do not cause a correct answer to be marked as incorrect.
+
 ---
 
 ### 4. AI Interaction Principles
@@ -68,7 +71,7 @@ Each AI prompt must reside in its own dedicated file within a `prompts` director
 When implementing a new request, adhere to the principle of minimal changes. If the requested logic conflicts with the existing codebase, do not attempt to resolve the conflict autonomously. Instead, document the issue in `issues.md`. Each entry in `issues.md` should have a unique ID and a concise description of the conflict. This practice prevents incorrect assumptions and maintains code integrity, especially in cases where development context might be lost (e.g., a cancelled generation).
 
 #### 5.2. Source of Truth and Scope of Changes
-The provided codebase is the absolute source of truth. The AI's internal memory or previous states of the code are not to be trusted or used as a reference. No modifications, however minor, shall be made to any file unless explicitly requested by the user in the most recent prompt. Every change must be minimal and strictly scoped to address only the latest user request.
+The provided codebase is the absolute source of truth. The AI's internal memory or previous states of the code are not to be trusted or used as a reference. No modifications, however minor, shall be made to any file unless explicitly requested in the most recent prompt. Every change must be minimal and strictly scoped to address only the latest user request.
 
 #### 5.3. Cloning Procedure
 When a "clone" request is received, the following rules must be strictly followed:
@@ -89,10 +92,5 @@ When instructed to adapt existing code to use a cloned component, the following 
 
 ### 6. Code Optimization & Refactoring
 
-#### 6.1. Principle of Non-Intrusive Optimization
-When optimizing or refactoring code, the primary goal is to improve code quality without altering the user-facing experience. The following rules must be followed:
-- **No Functional Changes:** Do not change logic in a way that affects the application's functionality or user experience (UX).
-- **Bug Prevention:** Proactively fix potential bugs, race conditions, or memory leaks.
-- **TypeScript Compliance:** Resolve any TypeScript errors or type inconsistencies to improve code safety and maintainability.
-- **DRY (Don't Repeat Yourself):** Refactor duplicated code into reusable functions or components to reduce redundancy and simplify maintenance.
-- **Remove Dead Code:** Eliminate any unused variables, functions, imports, or code paths that are no longer reachable. This improves readability and reduces the overall codebase size.
+#### 6.1. Principle of Explicit Refactoring
+Code optimization and refactoring must not be performed independently. Do not optimize, redesign, or refactor any part of the application unless explicitly instructed to do so by the user. If a refactoring task is given, it must strictly adhere to the user's request without introducing unsolicited changes.

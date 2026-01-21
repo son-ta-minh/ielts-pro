@@ -1,10 +1,72 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Plus, CheckCircle2, Tag as TagIcon, StickyNote, Edit3, Archive, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, Info, ChevronDown, ChevronRight, Link as LinkIcon, Users2, BrainCircuit, Loader2 } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
-import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
+import { getRemainingTime, updateSRS, resetProgress, calculateMasteryScore } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { logSrsUpdate } from '../practice/ReviewSession';
+import { generateAvailableChallenges } from '../../utils/challengeUtils';
+import { ChallengeType } from '../practice/TestModalTypes';
+
+// New Component 1: The visual gauge
+const MasteryScoreGauge: React.FC<{ score: number }> = ({ score }) => {
+    const size = 36;
+    const strokeWidth = 4;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (score / 100) * circumference;
+
+    let color = 'text-neutral-400';
+    if (score >= 80) color = 'text-green-500';
+    else if (score >= 50) color = 'text-yellow-500';
+    else if (score > 0) color = 'text-orange-500';
+
+    return (
+        <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+            <svg className="absolute" width={size} height={size}>
+                <circle
+                    className="text-neutral-100"
+                    stroke="currentColor"
+                    strokeWidth={strokeWidth}
+                    fill="transparent"
+                    r={radius}
+                    cx={size / 2}
+                    cy={size / 2}
+                />
+                <circle
+                    className={color}
+                    stroke="currentColor"
+                    strokeWidth={strokeWidth}
+                    fill="transparent"
+                    r={radius}
+                    cx={size / 2}
+                    cy={size / 2}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={offset}
+                    strokeLinecap="round"
+                    style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 0.5s ease-out' }}
+                />
+            </svg>
+            <span className={`text-[10px] font-black ${color}`}>{score}</span>
+        </div>
+    );
+};
+
+// New Component 2: The logic and container
+const MasteryScoreCalculator: React.FC<{ word: VocabularyItem }> = ({ word }) => {
+    const score = word.masteryScore ?? 0;
+
+    return (
+        <div className="relative group/score">
+            <MasteryScoreGauge score={score} />
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max px-3 py-1.5 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/score:opacity-100 transition-opacity pointer-events-none z-10 uppercase tracking-wider">
+                Mastery Score
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+            </div>
+        </div>
+    );
+};
+
 
 // FIX: Allow 'raw' register type and handle it by not rendering a badge.
 const RegisterBadge: React.FC<{ register?: 'academic' | 'casual' | 'neutral' | 'raw' }> = ({ register }) => {
@@ -182,7 +244,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
         { id: ReviewGrade.HARD, label: 'Hard', icon: <div className="w-3 h-3 rounded-full bg-orange-500"/> },
         { id: ReviewGrade.EASY, label: 'Easy', icon: <div className="w-3 h-3 rounded-full bg-green-500"/> },
     ];
+    
     const currentLearnStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
+
     const handleLearnStatusSelect = (statusId: string) => {
         if (isViewOnly) return;
         if (statusId === 'NEW') {
@@ -270,7 +334,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                     <div className="flex justify-between items-start w-full gap-4">
                         {/* Top Left: Word, Sound, Meaning Icon */}
                         <div className="flex-1">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-2">
                                 <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
                                 {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
                                 {!word.isPassive && (
@@ -285,7 +349,8 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2.5 text-neutral-400 pl-2">
+                                <MasteryScoreCalculator word={word} />
+                                <div className="flex items-center gap-2.5 text-neutral-400">
                                     {word.isIdiom && (
                                         <div className="relative group flex items-center">
                                             <Quote size={18} className="cursor-help"/>
@@ -424,11 +489,18 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                             </div>
                         )}
 
+                        <div className="space-y-1 md:col-span-4">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><BookOpen size={10}/> Definition</label>
+                            <div className="p-4 bg-white rounded-xl border border-neutral-100">
+                                <p className="text-sm font-medium text-neutral-700 leading-relaxed">{word.meaningVi}</p>
+                            </div>
+                        </div>
+
                         <div className="space-y-1 md:col-span-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><AtSign size={10}/> Prepositions</label>{displayedPreps.length > 0 ? (<div className="bg-white border border-neutral-100 p-3 rounded-xl grid grid-cols-1 gap-y-1">{displayedPreps.map((p: PrepositionPattern, i: number) => { const specificKey = `PREPOSITION_QUIZ:${p.prep}`; const specificResult = word.lastTestResults?.[specificKey]; const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PREPOSITION_QUIZ'] === false)) && !p.isIgnored; return (<div key={i} className={`text-xs flex items-center gap-2 ${p.isIgnored ? 'opacity-50' : ''}`}>{isFailed && <AlertCircle size={10} className="text-red-500" />}<span className={`font-bold ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${p.isIgnored ? 'line-through' : ''}`}>{p.prep}</span><span className={`font-medium ${isFailed ? 'text-red-400' : 'text-neutral-500'}`}>{p.usage}</span></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No prepositions.</div>)}</div>
                         
                         <div className="space-y-1 md:col-span-3"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Network size={10}/> Word Family</label><div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100">{!hasAnyFamilyData ? (<span className="text-[10px] text-neutral-300 italic">No family data available.</span>) : (<div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{renderFamilyCardGroup("Nouns", word.wordFamily?.nouns, "blue", "nouns")}{renderFamilyCardGroup("Verbs", word.wordFamily?.verbs, "green", "verbs")}{renderFamilyCardGroup("Adjectives", word.wordFamily?.adjs, "orange", "adjs")}{renderFamilyCardGroup("Adverbs", word.wordFamily?.advs, "purple", "advs")}</div>)}</div></div>
 
-                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Combine size={10}/> Collocations</label>{displayedCollocs.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">{displayedCollocs.map((c: CollocationDetail, i: number) => { const isExisting = existingVariants.has(c.text.toLowerCase()); const specificKey = `COLLOCATION_QUIZ:${c.text}`; const specificResult = word.lastTestResults?.[specificKey]; let isFailed = false; if (viewSettings.highlightFailed && !c.isIgnored) { if (specificResult === false) { isFailed = true; } else if (specificResult === undefined && word.lastTestResults?.['COLLOCATION_QUIZ'] === false) { isFailed = true; } } let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900"; if (isFailed) { containerClass = "bg-red-50 border-red-200 text-red-700"; } else if (c.isIgnored) { containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400 line-through"; } return (<div key={i} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}><div className="flex items-center gap-2 flex-1 overflow-hidden">{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className="truncate" title={c.text}>{c.text}</span></div><button type="button" disabled={addingVariant === c.text || isExisting || c.isIgnored} onClick={() => onAddVariantToLibrary({ word: c.text, ipa: '' }, 'collocation')} className={`p-1 rounded-md transition-all shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : c.isIgnored ? 'text-neutral-300 cursor-not-allowed' : 'text-neutral-400 hover:text-neutral-900 hover:bg-white/50' }`} title={isExisting ? 'Already in library' : 'Add to library'}>{addingVariant === c.text ? <Loader2 size={12} className="animate-spin" /> : isExisting ? <CheckCircle2 size={12} /> : <Plus size={12} />}</button></div>);})}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No collocations.</div>)}</div>
+                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Combine size={10}/> Collocations</label>{displayedCollocs.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">{displayedCollocs.map((c: CollocationDetail, i: number) => { const isExisting = existingVariants.has(c.text.toLowerCase()); const specificKey = `COLLOCATION_QUIZ:${c.text}`; const specificResult = word.lastTestResults?.[specificKey]; let isFailed = false; if (viewSettings.highlightFailed && !c.isIgnored) { if (specificResult === false) { isFailed = true; } else if (specificResult === undefined && word.lastTestResults?.['COLLOCATION_QUIZ'] === false) { isFailed = true; } } let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900"; if (isFailed) { containerClass = "bg-red-50 border-red-200 text-red-700"; } else if (c.isIgnored) { containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400"; } return (<div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}><div className="flex-1 overflow-hidden">{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className={`truncate ${c.isIgnored ? 'line-through' : ''}`} title={c.text}>{c.text}</span>{c.d && !c.isIgnored && (<div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>)}</div><button type="button" disabled={addingVariant === c.text || isExisting || c.isIgnored} onClick={() => onAddVariantToLibrary({ word: c.text, ipa: '' }, 'collocation')} className={`p-1 rounded-md transition-all shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : c.isIgnored ? 'text-neutral-300 cursor-not-allowed' : 'text-neutral-400 hover:text-neutral-900 hover:bg-white/50' }`} title={isExisting ? 'Already in library' : 'Add to library'}>{addingVariant === c.text ? <Loader2 size={12} className="animate-spin" /> : isExisting ? <CheckCircle2 size={12} /> : <Plus size={12} />}</button></div>);})}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No collocations.</div>)}</div>
                         
                         <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Zap size={10} className="text-amber-500"/> Word Power & Variations</label>{displayedParas.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-4 gap-3">{displayedParas.map((para: ParaphraseOption, idx: number) => { const isExisting = existingVariants.has(para.word.toLowerCase()); const specificKey = `PARAPHRASE_QUIZ:${para.word}`; const specificResult = word.lastTestResults?.[specificKey]; const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PARAPHRASE_QUIZ'] === false)) && !para.isIgnored; const isIgnored = para.isIgnored; return (<div key={idx} className={`flex items-start justify-between gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-100'}`}><div className="flex-1 overflow-hidden"><div className="flex justify-between items-center mb-1">{renderParaphraseBadge(para.tone)}{isFailed && <AlertCircle size={12} className="text-red-500 fill-red-100"/>}</div><div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div><div className={`text-[10px] italic truncate ${isFailed ? 'text-red-400' : 'text-neutral-400'}`} title={para.context}>{para.context}</div></div><button type="button" disabled={addingVariant === para.word || isExisting} onClick={() => onAddVariantToLibrary({ word: para.word, ipa: '' }, 'paraphrase')} className={`p-1 rounded-md transition-all mt-1 shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100' }`} >{addingVariant === para.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}</button></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic">No variations available.</div>)}</div>
                         
@@ -453,14 +525,17 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                                         if (isFailed) {
                                             containerClass = "bg-red-50 border-red-200 text-red-700";
                                         } else if (idiom.isIgnored) {
-                                            containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400 line-through";
+                                            containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400";
                                         }
 
                                         return (
-                                            <div key={i} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}>
-                                                <div className="flex items-center gap-2 flex-1 overflow-hidden">
-                                                    {isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}
-                                                    <span className="truncate flex-1" title={idiom.text}>{idiom.text}</span>
+                                            <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}>
+                                                <div className="flex-1 overflow-hidden">
+                                                    <div className="flex items-center gap-2">
+                                                        {isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}
+                                                        <span className={`truncate flex-1 ${idiom.isIgnored ? 'line-through' : ''}`} title={idiom.text}>{idiom.text}</span>
+                                                    </div>
+                                                    {idiom.d && !idiom.isIgnored && (<div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{idiom.d}</div>)}
                                                 </div>
                                                 <button
                                                     type="button"

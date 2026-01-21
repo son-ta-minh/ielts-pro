@@ -1,25 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { User, VocabularyItem, AdventureProgress, SessionType } from '../../../../app/types';
+import { User, VocabularyItem, SessionType } from '../../../../app/types';
+import * as dataStore from '../../../../app/dataStore';
 import { AdventureUI } from './Adventure_UI';
-import { BattleMode } from './BattleMode';
-// FIX: Removed non-existent 'CHAPTER_PROGRESSION' export.
-import { AdventureBoss, AdventureSegment, AdventureChapter, AdventureBadge } from '../../../../data/adventure_content';
-import { findWordByText, bulkSaveWords, getAllWordsForExport, bulkDeleteWords } from '../../../../app/db';
+import { BattleMode } from './BossBattle';
+import { BADGE_DEFINITIONS, generateMap } from '../../../../data/adventure_map';
 import { useToast } from '../../../../contexts/ToastContext';
-import { createNewWord } from '../../../../utils/srs';
-import UniversalAiModal from '../../../common/UniversalAiModal';
-import { getGenerateChapterPrompt, getGenerateSegmentPrompt, getWordDetailsPrompt } from '../../../../services/promptService';
-import ConfirmationModal from '../../../common/ConfirmationModal';
-import { Trash2, Key } from 'lucide-react';
-import SegmentEditModal from './SegmentEditModal';
-import { normalizeAiResponse, mergeAiResultIntoWord } from '../../../../utils/vocabUtils';
-import { GateSelectionModal } from './GateSelectionModal';
-import * as adventureService from '../../../../services/adventureService';
+import { InventoryModal } from './InventoryModal';
+import Fireworks from './Fireworks';
 
 interface Props {
     user: User;
-    xpToNextLevel: number;
-    totalWords: number;
     onExit: () => void;
     onUpdateUser: (user: User) => Promise<void>;
     onStartSession: (words: VocabularyItem[], type: SessionType) => void;
@@ -27,202 +17,311 @@ interface Props {
 
 const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession }) => {
     const { showToast } = useToast();
-
-    const [chapters, setChapters] = useState<AdventureChapter[]>([]);
-    const [customBadges, setCustomBadges] = useState<Record<string, AdventureBadge>>({});
-    const [isEditing, setIsEditing] = useState(false);
+    const [activeBoss, setActiveBoss] = useState<{ boss: any, words: VocabularyItem[] } | null>(null);
+    const [isInventoryOpen, setIsInventoryOpen] = useState(false);
     
-    const [aiModalState, setAiModalState] = useState<{ isOpen: boolean; type: 'GENERATE_CHAPTER' | 'GENERATE_SEGMENT' | 'REFINE_SEGMENT_WORDS' | null; chapterContext?: AdventureChapter; segmentContext?: AdventureSegment;}>({ isOpen: false, type: null });
-    
-    const [segmentToDelete, setSegmentToDelete] = useState<{ chapterId: string, segment: AdventureSegment } | null>(null);
-    const [editingSegment, setEditingSegment] = useState<{ chapterId: string, segment: AdventureSegment } | null>(null);
-    const [confirmAction, setConfirmAction] = useState<{type: 'UNLOCK', chapterId: string, segment: AdventureSegment} | null>(null);
-    const [gateSelectionState, setGateSelectionState] = useState<{ chapterId: string, segment: AdventureSegment } | null>(null);
+    // Changed from boolean to object to pass data to Fireworks
+    const [celebrationData, setCelebrationData] = useState<{ name: string, icon: string } | null>(null);
 
-    const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
-    const [wordsLoading, setWordsLoading] = useState(false);
-
-    const [activeBoss, setActiveBoss] = useState<{ boss: AdventureBoss, segment: AdventureSegment, chapterId: string, starLevel: number } | null>(null);
-    const [battleWords, setBattleWords] = useState<VocabularyItem[]>([]);
-
+    // Ensure user has a persistent map. If not, create and save one.
     useEffect(() => {
-        setChapters(adventureService.getChapters());
-        setCustomBadges(adventureService.getCustomBadges());
+        if (!user.adventure.map) {
+            const newMap = generateMap(100);
+            onUpdateUser({
+                ...user,
+                adventure: { ...user.adventure, map: newMap }
+            });
+        }
     }, []);
 
-    const fetchAllWords = async () => {
-        if (allWords.length > 0) return;
-        setWordsLoading(true);
-        const words = await getAllWordsForExport(user.id);
-        setAllWords(words);
-        setWordsLoading(false);
+    const activeMap = user.adventure.map || generateMap(100); // Fallback to temp map if sync is pending
+
+    const handleMove = async () => {
+        // 1. Basic Validation
+        const currentProgress = { ...user.adventure };
+        if (currentProgress.energy <= 0) {
+            showToast("Not enough energy to move!", 'error');
+            return;
+        }
+
+        // 2. Consume Energy & Move
+        currentProgress.energy -= 1;
+        const nextIndex = currentProgress.currentNodeIndex + 1;
+        currentProgress.currentNodeIndex = nextIndex;
+
+        const nextNode = activeMap[nextIndex];
+
+        // 3. Auto Interaction Logic (ONLY for items, NOT for bosses)
+        if (nextNode) {
+            if (nextNode.type === 'standard') {
+                currentProgress.energyShards = (currentProgress.energyShards || 0) + 1;
+                showToast("+1 Energy Shard ⚡", 'success', 2000);
+            } 
+            else if (nextNode.type === 'key_fragment') {
+                currentProgress.keyFragments = (currentProgress.keyFragments || 0) + 1;
+                showToast("Picked up a Key Fragment 🗝️", 'success', 3000);
+                
+                // Auto-assemble Key
+                if (currentProgress.keyFragments >= 3) {
+                    currentProgress.keyFragments -= 3;
+                    currentProgress.keys = (currentProgress.keys || 0) + 1;
+                    showToast("✨ Key Fragments assembled into a Magic Key!", 'success', 4000);
+                }
+            } 
+            else if (nextNode.type === 'treasure') {
+                // Collect Treasure into Inventory
+                currentProgress.badges = [...(currentProgress.badges || []), 'locked_chest'];
+                showToast("Picked up a Locked Chest! 🧰 (Check Inventory)", 'success', 3000);
+            } 
+            // Boss logic removed from here to allow manual interaction
+        }
+
+        // 4. Random Dice Drop (20% chance on any move)
+        if (Math.random() < 0.2) {
+            currentProgress.badges = [...(currentProgress.badges || []), 'lucky_dice'];
+            showToast("You found a Lucky Dice! 🎲", 'success', 4000);
+        }
+
+        // 5. Save State
+        await onUpdateUser({ ...user, adventure: currentProgress });
     };
 
-    const handleEditSegment = (chapterId: string, segment: AdventureSegment) => {
-        fetchAllWords();
-        setEditingSegment({ chapterId, segment });
-    };
+    // Manual interaction for Bosses
+    const handleNodeClick = async (node: any) => {
+        // Only allow interaction if we are AT this node
+        if (node.id !== user.adventure.currentNodeIndex) return;
 
-    const progress: AdventureProgress = user.adventure 
-    ? { unlockedChapterIds: user.adventure.unlockedChapterIds || chapters.map(c => c.id), completedSegmentIds: user.adventure.completedSegmentIds || [], segmentStars: user.adventure.segmentStars || {}, badges: user.adventure.badges || [], keys: user.adventure.keys ?? 1, keyFragments: user.adventure.keyFragments ?? 0 }
-    : { unlockedChapterIds: chapters.map(c => c.id), completedSegmentIds: [], segmentStars: {}, badges: [], keys: 1, keyFragments: 0 };
+        if (node.type === 'boss') {
+            // Check if already defeated
+            if (node.isDefeated) {
+                showToast("This boss has already been defeated.", "info");
+                return;
+            }
+
+            // Trigger Boss Battle
+            const allUserWords = dataStore.getAllWords().filter(w => w.userId === user.id);
+            if (allUserWords.length === 0) {
+                showToast("You have no words in your library to fight a boss. Add some words first!", "error");
+                return;
+            }
+
+            const learnedWords = allUserWords.filter(w => w.lastReview);
+
+            if (learnedWords.length < 20) {
+                showToast("Warning: Boss ahead! You need more learned words to fight effectively. Other words from your library will be used.", "info");
+            }
+
+            let battleWords = [...learnedWords].sort(() => 0.5 - Math.random());
+
+            if (battleWords.length < 20) {
+                const learnedIds = new Set(battleWords.map(w => w.id));
+                const otherWords = allUserWords.filter(w => !learnedIds.has(w.id));
+                const needed = 20 - battleWords.length;
+                battleWords.push(...[...otherWords].sort(() => 0.5 - Math.random()).slice(0, needed));
+            }
+            
+            // Cap at 20
+            battleWords = battleWords.slice(0, 20);
+            
+            // Force boss HP to 20 to ensure consistency regardless of stored data
+            const bossData = { ...node.boss_details!, hp: 20 };
+            
+            setActiveBoss({ boss: bossData, words: battleWords });
+        }
+    };
     
-    const allBadges = adventureService.getAllBadges();
+    const handleBattleVictory = async () => {
+        showToast("Boss defeated! +1 Key Fragment", 'success');
+        const newProgress = { ...user.adventure };
+        
+        // Award rewards
+        newProgress.keyFragments = (newProgress.keyFragments || 0) + 1;
+        if (newProgress.keyFragments >= 3) {
+            newProgress.keyFragments -= 3;
+            newProgress.keys = (newProgress.keys || 0) + 1;
+            showToast("Key Fragments assembled into a Magic Key!", 'success', 4000);
+        }
 
-    const handleDeleteChapter = (chapterId: string) => { const newChapters = adventureService.deleteChapter(chapterId); setChapters(newChapters); showToast("Chapter removed.", "success"); };
+        // Mark map node as defeated
+        if (newProgress.map) {
+            const newMap = [...newProgress.map];
+            const nodeIndex = newProgress.currentNodeIndex;
+            if (newMap[nodeIndex]) {
+                newMap[nodeIndex] = { ...newMap[nodeIndex], isDefeated: true };
+            }
+            newProgress.map = newMap;
+        }
 
-    const handleDeleteSegment = (chapterId: string, segmentId: string) => {
-        const newChapters = adventureService.deleteSegment(chapterId, segmentId);
-        setChapters(newChapters);
-        showToast("Sub-topic removed.", "success"); 
-        setSegmentToDelete(null);
+        await onUpdateUser({ ...user, adventure: newProgress });
+        setActiveBoss(null);
     };
 
-    const handleSaveSegment = async (chapterId: string, updatedSegment: AdventureSegment) => {
-        const allSegmentWords = [ ...updatedSegment.basicWords, ...updatedSegment.intermediateWords, ...updatedSegment.advancedWords ];
-        const uniqueWords = Array.from(new Set(allSegmentWords.map(w => w.trim()).filter(Boolean)));
-    
-        const wordsToCreate: VocabularyItem[] = [];
-        for (const wordText of uniqueWords) {
-            const existing = await findWordByText(user.id, wordText);
-            if (!existing) {
-                const newItem = { ...createNewWord(wordText, '', '...', '...', `From: ${updatedSegment.title}`, [updatedSegment.tagCriteria, 'adventure-edit']), userId: user.id };
-                wordsToCreate.push(newItem);
+    const handleUseBadge = async (badgeId: string) => {
+        const newProgress = { ...user.adventure };
+        newProgress.badges = newProgress.badges || [];
+
+        if (badgeId === 'locked_chest') {
+            if ((newProgress.keys || 0) <= 0) {
+                showToast("You need a Magic Key 🗝️ to open this chest!", 'error');
+                return;
+            }
+
+            // Consume Key and Chest
+            newProgress.keys -= 1;
+            
+            // Remove ONE instance of locked_chest
+            const chestIndex = newProgress.badges.indexOf('locked_chest');
+            if (chestIndex > -1) {
+                newProgress.badges.splice(chestIndex, 1);
+            }
+
+            // Award random real badge
+            const realBadgeKeys = Object.keys(BADGE_DEFINITIONS).filter(k => k !== 'locked_chest' && k !== 'lucky_dice');
+            const userBadges = newProgress.badges || [];
+            
+            // Prioritize badges the user does NOT have yet
+            const unownedBadges = realBadgeKeys.filter(k => !userBadges.includes(k));
+            
+            let randomBadgeId: string;
+            if (unownedBadges.length > 0) {
+                randomBadgeId = unownedBadges[Math.floor(Math.random() * unownedBadges.length)];
+            } else {
+                // If user has all badges, give a random duplicate
+                randomBadgeId = realBadgeKeys[Math.floor(Math.random() * realBadgeKeys.length)];
+            }
+
+            newProgress.badges.push(randomBadgeId);
+
+            await onUpdateUser({ ...user, adventure: newProgress });
+            
+            // Trigger Fireworks with specific badge data
+            setCelebrationData(BADGE_DEFINITIONS[randomBadgeId]);
+            setIsInventoryOpen(false); // Close inventory to show fireworks
+            
+        } else if (badgeId === 'lucky_dice') {
+            // Remove ONE instance of lucky_dice
+            const diceIndex = newProgress.badges.indexOf('lucky_dice');
+            if (diceIndex > -1) {
+                newProgress.badges.splice(diceIndex, 1);
+            } else {
+                return; // Should not happen
+            }
+
+            const roll = Math.random();
+            // 20% Energy, 20% Key, 20% Chest, 40% Nothing
+            if (roll < 0.2) {
+                newProgress.energy += 3;
+                showToast("Dice rolled! +3 Energy ⚡", 'success', 3000);
+            } else if (roll < 0.4) {
+                newProgress.keys = (newProgress.keys || 0) + 1;
+                showToast("Dice rolled! +1 Magic Key 🗝️", 'success', 3000);
+            } else if (roll < 0.6) {
+                newProgress.badges.push('locked_chest');
+                showToast("Dice rolled! +1 Locked Chest 🧰", 'success', 3000);
+            } else {
+                showToast("Dice rolled... but nothing happened. Bad luck! 💨", 'info', 3000);
+            }
+
+            await onUpdateUser({ ...user, adventure: newProgress });
+
+        } else {
+            // Logic for using other badges (just show them for now)
+            setCelebrationData(BADGE_DEFINITIONS[badgeId]);
+        }
+    };
+
+    const handleAdminAction = async (action: 'add_energy' | 'remove_energy' | 'add_key' | 'remove_key' | 'pass_boss') => {
+        const newProgress = { ...user.adventure };
+        if (action === 'add_energy') {
+            newProgress.energy = (newProgress.energy || 0) + 10;
+            showToast("Admin: +10 Energy", 'success');
+        } else if (action === 'remove_energy') {
+            newProgress.energy = Math.max(0, (newProgress.energy || 0) - 1);
+            showToast("Admin: -1 Energy", 'info');
+        } else if (action === 'add_key') {
+            newProgress.keys = (newProgress.keys || 0) + 1;
+            showToast("Admin: +1 Key", 'success');
+        } else if (action === 'remove_key') {
+            newProgress.keys = Math.max(0, (newProgress.keys || 0) - 1);
+            showToast("Admin: -1 Key", 'info');
+        } else if (action === 'pass_boss') {
+            // Check if current node is boss
+            const currentNode = activeMap[newProgress.currentNodeIndex];
+            if (currentNode && currentNode.type === 'boss') {
+                // If in battle mode, win it
+                if (activeBoss) {
+                    await handleBattleVictory();
+                    return;
+                }
+                
+                // If just on map, trigger victory logic manually
+                showToast("Admin: Force Boss Victory", 'success');
+                
+                // Simulate boss loot logic
+                newProgress.keyFragments = (newProgress.keyFragments || 0) + 1;
+                if (newProgress.keyFragments >= 3) {
+                    newProgress.keyFragments -= 3;
+                    newProgress.keys = (newProgress.keys || 0) + 1;
+                }
+
+                // Update Map
+                if (newProgress.map) {
+                    const newMap = [...newProgress.map];
+                    const nodeIndex = newProgress.currentNodeIndex;
+                    if (newMap[nodeIndex]) {
+                        newMap[nodeIndex] = { ...newMap[nodeIndex], isDefeated: true };
+                    }
+                    newProgress.map = newMap;
+                }
+
+            } else {
+                showToast("Not currently at a boss node.", 'info');
             }
         }
-    
-        if (wordsToCreate.length > 0) { await bulkSaveWords(wordsToCreate); showToast(`Added ${wordsToCreate.length} new words to your library.`, 'success'); }
-
-        const newChapters = chapters.map(c => c.id === chapterId ? { ...c, segments: c.segments.map(s => s.id === updatedSegment.id ? updatedSegment : s) } : c);
-        adventureService.saveChapters(newChapters);
-        setChapters(newChapters);
-
-        showToast("Sub-topic updated!", "success");
-        setEditingSegment(null);
+        await onUpdateUser({ ...user, adventure: newProgress });
     };
 
-    const handleRefineSegmentWords = async (segment: AdventureSegment) => {
-        setEditingSegment(null);
-        showToast("Analyzing words...", "info");
-    
-        const allSegmentWords = [...segment.basicWords, ...segment.intermediateWords, ...segment.advancedWords];
-        const wordsToRefine: string[] = [];
-    
-        for (const wordText of allSegmentWords) {
-            const existingWord = await findWordByText(user.id, wordText);
-            if (!existingWord || !(existingWord.ipa && existingWord.meaningVi && existingWord.example)) { wordsToRefine.push(wordText); }
-        }
-    
-        if (wordsToRefine.length === 0) { showToast("All words in this sub-topic are already refined.", "success"); return; }
-    
-        const tempSegmentContext = { ...segment, basicWords: wordsToRefine, intermediateWords: [], advancedWords: [] };
-        setTimeout(() => { setAiModalState({ isOpen: true, type: 'REFINE_SEGMENT_WORDS', segmentContext: tempSegmentContext }); }, 150);
-    };
-
-    const handleAiRefinementResult = async (results: any[]) => {
-        // ... (logic remains the same as it doesn't use localStorage directly)
-    };
-
-    const handleAddNewChapter = (aiData: any) => {
-        // ... (logic for processing AI data)
-        const { newChapter, badgesToAdd } = processNewChapterData(aiData); // Hypothetical function to process data
-
-        const updatedChapters = [...chapters, newChapter];
-        adventureService.saveChapters(updatedChapters);
-        setChapters(updatedChapters);
-        
-        const currentCustomBadges = adventureService.getCustomBadges();
-        const updatedBadges = { ...currentCustomBadges, ...badgesToAdd };
-        adventureService.saveCustomBadges(updatedBadges);
-        setCustomBadges(updatedBadges);
-
-        const updatedProgress: AdventureProgress = {
-            ...progress,
-            unlockedChapterIds: Array.from(new Set([...progress.unlockedChapterIds, newChapter.id])),
-        };
-        onUpdateUser({ ...user, adventure: updatedProgress });
-    };
-
-    const handleAddNewSegment = (aiData: any) => {
-        // ... (logic for processing AI data)
-        const { newSegments, badgesToAdd } = processNewSegmentData(aiData); // Hypothetical function
-
-        const chapterContextId = aiModalState.chapterContext?.id;
-        if(!chapterContextId) return;
-
-        const updatedChapters = chapters.map(c => c.id === chapterContextId ? { ...c, segments: [...c.segments, ...newSegments] } : c);
-        adventureService.saveChapters(updatedChapters);
-        setChapters(updatedChapters);
-
-        const currentCustomBadges = adventureService.getCustomBadges();
-        const updatedBadges = { ...currentCustomBadges, ...badgesToAdd };
-        adventureService.saveCustomBadges(updatedBadges);
-        setCustomBadges(updatedBadges);
-    };
-
-    // --- Interaction Handlers (remain mostly the same) ---
-    const handleSegmentInteraction = async (chapterId: string, segment: AdventureSegment) => {
-        // ... (logic remains the same)
-    };
-    
-    const handleConfirmAction = async () => {
-        // ... (logic remains the same)
-    };
-
-    const startBossBattle = async (chapterId: string, segment: AdventureSegment) => {
-        // ... (logic remains the same)
-    };
-
-    const handleStartGateSession = async (wordList: string[]) => {
-        // ... (logic remains the same)
-    };
-
-    const handleBattleVictory = async () => {
-        // ... (logic remains the same)
-    };
+    if (activeBoss) {
+        return (
+            <BattleMode
+                boss={activeBoss.boss}
+                words={activeBoss.words}
+                onVictory={handleBattleVictory}
+                onDefeat={() => {
+                    showToast("You were defeated. Study more and try again!", "error");
+                    setActiveBoss(null);
+                }}
+                onExit={() => setActiveBoss(null)}
+            />
+        );
+    }
 
     return (
         <>
-            {activeBoss ? <BattleMode boss={activeBoss.boss} words={battleWords} onVictory={handleBattleVictory} onDefeat={() => { showToast("The challenge was too great. Return stronger!", "error"); setActiveBoss(null); }} onExit={() => setActiveBoss(null)} />
-            : <AdventureUI user={user} progress={progress} chapters={chapters} allBadges={allBadges} onSegmentClick={handleSegmentInteraction} xpToNextLevel={0} onExit={onExit} isEditing={isEditing} onToggleEdit={() => setIsEditing(!isEditing)} onDeleteChapter={handleDeleteChapter} onAddNewChapter={() => setAiModalState({ isOpen: true, type: 'GENERATE_CHAPTER' })} onDeleteSegment={(chapterId, segment) => setSegmentToDelete({ chapterId, segment })} onAddNewSegment={(chapter) => setAiModalState({ isOpen: true, type: 'GENERATE_SEGMENT', chapterContext: chapter })} onEditSegment={handleEditSegment} />}
-            
-            {gateSelectionState && (
-                <GateSelectionModal
-                    isOpen={!!gateSelectionState}
-                    onClose={() => setGateSelectionState(null)}
-                    segment={gateSelectionState.segment}
-                    chapterId={gateSelectionState.chapterId}
-                    progress={progress}
-                    onStartSession={handleStartGateSession}
-                    onChallengeBoss={startBossBattle}
+            <AdventureUI
+                user={user}
+                progress={user.adventure}
+                onExit={onExit}
+                map={activeMap}
+                onMove={handleMove}
+                onNodeClick={handleNodeClick}
+                onOpenInventory={() => setIsInventoryOpen(true)}
+                onAdminAction={handleAdminAction}
+            />
+            <InventoryModal 
+                isOpen={isInventoryOpen}
+                onClose={() => setIsInventoryOpen(false)}
+                badges={user.adventure.badges || []}
+                onUseBadge={handleUseBadge}
+            />
+            {celebrationData && (
+                <Fireworks 
+                    badge={celebrationData} 
+                    onComplete={() => setCelebrationData(null)} 
                 />
             )}
-
-            {aiModalState.isOpen && ( <UniversalAiModal isOpen={aiModalState.isOpen} onClose={() => setAiModalState({ isOpen: false, type: null, segmentContext: undefined })} type={(aiModalState.type === 'REFINE_SEGMENT_WORDS') ? 'REFINE_WORDS' : aiModalState.type!} title={aiModalState.type === 'GENERATE_SEGMENT' ? "Generate New Sub-topic" : aiModalState.type === 'GENERATE_CHAPTER' ? "Generate New Chapter" : "Refine Words"} description={aiModalState.type === 'GENERATE_SEGMENT' ? `For chapter: "${aiModalState.chapterContext?.title}"` : aiModalState.type === 'REFINE_SEGMENT_WORDS' ? `Refining ${aiModalState.segmentContext?.basicWords.length} raw/new words for "${aiModalState.segmentContext?.title}"` : "Describe a topic for a new adventure."} initialData={aiModalState.type === 'REFINE_SEGMENT_WORDS' && aiModalState.segmentContext ? { words: aiModalState.segmentContext.basicWords.join('; ') } : {}} 
-                onGeneratePrompt={(inputs: any) => { /* ... */ return ''; }} 
-                onJsonReceived={(data) => { /* ... */ }} /> 
-            )}
-            {editingSegment && <SegmentEditModal segment={editingSegment.segment} chapterId={editingSegment.chapterId} allWords={allWords} wordsLoading={wordsLoading} onSave={handleSaveSegment} onClose={() => setEditingSegment(null)} onRefine={handleRefineSegmentWords}/>}
-            
-            <ConfirmationModal isOpen={!!segmentToDelete} title="Delete Sub-topic?" message={<>Are you sure you want to delete <strong>"{segmentToDelete?.segment.title}"</strong>? This is permanent.</>} confirmText="Yes, Delete" isProcessing={false} onConfirm={() => segmentToDelete && handleDeleteSegment(segmentToDelete.chapterId, segmentToDelete.segment.id)} onClose={() => setSegmentToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
-            
-            <ConfirmationModal
-                isOpen={!!confirmAction}
-                title={'Unlock Region?'}
-                message={`This costs 1 Magic Key and adds all words from "${confirmAction?.segment.title}" to your library for study.`}
-                confirmText={'Yes, Unlock'}
-                isProcessing={false}
-                onConfirm={handleConfirmAction}
-                onClose={() => setConfirmAction(null)}
-                icon={<Key size={40} className="text-amber-500"/>}
-                confirmButtonClass={'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-200'}
-            />
         </>
     );
 };
-// Dummy processor functions to avoid breaking the code, the real logic is complex and not shown for brevity
-const processNewChapterData = (aiData: any) => ({ newChapter: aiData, badgesToAdd: {} });
-const processNewSegmentData = (aiData: any) => ({ newSegments: aiData, badgesToAdd: {} });
-
 
 export default Adventure;

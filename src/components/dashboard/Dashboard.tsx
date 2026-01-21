@@ -28,8 +28,10 @@ interface Props {
 const Dashboard: React.FC<Props> = ({ userId, totalCount, user, xpToNextLevel, wotd, onViewWotd, ...restProps }) => {
   const [labStats, setLabStats] = useState<any[]>([]);
   const [loadingLabs, setLoadingLabs] = useState(true);
+  const [rawCount, setRawCount] = useState(0);
   const [refinedCount, setRefinedCount] = useState(0);
   const [dayProgress, setDayProgress] = useState({ learned: 0, reviewed: 0, learnedWords: [], reviewedWords: [] });
+  const [reviewStats, setReviewStats] = useState({ learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 });
   const dailyGoals = getConfig().dailyGoals;
 
   useEffect(() => {
@@ -50,7 +52,19 @@ const Dashboard: React.FC<Props> = ({ userId, totalCount, user, xpToNextLevel, w
         setDayProgress(stats.dayProgress);
       }
 
+      setRawCount(stats.dashboardStats.rawCount || 0);
       setRefinedCount(stats.dashboardStats.refinedCount);
+      
+      if (stats.reviewCounts) {
+        setReviewStats({
+            learned: stats.reviewCounts.learned || 0,
+            mastered: stats.reviewCounts.mastered || 0,
+            statusForgot: stats.reviewCounts.statusForgot || 0,
+            statusHard: stats.reviewCounts.statusHard || 0,
+            statusEasy: stats.reviewCounts.statusEasy || 0,
+            statusLearned: stats.reviewCounts.statusLearned || 0,
+        });
+      }
 
       const cats = stats.dashboardStats.categories;
       const wordLabData = [
@@ -85,7 +99,9 @@ const Dashboard: React.FC<Props> = ({ userId, totalCount, user, xpToNextLevel, w
     totalCount,
     dueCount: restProps.dueCount,
     newCount: restProps.newCount,
+    rawCount,
     refinedCount,
+    reviewStats,
     wotd,
     onViewWotd,
     setView: restProps.setView,
