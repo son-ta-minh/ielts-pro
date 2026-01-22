@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { VocabularyItem, ReviewGrade, ReviewMode, SessionType, User } from '../../app/types';
 import { updateSRS, calculateMasteryScore } from '../../utils/srs';
@@ -55,6 +56,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   const [wordInModal, setWordInModal] = useState<VocabularyItem | null>(null);
   const [editingWordInModal, setEditingWordInModal] = useState<VocabularyItem | null>(null);
   const [isTesting, setIsTesting] = useState(sessionType === 'random_test');
+  const [isQuickReviewMode, setIsQuickReviewMode] = useState(false);
   
   const currentWord = sessionWords[currentIndex];
   const isNewWord = useMemo(() => !currentWord?.lastReview, [currentWord]);
@@ -86,6 +88,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     setWordInModal(null);
     setEditingWordInModal(null);
     setIsTesting(sessionType === 'random_test');
+    setIsQuickReviewMode(false);
   }, [currentIndex, sessionType]);
 
   const commitSessionResults = useCallback(async () => {
@@ -131,6 +134,16 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     nextItem();
   };
 
+  const handleQuickReview = () => {
+    setIsQuickReviewMode(true);
+    setIsTesting(true);
+  };
+
+  const handleManualPractice = () => {
+      setIsQuickReviewMode(false);
+      setIsTesting(true);
+  };
+
   const handleTestComplete = async (grade: ReviewGrade, testResults?: Record<string, boolean>, stopSession = false, counts?: { correct: number, tested: number }) => {
     setIsTesting(false);
     if (!currentWord) return;
@@ -144,6 +157,27 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
             wordWithUpdatedFlags.needsPronunciationFocus = true;
             showToast(`"${wordWithUpdatedFlags.word}" marked for pronunciation focus.`, 'info');
         }
+    }
+
+    if (isQuickReviewMode && counts) {
+        const wrong = counts.tested - counts.correct;
+        let autoGrade = ReviewGrade.FORGOT;
+        if (wrong === 0) autoGrade = ReviewGrade.EASY;
+        else if (wrong === 1) autoGrade = ReviewGrade.HARD;
+
+        setSessionOutcomes(prev => ({...prev, [currentWord.id]: autoGrade}));
+        
+        const updated = updateSRS(wordWithUpdatedFlags, autoGrade);
+        logSrsUpdate(autoGrade, currentWord, updated);
+
+        if (testResults) updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
+        updated.masteryScore = calculateMasteryScore(updated);
+
+        setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
+        
+        setIsQuickReviewMode(false);
+        nextItem();
+        return;
     }
 
     if (sessionType === 'random_test') {
@@ -208,6 +242,9 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       handleTestComplete={handleTestComplete}
       handleRetry={handleRetry}
       handleEndSession={handleEndSession}
+      handleQuickReview={handleQuickReview}
+      handleManualPractice={handleManualPractice}
+      isQuickReviewMode={isQuickReviewMode}
     />
   );
 };

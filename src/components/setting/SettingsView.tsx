@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { RotateCw, ShieldAlert, Wrench } from 'lucide-react';
 import { User as UserType, VocabularyItem } from '../../app/types';

@@ -1,3 +1,4 @@
+
 // A wrapper for the browser's SpeechRecognition API for easier use.
 
 export class SpeechRecognitionManager {
@@ -18,14 +19,19 @@ export class SpeechRecognitionManager {
             // FIX: Cannot find name 'SpeechRecognitionEvent'. Use 'any' for the event parameter.
             this.recognition.onresult = (event: any) => {
                 let interimTranscript = '';
-                this.finalTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                let finalTranscriptAccumulator = '';
+
+                // Iterate through ALL results to build the full transcript state.
+                // Starting from 0 ensures we don't lose previous phrases when a new one is finalized.
+                for (let i = 0; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
-                        this.finalTranscript += event.results[i][0].transcript;
+                        finalTranscriptAccumulator += event.results[i][0].transcript;
                     } else {
                         interimTranscript += event.results[i][0].transcript;
                     }
                 }
+                
+                this.finalTranscript = finalTranscriptAccumulator;
                 
                 if (this.onResultCallback) {
                     this.onResultCallback(this.finalTranscript, interimTranscript);

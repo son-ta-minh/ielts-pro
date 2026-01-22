@@ -1,3 +1,4 @@
+
 /**
  * Professional Hybrid Audio Utility
  * - Manages both System (Web Speech API) and AI (Gemini TTS) voices.
@@ -171,39 +172,57 @@ export const speak = async (text: string, preferredVoiceNameOverride?: string, a
 };
 
 
-// --- Recording Logic (Unchanged) ---
+// --- Recording Logic ---
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 
 export const startRecording = async (): Promise<void> => {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+  
+  // Detect supported mimeType
+  const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav'];
+  const options = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) 
+    ? { mimeType: mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) } 
+    : undefined;
+
+  mediaRecorder = new MediaRecorder(stream, options);
   audioChunks = [];
   
   mediaRecorder.ondataavailable = (event) => {
-    audioChunks.push(event.data);
+    if (event.data.size > 0) {
+      audioChunks.push(event.data);
+    }
   };
   
   mediaRecorder.start();
 };
 
-export const stopRecording = (): Promise<string> => {
+export const stopRecording = (): Promise<{base64: string, mimeType: string} | null> => {
   return new Promise((resolve) => {
-    if (!mediaRecorder) return resolve("");
+    if (!mediaRecorder) return resolve(null);
     
+    // Store mimeType before stopping, or use the recorder's actual property
+    const mimeType = mediaRecorder.mimeType || 'audio/webm';
+
     mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      const audioBlob = new Blob(audioChunks, { type: mimeType });
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
       reader.onloadend = () => {
-        const base64String = reader.result as string;
-        resolve(base64String.split(',')[1] || '');
+        const result = reader.result as string;
+        const base64String = result.split(',')[1] || '';
+        resolve({ base64: base64String, mimeType });
       };
+      
       mediaRecorder?.stream.getTracks().forEach(track => track.stop());
+      mediaRecorder = null;
     };
     
     if (mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
+    } else {
+        // Just in case it was already stopped
+        resolve(null);
     }
   });
 };

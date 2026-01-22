@@ -105,6 +105,32 @@ Don't memorize isolated lists.
 
 ---
 
+## 🐳 Docker Deployment
+
+You can run the application using Docker. The API Key is **optional**.
+
+### 1. Build the Image
+From the project root:
+```bash
+docker build -t vocab-pro -f deploy/Dockerfile .
+```
+
+### 2. Run the Container
+
+**Option A: With API Key (Auto AI Mode)**
+```bash
+docker run -d -p 8080:80 -e API_KEY=your_actual_key vocab-pro
+```
+
+**Option B: Without API Key (Manual AI Mode)**
+```bash
+docker run -d -p 8080:80 vocab-pro
+```
+
+Access the app at `http://localhost:8080`.
+
+---
+
 ## 📖 How to Use
 
 1.  **Add Words**: Go to **Library** > **Add**. Type words like `ubiquitous; mitigate` and hit **Add with AI**.

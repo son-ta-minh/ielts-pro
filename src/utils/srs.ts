@@ -1,3 +1,4 @@
+
 import { VocabularyItem, ReviewGrade, WordQuality, WordSource, WordFamily } from '../app/types';
 import { ChallengeType } from '../components/practice/TestModalTypes';
 import { generateAvailableChallenges } from './challengeUtils';
@@ -6,16 +7,22 @@ import { calculateGameEligibility } from './gameEligibility';
 
 /**
  * Calculates a future review timestamp, anchored to midnight (00:00:00).
+ * Adds a small "fuzz" factor to prevent card bunching.
  */
 function getNextReviewTimestamp(baseTimestamp: number, daysToAdd: number): number {
+    // Fuzzing: Add a random variation of +/- 5% to the interval to prevent "bunching"
+    // (e.g., preventing 50 words learned today from all appearing exactly tomorrow).
+    const fuzzFactor = 0.95 + (Math.random() * 0.1); // 0.95 to 1.05
+    const fuzzedDays = Math.max(1, daysToAdd * fuzzFactor);
+
     const reviewDate = new Date(baseTimestamp);
     reviewDate.setHours(0, 0, 0, 0);
-    reviewDate.setDate(reviewDate.getDate() + Math.round(daysToAdd));
+    reviewDate.setDate(reviewDate.getDate() + Math.round(fuzzedDays));
     return reviewDate.getTime();
 }
 
 /**
- * Enhanced SRS algorithm.
+ * Enhanced SRS algorithm with Overdue Bonus (Elastic Scheduling).
  */
 export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyItem {
   const config = getConfig().srs;
@@ -30,11 +37,20 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
     let currentInterval = item.interval || 0;
     let nextInterval = 1;
 
+    // Calculate actual elapsed days since last review
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const lastReviewDate = item.lastReview || now;
+    const elapsedDays = Math.max(0, (now - lastReviewDate) / ONE_DAY);
+    
+    // Check if the item was overdue (elapsed time > scheduled interval)
+    const isOverdue = elapsedDays > currentInterval;
+
     if (grade === ReviewGrade.FORGOT) {
       nextInterval = config.forgotInterval;
       newItem.consecutiveCorrect = 0;
       newItem.forgotCount += 1;
     } else if (grade === ReviewGrade.HARD) {
+      // Hard: Standard penalty logic, no overdue bonus
       if (item.lastGrade === ReviewGrade.EASY) {
         nextInterval = Math.max(1, Math.floor(currentInterval * config.easyHardPenalty));
       } else {
@@ -42,10 +58,22 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
       }
       newItem.consecutiveCorrect += 1;
     } else if (grade === ReviewGrade.EASY) {
+      // EASY: Apply Overdue Bonus (Elastic Scheduling)
+      // If the user remembers it easily AND it was overdue, we base the new interval on the ELAPSED time, 
+      // not the scheduled interval. This acknowledges the stronger memory trace.
+      
+      let baseIntervalForCalc = currentInterval;
+      
+      if (isOverdue) {
+          // If overdue, use the actual elapsed time as the base, essentially "skipping" the missed steps.
+          baseIntervalForCalc = Math.max(currentInterval, elapsedDays);
+          console.log(`[SRS] Overdue Bonus Applied: Scheduled=${currentInterval}d, Elapsed=${elapsedDays.toFixed(1)}d. New Base=${baseIntervalForCalc.toFixed(1)}d`);
+      }
+
       if (item.lastGrade === ReviewGrade.HARD) {
-        nextInterval = currentInterval === 0 ? config.initialEasy : Math.max(config.initialEasy, Math.floor(currentInterval * config.hardEasy));
+        nextInterval = currentInterval === 0 ? config.initialEasy : Math.max(config.initialEasy, Math.floor(baseIntervalForCalc * config.hardEasy));
       } else {
-        nextInterval = currentInterval === 0 ? config.initialEasy : Math.max(config.initialEasy, Math.floor(currentInterval * config.easyEasy));
+        nextInterval = currentInterval === 0 ? config.initialEasy : Math.max(config.initialEasy, Math.floor(baseIntervalForCalc * config.easyEasy));
       }
       newItem.consecutiveCorrect += 1;
     }
@@ -124,53 +152,73 @@ export function createNewWord(
  * Helper to define the logical units for a word.
  * Each unit maps to one or more test keys in `lastTestResults`.
  */
-interface KnowledgeUnit {
+export interface KnowledgeUnit {
     key: string;
     testKeys: string[];
 }
 
-function getLogicalKnowledgeUnits(word: VocabularyItem): KnowledgeUnit[] {
+export function getLogicalKnowledgeUnits(word: VocabularyItem): KnowledgeUnit[] {
     const units: KnowledgeUnit[] = [];
 
     // 1. Spelling
     units.push({ key: 'spelling', testKeys: ['SPELLING'] });
 
-    // 2. Phonetic (IPA + Pronunciation combined)
+    // 2. Pronunciation (Speaking)
+    // Always relevant unless explicitly marked otherwise, but checking IPA or flag is a good proxy.
     if (word.ipa || word.needsPronunciationFocus) {
-        const phoneticTestKeys = ['PRONUNCIATION'];
-        if (word.ipa && word.ipa.trim()) {
-            phoneticTestKeys.push('IPA_QUIZ');
-        }
-        units.push({ key: 'phonetic', testKeys: phoneticTestKeys });
+        units.push({ key: 'pronunciation', testKeys: ['PRONUNCIATION'] });
     }
 
-    // 3. Meaning
+    // 3. IPA Recognition (Listening/Reading)
+    // Only if IPA is present AND mistakes are defined (distractors available).
+    // If no mistakes are defined, the IPA Quiz cannot be generated, so it shouldn't count against mastery.
+    if (word.ipa && word.ipa.trim() && word.ipaMistakes && word.ipaMistakes.length > 0) {
+        units.push({ key: 'ipa_recognition', testKeys: ['IPA_QUIZ'] });
+    }
+
+    // 4. Meaning
     if (word.meaningVi && word.meaningVi.trim()) {
         units.push({ key: 'meaning', testKeys: ['MEANING_QUIZ'] });
     }
 
-    // 4. Context (Sentence Scramble)
+    // 5. Context (Sentence Scramble)
     if (word.example && word.example.trim()) {
         units.push({ key: 'context', testKeys: ['SENTENCE_SCRAMBLE'] });
     }
 
-    // 5. Collocations
+    // 6. Collocations
     if (word.collocationsArray) {
-        word.collocationsArray.filter(c => !c.isIgnored).forEach(c => {
+        // Must be NOT ignored AND have a description (d) to be testable
+        word.collocationsArray.filter(c => !c.isIgnored && c.d && c.d.trim()).forEach(c => {
             const text = c.text;
-            units.push({ key: `colloc:${text}`, testKeys: [`COLLOCATION_QUIZ:${text}`] });
+            // A collocation is mastered if ANY valid test for it is passed
+            units.push({ 
+                key: `colloc:${text}`, 
+                testKeys: [
+                    `COLLOCATION_QUIZ:${text}`,              // Fill-in
+                    `COLLOCATION_MULTICHOICE_QUIZ:${text}`,  // Multiple Choice
+                    `COLLOCATION_CONTEXT_QUIZ:${text}`       // Match
+                ] 
+            });
         });
     }
 
-    // 6. Idioms
+    // 7. Idioms
     if (word.idiomsList) {
-        word.idiomsList.filter(i => !i.isIgnored).forEach(i => {
+        // Must be NOT ignored AND have a description (d)
+        word.idiomsList.filter(i => !i.isIgnored && i.d && i.d.trim()).forEach(i => {
             const text = i.text;
-            units.push({ key: `idiom:${text}`, testKeys: [`IDIOM_QUIZ:${text}`] });
+            units.push({ 
+                key: `idiom:${text}`, 
+                testKeys: [
+                    `IDIOM_QUIZ:${text}`,               // Fill-in
+                    `IDIOM_CONTEXT_QUIZ:${text}`        // Match
+                ] 
+            });
         });
     }
 
-    // 7. Prepositions
+    // 8. Prepositions
     if (word.prepositions) {
         word.prepositions.filter(p => !p.isIgnored).forEach(p => {
             const prep = p.prep;
@@ -178,15 +226,22 @@ function getLogicalKnowledgeUnits(word: VocabularyItem): KnowledgeUnit[] {
         });
     }
 
-    // 8. Paraphrases
+    // 9. Paraphrases
     if (word.paraphrases) {
-        word.paraphrases.filter(p => !p.isIgnored).forEach(p => {
+        // Must be NOT ignored AND have a context
+        word.paraphrases.filter(p => !p.isIgnored && p.context && p.context.trim()).forEach(p => {
             const text = p.word;
-            units.push({ key: `para:${text}`, testKeys: [`PARAPHRASE_QUIZ:${text}`] });
+            units.push({ 
+                key: `para:${text}`, 
+                testKeys: [
+                    `PARAPHRASE_QUIZ:${text}`,          // Fill-in
+                    `PARAPHRASE_CONTEXT_QUIZ:${text}`   // Match
+                ] 
+            });
         });
     }
 
-    // 9. Word Family
+    // 10. Word Family
     if (word.wordFamily) {
         const familyKeys: (keyof typeof word.wordFamily)[] = ['nouns', 'verbs', 'adjs', 'advs'];
         const typeMap: Record<keyof WordFamily, string> = { nouns: 'n', verbs: 'v', adjs: 'j', advs: 'd' };
@@ -240,7 +295,8 @@ export function calculateComplexity(word: VocabularyItem): number {
 
 /**
  * Mastery Score logic:
- * A unit is passed IFF all of its constituent, applicable test keys have a result of `true`.
+ * A unit is passed if AT LEAST ONE of its constituent test keys has a result of `true`.
+ * This allows "matching" or "multiple choice" variants to satisfy the requirement.
  */
 export function calculateMasteryScore(word: VocabularyItem): number {
     const units = getLogicalKnowledgeUnits(word);
@@ -254,13 +310,15 @@ export function calculateMasteryScore(word: VocabularyItem): number {
     const failedUnits: {key: string, reason: string}[] = [];
 
     units.forEach(unit => {
-        const allPassed = unit.testKeys.length > 0 && unit.testKeys.every(tKey => history[tKey] === true);
-        if (allPassed) {
+        // CHANGED: Use .some() instead of .every() because passing ANY valid test for this concept (e.g. matching OR fill) is sufficient for mastery.
+        const isPassed = unit.testKeys.length > 0 && unit.testKeys.some(tKey => history[tKey] === true);
+        
+        if (isPassed) {
             passedCount++;
             passedUnits.push(unit.key);
         } else {
-            const missingKeys = unit.testKeys.filter(tKey => history[tKey] !== true);
-            failedUnits.push({ key: unit.key, reason: `Missing or failed test keys: [${missingKeys.join(', ')}]` });
+            // No keys passed
+            failedUnits.push({ key: unit.key, reason: `None of [${unit.testKeys.join(', ')}] passed.` });
         }
     });
 

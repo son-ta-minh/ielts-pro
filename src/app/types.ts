@@ -67,6 +67,8 @@ export interface AdventureProgress {
   keys: number;
   keyFragments: number;
   badges: string[]; // For medals/huy hiệu
+  hpPotions?: number; // New: Healing item
+  wisdomFruits?: number; // New: Hint item
   lastDailyEnergyAwardDate?: string;
   dailyEnergyAwarded?: number; // Tracks total energy earned today
   unlockedChapterIds?: string[];
@@ -168,6 +170,7 @@ export interface VocabularyItem {
   consecutiveCorrect: number;
   lastReview?: number;
   lastGrade?: ReviewGrade;
+  lastReviewSessionType?: SessionType;
   forgotCount: number;
   
   complexity?: number;
@@ -286,6 +289,6 @@ export interface IrregularVerb {
   lastTestIncorrectForms?: ('v1' | 'v2' | 'v3')[];
 }
 
-export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'PARAPHRASE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'WORD_NET' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS';
+export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'PARAPHRASE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'WORD_NET' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS' | 'MIMIC';
 
 export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'COLLO_CONNECT' | 'IPA_SORTER' | 'MEANING_MATCH' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'WORD_TRANSFORMER' | 'IDIOM_CONNECT' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER';

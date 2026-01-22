@@ -15,7 +15,8 @@ import {
   getWritingEvaluationPrompt,
   getIpaAccentsPrompt,
   getComparisonPrompt,
-  getIrregularVerbFormsPrompt
+  getIrregularVerbFormsPrompt,
+  getPronunciationAnalysisPrompt
 } from './promptService';
 import { getConfig } from "../app/settingsManager";
 import { getStoredJSON, setStoredJSON } from "../utils/storage";
@@ -30,9 +31,35 @@ export class ManualApiResponseError extends Error {
   }
 }
 
+const getApiKey = () => {
+  // 1. Process Env (Build time / Dev)
+  // Vite replaces process.env.API_KEY with the string literal.
+  // If it's the placeholder from .env.local, ignore it.
+  if (process.env.API_KEY && process.env.API_KEY !== 'PLACEHOLDER_API_KEY') {
+    return process.env.API_KEY;
+  }
+
+  // 2. Runtime Env (Docker injection via index.html)
+  const runtimeKey = (window as any).ENV?.API_KEY;
+  if (runtimeKey && runtimeKey !== 'PLACEHOLDER_API_KEY') {
+      return runtimeKey;
+  }
+
+  // 3. Local Storage (User Settings)
+  const localKeys = localStorage.getItem('gemini_api_keys');
+  if (localKeys) {
+      // Handle comma-separated keys (basic rotation logic could be added here, currently taking first)
+      const keys = localKeys.split(',').map(k => k.trim()).filter(Boolean);
+      if (keys.length > 0) return keys[0];
+  }
+  
+  return '';
+};
+
 const getClient = () => {
-  if (!process.env.API_KEY) throw new Error("API_KEY_MISSING");
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const key = getApiKey();
+  if (!key) throw new Error("API_KEY_MISSING");
+  return new GoogleGenAI({ apiKey: key });
 };
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -107,6 +134,12 @@ async function callAiWithRetry(requestPayload: any, maxRetries = 3) {
     } catch (err: any) {
       lastError = err;
       const errorMsg = err.message?.toLowerCase() || "";
+      
+      // If API key is missing, fail immediately (allow UI to switch to manual mode)
+      if (errorMsg.includes("api_key_missing")) {
+          throw err;
+      }
+
       if (errorMsg.includes("429") || errorMsg.includes("quota") || errorMsg.includes("exhausted") || errorMsg.includes("503")) {
         if (attempt < maxRetries) { await delay(Math.pow(2, attempt) * 1000); continue; }
         throw new ManualApiResponseError("API quota exceeded.", requestPayload.contents);
@@ -169,7 +202,7 @@ export async function refineSpeakingTopic(topicName: string, description: string
     return safeJsonParse(response.text, { name: topicName, description, questions: currentQuestions.split('\n') });
 }
 
-export async function evaluateSpeakingSessionFromAudio(topic: string, sessionData: { question: string, audioBase64: string }[]): Promise<{ band: number; feedback: string; transcripts: { question: string, transcript: string }[] }> {
+export async function evaluateSpeakingSessionFromAudio(topic: string, sessionData: { question: string, audioBase64: string, mimeType: string }[]): Promise<{ band: number; feedback: string; transcripts: { question: string, transcript: string }[] }> {
     const config = getConfig();
     const prompt = getSpeakingEvaluationFromAudioPrompt(topic, sessionData.map(s => s.question));
     
@@ -177,7 +210,7 @@ export async function evaluateSpeakingSessionFromAudio(topic: string, sessionDat
     sessionData.forEach(item => {
         contents.push({
             inlineData: {
-                mimeType: 'audio/webm',
+                mimeType: item.mimeType || 'audio/webm',
                 data: item.audioBase64,
             },
         });
@@ -212,14 +245,43 @@ export async function evaluateSpeakingSessionFromAudio(topic: string, sessionDat
     return safeJsonParse(response.text, { band: 0, feedback: '<p>Error evaluating response.</p>', transcripts: [] });
 }
 
-export async function transcribeAudios(sessionData: { question: string, audioBase64: string }[]): Promise<{ question: string; transcript: string }[]> {
+export async function analyzePronunciation(audioBase64: string, targetText: string, mimeType: string = 'audio/webm'): Promise<{ isCorrect: boolean, score: number, feedbackHtml: string }> {
+    const config = getConfig();
+    const prompt = getPronunciationAnalysisPrompt(targetText);
+
+    const contents = [
+        { text: prompt },
+        { inlineData: { mimeType: mimeType, data: audioBase64 } }
+    ];
+
+    const response = await callAiWithRetry({
+        model: config.ai.modelForComplexTasks,
+        contents: { parts: contents },
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    isCorrect: { type: Type.BOOLEAN },
+                    score: { type: Type.NUMBER },
+                    feedbackHtml: { type: Type.STRING }
+                },
+                required: ["isCorrect", "score", "feedbackHtml"]
+            }
+        }
+    });
+
+    return safeJsonParse(response.text, { isCorrect: false, score: 0, feedbackHtml: "Analysis failed." });
+}
+
+export async function transcribeAudios(sessionData: { question: string, audioBase64: string, mimeType: string }[]): Promise<{ question: string; transcript: string }[]> {
     const config = getConfig();
     const questions = sessionData.map(s => s.question);
     const prompt = getTranscriptionForSpeakingPrompt(questions);
 
     const contents: any[] = [{ text: prompt }];
     sessionData.forEach(item => {
-        contents.push({ inlineData: { mimeType: 'audio/webm', data: item.audioBase64 } });
+        contents.push({ inlineData: { mimeType: item.mimeType || 'audio/webm', data: item.audioBase64 } });
     });
 
     const response = await callAiWithRetry({
@@ -274,7 +336,6 @@ export async function generateFullWritingTest(theme: string): Promise<any> {
 
 export async function generateWordComparison(groupName: string, words: string[]): Promise<{ updatedWords: string[], comparisonHtml: string }> {
     const config = getConfig();
-    // FIX: Corrected function name from getWordComparisonPrompt to getComparisonPrompt.
     const prompt = getComparisonPrompt(groupName, words);
     const response = await callAiWithRetry({
         model: config.ai.modelForComplexTasks,

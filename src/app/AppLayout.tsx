@@ -1,6 +1,7 @@
+
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
-  Plus, LayoutDashboard, List, Settings, RefreshCw, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Network, Mic, PenLine, BrainCircuit, ClipboardCheck, ChevronDown, Puzzle, FileClock, AlertTriangle
+  Plus, LayoutDashboard, List, Settings, RefreshCw, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Network, Mic, PenLine, BrainCircuit, ClipboardCheck, ChevronDown, Puzzle, FileClock, AlertTriangle, AudioLines
 } from 'lucide-react';
 import { AppView, SessionType, VocabularyItem, User } from './types';
 import { useAppController } from './useAppController';
@@ -8,6 +9,7 @@ import { getDueWords, getNewWords } from './db';
 import EditWordModal from '../components/word_lib/EditWordModal';
 import ViewWordModal from '../components/word_lib/ViewWordModal';
 import ConfirmationModal from '../components/common/ConfirmationModal';
+import StudyBuddy from '../components/common/StudyBuddy';
 
 // Lazy load major views for performance
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
@@ -22,6 +24,7 @@ const SpeakingPractice = React.lazy(() => import('../components/speaking/Speakin
 const WritingPractice = React.lazy(() => import('../components/writing/WritingPractice'));
 const Comparison = React.lazy(() => import('../components/comparison/Comparison'));
 const IrregularVerbs = React.lazy(() => import('../components/irregular_verbs/IrregularVerbs'));
+const MimicPractice = React.lazy(() => import('../components/labs/MimicPractice').then(module => ({ default: module.MimicPractice })));
 
 type AppController = ReturnType<typeof useAppController>;
 
@@ -48,6 +51,7 @@ const navItems = [
     label: 'Labs',
     icon: BrainCircuit,
     children: [
+      { id: 'MIMIC', view: 'MIMIC', icon: AudioLines, label: 'Mimic Practice' },
       { id: 'COMPARISON', view: 'COMPARISON', icon: Puzzle, label: 'Comparison' },
       { id: 'WORD_NET', view: 'WORD_NET', icon: Network, label: 'Word Net' },
       { id: 'PARAPHRASE', view: 'PARAPHRASE', icon: RefreshCw, label: 'Paraphrase' },
@@ -284,13 +288,15 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
         return <Comparison user={currentUser} />;
     case 'IRREGULAR_VERBS':
         return <IrregularVerbs user={currentUser} onGlobalViewWord={setGlobalViewWord} />;
+    case 'MIMIC':
+        return <MimicPractice />;
     default:
       return <div>Unknown view: {view}</div>;
   }
 };
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary } = controller;
+  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary, currentUser, stats, startDueReviewSession, startNewLearnSession, lastBackupTime } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
 
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
@@ -303,6 +309,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
       setView(targetView);
       setIsSidebarOpen(false);
     }
+  };
+
+  const handleSpecialAction = (action: string) => {
+      switch(action) {
+          case 'REVIEW':
+              startDueReviewSession();
+              break;
+          case 'BROWSE': // Map to new learn or just browse
+              startNewLearnSession();
+              break;
+          default:
+             handleNavigation(action as AppView);
+      }
   };
   
   const handleLogoutRequest = () => {
@@ -358,6 +377,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
         </Suspense>
       </main>
       
+      {currentUser && !sessionType && (
+          <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={handleSpecialAction} />
+      )}
+
       {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
       {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
       

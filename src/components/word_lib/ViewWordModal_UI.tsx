@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { X, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Plus, CheckCircle2, Tag as TagIcon, StickyNote, Edit3, Archive, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, Info, ChevronDown, ChevronRight, Link as LinkIcon, Users2, BrainCircuit, Loader2 } from 'lucide-react';
+import { X, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Plus, CheckCircle2, Tag as TagIcon, StickyNote, Edit3, Archive, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, Info, ChevronDown, ChevronRight, Link as LinkIcon, Users2, BrainCircuit, Loader2, Ear } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
 import { getRemainingTime, updateSRS, resetProgress, calculateMasteryScore } from '../../utils/srs';
 import { speak } from '../../utils/audio';
@@ -190,6 +191,7 @@ export interface ViewWordModalUIProps {
     word: VocabularyItem;
     onClose: () => void;
     onChallengeRequest: () => void;
+    onMimicRequest: () => void;
     onEditRequest: () => void;
     onUpdate: (word: VocabularyItem) => void;
     linkedUnits: Unit[];
@@ -203,12 +205,34 @@ export interface ViewWordModalUIProps {
     appliedAccent?: 'US' | 'UK';
 }
 
-export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose, onChallengeRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, onNavigateToWord, onAddVariantToLibrary, addingVariant, existingVariants, isViewOnly = false, appliedAccent }) => {
+const Section = ({ title, icon: Icon, children, className }: { title: string; icon: React.ElementType; children: React.ReactNode; className?: string }) => (
+    <div className={`space-y-2 ${className || ''}`}>
+      <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-neutral-400 border-b border-neutral-100 pb-1 mb-2">
+        <Icon size={12} />
+        <span>{title}</span>
+      </div>
+      {children}
+    </div>
+);
+
+
+export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, onNavigateToWord, onAddVariantToLibrary, addingVariant, existingVariants, isViewOnly = false, appliedAccent }) => {
     const [viewSettings, setViewSettings] = useState(() => getStoredJSON('ielts_pro_word_view_settings', { showHidden: false, highlightFailed: true, isLearnView: true }));
     const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
     const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const viewMenuRef = useRef<HTMLDivElement>(null);
+
+    // Helper for displaying sections with a title and optional icon
+    const Section: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; className?: string }> = ({ title, icon: Icon, children, className }) => (
+        <div className={`space-y-2 ${className || ''}`}>
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-neutral-400 border-b border-neutral-100 pb-1 mb-2">
+            <Icon size={12} />
+            <span>{title}</span>
+          </div>
+          {children}
+        </div>
+    );
 
     useEffect(() => { setStoredJSON('ielts_pro_word_view_settings', viewSettings); }, [viewSettings]);
     const handleSettingChange = <K extends keyof typeof viewSettings>(key: K, value: (typeof viewSettings)[K]) => setViewSettings(prev => ({...prev, [key]: value}));
@@ -299,7 +323,11 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                 return (
                   <div key={idx} className={`flex items-center justify-between px-2 py-1.5 rounded-lg border group transition-colors ${containerClass}`}>
                     <div className="flex flex-col overflow-hidden">
-                      <div className="flex items-center gap-1.5"><span className={`text-[10px] font-bold truncate ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${isIgnored ? 'line-through decoration-neutral-400' : ''}`}>{member.word}</span>{isFailed && <AlertCircle size={10} className="text-red-500 fill-red-100 shrink-0" />}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-bold truncate ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${isIgnored ? 'line-through decoration-neutral-400' : ''}`}>{member.word}</span>
+                        <button onClick={(e) => { e.stopPropagation(); speak(member.word); }} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
+                        {isFailed && <AlertCircle size={10} className="text-red-500 fill-red-100 shrink-0" />}
+                      </div>
                       <span className={`text-[8px] font-mono ${isFailed ? 'text-red-400' : 'text-neutral-400'}`}>{member.ipa}</span>
                     </div>
                     <button type="button" disabled={addingVariant === member.word || isExisting} onClick={() => onAddVariantToLibrary(member, 'family')} className={`p-1 rounded-md transition-all ${ isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100' }`} >{addingVariant === member.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}</button>
@@ -415,7 +443,8 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                             </div>
                             {!isViewOnly && (
                                 <>
-                                    <button onClick={onChallengeRequest} className="p-2 bg-amber-100 text-amber-600 hover:text-amber-900 rounded-lg hover:bg-amber-200 transition-colors"><BrainCircuit size={16} /></button>
+                                    <button onClick={onChallengeRequest} className="p-2 bg-amber-100 text-amber-600 hover:text-amber-900 rounded-lg hover:bg-amber-200 transition-colors" title="Practice"><BrainCircuit size={16} /></button>
+                                    <button onClick={onMimicRequest} className="p-2 bg-neutral-100 text-neutral-600 hover:text-neutral-900 rounded-lg hover:bg-neutral-200 transition-colors" title="Mimic"><Mic size={16} /></button>
                                     <button onClick={onEditRequest} className="p-2 bg-neutral-100 text-neutral-600 hover:text-neutral-900 rounded-lg hover:bg-neutral-200 transition-colors"><Edit3 size={16} /></button>
                                 </>
                             )}
@@ -496,67 +525,42 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                             </div>
                         </div>
 
-                        <div className="space-y-1 md:col-span-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><AtSign size={10}/> Prepositions</label>{displayedPreps.length > 0 ? (<div className="bg-white border border-neutral-100 p-3 rounded-xl grid grid-cols-1 gap-y-1">{displayedPreps.map((p: PrepositionPattern, i: number) => { const specificKey = `PREPOSITION_QUIZ:${p.prep}`; const specificResult = word.lastTestResults?.[specificKey]; const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PREPOSITION_QUIZ'] === false)) && !p.isIgnored; return (<div key={i} className={`text-xs flex items-center gap-2 ${p.isIgnored ? 'opacity-50' : ''}`}>{isFailed && <AlertCircle size={10} className="text-red-500" />}<span className={`font-bold ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${p.isIgnored ? 'line-through' : ''}`}>{p.prep}</span><span className={`font-medium ${isFailed ? 'text-red-400' : 'text-neutral-500'}`}>{p.usage}</span></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No prepositions.</div>)}</div>
+                        <Section title="Examples" icon={Quote} className="md:col-span-4">
+                            {word.example ? (
+                                <div className="flex flex-col gap-2">
+                                    {word.example.split('\n').filter(line => line.trim() !== '').map((sentence, index) => (
+                                        <div 
+                                            key={index} 
+                                            className="flex items-start gap-2 px-3 py-2 bg-neutral-50 border border-neutral-100 rounded-xl group hover:border-neutral-200 transition-all"
+                                        >
+                                            <span className="text-sm font-medium text-neutral-700 leading-relaxed flex-1 select-text cursor-text">{sentence}</span>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); speak(sentence); }}
+                                                className="p-1.5 text-neutral-400 hover:text-indigo-500 hover:bg-white rounded-lg transition-all shrink-0"
+                                                title="Listen"
+                                            >
+                                                <Volume2 size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-[10px] text-neutral-300 italic px-1">No examples added.</div>
+                            )}
+                        </Section>
+
+                        <div className="space-y-1 md:col-span-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><AtSign size={10}/> Prepositions</label>{displayedPreps.length > 0 ? (<div className="bg-white border border-neutral-100 p-3 rounded-xl grid grid-cols-1 gap-y-1">{displayedPreps.map((p: PrepositionPattern, i: number) => { const specificKey = `PREPOSITION_QUIZ:${p.prep}`; const specificResult = word.lastTestResults?.[specificKey]; const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PREPOSITION_QUIZ'] === false)) && !p.isIgnored; return (<div key={i} className={`text-xs flex items-center gap-2 ${p.isIgnored ? 'opacity-50' : ''}`}>{isFailed && <AlertCircle size={10} className="text-red-500" />}<span className={`font-bold ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${p.isIgnored ? 'line-through' : ''}`}>{p.prep}</span><span className={`font-medium ${isFailed ? 'text-red-400' : 'text-neutral-500'}`}>{p.usage}</span>{p.usage && <button onClick={(e) => { e.stopPropagation(); speak(p.usage); }} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>}</div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No prepositions.</div>)}</div>
                         
                         <div className="space-y-1 md:col-span-3"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Network size={10}/> Word Family</label><div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100">{!hasAnyFamilyData ? (<span className="text-[10px] text-neutral-300 italic">No family data available.</span>) : (<div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{renderFamilyCardGroup("Nouns", word.wordFamily?.nouns, "blue", "nouns")}{renderFamilyCardGroup("Verbs", word.wordFamily?.verbs, "green", "verbs")}{renderFamilyCardGroup("Adjectives", word.wordFamily?.adjs, "orange", "adjs")}{renderFamilyCardGroup("Adverbs", word.wordFamily?.advs, "purple", "advs")}</div>)}</div></div>
 
-                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Combine size={10}/> Collocations</label>{displayedCollocs.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">{displayedCollocs.map((c: CollocationDetail, i: number) => { const isExisting = existingVariants.has(c.text.toLowerCase()); const specificKey = `COLLOCATION_QUIZ:${c.text}`; const specificResult = word.lastTestResults?.[specificKey]; let isFailed = false; if (viewSettings.highlightFailed && !c.isIgnored) { if (specificResult === false) { isFailed = true; } else if (specificResult === undefined && word.lastTestResults?.['COLLOCATION_QUIZ'] === false) { isFailed = true; } } let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900"; if (isFailed) { containerClass = "bg-red-50 border-red-200 text-red-700"; } else if (c.isIgnored) { containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400"; } return (<div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}><div className="flex-1 overflow-hidden">{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className={`truncate ${c.isIgnored ? 'line-through' : ''}`} title={c.text}>{c.text}</span>{c.d && !c.isIgnored && (<div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>)}</div><button type="button" disabled={addingVariant === c.text || isExisting || c.isIgnored} onClick={() => onAddVariantToLibrary({ word: c.text, ipa: '' }, 'collocation')} className={`p-1 rounded-md transition-all shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : c.isIgnored ? 'text-neutral-300 cursor-not-allowed' : 'text-neutral-400 hover:text-neutral-900 hover:bg-white/50' }`} title={isExisting ? 'Already in library' : 'Add to library'}>{addingVariant === c.text ? <Loader2 size={12} className="animate-spin" /> : isExisting ? <CheckCircle2 size={12} /> : <Plus size={12} />}</button></div>);})}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No collocations.</div>)}</div>
+                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Combine size={10}/> Collocations</label>{displayedCollocs.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">{displayedCollocs.map((c: CollocationDetail, i: number) => { const isExisting = existingVariants.has(c.text.toLowerCase()); const specificKey = `COLLOCATION_QUIZ:${c.text}`; const specificResult = word.lastTestResults?.[specificKey]; let isFailed = false; if (viewSettings.highlightFailed && !c.isIgnored) { if (specificResult === false) { isFailed = true; } else if (specificResult === undefined && word.lastTestResults?.['COLLOCATION_QUIZ'] === false) { isFailed = true; } } let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900"; if (isFailed) { containerClass = "bg-red-50 border-red-200 text-red-700"; } else if (c.isIgnored) { containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400"; } return (<div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}><div className="flex-1 overflow-hidden">{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className={`truncate ${c.isIgnored ? 'line-through' : ''}`} title={c.text}>{c.text}</span>{c.d && !c.isIgnored && (<div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>)}</div><button onClick={(e) => { e.stopPropagation(); speak(c.text); }} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button><button type="button" disabled={addingVariant === c.text || isExisting || c.isIgnored} onClick={() => onAddVariantToLibrary({ word: c.text, ipa: '' }, 'collocation')} className={`p-1 rounded-md transition-all shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : c.isIgnored ? 'text-neutral-300 cursor-not-allowed' : 'text-neutral-400 hover:text-neutral-900 hover:bg-white/50' }`} title={isExisting ? 'Already in library' : 'Add to library'}>{addingVariant === c.text ? <Loader2 size={12} className="animate-spin" /> : isExisting ? <CheckCircle2 size={12} /> : <Plus size={12} />}</button></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No collocations.</div>)}</div>
                         
-                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Zap size={10} className="text-amber-500"/> Word Power & Variations</label>{displayedParas.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-4 gap-3">{displayedParas.map((para: ParaphraseOption, idx: number) => { const isExisting = existingVariants.has(para.word.toLowerCase()); const specificKey = `PARAPHRASE_QUIZ:${para.word}`; const specificResult = word.lastTestResults?.[specificKey]; const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PARAPHRASE_QUIZ'] === false)) && !para.isIgnored; const isIgnored = para.isIgnored; return (<div key={idx} className={`flex items-start justify-between gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-100'}`}><div className="flex-1 overflow-hidden"><div className="flex justify-between items-center mb-1">{renderParaphraseBadge(para.tone)}{isFailed && <AlertCircle size={12} className="text-red-500 fill-red-100"/>}</div><div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div><div className={`text-[10px] italic truncate ${isFailed ? 'text-red-400' : 'text-neutral-400'}`} title={para.context}>{para.context}</div></div><button type="button" disabled={addingVariant === para.word || isExisting} onClick={() => onAddVariantToLibrary({ word: para.word, ipa: '' }, 'paraphrase')} className={`p-1 rounded-md transition-all mt-1 shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100' }`} >{addingVariant === para.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}</button></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic">No variations available.</div>)}</div>
+                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Zap size={10} className="text-amber-500"/> Word Power & Variations</label>{displayedParas.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-4 gap-3">{displayedParas.map((para: ParaphraseOption, idx: number) => { const isExisting = existingVariants.has(para.word.toLowerCase()); const specificKey = `PARAPHRASE_QUIZ:${para.word}`; const specificResult = word.lastTestResults?.[specificKey]; const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PARAPHRASE_QUIZ'] === false)) && !para.isIgnored; const isIgnored = para.isIgnored; return (<div key={idx} className={`flex items-start justify-between gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-100'}`}><div className="flex-1 overflow-hidden"><div className="flex justify-between items-center mb-1">{renderParaphraseBadge(para.tone)}{isFailed && <AlertCircle size={12} className="text-red-500 fill-red-100"/>}</div><div className="flex items-center gap-1"><div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div><button onClick={(e) => { e.stopPropagation(); speak(para.word); }} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button></div><div className={`text-[10px] italic truncate ${isFailed ? 'text-red-400' : 'text-neutral-400'}`} title={para.context}>{para.context}</div></div><button type="button" disabled={addingVariant === para.word || isExisting} onClick={() => onAddVariantToLibrary({ word: para.word, ipa: '' }, 'paraphrase')} className={`p-1 rounded-md transition-all mt-1 shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100' }`} >{addingVariant === para.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}</button></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic">No variations available.</div>)}</div>
                         
-                        <div className="space-y-1 md:col-span-4">
-                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><MessageSquare size={10}/> Related Idioms</label>
-                            {displayedIdioms.length > 0 ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">
-                                    {displayedIdioms.map((idiom: CollocationDetail, i: number) => {
-                                        const isExisting = existingVariants.has(idiom.text.toLowerCase());
-                                        const specificKey = `IDIOM_QUIZ:${idiom.text}`;
-                                        const specificResult = word.lastTestResults?.[specificKey];
-                                        let isFailed = false;
-                                        if (viewSettings.highlightFailed && !idiom.isIgnored) {
-                                            if (specificResult === false) {
-                                                isFailed = true;
-                                            } else if (specificResult === undefined && word.lastTestResults?.['IDIOM_QUIZ'] === false) {
-                                                isFailed = true;
-                                            }
-                                        }
-
-                                        let containerClass = "bg-amber-50/50 border-amber-100 text-amber-900";
-                                        if (isFailed) {
-                                            containerClass = "bg-red-50 border-red-200 text-red-700";
-                                        } else if (idiom.isIgnored) {
-                                            containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400";
-                                        }
-
-                                        return (
-                                            <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}>
-                                                <div className="flex-1 overflow-hidden">
-                                                    <div className="flex items-center gap-2">
-                                                        {isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}
-                                                        <span className={`truncate flex-1 ${idiom.isIgnored ? 'line-through' : ''}`} title={idiom.text}>{idiom.text}</span>
-                                                    </div>
-                                                    {idiom.d && !idiom.isIgnored && (<div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{idiom.d}</div>)}
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    disabled={addingVariant === idiom.text || isExisting || idiom.isIgnored}
-                                                    onClick={() => onAddVariantToLibrary({ word: idiom.text, ipa: '' }, 'idiom')}
-                                                    className={`p-1 rounded-md transition-all shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : idiom.isIgnored ? 'text-neutral-300 cursor-not-allowed' : 'text-neutral-400 hover:text-neutral-900 hover:bg-white/50' }`}
-                                                    title={isExisting ? 'Already in library' : 'Add to library'}
-                                                >
-                                                    {addingVariant === idiom.text ? <Loader2 size={12} className="animate-spin" /> : isExisting ? <CheckCircle2 size={12} /> : <Plus size={12} />}
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : (<div className="text-[10px] text-neutral-300 italic px-1">No related idioms found.</div>)}
-                        </div>
+                        <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><MessageSquare size={10}/> Related Idioms</label>{displayedIdioms.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 bg-white border border-neutral-100 p-3 rounded-xl">{displayedIdioms.map((idiom: CollocationDetail, i: number) => { const isExisting = existingVariants.has(idiom.text.toLowerCase()); const specificKey = `IDIOM_QUIZ:${idiom.text}`; const specificResult = word.lastTestResults?.[specificKey]; let isFailed = false; if (viewSettings.highlightFailed && !idiom.isIgnored) { if (specificResult === false) { isFailed = true; } else if (specificResult === undefined && word.lastTestResults?.['IDIOM_QUIZ'] === false) { isFailed = true; } } let containerClass = "bg-amber-50/50 border-amber-100 text-amber-900"; if (isFailed) { containerClass = "bg-red-50 border-red-200 text-red-700"; } else if (idiom.isIgnored) { containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400"; } return (<div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}><div className="flex-1 overflow-hidden"><div className="flex items-center gap-2">{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className={`truncate ${idiom.isIgnored ? 'line-through' : ''}`} title={idiom.text}>{idiom.text}</span><button onClick={(e) => { e.stopPropagation(); speak(idiom.text); }} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button></div>{idiom.d && !idiom.isIgnored && (<div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{idiom.d}</div>)}</div><button type="button" disabled={addingVariant === idiom.text || isExisting || idiom.isIgnored} onClick={() => onAddVariantToLibrary({ word: idiom.text, ipa: '' }, 'idiom')} className={`p-1 rounded-md transition-all shrink-0 ${ isExisting ? 'text-green-500 cursor-default' : idiom.isIgnored ? 'text-neutral-300 cursor-not-allowed' : 'text-neutral-400 hover:text-neutral-900 hover:bg-white/50' }`} title={isExisting ? 'Already in library' : 'Add to library'}>{addingVariant === idiom.text ? <Loader2 size={12} className="animate-spin" /> : isExisting ? <CheckCircle2 size={12} /> : <Plus size={12} />}</button></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No related idioms found.</div>)}</div>
 
                         {!viewSettings.isLearnView && (
                             <>
-                                <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Quote size={10}/> Examples</label>{word.example ? (<div className="p-4 bg-white rounded-xl border border-neutral-100 space-y-3">{word.example.split('\n').filter(line => line.trim() !== '').map((sentence, index) => ( <div key={index} className="flex items-start gap-3"><div className="w-1.5 h-1.5 bg-neutral-300 rounded-full mt-2 shrink-0"></div><p className="text-sm font-medium text-neutral-700 leading-relaxed">{sentence}</p></div>))}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No examples added.</div>)}</div>
-                        
                                 <div className="pt-8 space-y-4 md:col-span-4">
                                     <CollapsibleSection title="Tags & Flags" count={tagCount} icon={<TagIcon size={12} className="text-neutral-400"/>}>
                                         <div className="flex flex-wrap gap-1.5">{word.isIdiom && <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 text-[9px] font-black border border-amber-100">Idiom</span>}{word.isCollocation && <span className="px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 text-[9px] font-black border border-indigo-100">Colloc.</span>}{word.isPhrasalVerb && <span className="px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-[9px] font-black border border-blue-100">Phrasal</span>}{word.isIrregular && <span className="px-2 py-1 rounded-md bg-orange-50 text-orange-700 text-[9px] font-black border border-orange-100">Irreg.</span>}{word.tags && word.tags.length > 0 && (word.tags.map(t => <span key={t} className="px-2 py-1 rounded-md bg-neutral-100 text-neutral-600 text-[9px] font-bold border border-neutral-200">#{t}</span>))}</div>

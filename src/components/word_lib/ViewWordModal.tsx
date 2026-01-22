@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { VocabularyItem, Unit, ReviewGrade } from '../../app/types';
 import { findWordByText, saveWord, getUnitsContainingWord, getAllWords } from '../../app/dataStore';
@@ -6,6 +7,7 @@ import { createNewWord, updateSRS, calculateMasteryScore } from '../../utils/srs
 import TestModal from '../practice/TestModal';
 import { calculateWordDifficultyXp } from '../../app/useAppController';
 import { getConfig } from '../../app/settingsManager';
+import { MimicPractice } from '../labs/MimicPractice';
 
 interface Props {
   word: VocabularyItem;
@@ -25,6 +27,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   const [addingVariant, setAddingVariant] = useState<string | null>(null);
   const [existingVariants, setExistingVariants] = useState<Set<string>>(new Set());
   const [isChallenging, setIsChallenging] = useState(false);
+  const [isMimicOpen, setIsMimicOpen] = useState(false);
 
   useEffect(() => {
     setCurrentWord(word);
@@ -128,9 +131,6 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     // Use onUpdate to save the word state, which is the standard path.
     await onUpdate(updated);
     
-    // REMOVED: The onGainXp call was causing race conditions and duplicate notifications.
-    // "Test It" should only update mastery, not award XP, consistent with its behavior in ReviewSession.
-    
     setIsChallenging(false);
     setCurrentWord(updated); 
   };
@@ -146,10 +146,18 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   return (
     <>
     {isChallenging && <TestModal word={currentWord} onComplete={handleChallengeComplete} onClose={() => setIsChallenging(false)} />}
+    {isMimicOpen && (
+      <div className="fixed inset-0 z-[200] bg-white flex flex-col animate-in fade-in duration-200">
+        <div className="flex-1 overflow-auto">
+          <MimicPractice scopedWord={currentWord} onClose={() => setIsMimicOpen(false)} />
+        </div>
+      </div>
+    )}
     <ViewWordModalUI
       word={currentWord}
       onClose={onClose}
       onChallengeRequest={() => setIsChallenging(true)}
+      onMimicRequest={() => setIsMimicOpen(true)}
       onEditRequest={() => onEditRequest(currentWord)}
       onUpdate={handleLocalUpdate}
       linkedUnits={linkedUnits}

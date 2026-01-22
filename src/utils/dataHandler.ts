@@ -1,8 +1,9 @@
+
 import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, ComparisonGroup, IrregularVerb, AdventureProgress } from '../app/types';
 import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getComparisonGroupsByUserId, bulkSaveComparisonGroups, getIrregularVerbsByUserId, bulkSaveIrregularVerbs } from '../app/db';
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
-import { generateMap } from '../data/adventure_map';
+import { generateMap, BOSSES } from '../data/adventure_map';
 
 const keyMap: { [key: string]: string } = {
     // VocabularyItem top-level
@@ -531,6 +532,24 @@ export const processJsonImport = async (
                     // Regenerate Map if missing or invalid
                     if (!adv.map || !Array.isArray(adv.map) || adv.map.length === 0) {
                         adv.map = generateMap(100);
+                    } else {
+                        // Refresh Bosses: If using old map data, ensure boss details are current
+                        let bossCounter = 0;
+                        adv.map = adv.map.map((node: any, index: number) => {
+                            // Standard logic: every 10th node is a boss. 
+                            // Update details from the master list but preserve status.
+                            if ((index + 1) % 10 === 0) {
+                                node.type = 'boss';
+                                const newBossData = BOSSES[bossCounter % BOSSES.length];
+                                node.boss_details = {
+                                    ...newBossData,
+                                    // Preserve defeated status from the imported map if it exists
+                                    // (node is the imported node)
+                                };
+                                bossCounter++;
+                            }
+                            return node;
+                        });
                     }
                     
                     const userToSave = { ...sanitizedUser, id: importedUserId };

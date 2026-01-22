@@ -1,0 +1,8 @@
+# Application Name (used for container and image name)
+APP_NAME=vocab-pro
+
+# Host Port (the port you access in the browser)
+HOST_PORT=8080
+
+# Node.js Version for the build stage (e.g., 20-alpine, 18-alpine)
+NODE_VERSION=20-alpine

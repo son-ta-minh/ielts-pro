@@ -1,3 +1,4 @@
+
 import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
@@ -22,14 +23,16 @@ function _recalculateStats(userId: string) {
     const activeWords = wordsArray.filter(w => !w.isPassive && w.userId === userId);
 
     const total = activeWords.length;
-    const due = activeWords.filter(w => w.lastReview && w.nextReview <= now && w.quality === WordQuality.VERIFIED).length;
-    // FIX: Only count VERIFIED words as 'new' (ready to learn) to match db.getNewWords logic
-    const newCount = activeWords.filter(w => !w.lastReview && w.quality === WordQuality.VERIFIED).length;
-    const masteredCount = activeWords.filter(w => w.interval > 21).length;
-    const learningCount = total - newCount - masteredCount; // Note: 'total' here includes raw/refined, so this math might look weird if we don't adjust 'total' or 'learningCount' logic.
     
-    // Actually, learningCount is better calculated directly to avoid including Raw/Refined in 'Learned' if the math implies it.
-    // But 'learningCount' here is just for display. Let's calculate it directly.
+    // Due: Matches DB logic (Learned = has history, not failed). Allows reviewing raw words if they were learned before.
+    const due = activeWords.filter(w => w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED).length;
+    
+    // New: STRICTLY requires VERIFIED quality.
+    const newCount = activeWords.filter(w => !w.lastReview && w.quality === WordQuality.VERIFIED).length;
+    
+    const masteredCount = activeWords.filter(w => w.interval > 21).length;
+    const learningCount = total - newCount - masteredCount; 
+    
     const learningWords = activeWords.filter(w => !!w.lastReview && w.interval <= 21);
     const calculatedLearningCount = learningWords.length;
 
@@ -64,7 +67,8 @@ function _recalculateStats(userId: string) {
     const todayReviewedWords: VocabularyItem[] = [];
 
     activeWords.forEach(w => {
-        if (w.lastReview && w.lastReview >= todayTimestamp) {
+        // Exclude reviews from boss battles from daily stats to prevent energy farming
+        if (w.lastReview && w.lastReview >= todayTimestamp && w.lastReviewSessionType !== 'boss_battle') {
             if (w.lastGrade === ReviewGrade.FORGOT) todayReviewedWords.push(w);
             else if (w.consecutiveCorrect === 1) todayLearnedWords.push(w);
             else todayReviewedWords.push(w);

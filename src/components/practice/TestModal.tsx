@@ -1,10 +1,12 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-// FIX: Moved WordFamilyMember from './TestModalTypes' to the correct location in '../../app/types' and consolidated type imports.
-import { VocabularyItem, ReviewGrade, WordFamily, WordFamilyMember } from '../../app/types';
+import { VocabularyItem, ReviewGrade, WordFamily } from '../../app/types';
 import { TestModalUI } from './TestModal_UI';
-import { Challenge, ChallengeResult, ChallengeType, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge, PrepositionQuizChallenge } from './TestModalTypes';
-import { generateAvailableChallenges, prepareChallenges, gradeChallenge } from '../../utils/challengeUtils';
+import { Challenge, ChallengeType, RecapData } from './TestModalTypes';
+import { generateAvailableChallenges, prepareChallenges } from '../../utils/challengeUtils';
 import { Loader2 } from 'lucide-react';
+import { calculateMasteryScore, getLogicalKnowledgeUnits } from '../../utils/srs';
+import { useTestEngine } from './hooks/useTestEngine';
 
 interface Props {
   word: VocabularyItem;
@@ -15,142 +17,233 @@ interface Props {
   sessionPosition?: { current: number, total: number };
   onPrevWord?: () => void;
   disableHints?: boolean;
+  forceShowHint?: boolean;
+  skipSetup?: boolean;
+  challengeFilter?: (challenge: Challenge) => boolean;
+  skipRecap?: boolean;
 }
 
-const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = false, isModal = true, sessionPosition, onPrevWord, disableHints = false }) => {
-  const [isSetupMode, setIsSetupMode] = useState(!isQuickFire);
+const SHORT_TYPE_MAP: Record<string, string> = {
+    'SPELLING': 'sp', 'IPA_QUIZ': 'iq', 'PREPOSITION_QUIZ': 'pq',
+    'WORD_FAMILY': 'wf', 'MEANING_QUIZ': 'mq', 'PARAPHRASE_QUIZ': 'prq',
+    'SENTENCE_SCRAMBLE': 'sc', 'HETERONYM_QUIZ': 'hq', 'PRONUNCIATION': 'p',
+    'COLLOCATION_QUIZ': 'cq', 'IDIOM_QUIZ': 'idq',
+    'PARAPHRASE_CONTEXT_QUIZ': 'pcq', 'COLLOCATION_CONTEXT_QUIZ': 'ccq',
+    'COLLOCATION_MULTICHOICE_QUIZ': 'cmq', 'IDIOM_CONTEXT_QUIZ': 'icq'
+};
+
+const AUX_CHALLENGE_TYPES: string[] = [
+    'PARAPHRASE_CONTEXT_QUIZ',
+    'COLLOCATION_CONTEXT_QUIZ',
+    'IDIOM_CONTEXT_QUIZ',
+    'COLLOCATION_MULTICHOICE_QUIZ',
+    'HETERONYM_QUIZ'
+];
+
+// --- PRIORITY LOGIC ---
+
+const PRIORITIES = {
+    collocation: {
+        easy: ['COLLOCATION_CONTEXT_QUIZ', 'COLLOCATION_MULTICHOICE_QUIZ', 'COLLOCATION_QUIZ'],
+        hard: ['COLLOCATION_QUIZ', 'COLLOCATION_CONTEXT_QUIZ', 'COLLOCATION_MULTICHOICE_QUIZ']
+    },
+    paraphrase: {
+        easy: ['PARAPHRASE_CONTEXT_QUIZ', 'PARAPHRASE_QUIZ'],
+        hard: ['PARAPHRASE_QUIZ', 'PARAPHRASE_CONTEXT_QUIZ']
+    },
+    idiom: {
+        easy: ['IDIOM_CONTEXT_QUIZ', 'IDIOM_QUIZ'],
+        hard: ['IDIOM_QUIZ', 'IDIOM_CONTEXT_QUIZ']
+    }
+};
+
+// Set of all types that are part of a priority group to avoid adding them twice
+const GROUPED_TYPES = new Set([
+    ...PRIORITIES.collocation.easy,
+    ...PRIORITIES.paraphrase.easy,
+    ...PRIORITIES.idiom.easy
+]);
+
+const getDeduplicatedSelection = (availableSet: Set<ChallengeType>, mode: 'easy' | 'hard'): Set<ChallengeType> => {
+    const selected = new Set<ChallengeType>();
+    
+    // 1. Process Groups: Pick only ONE per group based on priority
+    (Object.keys(PRIORITIES) as Array<keyof typeof PRIORITIES>).forEach(groupKey => {
+        const priorityList = PRIORITIES[groupKey][mode];
+        for (const typeStr of priorityList) {
+            const type = typeStr as ChallengeType;
+            if (availableSet.has(type)) {
+                selected.add(type);
+                break; // Found the highest priority available for this group, stop looking
+            }
+        }
+    });
+
+    // 2. Process Standalone Types: Add everything else that isn't in a group
+    availableSet.forEach(type => {
+        if (!GROUPED_TYPES.has(type as string)) {
+            selected.add(type);
+        }
+    });
+
+    return selected;
+};
+
+// --- END PRIORITY LOGIC ---
+
+const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = false, isModal = true, sessionPosition, onPrevWord, disableHints = false, forceShowHint = false, skipSetup = false, challengeFilter, skipRecap = false }) => {
+  // Setup State
+  const [isSetupMode, setIsSetupMode] = useState(!isQuickFire && !skipSetup);
   const [selectedChallengeTypes, setSelectedChallengeTypes] = useState<Set<ChallengeType>>(new Set());
   const [isPreparing, setIsPreparing] = useState(false);
+  const [isQuickMode, setIsQuickMode] = useState(false); 
+  const [showHint, setShowHint] = useState(forceShowHint);
   
-  const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
-  const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<any[]>([]);
-  const [results, setResults] = useState<(ChallengeResult | null)[] | null>(null);
-  const [isFinishing, setIsFinishing] = useState(false);
+  // Recap State
+  const [recapData, setRecapData] = useState<RecapData | null>(null);
   
-  const [ignoredIndices, setIgnoredIndices] = useState<Set<number>>(new Set());
-  const [showHint, setShowHint] = useState(false);
+  // Engine
+  const engine = useTestEngine();
 
-  const availableChallenges = useMemo(() => generateAvailableChallenges(word), [word]);
+  // Reset hint on new question or when forceShowHint changes
+  useEffect(() => { 
+      setShowHint(forceShowHint); 
+  }, [engine.currentChallengeIndex, forceShowHint]);
 
-  const challengeStatuses = useMemo(() => {
+  const availableChallenges = useMemo(() => {
+      try {
+        return generateAvailableChallenges(word);
+      } catch (e) {
+        console.error("[TestModal] Error generating challenges:", e);
+        return [];
+      }
+  }, [word]);
+
+  const challengeStats = useMemo(() => {
     const history = word.lastTestResults || {};
-    const statuses = new Map<ChallengeType, { status: 'failed' | 'passed' | 'incomplete' | 'not_tested', tested: number, total: number }>();
+    const stats = new Map<ChallengeType, { score: number, total: number }>();
     const uniqueTypes = Array.from(new Set(availableChallenges.map(c => c.type)));
+
+    const getResult = (key: string, type: ChallengeType) => {
+        if (history[key] !== undefined) return history[key];
+        const shortType = SHORT_TYPE_MAP[type];
+        if (shortType) {
+            const suffix = key.startsWith(type) ? key.substring(type.length) : '';
+            const shortKey = shortType + suffix;
+            return history[shortKey];
+        }
+        return undefined;
+    };
 
     uniqueTypes.forEach((type: ChallengeType) => {
         const allOfType = availableChallenges.filter(c => c.type === type);
-        let total = allOfType.length;
-        
-        const getKey = (challenge: Challenge): string | null => {
-            switch(challenge.type) {
-                case 'COLLOCATION_QUIZ': return `COLLOCATION_QUIZ:${(challenge as CollocationQuizChallenge).fullText}`;
-                case 'IDIOM_QUIZ': return `IDIOM_QUIZ:${(challenge as IdiomQuizChallenge).fullText}`;
-                case 'PREPOSITION_QUIZ': return `PREPOSITION_QUIZ:${(challenge as PrepositionQuizChallenge).answer}`;
-                case 'PARAPHRASE_QUIZ': return `PARAPHRASE_QUIZ:${(challenge as ParaphraseQuizChallenge).answer}`;
-                default: return challenge.type;
-            }
-        };
         
         if (type === 'WORD_FAMILY') {
             const familyKeys: (keyof WordFamily)[] = ['nouns', 'verbs', 'adjs', 'advs'];
             const typeMap: Record<keyof WordFamily, string> = { nouns: 'n', verbs: 'v', adjs: 'j', advs: 'd' };
-            
-            const familyMembers = familyKeys.flatMap(key => 
-                (word.wordFamily?.[key] || []).map(m => ({...m, typeKey: key}))
-            ).filter(m => !m.isIgnored && m.word);
-            
-            const totalMembers = familyMembers.length;
-            if (totalMembers === 0) { 
-                statuses.set(type, { status: 'not_tested', tested: 0, total: 0 }); 
-                return; 
+            let currentScore = 0;
+            const familyMembers = familyKeys.flatMap(key => (word.wordFamily?.[key] || []).map(m => ({...m, typeKey: key}))).filter(m => !m.isIgnored && m.word);
+            if (familyMembers.length > 0) {
+                familyMembers.forEach(member => {
+                    const shortType = typeMap[member.typeKey];
+                    let result = history[`WORD_FAMILY:${shortType}:${member.word}`] ?? history[`wf:${shortType}:${member.word}`] ?? history[`WORD_FAMILY_${member.typeKey.toUpperCase()}`];
+                    if (result === true) currentScore++;
+                });
             }
-
-            let testedMembers = 0;
-            let hasFailure = false;
-
-            familyMembers.forEach(member => {
-                const shortType = typeMap[member.typeKey];
-                const key = `WORD_FAMILY:${shortType}:${member.word}`;
-                if (history[key] !== undefined) {
-                    testedMembers++;
-                    if (history[key] === false) hasFailure = true;
-                }
-            });
-            
-            let status: 'failed' | 'passed' | 'incomplete' | 'not_tested' = 'not_tested';
-            if (hasFailure) status = 'failed';
-            else if (testedMembers > 0 && testedMembers < totalMembers) status = 'incomplete';
-            else if (testedMembers === totalMembers && totalMembers > 0) status = 'passed';
-            
-            statuses.set(type, { status, tested: testedMembers, total: totalMembers });
+            stats.set(type, { score: currentScore, total: familyMembers.length });
             return;
         }
 
-        let tested = 0;
-        let failed = false;
-
+        let currentScore = 0;
         allOfType.forEach(challenge => {
-            const key = getKey(challenge);
-            if (key && history[key] !== undefined) {
-                tested++;
-                if (history[key] === false) failed = true;
-            }
+            let key: string = challenge.type;
+            if (challenge.type === 'COLLOCATION_QUIZ') key += `:${(challenge as any).fullText}`;
+            else if (challenge.type === 'COLLOCATION_MULTICHOICE_QUIZ') key += `:${(challenge as any).fullText}`;
+            else if (challenge.type === 'IDIOM_QUIZ') key += `:${(challenge as any).fullText}`;
+            else if (challenge.type === 'PREPOSITION_QUIZ') key += `:${(challenge as any).answer}`;
+            else if (challenge.type === 'PARAPHRASE_QUIZ') key += `:${(challenge as any).answer}`;
+            else if (challenge.type === 'PARAPHRASE_CONTEXT_QUIZ') key = 'PARAPHRASE_CONTEXT_QUIZ'; // Basic handling for now
+            else if (challenge.type === 'COLLOCATION_CONTEXT_QUIZ') key = 'COLLOCATION_CONTEXT_QUIZ';
+            else if (challenge.type === 'IDIOM_CONTEXT_QUIZ') key = 'IDIOM_CONTEXT_QUIZ';
+            
+            if (getResult(key, type) === true) currentScore++;
         });
-        
-        if (tested === 0 && history[type] !== undefined) {
-            tested = total;
-            if(history[type] === false) failed = true;
-        }
-
-        let status: 'failed' | 'passed' | 'incomplete' | 'not_tested' = 'not_tested';
-        if (failed) status = 'failed';
-        else if (tested > 0 && tested < total) status = 'incomplete';
-        else if (tested === total && total > 0) status = 'passed';
-
-        statuses.set(type, { status, tested, total });
+        stats.set(type, { score: currentScore, total: allOfType.length });
     });
-
-    return statuses;
+    return stats;
   }, [word, availableChallenges]);
 
+  // --- Auto-Start Logic ---
+
   useEffect(() => {
-    if (isQuickFire && availableChallenges.length > 0) {
+    if (isQuickFire && !isPreparing && engine.challenges.length === 0) {
+        if (availableChallenges.length === 0) {
+             setTimeout(onClose, 100);
+             return;
+        }
+
         const prepareQuickFire = async () => {
             setIsPreparing(true);
-            const randomTask = availableChallenges[Math.floor(Math.random() * availableChallenges.length)];
-            const finalChallenges = await prepareChallenges([randomTask], word);
+            let candidates = availableChallenges;
+            if (challengeFilter) candidates = availableChallenges.filter(challengeFilter);
+            if (candidates.length === 0) candidates = availableChallenges.filter(c => c.type !== 'SPELLING');
+            if (candidates.length === 0) candidates = availableChallenges;
+
+            const randomTask = candidates[Math.floor(Math.random() * candidates.length)];
             
-            setActiveChallenges(finalChallenges);
-            setUserAnswers(new Array(finalChallenges.length).fill(undefined));
-            setIsSetupMode(false);
-            setIsPreparing(false);
+            if (!randomTask) {
+                setIsPreparing(false);
+                setTimeout(onClose, 500);
+                return;
+            }
+
+            try {
+                const finalChallenges = await prepareChallenges([randomTask], word);
+                if (finalChallenges.length > 0) {
+                    engine.startTest(finalChallenges);
+                    setIsSetupMode(false);
+                } else {
+                    setTimeout(onClose, 500);
+                }
+            } catch (err) {
+                setTimeout(onClose, 500);
+            } finally {
+                setIsPreparing(false);
+            }
         };
         prepareQuickFire();
     }
-  }, [isQuickFire, availableChallenges, word]);
+  }, [isQuickFire, availableChallenges, word, challengeFilter]);
 
+  // Handle skipSetup prop
+  useEffect(() => {
+      if (skipSetup && !isQuickFire && availableChallenges.length > 0 && engine.challenges.length === 0 && !isPreparing) {
+          handleQuickStart();
+      }
+  }, [skipSetup, isQuickFire, availableChallenges.length, engine.challenges.length, isPreparing]);
+
+  // Logic for Auto-Selection in Setup
   useEffect(() => {
       if (isQuickFire || availableChallenges.length === 0) return;
-      
       const hasHistory = Object.keys(word.lastTestResults || {}).length > 0;
       const nextSelection = new Set<ChallengeType>();
 
-      if (!hasHistory) {
+      if (!hasHistory && !skipSetup) {
+          setIsQuickMode(false);
           availableChallenges.forEach(c => nextSelection.add(c.type));
       } else {
-          challengeStatuses.forEach((statusInfo, type) => {
-              if (statusInfo.status === 'failed' || statusInfo.status === 'incomplete') {
-                  nextSelection.add(type);
-              }
+          setIsQuickMode(true);
+          // Prefer quick/fun types if revisiting
+          ['MEANING_QUIZ', 'PREPOSITION_QUIZ', 'COLLOCATION_CONTEXT_QUIZ'].forEach(t => {
+               if (availableChallenges.some(c => c.type === t)) nextSelection.add(t as ChallengeType);
           });
       }
       setSelectedChallengeTypes(nextSelection);
-  }, [availableChallenges, word, isQuickFire, challengeStatuses]);
+  }, [availableChallenges, word, isQuickFire, skipSetup]);
 
-  useEffect(() => { setShowHint(false); }, [currentChallengeIndex]);
 
   const handleToggleChallenge = (type: ChallengeType) => {
+      setIsQuickMode(false);
       setSelectedChallengeTypes(prev => {
           const next = new Set(prev);
           if (next.has(type)) next.delete(type); else next.add(type);
@@ -158,201 +251,256 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       });
   };
 
-  const handleStartTest = async () => {
-      const selected = availableChallenges.filter(c => selectedChallengeTypes.has(c.type));
+  const handleStartTest = async (overrideSelection?: Set<ChallengeType>) => {
+      const selectionToUse = overrideSelection || selectedChallengeTypes;
+      let selected = availableChallenges.filter(c => selectionToUse.has(c.type));
+      
       if (selected.length === 0) return;
       setIsPreparing(true);
       const finalChallenges = await prepareChallenges(selected, word);
       
-      const shuffleChallenges = (challenges: Challenge[]): Challenge[] => {
-          const paraQuizzes = challenges.filter(c => c.type === 'PARAPHRASE_QUIZ');
-          const prepQuizzes = challenges.filter(c => c.type === 'PREPOSITION_QUIZ');
-          const otherQuizzes = challenges.filter(c => c.type !== 'PARAPHRASE_QUIZ' && c.type !== 'PREPOSITION_QUIZ');
-  
-          const shuffledPara = paraQuizzes.sort(() => Math.random() - 0.5);
-  
-          const itemsToShuffle: (Challenge | Challenge[])[] = [...otherQuizzes, ...shuffledPara];
-          if (prepQuizzes.length > 0) {
-              itemsToShuffle.push(prepQuizzes);
-          }
-          
-          for (let k = itemsToShuffle.length - 1; k > 0; k--) {
-              const l = Math.floor(Math.random() * (k + 1));
-              [itemsToShuffle[k], itemsToShuffle[l]] = [itemsToShuffle[l], itemsToShuffle[k]];
-          }
-  
-          return itemsToShuffle.flat();
-      };
+      // Shuffle logic
+      const shuffledChallenges = finalChallenges.sort(() => Math.random() - 0.5);
       
-      const shuffledChallenges = shuffleArray(finalChallenges);
-
-      setActiveChallenges(shuffledChallenges);
-      setUserAnswers(new Array(shuffledChallenges.length).fill(undefined));
+      engine.startTest(shuffledChallenges);
       setIsPreparing(false);
       setIsSetupMode(false);
   };
 
-  // Helper to shuffle without affecting the original array reference inside hooks if needed (though prepareChallenges does it)
-  // Re-implemented simple shuffle here for the handleStartTest
-  function shuffleArray<T>(array: T[]): T[] {
-      const newArray = [...array];
-      for (let i = newArray.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  const handleQuickStart = async () => {
+      const availableTypes = new Set<ChallengeType>(availableChallenges.map(c => c.type));
+      const selection = new Set<ChallengeType>();
+
+      // 1. Meaning
+      if (availableTypes.has('MEANING_QUIZ')) selection.add('MEANING_QUIZ');
+
+      // 2. Collocation (Easy Priority) - Pick exactly one best fit
+      for (const t of PRIORITIES.collocation.easy) {
+          if (availableTypes.has(t as ChallengeType)) {
+              selection.add(t as ChallengeType);
+              break;
+          }
       }
-      return newArray;
-  }
 
-  const currentChallenge = activeChallenges[currentChallengeIndex];
-
-  const currentPrepositionGroup = useMemo(() => {
-    if (currentChallenge?.type !== 'PREPOSITION_QUIZ') return null;
-    const group: { challenge: any; index: number }[] = [];
-    let startIndex = currentChallengeIndex;
-    while (startIndex > 0 && activeChallenges[startIndex - 1].type === 'PREPOSITION_QUIZ') { startIndex--; }
-    for (let i = startIndex; i < activeChallenges.length && activeChallenges[i].type === 'PREPOSITION_QUIZ'; i++) {
-        group.push({ challenge: activeChallenges[i], index: i });
-    }
-    if (group.length === 0) return null;
-    return { startIndex, group };
-  }, [currentChallenge, currentChallengeIndex, activeChallenges]);
-
-  const handleAnswerChange = (index: number, value: any) => {
-    setUserAnswers(prev => {
-      const newAnswers = [...prev];
-      newAnswers[index] = value;
-      return newAnswers;
-    });
-  };
-
-  const checkAnswers = async (isEarlyFinish = false, stopSession = false) => {
-    const newResults: (ChallengeResult | null)[] = [];
-    let correctCount = 0;
-    let actualTestedCount = 0;
-    const resultHistory: Record<string, boolean> = {};
-
-    activeChallenges.forEach((challenge, index) => {
-      if (ignoredIndices.has(index) || (isEarlyFinish && (userAnswers[index] === undefined || userAnswers[index] === ''))) {
-          newResults[index] = null;
-          return;
+      // 3. Paraphrase (Easy Priority) - Pick exactly one best fit
+      for (const t of PRIORITIES.paraphrase.easy) {
+          if (availableTypes.has(t as ChallengeType)) {
+              selection.add(t as ChallengeType);
+              break;
+          }
       }
+
+      // 4. Random from Pool (IPA, Prep, Family, Idiom)
+      const randomPool: ChallengeType[] = [];
+      if (availableTypes.has('IPA_QUIZ')) randomPool.push('IPA_QUIZ');
+      if (availableTypes.has('PREPOSITION_QUIZ')) randomPool.push('PREPOSITION_QUIZ');
+      if (availableTypes.has('WORD_FAMILY')) randomPool.push('WORD_FAMILY');
       
-      actualTestedCount++;
-      const result = gradeChallenge(challenge, userAnswers[index]);
-      newResults[index] = result;
-      const isCorrect = typeof result === 'boolean' ? result : result.correct;
-      if (isCorrect) correctCount++;
-      
-      if (challenge.type === 'WORD_FAMILY' && typeof result === 'object' && 'details' in result) {
-          Object.entries(result.details).forEach(([typedWord, correct]) => {
-              resultHistory[`WORD_FAMILY:${typedWord}`] = correct as boolean;
-          });
-      } else if (challenge.type === 'COLLOCATION_QUIZ') {
-          resultHistory[`COLLOCATION_QUIZ:${challenge.fullText}`] = isCorrect;
-      } else if (challenge.type === 'IDIOM_QUIZ') {
-          resultHistory[`IDIOM_QUIZ:${challenge.fullText}`] = isCorrect;
-      } else if (challenge.type === 'PARAPHRASE_QUIZ') {
-          resultHistory[`PARAPHRASE_QUIZ:${challenge.answer}`] = isCorrect;
-      } else if (challenge.type === 'PREPOSITION_QUIZ') {
-          resultHistory[`PREPOSITION_QUIZ:${challenge.answer}`] = isCorrect;
-      } else {
-          resultHistory[challenge.type] = isCorrect;
+      // Find best available idiom type to add to random pool
+      for (const t of PRIORITIES.idiom.easy) {
+          if (availableTypes.has(t as ChallengeType)) {
+              randomPool.push(t as ChallengeType);
+              break;
+          }
       }
-    });
 
-    let finalGrade: ReviewGrade = ReviewGrade.HARD;
-    if (actualTestedCount > 0) {
-        if (correctCount === actualTestedCount) finalGrade = actualTestedCount > 1 ? ReviewGrade.EASY : ReviewGrade.HARD;
-        else if (correctCount < actualTestedCount / 2) finalGrade = ReviewGrade.FORGOT;
-    }
-    
-    const counts = { correct: correctCount, tested: actualTestedCount };
+      if (randomPool.length > 0) {
+          const randomPick = randomPool[Math.floor(Math.random() * randomPool.length)];
+          selection.add(randomPick);
+      }
 
-    if (isEarlyFinish || isQuickFire) {
-        setResults(newResults);
-        setIsFinishing(true);
-        setTimeout(() => onComplete(finalGrade, resultHistory, stopSession, counts), isQuickFire ? 1500 : 2500);
-    } else {
-        onComplete(finalGrade, resultHistory, stopSession, counts);
-    }
+      if (selection.size === 0) {
+           // Fallback if strict selection found nothing (rare, but possible if word has only spelling/pronun)
+           const anySelection = getDeduplicatedSelection(availableTypes, 'easy');
+           if (anySelection.size > 0) {
+               setIsQuickMode(true);
+               handleStartTest(anySelection);
+               return;
+           }
+           return;
+      }
+
+      setIsQuickMode(true);
+      handleStartTest(selection);
   };
   
-  const isLastChallenge = useMemo(() => {
-     if (currentPrepositionGroup) {
-        const nextIndex = currentPrepositionGroup.startIndex + currentPrepositionGroup.group.length;
-        return nextIndex >= activeChallenges.length;
-     }
-     return currentChallengeIndex >= activeChallenges.length - 1;
-  }, [currentChallengeIndex, activeChallenges, currentPrepositionGroup]);
+  const handleMasterStart = () => {
+      const unmasteredTypes = new Set<ChallengeType>();
+      const logicalUnits = getLogicalKnowledgeUnits(word);
+      const history = word.lastTestResults || {};
 
-  const handleNextClick = () => {
-    if (isLastChallenge) { checkAnswers(); return; }
-    if (currentPrepositionGroup) { setCurrentChallengeIndex(currentPrepositionGroup.startIndex + currentPrepositionGroup.group.length); } 
-    else { setCurrentChallengeIndex(p => p + 1); }
-  };
-
-  const handleBackClick = () => {
-      if (currentChallengeIndex === 0 && sessionPosition && sessionPosition.current > 1 && onPrevWord) {
-          onPrevWord();
-          return;
-      }
-      const targetIndex = currentPrepositionGroup ? currentPrepositionGroup.startIndex - 1 : currentChallengeIndex - 1;
-      if (targetIndex >= 0) setCurrentChallengeIndex(targetIndex);
-  };
-
-  const handleIgnore = () => {
-      setIgnoredIndices(prev => {
-          const next = new Set(prev);
-          if (currentPrepositionGroup) { currentPrepositionGroup.group.forEach(item => next.add(item.index)); } 
-          else { next.add(currentChallengeIndex); }
-          return next;
+      // Filter logical units that have NOT been passed by ANY valid test
+      const unpassedUnits = logicalUnits.filter(unit => {
+          // If any key in testKeys is true, the unit is passed. We want unpassed.
+          return !unit.testKeys.some(key => history[key] === true);
       });
-      handleNextClick();
+
+      if (unpassedUnits.length === 0) {
+           // If all units passed, but user clicked "Master It", do a general check or fallback
+           // This handles cases where logicalUnits logic differs or user just wants to review
+           challengeStats.forEach((stat, type) => {
+               if (stat.score < stat.total) unmasteredTypes.add(type);
+           });
+           
+           if (unmasteredTypes.size === 0) return;
+           
+           // Deduplicate selection, favoring easier checks (recognition) if everything is supposedly fine
+           const selection = getDeduplicatedSelection(unmasteredTypes, 'easy');
+           handleStartTest(selection);
+           return;
+      }
+
+      // Collect required ChallengeTypes for the unpassed units
+      // We need to map back from the logical unit to available challenges.
+      // availableChallenges doesn't directly link to 'unit key', but we can infer or select all.
+      // Simpler approach: select ALL challenge types associated with unpassed areas.
+      
+      // We can use a heuristic mapping or just enable types that typically cover these areas.
+      // Or, better, check availableChallenges to see if they address any unpassed unit.
+      
+      // Let's iterate available challenges. If a challenge addresses an unpassed unit, add it.
+      availableChallenges.forEach(challenge => {
+          // Construct expected keys for this challenge
+          let keys: string[] = [];
+          if (challenge.type === 'COLLOCATION_QUIZ') keys.push(`COLLOCATION_QUIZ:${(challenge as any).fullText}`);
+          else if (challenge.type === 'COLLOCATION_MULTICHOICE_QUIZ') keys.push(`COLLOCATION_MULTICHOICE_QUIZ:${(challenge as any).fullText}`);
+          else if (challenge.type === 'COLLOCATION_CONTEXT_QUIZ') { /* Batch, hard to link to single unit without logic */ }
+          else if (challenge.type === 'PARAPHRASE_QUIZ') keys.push(`PARAPHRASE_QUIZ:${(challenge as any).answer}`);
+          else if (challenge.type === 'PREPOSITION_QUIZ') keys.push(`PREPOSITION_QUIZ:${(challenge as any).answer}`);
+          else if (challenge.type === 'SPELLING') keys.push('SPELLING');
+          else if (challenge.type === 'PRONUNCIATION') keys.push('PRONUNCIATION');
+          else if (challenge.type === 'MEANING_QUIZ') keys.push('MEANING_QUIZ');
+          else if (challenge.type === 'IPA_QUIZ') keys.push('IPA_QUIZ');
+          else if (challenge.type === 'WORD_FAMILY') keys.push('WORD_FAMILY'); // General family check
+
+          // If any key produced by this challenge corresponds to an unpassed unit's testKeys
+          const addressesUnpassed = keys.some(k => 
+              unpassedUnits.some(u => u.testKeys.includes(k) || u.testKeys.some(tk => tk.startsWith('WORD_FAMILY') && k === 'WORD_FAMILY'))
+          );
+          
+          if (addressesUnpassed) {
+              unmasteredTypes.add(challenge.type);
+          }
+          
+          // Special handling for Context Quizzes (Batch) - if any items in them are unpassed
+          if (challenge.type === 'COLLOCATION_CONTEXT_QUIZ') {
+              const unpassedCollocs = unpassedUnits.filter(u => u.key.startsWith('colloc:'));
+              if (unpassedCollocs.length > 0) unmasteredTypes.add(challenge.type);
+          }
+          if (challenge.type === 'PARAPHRASE_CONTEXT_QUIZ') {
+              const unpassedParas = unpassedUnits.filter(u => u.key.startsWith('para:'));
+              if (unpassedParas.length > 0) unmasteredTypes.add(challenge.type);
+          }
+           if (challenge.type === 'IDIOM_CONTEXT_QUIZ') {
+              const unpassedIdioms = unpassedUnits.filter(u => u.key.startsWith('idiom:'));
+              if (unpassedIdioms.length > 0) unmasteredTypes.add(challenge.type);
+          }
+      });
+
+      if (unmasteredTypes.size === 0) {
+          // Fallback if mapping failed
+           challengeStats.forEach((stat, type) => { if (stat.score < stat.total) unmasteredTypes.add(type); });
+      }
+
+      // Prioritize easier validation (Multi/Match) for "Master It" to help learning, 
+      // but ensure we cover the unmastered areas.
+      const selection = getDeduplicatedSelection(unmasteredTypes, 'easy');
+      
+      setIsQuickMode(false);
+      handleStartTest(selection);
   };
 
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Enter' && !isSetupMode && !isFinishing && !isPreparing) {
-            e.preventDefault();
-            handleNextClick();
-        }
-    };
+  const handleChallengeStart = async () => {
+      const allTypes = new Set<ChallengeType>(availableChallenges.map(c => c.type));
+      // Challenge = Hard Priority (All categories, hardest versions)
+      const selection = getDeduplicatedSelection(allTypes, 'hard');
 
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isSetupMode, isFinishing, isPreparing, handleNextClick]);
+      if (selection.size === 0) return;
 
-  if (isQuickFire && (isPreparing || !currentChallenge)) {
-    const loaderContent = (
-      <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center space-y-4">
-          <Loader2 className="animate-spin text-neutral-400" size={32} />
-          <p className="text-xs font-black text-neutral-500 uppercase tracking-widest">Preparing Challenge...</p>
-      </div>
-    );
+      setIsQuickMode(false);
+      handleStartTest(selection);
+  };
 
+  const handleFinish = (stopSession = false) => {
+      const { finalGrade, resultHistory, detailedResults, counts } = engine.checkAnswers();
+      engine.finishTest();
+
+      if (skipRecap || isQuickFire) {
+           setTimeout(() => onComplete(finalGrade, resultHistory, stopSession, counts), 1000);
+      } else {
+          const oldMastery = word.masteryScore || 0;
+          const oldStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
+          const tempWord = { ...word, lastTestResults: { ...(word.lastTestResults || {}), ...resultHistory } };
+          const newMastery = calculateMasteryScore(tempWord);
+
+          setRecapData({
+              oldMastery, newMastery, oldStatus, newStatus: finalGrade,
+              results: detailedResults, finalGrade, resultHistory, counts
+          });
+      }
+  };
+
+  const handleNext = () => {
+      if (engine.isLastChallenge) {
+          handleFinish(false);
+      } else {
+          engine.handleNext();
+      }
+  };
+
+  const formatTime = (totalSeconds: number) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const filteredStats = useMemo(() => {
+      const stats = new Map<ChallengeType, { score: number, total: number }>();
+      challengeStats.forEach((stat, type) => { if (!AUX_CHALLENGE_TYPES.includes(type)) stats.set(type, stat); });
+      return stats;
+  }, [challengeStats]);
+
+  const isMastered = useMemo(() => {
+    // Rely on the robust calculation from srs.ts which considers all alternatives
+    return calculateMasteryScore(word) === 100;
+  }, [word]);
+
+  if (!isSetupMode && !isPreparing && !engine.currentChallenge) {
     if (isModal) {
-      return (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col h-[500px] max-h-[90vh]">
-            {loaderContent}
-          </div>
-        </div>
-      );
+         return (
+             <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                 <div className="bg-white p-6 rounded-2xl shadow-xl text-center space-y-4">
+                     <p className="text-red-500 font-bold">Failed to load challenge.</p>
+                     <button onClick={onClose} className="px-4 py-2 bg-neutral-100 rounded-lg text-sm font-bold">Close</button>
+                 </div>
+             </div>
+         );
     }
+    return <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-4"><Loader2 className="animate-spin text-neutral-400" size={32} /><p className="text-red-500 font-bold">Error loading.</p><button onClick={onClose} className="text-xs underline text-neutral-500">Return</button></div>;
+  }
+
+  if ((isQuickFire || skipSetup) && (isPreparing || !engine.currentChallenge)) {
+    const loaderContent = <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center space-y-4"><Loader2 className="animate-spin text-neutral-400" size={32} /><p className="text-xs font-black text-neutral-500 uppercase tracking-widest">Preparing...</p></div>;
+    if (isModal) return <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col h-[500px]">{loaderContent}</div></div>;
     return loaderContent;
   }
 
   return (
     <TestModalUI
       isModal={isModal} word={word} onClose={onClose} isSetupMode={isSetupMode} isPreparing={isPreparing} availableChallenges={availableChallenges}
-      selectedChallengeTypes={selectedChallengeTypes} onToggleChallenge={handleToggleChallenge} onSetSelection={setSelectedChallengeTypes}
-      onStartTest={handleStartTest} challenges={activeChallenges} currentChallenge={currentChallenge}
-      currentChallengeIndex={currentChallengeIndex} userAnswers={userAnswers} handleAnswerChange={handleAnswerChange}
-      results={results} isFinishing={isFinishing} currentPrepositionGroup={currentPrepositionGroup} isLastChallenge={isLastChallenge}
-      handleNextClick={handleNextClick} handleBackClick={handleBackClick} handleIgnore={handleIgnore} handleFinishEarly={(stopSession = false) => checkAnswers(true, stopSession)}
+      selectedChallengeTypes={selectedChallengeTypes} onToggleChallenge={handleToggleChallenge} onSetSelection={(s) => { setSelectedChallengeTypes(s); setIsQuickMode(false); }}
+      onStartTest={() => handleStartTest()} challenges={engine.challenges} currentChallenge={engine.currentChallenge}
+      currentChallengeIndex={engine.currentChallengeIndex} userAnswers={engine.userAnswers} handleAnswerChange={engine.setAnswer}
+      results={engine.results} isFinishing={engine.isFinishing} currentPrepositionGroup={engine.currentPrepositionGroup} isLastChallenge={engine.isLastChallenge}
+      handleNextClick={handleNext} handleBackClick={engine.handleBack} handleIgnore={engine.handleIgnore} handleFinishEarly={handleFinish}
       showHint={showHint} onToggleHint={() => setShowHint(!showHint)} sessionPosition={sessionPosition}
-      challengeStatuses={challengeStatuses}
-      disableHints={disableHints}
+      challengeStats={filteredStats} disableHints={disableHints}
+      onSelectQuick={handleQuickStart} onSelectPreferred={handleMasterStart}
+      onSelectZeroScore={handleMasterStart} onSelectPartialScore={handleChallengeStart} 
+      isQuickMode={isQuickMode} elapsedTime={formatTime(engine.elapsedSeconds)}
+      recapData={recapData}
+      onRecalculateFinish={() => recapData && onComplete(recapData.finalGrade, recapData.resultHistory, false, recapData.counts)}
+      isMastered={isMastered} 
     />
   );
 };

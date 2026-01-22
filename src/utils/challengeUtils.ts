@@ -1,5 +1,6 @@
+
 import { VocabularyItem, WordFamily, PrepositionPattern } from '../app/types';
-import { Challenge, ChallengeType, IpaQuizChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, ChallengeResult, HeteronymQuizChallenge, HeteronymForm, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseContextQuizChallenge, ParaphraseContextQuizItem } from '../components/practice/TestModalTypes';
+import { Challenge, ChallengeType, IpaQuizChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, ChallengeResult, HeteronymQuizChallenge, HeteronymForm, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseContextQuizChallenge, ParaphraseContextQuizItem, CollocationContextQuizChallenge, CollocationContextQuizItem, CollocationMultichoiceQuizChallenge, IdiomContextQuizChallenge, IdiomContextQuizItem } from '../components/practice/TestModalTypes';
 import { getRandomMeanings } from '../app/db';
 
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
@@ -13,29 +14,55 @@ const normalizeAnswerForGrading = (str: string): string => str.replace(/[^a-zA-Z
 export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
     const list: Challenge[] = [];
     
-    list.push({ type: 'SPELLING', title: 'Spelling Drill', word });
+    list.push({ type: 'SPELLING', title: 'Spelling Fill', word });
     list.push({ type: 'PRONUNCIATION', title: 'Speak Out', word });
     
     if (word.meaningVi && word.meaningVi.length > 0) {
-        list.push({ type: 'MEANING_QUIZ', title: 'Meaning Recall', options: [], answer: word.meaningVi, word });
+        list.push({ type: 'MEANING_QUIZ', title: 'Meaning Multi Choice', options: [], answer: word.meaningVi, word });
     }
 
     if (word.ipaMistakes && word.ipaMistakes.length > 0) {
-      list.push({ type: 'IPA_QUIZ', title: 'Pronunciation Check', options: shuffleArray([word.ipa, ...word.ipaMistakes]), answer: word.ipa, word });
+      list.push({ type: 'IPA_QUIZ', title: 'IPA Multi Choice', options: shuffleArray([word.ipa, ...word.ipaMistakes]), answer: word.ipa, word });
     }
 
     if (word.collocationsArray && word.collocationsArray.length > 0) {
+        // Individual Collocation Challenges
         const activeCollocs = word.collocationsArray.filter(c => !c.isIgnored && c.d);
         activeCollocs.forEach(colloc => {
+            // Fill Challenge
             list.push({
                 type: 'COLLOCATION_QUIZ',
-                title: 'Collocation Recall',
+                title: 'Collocation Fill',
                 word,
                 fullText: colloc.text,
                 cue: colloc.d!,
                 answer: colloc.text
             });
+
+            // Multi Choice Challenge (only if enough distractors exist)
+            if (activeCollocs.length >= 4) {
+                 list.push({
+                    type: 'COLLOCATION_MULTICHOICE_QUIZ',
+                    title: 'Collocation Multi Choice',
+                    word,
+                    fullText: colloc.text,
+                    cue: colloc.d!,
+                    answer: colloc.text,
+                    options: [] // To be filled in prepare
+                });
+            }
         });
+
+        // Grouped Collocation Context Match (New)
+        if (activeCollocs.length >= 2) {
+            list.push({ 
+                type: 'COLLOCATION_CONTEXT_QUIZ', 
+                title: 'Collocation Match', 
+                word, 
+                contexts: [], 
+                collocations: [] 
+            });
+        }
     }
 
     if (word.idiomsList && word.idiomsList.length > 0) {
@@ -43,13 +70,24 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
         activeIdioms.forEach(idiom => {
             list.push({
                 type: 'IDIOM_QUIZ',
-                title: 'Idiom Recall',
+                title: 'Idiom Fill',
                 word,
                 fullText: idiom.text,
                 cue: idiom.d!,
                 answer: idiom.text
             });
         });
+
+        // Grouped Idiom Context Match (New)
+        if (activeIdioms.length >= 2) {
+            list.push({ 
+                type: 'IDIOM_CONTEXT_QUIZ', 
+                title: 'Idiom Match', 
+                word, 
+                contexts: [], 
+                idioms: [] 
+            });
+        }
     }
 
     if (word.prepositions && word.prepositions.length > 0) {
@@ -82,7 +120,7 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
             quizPhrase = `${headword} ___`;
         }
         
-        list.push({ type: 'PREPOSITION_QUIZ', title: 'Fill in the Prepositions', example: quizPhrase, answer: prep, word });
+        list.push({ type: 'PREPOSITION_QUIZ', title: 'Preposition Fill', example: quizPhrase, answer: prep, word });
       });
     }
 
@@ -151,7 +189,7 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
         );
 
         if (hasDistinctFamilyMembers) {
-            list.push({ type: 'WORD_FAMILY', title: 'Word Family Recall', word });
+            list.push({ type: 'WORD_FAMILY', title: 'Word Family Fill', word });
         }
     }
     
@@ -174,7 +212,7 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
     if (formsToTest.length >= 2) {
         list.push({
             type: 'HETERONYM_QUIZ',
-            title: 'Heteronym Challenge',
+            title: 'Heteronym Match',
             word,
             forms: formsToTest,
             ipaOptions: shuffleArray(formsToTest.map(f => f.ipa))
@@ -183,12 +221,12 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
 
     if (word.paraphrases && word.paraphrases.length > 0) {
         word.paraphrases.filter(p => !p.isIgnored).forEach(para => {
-            list.push({ type: 'PARAPHRASE_QUIZ', title: 'Word Power Recall', tone: para.tone, context: para.context, answer: para.word, word });
+            list.push({ type: 'PARAPHRASE_QUIZ', title: 'Paraphrase Fill', tone: para.tone, context: para.context, answer: para.word, word });
         });
     }
 
     if (word.paraphrases && word.paraphrases.filter(p => !p.isIgnored && p.context && p.context.trim()).length >= 2) {
-        list.push({ type: 'PARAPHRASE_CONTEXT_QUIZ', title: 'Paraphrase Context', word, contexts: [], paraphrases: [] });
+        list.push({ type: 'PARAPHRASE_CONTEXT_QUIZ', title: 'Paraphrase Match', word, contexts: [], paraphrases: [] });
     }
 
     return list;
@@ -204,7 +242,17 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
             const distractors = await getRandomMeanings(word.userId, 3, word.id);
             const options = shuffleArray([word.meaningVi, ...distractors]);
             finalChallenges.push({ ...challenge, options } as MeaningQuizChallenge);
-        } else if (challenge.type === 'PARAPHRASE_CONTEXT_QUIZ') {
+        } 
+        else if (challenge.type === 'COLLOCATION_MULTICHOICE_QUIZ') {
+            const validCollocs = (word.collocationsArray || []).filter(c => !c.isIgnored && c.text !== challenge.answer);
+            const distractors = validCollocs.map(c => c.text);
+            const shuffledOptions = shuffleArray([challenge.answer, ...distractors]).slice(0, 4);
+            finalChallenges.push({ 
+                ...challenge, 
+                options: shuffledOptions 
+            } as CollocationMultichoiceQuizChallenge);
+        }
+        else if (challenge.type === 'PARAPHRASE_CONTEXT_QUIZ') {
             const word = challenge.word;
             const validParaphrases = (word.paraphrases || [])
                 .filter(p => !p.isIgnored && p.context && p.context.trim())
@@ -226,6 +274,54 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
                     contexts: contextItems,
                     paraphrases: shuffleArray(paraphraseItems) // Shuffle paraphrases
                 } as ParaphraseContextQuizChallenge);
+            }
+        }
+        else if (challenge.type === 'COLLOCATION_CONTEXT_QUIZ') {
+            const word = challenge.word;
+            const validCollocs = (word.collocationsArray || [])
+                .filter(c => !c.isIgnored && c.d && c.d.trim())
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 5); // Take up to 5 pairs
+
+            if (validCollocs.length >= 2) {
+                const contextItems: CollocationContextQuizItem[] = [];
+                const collocItems: CollocationContextQuizItem[] = [];
+
+                validCollocs.forEach((c, index) => {
+                    const pairId = `${word.id}-col-${index}`;
+                    contextItems.push({ id: `context-${pairId}`, text: c.d!, pairId });
+                    collocItems.push({ id: `col-${pairId}`, text: c.text, pairId });
+                });
+
+                finalChallenges.push({
+                    ...challenge,
+                    contexts: contextItems,
+                    collocations: shuffleArray(collocItems)
+                } as CollocationContextQuizChallenge);
+            }
+        }
+        else if (challenge.type === 'IDIOM_CONTEXT_QUIZ') {
+            const word = challenge.word;
+            const validIdioms = (word.idiomsList || [])
+                .filter(i => !i.isIgnored && i.d && i.d.trim())
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 5); // Take up to 5 pairs
+
+            if (validIdioms.length >= 2) {
+                const contextItems: IdiomContextQuizItem[] = [];
+                const idiomItems: IdiomContextQuizItem[] = [];
+
+                validIdioms.forEach((i, index) => {
+                    const pairId = `${word.id}-idm-${index}`;
+                    contextItems.push({ id: `context-${pairId}`, text: i.d!, pairId });
+                    idiomItems.push({ id: `idm-${pairId}`, text: i.text, pairId });
+                });
+
+                finalChallenges.push({
+                    ...challenge,
+                    contexts: contextItems,
+                    idioms: shuffleArray(idiomItems)
+                } as IdiomContextQuizChallenge);
             }
         }
         else {
@@ -252,6 +348,8 @@ export function gradeChallenge(challenge: Challenge, answer: any): ChallengeResu
             return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.answer);
         case 'COLLOCATION_QUIZ':
             return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.answer);
+        case 'COLLOCATION_MULTICHOICE_QUIZ':
+            return answer === challenge.answer;
         case 'IDIOM_QUIZ':
             return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.answer);
         case 'SENTENCE_SCRAMBLE':
@@ -325,6 +423,64 @@ export function gradeChallenge(challenge: Challenge, answer: any): ChallengeResu
                 if (selectedParaphraseId) {
                     const selectedParaphrase = ch.paraphrases.find(p => p.id === selectedParaphraseId);
                     if (selectedParaphrase && selectedParaphrase.pairId === context.pairId) {
+                        details[context.id] = true;
+                        correctCount++;
+                    } else {
+                        details[context.id] = false;
+                    }
+                } else {
+                    details[context.id] = false;
+                }
+            });
+            
+            return {
+                correct: correctCount === ch.contexts.length,
+                details
+            };
+        }
+        case 'COLLOCATION_CONTEXT_QUIZ': {
+            const ch = challenge as CollocationContextQuizChallenge;
+            if (!(answer instanceof Map) || answer.size === 0) {
+                return { correct: false, details: {} };
+            }
+
+            const details: Record<string, boolean> = {};
+            let correctCount = 0;
+
+            ch.contexts.forEach(context => {
+                const selectedId = answer.get(context.id);
+                if (selectedId) {
+                    const selectedItem = ch.collocations.find(i => i.id === selectedId);
+                    if (selectedItem && selectedItem.pairId === context.pairId) {
+                        details[context.id] = true;
+                        correctCount++;
+                    } else {
+                        details[context.id] = false;
+                    }
+                } else {
+                    details[context.id] = false;
+                }
+            });
+            
+            return {
+                correct: correctCount === ch.contexts.length,
+                details
+            };
+        }
+        case 'IDIOM_CONTEXT_QUIZ': {
+            const ch = challenge as IdiomContextQuizChallenge;
+            if (!(answer instanceof Map) || answer.size === 0) {
+                return { correct: false, details: {} };
+            }
+
+            const details: Record<string, boolean> = {};
+            let correctCount = 0;
+
+            ch.contexts.forEach(context => {
+                const selectedId = answer.get(context.id);
+                if (selectedId) {
+                    const selectedItem = ch.idioms.find(i => i.id === selectedId);
+                    if (selectedItem && selectedItem.pairId === context.pairId) {
                         details[context.id] = true;
                         correctCount++;
                     } else {

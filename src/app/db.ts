@@ -1,3 +1,4 @@
+
 import { VocabularyItem, User, Unit, ReviewGrade, WordQuality, ParaphraseLog, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, ComparisonGroup, IrregularVerb } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
@@ -18,6 +19,30 @@ const DB_VERSION = 13;
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
 
+// --- DEBUG HELPER ---
+const verifyStoreIntegrity = async (caller: string) => {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).count();
+        
+        req.onsuccess = () => {
+            const count = req.result;
+            console.log(`[DB_INTEGRITY] Check after '${caller}': Total words in DB = ${count}`);
+            if (count === 0) {
+                console.error(`[DB_CRITICAL_FAILURE] 🚨 DATABASE IS EMPTY AFTER ${caller}! DATA LOSS DETECTED.`);
+                console.trace(`[DB_TRACE] Stack trace for ${caller}:`);
+            }
+        };
+        
+        req.onerror = (e) => {
+            console.error(`[DB_CRITICAL] Error verifying DB integrity after ${caller}`, (e.target as IDBRequest).error);
+        };
+    } catch (e) {
+        console.error(`[DB_CRITICAL] Failed to open DB for verification after ${caller}`, e);
+    }
+};
+
 const openDB = (): Promise<IDBDatabase> => {
   if (_dbInstance) {
     return Promise.resolve(_dbInstance);
@@ -26,10 +51,13 @@ const openDB = (): Promise<IDBDatabase> => {
     return _dbPromise;
   }
 
+  console.log(`[DB] Opening database connection (${DB_NAME} v${DB_VERSION})...`);
+
   _dbPromise = new Promise((resolve, reject) => {
     try {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onupgradeneeded = (event) => {
+        console.log(`[DB] Upgrade needed from version ${event.oldVersion} to ${event.newVersion}`);
         const db = (event.target as IDBOpenDBRequest).result;
         
         if (!db) {
@@ -107,29 +135,53 @@ const openDB = (): Promise<IDBDatabase> => {
       };
       request.onsuccess = () => {
         _dbInstance = request.result;
-        _dbInstance.onclose = () => { _dbInstance = null; _dbPromise = null; };
-        _dbInstance.onversionchange = () => { _dbInstance?.close(); _dbInstance = null; _dbPromise = null; window.location.reload(); };
+        _dbInstance.onclose = () => { 
+            console.warn("[DB] Database connection closed unexpectedly.");
+            _dbInstance = null; 
+            _dbPromise = null; 
+        };
+        _dbInstance.onversionchange = () => { 
+            console.warn("[DB] Database version change detected. Closing connection.");
+            _dbInstance?.close(); 
+            _dbInstance = null; 
+            _dbPromise = null; 
+            window.location.reload(); 
+        };
         resolve(_dbInstance);
       };
-      request.onerror = (event) => { _dbPromise = null; reject((event.target as IDBOpenDBRequest).error); };
-    } catch (e) { _dbPromise = null; reject(e); }
+      request.onerror = (event) => { 
+          console.error("[DB] Open DB Error:", (event.target as IDBOpenDBRequest).error);
+          _dbPromise = null; 
+          reject((event.target as IDBOpenDBRequest).error); 
+      };
+    } catch (e) { 
+        console.error("[DB] Open DB Exception:", e);
+        _dbPromise = null; 
+        reject(e); 
+    }
   });
 
   return _dbPromise;
 };
 
 export const clearVocabularyOnly = async (): Promise<void> => {
+  console.warn("[DB] ⚠️ clearVocabularyOnly called! This wipes data.");
+  console.trace();
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const stores: string[] = [STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, COMPARISON_STORE, IRREGULAR_VERBS_STORE];
     const tx = db.transaction(stores, 'readwrite');
     stores.forEach(s => tx.objectStore(s).clear());
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => {
+        console.log("[DB] Vocabulary cleared successfully.");
+        resolve();
+    };
     tx.onerror = () => reject(tx.error);
   });
 };
 
 export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User | null> => {
+  console.log(`[DB] Checking seedDatabaseIfEmpty (force=${force})...`);
   const db = await openDB();
   
   // 1. Check existing users
@@ -149,10 +201,8 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
     countReq.onerror = () => resolve(false);
   });
   
-  // 3. Decision Logic:
-  // If we have users, we generally respect the existing data state and skip seeding unless forced.
-  // HOWEVER, if we have NO users (existingUsers.length === 0), we MUST seed a user, 
-  // even if 'hasData' is true (which implies orphaned vocabulary).
+  console.log(`[DB] Existing Users: ${existingUsers.length}, Has Vocab: ${hasData}`);
+
   if (!force && existingUsers.length > 0) {
       if (hasData || sessionStorage.getItem('ielts_pro_skip_seed') === 'true') {
           return null;
@@ -185,6 +235,7 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
         map: [], // Will be generated if empty
       }
     };
+    console.log("[DB] Creating default user...");
     await saveUser(targetUser);
   } else {
     targetUser = existingUsers[0];
@@ -212,6 +263,7 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
 
   // Only seed vocabulary if there is no data
   if (!hasData) {
+      console.log("[DB] Seeding vocabulary...");
       let vocabToSeed: VocabularyItem[] = [];
       try {
         const localResponse = await fetch(LOCAL_SHIPPED_DATA_PATH);
@@ -322,13 +374,15 @@ export const filterItem = (item: VocabularyItem, query: string, filterTypes: str
     if (lowerQuery && !(item.word.toLowerCase().includes(lowerQuery) || item.meaningVi.toLowerCase().includes(lowerQuery))) return false;
     if (item.isPassive && !filterTypes.includes('archive')) return false;
 
+    // Filter Logic for Quality
     if (refinedFilter !== 'all') {
-        if ((refinedFilter === 'refined' && item.quality !== WordQuality.REFINED) ||
-            (refinedFilter === 'verified' && item.quality !== WordQuality.VERIFIED) ||
-            (refinedFilter === 'failed' && item.quality !== WordQuality.FAILED) ||
-            (refinedFilter === 'raw' && item.quality !== WordQuality.RAW) ||
-            (refinedFilter === 'not_refined' && item.quality !== WordQuality.RAW)) return false;
+        if (refinedFilter === 'refined' && item.quality !== WordQuality.REFINED) return false;
+        if (refinedFilter === 'verified' && item.quality !== WordQuality.VERIFIED) return false;
+        if (refinedFilter === 'failed' && item.quality !== WordQuality.FAILED) return false;
+        if (refinedFilter === 'raw' && item.quality !== WordQuality.RAW) return false;
+        if (refinedFilter === 'not_refined' && item.quality !== WordQuality.RAW) return false;
     }
+
     if (statusFilter !== 'all') {
         const isNew = !item.lastReview;
         const isLearned = !!item.lastReview && item.consecutiveCorrect === 1 && item.lastGrade !== ReviewGrade.FORGOT;
@@ -358,7 +412,19 @@ export const getReviewCounts = async (userId: string): Promise<{ total: number, 
     req.onsuccess = () => {
       const all = (req.result || []) as VocabularyItem[];
       const active = all.filter(w => !w.isPassive);
-      resolve({ total: active.length, due: active.filter(w => w.lastReview && w.nextReview <= now && w.quality === WordQuality.VERIFIED).length, newWords: active.filter(w => !w.lastReview && w.quality === WordQuality.VERIFIED).length, learned: active.filter(w => !!w.lastReview).length });
+      
+      // Due: Include any Learned word (has review history) that is not FAILED, to allow review of legacy raw words.
+      const isDueWord = (w: VocabularyItem) => w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED;
+      
+      // New: Strictly require VERIFIED to be considered "Ready to Learn".
+      const isNewWord = (w: VocabularyItem) => !w.lastReview && w.quality === WordQuality.VERIFIED;
+
+      resolve({ 
+          total: active.length, 
+          due: active.filter(isDueWord).length, 
+          newWords: active.filter(isNewWord).length, 
+          learned: active.filter(w => !!w.lastReview).length 
+      });
     };
     req.onerror = () => reject(req.error);
   });
@@ -374,8 +440,11 @@ export const getDueWords = async (userId: string, limit: number = 30): Promise<V
 
     req.onsuccess = () => {
       const allItems = (req.result || []) as VocabularyItem[];
+      
+      // Review Session: Allow any learned word (has history) as long as it's not failed/passive.
+      // This ensures legacy RAW words that were already studied don't get stuck.
       const dueWords = allItems
-        .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality === WordQuality.VERIFIED)
+        .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED)
         .sort((a, b) => a.nextReview - b.nextReview)
         .slice(0, limit);
       resolve(dueWords);
@@ -383,6 +452,7 @@ export const getDueWords = async (userId: string, limit: number = 30): Promise<V
     req.onerror = () => reject(req.error);
   });
 };
+
 export const getNewWords = async (userId: string, limit: number = 20): Promise<VocabularyItem[]> => {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -392,6 +462,8 @@ export const getNewWords = async (userId: string, limit: number = 20): Promise<V
 
     req.onsuccess = () => {
       const allItems = (req.result || []) as VocabularyItem[];
+      
+      // Learn Session: STRICTLY require VERIFIED quality.
       const newWords = allItems
         .filter(w => !w.isPassive && !w.lastReview && w.quality === WordQuality.VERIFIED)
         .sort((a, b) => a.createdAt - b.createdAt)
@@ -417,12 +489,45 @@ export const saveWordAndUser = async (word: VocabularyItem, user: User): Promise
         tx.objectStore(STORE_NAME).put(word);
         tx.objectStore(USER_STORE).put(user);
     });
+    // For single word/user save, we don't necessarily need a full integrity check every time if performance is key, 
+    // but if user reported corruption, safety first.
+    await verifyStoreIntegrity('saveWordAndUser');
 };
 
-export const saveWord = async (item: VocabularyItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).put(item)); };
-export const deleteWordFromDB = async (id: string): Promise<void> => { await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).delete(id)); };
-export const bulkDeleteWords = async (ids: string[]): Promise<void> => { await crudTemplate(STORE_NAME, tx => { const store = tx.objectStore(STORE_NAME); ids.forEach(id => store.delete(id)); }); };
-export const bulkSaveWords = async (items: VocabularyItem[]): Promise<void> => { await crudTemplate(STORE_NAME, tx => { const store = tx.objectStore(STORE_NAME); items.forEach(i => store.put(i)); }); };
+export const saveWord = async (item: VocabularyItem): Promise<void> => { 
+    item.updatedAt = Date.now(); 
+    if (!item.userId) {
+        console.error(`[DB_CRITICAL] Attempting to save word ${item.word} with NO USER ID!`);
+        console.trace();
+        throw new Error("Cannot save word without UserID");
+    }
+    await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).put(item)); 
+    await verifyStoreIntegrity('saveWord');
+};
+
+export const deleteWordFromDB = async (id: string): Promise<void> => { 
+    await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).delete(id)); 
+    await verifyStoreIntegrity('deleteWordFromDB');
+};
+
+export const bulkDeleteWords = async (ids: string[]): Promise<void> => { 
+    await crudTemplate(STORE_NAME, tx => { const store = tx.objectStore(STORE_NAME); ids.forEach(id => store.delete(id)); }); 
+    await verifyStoreIntegrity('bulkDeleteWords');
+};
+
+export const bulkSaveWords = async (items: VocabularyItem[]): Promise<void> => { 
+    if (items.length === 0) return;
+    
+    if (!items[0].userId) {
+         console.error(`[DB_CRITICAL] Attempting to bulk save words with NO USER ID on first item!`);
+         console.trace();
+         throw new Error("Cannot bulk save words without UserID");
+    }
+
+    await crudTemplate(STORE_NAME, tx => { const store = tx.objectStore(STORE_NAME); items.forEach(i => store.put(i)); }); 
+    await verifyStoreIntegrity('bulkSaveWords');
+};
+
 export const getAllWordsForExport = async (userId: string): Promise<VocabularyItem[]> => await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
 export const saveUnit = async (unit: Unit): Promise<void> => { unit.updatedAt = Date.now(); await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).put(unit)); };
 export const deleteUnit = async (id: string): Promise<void> => { await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).delete(id)); };

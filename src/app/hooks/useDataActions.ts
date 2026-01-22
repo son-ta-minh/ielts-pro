@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { User, VocabularyItem } from '../types';
 import * as dataStore from '../dataStore';
@@ -37,6 +38,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
         const now = Date.now();
         localStorage.setItem('vocab_pro_last_backup_timestamp', String(now));
         setLastBackupTime(now);
+        // Clear restore suppression if any
+        sessionStorage.removeItem('vocab_pro_just_restored');
     };
     
     const handleRestore = () => {
@@ -62,6 +65,9 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 const result = await processJsonImport(file, currentUser.id, true);
     
                 if (result.type === 'success') {
+                    // Mark that we just restored to suppress backup nagging
+                    sessionStorage.setItem('vocab_pro_just_restored', 'true');
+                    
                     showToast('Restore successful! The app will now reload.', 'success', 2000);
                     
                     if (result.updatedUser) {

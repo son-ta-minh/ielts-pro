@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { User, SpeakingTopic, SpeakingLog, SpeakingSessionRecord } from '../../app/types';
 import * as db from '../../app/db';
@@ -8,6 +9,7 @@ import { Loader2, ArrowLeft, Mic, Square, Volume2, Play, AlertTriangle, ChevronR
 import { speak } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import UniversalAiModal from '../common/UniversalAiModal';
+import { BandScoreGauge } from '../common/BandScoreGauge';
 
 interface Props {
   user: User;
@@ -24,9 +26,9 @@ interface SessionQuestion {
   cueCard?: { cueCard: string, points: string[] };
 }
 
-const downloadAudio = (base64: string, filename: string) => {
+const downloadAudio = (base64: string, mimeType: string, filename: string) => {
     const link = document.createElement('a');
-    link.href = `data:audio/webm;base64,${base64}`;
+    link.href = `data:${mimeType};base64,${base64}`;
     link.download = filename;
     document.body.appendChild(link);
     link.click();
@@ -38,7 +40,7 @@ const SpeakingSessionView: React.FC<Props> = ({ user, topic, onComplete }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   
-  const [recordedAudio, setRecordedAudio] = useState<Record<number, string>>({});
+  const [recordedAudio, setRecordedAudio] = useState<Record<number, { base64: string, mimeType: string }>>({});
   const [sessionTranscripts, setSessionTranscripts] = useState<Record<number, string>>({});
   const [liveTranscript, setLiveTranscript] = useState('');
 
@@ -122,11 +124,11 @@ const SpeakingSessionView: React.FC<Props> = ({ user, topic, onComplete }) => {
   
   const handleStopRecording = async () => {
     try {
-      const audioBase64 = await stopRecording();
+      const result = await stopRecording();
       recognitionManager.current.stop();
-      if (!audioBase64) throw new Error("Recording was empty.");
+      if (!result) throw new Error("Recording was empty.");
 
-      setRecordedAudio(prev => ({ ...prev, [currentQuestionIndex]: audioBase64 }));
+      setRecordedAudio(prev => ({ ...prev, [currentQuestionIndex]: result }));
       setIsRecording(false);
       
       if (isLastQuestion) {
@@ -141,10 +143,10 @@ const SpeakingSessionView: React.FC<Props> = ({ user, topic, onComplete }) => {
   };
   
   const playRecording = (index: number) => {
-    const audioBase64 = recordedAudio[index];
-    if (audioBase64) {
+    const audioData = recordedAudio[index];
+    if (audioData) {
         if (!audioPlayers.current[index]) {
-            audioPlayers.current[index] = new Audio(`data:audio/webm;base64,${audioBase64}`);
+            audioPlayers.current[index] = new Audio(`data:${audioData.mimeType};base64,${audioData.base64}`);
         }
         audioPlayers.current[index].play();
     }
@@ -245,7 +247,7 @@ const SpeakingSessionView: React.FC<Props> = ({ user, topic, onComplete }) => {
                             <p className="text-sm font-medium text-neutral-800">{q.cueCard ? q.cueCard.cueCard : q.question}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            {recordedAudio[i] && <button onClick={(e) => { e.preventDefault(); downloadAudio(recordedAudio[i], `q${i+1}_${topic.name.replace(/\s+/g, '_')}.webm`)}} className="p-3 bg-white rounded-full shadow-sm border text-neutral-400 hover:text-neutral-900" title="Download Audio"><Download size={16}/></button>}
+                            {recordedAudio[i] && <button onClick={(e) => { e.preventDefault(); downloadAudio(recordedAudio[i].base64, recordedAudio[i].mimeType, `q${i+1}_${topic.name.replace(/\s+/g, '_')}.webm`)}} className="p-3 bg-white rounded-full shadow-sm border text-neutral-400 hover:text-neutral-900" title="Download Audio"><Download size={16}/></button>}
                             {recordedAudio[i] && <button onClick={(e) => { e.preventDefault(); playRecording(i)}} className="p-3 bg-white rounded-full shadow-sm border text-neutral-600" title="Play Audio"><Play size={16} fill="currentColor" /></button>}
                             {!recordedAudio[i] && sessionTranscripts[i] === undefined && <span className="text-xs font-bold text-neutral-400">Skipped</span>}
                           </div>

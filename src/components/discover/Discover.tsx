@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { User, VocabularyItem, DiscoverGame, SessionType } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
@@ -73,8 +74,8 @@ const Discover: React.FC<Props> = ({ user, onExit, onGainXp, onRecalculateXp, xp
         let newAdventure = { ...user.adventure };
         let adventureUpdated = false;
 
-        // 1. Award key fragment for boss kills specifically (assuming 100 is boss score)
-        if (finalScore === 100) { 
+        // 1. Award key fragment for perfect scores/boss kills (assuming 100 is max)
+        if (finalScore >= 100) { 
             newAdventure.keyFragments = (newAdventure.keyFragments || 0) + 1;
             adventureUpdated = true;
         }
@@ -83,6 +84,19 @@ const Discover: React.FC<Props> = ({ user, onExit, onGainXp, onRecalculateXp, xp
         if (Math.random() < 0.2) {
             newAdventure.badges = [...(newAdventure.badges || []), 'lucky_dice'];
             showToast("You found a Lucky Dice! 🎲", 'success', 4000);
+            adventureUpdated = true;
+        }
+
+        // 3. Chance to drop Supplies (15%)
+        // Same logic as map movement to keep economy balanced
+        if (Math.random() < 0.15) {
+            if (Math.random() < 0.5) {
+                newAdventure.hpPotions = (newAdventure.hpPotions || 0) + 1;
+                showToast("Bonus Drop: HP Potion! 🧪", 'success', 4000);
+            } else {
+                newAdventure.wisdomFruits = (newAdventure.wisdomFruits || 0) + 1;
+                showToast("Bonus Drop: Wisdom Fruit! 🍎", 'success', 4000);
+            }
             adventureUpdated = true;
         }
 

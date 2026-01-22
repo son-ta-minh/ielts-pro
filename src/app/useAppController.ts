@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { AppView, User, VocabularyItem } from './types';
 import { useToast } from '../contexts/ToastContext';
@@ -43,8 +44,8 @@ export const useAppController = () => {
         // 2. Calculate entitlement
         // +1 Energy for every 3 new words learned
         const earnedFromLearned = Math.floor(learned / 3);
-        // +1 Energy for every 5 words reviewed
-        const earnedFromReviewed = Math.floor(reviewed / 5);
+        // +1 Energy for every 10 words reviewed (updated from 5)
+        const earnedFromReviewed = Math.floor(reviewed / 10);
         const totalEarnedToday = earnedFromLearned + earnedFromReviewed;
 
         // 3. Compare with user state
@@ -127,12 +128,6 @@ export const useAppController = () => {
             setGlobalViewWord(word);
         }
         
-        // We don't call checkEnergyRewards here because `saveWordAndUser` implies the user object (and thus energy) might already be in flux/managed by the caller (like XP gain).
-        // XP gain often happens alongside word update.
-        // However, if XP gain happens WITHOUT energy logic, we might miss energy.
-        // `gainExperienceAndLevelUp` in `useGamification` calls this.
-        // Since `gainExperienceAndLevelUp` handles XP, it doesn't handle Energy automatically.
-        // We SHOULD probably check energy here too just in case.
         await checkEnergyRewards();
     };
 

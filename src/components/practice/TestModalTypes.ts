@@ -1,6 +1,7 @@
-import { VocabularyItem, ParaphraseTone } from '../../app/types';
 
-export type ChallengeType = 'SPELLING' | 'IPA_QUIZ' | 'PREPOSITION_QUIZ' | 'WORD_FAMILY' | 'MEANING_QUIZ' | 'PARAPHRASE_QUIZ' | 'SENTENCE_SCRAMBLE' | 'HETERONYM_QUIZ' | 'PRONUNCIATION' | 'COLLOCATION_QUIZ' | 'IDIOM_QUIZ' | 'PARAPHRASE_CONTEXT_QUIZ';
+import { VocabularyItem, ParaphraseTone, ReviewGrade } from '../../app/types';
+
+export type ChallengeType = 'SPELLING' | 'IPA_QUIZ' | 'PREPOSITION_QUIZ' | 'WORD_FAMILY' | 'MEANING_QUIZ' | 'PARAPHRASE_QUIZ' | 'SENTENCE_SCRAMBLE' | 'HETERONYM_QUIZ' | 'PRONUNCIATION' | 'COLLOCATION_QUIZ' | 'IDIOM_QUIZ' | 'PARAPHRASE_CONTEXT_QUIZ' | 'COLLOCATION_CONTEXT_QUIZ' | 'COLLOCATION_MULTICHOICE_QUIZ' | 'IDIOM_CONTEXT_QUIZ';
 
 export interface BaseChallenge {
   type: ChallengeType;
@@ -34,6 +35,14 @@ export interface CollocationQuizChallenge extends BaseChallenge {
     answer: string;
 }
 
+export interface CollocationMultichoiceQuizChallenge extends BaseChallenge {
+    type: 'COLLOCATION_MULTICHOICE_QUIZ';
+    fullText: string;
+    cue: string;
+    answer: string;
+    options: string[];
+}
+
 export interface IdiomQuizChallenge extends BaseChallenge {
     type: 'IDIOM_QUIZ';
     fullText: string;
@@ -54,9 +63,44 @@ export interface ParaphraseContextQuizChallenge extends BaseChallenge {
     paraphrases: ParaphraseContextQuizItem[];
 }
 
-export type Challenge = SpellingChallenge | IpaQuizChallenge | PrepositionQuizChallenge | WordFamilyChallenge | MeaningQuizChallenge | ParaphraseQuizChallenge | SentenceScrambleChallenge | HeteronymQuizChallenge | PronunciationChallenge | CollocationQuizChallenge | IdiomQuizChallenge | ParaphraseContextQuizChallenge;
+export interface CollocationContextQuizItem {
+    id: string;
+    text: string;
+    pairId: string;
+}
+
+export interface CollocationContextQuizChallenge extends BaseChallenge {
+    type: 'COLLOCATION_CONTEXT_QUIZ';
+    contexts: CollocationContextQuizItem[];
+    collocations: CollocationContextQuizItem[];
+}
+
+export interface IdiomContextQuizItem {
+    id: string;
+    text: string;
+    pairId: string;
+}
+
+export interface IdiomContextQuizChallenge extends BaseChallenge {
+    type: 'IDIOM_CONTEXT_QUIZ';
+    contexts: IdiomContextQuizItem[];
+    idioms: IdiomContextQuizItem[];
+}
+
+export type Challenge = SpellingChallenge | IpaQuizChallenge | PrepositionQuizChallenge | WordFamilyChallenge | MeaningQuizChallenge | ParaphraseQuizChallenge | SentenceScrambleChallenge | HeteronymQuizChallenge | PronunciationChallenge | CollocationQuizChallenge | CollocationMultichoiceQuizChallenge | IdiomQuizChallenge | ParaphraseContextQuizChallenge | CollocationContextQuizChallenge | IdiomContextQuizChallenge;
 
 export type ChallengeResult = boolean | {
     correct: boolean;
     details: Record<string, boolean>;
 };
+
+export interface RecapData {
+  oldMastery: number;
+  newMastery: number;
+  oldStatus: string;
+  newStatus: ReviewGrade;
+  results: { type: ChallengeType; passed: boolean }[];
+  finalGrade: ReviewGrade;
+  resultHistory: Record<string, boolean>;
+  counts: { correct: number, tested: number };
+}

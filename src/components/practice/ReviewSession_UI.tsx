@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, ShieldAlert, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
@@ -34,6 +35,9 @@ export interface ReviewSessionUIProps {
   handleTestComplete: (grade: ReviewGrade, testResults?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => void;
   handleRetry: () => void;
   handleEndSession: () => void;
+  handleQuickReview?: () => void;
+  handleManualPractice: () => void;
+  isQuickReviewMode?: boolean;
 }
 
 const renderStatusBadge = (outcome: string | undefined, wasNew: boolean, isQuickFire: boolean) => {
@@ -130,7 +134,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         user, initialWords, sessionWords, sessionType, newWordIds, progress, setProgress,
         sessionOutcomes, sessionFinished, wordInModal, setWordInModal, editingWordInModal, setEditingWordInModal,
         isTesting, setIsTesting, currentWord, isNewWord, onUpdate, onComplete,
-        nextItem, handleReview, handleTestComplete, handleRetry, handleEndSession
+        nextItem, handleReview, handleTestComplete, handleRetry, handleEndSession,
+        handleQuickReview, handleManualPractice, isQuickReviewMode
     } = props;
 
     const { current: currentIndex, max: maxIndexVisited } = progress;
@@ -223,8 +228,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     <button onClick={() => setWordInModal(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
                                         <Eye size={14}/><span>View Details</span>
                                     </button>
-                                    <button onClick={() => setIsTesting(true)} className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-black text-[10px] hover:bg-amber-600 transition-all active:scale-95 uppercase tracking-widest shadow-lg shadow-amber-500/20">
-                                        <BrainCircuit size={14}/><span>Test It!</span>
+                                    <button onClick={handleManualPractice} className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-black text-[10px] hover:bg-amber-600 transition-all active:scale-95 uppercase tracking-widest shadow-lg shadow-amber-500/20">
+                                        <BrainCircuit size={14}/><span>Practice</span>
                                     </button>
                                 </div>
                             </div>
@@ -251,17 +256,18 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                             <div /> {/* Empty cell for spacing */}
                         </div>
                     ) : !isQuickFire && (
-                        <div className="max-w-lg mx-auto grid grid-cols-3 items-stretch gap-4">
+                        <div className="max-w-xl mx-auto grid grid-cols-4 items-stretch gap-3">
                             <button onClick={() => handleReview(ReviewGrade.FORGOT)} className="py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><X size={20} /><span className="text-[9px] font-black uppercase">FORGOT</span></button>
                             <button onClick={() => handleReview(ReviewGrade.HARD)} className="py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-orange-600 hover:bg-orange-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><HelpCircle size={20} /><span className="text-[9px] font-black uppercase">Hard</span></button>
                             <button onClick={() => handleReview(ReviewGrade.EASY)} className="py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-green-600 hover:bg-green-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><Check size={20} /><span className="text-[9px] font-black uppercase">Easy</span></button>
+                            <button onClick={handleQuickReview} className="py-5 bg-indigo-600 text-white rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all hover:bg-indigo-700 shadow-md shadow-indigo-200"><Zap size={20} fill="currentColor" /><span className="text-[9px] font-black uppercase">Quick Review</span></button>
                         </div>
                     )}
                 </div>
             </div>
             {wordInModal && <ViewWordModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={async () => 0} isViewOnly={true} />}
             {editingWordInModal && <EditWordModal user={user} word={editingWordInModal} onSave={handleSaveEdit} onClose={() => setEditingWordInModal(null)} onSwitchToView={() => { setEditingWordInModal(null); setWordInModal(editingWordInModal); }} />}
-            {isTesting && currentWord && <TestModal word={currentWord} isQuickFire={isQuickFire} sessionPosition={isQuickFire ? { current: currentIndex + 1, total: sessionWords.length } : undefined} onPrevWord={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} onClose={() => { if (isQuickFire) onComplete(); else setIsTesting(false); }} onComplete={handleTestComplete} />}
+            {isTesting && currentWord && <TestModal word={currentWord} isQuickFire={isQuickFire} sessionPosition={isQuickFire ? { current: currentIndex + 1, total: sessionWords.length } : undefined} onPrevWord={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} onClose={() => { if (isQuickFire) onComplete(); else setIsTesting(false); }} onComplete={handleTestComplete} skipSetup={isQuickReviewMode} />}
         </>
     );
 };

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AlertCircle, CheckCircle2, ChevronDown, User, BrainCircuit, Database, Settings2, AlertTriangle, LayoutTemplate, Target } from 'lucide-react';
 import { ProfileSettings } from './ProfileSettings';
@@ -6,7 +7,6 @@ import { DataSettings } from './DataSettings';
 import { SrsSettings } from './SrsSettings';
 import { DangerZone } from './DangerZone';
 import { SystemConfig } from '../../app/settingsManager';
-import { User as UserType } from '../../app/types';
 
 export type SettingView = 'PROFILE' | 'INTERFACE' | 'AI_AUDIO' | 'DATA' | 'SRS' | 'GOALS' | 'DANGER';
 

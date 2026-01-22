@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, VocabularyItem, SessionType } from '../../../../app/types';
 import * as dataStore from '../../../../app/dataStore';
@@ -76,13 +77,25 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession
             // Boss logic removed from here to allow manual interaction
         }
 
-        // 4. Random Dice Drop (20% chance on any move)
+        // 4. Random Item Drops (Potions & Fruits) - 15% Chance
+        const itemRoll = Math.random();
+        if (itemRoll < 0.15) {
+            if (Math.random() < 0.5) {
+                currentProgress.hpPotions = (currentProgress.hpPotions || 0) + 1;
+                showToast("You found an HP Potion! 🧪", 'success', 4000);
+            } else {
+                currentProgress.wisdomFruits = (currentProgress.wisdomFruits || 0) + 1;
+                showToast("You found a Wisdom Fruit! 🍎", 'success', 4000);
+            }
+        }
+
+        // 5. Random Dice Drop (20% chance on any move) - Independent of items
         if (Math.random() < 0.2) {
             currentProgress.badges = [...(currentProgress.badges || []), 'lucky_dice'];
             showToast("You found a Lucky Dice! 🎲", 'success', 4000);
         }
 
-        // 5. Save State
+        // 6. Save State
         await onUpdateUser({ ...user, adventure: currentProgress });
     };
 
@@ -208,7 +221,7 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession
             }
 
             const roll = Math.random();
-            // 20% Energy, 20% Key, 20% Chest, 40% Nothing
+            // 20% Energy, 20% Key, 20% Chest, 20% HP Potion, 20% Wisdom Fruit
             if (roll < 0.2) {
                 newProgress.energy += 3;
                 showToast("Dice rolled! +3 Energy ⚡", 'success', 3000);
@@ -218,8 +231,12 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession
             } else if (roll < 0.6) {
                 newProgress.badges.push('locked_chest');
                 showToast("Dice rolled! +1 Locked Chest 🧰", 'success', 3000);
+            } else if (roll < 0.8) {
+                newProgress.hpPotions = (newProgress.hpPotions || 0) + 1;
+                showToast("Dice rolled! +1 HP Potion 🧪", 'success', 3000);
             } else {
-                showToast("Dice rolled... but nothing happened. Bad luck! 💨", 'info', 3000);
+                newProgress.wisdomFruits = (newProgress.wisdomFruits || 0) + 1;
+                showToast("Dice rolled! +1 Wisdom Fruit 🍎", 'success', 3000);
             }
 
             await onUpdateUser({ ...user, adventure: newProgress });
@@ -230,7 +247,7 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession
         }
     };
 
-    const handleAdminAction = async (action: 'add_energy' | 'remove_energy' | 'add_key' | 'remove_key' | 'pass_boss') => {
+    const handleAdminAction = async (action: 'add_energy' | 'remove_energy' | 'add_key' | 'remove_key' | 'add_hp' | 'remove_hp' | 'add_fruit' | 'remove_fruit' | 'pass_boss') => {
         const newProgress = { ...user.adventure };
         if (action === 'add_energy') {
             newProgress.energy = (newProgress.energy || 0) + 10;
@@ -244,6 +261,18 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession
         } else if (action === 'remove_key') {
             newProgress.keys = Math.max(0, (newProgress.keys || 0) - 1);
             showToast("Admin: -1 Key", 'info');
+        } else if (action === 'add_hp') {
+            newProgress.hpPotions = (newProgress.hpPotions || 0) + 1;
+            showToast("Admin: +1 HP Potion", 'success');
+        } else if (action === 'remove_hp') {
+            newProgress.hpPotions = Math.max(0, (newProgress.hpPotions || 0) - 1);
+            showToast("Admin: -1 HP Potion", 'info');
+        } else if (action === 'add_fruit') {
+            newProgress.wisdomFruits = (newProgress.wisdomFruits || 0) + 1;
+            showToast("Admin: +1 Wisdom Fruit", 'success');
+        } else if (action === 'remove_fruit') {
+            newProgress.wisdomFruits = Math.max(0, (newProgress.wisdomFruits || 0) - 1);
+            showToast("Admin: -1 Wisdom Fruit", 'info');
         } else if (action === 'pass_boss') {
             // Check if current node is boss
             const currentNode = activeMap[newProgress.currentNodeIndex];
@@ -284,6 +313,7 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession
     if (activeBoss) {
         return (
             <BattleMode
+                user={user}
                 boss={activeBoss.boss}
                 words={activeBoss.words}
                 onVictory={handleBattleVictory}
@@ -292,6 +322,7 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession
                     setActiveBoss(null);
                 }}
                 onExit={() => setActiveBoss(null)}
+                onUpdateUser={onUpdateUser}
             />
         );
     }
@@ -313,6 +344,8 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession
                 onClose={() => setIsInventoryOpen(false)}
                 badges={user.adventure.badges || []}
                 onUseBadge={handleUseBadge}
+                hpPotions={user.adventure.hpPotions || 0}
+                wisdomFruits={user.adventure.wisdomFruits || 0}
             />
             {celebrationData && (
                 <Fireworks 

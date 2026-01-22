@@ -1,3 +1,4 @@
+
 import { MapNode } from '../app/types';
 
 export const BADGE_DEFINITIONS: Record<string, {name: string, icon: string}> = {
@@ -33,15 +34,19 @@ export const BADGE_DEFINITIONS: Record<string, {name: string, icon: string}> = {
     'badge_of_innovation': { name: 'Badge of Innovation', icon: '💡' },
 };
 
-const BOSSES = [
-    { name: 'Grammar Guardian', image: '🤖', hp: 20, dialogueIntro: "Prove your mastery!", dialogueWin: "Well done, scholar.", dialogueLose: "Return when you are stronger." },
-    { name: 'Lexical Leviathan', image: '🦑', hp: 20, dialogueIntro: "Your words are but whispers.", dialogueWin: "A worthy lexicon.", dialogueLose: "Your vocabulary fails you." },
+export const BOSSES = [
+    { name: 'Cyber Sentinel', image: '🤖', hp: 20, dialogueIntro: "Logic is absolute. Prove yours.", dialogueWin: "Error... System... Crash...", dialogueLose: "Your logic is flawed." },
+    { name: 'Inferno Dragon', image: '🐉', hp: 25, dialogueIntro: "I breathe fire. What do you breathe?", dialogueWin: "Your spirit burns brighter...", dialogueLose: "Burn to ash!" },
+    { name: 'Abyssal Kraken', image: '🐙', hp: 20, dialogueIntro: "The depths hold many secrets.", dialogueWin: "You have navigated the abyss.", dialogueLose: "Join the sunken ones." },
+    { name: 'Spectral Wraith', image: '👻', hp: 15, dialogueIntro: "Can you touch what isn't there?", dialogueWin: "I fade into the light...", dialogueLose: "Your soul is mine." },
+    { name: 'Ancient Mummy', image: '🧟', hp: 20, dialogueIntro: "My curse is eternal.", dialogueWin: "Rest... finally...", dialogueLose: "Join my tomb." },
+    { name: 'Alien Warlord', image: '👽', hp: 20, dialogueIntro: "Your language is primitive.", dialogueWin: "Acknowledged. You are superior.", dialogueLose: "Earth is ours." },
+    { name: 'Primal T-Rex', image: '🦖', hp: 25, dialogueIntro: "ROOOARRR! The earth shakes beneath me!", dialogueWin: "Extinction... comes for me...", dialogueLose: "You are merely prey." },
+    { name: 'Shadow Ninja', image: '🥷', hp: 18, dialogueIntro: "Silence is the loudest scream.", dialogueWin: "Honorable defeat...", dialogueLose: "Too slow." },
+    { name: 'Vampire Lord', image: '🧛', hp: 20, dialogueIntro: "The night is young.", dialogueWin: "The sun... it burns...", dialogueLose: "Delicious." },
+    { name: 'Oni Warlord', image: '👺', hp: 22, dialogueIntro: "Face the demon within!", dialogueWin: "Your spirit is unbreakable.", dialogueLose: "Another soul for the mask." },
     { name: 'Syntax Serpent', image: '🐍', hp: 20, dialogueIntro: "Untangle my sentences if you can.", dialogueWin: "Your logic is impeccable.", dialogueLose: "Your structure is flawed." },
-    { name: 'Fluency Fiend', image: '👻', hp: 20, dialogueIntro: "Speak without hesitation.", dialogueWin: "You are eloquent.", dialogueLose: "You stumble over your words." },
-    { name: 'Pronunciation Phantom', image: '🗣️', hp: 20, dialogueIntro: "Clarity is key.", dialogueWin: "Every syllable is perfect.", dialogueLose: "Mumbling will not suffice." },
-    { name: 'Collocation Colossus', image: '🗿', hp: 20, dialogueIntro: "Words belong together. Do you know which?", dialogueWin: "You understand the bonds between words.", dialogueLose: "Your phrasing is unnatural." },
-    { name: 'Idiom Imp', image: '😈', hp: 20, dialogueIntro: "Think outside the literal box.", dialogueWin: "You speak like a native.", dialogueLose: "You are too literal." },
-    { name: 'Cohesion Chimera', image: '🦁', hp: 20, dialogueIntro: "Connect your ideas, or be lost.", dialogueWin: "Your arguments flow like a river.", dialogueLose: "Your thoughts are disjointed." },
+    { name: 'Dread Scorpion', image: '🦂', hp: 25, dialogueIntro: "One sting is all it takes.", dialogueWin: "My venom... ineffective?", dialogueLose: "Paralyzed by fear." },
 ];
 
 export function generateMap(length: number): MapNode[] {
@@ -53,6 +58,7 @@ export function generateMap(length: number): MapNode[] {
 
         if ((i + 1) % 10 === 0) {
             node.type = 'boss';
+            // Use distinct boss based on index to ensure variety
             node.boss_details = BOSSES[bossCounter % BOSSES.length];
             bossCounter++;
         } else {

@@ -1,70 +1,81 @@
+
 import React, { useState } from 'react';
 import { User } from '../../app/types';
 import { DiscoverGame } from '../../app/types';
-import { ArrowLeft, RefreshCw, Trophy, Target, Split, Move, BookOpen, Shuffle, X, AtSign, SlidersHorizontal, Sparkles, User as UserIcon, Crown, Key, GitCommit, Award, ShoppingBag, Star, Edit3, Lock, Quote, Zap, BoxSelect, Loader2, Map, Briefcase, GraduationCap, Bot, Smile } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Trophy, Target, Split, Move, BookOpen, Shuffle, X, AtSign, SlidersHorizontal, Sparkles, User as UserIcon, Crown, Key, GitCommit, Award, ShoppingBag, Star, Edit3, Lock, Quote, Zap, BoxSelect, Loader2, Map, Briefcase, GraduationCap, Bot, Smile, Baby, Stethoscope, Palette, Hammer, UserCheck } from 'lucide-react';
 import { BADGES } from '../../data/adventure_content';
 
-// RPG Roles/Titles for Leveling Up
-const RPG_ROLES: { level: number; title: string; }[] = [
-    { level: 1, title: 'Vocab Novice' },
-    { level: 5, title: 'Word Apprentice' },
-    { level: 10, title: 'Lexical Explorer' },
-    { level: 15, title: 'Phrase Finder' },
-    { level: 20, title: 'Master Grammarian' },
-    { level: 25, title: 'Collocation Captain' },
-    { level: 30, title: 'IELTS Wordsmith' },
-    { level: 40, title: 'Articulate Architect' },
-    { level: 50, title: 'IELTS Luminary' },
-    { level: 75, title: 'Grand Lexicographer' },
-    { level: 100, title: 'Vocabulary Virtuoso' },
-    { level: 150, title: 'Oracle of Oration' },
-    { level: 200, title: 'Grandmaster of Grammar' },
-    { level: 400, title: 'Lord of Linguistics' },
-    { level: 500, title: 'Legendary Lexicon' },
-    { level: 750, title: 'Word-Ender' },
-    { level: 999, title: 'The Logophile' },
+// RPG Roles configuration with base image names
+const RPG_ROLES: { level: number; title: string; baseImage: string }[] = [
+    { level: 1, title: 'Novice Soul', baseImage: 'Baby Angel' },
+    { level: 5, title: 'Forest Kin', baseImage: 'Elf' },
+    { level: 10, title: 'Lamp Spirit', baseImage: 'Genie' },
+    { level: 20, title: 'Undead Walker', baseImage: 'Zombie' },
+    { level: 30, title: 'Night Stalker', baseImage: 'Vampire' },
+    { level: 50, title: 'Mystic Fairy', baseImage: 'Fairy' },
+    { level: 75, title: 'Arcane Mage', baseImage: 'Mage' },
+    { level: 100, title: 'Shadow Ninja', baseImage: 'Ninja' },
+    { level: 150, title: 'Heroic Savior', baseImage: 'Superhero' },
+    { level: 200, title: 'Master Villain', baseImage: 'Supervillain' },
+    { level: 500, title: 'Royal Heir', baseImage: 'Royalty' }, 
+    { level: 999, title: 'The Legend', baseImage: 'Astronaut' },
 ];
 
-// Defined Avatar Collections
+// Helper to get gendered image name
+const getGenderedImage = (base: string, gender: 'Male' | 'Female'): string => {
+    if (base === 'Baby Angel') return 'Baby Angel';
+    if (base === 'Ninja') return 'Ninja'; // Ninja often doesn't have gendered prefixes in some sets
+    if (base === 'Royalty') return gender === 'Male' ? 'Prince' : 'Princess';
+    
+    // Standard Fluent Emoji pattern: "Man [Base]" / "Woman [Base]"
+    return `${gender === 'Male' ? 'Man' : 'Woman'} ${base}`;
+};
+
+// Defined Avatar Collections (Fantasy & Royal removed as they are now in Hall of Fame)
 const AVATAR_COLLECTIONS = [
     {
-        title: "The Academy",
-        description: "Focus & Dedication",
+        title: "Education & Tech",
+        description: "Teachers, Coders, Scientists",
         icon: GraduationCap,
-        style: "notionists",
-        seeds: ["Felix", "Aneka", "Milo", "Lola", "Leo", "Betty", "Fin", "Zoe", "Caleb", "Maya"]
+        type: "fluent",
+        items: [
+            "Woman Teacher", "Man Teacher", 
+            "Woman Student", "Man Student",
+            "Woman Technologist", "Man Technologist",
+            "Woman Scientist", "Man Scientist",
+            "Woman Astronaut", "Man Astronaut"
+        ]
     },
     {
-        title: "The Workplace",
-        description: "Professional & Sharp",
-        icon: Briefcase,
-        style: "avataaars",
-        seeds: ["Alexander", "Jessica", "Christian", "Sophia", "Brian", "Jennifer", "Edward", "Sarah", "Christopher", "Emily"]
+        title: "Medical & Service",
+        description: "Doctors, Chefs, Heroes",
+        icon: Stethoscope,
+        type: "fluent",
+        items: [
+            "Woman Health Worker", "Man Health Worker",
+            "Woman Cook", "Man Cook",
+            "Woman Firefighter", "Man Firefighter",
+            "Woman Police Officer", "Man Police Officer",
+            "Woman Judge", "Man Judge"
+        ]
     },
     {
-        title: "The Playground",
-        description: "Fun & Expressive",
-        icon: Smile,
-        style: "micah",
-        seeds: ["Bubba", "Pumpkin", "Cookie", "Bear", "Muffin", "Socks", "Lucky", "Peanut", "Noodle", "Gizmo"]
-    },
-    {
-        title: "Digital Beings",
-        description: "Futuristic & Abstract",
-        icon: Bot,
-        style: "bottts",
-        seeds: ["Function", "Array", "Object", "Variable", "Const", "Let", "Async", "Await", "Promise", "Return"]
+        title: "Arts & Office",
+        description: "Creatives & Professionals",
+        icon: Palette,
+        type: "fluent",
+        items: [
+            "Woman Artist", "Man Artist",
+            "Woman Singer", "Man Singer",
+            "Woman Office Worker", "Man Office Worker",
+            "Woman Detective", "Man Detective",
+            "Woman Mechanic", "Man Mechanic"
+        ]
     }
 ];
 
-const TITLE_AVATARS = RPG_ROLES.map(role => ({
-    title: role.title,
-    level: role.level,
-    url: `https://api.dicebear.com/7.x/personas/svg?seed=${role.title.replace(/\s/g, '')}`
-}));
-
 const getGameTitleForLevel = (level: number): string => {
-  let title = 'Vocab Novice'; // Default starting role
+  let title = 'Novice Soul'; // Default starting role
   for (const r of RPG_ROLES) {
     if (level >= r.level) {
       title = r.title;
@@ -81,83 +92,134 @@ const AvatarSelectionModal: React.FC<{
   onSelectAvatar: (url: string) => void;
   currentUser: User;
 }> = ({ isOpen, onClose, onSelectAvatar, currentUser }) => {
+  const [gender, setGender] = useState<'Male' | 'Female'>('Male');
+
   if (!isOpen) return null;
 
+  const getUrl = (type: string, item: string) => {
+    if (type === 'fluent') {
+        return `https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/People/${encodeURIComponent(item)}.png`;
+    }
+    return `https://api.dicebear.com/7.x/${type}/svg?seed=${item}`;
+  };
+
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-[2.5rem] w-full max-w-4xl p-0 relative shadow-2xl border border-neutral-200 flex flex-col max-h-[85vh] overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-5xl p-0 relative shadow-2xl border border-neutral-200 flex flex-col max-h-[85vh] overflow-hidden">
         
         {/* Header */}
-        <div className="p-6 border-b border-neutral-100 flex justify-between items-center bg-white z-10">
+        <div className="p-6 border-b border-neutral-100 flex justify-between items-center bg-white z-10 shrink-0">
             <div>
                 <h3 className="text-2xl font-black text-neutral-900 flex items-center gap-2"><UserIcon size={24}/> Select Identity</h3>
-                <p className="text-neutral-500 text-sm font-medium">Choose an avatar that represents your learning style.</p>
+                <p className="text-neutral-500 text-sm font-medium">Who do you want to be today?</p>
             </div>
-            <button onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={24} /></button>
+            <div className="flex items-center gap-4">
+                 {/* Gender Toggle */}
+                 <div className="bg-neutral-100 p-1 rounded-xl flex">
+                    <button 
+                        onClick={() => setGender('Male')} 
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${gender === 'Male' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
+                    >
+                        Male
+                    </button>
+                    <button 
+                        onClick={() => setGender('Female')} 
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${gender === 'Female' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
+                    >
+                        Female
+                    </button>
+                 </div>
+                 <button onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={24} /></button>
+            </div>
         </div>
         
         {/* Content */}
         <div className="overflow-y-auto p-6 space-y-8 bg-neutral-50/50">
             
-            {/* Standard Collections */}
-            {AVATAR_COLLECTIONS.map((group) => (
-                <div key={group.title} className="bg-white p-5 rounded-[2rem] border border-neutral-100 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4 px-2">
-                        <div className="p-2 bg-neutral-100 rounded-xl text-neutral-600"><group.icon size={18}/></div>
-                        <div>
-                            <h4 className="text-sm font-black uppercase text-neutral-900 tracking-wide">{group.title}</h4>
-                            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{group.description}</p>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-8 gap-4">
-                        {group.seeds.map((seed) => {
-                            const url = `https://api.dicebear.com/7.x/${group.style}/svg?seed=${seed}`;
-                            return (
-                                <button key={seed} onClick={() => onSelectAvatar(url)} className={`group relative aspect-square rounded-2xl p-1 transition-all active:scale-95 ${currentUser.avatar === url ? 'bg-indigo-600 ring-4 ring-indigo-200 shadow-lg scale-105' : 'bg-neutral-50 hover:bg-white hover:shadow-md border border-transparent hover:border-neutral-200'}`}>
-                                    <img src={url} alt={seed} className="w-full h-full rounded-xl bg-white" />
-                                    {currentUser.avatar === url && <div className="absolute -top-2 -right-2 bg-indigo-600 text-white p-1 rounded-full"><Sparkles size={10} fill="currentColor"/></div>}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-            ))}
-
-            {/* RPG Title Avatars */}
-            <div className="bg-gradient-to-br from-neutral-900 to-neutral-800 p-5 rounded-[2rem] shadow-lg text-white">
+             {/* RPG Title Avatars (Fantasy Heroes) */}
+             <div className="bg-gradient-to-br from-neutral-900 to-neutral-800 p-6 rounded-[2rem] shadow-lg text-white">
                 <div className="flex items-center gap-2 mb-4 px-2">
                     <div className="p-2 bg-white/10 rounded-xl text-yellow-400"><Crown size={18}/></div>
                     <div>
-                        <h4 className="text-sm font-black uppercase tracking-wide">Hall of Fame</h4>
-                        <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Unlocked by Leveling Up</p>
+                        <h4 className="text-sm font-black uppercase tracking-wide">Hall of Fame (Level Unlocks)</h4>
+                        <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Dynamic Fantasy Avatars</p>
                     </div>
                 </div>
-                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-8 gap-4">
-                    {TITLE_AVATARS.map((avatar) => {
-                        const isUnlocked = (currentUser.peakLevel || 1) >= avatar.level;
-                        const isSelected = currentUser.avatar === avatar.url;
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-4">
+                    {RPG_ROLES.map((role) => {
+                        const isUnlocked = (currentUser.peakLevel || 1) >= role.level;
+                        const imageName = getGenderedImage(role.baseImage, gender);
+                        const url = getUrl('fluent', imageName);
+                        const isSelected = currentUser.avatar === url;
+                        
                         return (
                             <button 
-                                key={avatar.title} 
-                                onClick={() => isUnlocked && onSelectAvatar(avatar.url)} 
+                                key={role.title} 
+                                onClick={() => isUnlocked && onSelectAvatar(url)} 
                                 disabled={!isUnlocked} 
-                                className={`group relative aspect-square rounded-2xl p-1 transition-all ${isSelected ? 'bg-yellow-500 ring-4 ring-yellow-500/30' : 'bg-white/5 hover:bg-white/10'} ${!isUnlocked ? 'opacity-60 cursor-not-allowed' : 'active:scale-95'}`}
+                                className={`group relative aspect-square rounded-2xl p-2 transition-all ${isSelected ? 'bg-yellow-500 ring-4 ring-yellow-500/30' : 'bg-white/5 hover:bg-white/10'} ${!isUnlocked ? 'cursor-not-allowed' : 'active:scale-95'}`}
                             >
-                                <img src={avatar.url} alt={avatar.title} className={`w-full h-full rounded-xl ${!isUnlocked ? 'grayscale blur-[1px]' : 'bg-white'}`} />
+                                <img src={url} alt={role.title} className="w-full h-full object-contain filter drop-shadow-sm" loading="lazy" />
+                                
                                 {!isUnlocked && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-                                        <Lock size={16} className="text-white drop-shadow-md"/>
-                                        <span className="text-[8px] font-black mt-1 bg-black/50 px-1.5 rounded-full">Lvl {avatar.level}</span>
+                                    <div className="absolute top-1 right-1 z-10 bg-black/60 text-white p-1 rounded-full backdrop-blur-sm">
+                                        <Lock size={10} />
                                     </div>
                                 )}
+                                
+                                {!isUnlocked && (
+                                    <div className="absolute bottom-1 right-1 z-10">
+                                         <span className="text-[8px] font-black bg-black/60 text-white px-1.5 py-0.5 rounded-full backdrop-blur-sm">Lvl {role.level}</span>
+                                    </div>
+                                )}
+
                                 <div className="absolute -bottom-2 w-full flex justify-center z-20">
-                                    <span className={`text-[6px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm truncate max-w-[90%] ${isUnlocked ? 'bg-white text-neutral-900' : 'bg-neutral-800 text-neutral-500'}`}>{avatar.title}</span>
+                                    <span className={`text-[6px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-sm truncate max-w-[90%] ${isUnlocked ? 'bg-white text-neutral-900' : 'bg-neutral-800 text-neutral-500'}`}>{role.title}</span>
                                 </div>
                             </button>
                         );
                     })}
                 </div>
             </div>
+
+            {/* Standard Collections */}
+            {AVATAR_COLLECTIONS.map((group) => {
+                // Filter items based on selected gender (Woman vs Man prefix)
+                const prefix = gender === 'Male' ? 'Man' : 'Woman';
+                const filteredItems = group.items.filter(item => item.startsWith(prefix));
+                
+                if (filteredItems.length === 0) return null;
+
+                return (
+                    <div key={group.title} className="bg-white p-5 rounded-[2rem] border border-neutral-100 shadow-sm">
+                        <div className="flex items-center gap-2 mb-4 px-2">
+                            <div className="p-2 bg-neutral-100 rounded-xl text-neutral-600"><group.icon size={18}/></div>
+                            <div>
+                                <h4 className="text-sm font-black uppercase text-neutral-900 tracking-wide">{group.title}</h4>
+                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{group.description}</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3">
+                            {filteredItems.map((item) => {
+                                const url = getUrl(group.type, item);
+                                const isSelected = currentUser.avatar === url;
+                                return (
+                                    <button 
+                                        key={item} 
+                                        onClick={() => onSelectAvatar(url)} 
+                                        title={item}
+                                        className={`group relative aspect-square rounded-2xl p-2 transition-all active:scale-95 ${isSelected ? 'bg-indigo-600 ring-4 ring-indigo-200 shadow-lg scale-105' : 'bg-neutral-50 hover:bg-white hover:shadow-md border border-transparent hover:border-neutral-200'}`}
+                                    >
+                                        <img src={url} alt={item} className="w-full h-full object-contain filter drop-shadow-sm transition-transform group-hover:scale-110" loading="lazy" />
+                                        {isSelected && <div className="absolute -top-2 -right-2 bg-indigo-600 text-white p-1 rounded-full"><Sparkles size={10} fill="currentColor"/></div>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })}
+
         </div>
       </div>
     </div>
@@ -217,7 +279,7 @@ const PlayerHubPanel: React.FC<{ user: User, xpToNextLevel: number, onUpdateUser
                     <div className="flex items-center gap-4 flex-shrink-0">
                         <button onClick={() => setIsAvatarModalOpen(true)} className="group relative focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 rounded-2xl">
                             <div className={`relative p-1 rounded-2xl ${appearance.frame} shadow-md ${appearance.shadow}`}>
-                                <img src={user.avatar} className="w-12 h-12 rounded-xl bg-white border-2 border-white/50 object-cover" alt="User Avatar" />
+                                <img src={user.avatar} className="w-16 h-16 rounded-xl bg-white border-2 border-white/50 object-contain p-1" alt="User Avatar" />
                                 <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Edit3 size={20} className="text-white" />
                                 </div>

@@ -1,3 +1,4 @@
+
 import { getStoredJSON } from "../utils/storage";
 
 export interface AiConfig {
@@ -29,11 +30,23 @@ export interface DailyGoalConfig {
   max_review_per_day: number;
 }
 
+export interface InterfaceConfig {
+  studyBuddyLanguage: 'vi' | 'en';
+  studyBuddyEnabled: boolean;
+  studyBuddyAvatar: 'robot' | 'owl' | 'pet' | 'fox' | 'koala' | 'bunny' | 'lion' | 'panda' | 'unicorn' | 'chicken';
+}
+
+export interface TestConfig {
+  preferredTypes: string[];
+}
+
 export interface SystemConfig {
   ai: AiConfig;
   srs: SrsConfig;
   audio: AudioConfig;
   dailyGoals: DailyGoalConfig;
+  interface: InterfaceConfig;
+  test: TestConfig;
 }
 
 export const DEFAULT_SRS_CONFIG: SrsConfig = {
@@ -51,6 +64,10 @@ export const DEFAULT_DAILY_GOAL_CONFIG: DailyGoalConfig = {
   max_review_per_day: 10,
 };
 
+export const DEFAULT_TEST_CONFIG: TestConfig = {
+  preferredTypes: []
+};
+
 export const DEFAULT_CONFIG: SystemConfig = {
   ai: {
     enableGeminiApi: true,
@@ -66,6 +83,12 @@ export const DEFAULT_CONFIG: SystemConfig = {
     appliedAccent: undefined,
   },
   dailyGoals: DEFAULT_DAILY_GOAL_CONFIG,
+  interface: {
+    studyBuddyLanguage: 'vi',
+    studyBuddyEnabled: true,
+    studyBuddyAvatar: 'fox'
+  },
+  test: DEFAULT_TEST_CONFIG
 };
 
 const CONFIG_KEY = 'vocab_pro_system_config';
