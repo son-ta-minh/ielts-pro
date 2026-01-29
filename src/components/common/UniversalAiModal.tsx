@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Clipboard, Check, Bot, Sparkles, Command, CornerDownLeft, AlertCircle, Loader2, MessageSquareDashed, FileText, Plus } from 'lucide-react';
+import { X, Clipboard, Check, Bot, Sparkles, Command, CornerDownLeft, AlertCircle, Loader2, MessageSquareDashed, FileText, Plus, Globe, User as UserIcon, Radio, BookOpen } from 'lucide-react';
 import { copyToClipboard } from '../../utils/text';
 import { User, ParaphraseMode } from '../../app/types';
 
-export type AiActionType = 'REFINE_WORDS' | 'REFINE_UNIT' | 'GENERATE_PARAPHRASE' | 'EVALUATE_PARAPHRASE' | 'GENERATE_UNIT' | 'GENERATE_CHAPTER' | 'GENERATE_SEGMENT';
+export type AiActionType = 'REFINE_WORDS' | 'REFINE_UNIT' | 'GENERATE_PARAPHRASE' | 'EVALUATE_PARAPHRASE' | 'GENERATE_UNIT' | 'GENERATE_CHAPTER' | 'GENERATE_SEGMENT' | 'GENERATE_LESSON';
 
 interface Props {
   isOpen: boolean;
@@ -44,15 +44,22 @@ const UniversalAiModal: React.FC<Props> = ({
   const [paraContext, setParaContext] = useState('');
   const [paraMode, setParaMode] = useState<ParaphraseMode>(ParaphraseMode.VARIETY);
 
+  // Lesson Gen State
+  const [lessonTopic, setLessonTopic] = useState('');
+  const [lessonAudience, setLessonAudience] = useState('');
+  const [lessonLang, setLessonLang] = useState<'English'|'Vietnamese'>('English');
+  const [lessonTone, setLessonTone] = useState<'friendly_elementary'|'professional_professor'>('friendly_elementary');
+
   // --- Common States ---
   const [jsonInput, setJsonInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false); // New success state
   const [promptCopied, setPromptCopied] = useState(false);
+  const [currentPrompt, setCurrentPrompt] = useState('');
   
   const jsonInputRef = useRef<HTMLTextAreaElement>(null);
-  const prevIsOpen = useRef(isOpen);
+  const prevIsOpen = useRef<boolean | undefined>(undefined);
 
   // Initialize inputs only when the modal opens
   useEffect(() => {
@@ -70,6 +77,11 @@ const UniversalAiModal: React.FC<Props> = ({
         if (type === 'REFINE_WORDS' && initialData?.words) {
             const formatted = initialData.words.replace(/\n/g, '; ');
             setWordListInput(formatted);
+        } else if (type === 'GENERATE_LESSON') {
+            setLessonTopic('');
+            setLessonAudience(initialData?.targetAudience || '');
+            setLessonLang(initialData?.language || 'English');
+            setLessonTone(initialData?.tone || 'friendly_elementary');
         }
 
         // Reset common states
@@ -84,17 +96,32 @@ const UniversalAiModal: React.FC<Props> = ({
   }, [isOpen, type, initialData]);
 
   // Calculate current prompt based on inputs
-  const currentPrompt = useMemo(() => {
-      let inputs: any = {};
-      if (type === 'REFINE_WORDS') inputs = { words: hidePrimaryInput ? initialData?.words : wordListInput };
-      else if (type === 'REFINE_UNIT') inputs = { request: unitRequestInput };
-      else if (type === 'GENERATE_CHAPTER') inputs = { request: chapterRequestInput };
-      else if (type === 'GENERATE_SEGMENT') inputs = { request: segmentRequestInput };
-      else if (type === 'GENERATE_PARAPHRASE') inputs = { tone: paraTone, context: paraContext, mode: paraMode };
-      else if (type === 'EVALUATE_PARAPHRASE') inputs = initialData;
-      
-      return onGeneratePrompt(inputs);
-  }, [type, wordListInput, unitRequestInput, chapterRequestInput, segmentRequestInput, paraTone, paraContext, paraMode, initialData, onGeneratePrompt, hidePrimaryInput]);
+  useEffect(() => {
+    let inputs: any = {};
+    if (type === 'REFINE_WORDS') {
+        inputs = { words: hidePrimaryInput ? initialData?.words : wordListInput };
+    } else if (type === 'REFINE_UNIT') {
+        inputs = { request: unitRequestInput };
+    } else if (type === 'GENERATE_CHAPTER') {
+        inputs = { request: chapterRequestInput };
+    } else if (type === 'GENERATE_SEGMENT') {
+        inputs = { request: segmentRequestInput };
+    } else if (type === 'GENERATE_PARAPHRASE') {
+        inputs = { tone: paraTone, context: paraContext, mode: paraMode };
+    } else if (type === 'EVALUATE_PARAPHRASE') {
+        inputs = initialData;
+    } else if (type === 'GENERATE_LESSON') {
+        inputs = { topic: lessonTopic, language: lessonLang, targetAudience: lessonAudience, tone: lessonTone };
+    } else if (type === 'GENERATE_UNIT') {
+        inputs = { request: unitRequestInput };
+    }
+    
+    setCurrentPrompt(onGeneratePrompt(inputs));
+
+  // The dependency array is intentionally missing `onGeneratePrompt` to prevent re-renders, as it's a prop function.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, wordListInput, unitRequestInput, chapterRequestInput, segmentRequestInput, paraTone, paraContext, paraMode, initialData, hidePrimaryInput, lessonTopic, lessonAudience, lessonLang, lessonTone]);
+
 
   if (!isOpen) return null;
 
@@ -133,7 +160,15 @@ const UniversalAiModal: React.FC<Props> = ({
                 }
             }
 
-            await onJsonReceived(parsedData);
+            // For GENERATE_LESSON, we also want to pass back the preferences to update user profile
+            if (type === 'GENERATE_LESSON') {
+                 await onJsonReceived({
+                     result: parsedData,
+                     preferences: { language: lessonLang, targetAudience: lessonAudience, tone: lessonTone }
+                 });
+            } else {
+                 await onJsonReceived(parsedData);
+            }
             
             if (closeOnSuccess) {
                 onClose();
@@ -219,6 +254,19 @@ const renderSegmentGenInput = () => (
           />
       </div>
   );
+  
+  const renderGenerateUnitInput = () => (
+    <div className="space-y-1">
+        <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1">Topic or Request</label>
+        <input 
+          value={unitRequestInput}
+          onChange={(e) => setUnitRequestInput(e.target.value)}
+          disabled={isProcessing || isSuccess}
+          placeholder='e.g., "Trees", "Technology", "The Ocean"'
+          className="w-full px-4 py-3 bg-neutral-50/50 border border-neutral-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-neutral-900 outline-none"
+        />
+    </div>
+);
 
   const renderParaphraseGenInput = () => (
       <div className="space-y-2">
@@ -258,6 +306,53 @@ const renderSegmentGenInput = () => (
           <p className="text-[9px] text-neutral-400 px-2 italic text-right">This content will be evaluated by AI.</p>
       </div>
   );
+  
+  const renderLessonGenInput = () => (
+      <div className="space-y-4">
+          <div className="space-y-1">
+             <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><BookOpen size={10}/> Topic</label>
+             <input 
+                value={lessonTopic} 
+                onChange={(e) => setLessonTopic(e.target.value)} 
+                placeholder="e.g. Present Perfect Tense, Space Travel" 
+                className="w-full px-4 py-2 bg-neutral-50/50 border border-neutral-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-neutral-900 outline-none"
+             />
+          </div>
+          <div className="space-y-1">
+             <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><UserIcon size={10}/> Target Audience</label>
+             <input 
+                value={lessonAudience} 
+                onChange={(e) => setLessonAudience(e.target.value)} 
+                placeholder="e.g. IELTS Beginners, Primary Students" 
+                className="w-full px-4 py-2 bg-neutral-50/50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
+             />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Globe size={10}/> Language</label>
+                <select 
+                    value={lessonLang}
+                    onChange={(e) => setLessonLang(e.target.value as any)}
+                    className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none appearance-none cursor-pointer"
+                >
+                    <option value="English">English</option>
+                    <option value="Vietnamese">Vietnamese</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                 <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Radio size={10}/> Persona</label>
+                 <select 
+                    value={lessonTone}
+                    onChange={(e) => setLessonTone(e.target.value as any)}
+                    className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none appearance-none cursor-pointer"
+                >
+                    <option value="friendly_elementary">Friendly Teacher</option>
+                    <option value="professional_professor">Professional Prof.</option>
+                </select>
+              </div>
+          </div>
+      </div>
+  );
 
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-white/10 backdrop-blur-sm animate-in fade-in duration-200">
@@ -285,6 +380,8 @@ const renderSegmentGenInput = () => (
                 {type === 'GENERATE_SEGMENT' && renderSegmentGenInput()}
                 {type === 'GENERATE_PARAPHRASE' && renderParaphraseGenInput()}
                 {type === 'EVALUATE_PARAPHRASE' && renderEvaluateParaphraseInput()}
+                {type === 'GENERATE_LESSON' && renderLessonGenInput()}
+                {type === 'GENERATE_UNIT' && renderGenerateUnitInput()}
             </div>
 
             {/* Action Flow: 1. Copy -> 2. Paste */}

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Target } from 'lucide-react';
 import { DailyGoalConfig } from '../../app/settingsManager';
@@ -5,9 +6,10 @@ import { DailyGoalConfig } from '../../app/settingsManager';
 interface GoalSettingsProps {
     goalConfig: DailyGoalConfig;
     onGoalConfigChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onSaveSettings: () => void;
 }
 
-export const GoalSettings: React.FC<GoalSettingsProps> = ({ goalConfig, onGoalConfigChange }) => {
+export const GoalSettings: React.FC<GoalSettingsProps> = ({ goalConfig, onGoalConfigChange, onSaveSettings }) => {
     return (
         <section className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col space-y-6">
             <div className="flex items-center space-x-4">
@@ -45,6 +47,12 @@ export const GoalSettings: React.FC<GoalSettingsProps> = ({ goalConfig, onGoalCo
                     />
                     <p className="text-[9px] text-neutral-400 mt-1">Target for reviewing existing vocabulary.</p>
                 </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-neutral-100">
+                <button onClick={onSaveSettings} className="w-full md:w-auto py-3 px-6 bg-neutral-900 text-white rounded-2xl font-black text-xs hover:bg-neutral-800 transition-all flex items-center justify-center space-x-2">
+                    <span>SAVE GOALS</span>
+                </button>
             </div>
         </section>
     );

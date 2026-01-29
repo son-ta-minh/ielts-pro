@@ -1,10 +1,11 @@
-
 import React, { useState, useCallback } from 'react';
-import { User, VocabularyItem } from '../types';
+import { User, VocabularyItem, DataScope } from '../types';
 import * as dataStore from '../dataStore';
 import { processJsonImport, generateJsonExport } from '../../utils/dataHandler';
 import { useToast } from '../../contexts/ToastContext';
 import * as db from '../db';
+// Import calculateMasteryScore to fix reference error on line 153
+import { calculateMasteryScore } from '../../utils/srs';
 
 interface UseDataActionsProps {
     currentUser: User | null;
@@ -29,11 +30,23 @@ export const useDataActions = (props: UseDataActionsProps) => {
         Number(localStorage.getItem('vocab_pro_last_backup_timestamp')) || null
     );
 
-    const handleBackup = async () => {
+    const handleBackup = async (customScope?: DataScope) => {
         if (!currentUser) return;
         
-        // Use the centralized export function. Assume default backup from dashboard includes all data.
-        await generateJsonExport(currentUser.id, true, true, currentUser);
+        // Default scope includes everything if not specified (for global backup button)
+        const fullScope: DataScope = customScope || {
+            user: true,
+            vocabulary: true,
+            lesson: true,
+            reading: true,
+            writing: true,
+            speaking: true,
+            listening: true,
+            mimic: true,
+            wordBook: true
+        };
+        
+        await generateJsonExport(currentUser.id, currentUser, fullScope);
         
         const now = Date.now();
         localStorage.setItem('vocab_pro_last_backup_timestamp', String(now));
@@ -62,20 +75,38 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 const file = (e.target as HTMLInputElement).files?.[0];
                 if (!file) return;
                 
-                const result = await processJsonImport(file, currentUser.id, true);
+                // Full restore logic: assumes all scopes true for quick restore action
+                const fullScope: DataScope = {
+                    user: true,
+                    vocabulary: true,
+                    lesson: true,
+                    reading: true,
+                    writing: true,
+                    speaking: true,
+                    listening: true,
+                    mimic: true,
+                    wordBook: true
+                };
+
+                const result = await processJsonImport(file, currentUser.id, fullScope);
     
                 if (result.type === 'success') {
                     // Mark that we just restored to suppress backup nagging
                     sessionStorage.setItem('vocab_pro_just_restored', 'true');
                     
-                    showToast('Restore successful! The app will now reload.', 'success', 2000);
+                    showToast('Restore successful! Refreshing data...', 'success', 2000);
                     
+                    // Force the dataStore to re-read from IndexedDB completely
+                    await dataStore.forceReload(currentUser.id);
+
                     if (result.updatedUser) {
                         await onUpdateUser(result.updatedUser);
                         localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
                     }
+                    
+                    // Refresh stats for UI
+                    refreshGlobalStats();
 
-                    setTimeout(() => window.location.reload(), 2000);
                 } else {
                     showToast(`Restore data failed. Reason: ${result.detail || result.message}`, 'error', 10000);
                 }
@@ -97,10 +128,11 @@ export const useDataActions = (props: UseDataActionsProps) => {
             await dataStore.clearVocabularyOnly();
             sessionStorage.removeItem('vocab_pro_skip_seed');
             await dataStore.seedDatabaseIfEmpty(true);
-            // dataStore.init() is called inside refreshGlobalStats, so the explicit call here is redundant.
-            refreshGlobalStats(); // Pulls from the fresh cache and re-initializes dataStore
+            await dataStore.forceReload(currentUser.id);
+            refreshGlobalStats(); 
             setView('DASHBOARD');
         } catch (err) {
+            console.error("Reset failed", err);
             window.location.reload();
         } finally {
             setIsResetting(false);
@@ -120,6 +152,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
         // If the word currently in the global view modal is the one being updated,
         // we need to update the state to force a re-render of the modal with the new data.
         if (globalViewWord && globalViewWord.id === updatedWord.id) {
+            updatedWord.masteryScore = calculateMasteryScore(updatedWord);
             setGlobalViewWord(updatedWord);
         }
     };

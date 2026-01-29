@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { LayoutTemplate, Table, List, Eye, MessageSquare, Bot } from 'lucide-react';
+import { LayoutTemplate, Table, Eye, Bot } from 'lucide-react';
 import { DEFAULT_VISIBILITY } from '../word_lib/WordTable_UI';
 import { getConfig, saveConfig, SystemConfig } from '../../app/settingsManager';
 
@@ -17,15 +17,6 @@ const ToggleSwitch = ({ checked, onChange, label, subLabel }: { checked: boolean
             <div className={`w-3.5 h-3.5 bg-white rounded-full shadow-sm transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
         </div>
     </label>
-);
-
-const AvatarOption = ({ id, label, selected, onClick, url, bgColor }: { id: string, label: string, selected: boolean, onClick: () => void, url: string, bgColor: string }) => (
-    <button onClick={onClick} className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${selected ? 'border-indigo-500 bg-indigo-50/50' : 'border-neutral-100 hover:border-neutral-200 bg-white'}`}>
-        <div className={`w-12 h-12 rounded-full flex items-center justify-center overflow-hidden ${bgColor}`}>
-            <img src={url} alt={label} className="w-full h-full object-cover" />
-        </div>
-        <span className={`text-[10px] font-bold uppercase tracking-wide ${selected ? 'text-indigo-700' : 'text-neutral-500'}`}>{label}</span>
-    </button>
 );
 
 export const InterfaceSettings: React.FC<InterfaceSettingsProps> = () => {
@@ -45,14 +36,6 @@ export const InterfaceSettings: React.FC<InterfaceSettingsProps> = () => {
         } catch { return DEFAULT_VISIBILITY; }
     });
 
-    // Unit List Defaults
-    const [unitVis, setUnitVis] = useState(() => {
-        try {
-            const stored = localStorage.getItem('ielts_pro_unit_visibility');
-            return stored ? JSON.parse(stored) : { showDesc: false, showWords: true, showStatus: true };
-        } catch { return { showDesc: false, showWords: true, showStatus: true }; }
-    });
-
     // Word Detail View Defaults
     const [wordViewVis, setWordViewVis] = useState(() => {
         const defaultSettings = { showHidden: false, highlightFailed: true, isLearnView: true };
@@ -67,12 +50,6 @@ export const InterfaceSettings: React.FC<InterfaceSettingsProps> = () => {
         const newVal = { ...libVis, [key]: val };
         setLibVis(newVal);
         localStorage.setItem('ielts_pro_library_view_settings', JSON.stringify(newVal));
-    };
-
-    const handleUnitVisChange = (key: string, val: boolean) => {
-        const newVal = { ...unitVis, [key]: val };
-        setUnitVis(newVal);
-        localStorage.setItem('ielts_pro_unit_visibility', JSON.stringify(newVal));
     };
 
     const handleWordViewVisChange = (key: string, val: boolean) => {
@@ -93,14 +70,6 @@ export const InterfaceSettings: React.FC<InterfaceSettingsProps> = () => {
         const newConfig: SystemConfig = {
             ...config,
             interface: { ...config.interface, studyBuddyEnabled: enabled }
-        };
-        saveConfig(newConfig);
-    };
-
-    const handleAvatarChange = (avatar: any) => {
-        const newConfig: SystemConfig = {
-            ...config,
-            interface: { ...config.interface, studyBuddyAvatar: avatar }
         };
         saveConfig(newConfig);
     };
@@ -128,94 +97,6 @@ export const InterfaceSettings: React.FC<InterfaceSettingsProps> = () => {
                         subLabel="Shows helpful tips and motivation"
                     />
                     
-                    {config.interface.studyBuddyEnabled && (
-                        <div className="pt-2 animate-in fade-in slide-in-from-top-2">
-                             <label className="block text-xs font-bold text-neutral-500 mb-2 px-1">Avatar Style</label>
-                             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                                <AvatarOption 
-                                    id="fox" 
-                                    label="Vix" 
-                                    selected={config.interface.studyBuddyAvatar === 'fox'} 
-                                    onClick={() => handleAvatarChange('fox')}
-                                    url={`https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Fox.png`}
-                                    bgColor="bg-orange-100"
-                                />
-                                <AvatarOption 
-                                    id="koala" 
-                                    label="Nami" 
-                                    selected={config.interface.studyBuddyAvatar === 'koala'} 
-                                    onClick={() => handleAvatarChange('koala')}
-                                    url={`https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Koala.png`}
-                                    bgColor="bg-teal-100"
-                                />
-                                <AvatarOption 
-                                    id="bunny" 
-                                    label="Hops" 
-                                    selected={config.interface.studyBuddyAvatar === 'bunny'} 
-                                    onClick={() => handleAvatarChange('bunny')}
-                                    url={`https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Rabbit%20Face.png`}
-                                    bgColor="bg-rose-100"
-                                />
-                                <AvatarOption 
-                                    id="lion" 
-                                    label="Leo" 
-                                    selected={config.interface.studyBuddyAvatar === 'lion'} 
-                                    onClick={() => handleAvatarChange('lion')}
-                                    url={`https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Lion.png`}
-                                    bgColor="bg-amber-100"
-                                />
-                                <AvatarOption 
-                                    id="panda" 
-                                    label="Bamboo" 
-                                    selected={config.interface.studyBuddyAvatar === 'panda'} 
-                                    onClick={() => handleAvatarChange('panda')}
-                                    url={`https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Panda.png`}
-                                    bgColor="bg-emerald-100"
-                                />
-                                <AvatarOption 
-                                    id="unicorn" 
-                                    label="Spark" 
-                                    selected={config.interface.studyBuddyAvatar === 'unicorn'} 
-                                    onClick={() => handleAvatarChange('unicorn')}
-                                    url={`https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Unicorn.png`}
-                                    bgColor="bg-purple-100"
-                                />
-                                <AvatarOption 
-                                    id="chicken" 
-                                    label="Nugget" 
-                                    selected={config.interface.studyBuddyAvatar === 'chicken'} 
-                                    onClick={() => handleAvatarChange('chicken')}
-                                    url={`https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Chicken.png`}
-                                    bgColor="bg-yellow-100"
-                                />
-                                <AvatarOption 
-                                    id="pet" 
-                                    label="Mochi" 
-                                    selected={config.interface.studyBuddyAvatar === 'pet'} 
-                                    onClick={() => handleAvatarChange('pet')}
-                                    url={`https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Cat%20Face.png`}
-                                    bgColor="bg-pink-100"
-                                />
-                                <AvatarOption 
-                                    id="owl" 
-                                    label="Hootie" 
-                                    selected={config.interface.studyBuddyAvatar === 'owl'} 
-                                    onClick={() => handleAvatarChange('owl')}
-                                    url={`https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Owl.png`}
-                                    bgColor="bg-yellow-100"
-                                />
-                                <AvatarOption 
-                                    id="robot" 
-                                    label="Zeta" 
-                                    selected={config.interface.studyBuddyAvatar === 'robot'} 
-                                    onClick={() => handleAvatarChange('robot')}
-                                    url={`https://api.dicebear.com/7.x/bottts/svg?seed=Buddy`}
-                                    bgColor="bg-indigo-100"
-                                />
-                             </div>
-                        </div>
-                    )}
-
                     <div className="pt-2">
                         <label className="block text-xs font-bold text-neutral-500 mb-2 px-1">Language</label>
                         <div className="bg-white p-1 rounded-xl flex w-full md:w-64 border border-neutral-200">
@@ -247,16 +128,6 @@ export const InterfaceSettings: React.FC<InterfaceSettingsProps> = () => {
                     <ToggleSwitch checked={libVis.showDue} onChange={(v) => handleLibVisChange('showDue', v)} label="Due Date" />
                     <ToggleSwitch checked={libVis.showAiIcon} onChange={(v) => handleLibVisChange('showAiIcon', v)} label="AI Refined Indicator" />
                     <ToggleSwitch checked={libVis.showComplexity} onChange={(v) => handleLibVisChange('showComplexity', v)} label="Complexity Column" />
-                </div>
-            </div>
-
-            {/* Unit List Section */}
-            <div className="space-y-4">
-                <div className="flex items-center gap-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1"><List size={12}/> Essay / Unit List Columns</div>
-                <div className="bg-white border border-neutral-200 rounded-2xl p-1 grid grid-cols-1 md:grid-cols-2 gap-x-4">
-                    <ToggleSwitch checked={unitVis.showDesc} onChange={(v) => handleUnitVisChange('showDesc', v)} label="Description" />
-                    <ToggleSwitch checked={unitVis.showWords} onChange={(v) => handleUnitVisChange('showWords', v)} label="Word Count" />
-                    <ToggleSwitch checked={unitVis.showStatus} onChange={(v) => handleUnitVisChange('showStatus', v)} label="Completion Status" />
                 </div>
             </div>
 

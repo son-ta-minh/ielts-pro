@@ -1,44 +1,5 @@
 import { User } from '../../app/types';
 
-export function getRefineSpeakingTopicPrompt(
-    topicName: string,
-    description: string,
-    currentQuestions: string,
-    userRequest: string,
-    user: User
-): string {
-    const hasExistingContent = topicName !== "New Topic" || description.trim() || currentQuestions.trim();
-    
-    let currentDataBlock = '';
-    if (hasExistingContent) {
-      currentDataBlock = `CURRENT TOPIC DATA:\n- Name: ${topicName}\n- Description: ${description || '(empty)'}\n- Current Questions:\n${currentQuestions || '(empty)'}\n`;
-    }
-    
-    const requestBlock = userRequest ? `USER REQUEST: "${userRequest}"` : "USER REQUEST: General improvement and expansion.";
-
-    return `You are an expert IELTS coach. Your task is to refine a speaking topic based on user context and a new request.
-
-USER PROFILE:
-- Role: ${user.role}
-- Level: ${user.currentLevel}
-
-${currentDataBlock}
-${requestBlock}
-
-TASK:
-1.  Read the user request and apply it to the CURRENT TOPIC DATA. If no data exists, create a new topic from the request.
-2.  The goal is to generate a high-quality, relevant set of IELTS Speaking questions for the topic.
-3.  Ensure the topic name and description are concise and accurate.
-4.  Generate between 5 to 10 questions. The questions should cover different aspects of the topic and be typical of a real Part 1 or Part 2/3 follow-up interview.
-
-Return a strict JSON object with this schema:
-{ 
-  "name": "string (The updated topic name)", 
-  "description": "string (The updated description, max 1-2 sentences)", 
-  "questions": ["string"] (An array of 5-10 question strings)
-}`;
-}
-
 export function getFullSpeakingTestPrompt(theme: string): string {
     return `You are an expert IELTS examiner creating a full speaking test. The main topic is "${theme}".
 
@@ -97,4 +58,44 @@ export function getTranscriptionForSpeakingPrompt(questions: string[]): string {
       ]
     }
     `;
+}
+
+// FIX: Add missing getRefineSpeakingTopicPrompt function definition.
+export function getRefineSpeakingTopicPrompt(
+    topicName: string,
+    description: string,
+    currentQuestions: string,
+    userRequest: string,
+    user: User
+): string {
+    const hasExistingContent = topicName !== "New Topic" || description.trim() || currentQuestions.trim();
+    
+    let currentDataBlock = '';
+    if (hasExistingContent) {
+      currentDataBlock = `CURRENT TOPIC DATA:\n- Name: ${topicName}\n- Description: ${description || '(empty)'}\n- Current Questions:\n${currentQuestions || '(empty)'}\n`;
+    }
+    
+    const requestBlock = userRequest ? `USER REQUEST FOR REFINEMENT: "${userRequest}"` : "USER REQUEST FOR REFINEMENT: General improvement.";
+
+    return `You are an expert IELTS coach. Your task is to refine an IELTS Speaking topic based on user context, existing data, and a new request.
+
+USER PROFILE:
+- Role: ${user.role}
+- Level: ${user.currentLevel}
+
+${currentDataBlock}
+${requestBlock}
+
+TASK:
+1.  Read the user request and apply it to the CURRENT TOPIC DATA. If no data exists, create a new topic from the request.
+2.  The goal is to generate a high-quality, realistic set of IELTS Speaking questions.
+3.  Ensure the topic name and description are concise and accurate.
+4.  The 'questions' array should contain relevant questions for a speaking test on the topic.
+
+Return a strict JSON object with this schema:
+{ 
+  "name": "string (The updated topic name)", 
+  "description": "string (The updated description)", 
+  "questions": ["string"]
+}`;
 }

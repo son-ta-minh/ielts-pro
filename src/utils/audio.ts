@@ -1,176 +1,272 @@
 
 /**
  * Professional Hybrid Audio Utility
- * - Manages both System (Web Speech API) and AI (Gemini TTS) voices.
- * - Prioritizes finding and using high-quality native voices like Siri.
- * - Recording using MediaRecorder.
+ * - Manages System (Web Speech API), Server (macOS Local), and AI (Gemini TTS) voices.
+ * - Supports multi-language switching based on content.
  */
 
-import { generateSpeech } from '../services/geminiService';
 import { getConfig } from '../app/settingsManager';
 
+const getBaseUrl = (portOverride?: number) => {
+    const port = portOverride || getConfig().audioCoach.serverPort || 3000;
+    return `http://localhost:${port}`;
+};
+
 let voices: SpeechSynthesisVoice[] = [];
-let voicesPromise: Promise<SpeechSynthesisVoice[]> | null = null;
+let currentServerAudio: HTMLAudioElement | null = null;
+let isSpeaking = false;
 
 // --- Native Voice Management ---
 
-function initializeVoices(): Promise<SpeechSynthesisVoice[]> {
-  if (voicesPromise) return voicesPromise;
+function initializeVoices() {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-  voicesPromise = new Promise((resolve) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      return resolve([]);
+  const updateVoices = () => {
+    const allVoices = window.speechSynthesis.getVoices();
+    if (allVoices && allVoices.length > 0) {
+      voices = Array.from(allVoices);
     }
+  };
 
-    const getAndResolve = () => {
-      const allVoices = window.speechSynthesis.getVoices();
-      if (allVoices && allVoices.length > 0) {
-        voices = allVoices.filter(v => v.lang.startsWith('en'));
-        resolve(voices);
-      }
-    };
-
-    getAndResolve(); // Initial attempt
-
-    if (voices.length === 0) {
-      window.speechSynthesis.onvoiceschanged = getAndResolve;
-      // Fallback timeout for browsers that might not fire the event reliably
-      setTimeout(() => getAndResolve(), 1000);
-    }
-  });
-
-  return voicesPromise;
+  updateVoices();
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = updateVoices;
+  }
 }
+
+initializeVoices();
 
 export const getAvailableVoices = (): Promise<SpeechSynthesisVoice[]> => {
-  return initializeVoices();
+  return new Promise((resolve) => {
+    const current = window.speechSynthesis.getVoices();
+    if (current.length > 0) {
+      voices = Array.from(current);
+      resolve(voices);
+    } else {
+      const cb = () => {
+        const v = window.speechSynthesis.getVoices();
+        if (v.length > 0) {
+            voices = Array.from(v);
+            resolve(voices);
+            window.speechSynthesis.onvoiceschanged = null;
+        }
+      };
+      window.speechSynthesis.onvoiceschanged = cb;
+      setTimeout(() => {
+          const final = window.speechSynthesis.getVoices();
+          voices = Array.from(final);
+          resolve(voices);
+      }, 1000);
+    }
+  });
 };
 
-export const getBestVoice = (): SpeechSynthesisVoice | null => {
-  if (voices.length === 0) return null;
-
-  const priorityKeywords = ['siri', 'daniel', 'alex', 'com.apple', 'enhanced', 'premium', 'natural', 'google', 'samantha'];
-  const usVoices = voices.filter(v => v.lang.includes('en-US'));
-  const gbVoices = voices.filter(v => v.lang.includes('en-GB'));
-  const targetPool = usVoices.length > 0 ? usVoices : (gbVoices.length > 0 ? gbVoices : voices);
-
-  for (const keyword of priorityKeywords) {
-    const found = targetPool.find(v => v.name.toLowerCase().includes(keyword));
-    if (found) return found;
-  }
-  
-  return targetPool[0] || null;
-};
-
-export const unlockAudio = () => {
-  if (typeof window !== 'undefined' && window.speechSynthesis && !window.speechSynthesis.speaking) {
-    const utterance = new SpeechSynthesisUtterance('');
-    utterance.volume = 0;
-    window.speechSynthesis.speak(utterance);
-    initializeVoices(); // Proactively load voices on first interaction
-  }
-};
-
-
-// --- AI Voice Management ---
-const aiAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-let currentAiSource: AudioBufferSourceNode | null = null;
-
-function decode(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
+export interface VoiceDefinition {
+    name: string;
+    language: 'en' | 'vi';
+    accent: string;
 }
 
-async function decodeAudioData(data: Uint8Array): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / 1; // Assuming mono
-  const buffer = aiAudioContext.createBuffer(1, frameCount, 24000);
-  const channelData = buffer.getChannelData(0);
-  for (let i = 0; i < frameCount; i++) {
-    channelData[i] = dataInt16[i] / 32768.0;
-  }
-  return buffer;
+export type ServerVoice = VoiceDefinition;
+
+export interface ServerVoicesResponse {
+    currentVoice: string;
+    count: number;
+    voices: VoiceDefinition[];
 }
 
-async function playAiSpeech(text: string) {
-  if (currentAiSource) {
-    try { currentAiSource.stop(); } catch (e) {}
-  }
+export const fetchServerVoices = async (port?: number): Promise<ServerVoicesResponse | null> => {
+    const url = `${getBaseUrl(port)}/voices`;
+    try {
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(2000) 
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+    } catch (e: any) {
+        return null;
+    }
+};
 
-  try {
-    const base64Audio = await generateSpeech(text);
-    if (!base64Audio) return;
+export const selectServerVoice = async (voiceName: string, port?: number): Promise<boolean> => {
+    const url = `${getBaseUrl(port)}/select-voice`;
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                voice: voiceName,
+                mode: 'audio'
+            })
+        });
+        const data = await res.json();
+        return data.success;
+    } catch (e) {
+        return false;
+    }
+};
+
+export const setServerMode = async (mode: string, port?: number): Promise<boolean> => {
+    const url = `${getBaseUrl(port)}/set-mode`;
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode })
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        return data.success;
+    } catch (e) {
+        return false;
+    }
+};
+
+const notifyStatus = (status: boolean) => {
+    isSpeaking = status;
+    window.dispatchEvent(new CustomEvent('audio-status-changed', { detail: { isSpeaking } }));
+};
+
+export const stopSpeaking = () => {
+    if (currentServerAudio) {
+        currentServerAudio.pause();
+        currentServerAudio = null;
+    }
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
+    notifyStatus(false);
+};
+
+export const getIsSpeaking = () => isSpeaking;
+
+const speakViaServer = async (text: string, language: 'en' | 'vi', accent: string, port?: number) => {
+    const url = `${getBaseUrl(port)}/speak`;
+    const payload = { text, language, accent }; 
     
-    const audioBuffer = await decodeAudioData(decode(base64Audio));
-    const source = aiAudioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(aiAudioContext.destination);
-    source.start();
-    currentAiSource = source;
-  } catch (error) {
-    console.error("Failed to play AI speech:", error);
-  }
-}
+    stopSpeaking(); 
+    notifyStatus(true);
 
-// --- Universal `speak` Function ---
-export const speak = async (text: string, preferredVoiceNameOverride?: string, accent?: 'US' | 'GB') => {
-  if (typeof window === 'undefined') return;
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(20000) 
+        });
 
-  const audioConfig = getConfig().audio;
-  const preferredVoiceName = preferredVoiceNameOverride || audioConfig.preferredSystemVoice;
+        if (!res.ok) throw new Error(`Server unreachable`);
+        
+        const contentType = res.headers.get('Content-Type');
+        
+        if (contentType && contentType.includes('audio')) {
+            const blob = await res.blob();
+            const audioUrl = URL.createObjectURL(blob);
+            const audio = new Audio(audioUrl);
+            currentServerAudio = audio;
+            
+            return new Promise<boolean>((resolve, reject) => {
+                audio.play()
+                    .then(() => {
+                        audio.onended = () => {
+                            URL.revokeObjectURL(audioUrl);
+                            notifyStatus(false);
+                            resolve(true);
+                        };
+                    })
+                    .catch(e => {
+                        URL.revokeObjectURL(audioUrl);
+                        notifyStatus(false);
+                        reject(e);
+                    });
+            });
+        } else {
+            notifyStatus(false);
+            return true;
+        }
+    } catch (e: any) {
+        notifyStatus(false);
+        throw e;
+    }
+};
 
-  if (audioConfig.mode === 'ai') {
-    await playAiSpeech(text);
-  } else {
+const speakViaBrowser = (text: string, voiceName?: string) => {
     if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
     
-    await getAvailableVoices(); // Ensure voices are loaded
+    stopSpeaking(); 
+    notifyStatus(true);
 
     const utterance = new SpeechSynthesisUtterance(text);
-    let selectedVoice: SpeechSynthesisVoice | null = null;
-
-    if (accent) {
-        const langCode = accent === 'US' ? 'en-US' : 'en-GB';
-        const accentVoices = voices.filter(v => v.lang === langCode);
-        if (accentVoices.length > 0) {
-            const priorityKeywords = ['siri', 'daniel', 'alex', 'com.apple', 'enhanced', 'premium', 'natural', 'google', 'samantha'];
-            for (const keyword of priorityKeywords) {
-                const found = accentVoices.find(v => v.name.toLowerCase().includes(keyword));
-                if (found) {
-                    selectedVoice = found;
-                    break;
-                }
-            }
-            if (!selectedVoice) selectedVoice = accentVoices[0];
-        }
-    }
-
-    if (!selectedVoice && preferredVoiceName) {
-      selectedVoice = voices.find(v => v.name === preferredVoiceName) || null;
-    }
     
-    if (!selectedVoice) {
-      selectedVoice = getBestVoice();
-    }
+    const availableVoices = window.speechSynthesis.getVoices();
+    const selectedVoice = (voiceName && availableVoices.find(v => v.name === voiceName)) || 
+                          availableVoices.find(v => v.name.includes("Samantha"));
 
     if (selectedVoice) {
-      utterance.voice = selectedVoice;
+        utterance.voice = selectedVoice;
     }
-
     utterance.rate = 0.95;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
+    
+    utterance.onend = () => notifyStatus(false);
+    utterance.onerror = () => notifyStatus(false);
 
     window.speechSynthesis.speak(utterance);
-  }
 };
 
+/**
+ * Detects if the text is predominantly Vietnamese.
+ */
+export const detectLanguage = (text: string): 'vi' | 'en' => {
+  const viRegex = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+  return viRegex.test(text) ? 'vi' : 'en';
+};
+
+/**
+ * Strips formatting characters, emojis and normalize dashes for natural TTS.
+ */
+const cleanTextForTts = (text: string): string => {
+    return text
+        .replace(/\*+/g, '') // Remove Markdown bold/italic
+        .replace(/[\{\}\[\]<>]/g, '') // Remove highlight/note/bracket wrappers
+        .replace(/—/g, ', ') // Convert em-dash to comma for natural pause
+        // Remove emojis and specific symbols
+        .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
+        .trim();
+};
+
+/**
+ * Universal speak function.
+ * @param text The text to speak
+ * @param isDialogue If true, skips browser fallback if server is unreachable
+ */
+export const speak = async (text: string, isDialogue = false) => {
+  if (typeof window === 'undefined' || !text) return;
+
+  const cleanedText = cleanTextForTts(text);
+  if (!cleanedText) return;
+
+  const config = getConfig();
+  const coachType = config.audioCoach.activeCoach;
+  const coach = config.audioCoach.coaches[coachType];
+  const lang = detectLanguage(cleanedText);
+  
+  const voiceName = lang === 'vi' ? coach.viVoice : coach.enVoice;
+  const accentCode = lang === 'vi' ? coach.viAccent : coach.enAccent;
+
+  try {
+      if (voiceName) {
+          await selectServerVoice(voiceName, config.audioCoach.serverPort);
+      }
+      await speakViaServer(cleanedText, lang, accentCode, config.audioCoach.serverPort);
+      return; 
+  } catch (e) {
+      if (!isDialogue) {
+          speakViaBrowser(cleanedText, voiceName);
+      }
+  }
+};
 
 // --- Recording Logic ---
 let mediaRecorder: MediaRecorder | null = null;
@@ -178,32 +274,17 @@ let audioChunks: Blob[] = [];
 
 export const startRecording = async (): Promise<void> => {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  
-  // Detect supported mimeType
-  const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav'];
-  const options = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) 
-    ? { mimeType: mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) } 
-    : undefined;
-
-  mediaRecorder = new MediaRecorder(stream, options);
+  const options = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(type => MediaRecorder.isTypeSupported(type));
+  mediaRecorder = new MediaRecorder(stream, options ? { mimeType: options } : undefined);
   audioChunks = [];
-  
-  mediaRecorder.ondataavailable = (event) => {
-    if (event.data.size > 0) {
-      audioChunks.push(event.data);
-    }
-  };
-  
+  mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunks.push(event.data); };
   mediaRecorder.start();
 };
 
 export const stopRecording = (): Promise<{base64: string, mimeType: string} | null> => {
   return new Promise((resolve) => {
     if (!mediaRecorder) return resolve(null);
-    
-    // Store mimeType before stopping, or use the recorder's actual property
     const mimeType = mediaRecorder.mimeType || 'audio/webm';
-
     mediaRecorder.onstop = () => {
       const audioBlob = new Blob(audioChunks, { type: mimeType });
       const reader = new FileReader();
@@ -213,16 +294,10 @@ export const stopRecording = (): Promise<{base64: string, mimeType: string} | nu
         const base64String = result.split(',')[1] || '';
         resolve({ base64: base64String, mimeType });
       };
-      
       mediaRecorder?.stream.getTracks().forEach(track => track.stop());
       mediaRecorder = null;
     };
-    
-    if (mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
-    } else {
-        // Just in case it was already stopped
-        resolve(null);
-    }
+    if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    else resolve(null);
   });
 };

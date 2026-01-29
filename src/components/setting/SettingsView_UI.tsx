@@ -1,14 +1,16 @@
 
 import React from 'react';
-import { AlertCircle, CheckCircle2, ChevronDown, User, BrainCircuit, Database, Settings2, AlertTriangle, LayoutTemplate, Target } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, User, Bot, Database, Settings2, AlertTriangle, LayoutTemplate, Target, BookText, GraduationCap } from 'lucide-react';
 import { ProfileSettings } from './ProfileSettings';
-import { AiAudioSettings } from './AiAudioSettings';
+import { AudioCoachSettings } from './AudioCoachSettings';
 import { DataSettings } from './DataSettings';
 import { SrsSettings } from './SrsSettings';
+import { GoalSettings } from './GoalSettings';
 import { DangerZone } from './DangerZone';
-import { SystemConfig } from '../../app/settingsManager';
+import { SystemConfig, DailyGoalConfig } from '../../app/settingsManager';
+import { DataScope } from '../../app/types';
 
-export type SettingView = 'PROFILE' | 'INTERFACE' | 'AI_AUDIO' | 'DATA' | 'SRS' | 'GOALS' | 'DANGER';
+export type SettingView = 'PROFILE' | 'INTERFACE' | 'AUDIO_COACH' | 'DATA' | 'LEARNING' | 'DANGER';
 
 interface SettingsViewUIProps {
     // State
@@ -23,12 +25,13 @@ interface SettingsViewUIProps {
     apiKeyInput: string;
     apiUsage: { count: number; date: string };
     jsonInputRef: React.RefObject<HTMLInputElement>;
-    includeProgress: boolean;
-    includeEssays: boolean;
+    dataScope: DataScope;
     mobileNavRef: React.RefObject<HTMLDivElement>;
     isNormalizing: boolean;
     isApplyingAccent: boolean;
     isAdmin: boolean;
+    junkTags: string[];
+    normalizeOptions: { removeJunkTags: boolean; removeMultiWordData: boolean };
     
     // Handlers
     setCurrentView: (view: SettingView) => void;
@@ -37,14 +40,11 @@ interface SettingsViewUIProps {
     onSaveProfile: () => void;
     onConfigChange: (section: keyof SystemConfig, key: any, value: any) => void;
     onAiConfigChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    onAudioModeChange: (mode: 'system' | 'ai') => void;
-    onVoiceChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
     onApiKeyInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
     onSaveApiKeys: () => void;
     onResetUsage: () => void;
     onSaveSettings: () => void;
-    setIncludeProgress: (value: boolean) => void;
-    setIncludeEssays: (value: boolean) => void;
+    onDataScopeChange: (scope: DataScope) => void;
     onJSONImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onJSONExport: () => void;
     onSrsConfigChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -54,7 +54,13 @@ interface SettingsViewUIProps {
     onOpenNormalizeModal: () => void;
     onApplyAccent: () => void;
     onToggleAdmin: () => void;
+    onJunkTagsChange: (tags: string[]) => void;
+    onNormalizeOptionsChange: (options: { removeJunkTags: boolean; removeMultiWordData: boolean }) => void;
     
+    // Goal Props
+    goalConfig: DailyGoalConfig;
+    onGoalConfigChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+
     // Children render prop for InterfaceSettings
     children?: React.ReactNode;
 }
@@ -62,10 +68,9 @@ interface SettingsViewUIProps {
 const navItems = [
     { id: 'PROFILE', label: 'Profile', icon: User },
     { id: 'INTERFACE', label: 'Interface Defaults', icon: LayoutTemplate },
-    { id: 'AI_AUDIO', label: 'AI & Audio', icon: BrainCircuit },
+    { id: 'AUDIO_COACH', label: 'Audio Coach', icon: Bot },
+    { id: 'LEARNING', label: 'Learning', icon: GraduationCap },
     { id: 'DATA', label: 'Data Management', icon: Database },
-    { id: 'SRS', label: 'Learning Algorithm', icon: Settings2 },
-    { id: 'GOALS', label: 'Daily Goals', icon: Target },
     { id: 'DANGER', label: 'Danger Zone', icon: AlertTriangle, color: 'text-red-500' }
 ];
 
@@ -80,12 +85,16 @@ export const SettingsViewUI: React.FC<SettingsViewUIProps> = (props) => {
     const renderCurrentView = () => {
         switch (currentView) {
             case 'PROFILE': return <ProfileSettings profileData={props.profileData} onProfileChange={props.onProfileChange} onSaveProfile={props.onSaveProfile} />;
-            case 'AI_AUDIO': return <AiAudioSettings config={props.config} isVoiceLoading={props.isVoiceLoading} availableVoices={props.availableVoices} apiKeyInput={props.apiKeyInput} apiUsage={props.apiUsage} onConfigChange={props.onConfigChange} onAiConfigChange={props.onAiConfigChange} onAudioModeChange={props.onAudioModeChange} onVoiceChange={props.onVoiceChange} onApiKeyInputChange={props.onApiKeyInputChange} onSaveApiKeys={props.onSaveApiKeys} onResetUsage={props.onResetUsage} onSaveSettings={props.onSaveSettings} isApplyingAccent={props.isApplyingAccent} onApplyAccent={props.onApplyAccent} />;
-            case 'DATA': return <DataSettings jsonInputRef={props.jsonInputRef} includeProgress={props.includeProgress} setIncludeProgress={props.setIncludeProgress} includeEssays={props.includeEssays} setIncludeEssays={props.setIncludeEssays} onJSONImport={props.onJSONImport} onJSONExport={props.onJSONExport} isNormalizing={props.isNormalizing} onOpenNormalizeModal={props.onOpenNormalizeModal} />;
-            case 'SRS': return <SrsSettings srsConfig={props.config.srs} onSrsConfigChange={props.onSrsConfigChange} onResetSrsConfig={props.onResetSrsConfig} onSaveSettings={props.onSaveSettings} />;
+            case 'AUDIO_COACH': return <AudioCoachSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />;
+            case 'DATA': return <DataSettings jsonInputRef={props.jsonInputRef} dataScope={props.dataScope} onDataScopeChange={props.onDataScopeChange} onJSONImport={props.onJSONImport} onJSONExport={props.onJSONExport} isNormalizing={props.isNormalizing} onOpenNormalizeModal={props.onOpenNormalizeModal} junkTags={props.junkTags} onJunkTagsChange={props.onJunkTagsChange} normalizeOptions={props.normalizeOptions} onNormalizeOptionsChange={props.onNormalizeOptionsChange} />;
+            case 'LEARNING': return (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                    <GoalSettings goalConfig={props.goalConfig} onGoalConfigChange={props.onGoalConfigChange} onSaveSettings={props.onSaveSettings} />
+                    <SrsSettings srsConfig={props.config.srs} onSrsConfigChange={props.onSrsConfigChange} onResetSrsConfig={props.onResetSrsConfig} onSaveSettings={props.onSaveSettings} />
+                </div>
+            );
             case 'DANGER': return <DangerZone onOpenClearProgressModal={props.onOpenClearProgressModal} onOpenNukeModal={props.onOpenNukeModal} isAdmin={props.isAdmin} onToggleAdmin={props.onToggleAdmin} />;
             case 'INTERFACE':
-            case 'GOALS':
                 return null; // Rendered via children
             default: return null;
         }

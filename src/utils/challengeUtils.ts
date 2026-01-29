@@ -5,7 +5,7 @@ import { getRandomMeanings } from '../app/db';
 
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
 const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const normalizeAnswerForGrading = (str: string): string => str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+export const normalizeAnswerForGrading = (str: string): string => str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
 
 /**

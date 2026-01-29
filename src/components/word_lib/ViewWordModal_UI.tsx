@@ -593,7 +593,10 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                                                             {isExpanded && (
                                                                 <div className="pt-2 mt-2 border-t border-neutral-200 animate-in fade-in zoom-in-95">
                                                                     <div className="flex flex-wrap gap-1.5">
-                                                                        {words.map(w => (<button key={w.id} onClick={() => onNavigateToWord(w)} className="px-2 py-1 bg-white border border-neutral-200 rounded-md text-xs font-bold text-neutral-700 hover:bg-neutral-100 hover:border-neutral-300 transition-colors">{w.word}</button>))}
+                                                                        {words.slice(0, 20).map(w => (<button key={w.id} onClick={() => onNavigateToWord(w)} className="px-2 py-1 bg-white border border-neutral-200 rounded-md text-xs font-bold text-neutral-700 hover:bg-neutral-100 hover:border-neutral-300 transition-colors">{w.word}</button>))}
+                                                                        {words.length > 20 && (
+                                                                            <span className="px-2 py-1 text-xs font-bold text-neutral-400">...and {words.length - 20} more</span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             )}

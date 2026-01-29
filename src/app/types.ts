@@ -1,4 +1,3 @@
-
 export enum ReviewGrade {
   FORGOT = 'FORGOT',
   HARD = 'HARD',
@@ -12,6 +11,8 @@ export enum WordQuality {
   VERIFIED = 'VERIFIED',
   FAILED = 'FAILED'
 }
+
+export type FocusColor = 'green' | 'yellow' | 'red';
 
 export enum ReviewMode {
   STANDARD = 'STANDARD',       // Show Word -> Recall Meaning
@@ -28,7 +29,21 @@ export enum ParaphraseMode {
   LESS_ACADEMIC = 'LESS_ACADEMIC'
 }
 
+export type WordTypeOption = 'vocab' | 'idiom' | 'phrasal' | 'collocation' | 'phrase' | 'pronun' | 'preposition' | 'archive';
+
 export type SessionType = 'due' | 'new' | 'custom' | 'new_study' | 'random_test' | 'boss_battle' | null;
+
+export interface DataScope {
+  user: boolean;
+  vocabulary: boolean;
+  lesson: boolean;
+  reading: boolean;
+  writing: boolean;
+  speaking: boolean;
+  listening: boolean;
+  mimic: boolean;
+  wordBook: boolean;
+}
 
 export interface WordFamilyMember {
   word: string;
@@ -77,6 +92,12 @@ export interface AdventureProgress {
   map?: MapNode[];
 }
 
+export interface LessonPreferences {
+  language: 'English' | 'Vietnamese';
+  targetAudience: string;
+  tone: 'friendly_elementary' | 'professional_professor';
+}
+
 export interface User {
   id: string;
   name: string;
@@ -92,6 +113,7 @@ export interface User {
   adventure: AdventureProgress;
   adventureLastDailyStar?: string; // YYYY-MM-DD format
   isAdmin?: boolean;
+  lessonPreferences?: LessonPreferences;
 }
 
 export interface PrepositionPattern {
@@ -188,23 +210,36 @@ export interface Unit {
   name: string;
   description: string;
   wordIds: string[];
+  path?: string;
+  tags?: string[];
   customVocabString?: string;
   createdAt: number;
   updatedAt: number;
   essay?: string;
   isLearned?: boolean;
+  comprehensionQuestions?: {
+    question: string;
+    answer: string;
+  }[];
+  focusColor?: FocusColor;
 }
 
 export interface SpeakingTopic {
   id: string;
   userId: string;
   name: string;
-  description: string;
-  questions: string[];
+  label?: string; // e.g. "Part 1", "Free Talk"
+  description: string; // Context
+  questions: string[]; // Context/Questions
+  sampleAnswers?: string[]; // Format: "Tone: Answer"
+  path?: string;
+  tags?: string[];
+  note?: string; // User Note
   part2?: { cueCard: string, points: string[] };
   part3?: string[];
   createdAt: number;
   updatedAt: number;
+  focusColor?: FocusColor;
 }
 
 export interface WritingTopic {
@@ -214,8 +249,29 @@ export interface WritingTopic {
   description: string;
   task1: string;
   task2: string;
+  path?: string;
+  tags?: string[];
   createdAt: number;
   updatedAt: number;
+  focusColor?: FocusColor;
+}
+
+// New Composition Type
+export type CompositionLabel = 'IELTS Task 1' | 'IELTS Task 2' | 'Professional' | 'Academic' | 'Informal' | 'Free Write';
+
+export interface Composition {
+  id: string;
+  userId: string;
+  title?: string;
+  label: CompositionLabel; // Legacy: Kept for compatibility
+  path?: string;
+  tags?: string[];
+  content: string;
+  linkedWordIds: string[]; // IDs of VocabularyItems used
+  aiFeedback?: string; // HTML feedback
+  createdAt: number;
+  updatedAt: number;
+  focusColor?: FocusColor;
 }
 
 export interface ParaphraseLog {
@@ -272,8 +328,11 @@ export interface ComparisonGroup {
       example: string;
       userNote?: string;
   }[];
+  path?: string;
+  tags?: string[];
   createdAt: number;
   updatedAt: number;
+  focusColor?: FocusColor;
 }
 
 export interface IrregularVerb {
@@ -289,6 +348,103 @@ export interface IrregularVerb {
   lastTestIncorrectForms?: ('v1' | 'v2' | 'v3')[];
 }
 
-export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'PARAPHRASE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'WORD_NET' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS' | 'MIMIC';
+export type LessonType = 'essay' | 'comparison';
+
+export interface Lesson {
+  id: string;
+  userId: string;
+  type?: LessonType; // 'essay' by default if undefined
+  
+  topic1: string; // Deprecated in V2 UI, kept for data legacy
+  topic2: string; // Deprecated in V2 UI, kept for data legacy
+  
+  title: string;
+  description: string;
+  content: string; // Stored as HTML. For comparisons, this can be empty or auto-generated.
+  
+  // New: For 'comparison' type
+  comparisonData?: {
+      word: string;
+      explanation: string;
+      example: string;
+      userNote?: string;
+  }[];
+  words?: string[]; // Words involved in the comparison
+
+  path?: string;
+  tags?: string[];
+  createdAt: number;
+  updatedAt: number;
+  focusColor?: FocusColor;
+}
+
+export interface ListeningItem {
+  id: string;
+  userId: string;
+  text: string; // Text with {curly braces} for highlighting
+  note?: string;
+  path?: string;
+  tags?: string[];
+  createdAt: number;
+  updatedAt: number;
+  focusColor?: FocusColor;
+}
+
+export interface NativeSpeakAnswer {
+  tone: 'casual' | 'semi-academic' | 'academic';
+  anchor: string;
+  sentence: string;
+  note?: string;
+}
+
+export interface NativeSpeakItem {
+    id: string;
+    userId: string;
+    standard: string; // The "Question" or "Context"
+    answers: NativeSpeakAnswer[];
+    path?: string;
+    tags: string[];
+    note?: string; // User note for context/usage explanation
+    createdAt: number;
+    updatedAt: number;
+    focusColor?: FocusColor;
+}
+
+export interface CalendarEvent {
+  id: string;
+  userId: string;
+  title: string;
+  start: number; // timestamp
+  end: number; // timestamp
+  description?: string;
+  color: 'blue' | 'green' | 'purple' | 'orange' | 'red';
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface WordBookItem {
+  word: string;
+  definition: string;
+}
+
+export interface WordBook {
+  id: string;
+  userId: string;
+  topic: string;
+  icon: string; // Emoji
+  words: WordBookItem[];
+  createdAt: number;
+  updatedAt: number;
+  color?: string;
+  titleColor?: string;
+  titleSize?: number;
+  titleTop?: number;
+  titleLeft?: number;
+  iconTop?: number;
+  iconLeft?: number;
+}
+
+
+export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS' | 'MIMIC' | 'LESSON' | 'LISTENING' | 'NATIVE_SPEAK' | 'EXPERIMENT' | 'CALENDAR' | 'WORDBOOK';
 
 export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'COLLO_CONNECT' | 'IPA_SORTER' | 'MEANING_MATCH' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'WORD_TRANSFORMER' | 'IDIOM_CONNECT' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER';

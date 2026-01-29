@@ -1,18 +1,17 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { RotateCw, ShieldAlert, Wrench } from 'lucide-react';
-import { User as UserType, VocabularyItem } from '../../app/types';
+import { User as UserType, VocabularyItem, DataScope } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { resetProgress } from '../../utils/srs';
-import { getAvailableVoices, speak, getBestVoice } from '../../utils/audio';
+// --- FIX: Removed unused setServerMode import ---
+import { getAvailableVoices, speak } from '../../utils/audio';
 import { processJsonImport, generateJsonExport } from '../../utils/dataHandler';
-import ConfirmationModal from '../common/ConfirmationModal';
-import { getConfig, saveConfig, SystemConfig, DEFAULT_SRS_CONFIG, DEFAULT_DAILY_GOAL_CONFIG } from '../../app/settingsManager';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
+import { getConfig, saveConfig, SystemConfig, DEFAULT_SRS_CONFIG } from '../../app/settingsManager';
 import { SettingsViewUI, SettingView } from './SettingsView_UI';
-import { InterfaceSettings } from './InterfaceSettings'; // Import the new component
-import { GoalSettings } from './GoalSettings';
+import { InterfaceSettings } from './InterfaceSettings'; 
 import { useToast } from '../../contexts/ToastContext';
-import { calculateGameEligibility } from '../../utils/gameEligibility';
 
 interface Props {
   user: UserType;
@@ -30,8 +29,17 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   const [currentView, setCurrentView] = useState<SettingView>('PROFILE');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
-  const [includeProgress, setIncludeProgress] = useState(true);
-  const [includeEssays, setIncludeEssays] = useState(true);
+  const [dataScope, setDataScope] = useState<DataScope>({
+      user: true,
+      vocabulary: true,
+      lesson: true,
+      reading: true,
+      writing: true,
+      speaking: true,
+      listening: true,
+      mimic: true,
+      wordBook: true
+  });
   
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'info', message: string, detail?: string } | null>(null);
   
@@ -42,6 +50,8 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
 
   const [isNormalizeModalOpen, setIsNormalizeModalOpen] = useState(false);
   const [isNormalizing, setIsNormalizing] = useState(false);
+  const [normalizeOptions, setNormalizeOptions] = useState({ removeJunkTags: true, removeMultiWordData: true });
+
 
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [config, setConfig] = useState<SystemConfig>(getConfig());
@@ -54,11 +64,21 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
     role: user.role || '',
     currentLevel: user.currentLevel || '',
     target: user.target || '',
-    nativeLanguage: user.nativeLanguage || 'Vietnamese'
+    nativeLanguage: user.nativeLanguage || 'Vietnamese',
+    lessonLanguage: user.lessonPreferences?.language || 'English',
+    lessonAudience: user.lessonPreferences?.targetAudience || '',
   });
   
   useEffect(() => {
-    setProfileData({ name: user.name, role: user.role || '', currentLevel: user.currentLevel || '', target: user.target || '', nativeLanguage: user.nativeLanguage || 'Vietnamese' });
+    setProfileData({ 
+        name: user.name, 
+        role: user.role || '', 
+        currentLevel: user.currentLevel || '', 
+        target: user.target || '', 
+        nativeLanguage: user.nativeLanguage || 'Vietnamese',
+        lessonLanguage: user.lessonPreferences?.language || 'English',
+        lessonAudience: user.lessonPreferences?.targetAudience || '',
+    });
   }, [user]);
 
   useEffect(() => {
@@ -72,10 +92,6 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
       setIsVoiceLoading(true);
       const voices = await getAvailableVoices();
       setAvailableVoices(voices);
-      if (!getConfig().audio.preferredSystemVoice && voices.length > 0) {
-        const best = getBestVoice();
-        if (best) { handleConfigChange('audio', 'preferredSystemVoice', best.name); }
-      }
       setIsVoiceLoading(false);
     };
     loadVoices();
@@ -96,7 +112,23 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   }, []);
 
   const handleConfigChange = (section: keyof SystemConfig, key: any, value: any) => {
-    setConfig(prev => ({ ...prev, [section]: { ...prev[section], [key]: value, }, }));
+    setConfig(prev => {
+        const newConfig = { 
+            ...prev, 
+            [section]: { ...prev[section], [key]: value } 
+        };
+        
+        // Auto-save audio coach updates
+        if (section === 'audioCoach') {
+            saveConfig(newConfig);
+        }
+        
+        return newConfig;
+    });
+  };
+  
+  const handleJunkTagsChange = (newJunkTags: string[]) => {
+    handleConfigChange('interface', 'junkTags', newJunkTags);
   };
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -104,15 +136,28 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   };
 
   const handleSaveProfile = async () => {
-    const updatedUser: UserType = { ...user, name: profileData.name.trim() || user.name, role: profileData.role.trim(), currentLevel: profileData.currentLevel.trim(), target: profileData.target.trim(), nativeLanguage: profileData.nativeLanguage, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profileData.name.trim() || user.name}` };
+    const updatedUser: UserType = { 
+        ...user, 
+        name: profileData.name.trim() || user.name, 
+        role: profileData.role.trim(), 
+        currentLevel: profileData.currentLevel.trim(), 
+        target: profileData.target.trim(), 
+        nativeLanguage: profileData.nativeLanguage, 
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profileData.name.trim() || user.name}`,
+        lessonPreferences: {
+            language: profileData.lessonLanguage as 'English' | 'Vietnamese',
+            targetAudience: profileData.lessonAudience.trim(),
+            // Persona is now pulled from the active coach in AudioCoachSettings
+            tone: config.audioCoach.coaches[config.audioCoach.activeCoach].persona
+        }
+    };
     await onUpdateUser(updatedUser);
-    setNotification('Profile updated successfully!');
+    setNotification('Profile & Preferences updated successfully!');
   };
 
   const handleSaveApiKeys = () => { localStorage.setItem('gemini_api_keys', apiKeyInput.trim()); setNotification('API Keys have been saved locally.'); };
   const handleResetUsage = () => { localStorage.removeItem('vocab_pro_api_usage'); window.dispatchEvent(new CustomEvent('apiUsageUpdated')); setNotification('API usage counter has been reset.'); };
-  const handleAudioModeChange = (mode: 'system' | 'ai') => { handleConfigChange('audio', 'mode', mode); speak("Hello! This is a voice test.", config.audio.preferredSystemVoice); };
-  const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => { handleConfigChange('audio', 'preferredSystemVoice', e.target.value); speak("Hello! I am your vocabulary coach.", e.target.value); };
+  
   const handleSrsConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => { handleConfigChange('srs', e.target.name, parseFloat(e.target.value)); };
   
   const handleAiConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => { 
@@ -131,7 +176,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
     const file = e.target.files?.[0];
     if (!file) return;
     setImportStatus(null);
-    const result = await processJsonImport(file, user.id, includeProgress);
+    const result = await processJsonImport(file, user.id, dataScope);
     setImportStatus(result);
     if (result.type === 'success') {
       showToast('Restore successful! The app will now reload.', 'success', 2000);
@@ -146,7 +191,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   };
 
   const handleJSONExport = async () => {
-    await generateJsonExport(user.id, includeProgress, includeEssays, user);
+    await generateJsonExport(user.id, user, dataScope);
   };
   
   const handleClearProgress = async () => {
@@ -155,7 +200,6 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         const allWords = await dataStore.getAllWords();
         const resetWords = allWords.map(word => resetProgress(word));
         await dataStore.bulkSaveWords(resetWords);
-        // DataStore event will trigger refresh
         setNotification("All learning progress has been reset.");
     } catch (err) { setImportStatus({ type: 'error', message: 'Failed to clear progress', detail: (err as Error).message }); } 
     finally { setIsClearing(false); setIsClearProgressModalOpen(false); }
@@ -164,31 +208,56 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   const handleNormalizeData = async () => {
     setIsNormalizing(true);
     setIsNormalizeModalOpen(false);
-    
+    let totalUpdated = 0;
+    const junkTagsSet = new Set(config.interface.junkTags.map(t => t.toLowerCase()));
+
     try {
         const allWords = dataStore.getAllWords();
-        
-        const wordsToUpdate = allWords.filter(word => {
-            const isMultiWord = word.isIdiom || word.isPhrasalVerb || word.isCollocation || word.isStandardPhrase;
-            const hasDataToClean = !!word.wordFamily || (word.collocationsArray && word.collocationsArray.length > 0);
-            return isMultiWord && hasDataToClean;
-        });
+        const wordsToUpdate: VocabularyItem[] = [];
 
-        if (wordsToUpdate.length === 0) {
-            showToast("All multi-word items are already normalized.", "info");
-            return;
+        for (const word of allWords) {
+            let changed = false;
+            const updatedWord = { ...word };
+
+            // Action 1: Remove Junk Tags
+            if (normalizeOptions.removeJunkTags && junkTagsSet.size > 0 && updatedWord.tags) {
+                const originalTagCount = updatedWord.tags.length;
+                updatedWord.tags = updatedWord.tags.filter(tag => !junkTagsSet.has(tag.toLowerCase()));
+                if (updatedWord.tags.length !== originalTagCount) {
+                    changed = true;
+                }
+            }
+
+            // Action 2: Clean Multi-Word Items
+            if (normalizeOptions.removeMultiWordData) {
+                const isMultiWord = updatedWord.isIdiom || updatedWord.isPhrasalVerb || updatedWord.isCollocation || updatedWord.isStandardPhrase;
+                if (isMultiWord) {
+                    if (updatedWord.wordFamily) {
+                        updatedWord.wordFamily = undefined;
+                        changed = true;
+                    }
+                    if (updatedWord.collocationsArray && updatedWord.collocationsArray.length > 0) {
+                        updatedWord.collocations = undefined;
+                        updatedWord.collocationsArray = undefined;
+                        changed = true;
+                    }
+                }
+            }
+
+            if (changed) {
+                updatedWord.updatedAt = Date.now();
+                wordsToUpdate.push(updatedWord);
+            }
+        }
+        
+        totalUpdated = wordsToUpdate.length;
+        if (totalUpdated > 0) {
+            await dataStore.bulkSaveWords(wordsToUpdate);
         }
 
-        const updatedWords = wordsToUpdate.map(word => ({
-            ...word,
-            wordFamily: undefined,
-            collocations: undefined,
-            collocationsArray: undefined,
-            updatedAt: Date.now()
-        }));
-
-        await dataStore.bulkSaveWords(updatedWords);
-        showToast(`Normalized ${updatedWords.length} multi-word items.`, "success");
+        let successMessage = `Normalized ${totalUpdated} item(s).`;
+        if (totalUpdated === 0) successMessage = "No items needed normalization based on selected options.";
+        showToast(successMessage, "success");
 
     } catch (err) {
         showToast("Failed to normalize data.", "error");
@@ -198,40 +267,17 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
     }
   };
 
-  const handleApplyAccent = async () => {
-    setIsApplyingAccent(true);
-    try {
-      const newAccent = config.audio.preferredAccent;
-      const allWords = dataStore.getAllWords();
-      const wordsToUpdate: VocabularyItem[] = [];
-
-      for (const word of allWords) {
-          const ipaToApply = newAccent === 'US' ? word.ipaUs : word.ipaUk;
-          if (ipaToApply && ipaToApply !== word.ipa) {
-              const updatedWord = { ...word, ipa: ipaToApply, updatedAt: Date.now() };
-              wordsToUpdate.push(updatedWord);
-          }
-      }
-
-      if (wordsToUpdate.length > 0) {
-        await dataStore.bulkSaveWords(wordsToUpdate);
-      }
-      
-      const newConfig = { ...config, audio: { ...config.audio, appliedAccent: newAccent } };
-      saveConfig(newConfig);
-      
-      showToast(`Applied ${newAccent} accent to ${wordsToUpdate.length} words.`, 'success');
-    } catch (err) {
-      showToast('Failed to apply accent.', 'error');
-    } finally {
-      setIsApplyingAccent(false);
-    }
-  };
-
   const handleToggleAdmin = async () => {
       await onUpdateUser({ ...user, isAdmin: !user.isAdmin });
       setNotification(`Developer Mode ${!user.isAdmin ? 'Enabled' : 'Disabled'}`);
   };
+  
+  const Checkbox = ({ id, label, checked, onChange }: { id: string, label: string, checked: boolean, onChange: (checked: boolean) => void }) => (
+    <label htmlFor={id} className="flex items-center gap-2 p-3 bg-neutral-50 rounded-lg border border-neutral-200 cursor-pointer">
+      <input id={id} type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+      <span className="text-sm font-medium">{label}</span>
+    </label>
+  );
 
   return (
     <>
@@ -247,8 +293,8 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         apiKeyInput={apiKeyInput}
         apiUsage={apiUsage}
         jsonInputRef={jsonInputRef}
-        includeProgress={includeProgress}
-        includeEssays={includeEssays}
+        dataScope={dataScope}
+        onDataScopeChange={setDataScope}
         mobileNavRef={mobileNavRef}
         setCurrentView={setCurrentView}
         setIsDropdownOpen={setIsDropdownOpen}
@@ -256,14 +302,10 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         onSaveProfile={handleSaveProfile}
         onConfigChange={handleConfigChange}
         onAiConfigChange={handleAiConfigChange}
-        onAudioModeChange={handleAudioModeChange}
-        onVoiceChange={handleVoiceChange}
         onApiKeyInputChange={(e) => setApiKeyInput(e.target.value)}
         onSaveApiKeys={handleSaveApiKeys}
         onResetUsage={handleResetUsage}
         onSaveSettings={handleSaveSettings}
-        setIncludeProgress={setIncludeProgress}
-        setIncludeEssays={setIncludeEssays}
         onJSONImport={handleJSONImport}
         onJSONExport={handleJSONExport}
         onSrsConfigChange={handleSrsConfigChange}
@@ -273,12 +315,17 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         isNormalizing={isNormalizing}
         onOpenNormalizeModal={() => setIsNormalizeModalOpen(true)}
         isApplyingAccent={isApplyingAccent}
-        onApplyAccent={handleApplyAccent}
+        onApplyAccent={() => {}}
         isAdmin={!!user.isAdmin}
         onToggleAdmin={handleToggleAdmin}
+        junkTags={config.interface.junkTags}
+        onJunkTagsChange={handleJunkTagsChange}
+        normalizeOptions={normalizeOptions}
+        onNormalizeOptionsChange={setNormalizeOptions}
+        goalConfig={config.dailyGoals}
+        onGoalConfigChange={handleGoalConfigChange}
       >
         {currentView === 'INTERFACE' && <InterfaceSettings />}
-        {currentView === 'GOALS' && <GoalSettings goalConfig={config.dailyGoals} onGoalConfigChange={handleGoalConfigChange} />}
       </SettingsViewUI>
       <ConfirmationModal 
         isOpen={isNukeModalOpen}
@@ -300,18 +347,34 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         onConfirm={handleClearProgress} 
         onClose={() => setIsClearProgressModalOpen(false)} 
         icon={<RotateCw size={40} className="text-orange-500"/>} 
-        confirmButtonClass="bg-orange-500 text-white hover:bg-orange-600 shadow-orange-200" 
+        confirmButtonClass="bg-orange-50 text-white hover:bg-orange-600 shadow-orange-200" 
       />
        <ConfirmationModal
           isOpen={isNormalizeModalOpen}
-          title="Normalize Data?"
-          message="This will remove word family and collocation data from multi-word items (phrases, idioms, etc.) to align with new standards. This action is not reversible."
+          title="Normalize Data"
+          message={
+            <div className="space-y-4 text-left">
+                <p>Select normalization actions to perform. This process will update your entire library and cannot be undone.</p>
+                <Checkbox 
+                    id="norm-junk" 
+                    label="Remove junk tags from all words" 
+                    checked={normalizeOptions.removeJunkTags} 
+                    onChange={c => setNormalizeOptions(o => ({...o, removeJunkTags: c}))} 
+                />
+                <Checkbox 
+                    id="norm-multi" 
+                    label="Clean multi-word items (phrases, idioms)" 
+                    checked={normalizeOptions.removeMultiWordData} 
+                    onChange={c => setNormalizeOptions(o => ({...o, removeMultiWordData: c}))} 
+                />
+            </div>
+          }
           confirmText="Yes, Normalize"
           isProcessing={isNormalizing}
           onConfirm={handleNormalizeData}
           onClose={() => setIsNormalizeModalOpen(false)}
           icon={<Wrench size={40} className="text-orange-500"/>} 
-          confirmButtonClass="bg-orange-500 text-white hover:bg-orange-600 shadow-orange-200"
+          confirmButtonClass="bg-orange-50 text-white hover:bg-orange-600 shadow-orange-200"
       />
     </>
   );

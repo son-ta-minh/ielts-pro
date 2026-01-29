@@ -1,3 +1,4 @@
+
 export function getComparisonPrompt(groupName: string, words: string[]): string {
     const wordList = words.map(w => `"${w}"`).join(', ');
 
@@ -21,15 +22,18 @@ export function getComparisonPrompt(groupName: string, words: string[]): string 
             5.  Highlight the single most important keyword or phrase with markdown bold (**key idea**).
         - **example**: A clear, concise example sentence that perfectly illustrates the unique usage of the word.
         - **userNote**: An empty string (""). This is a placeholder for the user's personal notes.
-    3.  **Final JSON Output**: Your final response must be a single, strict JSON object with two keys:
+    3.  **Final JSON Output**: Your final response must be a single, strict JSON object with three keys:
+        - \`title\`: **CRITICAL**: Identify the **most common, simplest word** in the group (the "anchor word" that everyone knows, e.g., "Big", "Small", "Stop", "Problem"). Set the title to **ONLY that specific word**. Do NOT add phrases like "Words for...". (e.g. if the list is "mitigate, alleviate, reduce", the title MUST be just "Reduce").
         - \`updatedWords\`: An array of strings containing ALL words analyzed (the original list PLUS your new suggestions).
         - \`comparisonData\`: An array of the JSON objects you created in step 2. The order of items in this array will determine the order in the final table.
 
     EXAMPLE SCENARIO:
     If input words are ["job", "work", "career"], a good explanation for "career" would be: "Use for your **long-term professional journey**, not a single 'job' or the general activity of 'work'."
+    The Title would be: "Work".
 
     STRICT JSON RESPONSE FORMAT:
     {
+      "title": "string (The single anchor word)",
       "updatedWords": ["original_word_1", "original_word_2", "new_suggestion_1"],
       "comparisonData": [
         {

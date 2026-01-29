@@ -7,7 +7,7 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
 
     IMPORTANT RULES FOR HEADWORD (hw) IDENTIFICATION:
     1. FOR PHRASES/IDIOMS/EXPRESSIONS: If the input is a multi-word unit (e.g., "cut the road", "break the ice", "get over"), the headword (hw) MUST be the EXACT phrase provided. DO NOT reduce it to a single word (e.g., do NOT return "cut" for "cut the road").
-    2. FOR SINGLE WORDS: If the input is a single inflected word, identify its base form (e.g., "running" -> "run", "cities" -> "city").
+    2. FOR SINGLE WORDS: If the input is a single inflected word, identify its base form and ensure it is in SINGULAR form (e.g., "running" -> "run", "cities" -> "city", "problems" -> "problem").
     3. All details (meaning, IPA, examples) MUST correspond to the identified headword (the whole phrase or the base word).
     4. If input has multiple distinct meanings as a phrase vs a single word, prioritize the meaning of the input as provided.
 

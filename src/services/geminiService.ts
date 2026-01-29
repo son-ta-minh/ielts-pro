@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ParaphraseMode, User, WritingTopic } from "../app/types";
 import { 
@@ -16,7 +15,10 @@ import {
   getIpaAccentsPrompt,
   getComparisonPrompt,
   getIrregularVerbFormsPrompt,
-  getPronunciationAnalysisPrompt
+  getPronunciationAnalysisPrompt,
+  getGenerateLessonPrompt,
+  LessonGenerationParams,
+  getGenerateWordBookPrompt
 } from './promptService';
 import { getConfig } from "../app/settingsManager";
 import { getStoredJSON, setStoredJSON } from "../utils/storage";
@@ -75,6 +77,17 @@ function cleanJsonResponse(text: string): string {
       if (endIndex > startIndex) {
           return clean.substring(startIndex, endIndex).trim();
       }
+  }
+
+  // Fallback for just markdown block without json specifier
+  const mdStart = clean.indexOf('```');
+  if (mdStart !== -1) {
+       // Check if it's the start
+       const startIndex = mdStart + 3;
+       const endIndex = clean.lastIndexOf('```');
+       if (endIndex > startIndex) {
+           return clean.substring(startIndex, endIndex).trim();
+       }
   }
 
   // Fallback to finding the first and last brace/bracket
@@ -200,6 +213,36 @@ export async function refineSpeakingTopic(topicName: string, description: string
     const prompt = getRefineSpeakingTopicPrompt(topicName, description, currentQuestions, userRequest, user);
     const response = await callAiWithRetry({ model: config.ai.modelForComplexTasks, contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, description: { type: Type.STRING }, questions: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ["name", "description", "questions"] } } });
     return safeJsonParse(response.text, { name: topicName, description, questions: currentQuestions.split('\n') });
+}
+
+export async function generateFullSpeakingTest(theme: string): Promise<any> {
+    const config = getConfig();
+    const prompt = getFullSpeakingTestPrompt(theme);
+    const response = await callAiWithRetry({
+        model: config.ai.modelForComplexTasks,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    topic: { type: Type.STRING },
+                    part1: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    part2: {
+                        type: Type.OBJECT,
+                        properties: {
+                            cueCard: { type: Type.STRING },
+                            points: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        },
+                        required: ["cueCard", "points"]
+                    },
+                    part3: { type: Type.ARRAY, items: { type: Type.STRING } }
+                },
+                required: ["topic", "part1", "part2", "part3"]
+            }
+        }
+    });
+    return safeJsonParse(response.text, null);
 }
 
 export async function evaluateSpeakingSessionFromAudio(topic: string, sessionData: { question: string, audioBase64: string, mimeType: string }[]): Promise<{ band: number; feedback: string; transcripts: { question: string, transcript: string }[] }> {
@@ -378,4 +421,58 @@ export async function generateIrregularVerbForms(verbs: string[]): Promise<{v1: 
         }
     });
     return safeJsonParse(response.text, []);
+}
+
+export async function generateLessonContent(params: LessonGenerationParams): Promise<{ title: string; description: string; content: string }> {
+  const config = getConfig();
+  const prompt = getGenerateLessonPrompt(params);
+  const response = await callAiWithRetry({
+      model: config.ai.modelForComplexTasks,
+      contents: prompt,
+      config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                  title: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  content: { type: Type.STRING }
+              },
+              required: ["title", "description", "content"]
+          }
+      }
+  });
+  return safeJsonParse(response.text, { title: params.topic, description: "Generated lesson.", content: "" });
+}
+
+export async function generateWordBook(topic: string): Promise<{ topic: string, icon: string, words: { word: string, definition: string }[] }> {
+    const config = getConfig();
+    const prompt = getGenerateWordBookPrompt(topic);
+    const response = await callAiWithRetry({
+        model: config.ai.modelForComplexTasks,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    topic: { type: Type.STRING },
+                    icon: { type: Type.STRING },
+                    words: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                word: { type: Type.STRING },
+                                definition: { type: Type.STRING }
+                            },
+                            required: ["word", "definition"]
+                        }
+                    }
+                },
+                required: ["topic", "icon", "words"]
+            }
+        }
+    });
+    return safeJsonParse(response.text, { topic: '', icon: '', words: [] });
 }

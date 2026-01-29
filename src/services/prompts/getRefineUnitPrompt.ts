@@ -1,3 +1,4 @@
+
 import { User } from '../../app/types';
 
 /**
@@ -28,13 +29,18 @@ TASK:
 1.  Read the user request and apply it to the CURRENT UNIT DATA to generate an improved essay.
 2.  After generating the new essay, you MUST re-analyze its content to identify all relevant, high-value vocabulary.
 3.  The 'words' array in your JSON response must be EXPANDED. It must include both original words (if they still appear in the essay) AND any NEW, useful words you've added to the essay. The goal is to grow the vocabulary list based on the new essay.
+4.  Generate 3-5 reading comprehension questions based on the new essay. For each question, provide a concise, correct answer.
 
 Return a strict JSON object with this schema:
 { 
   "name": "string (The updated unit name)", 
   "description": "string (The updated description)", 
   "words": ["string"], 
-  "essay": "string (The full, updated essay text)" 
+  "essay": "string (The full, updated essay text)",
+  "comprehensionQuestions": [
+    { "question": "string (Question 1)", "answer": "string (Concise answer 1)" },
+    { "question": "string (Question 2)", "answer": "string (Concise answer 2)" }
+  ]
 }
 
 'words' array format rules:

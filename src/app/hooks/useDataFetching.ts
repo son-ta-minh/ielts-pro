@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { User, VocabularyItem, AppView } from '../types';
+import { User, VocabularyItem, AppView, WordQuality } from '../types';
 import * as db from '../db';
 import * as dataStore from '../dataStore';
 import { getStoredJSON } from '../../utils/storage';
@@ -15,6 +15,9 @@ interface UseDataFetchingProps {
 export const useDataFetching = ({ currentUser, view, onUpdateUser }: UseDataFetchingProps) => {
     const [stats, setStats] = useState({ total: 0, due: 0, new: 0, learned: 0 });
     const [wotd, setWotd] = useState<VocabularyItem | null>(null);
+    const [randomWotd, setRandomWotd] = useState<VocabularyItem | null>(null);
+    const [isWotdComposed, setIsWotdComposed] = useState(false);
+    
     const [apiUsage, setApiUsage] = useState({ count: 0, date: '' });
     const { showToast } = useToast();
 
@@ -27,17 +30,31 @@ export const useDataFetching = ({ currentUser, view, onUpdateUser }: UseDataFetc
         const cachedStats = dataStore.getStats();
         setStats(cachedStats.reviewCounts);
 
-        // Word of the day still needs a custom calculation, but on in-memory data
         const allUserWords = dataStore.getAllWords().filter(w => w.userId === currentUser.id);
         const activeWords = allUserWords.filter(w => !w.isPassive);
-        if (activeWords.length > 0) {
+        
+        // Create a specific pool for Word of the Day from verified words
+        const wotdPool = activeWords.filter(w => w.quality === WordQuality.VERIFIED);
+        
+        let selectedWotd: VocabularyItem | null = null;
+
+        if (randomWotd) {
+            // If user manually shuffled, use that
+            selectedWotd = randomWotd;
+        } else if (wotdPool.length > 0) {
+            // Default deterministic calculation using only verified words
             const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
             const userSeed = currentUser.id.length > 4 ? parseInt(currentUser.id.substring(currentUser.id.length - 4), 16) || 1234 : 1234;
             const seed = parseInt(todayStr) + userSeed;
-            const index = seed % activeWords.length;
-            setWotd(activeWords[index]);
+            const index = seed % wotdPool.length;
+            selectedWotd = wotdPool[index];
+        }
+
+        setWotd(selectedWotd);
+        if (selectedWotd) {
+            setIsWotdComposed(dataStore.isWordComposed(selectedWotd.id));
         } else {
-            setWotd(null);
+            setIsWotdComposed(false);
         }
         
         const chapters = adventureService.getChapters();
@@ -97,7 +114,14 @@ export const useDataFetching = ({ currentUser, view, onUpdateUser }: UseDataFetc
                 onUpdateUser(updatedUser);
             }
         }
-    }, [currentUser, showToast, onUpdateUser]);
+    }, [currentUser, showToast, onUpdateUser, randomWotd]);
+
+    // Force re-run logic if randomWotd changes
+    useEffect(() => {
+        if (randomWotd) {
+            refreshGlobalStats();
+        }
+    }, [randomWotd]);
 
     useEffect(() => {
         if (currentUser) {
@@ -133,6 +157,16 @@ export const useDataFetching = ({ currentUser, view, onUpdateUser }: UseDataFetc
             window.removeEventListener('apiUsageUpdated', loadApiUsage);
         };
     }, [loadApiUsage]);
+    
+    const randomizeWotd = () => {
+        if (!currentUser) return;
+        const allUserWords = dataStore.getAllWords().filter(w => w.userId === currentUser.id);
+        const wotdPool = allUserWords.filter(w => !w.isPassive && w.quality === WordQuality.VERIFIED);
+        if (wotdPool.length > 0) {
+            const random = wotdPool[Math.floor(Math.random() * wotdPool.length)];
+            setRandomWotd(random);
+        }
+    };
 
-    return { stats, wotd, setWotd, apiUsage, refreshGlobalStats };
+    return { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd };
 };

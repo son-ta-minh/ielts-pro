@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useReducer } from 'react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, PrepositionPattern, User } from '../../app/types';
 import { updateSRS, resetProgress, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
@@ -124,7 +125,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
     }
   };
 
-  const handleGenerateSuggestPrompt = () => {
+  const handleGenerateSuggestPrompt = (inputs: any) => {
     return getLearningSuggestionsPrompt(formData, user);
   };
 

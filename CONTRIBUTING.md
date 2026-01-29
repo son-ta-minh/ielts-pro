@@ -4,13 +4,6 @@ This document records the principles and conventions we will follow during the d
 
 ---
 
-### 0. Core Mandate
-
-#### 0.1. User Ownership of UI/UX
-The user is the sole owner of the UI/UX and overall product direction. All changes must be explicitly requested. If a flow or visualization change is needed, the user will provide explicit instructions.
-
----
-
 ### 1. UI/UX Principles
 
 #### 1.1. Separation of Concerns (UI vs. Logic)
@@ -18,9 +11,6 @@ Strictly separate presentational components from their underlying logic. Each UI
 
 #### 1.2. User-Friendly Notifications
 Notifications should be user-friendly, concise, and avoid technical jargon. Display notifications only when truly necessary and avoid stating obvious outcomes. For example, a "Restore Complete" notification is redundant if the user can see the library count update on the Dashboard immediately after the action.
-
-#### 1.3. Visual Separation
-Avoid using horizontal lines (`<hr>`, `border-t`, `border-b`) as visual separators. Instead, rely on spacing (margins/padding), cards, and background colors to create clear visual hierarchy and separation between elements. This promotes a cleaner, more modern interface.
 
 ---
 
@@ -66,31 +56,6 @@ This principle applies specifically to challenges like "Collocation Recall" and 
 #### 3.3. Grading Normalization
 When grading any test or challenge, both the user's input and the correct answer from the word's data must be normalized before comparison. Use the existing `normalizeAnswerForGrading` utility for this purpose. This ensures that minor differences in casing, punctuation, or whitespace do not cause a correct answer to be marked as incorrect.
 
-#### 3.4. Test Generation Logic (TestModal)
-When modifying `TestModal.tsx`, strict adherence to the following logic is required to maintain the distinction between modes:
-
-1.  **Quick Test (`handleQuickStart`):**
-    -   **Goal:** A fast, focused check (Max 4 questions).
-    -   **Logic:** Do **NOT** select all available types. Use a strict priority queue to select specific challenges:
-        1.  Meaning Quiz.
-        2.  Collocation (Easy variant - Context/Multi).
-        3.  Paraphrase (Easy variant - Context).
-        4.  Random from remaining (IPA, Prep, Family, Idiom).
-    -   **Constraint:** Pick **specific individual challenges** (not just types) to strictly limit the total count to 4. Do NOT default to adding all challenges of a certain type.
-
-2.  **Master It (`handleMasterStart`):**
-    -   **Goal:** Focus on weak spots (Gap filling).
-    -   **Logic:** Filter `challengeStats` to find ONLY types where `score < total`.
-    -   **Difficulty:** Use `getDeduplicatedSelection(..., 'easy')`. Prioritize recognition (matching/multi-choice) over recall (typing) to facilitate learning.
-
-3.  **Challenge Mode (`handleChallengeStart`):**
-    -   **Goal:** Full competency check (Hardcore).
-    -   **Logic:** Select ALL available challenge types.
-    -   **Difficulty:** Use `getDeduplicatedSelection(..., 'hard')`. Prioritize recall (fill-in-the-blanks) over recognition.
-
-4.  **Deduplication:**
-    -   Never simply add all types from `availableChallenges`. Always pass the selection through `getDeduplicatedSelection` (or manual priority logic) to ensure we don't ask the same question twice in different formats (e.g., don't ask Collocation Match AND Collocation Fill in the same session).
-
 ---
 
 ### 4. AI Interaction Principles
@@ -106,7 +71,7 @@ Each AI prompt must reside in its own dedicated file within a `prompts` director
 When implementing a new request, adhere to the principle of minimal changes. If the requested logic conflicts with the existing codebase, do not attempt to resolve the conflict autonomously. Instead, document the issue in `issues.md`. Each entry in `issues.md` should have a unique ID and a concise description of the conflict. This practice prevents incorrect assumptions and maintains code integrity, especially in cases where development context might be lost (e.g., a cancelled generation).
 
 #### 5.2. Source of Truth and Scope of Changes
-The provided codebase is the absolute source of truth. The AI's internal memory or previous states of the code are not to be trusted or used as a reference. Modifications must be **the exact changes specified by the user** and nothing more. No modifications, however minor, shall be made to any file unless explicitly requested in the most recent prompt. Every change must be minimal and strictly scoped to address only the latest user request.
+The provided codebase is the absolute source of truth. The AI's internal memory or previous states of the code are not to be trusted or used as a reference. No modifications, however minor, shall be made to any file unless explicitly requested in the most recent prompt. Every change must be minimal and strictly scoped to address only the latest user request.
 
 #### 5.3. Cloning Procedure
 When a "clone" request is received, the following rules must be strictly followed:

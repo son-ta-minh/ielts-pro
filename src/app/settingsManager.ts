@@ -18,11 +18,31 @@ export interface SrsConfig {
   forgotInterval: number;
 }
 
+// Added AudioConfig to match usage in components like ViewWordModal and AiAudioSettings
 export interface AudioConfig {
-  mode: 'system' | 'ai';
+  mode: 'system' | 'ai' | 'server';
+  serverPort: number;
   preferredSystemVoice: string;
-  preferredAccent: 'US' | 'UK';
-  appliedAccent?: 'US' | 'UK';
+  appliedAccent: 'US' | 'UK';
+}
+
+export interface CoachConfig {
+  name: string; // Added custom name field
+  avatar: string;
+  persona: 'friendly_elementary' | 'professional_professor';
+  enVoice: string;
+  enAccent: string; 
+  viVoice: string;
+  viAccent: string; 
+}
+
+export interface AudioCoachConfig {
+  activeCoach: 'male' | 'female';
+  serverPort: number;
+  coaches: {
+    male: CoachConfig;
+    female: CoachConfig;
+  };
 }
 
 export interface DailyGoalConfig {
@@ -31,22 +51,31 @@ export interface DailyGoalConfig {
 }
 
 export interface InterfaceConfig {
-  studyBuddyLanguage: 'vi' | 'en';
-  studyBuddyEnabled: boolean;
-  studyBuddyAvatar: 'robot' | 'owl' | 'pet' | 'fox' | 'koala' | 'bunny' | 'lion' | 'panda' | 'unicorn' | 'chicken';
+  studyBuddyLanguage: 'vi' | 'en'; // Global preference for UI labels
+  studyBuddyEnabled: boolean; // Added to fix build error
+  studyBuddyAvatar: string; // Added to fix build error
+  junkTags: string[];
 }
 
 export interface TestConfig {
   preferredTypes: string[];
 }
 
+export interface LessonConfig {
+  topic1Options: string[];
+  topic2Options: Record<string, string[]>;
+}
+
 export interface SystemConfig {
   ai: AiConfig;
   srs: SrsConfig;
+  // Added missing audio section to match expected structure in the app
   audio: AudioConfig;
+  audioCoach: AudioCoachConfig;
   dailyGoals: DailyGoalConfig;
   interface: InterfaceConfig;
   test: TestConfig;
+  lesson: LessonConfig;
 }
 
 export const DEFAULT_SRS_CONFIG: SrsConfig = {
@@ -59,6 +88,14 @@ export const DEFAULT_SRS_CONFIG: SrsConfig = {
   forgotInterval: 1,
 };
 
+// Added default configuration for the audio section
+export const DEFAULT_AUDIO_CONFIG: AudioConfig = {
+  mode: 'system',
+  serverPort: 3000,
+  preferredSystemVoice: '',
+  appliedAccent: 'US',
+};
+
 export const DEFAULT_DAILY_GOAL_CONFIG: DailyGoalConfig = {
   max_learn_per_day: 10,
   max_review_per_day: 10,
@@ -66,6 +103,15 @@ export const DEFAULT_DAILY_GOAL_CONFIG: DailyGoalConfig = {
 
 export const DEFAULT_TEST_CONFIG: TestConfig = {
   preferredTypes: []
+};
+
+export const DEFAULT_LESSON_CONFIG: LessonConfig = {
+  topic1Options: ['Grammar', 'Vocabulary', 'Pronunciation'],
+  topic2Options: {
+      'Grammar': ['Tenses', 'Conditionals', 'Passive Voice', 'Reported Speech'],
+      'Vocabulary': ['Topic: Work', 'Topic: Environment', 'Collocations', 'Idioms'],
+      'Pronunciation': ['Vowel Sounds', 'Consonant Sounds', 'Intonation']
+  }
 };
 
 export const DEFAULT_CONFIG: SystemConfig = {
@@ -76,19 +122,41 @@ export const DEFAULT_CONFIG: SystemConfig = {
     modelForTts: 'gemini-2.5-flash-preview-tts',
   },
   srs: DEFAULT_SRS_CONFIG,
-  audio: {
-    mode: 'system',
-    preferredSystemVoice: '',
-    preferredAccent: 'US',
-    appliedAccent: undefined,
+  // Included audio section in DEFAULT_CONFIG
+  audio: DEFAULT_AUDIO_CONFIG,
+  audioCoach: {
+    activeCoach: 'female',
+    serverPort: 3000,
+    coaches: {
+      male: {
+        name: 'Victor', // Default name
+        avatar: 'fox',
+        persona: 'professional_professor',
+        enVoice: '',
+        enAccent: 'en_US',
+        viVoice: '',
+        viAccent: 'vi_VN'
+      },
+      female: {
+        name: 'Sofia', // Default name
+        avatar: 'koala',
+        persona: 'friendly_elementary',
+        enVoice: '',
+        enAccent: 'en_US',
+        viVoice: '',
+        viAccent: 'vi_VN'
+      }
+    }
   },
   dailyGoals: DEFAULT_DAILY_GOAL_CONFIG,
   interface: {
     studyBuddyLanguage: 'vi',
-    studyBuddyEnabled: true,
-    studyBuddyAvatar: 'fox'
+    studyBuddyEnabled: true, // Set default
+    studyBuddyAvatar: 'fox', // Set default
+    junkTags: ['ielts', 'general', 'common'],
   },
-  test: DEFAULT_TEST_CONFIG
+  test: DEFAULT_TEST_CONFIG,
+  lesson: DEFAULT_LESSON_CONFIG
 };
 
 const CONFIG_KEY = 'vocab_pro_system_config';
@@ -108,31 +176,28 @@ function mergeConfigs(target: any, source: any): any {
           output[key] = mergeConfigs(target[key], source[key]);
         }
       } else {
-        Object.assign(output, { [key]: source[key] });
+        output[key] = source[key];
       }
     });
   }
   return output;
 }
 
-let currentConfig: SystemConfig | null = null;
-
 export function getConfig(): SystemConfig {
-  if (currentConfig) {
-    return currentConfig;
+  const storedStr = localStorage.getItem(CONFIG_KEY);
+  const storedJson = storedStr ? JSON.parse(storedStr) : null;
+  
+  if (!storedJson) {
+      return DEFAULT_CONFIG;
   }
-  
-  const storedConfig = getStoredJSON<Partial<SystemConfig>>(CONFIG_KEY, {});
-  currentConfig = mergeConfigs(DEFAULT_CONFIG, storedConfig);
-  
-  return currentConfig as SystemConfig;
+
+  return mergeConfigs(DEFAULT_CONFIG, storedJson) as SystemConfig;
 }
 
 export function saveConfig(config: SystemConfig): void {
   try {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-    currentConfig = config; // Update cached config
-    window.dispatchEvent(new Event('config-updated')); // Notify app of changes
+    window.dispatchEvent(new Event('config-updated'));
   } catch (e) {
     console.error("Failed to save system config.", e);
   }

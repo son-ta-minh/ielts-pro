@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { generateWordDetails } from '../../services/geminiService';
 import { createNewWord } from '../../utils/srs';
@@ -19,6 +18,8 @@ interface Props {
 
 const generateUnitId = () => 'unit-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 
+export type WordTypeOption = 'vocab' | 'idiom' | 'phrasal' | 'collocation' | 'phrase';
+
 const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, nativeLanguage = 'Vietnamese' }) => {
   const [inputWords, setInputWords] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -33,6 +34,9 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedUnitForUpdate, setSelectedUnitForUpdate] = useState<Unit | null>(null);
   const unitComboboxRef = useRef<HTMLDivElement>(null);
+
+  // New state for Word Type
+  const [wordType, setWordType] = useState<WordTypeOption>('vocab');
 
   const { showToast } = useToast();
   const aiEnabled = getConfig().ai.enableGeminiApi;
@@ -164,8 +168,32 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
                     prepositions = parsePrepositionPatterns(aiDetails.prepositionString);
                 }
 
+                // Determine final flags based on User Selection OR AI detection
+                // If user selected 'vocab' (auto/default), trust AI. 
+                // If user selected a specific type, override AI/default.
+                const isIdiom = wordType === 'idiom' || (wordType === 'vocab' && !!aiDetails?.isIdiom);
+                const isPhrasalVerb = wordType === 'phrasal' || (wordType === 'vocab' && !!aiDetails?.isPhrasalVerb);
+                const isCollocation = wordType === 'collocation' || (wordType === 'vocab' && !!aiDetails?.isCollocation);
+                const isStandardPhrase = wordType === 'phrase' || (wordType === 'vocab' && !!aiDetails?.isStandardPhrase);
+                
+                // If the input was spaced and no specific type was found/selected, treat as phrase if it looks like one? 
+                // Keeping it simple: rely on AI or explicit user selection.
+
                 const newItem = {
-                    ...createNewWord(headword, aiDetails?.ipa || '', aiDetails?.meaningVi || '', aiDetails?.example || '', '', aiDetails?.tags || [], !!aiDetails?.isIdiom, !!aiDetails?.needsPronunciationFocus, !!aiDetails?.isPhrasalVerb, !!aiDetails?.isCollocation, !!aiDetails?.isStandardPhrase, isArchived), 
+                    ...createNewWord(
+                        headword, 
+                        aiDetails?.ipa || '', 
+                        aiDetails?.meaningVi || '', 
+                        aiDetails?.example || '', 
+                        '', 
+                        aiDetails?.tags || [], 
+                        isIdiom, 
+                        !!aiDetails?.needsPronunciationFocus, 
+                        isPhrasalVerb, 
+                        isCollocation, 
+                        isStandardPhrase, 
+                        isArchived
+                    ), 
                     prepositions, 
                     isIrregular: !!aiDetails?.isIrregular, 
                     v2: aiDetails?.v2, 
@@ -175,6 +203,7 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
                     collocationsArray: aiDetails?.collocationsArray,
                     collocations: aiDetails?.collocations || undefined,
                     idioms: aiDetails?.idioms || undefined,
+                    idiomsList: aiDetails?.idiomsList,
                     paraphrases: aiDetails?.paraphrases,
                     userId,
                     quality: withAI ? WordQuality.REFINED : WordQuality.RAW // Override quality from createNewWord
@@ -231,6 +260,7 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
         setInputWords('');
         setUnitInput('');
         setSelectedUnitForUpdate(null);
+        setWordType('vocab'); // Reset type to default
 
     } catch (e: any) {
         console.error(e);
@@ -266,7 +296,7 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
     isSaving={isSaving}
     lastAddedItems={lastAddedItems}
     aiEnabled={aiEnabled}
-  />
+  />;
 };
 
 export default AddWord;

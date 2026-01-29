@@ -24,12 +24,15 @@ export const useAppController = () => {
     const [initialListFilter, setInitialListFilter] = useState<string | null>(null);
     const [forceExpandAdd, setForceExpandAdd] = useState(false);
     const [lastMasteryScoreUpdateTimestamp, setLastMasteryScoreUpdateTimestamp] = useState(Date.now());
+    
+    // New state to pass a word to Writing Practice
+    const [writingContextWord, setWritingContextWord] = useState<VocabularyItem | null>(null);
 
 
     // --- Composed Logic Hooks ---
     const { sessionWords, setSessionWords, sessionType, sessionFocus, startSession, clearSessionState } = useSession({ setView, setIsSidebarOpen });
     
-    const { stats, wotd, setWotd, apiUsage, refreshGlobalStats } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
+    const { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
 
     // --- Helper for Energy Rewards ---
     const checkEnergyRewards = async () => {
@@ -211,6 +214,15 @@ export const useAppController = () => {
         setForceExpandAdd(true);
     };
     
+    const handleComposeWithWord = (word: VocabularyItem) => {
+        setWritingContextWord(word);
+        setView('WRITING');
+    };
+
+    const consumeWritingContext = () => {
+        setWritingContextWord(null);
+    };
+    
     // --- Returned Controller Object ---
     return {
         view, setView,
@@ -222,7 +234,7 @@ export const useAppController = () => {
         handleLogout: handleLogoutAndNavigate, 
         handleUpdateUser,
         sessionWords, sessionFocus, sessionType, startSession, handleSessionComplete,
-        stats, wotd, refreshGlobalStats,
+        stats, wotd, refreshGlobalStats, isWotdComposed, randomizeWotd,
         globalViewWord, setGlobalViewWord,
         lastBackupTime, handleBackup, handleRestore, handleLibraryReset,
         initialListFilter, setInitialListFilter,
@@ -243,6 +255,10 @@ export const useAppController = () => {
         xpToNextLevel,
         startDueReviewSession,
         startNewLearnSession,
-        lastMasteryScoreUpdateTimestamp
+        lastMasteryScoreUpdateTimestamp,
+        // New writing context props
+        writingContextWord,
+        handleComposeWithWord,
+        consumeWritingContext
     };
 };

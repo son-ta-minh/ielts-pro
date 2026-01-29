@@ -1,19 +1,34 @@
+
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality } from '../../app/types';
+import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { getWordDetailsPrompt, getHintsPrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
-import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter } from './WordTable_UI';
+import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter, CompositionFilter, BookFilter } from './WordTable_UI';
 import { normalizeAiResponse, mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { stringToWordArray } from '../../utils/text';
 import ConfirmationModal from '../common/ConfirmationModal';
 import { Unlink, Trash2 } from 'lucide-react';
-// FIX: Import UniversalAiModal to resolve 'Cannot find name' error.
 import UniversalAiModal from '../common/UniversalAiModal';
 import { createNewWord } from '../../utils/srs';
+import { TagTreeNode } from '../common/TagBrowser';
+
+// Define interface for persisted filter settings to fix TypeScript inference errors
+interface PersistedFilters {
+    query?: string;
+    activeFilters?: FilterType[];
+    refinedFilter?: RefinedFilter;
+    statusFilter?: StatusFilter;
+    registerFilter?: RegisterFilter;
+    sourceFilter?: SourceFilter;
+    compositionFilter?: CompositionFilter;
+    bookFilter?: BookFilter;
+    isFilterMenuOpen?: boolean;
+}
 
 interface Props {
+  user: User;
   words: VocabularyItem[];
   total: number;
   loading: boolean;
@@ -22,12 +37,13 @@ interface Props {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onSearch: (query: string) => void;
-  onFilterChange: (filters: { types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, source: SourceFilter }) => void;
-  onAddWords: (wordsInput: string) => Promise<void>;
+  onFilterChange: (filters: { types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, source: SourceFilter, composition: CompositionFilter, book: BookFilter }) => void;
+  onAddWords: (wordsInput: string, types: Set<WordTypeOption>) => Promise<void>;
   onViewWord: (word: VocabularyItem) => void; // This is for OPENING the view modal
   onEditWord: (word: VocabularyItem) => void; // This is for OPENING the edit modal
   onDelete: (word: VocabularyItem) => Promise<void>;
   onHardDelete?: (word: VocabularyItem) => Promise<void>;
+  // FIX: Corrected typo from onBoldDelete to onBulkDelete
   onBulkDelete?: (ids: Set<string>) => Promise<void>;
   onBulkHardDelete?: (ids: Set<string>) => Promise<void>;
   onPractice: (ids: Set<string>) => void;
@@ -37,25 +53,66 @@ interface Props {
   forceExpandAdd?: boolean;
   onExpandAddConsumed?: () => void;
   onWordRenamed?: (renames: { id: string; oldWord: string; newWord: string }[]) => void;
+  showTagBrowserButton?: boolean;
+  tagTree?: TagTreeNode[];
+  selectedTag?: string | null;
+  onSelectTag?: (tag: string | null) => void;
 }
 
+const LIBRARY_FILTERS_KEY = 'vocab_pro_library_filters_v2';
+
+// Groups definition for exclusive logic
+const GROUP_CONTENT: WordTypeOption[] = ['vocab', 'idiom', 'phrasal', 'collocation', 'phrase'];
+const GROUP_ATTRIBUTE: WordTypeOption[] = ['pronun', 'archive'];
+
 const WordTable: React.FC<Props> = ({ 
+  user,
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
   onSearch, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onBulkHardDelete, onPractice,
-  settingsKey, context, initialFilter, forceExpandAdd, onExpandAddConsumed, onWordRenamed
+  settingsKey, context, initialFilter, forceExpandAdd, onExpandAddConsumed, onWordRenamed,
+  showTagBrowserButton, tagTree, selectedTag, onSelectTag
 }) => {
-  const [query, setQuery] = useState('');
-  const [activeFilters, setActiveFilters] = useState<Set<FilterType>>(new Set(['all']));
-  const [refinedFilter, setRefinedFilter] = useState<RefinedFilter>('all');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [registerFilter, setRegisterFilter] = useState<RegisterFilter>('all');
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  // Load persisted filters with explicit typing to fix property access errors
+  const persistedFilters = useMemo(() => getStoredJSON<PersistedFilters>(LIBRARY_FILTERS_KEY, {}), []);
+
+  const [query, setQuery] = useState(persistedFilters.query || '');
+  const [activeFilters, setActiveFilters] = useState<Set<FilterType>>(() => {
+    if (Array.isArray(persistedFilters.activeFilters)) {
+      return new Set(persistedFilters.activeFilters);
+    }
+    return new Set(['all']);
+  });
+  const [refinedFilter, setRefinedFilter] = useState<RefinedFilter>(persistedFilters.refinedFilter || 'all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(persistedFilters.statusFilter || 'all');
+  const [registerFilter, setRegisterFilter] = useState<RegisterFilter>(persistedFilters.registerFilter || 'all');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(persistedFilters.sourceFilter || 'all');
+  const [compositionFilter, setCompositionFilter] = useState<CompositionFilter>(persistedFilters.compositionFilter || 'all');
+  const [bookFilter, setBookFilter] = useState<BookFilter>(persistedFilters.bookFilter || 'all');
   
   const [isAddExpanded, setIsAddExpanded] = useState(false);
-  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(persistedFilters.isFilterMenuOpen || false);
   const [quickAddInput, setQuickAddInput] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+
+  // Persistence effect
+  useEffect(() => {
+    setStoredJSON(LIBRARY_FILTERS_KEY, {
+        query,
+        activeFilters: Array.from(activeFilters),
+        refinedFilter,
+        statusFilter,
+        registerFilter,
+        sourceFilter,
+        compositionFilter,
+        bookFilter,
+        isFilterMenuOpen
+    });
+  }, [query, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, isFilterMenuOpen]);
+
+  // New state for Word Type selection in Quick Add
+  // Default to 'vocab' selected
+  const [selectedWordTypes, setSelectedWordTypes] = useState<Set<WordTypeOption>>(new Set(['vocab']));
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [wordToDelete, setWordToDelete] = useState<VocabularyItem | null>(null);
@@ -116,10 +173,10 @@ const WordTable: React.FC<Props> = ({
   }, [query]);
 
   useEffect(() => {
-    onFilterChange({ types: activeFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, source: sourceFilter });
-    onPageChange(0);
-    setSelectedIds(new Set());
-  }, [activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter]);
+      onFilterChange({ types: activeFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, source: sourceFilter, composition: compositionFilter, book: bookFilter });
+      onPageChange(0);
+      setSelectedIds(new Set());
+  }, [activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter]);
 
   useEffect(() => { if (notification) { const t = setTimeout(() => setNotification(null), 4000); return () => clearTimeout(t); } }, [notification]);
 
@@ -144,11 +201,38 @@ const WordTable: React.FC<Props> = ({
       });
   };
 
+  const handleTypeToggle = (type: WordTypeOption) => {
+      setSelectedWordTypes(prev => {
+          const next = new Set<WordTypeOption>(prev);
+          
+          const removeGroupFromSet = (set: Set<WordTypeOption>, group: WordTypeOption[]) => {
+              group.forEach(g => set.delete(g));
+          };
+
+          if (GROUP_CONTENT.includes(type)) {
+              if (next.has(type)) {
+                  next.delete(type);
+              } else {
+                  removeGroupFromSet(next, GROUP_CONTENT);
+                  next.add(type);
+              }
+          } else if (GROUP_ATTRIBUTE.includes(type)) {
+               if (next.has(type)) {
+                   next.delete(type);
+               } else {
+                   removeGroupFromSet(next, GROUP_ATTRIBUTE);
+                   next.add(type);
+               }
+          }
+          return next;
+      });
+  };
+
   const handleBatchAddSubmit = async () => {
     if (!quickAddInput.trim()) return;
     setIsAdding(true);
     try {
-        await onAddWords(quickAddInput);
+        await onAddWords(quickAddInput, selectedWordTypes);
         setNotification({ type: 'success', message: 'Words added successfully.' });
         setQuickAddInput('');
         setIsAddExpanded(false);
@@ -175,6 +259,7 @@ const WordTable: React.FC<Props> = ({
   );
 
   const handleConfirmBulkDelete = async () => {
+    // FIX: Prop renamed to onBulkDelete
     if (!onBulkDelete || selectedIds.size === 0) return;
     setIsDeleting(true);
     try {
@@ -299,9 +384,9 @@ const WordTable: React.FC<Props> = ({
     setIsAiModalOpen(false);
   };
 
-  const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(stringToWordArray(inputs.words), 'Vietnamese');
+  const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(stringToWordArray(inputs.words), user.nativeLanguage || 'Vietnamese');
   
-  const handleGenerateHintPrompt = () => getHintsPrompt(selectedWordsMissingHints);
+  const handleGenerateHintPrompt = (inputs: any) => getHintsPrompt(selectedWordsMissingHints);
 
   const handleHintAiResult = async (results: any[]) => {
     if (!Array.isArray(results)) {
@@ -369,13 +454,14 @@ const WordTable: React.FC<Props> = ({
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
     onPractice, context, onDelete,
     onViewWord, onEditWord,
-    query, setQuery, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, isAddExpanded,
+    query, setQuery, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, isAddExpanded,
     isFilterMenuOpen, quickAddInput, setQuickAddInput, isAdding, isViewMenuOpen,
     selectedIds, setSelectedIds, 
     wordToDelete, setWordToDelete, isDeleting, setIsDeleting,
     wordToHardDelete, setWordToHardDelete, isHardDeleting, setIsHardDeleting, onHardDelete,
     isAiModalOpen, setIsAiModalOpen, notification, viewMenuRef, visibility,
     setVisibility, handleToggleFilter, handleBatchAddSubmit,
+    // FIX: Renamed typo onBoldDelete to onBulkDelete
     onOpenBulkDeleteModal: onBulkDelete ? () => setIsBulkDeleteModalOpen(true) : undefined,
     onBulkVerify: handleBulkVerify,
     onOpenBulkHardDeleteModal: onBulkHardDelete && selectedRawWords.length > 0 ? () => setIsBulkHardDeleteModalOpen(true) : undefined,
@@ -383,14 +469,21 @@ const WordTable: React.FC<Props> = ({
     selectedRawWordsCount: selectedRawWords.length,
     selectedWordsMissingHintsCount: selectedWordsMissingHints.length,
     onOpenHintModal: () => setIsHintModalOpen(true),
-    setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setIsViewMenuOpen, setIsFilterMenuOpen,
+    setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen, setIsFilterMenuOpen,
     setIsAddExpanded,
     settingsKey,
+    showTagBrowserButton,
+    tagTree,
+    selectedTag,
+    onSelectTag,
+    selectedTypes: selectedWordTypes,
+    toggleType: handleTypeToggle,
   };
 
   return (
     <>
       <WordTableUI {...uiProps} />
+      {/* FIX: Renamed typo onBoldDelete to onBulkDelete */}
       {onBulkDelete && <ConfirmationModal 
         isOpen={isBulkDeleteModalOpen}
         title={context === 'unit' ? `Unlink ${selectedIds.size} Words?` : `Delete ${selectedIds.size} Words?`}
@@ -423,10 +516,25 @@ const WordTable: React.FC<Props> = ({
             title="Refine Hints"
             description={`Generating hints for ${selectedWordsMissingHints.length} selected word(s).`}
             initialData={{}}
+            user={user}
             onGeneratePrompt={handleGenerateHintPrompt}
             onJsonReceived={handleHintAiResult}
             actionLabel="Apply Hints"
             hidePrimaryInput={true}
+        />
+      )}
+      {isAiModalOpen && selectedWordsToRefine.length > 0 && (
+        <UniversalAiModal 
+            isOpen={isAiModalOpen} 
+            onClose={() => setIsAiModalOpen(false)} 
+            type="REFINE_WORDS" 
+            title="Refine Selected Words"
+            description={`Generating details for ${selectedWordsToRefine.length} selected word(s).`}
+            initialData={{ words: selectedWordsToRefine.map(w => w.word).join('; ') }} 
+            user={user}
+            onGeneratePrompt={handleGenerateRefinePrompt} 
+            onJsonReceived={handleAiRefinementResult} 
+            actionLabel="Apply to All"
         />
       )}
     </>

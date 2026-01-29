@@ -1,28 +1,92 @@
 import React, { useState } from 'react';
-import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench } from 'lucide-react';
+import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench, Plus, Trash2, Tag, Check, Circle, Ear, BookMarked } from 'lucide-react';
+import { DataScope } from '../../app/types';
+
+interface JunkTagManagerProps {
+    junkTags: string[];
+    onJunkTagsChange: (tags: string[]) => void;
+}
+
+const JunkTagManager: React.FC<JunkTagManagerProps> = ({ junkTags, onJunkTagsChange }) => {
+    const [newTag, setNewTag] = useState('');
+
+    const handleAdd = () => {
+        const tagToAdd = newTag.trim().toLowerCase();
+        if (tagToAdd && !junkTags.includes(tagToAdd)) {
+            onJunkTagsChange([...junkTags, tagToAdd].sort());
+        }
+        setNewTag('');
+    };
+    
+    const handleRemove = (tagToRemove: string) => {
+        onJunkTagsChange(junkTags.filter(t => t !== tagToRemove));
+    };
+
+    return (
+        <div className="space-y-4 pt-4 border-t border-neutral-100">
+            <div className="flex items-center gap-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1"><Tag size={12}/> Junk Tag List</div>
+            <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-100 space-y-3">
+                <div className="flex gap-2">
+                    <input 
+                        value={newTag}
+                        onChange={e => setNewTag(e.target.value)}
+                        onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); handleAdd(); } }}
+                        placeholder="Add a tag to remove..."
+                        className="flex-1 px-3 py-2 bg-white border border-neutral-200 rounded-lg text-xs font-bold"
+                    />
+                    <button onClick={handleAdd} className="p-2.5 bg-neutral-900 text-white rounded-lg flex items-center justify-center"><Plus size={14}/></button>
+                </div>
+                {junkTags.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                        {junkTags.map(tag => (
+                            <div key={tag} className="flex items-center gap-1 bg-white pl-3 pr-1 py-1 rounded-full border border-neutral-200 text-xs font-bold text-neutral-700">
+                                <span>{tag}</span>
+                                <button onClick={() => handleRemove(tag)} className="p-1 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-full"><Trash2 size={12}/></button>
+                            </div>
+                        ))}
+                    </div>
+                ) : <p className="text-center text-xs text-neutral-400 py-2">No junk tags defined.</p>}
+            </div>
+        </div>
+    );
+};
+
 
 interface DataSettingsProps {
     jsonInputRef: React.RefObject<HTMLInputElement>;
-    includeProgress: boolean;
-    setIncludeProgress: (value: boolean) => void;
-    includeEssays: boolean;
-    setIncludeEssays: (value: boolean) => void;
+    dataScope: DataScope;
+    onDataScopeChange: (scope: DataScope) => void;
     onJSONImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onJSONExport: () => void;
     isNormalizing: boolean;
     onOpenNormalizeModal: () => void;
+    
+    // Junk Tag Props
+    junkTags: string[];
+    onJunkTagsChange: (tags: string[]) => void;
+
+    // Normalization Options
+    normalizeOptions: { removeJunkTags: boolean; removeMultiWordData: boolean };
+    onNormalizeOptionsChange: (options: { removeJunkTags: boolean; removeMultiWordData: boolean }) => void;
 }
 
-const ToggleSwitch = ({ checked, onChange, label, subLabel }: { checked: boolean; onChange: (c: boolean) => void; label: string; subLabel: string }) => (
-    <label onClick={(e) => { e.preventDefault(); onChange(!checked); }} className="flex items-center justify-between px-6 py-4 cursor-pointer group hover:bg-white hover:shadow-sm rounded-xl transition-all">
-        <div className="flex flex-col"><span className="text-[10px] font-black text-neutral-400 group-hover:text-neutral-900 uppercase tracking-widest">{label}</span><span className="text-[8px] text-neutral-400 font-bold italic">{subLabel}</span></div>
-        <div className={`w-10 h-6 rounded-full transition-all flex items-center p-1 ${checked ? 'bg-neutral-900' : 'bg-neutral-200'}`}><div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} /></div>
-    </label>
+const ScopeCheckbox = ({ checked, onChange, label, icon: Icon }: { checked: boolean; onChange: () => void; label: string, icon?: React.ElementType }) => (
+    <button onClick={onChange} className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${checked ? 'bg-indigo-50 border-indigo-200 text-indigo-800' : 'bg-white border-neutral-200 text-neutral-500 hover:bg-neutral-50'}`}>
+        {Icon && <Icon size={14} />}
+        {checked ? <Check size={14} /> : <Circle size={14} />}
+        <span className="text-xs font-bold uppercase">{label}</span>
+    </button>
 );
 
-export const DataSettings: React.FC<DataSettingsProps> = ({
-    jsonInputRef, includeProgress, setIncludeProgress, includeEssays, setIncludeEssays, onJSONImport, onJSONExport, isNormalizing, onOpenNormalizeModal
-}) => {
+export const DataSettings: React.FC<DataSettingsProps> = (props) => {
+    const {
+        jsonInputRef, dataScope, onDataScopeChange, onJSONImport, onJSONExport, isNormalizing, onOpenNormalizeModal,
+        junkTags, onJunkTagsChange, normalizeOptions, onNormalizeOptionsChange
+    } = props;
+
+    const toggleScope = (key: keyof DataScope) => {
+        onDataScopeChange({ ...dataScope, [key]: !dataScope[key] });
+    };
 
     return (
         <section className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col space-y-6">
@@ -30,13 +94,23 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                 <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl"><FileJson size={24} /></div>
                 <div>
                     <h3 className="text-xl font-black text-neutral-900">Data Management</h3>
-                    <p className="text-xs text-neutral-400">Sync files and optimize your local library.</p>
+                    <p className="text-xs text-neutral-400">Backup, restore, and optimize your library.</p>
                 </div>
             </div>
 
-            <div className="p-1 bg-neutral-50 rounded-2xl border border-neutral-100 space-y-1">
-                <ToggleSwitch checked={includeProgress} onChange={setIncludeProgress} label="Include Progress" subLabel="Sync SRS learning data" />
-                <ToggleSwitch checked={includeEssays} onChange={setIncludeEssays} label="Include Essay Content" subLabel="Sync generated Unit essays" />
+            <div className="space-y-3">
+                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Backup / Restore Content</label>
+                <div className="flex flex-wrap gap-2">
+                    <ScopeCheckbox checked={dataScope.user} onChange={() => toggleScope('user')} label="User Profile" />
+                    <ScopeCheckbox checked={dataScope.vocabulary} onChange={() => toggleScope('vocabulary')} label="Word Library" />
+                    <ScopeCheckbox checked={dataScope.wordBook} onChange={() => toggleScope('wordBook')} label="Word Books" icon={BookMarked} />
+                    <ScopeCheckbox checked={dataScope.lesson} onChange={() => toggleScope('lesson')} label="Lessons" />
+                    <ScopeCheckbox checked={dataScope.reading} onChange={() => toggleScope('reading')} label="Reading" />
+                    <ScopeCheckbox checked={dataScope.writing} onChange={() => toggleScope('writing')} label="Writing" />
+                    <ScopeCheckbox checked={dataScope.speaking} onChange={() => toggleScope('speaking')} label="Speaking" />
+                    <ScopeCheckbox checked={dataScope.listening} onChange={() => toggleScope('listening')} label="Listening" />
+                    <ScopeCheckbox checked={dataScope.mimic} onChange={() => toggleScope('mimic')} label="Mimic Practice" icon={Ear} />
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -48,6 +122,8 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                     <Download size={16} /> <span>EXPORT</span>
                 </button>
             </div>
+            
+            <JunkTagManager junkTags={junkTags} onJunkTagsChange={onJunkTagsChange} />
 
             <div className="pt-4 border-t border-neutral-100 grid grid-cols-1 md:grid-cols-2 gap-3">
                  <button 
@@ -60,7 +136,7 @@ export const DataSettings: React.FC<DataSettingsProps> = ({
                     </div>
                     <div className="text-left">
                         <div className="text-xs font-black uppercase tracking-widest leading-none">Normalize Data</div>
-                        <div className="text-[9px] font-bold text-neutral-400 mt-1">Clean legacy data from phrases</div>
+                        <div className="text-[9px] font-bold text-neutral-400 mt-1">Clean junk tags & legacy data</div>
                     </div>
                 </button>
             </div>

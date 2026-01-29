@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as dataStore from '../../app/dataStore';
 import { speak, startRecording, stopRecording } from '../../utils/audio';
@@ -10,10 +9,10 @@ import { analyzePronunciation } from '../../services/geminiService';
 import { useToast } from '../../contexts/ToastContext';
 
 export interface TargetPhrase {
-    id: string; // Add a unique ID for React keys
+    id: string; 
     text: string;
     sourceWord: string;
-    type: 'Collocation' | 'Idiom' | 'Paraphrase';
+    type: string;
 }
 
 interface Props {
@@ -21,12 +20,18 @@ interface Props {
     onClose?: () => void;
 }
 
+const MIMIC_PRACTICE_QUEUE_KEY = 'vocab_pro_mimic_practice_queue';
+
 export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
     // Queue Management
     const [queue, setQueue] = useState<TargetPhrase[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isEmpty, setIsEmpty] = useState(false);
     
+    // Modal state
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingItem, setEditingItem] = useState<TargetPhrase | null>(null);
+
     // Initialize from storage, default to false
     const [autoSpeak, setAutoSpeak] = useState(() => getStoredJSON('vocab_pro_mimic_autospeak', false));
     const autoSpeakRef = useRef(autoSpeak);
@@ -65,6 +70,65 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
     // Derived Display Transcript
     const displayTranscript = fullTranscript.substring(transcriptOffset).trimStart();
 
+    const saveQueue = (newQueue: TargetPhrase[]) => {
+        setQueue(newQueue);
+        setStoredJSON(MIMIC_PRACTICE_QUEUE_KEY, newQueue);
+        setIsEmpty(newQueue.length === 0);
+    };
+
+    useEffect(() => {
+        const initialQueue = getStoredJSON<TargetPhrase[]>(MIMIC_PRACTICE_QUEUE_KEY, []);
+        setQueue(initialQueue);
+        setIsEmpty(initialQueue.length === 0);
+        setCurrentIndex(0);
+    }, []);
+
+    const handleAddItem = (newPhraseText: string) => {
+        const newItem: TargetPhrase = {
+            id: `mimic-${Date.now()}`,
+            text: newPhraseText,
+            sourceWord: 'Manual',
+            type: 'Phrase'
+        };
+        saveQueue([...queue, newItem]);
+        setIsModalOpen(false);
+    };
+
+    const handleUpdateItem = (itemId: string, newText: string) => {
+        saveQueue(queue.map(item => item.id === itemId ? { ...item, text: newText } : item));
+        setIsModalOpen(false);
+        setEditingItem(null);
+    };
+
+    const handleDeleteItem = (itemId: string) => {
+        const newQueue = queue.filter(item => item.id !== itemId);
+        if (currentIndex >= newQueue.length && newQueue.length > 0) {
+            setCurrentIndex(newQueue.length - 1);
+        } else if (newQueue.length === 0) {
+            setCurrentIndex(0);
+        }
+        saveQueue(newQueue);
+        showToast("Phrase deleted.", "success");
+    };
+
+    const openModalToAdd = () => {
+        setEditingItem(null);
+        setIsModalOpen(true);
+    };
+    
+    const openModalToEdit = (item: TargetPhrase) => {
+        setEditingItem(item);
+        setIsModalOpen(true);
+    };
+
+    const handleSaveFromModal = (text: string) => {
+        if (editingItem) {
+            handleUpdateItem(editingItem.id, text);
+        } else {
+            handleAddItem(text);
+        }
+    };
+    
     const stopRecordingSession = useCallback(async (abort = false) => {
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
         
@@ -86,94 +150,30 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
         stopFnRef.current = stopRecordingSession;
     }, [stopRecordingSession]);
 
-    // Initialize Queue
-    const generateSession = useCallback(() => {
-        // If scopedWord is provided, use only that word. Otherwise use all words.
-        const sourceWords = scopedWord ? [scopedWord] : dataStore.getAllWords();
-        const candidates: TargetPhrase[] = [];
-
-        sourceWords.forEach(w => {
-            if (w.isPassive) return;
-
-            if (w.collocationsArray) {
-                w.collocationsArray.filter(c => !c.isIgnored).forEach((c, idx) => {
-                    if (c.text.split(' ').length > 1) { 
-                        candidates.push({ id: `${w.id}-col-${idx}`, text: c.text, sourceWord: w.word, type: 'Collocation' });
-                    }
-                });
-            }
-            if (w.idiomsList) {
-                w.idiomsList.filter(i => !i.isIgnored).forEach((i, idx) => {
-                    candidates.push({ id: `${w.id}-idm-${idx}`, text: i.text, sourceWord: w.word, type: 'Idiom' });
-                });
-            }
-            if (w.paraphrases) {
-                w.paraphrases.filter(p => !p.isIgnored).forEach((p, idx) => {
-                     candidates.push({ id: `${w.id}-para-${idx}`, text: p.word, sourceWord: w.word, type: 'Paraphrase' });
-                });
-            }
-        });
-
-        if (candidates.length === 0) {
-            setIsEmpty(true);
-            setQueue([]);
-            return;
-        }
-
-        // If scoped, use all. If global, shuffle and take subset to create a "Session"
-        if (scopedWord) {
-            setQueue(candidates);
-        } else {
-            const shuffled = candidates.sort(() => Math.random() - 0.5).slice(0, 20);
-            setQueue(shuffled);
-        }
-        
-        // Reset state for new session
-        setCurrentIndex(0);
-        setFullTranscript('');
-        setTranscriptOffset(0);
-        setUserAudioUrl(null);
-        setMatchStatus(null);
-        setIsRevealed(false);
-        setAiAnalysis(null);
-    }, [scopedWord]);
-
-    useEffect(() => {
-        generateSession();
-    }, [generateSession]);
-
     // Reset interaction state when target changes
     useEffect(() => {
-        // 1. Stop recording if active (and abort saving audio to prevent race condition)
         if (isRecording) {
             stopRecordingSession(true); 
         }
-
-        // 2. Reset UI state
-        // Note: These are also called in navigation handlers to prevent UI flash,
-        // but kept here to ensure consistency if target changes via other means.
         setIsRevealed(false);
         setFullTranscript('');
         setTranscriptOffset(0);
         setUserAudioUrl(null);
         setMatchStatus(null);
         setAiAnalysis(null);
-        
-        // 3. Cleanup player
         if (userAudioPlayer.current) {
             userAudioPlayer.current.pause();
             userAudioPlayer.current = null;
         }
 
-        // 4. Auto Speak
         if (autoSpeakRef.current && target) {
             const timer = setTimeout(() => {
                 speak(target.text);
-            }, 500); // Slight delay for smoother transition
+            }, 500);
             return () => clearTimeout(timer);
         }
 
-    }, [target?.id]); // Only reset when the specific target ID changes. Removed autoSpeak from deps.
+    }, [target?.id]);
 
     useEffect(() => {
         return () => {
@@ -221,7 +221,6 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
                 await startRecording();
                 setIsRecording(true);
                 
-                // Initialize silence timer
                 if (silenceTimer.current) clearTimeout(silenceTimer.current);
                 silenceTimer.current = setTimeout(() => stopFnRef.current(), 5000);
                 
@@ -232,11 +231,9 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
                         const full = final + (interim ? (final ? ' ' : '') + interim : '');
                         setFullTranscript(full);
 
-                        // Reset silence timer on every transcript update
                         if (silenceTimer.current) clearTimeout(silenceTimer.current);
                         silenceTimer.current = setTimeout(() => stopFnRef.current(), 5000);
 
-                        // Auto-stop if perfect match
                         if (normalize(full) === normalize(currentTargetText)) {
                              stopRecordingSession();
                         }
@@ -316,10 +313,6 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
         }
     };
 
-    const handleRefreshList = () => {
-        generateSession();
-    };
-
     return (
         <MimicPracticeUI 
             targetText={target?.text || null}
@@ -343,11 +336,17 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
             onSelect={handleSelect}
             autoSpeak={autoSpeak}
             onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
-            onRefresh={handleRefreshList}
             isGlobalMode={!scopedWord}
             isAnalyzing={isAnalyzing}
             onAnalyze={handleAnalyzeAudio}
             aiAnalysis={aiAnalysis}
+            onAddItem={openModalToAdd}
+            onEditItem={openModalToEdit}
+            onDeleteItem={handleDeleteItem}
+            isModalOpen={isModalOpen}
+            editingItem={editingItem}
+            onCloseModal={() => setIsModalOpen(false)}
+            onSaveItem={handleSaveFromModal}
         />
     );
 };

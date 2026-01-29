@@ -78,7 +78,8 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
 
       const allWordsInStore = getAllWords();
       const relatedData: Record<string, VocabularyItem[]> = {};
-      (currentWord.tags || []).forEach(tag => {
+      const tagsToProcess = (currentWord.tags || []).filter(tag => tag.toLowerCase() !== 'ielts');
+      tagsToProcess.forEach(tag => {
           const wordsForTag = allWordsInStore.filter(w => 
               w.userId === currentWord.userId && 
               w.id !== currentWord.id && 
