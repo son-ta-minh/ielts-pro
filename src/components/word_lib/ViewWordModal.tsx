@@ -7,7 +7,7 @@ import { createNewWord, updateSRS, calculateMasteryScore } from '../../utils/srs
 import TestModal from '../practice/TestModal';
 import { calculateWordDifficultyXp } from '../../app/useAppController';
 import { getConfig } from '../../app/settingsManager';
-import { MimicPractice } from '../labs/MimicPractice';
+import { SimpleMimicModal } from '../common/SimpleMimicModal';
 
 interface Props {
   word: VocabularyItem;
@@ -148,11 +148,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     <>
     {isChallenging && <TestModal word={currentWord} onComplete={handleChallengeComplete} onClose={() => setIsChallenging(false)} />}
     {isMimicOpen && (
-      <div className="fixed inset-0 z-[200] bg-white flex flex-col animate-in fade-in duration-200">
-        <div className="flex-1 overflow-auto">
-          <MimicPractice scopedWord={currentWord} onClose={() => setIsMimicOpen(false)} />
-        </div>
-      </div>
+        <SimpleMimicModal target={currentWord.word} onClose={() => setIsMimicOpen(false)} />
     )}
     <ViewWordModalUI
       word={currentWord}

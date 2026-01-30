@@ -143,6 +143,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   const handleFocusChange = async (unit: Unit, color: FocusColor | null) => {
       const updatedUnit = { ...unit, focusColor: color || undefined, updatedAt: Date.now() };
       if (!color) delete updatedUnit.focusColor;
+      // FIX: Changed 'i' to 'u' to fix 'Cannot find name i' error
       setUnits(prev => prev.map(u => u.id === unit.id ? updatedUnit : u));
       await db.saveUnit(updatedUnit);
   };
@@ -160,7 +161,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       <ResourcePage
         title="Reading Library"
         subtitle="Curated collections for intensive reading & vocab."
-        icon={<Layers3 size={28} className="text-indigo-600" />}
+        icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png" className="w-8 h-8 object-contain" alt="Reading" />}
         config={{}} 
         activeFilters={{}} 
         onFilterChange={() => {}}

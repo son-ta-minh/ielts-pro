@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption } from '../../app/types';
+import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { getWordDetailsPrompt, getHintsPrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
@@ -13,6 +13,8 @@ import { Unlink, Trash2 } from 'lucide-react';
 import UniversalAiModal from '../common/UniversalAiModal';
 import { createNewWord } from '../../utils/srs';
 import { TagTreeNode } from '../common/TagBrowser';
+import * as db from '../../app/db';
+import { useToast } from '../../contexts/ToastContext';
 
 // Define interface for persisted filter settings to fix TypeScript inference errors
 interface PersistedFilters {
@@ -25,6 +27,8 @@ interface PersistedFilters {
     compositionFilter?: CompositionFilter;
     bookFilter?: BookFilter;
     isFilterMenuOpen?: boolean;
+    page?: number;
+    pageSize?: number;
 }
 
 interface Props {
@@ -57,6 +61,7 @@ interface Props {
   tagTree?: TagTreeNode[];
   selectedTag?: string | null;
   onSelectTag?: (tag: string | null) => void;
+  onOpenWordBook?: () => void;
 }
 
 const LIBRARY_FILTERS_KEY = 'vocab_pro_library_filters_v2';
@@ -70,10 +75,11 @@ const WordTable: React.FC<Props> = ({
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
   onSearch, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onBulkHardDelete, onPractice,
   settingsKey, context, initialFilter, forceExpandAdd, onExpandAddConsumed, onWordRenamed,
-  showTagBrowserButton, tagTree, selectedTag, onSelectTag
+  showTagBrowserButton, tagTree, selectedTag, onSelectTag, onOpenWordBook
 }) => {
   // Load persisted filters with explicit typing to fix property access errors
   const persistedFilters = useMemo(() => getStoredJSON<PersistedFilters>(LIBRARY_FILTERS_KEY, {}), []);
+  const { showToast } = useToast();
 
   const [query, setQuery] = useState(persistedFilters.query || '');
   const [activeFilters, setActiveFilters] = useState<Set<FilterType>>(() => {
@@ -95,6 +101,9 @@ const WordTable: React.FC<Props> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
 
+  // Use a ref to track if this is the first mount to avoid resetting page index
+  const isFirstMount = useRef(true);
+
   // Persistence effect
   useEffect(() => {
     setStoredJSON(LIBRARY_FILTERS_KEY, {
@@ -106,9 +115,11 @@ const WordTable: React.FC<Props> = ({
         sourceFilter,
         compositionFilter,
         bookFilter,
-        isFilterMenuOpen
+        isFilterMenuOpen,
+        page,      // Save current page
+        pageSize   // Save current pageSize
     });
-  }, [query, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, isFilterMenuOpen]);
+  }, [query, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, isFilterMenuOpen, page, pageSize]);
 
   // New state for Word Type selection in Quick Add
   // Default to 'vocab' selected
@@ -126,6 +137,10 @@ const WordTable: React.FC<Props> = ({
   const [isHintModalOpen, setIsHintModalOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info', message: string} | null>(null);
   
+  // Add to Book states
+  const [isAddToBookModalOpen, setIsAddToBookModalOpen] = useState(false);
+  const [availableBooks, setAvailableBooks] = useState<WordBook[]>([]);
+
   const viewMenuRef = useRef<HTMLDivElement>(null);
 
   const [visibility, setVisibility] = useState(() => {
@@ -174,8 +189,15 @@ const WordTable: React.FC<Props> = ({
 
   useEffect(() => {
       onFilterChange({ types: activeFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, source: sourceFilter, composition: compositionFilter, book: bookFilter });
-      onPageChange(0);
-      setSelectedIds(new Set());
+      
+      // If it's the first mount, do NOT reset the page to 0. 
+      // Allow WordList to initialize it from storage.
+      if (isFirstMount.current) {
+          isFirstMount.current = false;
+      } else {
+          onPageChange(0);
+          setSelectedIds(new Set());
+      }
   }, [activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter]);
 
   useEffect(() => { if (notification) { const t = setTimeout(() => setNotification(null), 4000); return () => clearTimeout(t); } }, [notification]);
@@ -305,6 +327,40 @@ const WordTable: React.FC<Props> = ({
         setNotification({ type: 'success', message: `Marked ${itemsToUpdate.length} item(s) as Verified.` });
         setSelectedIds(new Set());
     }
+  };
+
+  const handleAddToPronunciation = () => {
+      const selectedItems = words.filter(w => selectedIds.has(w.id));
+      if (selectedItems.length === 0) return;
+
+      const currentQueue = getStoredJSON<any[]>('vocab_pro_mimic_practice_queue', []);
+      const existingTexts = new Set(currentQueue.map(i => i.text.toLowerCase().trim()));
+      
+      let addedCount = 0;
+      const newItems = [];
+
+      selectedItems.forEach(item => {
+          const text = item.word;
+          if (!existingTexts.has(text.toLowerCase().trim())) {
+              newItems.push({
+                  id: `pronun-${Date.now()}-${Math.random()}`,
+                  text: text,
+                  sourceWord: item.word,
+                  type: 'Library Word'
+              });
+              existingTexts.add(text.toLowerCase().trim());
+              addedCount++;
+          }
+      });
+
+      if (addedCount > 0) {
+          const updatedQueue = [...currentQueue, ...newItems];
+          setStoredJSON('vocab_pro_mimic_practice_queue', updatedQueue);
+          setNotification({ type: 'success', message: `Added ${addedCount} words to Pronunciation.` });
+          setSelectedIds(new Set());
+      } else {
+          setNotification({ type: 'info', message: 'Selected words are already in Pronunciation queue.' });
+      }
   };
 
   const handleAiRefinementResult = async (results: any[]) => {
@@ -450,6 +506,41 @@ const WordTable: React.FC<Props> = ({
     setIsHintModalOpen(false);
   };
   
+  const handleOpenAddToBookModal = async () => {
+    const books = await db.getWordBooksByUserId(user.id);
+    setAvailableBooks(books);
+    setIsAddToBookModalOpen(true);
+  };
+
+  const handleConfirmAddToBook = async (bookId: string) => {
+    const targetBook = availableBooks.find(b => b.id === bookId);
+    if (!targetBook) return;
+
+    const wordsToAdd = words.filter(w => selectedIds.has(w.id));
+    const existingBookWords = new Set(targetBook.words.map(w => w.word.toLowerCase()));
+    
+    const newBookItems: WordBookItem[] = wordsToAdd
+        .filter(w => !existingBookWords.has(w.word.toLowerCase()))
+        .map(w => ({ word: w.word, definition: w.meaningVi }));
+        
+    if (newBookItems.length === 0) {
+        setNotification({ type: 'info', message: "All selected words are already in this book." });
+        setIsAddToBookModalOpen(false);
+        return;
+    }
+
+    const updatedWords = [...targetBook.words, ...newBookItems].sort((a,b) => a.word.toLowerCase().localeCompare(b.word.toLowerCase()));
+    const updatedBook = { ...targetBook, words: updatedWords, updatedAt: Date.now() };
+    
+    await dataStore.saveWordBook(updatedBook);
+    // Notify store to update book word index for filters
+    await dataStore.notifyWordBookChange(user.id);
+
+    setNotification({ type: 'success', message: `Added ${newBookItems.length} words to "${targetBook.topic.split(':').pop()?.trim()}".` });
+    setIsAddToBookModalOpen(false);
+    setSelectedIds(new Set());
+  };
+
   const uiProps: Omit<WordTableUIProps, 'viewingWord' | 'setViewingWord' | 'editingWord' | 'setEditingWord'> = {
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
     onPractice, context, onDelete,
@@ -478,6 +569,14 @@ const WordTable: React.FC<Props> = ({
     onSelectTag,
     selectedTypes: selectedWordTypes,
     toggleType: handleTypeToggle,
+    onOpenWordBook,
+    onOpenAddToBookModal: handleOpenAddToBookModal,
+    isAddToBookModalOpen,
+    setIsAddToBookModalOpen,
+    wordBooks: availableBooks,
+    onConfirmAddToBook: handleConfirmAddToBook,
+    // New prop for Pronunciation Queue
+    onAddToPronunciation: handleAddToPronunciation
   };
 
   return (

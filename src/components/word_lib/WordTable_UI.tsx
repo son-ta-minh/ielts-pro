@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ArrowDownAZ, ListFilter, Copy, ShieldCheck, ShieldX, Ghost, Zap, GitCommit, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, Sparkles, PenLine, BookMarked } from 'lucide-react';
-import { VocabularyItem, ReviewGrade, WordQuality, WordTypeOption } from '../../app/types';
+
+import React, { useState, useMemo } from 'react';
+import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ArrowDownAZ, ListFilter, Copy, ShieldCheck, ShieldX, Ghost, Zap, GitCommit, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, Sparkles, PenLine, BookMarked, BookPlus } from 'lucide-react';
+import { VocabularyItem, ReviewGrade, WordQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import ConfirmationModal from '../common/ConfirmationModal';
 import UniversalAiModal from '../common/UniversalAiModal';
@@ -91,6 +92,107 @@ const TYPE_OPTIONS: { id: WordTypeOption; label: string; icon: React.ElementType
     { id: 'archive', label: 'Archive', icon: Archive },
 ];
 
+const BookIcon: React.FC<{ icon: string; className?: string }> = ({ icon, className }) => {
+    if (!icon) return null;
+    const isUrl = icon?.startsWith('http') || icon?.startsWith('data:image');
+    if (isUrl) {
+        return <img src={icon} className={`object-contain ${className}`} alt="Book icon" />;
+    }
+    return <span className={className}>{icon}</span>;
+};
+
+// --- AddToBookModal ---
+const AddToBookModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: (bookId: string) => void;
+    books: WordBook[];
+    selectedCount: number;
+}> = ({ isOpen, onClose, onConfirm, books, selectedCount }) => {
+    const [query, setQuery] = useState('');
+    
+    const shelves = useMemo(() => {
+        const map = new Map<string, WordBook[]>();
+        books.forEach(b => {
+            const shelfName = b.topic.split(':')[0].trim() || 'General';
+            if (!map.has(shelfName)) map.set(shelfName, []);
+            map.get(shelfName)!.push(b);
+        });
+        return Array.from(map.entries()).sort((a,b) => a[0].localeCompare(b[0]));
+    }, [books]);
+
+    const filteredShelves = useMemo(() => {
+        if (!query.trim()) return shelves;
+        const q = query.toLowerCase();
+        return shelves.map(([name, bks]) => {
+            const filteredBks = bks.filter(b => b.topic.toLowerCase().includes(q));
+            return [name, filteredBks] as [string, WordBook[]];
+        }).filter(([_, bks]) => bks.length > 0);
+    }, [shelves, query]);
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[80vh]">
+                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
+                    <div>
+                        <h3 className="text-xl font-black text-neutral-900">Add to Word Book</h3>
+                        <p className="text-xs text-neutral-500 font-bold mt-1 truncate">Adding {selectedCount} items...</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
+                </header>
+                <div className="p-4 border-b border-neutral-50">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-300" size={14} />
+                        <input 
+                            value={query} 
+                            onChange={e => setQuery(e.target.value)} 
+                            placeholder="Search book..." 
+                            className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none"
+                            autoFocus
+                        />
+                    </div>
+                </div>
+                <main className="p-4 overflow-y-auto flex-1 space-y-6 custom-scrollbar">
+                    {filteredShelves.map(([shelfName, bks]) => (
+                        <div key={shelfName} className="space-y-2">
+                            <h4 className="px-3 text-[10px] font-black uppercase text-neutral-400 tracking-widest">{shelfName}</h4>
+                            <div className="space-y-1">
+                                {bks.map(b => {
+                                    const displayTopic = b.topic.split(':').slice(1).join(':').trim() || b.topic;
+                                    return (
+                                        <button 
+                                            key={b.id} 
+                                            onClick={() => onConfirm(b.id)}
+                                            className="w-full text-left px-4 py-3 rounded-xl border border-neutral-100 hover:border-neutral-300 hover:bg-neutral-50 transition-all font-bold text-sm text-neutral-700 flex items-center gap-3 group"
+                                        >
+                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-neutral-100 group-hover:bg-white border border-transparent group-hover:border-neutral-200 shrink-0">
+                                                <BookIcon icon={b.icon} className="text-base" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="truncate">{displayTopic}</p>
+                                                <p className="text-[10px] text-neutral-400 font-medium">{b.words.length} words</p>
+                                            </div>
+                                            <ChevronRight size={14} className="text-neutral-300 group-hover:text-neutral-900" />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+                    {filteredShelves.length === 0 && (
+                        <div className="text-center py-10 text-neutral-400 italic text-xs font-medium">No books found.</div>
+                    )}
+                </main>
+                <footer className="px-8 py-4 border-t border-neutral-100 bg-neutral-50/50 rounded-b-[2.5rem] flex justify-end">
+                    <button onClick={onClose} className="px-5 py-2 text-xs font-bold text-neutral-500 hover:text-neutral-900">Cancel</button>
+                </footer>
+            </div>
+        </div>
+    );
+};
+
 export interface WordTableUIProps {
   words: VocabularyItem[];
   total: number;
@@ -165,6 +267,16 @@ export interface WordTableUIProps {
   // Updated props for Type Selector
   selectedTypes: Set<WordTypeOption>;
   toggleType: (type: WordTypeOption) => void;
+  onOpenWordBook?: () => void;
+  
+  // New props for Add to Book
+  onOpenAddToBookModal: () => void;
+  isAddToBookModalOpen: boolean;
+  setIsAddToBookModalOpen: (o: boolean) => void;
+  wordBooks: WordBook[];
+  onConfirmAddToBook: (bookId: string) => void;
+  // New prop for Pronunciation Queue
+  onAddToPronunciation: () => void;
 }
 
 export const WordTableUI: React.FC<WordTableUIProps> = ({
@@ -180,7 +292,9 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   handleAiRefinementResult, setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen,
   setIsFilterMenuOpen, setIsAddExpanded, selectedWordsMissingHintsCount, onOpenHintModal,
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
-  selectedTypes, toggleType
+  selectedTypes, toggleType, onOpenWordBook,
+  onOpenAddToBookModal, isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook,
+  onAddToPronunciation
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const totalPages = Math.ceil(total / pageSize);
@@ -191,18 +305,31 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
     <div className="space-y-6 animate-in fade-in duration-500 relative">
       {notification && (<div className="fixed top-20 left-1/2 -translate-x-1/2 z-[300] bg-neutral-900 text-white px-6 py-3 rounded-2xl shadow-2xl border border-neutral-800 animate-in slide-in-from-top-4 flex items-center space-x-2">{notification.type === 'success' ? <CheckCircle2 size={18} className="text-green-400" /> : <AlertCircle size={18} className="text-orange-400" />}<span className="text-sm font-bold">{notification.message}</span></div>)}
       <div className="flex flex-col gap-4">
-        <div>
-            <h2 className={`${context === 'library' ? 'text-3xl' : 'text-lg'} font-black text-neutral-900 tracking-tight`}>{context === 'library' ? 'Word Library' : 'Unit Vocabulary'}</h2>
-            <p className={`${context === 'library' ? 'text-neutral-500 mt-2 font-medium' : 'text-neutral-500 text-xs font-bold mt-0.5'}`}>{total} items{context === 'library' ? ' collected.' : '.'}</p>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+            <div>
+                <h2 className={`${context === 'library' ? 'text-3xl' : 'text-lg'} font-black text-neutral-900 tracking-tight`}>{context === 'library' ? 'Word Library' : 'Unit Vocabulary'}</h2>
+                <p className={`${context === 'library' ? 'text-neutral-500 mt-2 font-medium' : 'text-neutral-500 text-xs font-bold mt-0.5'}`}>{total} items{context === 'library' ? ' collected.' : '.'}</p>
+            </div>
+            {context === 'library' && onOpenWordBook && (
+                <button 
+                    onClick={onOpenWordBook}
+                    className="flex items-center gap-2.5 p-2 bg-white border border-neutral-200 rounded-2xl hover:border-indigo-400 hover:shadow-sm transition-all group shrink-0"
+                >
+                    <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                        <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png" className="w-6 h-6 object-contain" alt="Word Book" />
+                    </div>
+                    <span className="text-sm font-black text-neutral-900 pr-3">Word Book</span>
+                </button>
+            )}
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-                <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search words..." className="w-full pl-10 pr-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900 transition-all shadow-sm" />
+                <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search words..." className="w-full pl-10 pr-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-neutral-900 transition-all shadow-sm" />
             </div>
             <div className="flex gap-2">
                 <div className="relative" ref={viewMenuRef}>
-                    <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className={`px-4 py-3 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isViewMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="View Options">
+                    <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className={`px-4 py-3 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isViewMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="View Options">
                         <Eye size={16} /> <span className="hidden sm:inline">View</span>
                     </button>
                     {isViewMenuOpen && (
@@ -223,7 +350,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                         </div>
                     )}
                 </div>
-                <button onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)} className={`px-4 py-3 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isFilterMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="Filter">
+                <button onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)} className={`px-4 py-3 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isFilterMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="Filter">
                     <ListFilter size={16} /> <span className="hidden sm:inline">Filter</span>
                 </button>
                  {showTagBrowserButton && (
@@ -371,6 +498,8 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
               <button onClick={() => onBulkVerify(selectedIds)} className="px-4 py-3 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><ShieldCheck size={14} /> <span>Verify</span></button>
               {selectedWordsMissingHintsCount > 0 && ( <button onClick={onOpenHintModal} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors" title="Generate hints for collocations and idioms"><Zap size={14} /> <span>Refine Hints ({selectedWordsMissingHintsCount})</span></button> )}
               <button onClick={() => { setIsAiModalOpen(true); }} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>Refine</span></button>
+              <button onClick={onOpenAddToBookModal} className="px-4 py-3 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><BookPlus size={14} /> <span>Add to Book</span></button>
+              <button onClick={onAddToPronunciation} className="px-4 py-3 bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Mic size={14} /> <span>Pronunciation</span></button>
               <button onClick={() => onPractice(selectedIds)} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black flex items-center space-x-2"><Play size={14} fill="currentColor"/> <span>Practice</span></button>
             </div>
           </div>
@@ -400,6 +529,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
           icon={<Trash2 size={40} className="text-red-500"/>}
         />
       )}
+      <AddToBookModal isOpen={isAddToBookModalOpen} onClose={() => setIsAddToBookModalOpen(false)} onConfirm={onConfirmAddToBook} books={wordBooks} selectedCount={selectedIds.size} />
     </div>
   );
 };

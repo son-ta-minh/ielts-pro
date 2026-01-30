@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { User, Lesson, VocabularyItem, SessionType, ComparisonGroup, AppView, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
@@ -7,7 +8,9 @@ import { BookText, Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, Puzzle, FileCloc
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { TagBrowser, TagTreeNode } from '../../components/common/TagBrowser';
+// FIX: getConfig is exported from settingsManager, not storage
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
+import { getConfig } from '../../app/settingsManager';
 import { UniversalCard } from '../../components/common/UniversalCard';
 import LessonEditView from './LessonEditView';
 import LessonPracticeView from './LessonPracticeView';
@@ -104,7 +107,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const handleSaveComparison = async (group: ComparisonGroup) => { await db.saveComparisonGroup(group); showToast('Comparison saved!', 'success'); setViewMode('read_comparison'); setActiveComparison(group); loadData(); };
   
   if (viewMode === 'read_lesson' && activeLesson) return <LessonPracticeView lesson={activeLesson} onComplete={() => setViewMode('list')} onEdit={() => setViewMode('edit_lesson')} />;
-  if (viewMode === 'edit_lesson' && activeLesson) return <LessonEditView lesson={activeLesson} onSave={handleSaveLesson} onPractice={(l) => { setActiveLesson(l); setViewMode('read_lesson'); }} onCancel={() => setViewMode('list')} />;
+  if (viewMode === 'edit_lesson' && activeLesson) return <LessonEditView lesson={activeLesson} user={user} onSave={handleSaveLesson} onPractice={(l) => { setActiveLesson(l); setViewMode('read_lesson'); }} onCancel={() => setViewMode('list')} />;
   if (viewMode === 'read_comparison' && activeComparison) return <ComparisonReadView group={activeComparison} onBack={() => setViewMode('list')} onEdit={() => setViewMode('edit_comparison')} />;
   if (viewMode === 'edit_comparison' && activeComparison) return <ComparisonEditView group={activeComparison} onSave={handleSaveComparison} onCancel={() => setViewMode(activeComparison.words.length > 0 ? 'read_comparison' : 'list')} user={user} />;
   
@@ -156,12 +159,19 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       { label: 'New Lesson', icon: Plus, onClick: handleNewLesson },
   ];
 
+  const handleGeneratePromptWithCoach = (inputs: any) => {
+      const config = (window as any).CONFIG || getConfig();
+      const activeType = config.audioCoach.activeCoach;
+      const coachName = config.audioCoach.coaches[activeType].name;
+      return getGenerateLessonPrompt({ ...inputs, coachName });
+  };
+
   return (
     <>
     <ResourcePage
       title="Knowledge Library"
       subtitle="Your collection of lessons and comparisons."
-      icon={<BookText size={28} className="text-cyan-600" />}
+      icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png" className="w-8 h-8 object-contain" alt="Lessons" />}
       minorSkills={ <button onClick={() => onNavigate('IRREGULAR_VERBS')} className="flex items-center gap-2 px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors"><FileClock size={16} /><span className="hidden sm:inline">Irregular Verbs</span></button> }
       pagination={{ page, totalPages: Math.ceil(filteredResources.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredResources.length }}
       actions={
@@ -235,7 +245,18 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     </ResourcePage>
     <ConfirmationModal isOpen={!!lessonToDelete} title="Delete Lesson?" message="Confirm delete?" confirmText="Yes, Delete" isProcessing={false} onConfirm={handleDeleteLesson} onClose={() => setLessonToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
     <ConfirmationModal isOpen={!!comparisonToDelete} title="Delete Comparison?" message="Confirm delete?" confirmText="Yes, Delete" isProcessing={false} onConfirm={handleDeleteComparison} onClose={() => setComparisonToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
-    <UniversalAiModal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} type="GENERATE_LESSON" title="AI Lesson Creator" description="Design a custom lesson instantly." initialData={user.lessonPreferences} onGeneratePrompt={getGenerateLessonPrompt} onJsonReceived={handleGenerateLesson} actionLabel="Create Lesson" closeOnSuccess={true} />
+    <UniversalAiModal 
+        isOpen={isAiModalOpen} 
+        onClose={() => setIsAiModalOpen(false)} 
+        type="GENERATE_LESSON" 
+        title="AI Lesson Creator" 
+        description="Design a custom lesson instantly." 
+        initialData={user.lessonPreferences} 
+        onGeneratePrompt={handleGeneratePromptWithCoach} 
+        onJsonReceived={handleGenerateLesson} 
+        actionLabel="Create Lesson" 
+        closeOnSuccess={true} 
+    />
     </>
   );
 };

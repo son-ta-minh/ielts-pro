@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { User as UserIcon, Globe, Save } from 'lucide-react';
+import { User as UserIcon, Globe, Save, Users } from 'lucide-react';
 
 const LANGUAGES = [
     'Vietnamese', 'Spanish', 'Chinese (Simplified)', 'Chinese (Traditional)', 
@@ -26,7 +26,7 @@ interface ProfileSettingsProps {
         target: string;
         nativeLanguage: string;
         lessonLanguage?: string;
-        lessonAudience?: string;
+        lessonAudience?: 'Kid' | 'Adult';
     };
     onProfileChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
     onSaveProfile: () => void;
@@ -87,16 +87,19 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profileData, o
                     </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-neutral-100">
-                     <div className="md:col-span-2">
+                     <div>
                         <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 mb-2 flex items-center gap-2"><Globe size={12} /> Content Language</label>
                         <select name="lessonLanguage" value={profileData.lessonLanguage} onChange={onProfileChange} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium appearance-none">
                             <option value="English">English</option>
                             <option value="Vietnamese">Vietnamese</option>
                         </select>
                     </div>
-                     <div className="md:col-span-2">
-                        <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 mb-2 flex items-center gap-2">Target Audience</label>
-                        <input name="lessonAudience" value={profileData.lessonAudience} onChange={onProfileChange} placeholder="e.g., IELTS Beginners" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium" />
+                     <div>
+                        <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 mb-2 flex items-center gap-2"><Users size={12} /> Target Audience</label>
+                        <select name="lessonAudience" value={profileData.lessonAudience} onChange={onProfileChange} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium appearance-none">
+                            <option value="Kid">Kid</option>
+                            <option value="Adult">Adult</option>
+                        </select>
                     </div>
                 </div>
             </div>

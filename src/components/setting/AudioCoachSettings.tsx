@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Save, ChevronDown, CheckCircle2, AlertCircle, Hash, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Globe } from 'lucide-react';
+import { Save, ChevronDown, CheckCircle2, AlertCircle, Hash, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Globe, Volume2, Mic } from 'lucide-react';
 import { SystemConfig, CoachConfig, saveConfig } from '../../app/settingsManager';
 import { fetchServerVoices, ServerVoicesResponse, speak, VoiceDefinition } from '../../utils/audio';
 
@@ -11,6 +11,8 @@ interface AudioCoachSettingsProps {
 }
 
 const AVATAR_OPTIONS = [
+    { id: 'woman_teacher', label: 'Ms. Learn', url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/People/Woman%20Teacher.png', bg: 'bg-indigo-50' },
+    { id: 'man_teacher', label: 'Mr. Teach', url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/People/Man%20Teacher.png', bg: 'bg-blue-50' },
     { id: 'fox', label: 'Vix (Fox)', url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Fox.png', bg: 'bg-orange-100' },
     { id: 'koala', label: 'Nami (Koala)', url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Koala.png', bg: 'bg-teal-100' },
     { id: 'pet', label: 'Mochi (Cat)', url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Cat%20Face.png', bg: 'bg-pink-100' },
@@ -25,7 +27,7 @@ const VoiceSelector: React.FC<{
     currentVoice: string;
     serverData: ServerVoicesResponse | null;
     onChange: (voiceName: string, accentCode: string) => void;
-    onPreview: () => void;
+    onPreview: (voice: string, accent: string) => void;
 }> = ({ label, langCode, currentVoice, serverData, onChange, onPreview }) => {
     if (!serverData) {
         return (
@@ -37,29 +39,31 @@ const VoiceSelector: React.FC<{
             </div>
         );
     }
-
-    const filteredVoices = serverData.voices.filter(v => v.language === langCode);
-    if (filteredVoices.length === 0) return null;
-
-    // Group by accent for UI categorization
+    
+    const filteredVoices = serverData.voices.filter(v => 
+        v.language === langCode || v.language.toLowerCase().startsWith(langCode)
+    );
+    
     const accentsMap = filteredVoices.reduce((acc, voice) => {
-        if (!acc[voice.accent]) acc[voice.accent] = [];
-        acc[voice.accent].push(voice);
+        const accentKey = voice.accent || 'Standard';
+        if (!acc[accentKey]) acc[accentKey] = [];
+        acc[accentKey].push(voice);
         return acc;
     }, {} as Record<string, VoiceDefinition[]>);
 
     const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const voiceName = e.target.value;
         if (!voiceName) {
-            onChange('', langCode === 'en' ? 'en_US' : 'vi_VN');
+            const defaultAccent = langCode === 'en' ? 'en_US' : 'vi_VN';
+            onChange('', defaultAccent);
+            onPreview('', defaultAccent); 
             return;
         }
 
         const foundVoice = filteredVoices.find(v => v.name === voiceName);
         if (foundVoice) {
             onChange(foundVoice.name, foundVoice.accent);
-            // Automatically trigger preview on change
-            setTimeout(onPreview, 100);
+            setTimeout(() => onPreview(foundVoice.name, foundVoice.accent), 100);
         }
     };
 
@@ -67,11 +71,13 @@ const VoiceSelector: React.FC<{
         <div className="space-y-1">
             <div className="flex justify-between items-center px-1">
                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{label}</label>
-                {currentVoice && (
-                    <button onClick={onPreview} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:underline">
-                        <Play size={10} fill="currentColor"/> Test
-                    </button>
-                )}
+                <button 
+                    type="button"
+                    onClick={() => onPreview(currentVoice, langCode === 'en' ? 'en_US' : 'vi_VN')} 
+                    className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:underline"
+                >
+                    <Play size={10} fill="currentColor"/> Test
+                </button>
             </div>
             <div className="relative">
                 <select 
@@ -81,7 +87,7 @@ const VoiceSelector: React.FC<{
                 >
                     <option value="">Default OS</option>
                     {(Object.entries(accentsMap) as [string, VoiceDefinition[]][]).map(([accentCode, voices]) => (
-                        <optgroup key={accentCode} label={accentCode.replace('_', ' ').toUpperCase()}>
+                        <optgroup key={accentCode} label={accentCode.replace(/[_]/g, ' ').toUpperCase()}>
                             {voices.map(v => (
                                 <option key={v.name} value={v.name}>
                                     {v.name}
@@ -104,9 +110,9 @@ const CoachCard: React.FC<{
     isActive: boolean;
 }> = ({ type, config, serverData, onUpdate, isActive }) => {
     
-    const handleVoicePreview = (lang: 'en' | 'vi') => {
-        const text = lang === 'en' ? "This is a sample of my new voice." : "Đây là mẫu giọng nói mới của mình.";
-        speak(text);
+    const handleVoicePreview = (lang: 'en' | 'vi', voice?: string, accent?: string) => {
+        const text = lang === 'en' ? "This is a sample of my voice." : "Đây là mẫu giọng nói của mình.";
+        speak(text, true, lang, voice, accent);
     };
 
     return (
@@ -122,7 +128,6 @@ const CoachCard: React.FC<{
             </div>
 
             <div className="space-y-4">
-                {/* Name Input */}
                 <div className="space-y-1">
                     <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Display Name</label>
                     <input 
@@ -134,7 +139,6 @@ const CoachCard: React.FC<{
                     />
                 </div>
 
-                {/* Avatar Selection */}
                 <div className="space-y-2">
                     <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Avatar Identity</label>
                     <div className="flex flex-wrap gap-2">
@@ -150,17 +154,18 @@ const CoachCard: React.FC<{
                     </div>
                 </div>
 
-                {/* Persona Selection */}
                 <div className="space-y-2">
                     <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Persona</label>
                     <div className="grid grid-cols-2 gap-2">
                         <button 
+                            type="button"
                             onClick={() => onUpdate({ persona: 'friendly_elementary' })}
                             className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all ${config.persona === 'friendly_elementary' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-white border-neutral-100 text-neutral-400'}`}
                         >
                             <School size={14}/> <span>Teacher</span>
                         </button>
                         <button 
+                            type="button"
                             onClick={() => onUpdate({ persona: 'professional_professor' })}
                             className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all ${config.persona === 'professional_professor' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-400'}`}
                         >
@@ -175,7 +180,16 @@ const CoachCard: React.FC<{
                     currentVoice={config.enVoice} 
                     serverData={serverData} 
                     onChange={(v, a) => onUpdate({ enVoice: v, enAccent: a })} 
-                    onPreview={() => handleVoicePreview('en')}
+                    onPreview={(v, a) => handleVoicePreview('en', v, a)}
+                />
+
+                <VoiceSelector 
+                    label="Vietnamese Voice" 
+                    langCode="vi" 
+                    currentVoice={config.viVoice} 
+                    serverData={serverData} 
+                    onChange={(v, a) => onUpdate({ viVoice: v, viAccent: a })} 
+                    onPreview={(v, a) => handleVoicePreview('vi', v, a)}
                 />
             </div>
         </div>
@@ -186,7 +200,8 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
     const [serverData, setServerData] = useState<ServerVoicesResponse | null>(null);
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
 
-    const checkServer = async () => {
+    const checkServers = async () => {
+        // Check TTS Server
         setServerStatus('checking');
         const data = await fetchServerVoices(config.audioCoach.serverPort);
         if (data) {
@@ -199,13 +214,15 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
     };
 
     useEffect(() => {
-        checkServer();
+        checkServers();
     }, [config.audioCoach.serverPort]);
 
     const handleActiveCoachToggle = (type: 'male' | 'female') => {
         onConfigChange('audioCoach', 'activeCoach', type);
-        const coachName = config.audioCoach.coaches[type].name;
-        setTimeout(() => speak(`I am now your active coach. Call me ${coachName}.`), 100);
+        const activeCoach = config.audioCoach.coaches[type];
+        setTimeout(() => {
+            speak(`I am now your active coach. Call me ${activeCoach.name}.`, true, 'en', activeCoach.enVoice, activeCoach.enAccent);
+        }, 100);
     };
 
     const handleUpdateCoach = (type: 'male' | 'female', updates: Partial<CoachConfig>) => {
@@ -214,13 +231,17 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
         onConfigChange('audioCoach', 'coaches', currentCoaches);
     };
 
-    const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePortChange = (field: 'serverPort', e: React.ChangeEvent<HTMLInputElement>) => {
         const port = parseInt(e.target.value, 10);
-        if (!isNaN(port)) onConfigChange('audioCoach', 'serverPort', port);
+        if (!isNaN(port)) onConfigChange('audioCoach', field, port);
     };
 
     const handleLanguageChange = (lang: 'vi' | 'en') => {
         onConfigChange('interface', 'studyBuddyLanguage', lang);
+    };
+
+    const handleBuddyVoiceToggle = (enabled: boolean) => {
+        onConfigChange('interface', 'buddyVoiceEnabled', enabled);
     };
 
     return (
@@ -237,44 +258,50 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
             </div>
 
             <div className="p-5 bg-neutral-50 rounded-2xl border border-neutral-100 flex flex-col md:flex-row items-center gap-6">
-                <div className="flex-1 space-y-1">
+                <div className="flex-1 space-y-3">
                     <div className="flex items-center gap-2">
                         {serverStatus === 'connected' ? <CheckCircle2 size={16} className="text-emerald-500" /> : <AlertCircle size={16} className="text-red-500" />}
-                        <span className="text-xs font-black uppercase tracking-wider text-neutral-600">Local TTS Engine</span>
+                        <span className="text-xs font-black uppercase tracking-wider text-neutral-600">Local TTS Server</span>
+                        <div className="relative">
+                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-300" size={14} />
+                            <input type="number" value={config.audioCoach.serverPort} onChange={(e) => handlePortChange('serverPort', e)} className="w-20 pl-8 pr-2 py-1.5 bg-white border border-neutral-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none" placeholder="3000" />
+                        </div>
                     </div>
-                    <p className="text-[10px] text-neutral-400 leading-relaxed font-medium">Connects to macOS high-quality voices.</p>
                 </div>
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    <div className="relative">
-                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-300" size={14} />
-                        <input type="number" value={config.audioCoach.serverPort} onChange={handlePortChange} className="w-24 pl-8 pr-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none" placeholder="3000" />
-                    </div>
-                    <button onClick={checkServer} className="p-2.5 bg-white border border-neutral-200 text-neutral-500 rounded-xl hover:bg-neutral-50 transition-all"><RefreshCw size={16} /></button>
-                </div>
+                <button onClick={checkServers} className="p-2.5 bg-white border border-neutral-200 text-neutral-500 rounded-xl hover:bg-neutral-50 transition-all shadow-sm"><RefreshCw size={16} /></button>
             </div>
 
-            {/* Coach Language Toggle */}
             <div className="space-y-4 pt-4 border-t border-neutral-100">
-                <div className="flex items-center gap-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">
-                    <Globe size={12}/> Coach Primary Language
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">
+                            <Volume2 size={12}/> Dialogue Voice
+                        </div>
+                        <label onClick={() => handleBuddyVoiceToggle(!config.interface.buddyVoiceEnabled)} className="flex items-center justify-between px-4 py-3 bg-neutral-100 border border-neutral-200 rounded-xl cursor-pointer hover:bg-neutral-200 transition-all">
+                            <div className="flex flex-col">
+                                <span className="text-xs font-black text-neutral-700">Enable Dialogue</span>
+                                <span className="text-[10px] text-neutral-500 font-medium">Read advice bubbles aloud</span>
+                            </div>
+                            <div className={`w-9 h-5 rounded-full transition-all flex items-center p-1 ${config.interface.buddyVoiceEnabled ? 'bg-neutral-900' : 'bg-neutral-300'}`}>
+                                <div className={`w-3.5 h-3.5 bg-white rounded-full shadow-sm transition-transform ${config.interface.buddyVoiceEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                            </div>
+                        </label>
+                    </div>
+
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">
+                            <Mic size={12}/> STT Engine
+                        </div>
+                        <div className="px-4 py-3 bg-neutral-100 border border-neutral-200 rounded-xl flex items-center justify-between">
+                            <span className="text-xs font-black text-neutral-700 uppercase tracking-widest">
+                                Browser (Native)
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border bg-emerald-50 text-emerald-700 border-emerald-200`}>
+                                Connected
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <div className="flex bg-neutral-100 p-1 rounded-xl w-full max-w-xs border border-neutral-200">
-                    <button 
-                        onClick={() => handleLanguageChange('vi')}
-                        className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${config.interface.studyBuddyLanguage === 'vi' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
-                    >
-                        Tiếng Việt
-                    </button>
-                    <button 
-                        onClick={() => handleLanguageChange('en')}
-                        className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${config.interface.studyBuddyLanguage === 'en' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}
-                    >
-                        English
-                    </button>
-                </div>
-                <p className="text-[10px] text-neutral-400 px-1 font-medium italic">
-                    Determines the language your coach uses for advice and feedback.
-                </p>
             </div>
 
             <div className="space-y-4 pt-4 border-t border-neutral-100">
@@ -307,7 +334,7 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
             <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
                 <Info size={16} className="text-indigo-500 mt-0.5 shrink-0" />
                 <p className="text-[10px] text-indigo-700 leading-relaxed font-medium">
-                    Coaches automatically switch between your configured <b>English</b> and <b>Vietnamese</b> (System Default) voices based on the content they speak.
+                    Pronunciation practice uses your browser's built-in recognition engine for maximum compatibility and privacy.
                 </p>
             </div>
         </section>

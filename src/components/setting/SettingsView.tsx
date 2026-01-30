@@ -4,7 +4,6 @@ import { RotateCw, ShieldAlert, Wrench } from 'lucide-react';
 import { User as UserType, VocabularyItem, DataScope } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { resetProgress } from '../../utils/srs';
-// --- FIX: Removed unused setServerMode import ---
 import { getAvailableVoices, speak } from '../../utils/audio';
 import { processJsonImport, generateJsonExport } from '../../utils/dataHandler';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
@@ -50,7 +49,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
 
   const [isNormalizeModalOpen, setIsNormalizeModalOpen] = useState(false);
   const [isNormalizing, setIsNormalizing] = useState(false);
-  const [normalizeOptions, setNormalizeOptions] = useState({ removeJunkTags: true, removeMultiWordData: true });
+  const [normalizeOptions, setNormalizeOptions] = useState({ removeJunkTags: true, removeMultiWordData: true, cleanHeadwords: true });
 
 
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -64,9 +63,9 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
     role: user.role || '',
     currentLevel: user.currentLevel || '',
     target: user.target || '',
-    nativeLanguage: user.nativeLanguage || 'Vietnamese',
+    nativeLanguage: user.nativeLanguage || 'English',
     lessonLanguage: user.lessonPreferences?.language || 'English',
-    lessonAudience: user.lessonPreferences?.targetAudience || '',
+    lessonAudience: user.lessonPreferences?.targetAudience || 'Adult', // DEFAULT: Adult
   });
   
   useEffect(() => {
@@ -75,9 +74,9 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         role: user.role || '', 
         currentLevel: user.currentLevel || '', 
         target: user.target || '', 
-        nativeLanguage: user.nativeLanguage || 'Vietnamese',
+        nativeLanguage: user.nativeLanguage || 'English',
         lessonLanguage: user.lessonPreferences?.language || 'English',
-        lessonAudience: user.lessonPreferences?.targetAudience || '',
+        lessonAudience: user.lessonPreferences?.targetAudience || 'Adult',
     });
   }, [user]);
 
@@ -146,7 +145,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profileData.name.trim() || user.name}`,
         lessonPreferences: {
             language: profileData.lessonLanguage as 'English' | 'Vietnamese',
-            targetAudience: profileData.lessonAudience.trim(),
+            targetAudience: profileData.lessonAudience.trim() as 'Kid' | 'Adult',
             // Persona is now pulled from the active coach in AudioCoachSettings
             tone: config.audioCoach.coaches[config.audioCoach.activeCoach].persona
         }
@@ -241,6 +240,14 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
                         updatedWord.collocationsArray = undefined;
                         changed = true;
                     }
+                }
+            }
+            
+            // Action 3: Clean Headwords (remove quotes)
+            if (normalizeOptions.cleanHeadwords) {
+                if (updatedWord.word && updatedWord.word.includes('"')) {
+                    updatedWord.word = updatedWord.word.replace(/"/g, '').trim();
+                    changed = true;
                 }
             }
 
@@ -366,6 +373,12 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
                     label="Clean multi-word items (phrases, idioms)" 
                     checked={normalizeOptions.removeMultiWordData} 
                     onChange={c => setNormalizeOptions(o => ({...o, removeMultiWordData: c}))} 
+                />
+                <Checkbox 
+                    id="norm-quotes" 
+                    label="Clean headwords (remove quotes)" 
+                    checked={normalizeOptions.cleanHeadwords} 
+                    onChange={c => setNormalizeOptions(o => ({...o, cleanHeadwords: c}))} 
                 />
             </div>
           }

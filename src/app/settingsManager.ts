@@ -18,7 +18,6 @@ export interface SrsConfig {
   forgotInterval: number;
 }
 
-// Added AudioConfig to match usage in components like ViewWordModal and AiAudioSettings
 export interface AudioConfig {
   mode: 'system' | 'ai' | 'server';
   serverPort: number;
@@ -27,7 +26,7 @@ export interface AudioConfig {
 }
 
 export interface CoachConfig {
-  name: string; // Added custom name field
+  name: string;
   avatar: string;
   persona: 'friendly_elementary' | 'professional_professor';
   enVoice: string;
@@ -51,10 +50,11 @@ export interface DailyGoalConfig {
 }
 
 export interface InterfaceConfig {
-  studyBuddyLanguage: 'vi' | 'en'; // Global preference for UI labels
-  studyBuddyEnabled: boolean; // Added to fix build error
-  studyBuddyAvatar: string; // Added to fix build error
+  studyBuddyLanguage: 'vi' | 'en'; 
+  buddyVoiceEnabled: boolean; 
+  studyBuddyAvatar: string;
   junkTags: string[];
+  rightClickCommandEnabled: boolean; // Mới: Cho phép chuột phải hiện command box
 }
 
 export interface TestConfig {
@@ -69,7 +69,6 @@ export interface LessonConfig {
 export interface SystemConfig {
   ai: AiConfig;
   srs: SrsConfig;
-  // Added missing audio section to match expected structure in the app
   audio: AudioConfig;
   audioCoach: AudioCoachConfig;
   dailyGoals: DailyGoalConfig;
@@ -88,7 +87,6 @@ export const DEFAULT_SRS_CONFIG: SrsConfig = {
   forgotInterval: 1,
 };
 
-// Added default configuration for the audio section
 export const DEFAULT_AUDIO_CONFIG: AudioConfig = {
   mode: 'system',
   serverPort: 3000,
@@ -122,15 +120,14 @@ export const DEFAULT_CONFIG: SystemConfig = {
     modelForTts: 'gemini-2.5-flash-preview-tts',
   },
   srs: DEFAULT_SRS_CONFIG,
-  // Included audio section in DEFAULT_CONFIG
   audio: DEFAULT_AUDIO_CONFIG,
   audioCoach: {
     activeCoach: 'female',
     serverPort: 3000,
     coaches: {
       male: {
-        name: 'Victor', // Default name
-        avatar: 'fox',
+        name: 'Victor',
+        avatar: 'man_teacher',
         persona: 'professional_professor',
         enVoice: '',
         enAccent: 'en_US',
@@ -138,8 +135,8 @@ export const DEFAULT_CONFIG: SystemConfig = {
         viAccent: 'vi_VN'
       },
       female: {
-        name: 'Sofia', // Default name
-        avatar: 'koala',
+        name: 'Sofia',
+        avatar: 'woman_teacher',
         persona: 'friendly_elementary',
         enVoice: '',
         enAccent: 'en_US',
@@ -151,9 +148,10 @@ export const DEFAULT_CONFIG: SystemConfig = {
   dailyGoals: DEFAULT_DAILY_GOAL_CONFIG,
   interface: {
     studyBuddyLanguage: 'vi',
-    studyBuddyEnabled: true, // Set default
-    studyBuddyAvatar: 'fox', // Set default
+    buddyVoiceEnabled: true,
+    studyBuddyAvatar: 'woman_teacher',
     junkTags: ['ielts', 'general', 'common'],
+    rightClickCommandEnabled: true,
   },
   test: DEFAULT_TEST_CONFIG,
   lesson: DEFAULT_LESSON_CONFIG

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, ListeningItem, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
@@ -285,7 +286,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
     <ResourcePage
       title="Listening Library"
       subtitle="Practice listening reflexes and capture difficult phrases."
-      icon={<Ear size={28} className="text-red-500" />}
+      icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Headphone.png" className="w-8 h-8 object-contain" alt="Listening" />}
       config={{}}
       isLoading={loading}
       isEmpty={filteredItems.length === 0}

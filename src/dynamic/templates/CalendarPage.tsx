@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, CalendarEvent } from '../../app/types';
 import * as db from '../../app/db';
@@ -218,9 +219,12 @@ export const CalendarPage: React.FC<CalendarPageProps> = ({ user }) => {
     return (
         <div className="space-y-6">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 className="text-3xl font-black text-neutral-900 tracking-tight flex items-center gap-3"><Calendar size={28}/> Study Calendar</h2>
-                    <p className="text-neutral-500 mt-1 font-medium">Plan your learning journey.</p>
+                <div className="flex items-center gap-3">
+                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Calendar.png" className="w-10 h-10 object-contain" alt="Calendar" />
+                    <div>
+                        <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Study Calendar</h2>
+                        <p className="text-neutral-500 mt-1 font-medium">Plan your learning journey.</p>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={() => setCurrentDate(new Date())} className="px-4 py-2 bg-white border border-neutral-200 text-neutral-600 rounded-lg font-bold text-xs">Today</button>

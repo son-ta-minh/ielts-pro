@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User } from '../../app/types';
 import { getAllUsers, saveUser } from '../../app/db';
@@ -17,7 +18,8 @@ const AuthView: React.FC<Props> = ({ onLogin }) => {
   const [newRole, setNewRole] = useState('');
   const [newLevel, setNewLevel] = useState('');
   const [newTarget, setNewTarget] = useState('');
-  const [newLanguage, setNewLanguage] = useState('Vietnamese');
+  const [newLanguage, setNewLanguage] = useState('English'); // DEFAULT: English
+  const [newAudience, setNewAudience] = useState<'Kid' | 'Adult'>('Adult'); // DEFAULT: Adult
   const [selectedPersona, setSelectedPersona] = useState<string>('learner');
   
   const [loading, setLoading] = useState(true);
@@ -71,6 +73,7 @@ const AuthView: React.FC<Props> = ({ onLogin }) => {
         setNewRole(persona.role);
         setNewLevel(persona.level);
         setNewTarget(persona.target);
+        setNewAudience(personaId === 'student' ? 'Kid' : 'Adult');
     }
   };
 
@@ -97,10 +100,14 @@ const AuthView: React.FC<Props> = ({ onLogin }) => {
         keys: 1,
         keyFragments: 0,
         badges: [],
-        // Fix: Add missing properties to conform to AdventureProgress type.
         unlockedChapterIds: ADVENTURE_CHAPTERS.map(c => c.id),
         completedSegmentIds: [],
         segmentStars: {},
+      },
+      lessonPreferences: {
+          language: newLanguage as 'English' | 'Vietnamese',
+          targetAudience: newAudience,
+          tone: newAudience === 'Kid' ? 'friendly_elementary' : 'professional_professor'
       }
     };
 
@@ -125,6 +132,8 @@ const AuthView: React.FC<Props> = ({ onLogin }) => {
       setNewTarget={setNewTarget}
       newLanguage={newLanguage}
       setNewLanguage={setNewLanguage}
+      newAudience={newAudience}
+      setNewAudience={setNewAudience}
       selectedPersona={selectedPersona}
       handleSelectKey={handleSelectKey}
       handlePersonaSelect={handlePersonaSelect}

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Composition, VocabularyItem, WritingTopic, WritingLog, CompositionLabel, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
@@ -309,7 +310,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
         <ResourcePage
             title="Writing Library"
             subtitle="Practice writing and track vocabulary usage."
-            icon={<PenLine size={28} className="text-pink-600" />}
+            icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png" className="w-8 h-8 object-contain" alt="Writing" />}
             config={{}}
             activeFilters={{}}
             onFilterChange={() => {}}

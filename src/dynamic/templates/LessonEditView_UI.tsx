@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { ArrowLeft, Save, Loader2, Eye, PenLine, Sparkles, BookOpen, Tag } from 'lucide-react';
 import { parseMarkdown } from '../../utils/markdownParser';
+import { speak } from '../../utils/audio';
 
 interface Props {
   title: string;
@@ -27,6 +29,16 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
     const previewHtml = useMemo(() => {
         return parseMarkdown(content);
     }, [content]);
+
+    // Attach speaker utility to window for HTML event handlers in preview
+    useEffect(() => {
+        (window as any).handleLessonSpeak = (text: string) => {
+            speak(text);
+        };
+        return () => {
+            delete (window as any).handleLessonSpeak;
+        };
+    }, []);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300 pb-20">
@@ -64,6 +76,7 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
                 <input 
                     type="text" 
                     value={path} 
+                    /* Fixed: Replaced 'setEditPath' with 'setPath' */
                     onChange={(e) => setPath(e.target.value)} 
                     placeholder="e.g. /Grammar/Tenses" 
                     className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"

@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality } from '../../app/types';
+import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import WordTable from './WordTable';
@@ -9,6 +9,7 @@ import EditWordModal from './EditWordModal';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter, CompositionFilter, BookFilter } from './WordTable_UI';
 import { stringToWordArray } from '../../utils/text';
 import { TagTreeNode } from '../common/TagBrowser';
+import { getStoredJSON } from '../../utils/storage';
 
 interface Props {
   user: User;
@@ -20,16 +21,23 @@ interface Props {
   onInitialFilterApplied?: () => void;
   forceExpandAdd?: boolean;
   onExpandAddConsumed?: () => void;
+  onNavigate?: (view: AppView) => void;
 }
 
-const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed }) => {
+const LIBRARY_FILTERS_KEY = 'vocab_pro_library_filters_v2';
+
+const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed, onNavigate }) => {
   const [words, setWords] = useState<VocabularyItem[]>([]);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  
+  // Read storage synchronously for initial state
+  const savedState = useMemo(() => getStoredJSON<any>(LIBRARY_FILTERS_KEY, {}), []);
+
+  const [page, setPage] = useState(savedState.page || 0);
+  const [pageSize, setPageSize] = useState(savedState.pageSize || 25);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   
-  const [currentQuery, setCurrentQuery] = useState('');
+  const [currentQuery, setCurrentQuery] = useState(savedState.query || '');
   const [currentFilters, setCurrentFilters] = useState<{ types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, source: SourceFilter, composition: CompositionFilter, book: BookFilter }>({ types: new Set(['all']), refined: 'all', status: 'all', register: 'all', source: 'all', composition: 'all', book: 'all' });
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   
@@ -181,7 +189,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
         currentFilters.status, 
         currentFilters.register, 
         currentFilters.source, 
-        selectedTag,
+        selectedTag, 
         currentFilters.composition,
         currentFilters.book
       );
@@ -296,8 +304,23 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
           tagTree={tagTree}
           selectedTag={selectedTag}
           onSelectTag={handleSelectTag}
+          onOpenWordBook={() => onNavigate?.('WORDBOOK')}
       />
-      {viewingWord && <ViewWordModal word={viewingWord} onClose={() => setViewingWord(null)} onNavigateToWord={setViewingWord} onUpdate={onUpdate} onGainXp={async () => 0} onEditRequest={(word) => { setViewingWord(null); setEditingWord(word); }} isViewOnly={false} />}
+      {viewingWord && (
+          <ViewWordModal 
+            word={viewingWord} 
+            onClose={() => setViewingWord(null)} 
+            onNavigateToWord={setViewingWord} 
+            onUpdate={onUpdate} 
+            onGainXp={async () => 0} 
+            isViewOnly={false} 
+            onEditRequest={(word) => { setViewingWord(null); setEditingWord(word); }}
+          />
+      )}
+      {/* 
+        Fix: Use setViewingWord instead of setGlobalViewWord because setGlobalViewWord is not 
+        available in WordList. WordList manages its own viewing state.
+      */}
       {editingWord && <EditWordModal user={user} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setViewingWord(word); }}/>}
     </>
   );

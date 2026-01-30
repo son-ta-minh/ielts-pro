@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User, WordBook, WordBookItem, VocabularyItem, FocusColor, WordQuality, Unit } from '../../app/types';
 import * as db from '../../app/db';
@@ -890,9 +891,12 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
     return (
         <div className="space-y-8">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 className="text-3xl font-black text-neutral-900 tracking-tight flex items-center gap-3"><BookMarked size={28}/> Word Books</h2>
-                    <p className="text-neutral-500 mt-1 font-medium">Visual vocabulary collections by topic.</p>
+                <div className="flex items-center gap-3">
+                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Bookmark%20Tabs.png" className="w-10 h-10 object-contain" alt="Word Books" />
+                    <div>
+                        <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Word Books</h2>
+                        <p className="text-neutral-500 mt-1 font-medium">Visual vocabulary collections by topic.</p>
+                    </div>
                 </div>
                  <button onClick={handleAddShelf} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm"><FolderPlus size={14}/> Add Shelf</button>
             </header>

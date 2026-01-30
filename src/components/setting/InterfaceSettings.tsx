@@ -1,16 +1,19 @@
 
-import React, { useState, useEffect } from 'react';
-import { LayoutTemplate, Table, Eye, Bot } from 'lucide-react';
+import React, { useState } from 'react';
+import { Table, Eye } from 'lucide-react';
 import { DEFAULT_VISIBILITY } from '../word_lib/WordTable_UI';
-import { getConfig, saveConfig, SystemConfig } from '../../app/settingsManager';
+import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 
 interface InterfaceSettingsProps {
 }
 
-const ToggleSwitch = ({ checked, onChange, label, subLabel }: { checked: boolean; onChange: (c: boolean) => void; label: string; subLabel?: string }) => (
+const ToggleSwitch = ({ checked, onChange, label, subLabel, icon: Icon }: { checked: boolean; onChange: (c: boolean) => void; label: string; subLabel?: string; icon?: React.ElementType }) => (
     <label onClick={(e) => { e.preventDefault(); onChange(!checked); }} className="flex items-center justify-between px-4 py-3 cursor-pointer group hover:bg-neutral-50 rounded-xl transition-all border border-transparent hover:border-neutral-100">
         <div className="flex flex-col">
-            <span className="text-xs font-bold text-neutral-700 group-hover:text-neutral-900">{label}</span>
+            <div className="flex items-center gap-2">
+                {Icon && <Icon size={14} className={checked ? "text-neutral-900" : "text-neutral-400"} />}
+                <span className="text-xs font-bold text-neutral-700 group-hover:text-neutral-900">{label}</span>
+            </div>
             {subLabel && <span className="text-[10px] text-neutral-400 font-medium">{subLabel}</span>}
         </div>
         <div className={`w-9 h-5 rounded-full transition-all flex items-center p-1 ${checked ? 'bg-neutral-900' : 'bg-neutral-200'}`}>
@@ -20,14 +23,6 @@ const ToggleSwitch = ({ checked, onChange, label, subLabel }: { checked: boolean
 );
 
 export const InterfaceSettings: React.FC<InterfaceSettingsProps> = () => {
-    const [config, setConfig] = useState<SystemConfig>(getConfig());
-
-    useEffect(() => {
-        const handleConfigUpdate = () => setConfig(getConfig());
-        window.addEventListener('config-updated', handleConfigUpdate);
-        return () => window.removeEventListener('config-updated', handleConfigUpdate);
-    }, []);
-
     // Library Table Defaults
     const [libVis, setLibVis] = useState(() => {
         try {
@@ -58,62 +53,15 @@ export const InterfaceSettings: React.FC<InterfaceSettingsProps> = () => {
         localStorage.setItem('ielts_pro_word_view_settings', JSON.stringify(newVal));
     };
 
-    const handleLanguageChange = (lang: 'vi' | 'en') => {
-        const newConfig: SystemConfig = {
-            ...config,
-            interface: { ...config.interface, studyBuddyLanguage: lang }
-        };
-        saveConfig(newConfig);
-    };
-
-    const handleBuddyToggle = (enabled: boolean) => {
-        const newConfig: SystemConfig = {
-            ...config,
-            interface: { ...config.interface, studyBuddyEnabled: enabled }
-        };
-        saveConfig(newConfig);
-    };
-
     return (
         <section className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col space-y-8 animate-in fade-in duration-300">
             
             {/* Header */}
             <div className="flex items-center space-x-4">
-                <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl"><LayoutTemplate size={24} /></div>
+                <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl"><Eye size={24} /></div>
                 <div>
                     <h3 className="text-xl font-black text-neutral-900">Interface Defaults</h3>
-                    <p className="text-xs text-neutral-400">Customize what you see across the app.</p>
-                </div>
-            </div>
-
-            {/* Study Buddy Configuration */}
-            <div className="space-y-4">
-                <div className="flex items-center gap-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1"><Bot size={12}/> Study Buddy Configuration</div>
-                <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-100 space-y-4">
-                    <ToggleSwitch 
-                        checked={config.interface.studyBuddyEnabled} 
-                        onChange={handleBuddyToggle} 
-                        label="Enable Study Buddy" 
-                        subLabel="Shows helpful tips and motivation"
-                    />
-                    
-                    <div className="pt-2">
-                        <label className="block text-xs font-bold text-neutral-500 mb-2 px-1">Language</label>
-                        <div className="bg-white p-1 rounded-xl flex w-full md:w-64 border border-neutral-200">
-                            <button 
-                                onClick={() => handleLanguageChange('vi')}
-                                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${config.interface.studyBuddyLanguage === 'vi' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
-                            >
-                                Tiếng Việt
-                            </button>
-                            <button 
-                                onClick={() => handleLanguageChange('en')}
-                                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${config.interface.studyBuddyLanguage === 'en' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
-                            >
-                                English
-                            </button>
-                        </div>
-                    </div>
+                    <p className="text-xs text-neutral-400">Customize what you see across the app library and cards.</p>
                 </div>
             </div>
 

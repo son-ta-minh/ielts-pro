@@ -1,14 +1,18 @@
 
-// A wrapper for the browser's SpeechRecognition API for easier use.
-
+/**
+ * STT Manager using native Browser Web Speech API.
+ */
 export class SpeechRecognitionManager {
-    // FIX: Cannot find name 'SpeechRecognition'. Use 'any' to avoid type errors for browser-specific APIs.
     private recognition: any | null = null;
     private finalTranscript: string = '';
+    private onResultCallback: ((final: string, interim: string) => void) | null = null;
     private onEndCallback: ((finalTranscript: string) => void) | null = null;
 
     constructor() {
-        // FIX: Property 'SpeechRecognition' does not exist on type 'Window'. Cast to 'any' to access vendor-prefixed APIs.
+        this.initBrowserRecognition();
+    }
+
+    private initBrowserRecognition() {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (SpeechRecognition) {
             this.recognition = new SpeechRecognition();
@@ -16,56 +20,59 @@ export class SpeechRecognitionManager {
             this.recognition.interimResults = true;
             this.recognition.lang = 'en-US';
 
-            // FIX: Cannot find name 'SpeechRecognitionEvent'. Use 'any' for the event parameter.
             this.recognition.onresult = (event: any) => {
                 let interimTranscript = '';
-                let finalTranscriptAccumulator = '';
+                let currentFinal = '';
 
-                // Iterate through ALL results to build the full transcript state.
-                // Starting from 0 ensures we don't lose previous phrases when a new one is finalized.
-                for (let i = 0; i < event.results.length; ++i) {
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
-                        finalTranscriptAccumulator += event.results[i][0].transcript;
+                        currentFinal += event.results[i][0].transcript;
                     } else {
                         interimTranscript += event.results[i][0].transcript;
                     }
                 }
                 
-                this.finalTranscript = finalTranscriptAccumulator;
-                
+                this.finalTranscript += currentFinal;
                 if (this.onResultCallback) {
                     this.onResultCallback(this.finalTranscript, interimTranscript);
                 }
             };
             
             this.recognition.onend = () => {
-                if(this.onEndCallback) {
+                if (this.onEndCallback) {
                     this.onEndCallback(this.finalTranscript);
                 }
             };
-        } else {
-            console.warn("Speech Recognition API not supported in this browser.");
+
+            this.recognition.onerror = (event: any) => {
+                console.error("Speech Recognition Error:", event.error);
+                this.stop();
+            };
         }
     }
 
-    private onResultCallback: ((final: string, interim: string) => void) | null = null;
-
-    start(onResult: (final: string, interim: string) => void, onEnd: (finalTranscript: string) => void) {
-        if (!this.recognition) return;
-        this.finalTranscript = '';
+    async start(onResult: (final: string, interim: string) => void, onEnd: (finalTranscript: string) => void) {
         this.onResultCallback = onResult;
         this.onEndCallback = onEnd;
+        this.finalTranscript = '';
+
+        if (!this.recognition) {
+            console.error("Speech Recognition not supported in this browser.");
+            return;
+        }
+
         try {
             this.recognition.start();
         } catch (e) {
-            console.error("Speech recognition could not start:", e);
+            console.error("Speech Recognition start failed:", e);
         }
     }
 
     stop() {
-        if (!this.recognition) return;
-        this.recognition.stop();
-        this.onResultCallback = null;
-        // onEnd will be called automatically
+        if (this.recognition) {
+            try {
+                this.recognition.stop();
+            } catch (e) {}
+        }
     }
 }

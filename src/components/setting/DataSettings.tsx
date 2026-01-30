@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench, Plus, Trash2, Tag, Check, Circle, Ear, BookMarked } from 'lucide-react';
 import { DataScope } from '../../app/types';
@@ -66,8 +67,8 @@ interface DataSettingsProps {
     onJunkTagsChange: (tags: string[]) => void;
 
     // Normalization Options
-    normalizeOptions: { removeJunkTags: boolean; removeMultiWordData: boolean };
-    onNormalizeOptionsChange: (options: { removeJunkTags: boolean; removeMultiWordData: boolean }) => void;
+    normalizeOptions: { removeJunkTags: boolean; removeMultiWordData: boolean; cleanHeadwords: boolean };
+    onNormalizeOptionsChange: (options: { removeJunkTags: boolean; removeMultiWordData: boolean; cleanHeadwords: boolean }) => void;
 }
 
 const ScopeCheckbox = ({ checked, onChange, label, icon: Icon }: { checked: boolean; onChange: () => void; label: string, icon?: React.ElementType }) => (
@@ -109,7 +110,7 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
                     <ScopeCheckbox checked={dataScope.writing} onChange={() => toggleScope('writing')} label="Writing" />
                     <ScopeCheckbox checked={dataScope.speaking} onChange={() => toggleScope('speaking')} label="Speaking" />
                     <ScopeCheckbox checked={dataScope.listening} onChange={() => toggleScope('listening')} label="Listening" />
-                    <ScopeCheckbox checked={dataScope.mimic} onChange={() => toggleScope('mimic')} label="Mimic Practice" icon={Ear} />
+                    <ScopeCheckbox checked={dataScope.mimic} onChange={() => toggleScope('mimic')} label="Pronunciation Queue" icon={Ear} />
                 </div>
             </div>
 

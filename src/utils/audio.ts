@@ -7,9 +7,12 @@
 
 import { getConfig } from '../app/settingsManager';
 
+const MAX_SPEECH_LENGTH = 1500; // Giới hạn an toàn để tránh treo trình duyệt
+
 const getBaseUrl = (portOverride?: number) => {
     const port = portOverride || getConfig().audioCoach.serverPort || 3000;
-    return `http://localhost:${port}`;
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+    return `http://${hostname}:${port}`;
 };
 
 let voices: SpeechSynthesisVoice[] = [];
@@ -84,7 +87,8 @@ export const fetchServerVoices = async (port?: number): Promise<ServerVoicesResp
             signal: AbortSignal.timeout(2000) 
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
+        const data = await res.json();
+        return data;
     } catch (e: any) {
         return null;
     }
@@ -132,9 +136,10 @@ const notifyStatus = (status: boolean) => {
 export const stopSpeaking = () => {
     if (currentServerAudio) {
         currentServerAudio.pause();
+        currentServerAudio.src = "";
         currentServerAudio = null;
     }
-    if (window.speechSynthesis) {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
     }
     notifyStatus(false);
@@ -142,9 +147,9 @@ export const stopSpeaking = () => {
 
 export const getIsSpeaking = () => isSpeaking;
 
-const speakViaServer = async (text: string, language: 'en' | 'vi', accent: string, port?: number) => {
+const speakViaServer = async (text: string, language: 'en' | 'vi', accent: string, voice: string, port?: number) => {
     const url = `${getBaseUrl(port)}/speak`;
-    const payload = { text, language, accent }; 
+    const payload = { text, language, accent, voice }; 
     
     stopSpeaking(); 
     notifyStatus(true);
@@ -192,16 +197,18 @@ const speakViaServer = async (text: string, language: 'en' | 'vi', accent: strin
     }
 };
 
-const speakViaBrowser = (text: string, voiceName?: string) => {
-    if (!window.speechSynthesis) return;
+const speakViaBrowser = (text: string, voiceName?: string, langCode: 'en' | 'vi' = 'en') => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
     stopSpeaking(); 
     notifyStatus(true);
 
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = langCode === 'vi' ? 'vi-VN' : 'en-US';
     
     const availableVoices = window.speechSynthesis.getVoices();
     const selectedVoice = (voiceName && availableVoices.find(v => v.name === voiceName)) || 
+                          availableVoices.find(v => v.lang.startsWith(langCode)) ||
                           availableVoices.find(v => v.name.includes("Samantha"));
 
     if (selectedVoice) {
@@ -219,29 +226,27 @@ const speakViaBrowser = (text: string, voiceName?: string) => {
  * Detects if the text is predominantly Vietnamese.
  */
 export const detectLanguage = (text: string): 'vi' | 'en' => {
-  const viRegex = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+  const viRegex = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỗùúụủũưừứựửữỳýỵỷỹđ]/i;
   return viRegex.test(text) ? 'vi' : 'en';
 };
 
 /**
- * Strips formatting characters, emojis and normalize dashes for natural TTS.
+ * Strips formatting characters, emojis and all symbols EXCEPT letters, numbers, and basic punctuation.
  */
 const cleanTextForTts = (text: string): string => {
+    if (!text) return '';
     return text
+        .substring(0, MAX_SPEECH_LENGTH) // Cắt bớt nếu quá dài
         .replace(/\*+/g, '') // Remove Markdown bold/italic
-        .replace(/[\{\}\[\]<>]/g, '') // Remove highlight/note/bracket wrappers
         .replace(/—/g, ', ') // Convert em-dash to comma for natural pause
-        // Remove emojis and specific symbols
-        .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
+        .replace(/[^a-zA-Z0-9.,!?%'\-\s\u00C0-\u024F\u1E00-\u1EFF]/g, '')
         .trim();
 };
 
 /**
  * Universal speak function.
- * @param text The text to speak
- * @param isDialogue If true, skips browser fallback if server is unreachable
  */
-export const speak = async (text: string, isDialogue = false) => {
+export const speak = async (text: string, isDialogue = false, forcedLang?: 'en' | 'vi', voiceOverride?: string, accentOverride?: string) => {
   if (typeof window === 'undefined' || !text) return;
 
   const cleanedText = cleanTextForTts(text);
@@ -250,20 +255,17 @@ export const speak = async (text: string, isDialogue = false) => {
   const config = getConfig();
   const coachType = config.audioCoach.activeCoach;
   const coach = config.audioCoach.coaches[coachType];
-  const lang = detectLanguage(cleanedText);
   
-  const voiceName = lang === 'vi' ? coach.viVoice : coach.enVoice;
-  const accentCode = lang === 'vi' ? coach.viAccent : coach.enAccent;
+  const lang = forcedLang ? forcedLang : detectLanguage(cleanedText);
+  const voiceName = voiceOverride !== undefined ? voiceOverride : (lang === 'vi' ? coach.viVoice : coach.enVoice);
+  const accentCode = accentOverride !== undefined ? accentOverride : (lang === 'vi' ? coach.viAccent : coach.enAccent);
 
   try {
-      if (voiceName) {
-          await selectServerVoice(voiceName, config.audioCoach.serverPort);
-      }
-      await speakViaServer(cleanedText, lang, accentCode, config.audioCoach.serverPort);
+      await speakViaServer(cleanedText, lang, accentCode, voiceName, config.audioCoach.serverPort);
       return; 
   } catch (e) {
       if (!isDialogue) {
-          speakViaBrowser(cleanedText, voiceName);
+          speakViaBrowser(cleanedText, voiceName, lang);
       }
   }
 };

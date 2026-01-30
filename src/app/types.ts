@@ -1,3 +1,4 @@
+
 export enum ReviewGrade {
   FORGOT = 'FORGOT',
   HARD = 'HARD',
@@ -94,7 +95,7 @@ export interface AdventureProgress {
 
 export interface LessonPreferences {
   language: 'English' | 'Vietnamese';
-  targetAudience: string;
+  targetAudience: 'Kid' | 'Adult';
   tone: 'friendly_elementary' | 'professional_professor';
 }
 

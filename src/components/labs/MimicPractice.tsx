@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as dataStore from '../../app/dataStore';
 import { speak, startRecording, stopRecording } from '../../utils/audio';
@@ -5,14 +6,16 @@ import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { MimicPracticeUI } from './MimicPractice_UI';
 import { VocabularyItem } from '../../app/types';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
-import { analyzePronunciation } from '../../services/geminiService';
+import { analyzeSpeechLocally, AnalysisResult } from '../../utils/speechAnalysis';
 import { useToast } from '../../contexts/ToastContext';
+import ConfirmationModal from '../common/ConfirmationModal';
 
 export interface TargetPhrase {
     id: string; 
     text: string;
     sourceWord: string;
     type: string;
+    lastScore?: number; // Track last practice score (0-100)
 }
 
 interface Props {
@@ -23,51 +26,49 @@ interface Props {
 const MIMIC_PRACTICE_QUEUE_KEY = 'vocab_pro_mimic_practice_queue';
 
 export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
-    // Queue Management
     const [queue, setQueue] = useState<TargetPhrase[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isEmpty, setIsEmpty] = useState(false);
     
-    // Modal state
+    // Pagination State
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(10);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<TargetPhrase | null>(null);
+    
+    // Delete Confirmation State
+    const [itemToDelete, setItemToDelete] = useState<TargetPhrase | null>(null);
 
-    // Initialize from storage, default to false
     const [autoSpeak, setAutoSpeak] = useState(() => getStoredJSON('vocab_pro_mimic_autospeak', false));
     const autoSpeakRef = useRef(autoSpeak);
 
-    // Persist to storage on change
     useEffect(() => {
         setStoredJSON('vocab_pro_mimic_autospeak', autoSpeak);
         autoSpeakRef.current = autoSpeak;
     }, [autoSpeak]);
     
-    // Derived Target
+    // Get the actual item based on current index in the FULL queue
     const target = queue[currentIndex] || null;
 
-    // Interaction State
     const [isRecording, setIsRecording] = useState(false);
     const [isRevealed, setIsRevealed] = useState(false);
-    
-    // Audio & Transcription State
-    const [fullTranscript, setFullTranscript] = useState(''); // Raw accumulator
-    const [transcriptOffset, setTranscriptOffset] = useState(0); // For clearing
-    const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null); // Base64
+    const [fullTranscript, setFullTranscript] = useState('');
+    const [transcriptOffset, setTranscriptOffset] = useState(0);
+    const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null);
     const [userAudioMimeType, setUserAudioMimeType] = useState<string>('audio/webm');
     const [matchStatus, setMatchStatus] = useState<'match' | 'close' | 'miss' | null>(null);
 
-    // Analysis State
+    // Analysis State (Local)
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [aiAnalysis, setAiAnalysis] = useState<{ isCorrect: boolean, score: number, feedbackHtml: string } | null>(null);
+    const [localAnalysis, setLocalAnalysis] = useState<AnalysisResult | null>(null);
 
-    // Audio & Recognition Refs
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const userAudioPlayer = useRef<HTMLAudioElement | null>(null);
     const silenceTimer = useRef<any>(null);
     const stopFnRef = useRef<() => void>(() => {});
     const { showToast } = useToast();
 
-    // Derived Display Transcript
     const displayTranscript = fullTranscript.substring(transcriptOffset).trimStart();
 
     const saveQueue = (newQueue: TargetPhrase[]) => {
@@ -83,6 +84,22 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
         setCurrentIndex(0);
     }, []);
 
+    // Ensure page is valid when queue changes
+    useEffect(() => {
+        const totalPages = Math.ceil(queue.length / pageSize);
+        if (page >= totalPages && totalPages > 0) {
+            setPage(totalPages - 1);
+        }
+    }, [queue.length, pageSize]);
+
+    // Ensure the current playing item is visible on the current page
+    useEffect(() => {
+        const itemPage = Math.floor(currentIndex / pageSize);
+        if (itemPage !== page) {
+            setPage(itemPage);
+        }
+    }, [currentIndex, pageSize]);
+
     const handleAddItem = (newPhraseText: string) => {
         const newItem: TargetPhrase = {
             id: `mimic-${Date.now()}`,
@@ -90,7 +107,10 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
             sourceWord: 'Manual',
             type: 'Phrase'
         };
-        saveQueue([...queue, newItem]);
+        // Add to beginning of queue
+        const newQueue = [newItem, ...queue];
+        saveQueue(newQueue);
+        setCurrentIndex(0); // Jump to new item
         setIsModalOpen(false);
     };
 
@@ -100,79 +120,77 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
         setEditingItem(null);
     };
 
-    const handleDeleteItem = (itemId: string) => {
-        const newQueue = queue.filter(item => item.id !== itemId);
-        if (currentIndex >= newQueue.length && newQueue.length > 0) {
-            setCurrentIndex(newQueue.length - 1);
-        } else if (newQueue.length === 0) {
-            setCurrentIndex(0);
-        }
-        saveQueue(newQueue);
-        showToast("Phrase deleted.", "success");
+    const requestDeleteItem = (item: TargetPhrase) => {
+        setItemToDelete(item);
     };
 
-    const openModalToAdd = () => {
-        setEditingItem(null);
-        setIsModalOpen(true);
+    const confirmDelete = () => {
+        if (!itemToDelete) return;
+        const newQueue = queue.filter(item => item.id !== itemToDelete.id);
+        
+        let newIndex = currentIndex;
+        if (newIndex >= newQueue.length) {
+            newIndex = Math.max(0, newQueue.length - 1);
+        }
+        
+        setCurrentIndex(newIndex);
+        saveQueue(newQueue);
+        setItemToDelete(null);
+        showToast("Phrase removed.", "success");
+    };
+
+    const handleRandomize = () => {
+        if (queue.length < 2) return;
+        const shuffled = [...queue].sort(() => Math.random() - 0.5);
+        saveQueue(shuffled);
+        setCurrentIndex(0);
+        showToast("Queue shuffled!", "success");
     };
     
-    const openModalToEdit = (item: TargetPhrase) => {
-        setEditingItem(item);
-        setIsModalOpen(true);
+    const handlePageSizeChange = (newSize: number) => {
+        setPageSize(newSize);
+        setPage(0); // Reset to first page to avoid index issues
     };
 
+    const openModalToAdd = () => { setEditingItem(null); setIsModalOpen(true); };
+    const openModalToEdit = (item: TargetPhrase) => { setEditingItem(item); setIsModalOpen(true); };
+
     const handleSaveFromModal = (text: string) => {
-        if (editingItem) {
-            handleUpdateItem(editingItem.id, text);
-        } else {
-            handleAddItem(text);
-        }
+        if (editingItem) handleUpdateItem(editingItem.id, text);
+        else handleAddItem(text);
     };
     
     const stopRecordingSession = useCallback(async (abort = false) => {
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
-        
         setIsRecording(false);
         recognitionManager.current.stop();
-        
         try {
             const result = await stopRecording();
             if (!abort && result) {
                 setUserAudioUrl(result.base64);
                 setUserAudioMimeType(result.mimeType);
             }
-        } catch (e) {
-            console.error("Audio capture failed", e);
-        }
+        } catch (e) { console.error("Audio capture failed", e); }
     }, []);
 
-    useEffect(() => {
-        stopFnRef.current = stopRecordingSession;
-    }, [stopRecordingSession]);
+    useEffect(() => { stopFnRef.current = stopRecordingSession; }, [stopRecordingSession]);
 
-    // Reset interaction state when target changes
     useEffect(() => {
-        if (isRecording) {
-            stopRecordingSession(true); 
-        }
+        if (isRecording) stopRecordingSession(true); 
         setIsRevealed(false);
         setFullTranscript('');
         setTranscriptOffset(0);
         setUserAudioUrl(null);
         setMatchStatus(null);
-        setAiAnalysis(null);
+        setLocalAnalysis(null);
         if (userAudioPlayer.current) {
             userAudioPlayer.current.pause();
             userAudioPlayer.current = null;
         }
-
         if (autoSpeakRef.current && target) {
-            const timer = setTimeout(() => {
-                speak(target.text);
-            }, 500);
+            const timer = setTimeout(() => speak(target.text), 500);
             return () => clearTimeout(timer);
         }
-
     }, [target?.id]);
 
     useEffect(() => {
@@ -182,65 +200,33 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
         }
     }, []);
 
-    const normalize = (text: string) => {
-        return text.toLowerCase().replace(/[^a-z0-9]/g, '');
-    };
-
-    const checkMatch = (inputText: string) => {
-        if (!target || !inputText) {
-            setMatchStatus(null);
-            return;
-        }
-        const normTarget = normalize(target.text);
-        const normUser = normalize(inputText);
-        
-        if (normUser === normTarget) {
-            setMatchStatus('match');
-        } else if (normTarget.includes(normUser) && normUser.length > 3) {
-            setMatchStatus('close');
-        } else if (normUser.includes(normTarget)) {
-            setMatchStatus('match'); 
-        } else {
-            setMatchStatus('miss');
-        }
-    };
-
     const handleToggleRecord = async () => {
         if (!target) return;
-
         if (isRecording) {
             await stopRecordingSession();
-            checkMatch(displayTranscript);
+            // Local Analysis is triggered instantly on stop
+            const result = analyzeSpeechLocally(target.text, displayTranscript);
+            setLocalAnalysis(result);
+            
+            // Save the score to the item in the queue
+            const updatedQueue = queue.map((item, idx) => 
+                idx === currentIndex ? { ...item, lastScore: result.score } : item
+            );
+            saveQueue(updatedQueue); // Persist score
+
         } else {
             setFullTranscript('');
             setTranscriptOffset(0);
             setMatchStatus(null);
-            setAiAnalysis(null);
-            
+            setLocalAnalysis(null);
             try {
                 await startRecording();
                 setIsRecording(true);
-                
                 if (silenceTimer.current) clearTimeout(silenceTimer.current);
-                silenceTimer.current = setTimeout(() => stopFnRef.current(), 5000);
-                
-                const currentTargetText = target.text;
-
+                silenceTimer.current = setTimeout(() => stopFnRef.current(), 10000);
                 recognitionManager.current.start(
-                    (final, interim) => {
-                        const full = final + (interim ? (final ? ' ' : '') + interim : '');
-                        setFullTranscript(full);
-
-                        if (silenceTimer.current) clearTimeout(silenceTimer.current);
-                        silenceTimer.current = setTimeout(() => stopFnRef.current(), 5000);
-
-                        if (normalize(full) === normalize(currentTargetText)) {
-                             stopRecordingSession();
-                        }
-                    },
-                    (finalTranscript) => {
-                        setFullTranscript(finalTranscript);
-                    }
+                    (final, interim) => setFullTranscript(final + interim),
+                    (finalTranscript) => setFullTranscript(finalTranscript)
                 );
             } catch (e) {
                 console.error("Failed to start recording", e);
@@ -249,104 +235,102 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
         }
     };
     
-    useEffect(() => {
-        checkMatch(displayTranscript);
-    }, [displayTranscript, target]);
-
     const handleClearTranscript = () => {
         setTranscriptOffset(fullTranscript.length);
         setMatchStatus(null);
-        setAiAnalysis(null);
+        setLocalAnalysis(null);
     };
 
-    const handlePlayTarget = () => {
-        if (target) {
-            speak(target.text);
-        }
-    };
+    const handlePlayTarget = () => target && speak(target.text);
 
     const handlePlayUser = () => {
         if (userAudioUrl) {
-            if (userAudioPlayer.current) {
-                userAudioPlayer.current.pause();
-            }
+            if (userAudioPlayer.current) userAudioPlayer.current.pause();
             const audio = new Audio(`data:${userAudioMimeType};base64,${userAudioUrl}`);
             userAudioPlayer.current = audio;
             audio.play();
         }
     };
 
-    const handleAnalyzeAudio = async () => {
-        if (!userAudioUrl || !target) return;
-        setIsAnalyzing(true);
-        try {
-            const result = await analyzePronunciation(userAudioUrl, target.text, userAudioMimeType);
-            setAiAnalysis(result);
-        } catch (e) {
-            console.error(e);
-            showToast("Failed to analyze audio. Check API settings.", "error");
-        } finally {
-            setIsAnalyzing(false);
-        }
-    };
-
-    const resetState = () => {
-        setFullTranscript('');
-        setTranscriptOffset(0);
-        setUserAudioUrl(null);
-        setMatchStatus(null);
-        setIsRevealed(false);
-        setAiAnalysis(null);
-    };
-
     const handleNext = () => {
         if (queue.length > 0) {
-            resetState();
             setCurrentIndex((prev) => (prev + 1) % queue.length);
         }
     };
 
     const handleSelect = (index: number) => {
         if (index >= 0 && index < queue.length) {
-            resetState();
             setCurrentIndex(index);
         }
     };
 
+    // Derived Logic for UI
+    const totalPages = Math.ceil(queue.length / pageSize);
+    const pagedItems = queue.slice(page * pageSize, (page + 1) * pageSize);
+
     return (
-        <MimicPracticeUI 
-            targetText={target?.text || null}
-            sourceWord={target?.sourceWord || ''}
-            type={target?.type || ''}
-            isRecording={isRecording}
-            isRevealed={isRevealed}
-            userTranscript={displayTranscript}
-            matchStatus={matchStatus}
-            userAudioUrl={userAudioUrl}
-            onToggleRecord={handleToggleRecord}
-            onPlayTarget={handlePlayTarget}
-            onPlayUser={handlePlayUser}
-            onToggleReveal={() => setIsRevealed(!isRevealed)}
-            onNext={handleNext}
-            onClearTranscript={handleClearTranscript}
-            isEmpty={isEmpty}
-            onClose={onClose}
-            queue={queue}
-            currentIndex={currentIndex}
-            onSelect={handleSelect}
-            autoSpeak={autoSpeak}
-            onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
-            isGlobalMode={!scopedWord}
-            isAnalyzing={isAnalyzing}
-            onAnalyze={handleAnalyzeAudio}
-            aiAnalysis={aiAnalysis}
-            onAddItem={openModalToAdd}
-            onEditItem={openModalToEdit}
-            onDeleteItem={handleDeleteItem}
-            isModalOpen={isModalOpen}
-            editingItem={editingItem}
-            onCloseModal={() => setIsModalOpen(false)}
-            onSaveItem={handleSaveFromModal}
-        />
+        <>
+            <MimicPracticeUI 
+                targetText={target?.text || null}
+                sourceWord={target?.sourceWord || ''}
+                type={target?.type || ''}
+                isRecording={isRecording}
+                isRevealed={isRevealed}
+                userTranscript={displayTranscript}
+                matchStatus={matchStatus}
+                userAudioUrl={userAudioUrl}
+                onToggleRecord={handleToggleRecord}
+                onPlayTarget={handlePlayTarget}
+                onPlayUser={handlePlayUser}
+                onToggleReveal={() => setIsRevealed(!isRevealed)}
+                onNext={handleNext}
+                onClearTranscript={handleClearTranscript}
+                isEmpty={isEmpty}
+                onClose={onClose}
+                
+                // Pagination Props
+                pagedItems={pagedItems}
+                page={page}
+                pageSize={pageSize}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                onPageSizeChange={handlePageSizeChange}
+                // Determine absolute index for paged item clicks
+                onSelect={(relativeIndex) => handleSelect((page * pageSize) + relativeIndex)}
+                currentAbsoluteIndex={currentIndex}
+                
+                autoSpeak={autoSpeak}
+                onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
+                isGlobalMode={!scopedWord}
+                isAnalyzing={isAnalyzing}
+                onAnalyze={() => {}} 
+                aiAnalysis={localAnalysis ? { 
+                    isCorrect: localAnalysis.score > 80, 
+                    score: localAnalysis.score, 
+                    feedbackHtml: '' 
+                } : null}
+                localAnalysis={localAnalysis}
+                onAddItem={openModalToAdd}
+                onEditItem={openModalToEdit}
+                onDeleteItem={requestDeleteItem} // Pass the full item object logic here later
+                onRandomize={handleRandomize}
+                isModalOpen={isModalOpen}
+                editingItem={editingItem}
+                onCloseModal={() => setIsModalOpen(false)}
+                onSaveItem={handleSaveFromModal}
+            />
+            
+            <ConfirmationModal 
+                isOpen={!!itemToDelete}
+                title="Delete Phrase?"
+                message="Are you sure you want to remove this phrase from your pronunciation queue?"
+                confirmText="Delete"
+                isProcessing={false}
+                onConfirm={confirmDelete}
+                onClose={() => setItemToDelete(null)}
+                icon={null} // Optional custom icon
+                confirmButtonClass="bg-red-600 text-white hover:bg-red-700"
+            />
+        </>
     );
 };

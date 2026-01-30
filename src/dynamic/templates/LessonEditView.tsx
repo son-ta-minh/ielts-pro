@@ -1,18 +1,21 @@
+
 import React, { useState, useEffect } from 'react';
-import { Lesson } from '../../app/types';
+import { Lesson, User } from '../../app/types';
 import { LessonEditViewUI } from './LessonEditView_UI';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
 import { getRefineLessonPrompt } from '../../services/promptService';
 import { useToast } from '../../contexts/ToastContext';
+import { getConfig } from '../../app/settingsManager';
 
 interface Props {
   lesson: Lesson;
+  user: User;
   onSave: (lesson: Lesson) => void;
   onPractice: (lesson: Lesson) => void;
   onCancel: () => void;
 }
 
-const LessonEditView: React.FC<Props> = ({ lesson, onSave, onPractice, onCancel }) => {
+const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onCancel }) => {
   const [title, setTitle] = useState(lesson.title);
   const [description, setDescription] = useState(lesson.description || '');
   const [path, setPath] = useState(lesson.path || '/');
@@ -73,7 +76,18 @@ const LessonEditView: React.FC<Props> = ({ lesson, onSave, onPractice, onCancel 
   };
 
   const handleGenerateRefinePrompt = (inputs: { request: string }) => {
-    return getRefineLessonPrompt({ title, description, content }, inputs.request);
+    const config = getConfig();
+    const activeType = config.audioCoach.activeCoach;
+    const coachName = config.audioCoach.coaches[activeType].name;
+    
+    return getRefineLessonPrompt({
+      currentLesson: { title, description, content },
+      userRequest: inputs.request,
+      language: user.lessonPreferences?.language || 'English',
+      targetAudience: user.lessonPreferences?.targetAudience || 'Adult',
+      tone: user.lessonPreferences?.tone || 'professional_professor',
+      coachName
+    });
   };
 
   const handleAiResult = (data: { title: string; description: string; content: string; tags?: string[] }) => {

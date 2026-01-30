@@ -366,7 +366,10 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                                 <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
                                 {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
                                 {!word.isPassive && (
-                                    <button onClick={(e) => { e.stopPropagation(); speak(word.word); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce"><Volume2 size={18} /></button>
+                                    <>
+                                        <button onClick={(e) => { e.stopPropagation(); speak(word.word); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce"><Volume2 size={18} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onMimicRequest(); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Mimic"><Mic size={18} /></button>
+                                    </>
                                 )}
                                 <div className="relative group">
                                     <button className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Show meaning">
@@ -444,7 +447,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                             {!isViewOnly && (
                                 <>
                                     <button onClick={onChallengeRequest} className="p-2 bg-amber-100 text-amber-600 hover:text-amber-900 rounded-lg hover:bg-amber-200 transition-colors" title="Practice"><BrainCircuit size={16} /></button>
-                                    <button onClick={onMimicRequest} className="p-2 bg-neutral-100 text-neutral-600 hover:text-neutral-900 rounded-lg hover:bg-neutral-200 transition-colors" title="Mimic"><Mic size={16} /></button>
                                     <button onClick={onEditRequest} className="p-2 bg-neutral-100 text-neutral-600 hover:text-neutral-900 rounded-lg hover:bg-neutral-200 transition-colors"><Edit3 size={16} /></button>
                                 </>
                             )}

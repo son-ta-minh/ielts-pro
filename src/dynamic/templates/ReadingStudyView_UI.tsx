@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen, Download, Tag, HelpCircle, X, Check, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
@@ -7,6 +7,7 @@ import EditWordModal from '../../components/word_lib/EditWordModal';
 import ViewWordModal from '../../components/word_lib/ViewWordModal';
 import WordTable from '../../components/word_lib/WordTable';
 import { EssayReader } from './EssayReader';
+import { speak } from '../../utils/audio';
 
 interface TooltipState { word: VocabularyItem; rect: DOMRect; }
 
@@ -141,6 +142,16 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
   
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
+
+  // Attach speaker utility for data-only Audio tags
+  useEffect(() => {
+    (window as any).handleLessonSpeak = (text: string) => {
+        speak(text);
+    };
+    return () => {
+        delete (window as any).handleLessonSpeak;
+    };
+  }, []);
 
   const handleHoverWord = (word: VocabularyItem | null, rect: DOMRect | null) => { 
     if (isPracticeMode) return;

@@ -1,7 +1,7 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
-  Plus, LayoutDashboard, List, Settings, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Mic, PenLine, AlertTriangle, BookText, Ear, Zap, Calendar, Gamepad2, BookMarked
+  Plus, LayoutDashboard, List, Settings, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Mic, PenLine, AlertTriangle, BookText, Ear, Zap, Calendar, Gamepad2, BookMarked, Waves
 } from 'lucide-react';
 import { AppView, SessionType, VocabularyItem } from './types';
 import { useAppController } from './useAppController';
@@ -41,14 +41,13 @@ interface AppLayoutProps {
 }
 
 const navItems = [
-  { id: 'DASHBOARD', view: 'DASHBOARD', icon: LayoutDashboard, label: 'Dashboard' },
-  { id: 'BROWSE', view: 'BROWSE', icon: List, label: 'Library' },
-  { id: 'WORDBOOK', view: 'WORDBOOK', icon: BookMarked, label: 'Word Book' },
-  { id: 'LESSON', view: 'LESSON', icon: BookText, label: 'Lesson' },
-  { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: Layers3, label: 'Reading' },
-  { id: 'LISTENING', view: 'LISTENING', icon: Ear, label: 'Listening' },
-  { id: 'SPEAKING', view: 'SPEAKING', icon: Mic, label: 'Speaking' },
-  { id: 'WRITING', view: 'WRITING', icon: PenLine, label: 'Writing' }
+  { id: 'DASHBOARD', view: 'DASHBOARD', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Mobile%20Phone.png", label: 'Dashboard' },
+  { id: 'BROWSE', view: 'BROWSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png", label: 'Library' },
+  { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Lesson' },
+  { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },
+  { id: 'LISTENING', view: 'LISTENING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Headphone.png", label: 'Listening' },
+  { id: 'SPEAKING', view: 'SPEAKING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png", label: 'Speaking' },
+  { id: 'WRITING', view: 'WRITING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png", label: 'Writing' }
 ] as const;
 
 const Sidebar: React.FC<AppLayoutProps & { 
@@ -77,15 +76,15 @@ const Sidebar: React.FC<AppLayoutProps & {
              <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-neutral-400"><X size={24} /></button>
            </div>
            
-           <div className="mt-2 flex items-center space-x-1">
-             <button onClick={() => onNavigate('SETTINGS')} className="p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 rounded-lg transition-colors" title="Settings">
-                <Settings size={18} />
+           <div className="mt-4 flex items-center space-x-2">
+             <button onClick={() => onNavigate('SETTINGS')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Settings">
+                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Gear.png" alt="Settings" className="w-6 h-6 object-contain" />
              </button>
-             <button onClick={() => onNavigate('CALENDAR')} className="p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 rounded-lg transition-colors" title="Study Calendar">
-                <Calendar size={18} />
+             <button onClick={() => onNavigate('CALENDAR')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Study Calendar">
+                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Calendar.png" alt="Calendar" className="w-6 h-6 object-contain" />
              </button>
-             <button onClick={() => onNavigate('DISCOVER')} className="p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 rounded-lg transition-colors" title="Games & Discover">
-                <Gamepad2 size={18} />
+             <button onClick={() => onNavigate('DISCOVER')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Games & Discover">
+                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Activities/Video%20Game.png" alt="Games" className="w-6 h-6 object-contain" />
              </button>
            </div>
         </div>
@@ -99,7 +98,8 @@ const Sidebar: React.FC<AppLayoutProps & {
               </button>
             </div>
           )}
-          {navItems.map(item => {
+          {/* Fix: Explicitly type 'item' as 'any' to avoid type narrowing errors ('Property icon does not exist on type never') caused by 'as const' tuple mapping. */}
+          {navItems.map((item: any) => {
             const isActive = view === item.view && (item.id !== 'BROWSE' || !forceExpandAdd);
             // Handle Speaking active state also for mock test sub-view
             const isSpeakingActive = item.id === 'SPEAKING' && view === 'SPEAKING';
@@ -107,10 +107,21 @@ const Sidebar: React.FC<AppLayoutProps & {
             return (
               <div key={item.id} className="relative group">
                 <button 
-                  onClick={() => onNavigate(item.view)} 
+                  onClick={() => onNavigate(item.view as AppView)} 
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${isActive || isSpeakingActive ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-100'}`}
                 >
-                  <div className="flex items-center space-x-3"><item.icon size={20} /><span>{item.label}</span></div>
+                  <div className="flex items-center space-x-3">
+                    {typeof item.icon === 'string' ? (
+                        <img 
+                          src={item.icon} 
+                          className={`w-5 h-5 object-contain transition-all ${isActive || isSpeakingActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`} 
+                          alt={item.label} 
+                        />
+                    ) : (
+                        <item.icon size={20} />
+                    )}
+                    <span>{item.label}</span>
+                  </div>
                 </button>
               </div>
             );
@@ -221,6 +232,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
           onInitialFilterApplied={() => setInitialListFilter(null)}
           forceExpandAdd={forceExpandAdd}
           onExpandAddConsumed={() => setForceExpandAdd(false)}
+          onNavigate={setView}
         />
       );
     case 'LESSON':
@@ -238,10 +250,10 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'DISCOVER':
         return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} onRecalculateXp={recalculateXpAndLevelUp} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} lastMasteryScoreUpdateTimestamp={lastMasteryScoreUpdateTimestamp} onBulkUpdate={bulkUpdateWords} />;
     case 'SPEAKING':
-        return <ExpressionPage user={currentUser} />;
+        return <ExpressionPage user={currentUser} onNavigate={setView} />;
     // Deprecated NATIVE_SPEAK view key handling for safety
     case 'NATIVE_SPEAK':
-        return <ExpressionPage user={currentUser} />;
+        return <ExpressionPage user={currentUser} onNavigate={setView} />;
     case 'WRITING':
         return <WritingStudioPage user={currentUser} initialContextWord={writingContextWord} onConsumeContext={consumeWritingContext} />;
     case 'IRREGULAR_VERBS':
@@ -252,7 +264,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
         return <ListeningCardPage user={currentUser} />;
     case 'EXPERIMENT':
         // Fallback
-        return <ExpressionPage user={currentUser} />;
+        return <ExpressionPage user={currentUser} onNavigate={setView} />;
     default:
       return <div>Unknown view: {view}</div>;
   }

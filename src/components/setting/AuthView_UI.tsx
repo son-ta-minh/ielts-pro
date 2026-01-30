@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { UserPlus, Sparkles, ChevronRight, Loader2, Plus, Key, ExternalLink, AlertCircle, BrainCircuit, Briefcase, GraduationCap, Globe } from 'lucide-react';
+import { UserPlus, Sparkles, ChevronRight, Loader2, Plus, Key, ExternalLink, AlertCircle, BrainCircuit, Briefcase, GraduationCap, Globe, Users } from 'lucide-react';
 import { User } from '../../app/types';
 
 const LANGUAGES = [
@@ -33,6 +33,8 @@ export interface AuthViewUIProps {
     setNewTarget: (v: string) => void;
     newLanguage: string;
     setNewLanguage: (v: string) => void;
+    newAudience: 'Kid' | 'Adult';
+    setNewAudience: (v: 'Kid' | 'Adult') => void;
     selectedPersona: string;
 
     // Handlers
@@ -45,7 +47,7 @@ export interface AuthViewUIProps {
 export const AuthViewUI: React.FC<AuthViewUIProps> = ({
     users, isCreating, setIsCreating, loading, hasApiKey,
     newName, setNewName, newRole, setNewRole, newLevel, setNewLevel,
-    newTarget, setNewTarget, newLanguage, setNewLanguage, selectedPersona,
+    newTarget, setNewTarget, newLanguage, setNewLanguage, newAudience, setNewAudience, selectedPersona,
     handleSelectKey, handlePersonaSelect, handleCreateProfile, onLogin
 }) => {
 
@@ -117,16 +119,28 @@ export const AuthViewUI: React.FC<AuthViewUIProps> = ({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Globe size={14}/> Native Language</label>
-              <select 
-                value={newLanguage} 
-                onChange={(e) => setNewLanguage(e.target.value)} 
-                className="w-full px-5 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-md font-medium focus:ring-2 focus:ring-neutral-900 focus:outline-none appearance-none"
-              >
-                {LANGUAGES.map(lang => <option key={lang} value={lang}>{lang}</option>)}
-              </select>
-              <p className="text-[10px] text-neutral-400 mt-2 font-medium">AI will translate vocabulary definitions to this language.</p>
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Globe size={14}/> Language</label>
+                  <select 
+                    value={newLanguage} 
+                    onChange={(e) => setNewLanguage(e.target.value)} 
+                    className="w-full px-5 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 focus:outline-none appearance-none"
+                  >
+                    {LANGUAGES.map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Users size={14}/> Audience</label>
+                  <select 
+                    value={newAudience} 
+                    onChange={(e) => setNewAudience(e.target.value as any)} 
+                    className="w-full px-5 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 focus:outline-none appearance-none"
+                  >
+                    <option value="Kid">Kid</option>
+                    <option value="Adult">Adult</option>
+                  </select>
+                </div>
             </div>
 
             <div className="space-y-3">
@@ -155,16 +169,14 @@ export const AuthViewUI: React.FC<AuthViewUIProps> = ({
 
             <div className="space-y-4 pt-4 border-t border-neutral-100">
               <div>
-                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Starting Role</label> {/* Label updated */}
+                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Starting Role</label>
                 <input 
                   type="text"
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value)}
                   placeholder="e.g., Working Professional, Student"
                   className="w-full px-5 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-md font-medium focus:ring-2 focus:ring-neutral-900 focus:outline-none"
-                  title="This is your initial role. It will automatically update to an RPG title as you level up, unless you manually change it later."
                 />
-                <p className="text-[10px] text-neutral-400 mt-2 font-medium">Your role will automatically update to an RPG title as you level up.</p>
               </div>
 
               <div>
@@ -173,18 +185,7 @@ export const AuthViewUI: React.FC<AuthViewUIProps> = ({
                   type="text"
                   value={newLevel}
                   onChange={(e) => setNewLevel(e.target.value)}
-                  placeholder="e.g., Intermediate, Band 6.0 equivalent"
-                  className="w-full px-5 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-md font-medium focus:ring-2 focus:ring-neutral-900 focus:outline-none"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Target</label>
-                <input 
-                  type="text"
-                  value={newTarget}
-                  onChange={(e) => setNewTarget(e.target.value)}
-                  placeholder="e.g., Fluent communication, Advanced proficiency"
+                  placeholder="e.g., Intermediate"
                   className="w-full px-5 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-md font-medium focus:ring-2 focus:ring-neutral-900 focus:outline-none"
                 />
               </div>

@@ -1,8 +1,9 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { Lesson } from '../../app/types';
 import { ArrowLeft, Edit3 } from 'lucide-react';
 import { parseMarkdown } from '../../utils/markdownParser';
+import { speak } from '../../utils/audio';
 
 interface Props {
   lesson: Lesson;
@@ -14,6 +15,16 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
     const contentHtml = useMemo(() => {
         return parseMarkdown(lesson.content);
     }, [lesson.content]);
+
+    // Attach speaker utility to window for HTML event handlers
+    useEffect(() => {
+        (window as any).handleLessonSpeak = (text: string) => {
+            speak(text);
+        };
+        return () => {
+            delete (window as any).handleLessonSpeak;
+        };
+    }, []);
 
     return (
         <div className="max-w-4xl mx-auto space-y-6 pb-20 animate-in fade-in duration-300">
@@ -43,4 +54,3 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
         </div>
     );
 };
-    

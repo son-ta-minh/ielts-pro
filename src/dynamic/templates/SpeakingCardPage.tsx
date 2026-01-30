@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, NativeSpeakItem, VocabularyItem, WordQuality, FocusColor, SpeakingTopic, NativeSpeakAnswer } from '../../app/types';
+import { User, NativeSpeakItem, VocabularyItem, WordQuality, FocusColor, SpeakingTopic, NativeSpeakAnswer, AppView } from '../../app/types';
 import * as db from '../../app/db';
 import { ResourcePage } from '../page/ResourcePage';
-import { Mic, Volume2, Eye, EyeOff, Tag, Coffee, GraduationCap, School, ChevronRight, Shuffle, Plus, Edit3, Trash2, Swords, AudioLines, Sparkles, Save, X, Braces, StickyNote, FolderTree, Lightbulb, Info, ChevronLeft, Loader2, Square, Combine, CheckSquare } from 'lucide-react';
+import { Mic, Volume2, Eye, EyeOff, Tag, Coffee, GraduationCap, School, ChevronRight, Shuffle, Plus, Edit3, Trash2, Swords, AudioLines, Sparkles, Save, X, Braces, StickyNote, FolderTree, Lightbulb, Info, ChevronLeft, Loader2, Square, Combine, CheckSquare, Waves } from 'lucide-react';
 import { speak, startRecording, stopRecording } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { TagBrowser, TagTreeNode } from '../../components/common/TagBrowser';
@@ -21,6 +22,7 @@ import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 
 interface Props {
   user: User;
+  onNavigate?: (view: AppView) => void;
 }
 
 const VIEW_SETTINGS_KEY = 'vocab_pro_speaking_card_view';
@@ -426,7 +428,7 @@ const SpeakingPracticeModal: React.FC<SpeakingPracticeModalProps> = ({ isOpen, o
 };
 
 
-export const SpeakingCardPage: React.FC<Props> = ({ user }) => {
+export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   const [items, setItems] = useState<NativeSpeakItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -567,7 +569,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user }) => {
     <ResourcePage
       title="Speaking Library"
       subtitle="Master natural phrases and expressions for any context."
-      icon={<Mic size={28} className="text-rose-500" />}
+      icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png" className="w-8 h-8 object-contain" alt="Speaking" />}
       config={{}}
       isLoading={loading || isProcessing}
       isEmpty={filteredItems.length === 0}
@@ -575,6 +577,14 @@ export const SpeakingCardPage: React.FC<Props> = ({ user }) => {
       activeFilters={{}}
       onFilterChange={() => {}}
       pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }}
+      minorSkills={
+          onNavigate ? (
+            <button onClick={() => onNavigate('MIMIC')} className="flex items-center gap-2 px-3 py-2 bg-neutral-100 text-neutral-600 rounded-lg text-xs font-bold hover:bg-neutral-200 transition-colors">
+                <Mic size={16} />
+                <span className="hidden sm:inline">Pronunciation</span>
+            </button>
+          ) : undefined
+      }
       actions={
         <ResourceActions
             viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]}/>}
@@ -620,7 +630,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user }) => {
                 <button
                     onClick={() => setIsMergeModalOpen(true)}
                     disabled={selectedIds.size < 2 || isProcessing}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-black text-xs flex items-center gap-2 uppercase tracking-wider hover:bg-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-black text-xs flex items-center gap-2 uppercase tracking-wider hover:bg-indigo-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <Combine size={14} /> Merge
                 </button>

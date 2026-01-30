@@ -31,7 +31,7 @@ interface SettingsViewUIProps {
     isApplyingAccent: boolean;
     isAdmin: boolean;
     junkTags: string[];
-    normalizeOptions: { removeJunkTags: boolean; removeMultiWordData: boolean };
+    normalizeOptions: { removeJunkTags: boolean; removeMultiWordData: boolean; cleanHeadwords: boolean };
     
     // Handlers
     setCurrentView: (view: SettingView) => void;
@@ -55,7 +55,7 @@ interface SettingsViewUIProps {
     onApplyAccent: () => void;
     onToggleAdmin: () => void;
     onJunkTagsChange: (tags: string[]) => void;
-    onNormalizeOptionsChange: (options: { removeJunkTags: boolean; removeMultiWordData: boolean }) => void;
+    onNormalizeOptionsChange: (options: { removeJunkTags: boolean; removeMultiWordData: boolean; cleanHeadwords: boolean }) => void;
     
     // Goal Props
     goalConfig: DailyGoalConfig;
