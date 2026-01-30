@@ -27,10 +27,18 @@ interface ControlProps {
     toggleFontFamily: () => void;
     isPracticeMode?: boolean;
     onResetPractice?: () => void;
+    currentSelection?: { text: string; isLinked: boolean } | null;
+    onWordAction?: (text: string, action: 'add' | 'remove') => void;
+    onClearSelection?: () => void;
 }
 
-const HighlightControls: React.FC<ControlProps> = ({ isUnderlined, toggleUnderline, highlightColor, setHighlightColor, fontSize, setFontSize, isSerif, toggleFontFamily, isPracticeMode, onResetPractice }) => (
-    <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-neutral-200 shadow-sm">
+const HighlightControls: React.FC<ControlProps> = ({ 
+    isUnderlined, toggleUnderline, highlightColor, setHighlightColor, 
+    fontSize, setFontSize, isSerif, toggleFontFamily, 
+    isPracticeMode, onResetPractice,
+    currentSelection, onWordAction, onClearSelection 
+}) => (
+    <div className="highlight-controls-container flex items-center gap-2 bg-white p-1 rounded-xl border border-neutral-200 shadow-sm h-[42px]">
         <div className="flex items-center gap-1 px-1">
             <button onClick={toggleFontFamily} className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900 transition-colors" title={isSerif ? "Switch to Sans-Serif" : "Switch to Serif"}><Type size={14} /></button>
             <div className="w-px h-3 bg-neutral-200 mx-1"></div>
@@ -47,6 +55,39 @@ const HighlightControls: React.FC<ControlProps> = ({ isUnderlined, toggleUnderli
                 <div className="w-px h-4 bg-neutral-200 mx-1"></div>
                 <button onClick={onResetPractice} className="px-3 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all">New Random Blanks</button>
             </>
+        )}
+
+        {currentSelection && onWordAction && onClearSelection && !isPracticeMode && (
+             <>
+                <div className="w-px h-4 bg-neutral-200 mx-1"></div>
+                <div className="flex items-center gap-2 pr-1 animate-in fade-in slide-in-from-left-2 duration-200">
+                    <span className="text-[10px] font-bold text-neutral-400 max-w-[100px] truncate hidden sm:inline-block pointer-events-none select-none">
+                        "{currentSelection.text}"
+                    </span>
+                    <button 
+                        onMouseDown={(e) => {
+                             e.preventDefault();
+                             onWordAction(currentSelection.text, currentSelection.isLinked ? 'remove' : 'add');
+                             onClearSelection();
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 ${
+                            currentSelection.isLinked 
+                                ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100' 
+                                : 'bg-green-50 text-green-600 border border-green-200 hover:bg-green-100'
+                        }`}
+                    >
+                        {currentSelection.isLinked ? <Unlink size={12} /> : <Link size={12} />}
+                        <span>{currentSelection.isLinked ? 'Unlink' : 'Link'}</span>
+                    </button>
+                    <button 
+                        onMouseDown={(e) => { e.preventDefault(); onClearSelection(); }}
+                        className="p-1.5 text-neutral-300 hover:text-neutral-500 rounded-lg hover:bg-neutral-100 transition-colors"
+                        title="Clear Selection"
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+             </>
         )}
     </div>
 );
@@ -152,29 +193,6 @@ const PracticeInput: React.FC<{
                 </div>
             )}
         </span>
-    );
-};
-
-const SelectionMenu: React.FC<{ 
-    x: number; 
-    y: number; 
-    text: string; 
-    isLinked: boolean; 
-    onAction: (text: string, action: 'add' | 'remove') => void; 
-    onClose: () => void; 
-}> = ({ x, y, text, isLinked, onAction, onClose }) => {
-    return (
-        <div className="fixed z-[100] -translate-x-1/2 -translate-y-full mb-2 animate-in fade-in zoom-in-95" style={{ left: `${x}px`, top: `${y}px` }}>
-            <div className="bg-neutral-900 text-white rounded-xl shadow-2xl border border-neutral-800 overflow-hidden flex items-center p-1">
-                <div className="px-3 py-1.5 border-r border-neutral-700 max-w-[120px]">
-                    <p className="text-[10px] font-black uppercase text-neutral-500 tracking-widest mb-0.5">Selected</p>
-                    <p className="text-xs font-bold truncate">{text}</p>
-                </div>
-                <button onClick={() => { onAction(text, isLinked ? 'remove' : 'add'); onClose(); }} className={`flex items-center space-x-2 px-3 py-1.5 hover:bg-neutral-800 transition-colors text-xs font-black uppercase tracking-widest ${isLinked ? 'text-orange-400' : 'text-green-400'}`}>{isLinked ? <Unlink size={14} /> : <Link size={14} />}<span>{isLinked ? 'Unlink' : 'Link'}</span></button>
-                <button onClick={onClose} className="p-1.5 hover:bg-neutral-800 text-neutral-500 transition-colors rounded-lg ml-1"><X size={14} /></button>
-            </div>
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-900 rotate-45"></div>
-        </div>
     );
 };
 
@@ -313,22 +331,37 @@ export const EssayReaderUI: React.FC<EssayReaderUIProps> = ({
     fontSize, setFontSize, isSerif, setIsSerif, onHoverWord, onWordAction,
     isPracticeMode, className
 }) => {
-    const [selectionMenu, setSelectionMenu] = useState<{x:number, y:number, text:string, isLinked:boolean} | null>(null);
+    const [currentSelection, setCurrentSelection] = useState<{ text: string; isLinked: boolean } | null>(null);
     const [practiceSessionKey, setPracticeSessionKey] = useState(Date.now());
 
-    useEffect(() => { setSelectionMenu(null); }, [text, vocabString]);
+    useEffect(() => { setCurrentSelection(null); }, [text, vocabString]);
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: React.MouseEvent) => {
         if (!onWordAction || isPracticeMode) return;
-        const selection = window.getSelection();
-        if (!selection || selection.isCollapsed) { setSelectionMenu(null); return; }
-        const selectedText = selection.toString().trim();
-        if (!selectedText || selectedText.includes('\n')) { setSelectionMenu(null); return; }
-        const mapping = parseVocabMapping(vocabString);
-        const isLinked = mapping.has(selectedText.toLowerCase());
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        setSelectionMenu({ x: rect.left + rect.width / 2, y: rect.top, text: selectedText, isLinked });
+        
+        // Ignore if clicking inside header controls to prevent clearing selection
+        if ((e.target as HTMLElement).closest('.highlight-controls-container')) return;
+
+        setTimeout(() => {
+            const selection = window.getSelection();
+            if (!selection || selection.isCollapsed) { 
+                setCurrentSelection(null); 
+                return; 
+            }
+            const selectedText = selection.toString().trim();
+            if (!selectedText || selectedText.includes('\n') || selectedText.length > 50) { 
+                setCurrentSelection(null); 
+                return; 
+            }
+            const mapping = parseVocabMapping(vocabString);
+            const isLinked = mapping.has(selectedText.toLowerCase());
+            setCurrentSelection({ text: selectedText, isLinked });
+        }, 10);
+    };
+
+    const handleClearSelection = () => {
+        setCurrentSelection(null);
+        window.getSelection()?.removeAllRanges();
     };
 
     return (
@@ -341,6 +374,9 @@ export const EssayReaderUI: React.FC<EssayReaderUIProps> = ({
                     isSerif={isSerif} toggleFontFamily={() => setIsSerif(!isSerif)} 
                     isPracticeMode={isPracticeMode}
                     onResetPractice={() => setPracticeSessionKey(Date.now())}
+                    currentSelection={currentSelection}
+                    onWordAction={onWordAction}
+                    onClearSelection={handleClearSelection}
                 />
             </div>
             <div className={`p-5 md:p-8 flex-1 overflow-y-auto stable-scrollbar relative ${isPracticeMode ? 'bg-neutral-50/20' : ''}`}>
@@ -366,9 +402,6 @@ export const EssayReaderUI: React.FC<EssayReaderUIProps> = ({
                     </div>
                 )}
             </div>
-            {selectionMenu && onWordAction && (
-               <SelectionMenu {...selectionMenu} onAction={onWordAction} onClose={() => { setSelectionMenu(null); window.getSelection()?.removeAllRanges(); }} />
-            )}
         </div>
     );
 };

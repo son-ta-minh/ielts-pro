@@ -45,7 +45,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
     const [isThinking, setIsThinking] = useState(false);
     const [hasWelcomed, setHasWelcomed] = useState(false);
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
-    const [menuPos, setMenuPos] = useState<{ x: number, y: number } | null>(null);
+    const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
     
     // Refs
     const closeTimerRef = useRef<any>(null);
@@ -71,10 +71,15 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
                 const range = selection!.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
                 
-                // Đặt vị trí menu ở giữa văn bản được chọn
+                // Determine placement based on available space above
+                // Estimate menu height around 120px
+                const MENU_HEIGHT = 120;
+                const placement = rect.top > MENU_HEIGHT ? 'top' : 'bottom';
+
                 setMenuPos({ 
                     x: rect.left + rect.width / 2, 
-                    y: rect.top 
+                    y: placement === 'top' ? rect.top : rect.bottom,
+                    placement
                 });
                 setMessage(null);
                 setIsOpen(true);
@@ -262,12 +267,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
                     style={{ 
                         left: `${menuPos.x}px`, 
                         top: `${menuPos.y}px`, 
-                        transform: 'translate(-50%, -100%) translateY(-10px)' 
+                        transform: menuPos.placement === 'top' 
+                            ? 'translate(-50%, -100%) translateY(-10px)' 
+                            : 'translate(-50%, 0) translateY(10px)' 
                     }}
                 >
                     <CommandBox />
                     {/* Tooltip Arrow */}
-                    <div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-3 h-3 bg-white border-r border-b border-neutral-200 rotate-45" />
+                    <div className={`absolute left-1/2 -translate-x-1/2 w-3 h-3 bg-white rotate-45 ${
+                        menuPos.placement === 'top'
+                            ? '-bottom-1 border-r border-b border-neutral-200'
+                            : '-top-1 border-l border-t border-neutral-200'
+                    }`} />
                 </div>
             )}
 
