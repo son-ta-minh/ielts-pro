@@ -1,33 +1,50 @@
 
-export interface RefineLessonParams {
-  currentLesson: { title: string; description: string; content: string };
-  userRequest: string;
+export interface LessonPromptParams {
+  // Common
   language: 'English' | 'Vietnamese';
   targetAudience: 'Kid' | 'Adult';
   tone: 'friendly_elementary' | 'professional_professor';
   coachName: string;
+  
+  // Create New Mode
+  topic?: string;
+  
+  // Refine Mode
+  currentLesson?: { title: string; description: string; content: string };
+  userRequest?: string;
 }
 
-export function getRefineLessonPrompt(params: RefineLessonParams): string {
-  const { currentLesson, userRequest, language, targetAudience, tone, coachName } = params;
+export function getLessonPrompt(params: LessonPromptParams): string {
+  const { topic, currentLesson, userRequest, language, targetAudience, tone, coachName } = params;
   
   const audioTag = language === 'Vietnamese' ? 'Audio-VN' : 'Audio-EN';
+  const isRefineMode = !!currentLesson;
 
-  const contentBlock = `CURRENT CONTENT:
-  Title: ${currentLesson.title}
-  Description: ${currentLesson.description}
-  Body:
-  ${currentLesson.content || '(empty)'}`;
+  let taskDescription = "";
+  let contextBlock = "";
+
+  if (isRefineMode && currentLesson) {
+    taskDescription = `Refine and reformat the user's lesson notes into a structured, high-quality study resource.`;
+    contextBlock = `
+    CURRENT CONTENT:
+    Title: ${currentLesson.title}
+    Description: ${currentLesson.description}
+    Body:
+    ${currentLesson.content || '(empty)'}
     
-  const requestBlock = userRequest ? `USER INSTRUCTIONS: "${userRequest}"` : "USER INSTRUCTIONS: Format deeply, improve structure, correct errors, and add educational value.";
+    USER INSTRUCTIONS: "${userRequest || 'Format deeply, improve structure, correct errors, and add educational value.'}"
+    `;
+  } else {
+    taskDescription = `Create a brand new lesson for a ${targetAudience} on topic: "${topic || 'General Knowledge'}".`;
+    contextBlock = `USER REQUEST: "${userRequest || 'Create a comprehensive lesson.'}"`;
+  }
 
   return `You are an expert educational content designer and IELTS coach.
   ROLE: You are '${coachName}', acting as a ${tone === 'friendly_elementary' ? 'friendly teacher' : 'professional professor'}.
     
-  TASK: Refine and reformat the user's lesson notes into a structured, high-quality study resource.
+  TASK: ${taskDescription}
 
-  ${contentBlock}
-  ${requestBlock}
+  ${contextBlock}
 
   STRICT LANGUAGE RULES:
   1. CORE MATERIAL (Vocabulary Lists, Example Sentences, Exercises): Must be in English.
@@ -40,15 +57,19 @@ export function getRefineLessonPrompt(params: RefineLessonParams): string {
   - **CONCISE TITLE**: Keep the title short and direct.
   - **TITLE OVERRIDE RULE**: If it's a pattern, use the BASE form (e.g., "be associated with", not "is associated with").
   - **COMPACT SPACING**: Keep the text dense. No extra empty lines between headings and content.
-  - **INTERACTIVE ELEMENTS**:
-    - Use \`[HIDDEN: content]\` for answers or key terms that should be hidden initially.
-    - Use \`[Content]\` (text inside brackets on a NEW LINE) for tips and notes.
+
+  INTERACTIVE ELEMENTS SYNTAX:
+  1. **Hidden Answer**: Use \`[HIDDEN: content]\` for answers that should be hidden initially.
+  2. **Tips**: Use \`[Content]\` (text inside brackets on a NEW LINE) for tips and notes.
+  3. **Fill-in Quiz**: Use \`[Quiz: answer]\` for a text input field checking against 'answer'.
+  4. **Multiple Choice**: Use \`[Multi: Correct Answer | Wrong Option | Wrong Option]\`. The FIRST option provided must be the correct one. The system will shuffle them automatically.
+  5. **Dropdown Select**: Use \`[Select: Correct Answer | Wrong Option | Wrong Option]\`. It renders as a dropdown menu. The FIRST option provided must be the correct one. The system will shuffle them automatically. Use this for "Fill in the blank" exercises where you want to give hints.
 
   AUDIO BLOCK RULE (TOKEN SAVER - CRITICAL):
   - **WRAP ONLY META CONTENT**: Only wrap your explanations, greetings, and definitions inside \`[${audioTag}]\` and \`[/]\`.
   - **EXCLUDE CORE MATERIAL**: Do NOT wrap vocabulary lists, exercises, or headers (##) inside audio tags.
   
-  EXAMPLE OF CORRECT TAGGING:
+  EXAMPLE OF CORRECT STRUCTURE:
     ## Key Concepts
     [${audioTag}]
     ${language === 'Vietnamese' ? 'Chào con! Hôm nay chúng mình sẽ học về...' : 'Hello! Today we will learn about...'}
@@ -56,11 +77,14 @@ export function getRefineLessonPrompt(params: RefineLessonParams): string {
     [Make sure to practice these daily!]
     * Word1, Word2, Word3
     
-    1. Is this correct?
-    Answer: [HIDDEN: Yes, absolutely.]
+    1. Select the correct word:
+    [Multi: Apple | Car | Sky]
     
-    2. Why?
-    Answer: [HIDDEN: Because...]
+    2. Type the missing word:
+    The sky is [Quiz: blue].
+    
+    3. Choose the best fit:
+    The ocean is [Select: deep | high | tall].
 
   TAGGING (STRICT): Return exactly ONE tag from: ["Writing", "Speaking", "Listening", "Reading", "Grammar", "Writing Task 1", "Writing Task 2", "Speaking Academic", "Speaking Casual", "Pattern", "Comparison"].
 
@@ -68,7 +92,7 @@ export function getRefineLessonPrompt(params: RefineLessonParams): string {
   {
     "title": "string",
     "description": "string",
-    "content": "string (Markdown using the [${audioTag}]...[/] wrappers)",
+    "content": "string (Markdown using the tags defined above)",
     "tags": ["string"]
   }`;
 }

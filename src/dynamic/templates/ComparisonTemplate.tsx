@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, ComparisonGroup } from '../../app/types';
+import { User, ComparisonGroup, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import { useToast } from '../../contexts/ToastContext';
 import { TagTreeNode } from '../../components/common/TagBrowser';
@@ -26,6 +27,10 @@ export const ComparisonTemplate: React.FC<Props> = ({ user, onExit }) => {
   // Filter & View Settings
   const [query, setQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  
+  const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
+  const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
+
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
@@ -87,6 +92,10 @@ export const ComparisonTemplate: React.FC<Props> = ({ user, onExit }) => {
 
   const filteredGroups = useMemo(() => {
       let result = groups;
+      
+      if (focusFilter === 'focused') result = result.filter(g => g.isFocused);
+      if (colorFilter !== 'all') result = result.filter(g => g.focusColor === colorFilter);
+
       if (query) {
           const lower = query.toLowerCase();
           result = result.filter(g => g.name.toLowerCase().includes(lower) || g.words.some(w => w.toLowerCase().includes(lower)));
@@ -103,7 +112,7 @@ export const ComparisonTemplate: React.FC<Props> = ({ user, onExit }) => {
           }
       }
       return result;
-  }, [groups, query, selectedTag]);
+  }, [groups, query, selectedTag, focusFilter, colorFilter]);
 
   // Handlers
   const handleNew = () => {
@@ -135,6 +144,19 @@ export const ComparisonTemplate: React.FC<Props> = ({ user, onExit }) => {
       loadData();
   };
 
+  const handleFocusChange = async (group: ComparisonGroup, color: FocusColor | null) => {
+      const newData = { ...group, focusColor: color || undefined, updatedAt: Date.now() };
+      if (!color) delete newData.focusColor;
+      setGroups(prev => prev.map(g => g.id === group.id ? newData : g));
+      await db.saveComparisonGroup(newData);
+  };
+
+  const handleToggleFocus = async (group: ComparisonGroup) => {
+      const newData = { ...group, isFocused: !group.isFocused, updatedAt: Date.now() };
+      setGroups(prev => prev.map(g => g.id === group.id ? newData : g));
+      await db.saveComparisonGroup(newData);
+  };
+
   if (viewMode === 'READ' && activeGroup) {
       return <ComparisonReadView group={activeGroup} onBack={() => setViewMode('LIST')} onEdit={() => setViewMode('EDIT')} />;
   }
@@ -154,6 +176,14 @@ export const ComparisonTemplate: React.FC<Props> = ({ user, onExit }) => {
         setViewSettings={setViewSettings}
         isViewMenuOpen={isViewMenuOpen}
         setIsViewMenuOpen={setIsViewMenuOpen}
+        
+        focusFilter={focusFilter}
+        setFocusFilter={setFocusFilter}
+        colorFilter={colorFilter}
+        setColorFilter={setColorFilter}
+        onFocusChange={handleFocusChange}
+        onToggleFocus={handleToggleFocus}
+
         isTagBrowserOpen={isTagBrowserOpen}
         setIsTagBrowserOpen={setIsTagBrowserOpen}
         tagTree={tagTree}

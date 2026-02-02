@@ -44,6 +44,7 @@ export interface DataScope {
   listening: boolean;
   mimic: boolean;
   wordBook: boolean;
+  calendar: boolean;
 }
 
 export interface WordFamilyMember {
@@ -223,6 +224,7 @@ export interface Unit {
     answer: string;
   }[];
   focusColor?: FocusColor;
+  isFocused?: boolean;
 }
 
 export interface SpeakingTopic {
@@ -241,6 +243,7 @@ export interface SpeakingTopic {
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
+  isFocused?: boolean;
 }
 
 export interface WritingTopic {
@@ -255,6 +258,7 @@ export interface WritingTopic {
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
+  isFocused?: boolean;
 }
 
 // New Composition Type
@@ -273,6 +277,7 @@ export interface Composition {
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
+  isFocused?: boolean;
 }
 
 export interface ParaphraseLog {
@@ -334,6 +339,7 @@ export interface ComparisonGroup {
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
+  isFocused?: boolean;
 }
 
 export interface IrregularVerb {
@@ -377,6 +383,7 @@ export interface Lesson {
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
+  isFocused?: boolean;
 }
 
 export interface ListeningItem {
@@ -389,6 +396,7 @@ export interface ListeningItem {
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
+  isFocused?: boolean;
 }
 
 export interface NativeSpeakAnswer {
@@ -409,6 +417,7 @@ export interface NativeSpeakItem {
     createdAt: number;
     updatedAt: number;
     focusColor?: FocusColor;
+    isFocused?: boolean;
 }
 
 export interface CalendarEvent {

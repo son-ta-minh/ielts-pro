@@ -352,7 +352,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
         </Suspense>
       </main>
       
-      {currentUser && !sessionType && (
+      {/* 
+        CHANGED: Removed '!sessionType' condition. 
+        Now the StudyBuddy will render as long as currentUser exists, 
+        making it available in 'REVIEW' view (sessions, quizzes, etc.) as requested.
+      */}
+      {currentUser && (
           <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={handleSpecialAction} />
       )}
 

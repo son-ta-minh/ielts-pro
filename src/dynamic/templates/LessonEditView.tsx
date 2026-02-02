@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Lesson, User } from '../../app/types';
 import { LessonEditViewUI } from './LessonEditView_UI';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
-import { getRefineLessonPrompt } from '../../services/promptService';
+import { getLessonPrompt } from '../../services/promptService';
 import { useToast } from '../../contexts/ToastContext';
 import { getConfig } from '../../app/settingsManager';
 
@@ -80,7 +80,8 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
     const activeType = config.audioCoach.activeCoach;
     const coachName = config.audioCoach.coaches[activeType].name;
     
-    return getRefineLessonPrompt({
+    // Using unified getLessonPrompt for refinement
+    return getLessonPrompt({
       currentLesson: { title, description, content },
       userRequest: inputs.request,
       language: user.lessonPreferences?.language || 'English',

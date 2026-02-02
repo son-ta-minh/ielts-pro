@@ -4,6 +4,8 @@
  * [Audio-VN]văn bản[/] -> Nút loa + văn bản (inline)
  * [HIDDEN: văn bản] -> Nút bấm reveal (inline replacement)
  * [Quiz: answer] -> Input field checking against 'answer'
+ * [Multi: Correct | Option 2 | Option 3] -> Multiple Choice Buttons (Inline buttons)
+ * [Select: Correct | Option 2 | Option 3] -> Dropdown Selection (Locked after check)
  * [Nội dung tip] -> Box thông tin màu xanh có icon bóng đèn
  */
 
@@ -24,6 +26,75 @@ if (typeof window !== 'undefined') {
              input.classList.add('border-green-500', 'text-green-700', 'bg-green-50');
         } else {
              input.classList.add('border-red-500', 'text-red-700', 'bg-red-50');
+        }
+    };
+
+    (window as any).checkDropdownQuiz = (btn: HTMLButtonElement) => {
+        const container = btn.parentElement;
+        if (!container) return;
+        
+        const select = container.querySelector('select');
+        if (!select) return;
+
+        const answer = select.getAttribute('data-answer');
+        const userValue = select.value;
+        
+        // Prevent checking if nothing selected (default value is usually empty or placeholder)
+        if (!userValue) return;
+
+        const isCorrect = userValue === answer;
+
+        // Lock the input
+        select.disabled = true;
+        btn.disabled = true;
+        btn.classList.add('opacity-0', 'pointer-events-none'); // Hide check button after checking
+
+        // Remove default styles
+        select.classList.remove('border-neutral-300', 'text-neutral-900', 'focus:border-indigo-600');
+        select.classList.remove('bg-white');
+
+        if (isCorrect) {
+            select.classList.add('border-green-500', 'text-green-700', 'bg-green-50', 'font-bold');
+        } else {
+            select.classList.add('border-red-500', 'text-red-700', 'bg-red-50', 'line-through');
+            
+            // Show correct answer tooltip or indicator if needed, 
+            // for now, we just mark it red to indicate failure. 
+            // Optionally, we could append the correct answer next to it.
+            const correction = document.createElement('span');
+            correction.className = 'ml-2 text-xs font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 animate-in fade-in';
+            correction.innerText = answer || '';
+            container.appendChild(correction);
+        }
+    };
+
+    (window as any).checkMultiChoice = (btn: HTMLButtonElement) => {
+        const container = btn.parentElement;
+        if (!container) return;
+        
+        const correctAnswer = container.getAttribute('data-answer');
+        const userSelection = btn.textContent?.trim();
+        
+        // Disable all buttons in this group
+        const allBtns = container.querySelectorAll('button');
+        allBtns.forEach(b => {
+            b.disabled = true;
+            b.classList.add('opacity-50', 'cursor-not-allowed');
+            // Highlight the correct one regardless of selection
+            if (b.textContent?.trim() === correctAnswer) {
+                b.classList.remove('bg-white', 'text-neutral-700', 'opacity-50');
+                b.classList.add('bg-green-500', 'text-white', 'border-green-600');
+            }
+        });
+
+        if (userSelection === correctAnswer) {
+            // User clicked correct
+            btn.classList.remove('opacity-50');
+            btn.classList.add('ring-2', 'ring-green-300');
+        } else {
+            // User clicked wrong
+            btn.classList.remove('bg-white', 'text-neutral-700', 'opacity-50');
+            btn.classList.add('bg-red-500', 'text-white', 'border-red-600');
         }
     };
 }
@@ -112,6 +183,66 @@ const processQuiz = (text: string): string => {
 };
 
 /**
+ * Xử lý [Select: Correct | Option | Option]
+ */
+const processDropdown = (text: string): string => {
+    return text.replace(/\[Select:\s*(.*?)\]/gi, (_, content) => {
+        const parts = content.split('|').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        if (parts.length < 2) return `[Invalid Select: ${content}]`;
+
+        const correctAnswer = parts[0];
+        // Fisher-Yates Shuffle
+        const shuffled = [...parts];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        
+        let html = `<span class="inline-flex items-center gap-1 align-middle mx-1 whitespace-nowrap">`;
+        html += `<select data-answer="${correctAnswer.replace(/"/g, '&quot;')}" class="border-b-2 border-neutral-300 bg-transparent font-bold text-neutral-900 outline-none focus:border-indigo-600 transition-all rounded-t-md px-2 py-0.5 text-sm cursor-pointer hover:bg-neutral-50 appearance-none pr-6 relative" style="min-width: 80px;">`;
+        html += `<option value="" disabled selected>Select...</option>`;
+        
+        shuffled.forEach(opt => {
+             html += `<option value="${opt.replace(/"/g, '&quot;')}">${opt}</option>`;
+        });
+
+        html += `</select>`;
+        // Check Button
+        html += `<button onclick="window.checkDropdownQuiz(this)" class="p-1 text-neutral-400 hover:text-indigo-600 transition-colors bg-neutral-100 hover:bg-indigo-50 rounded-full shadow-sm" title="Check Answer"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>`;
+        html += `</span>`;
+        return html;
+    });
+};
+
+/**
+ * Xử lý [Multi: Correct | Option | Option]
+ */
+const processMultiChoice = (text: string): string => {
+    return text.replace(/\[Multi:\s*(.*?)\]/gi, (_, content) => {
+        const parts = content.split('|').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        if (parts.length < 2) return `[Invalid Multi: ${content}]`;
+
+        const correctAnswer = parts[0];
+        const shuffled = [...parts];
+
+        // Fisher-Yates Shuffle ensures true randomness so the first option isn't always the correct one in the UI
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        
+        let html = `<span class="inline-flex flex-wrap items-center gap-1.5 align-middle mx-1" data-answer="${correctAnswer.replace(/"/g, '&quot;')}">`;
+        
+        shuffled.forEach(opt => {
+             html += `<button onclick="window.checkMultiChoice(this)" class="px-2 py-1 bg-white border border-neutral-200 text-neutral-700 rounded-md text-xs font-bold hover:bg-neutral-50 hover:border-neutral-300 transition-all shadow-sm select-none">${opt}</button>`;
+        });
+
+        html += `</span>`;
+        return html;
+    });
+};
+
+/**
  * Xử lý thẻ [Audio-XX]...[/] 
  */
 const processAudioBlocks = (text: string): string => {
@@ -122,6 +253,8 @@ const processAudioBlocks = (text: string): string => {
         const speechText = content
             .replace(/\[HIDDEN:.*?\]/gi, '') 
             .replace(/\[Quiz:.*?\]/gi, '') // remove quiz answer from speech
+            .replace(/\[Select:.*?\]/gi, '') // remove dropdown
+            .replace(/\[Multi:.*?\]/gi, '') // remove multi quiz
             .replace(/[#*`_~[\]()]/g, '') 
             .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '') 
             .trim()
@@ -139,6 +272,8 @@ export const parseMarkdown = (text: string): string => {
     // 1. Xử lý Audio và Spoilers trước (vì chúng có thể nằm inline)
     let processed = processAudioBlocks(text);
     processed = processQuiz(processed);
+    processed = processDropdown(processed); // New: Select
+    processed = processMultiChoice(processed); // Process Multi before table to safely replace pipes
     processed = processSpoilers(processed);
     
     const lines = processed.split('\n');
@@ -197,9 +332,8 @@ export const parseMarkdown = (text: string): string => {
             continue;
         }
 
-        // Xử lý [Tip Block] - Loại trừ các thẻ Audio, HIDDEN, và Quiz (dạng inline)
-        // Ensure QUIZ tag is also excluded from being treated as a Tip Block
-        const tipMatch = lineTrim.match(/^\[(?!(HIDDEN:|Quiz:|QUIZ:|Audio-|(\/\])))(.*)\]$/);
+        // Xử lý [Tip Block] - Loại trừ các thẻ Audio, HIDDEN, Quiz, Select, Multi (dạng inline)
+        const tipMatch = lineTrim.match(/^\[(?!(HIDDEN:|Quiz:|Select:|QUIZ:|Multi:|Audio-|(\/\])))(.*)\]$/);
         if (tipMatch) {
             closeLists(0);
             const lightbulbSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5 text-sky-500"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>`;

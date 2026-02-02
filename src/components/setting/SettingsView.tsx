@@ -37,7 +37,8 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
       speaking: true,
       listening: true,
       mimic: true,
-      wordBook: true
+      wordBook: true,
+      calendar: true
   });
   
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | 'info', message: string, detail?: string } | null>(null);

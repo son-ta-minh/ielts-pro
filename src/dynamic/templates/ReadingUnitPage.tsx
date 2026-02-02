@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { User, Unit, VocabularyItem, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import { ResourcePage } from '../page/ResourcePage';
-import { Layers3, Plus, Tag, Edit3, Trash2, BookOpen, CheckCircle2, Circle, FolderTree } from 'lucide-react';
+import { Layers3, Plus, Tag, Edit3, Trash2, BookOpen, CheckCircle2, Circle, FolderTree, Target } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { TagBrowser, TagTreeNode } from '../../components/common/TagBrowser';
@@ -29,6 +30,9 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
 
   // View & Filter State
   const [statusFilter, setStatusFilter] = useState<'all' | 'learned' | 'new'>('all');
+  const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
+  const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
+
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, {
       showDesc: true,
@@ -82,7 +86,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   
   useEffect(() => {
     setPage(0);
-  }, [statusFilter, selectedTag, pageSize]);
+  }, [statusFilter, selectedTag, pageSize, focusFilter, colorFilter]);
 
   const allLibraryTags = useMemo(() => [...new Set(units.flatMap(u => u.tags || []))].sort(), [units]);
 
@@ -91,6 +95,9 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
     
     if (statusFilter === 'learned') result = result.filter(u => u.isLearned);
     if (statusFilter === 'new') result = result.filter(u => !u.isLearned);
+    
+    if (focusFilter === 'focused') result = result.filter(u => u.isFocused);
+    if (colorFilter !== 'all') result = result.filter(u => u.focusColor === colorFilter);
     
     if (selectedTag) {
         if (selectedTag === 'Uncategorized') {
@@ -105,7 +112,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
     }
     
     return result;
-  }, [units, statusFilter, selectedTag]);
+  }, [units, statusFilter, selectedTag, focusFilter, colorFilter]);
   
   const pagedUnits = useMemo(() => {
       const start = page * pageSize;
@@ -144,6 +151,12 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       const updatedUnit = { ...unit, focusColor: color || undefined, updatedAt: Date.now() };
       if (!color) delete updatedUnit.focusColor;
       // FIX: Changed 'i' to 'u' to fix 'Cannot find name i' error
+      setUnits(prev => prev.map(u => u.id === unit.id ? updatedUnit : u));
+      await db.saveUnit(updatedUnit);
+  };
+  
+  const handleToggleFocus = async (unit: Unit) => {
+      const updatedUnit = { ...unit, isFocused: !unit.isFocused, updatedAt: Date.now() };
       setUnits(prev => prev.map(u => u.id === unit.id ? updatedUnit : u));
       await db.saveUnit(updatedUnit);
   };
@@ -187,6 +200,23 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                             { label: 'Active', value: 'new', isActive: statusFilter === 'new', onClick: () => setStatusFilter('new') },
                             { label: 'Done', value: 'learned', isActive: statusFilter === 'learned', onClick: () => setStatusFilter('learned') }
                         ]}
+                        customSection={
+                            <>
+                                <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
+                                    <Target size={10}/> Focus & Status
+                                </div>
+                                <div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2">
+                                    <button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                                        {focusFilter === 'focused' ? 'Focused Only' : 'All Items'}
+                                    </button>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
+                                        <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
+                                        <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                    </div>
+                                </div>
+                            </>
+                        }
                         viewOptions={[
                             { label: 'Description', checked: viewSettings.showDesc, onChange: () => setViewSettings(s => ({...s, showDesc: !s.showDesc})) },
                             { label: 'Word Count', checked: viewSettings.showWords, onChange: () => setViewSettings(s => ({...s, showWords: !s.showWords})) },
@@ -219,6 +249,8 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                         className={unit.isLearned ? "border-green-300 ring-1 ring-green-100 shadow-[0_4px_20px_-4px_rgba(34,197,94,0.15)]" : ""}
                         focusColor={unit.focusColor}
                         onFocusChange={(c) => handleFocusChange(unit, c)}
+                        isFocused={unit.isFocused}
+                        onToggleFocus={() => handleToggleFocus(unit)}
                         actions={
                             <>
                                 <button onClick={(e) => { e.stopPropagation(); toggleUnitStatus(unit); }} className={`p-1.5 rounded-lg transition-colors ${unit.isLearned ? 'text-green-600 bg-green-50 hover:bg-green-100' : 'text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100'}`} title={unit.isLearned ? "Mark as Incomplete" : "Mark as Completed"}>

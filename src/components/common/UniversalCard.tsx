@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Tag, X } from 'lucide-react';
+import { Tag, X, Target } from 'lucide-react';
 import { FocusColor } from '../../app/types';
 
 export interface CardBadge {
@@ -34,6 +35,11 @@ interface UniversalCardProps {
   focusColor?: FocusColor | null;
   /** Callback when focus color is changed via the mini menu */
   onFocusChange?: (color: FocusColor | null) => void;
+
+  /** Focus Toggle State */
+  isFocused?: boolean;
+  /** Callback to toggle focus state */
+  onToggleFocus?: () => void;
 
   className?: string;
 }
@@ -72,6 +78,8 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
   children,
   focusColor,
   onFocusChange,
+  isFocused,
+  onToggleFocus,
   className = ''
 }) => {
   const displayBadges = [...(badge ? [badge] : []), ...badges];
@@ -93,10 +101,26 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
           />
       )}
 
+      {/* Red Dot if Focused */}
+      {isFocused && (
+          <div className="absolute top-1.5 left-1.5 w-2 h-2 bg-red-600 rounded-full z-10 shadow-sm pointer-events-none animate-in zoom-in" />
+      )}
+
       {/* Actions & Focus - Positioned Absolute Top-Right */}
-      {(actions || onFocusChange) && (
+      {(actions || onFocusChange || onToggleFocus) && (
         <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 backdrop-blur-sm rounded-xl p-1 border border-neutral-200 shadow-sm z-30">
-            {/* Focus Menu (Buttons) */}
+            {/* Focus Toggle */}
+            {onToggleFocus && (
+                 <button 
+                    onClick={(e) => { e.stopPropagation(); onToggleFocus(); }} 
+                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-all mr-1 ${isFocused ? 'bg-red-50 text-red-600' : 'text-neutral-300 hover:text-neutral-600 hover:bg-neutral-50'}`}
+                    title="Toggle Focus"
+                 >
+                    <Target size={14} />
+                 </button>
+            )}
+
+            {/* Focus Color Menu */}
             {onFocusChange && (
                 <div className="flex items-center gap-1.5 pr-2 mr-1 border-r border-neutral-200" onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => onFocusChange('green')} className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${focusColor === 'green' ? 'bg-emerald-500 border-emerald-600 scale-110 shadow-sm' : 'bg-emerald-100 border-emerald-200 hover:bg-emerald-200 hover:border-emerald-300'}`} title="Mark Green">

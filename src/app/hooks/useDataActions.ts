@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { User, VocabularyItem, DataScope } from '../types';
 import * as dataStore from '../dataStore';
@@ -43,7 +44,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
             speaking: true,
             listening: true,
             mimic: true,
-            wordBook: true
+            wordBook: true,
+            calendar: true
         };
         
         await generateJsonExport(currentUser.id, currentUser, fullScope);
@@ -85,7 +87,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
                     speaking: true,
                     listening: true,
                     mimic: true,
-                    wordBook: true
+                    wordBook: true,
+                    calendar: true
                 };
 
                 const result = await processJsonImport(file, currentUser.id, fullScope);

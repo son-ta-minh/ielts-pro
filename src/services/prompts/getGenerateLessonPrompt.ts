@@ -27,6 +27,9 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
   - **INTERACTIVE ELEMENTS**:
     - **Hidden/Reveal**: Use \`[HIDDEN: content]\` for answers to questions, key takeaways, or pop-quiz answers.
     - **Tips**: Use \`[Content]\` (text inside brackets on a NEW LINE) for strategy tips, exam advice, or important notes.
+    - **Fill-in Quiz**: Use \`[Quiz: answer]\` for input fields.
+    - **Multi Choice Buttons**: Use \`[Multi: Correct | Option | Option]\`.
+    - **Dropdown Select**: Use \`[Select: Correct | Option | Option]\`. (Good for sentence completion with hints).
 
   AUDIO BLOCK RULE (TOKEN SAVER - CRITICAL):
   - **WRAP ONLY META CONTENT**: Only wrap your explanations, greetings, and definitions inside \`[${audioTag}]\` and \`[/]\`.
@@ -45,7 +48,7 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
     Answer: [HIDDEN: A pronoun]
     
     2. Give an example.
-    Answer: [HIDDEN: He, She, It]
+    Answer: [Select: He | The | A]
 
   TASK: Create a lesson for a ${targetAudience} on topic: "${topic}".
 
@@ -53,6 +56,6 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
   {
     "title": "string",
     "description": "string",
-    "content": "string (Markdown using the [${audioTag}]...[/] wrappers, [HIDDEN:...] blocks, and [Tip] blocks)"
+    "content": "string (Markdown using the [${audioTag}]...[/] wrappers, [HIDDEN:...] blocks, [Quiz:...], [Multi:...] and [Select:...] tags)"
   }`;
 }

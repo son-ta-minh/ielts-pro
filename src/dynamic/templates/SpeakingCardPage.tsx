@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, NativeSpeakItem, VocabularyItem, WordQuality, FocusColor, SpeakingTopic, NativeSpeakAnswer, AppView } from '../../app/types';
 import * as db from '../../app/db';
 import { ResourcePage } from '../page/ResourcePage';
-import { Mic, Volume2, Eye, EyeOff, Tag, Coffee, GraduationCap, School, ChevronRight, Shuffle, Plus, Edit3, Trash2, Swords, AudioLines, Sparkles, Save, X, Braces, StickyNote, FolderTree, Lightbulb, Info, ChevronLeft, Loader2, Square, Combine, CheckSquare, Waves } from 'lucide-react';
+import { Mic, Volume2, Eye, EyeOff, Tag, Coffee, GraduationCap, School, ChevronRight, Shuffle, Plus, Edit3, Trash2, Swords, AudioLines, Sparkles, Save, X, Braces, StickyNote, FolderTree, Lightbulb, Info, ChevronLeft, Loader2, Square, Combine, CheckSquare, Waves, Target } from 'lucide-react';
 import { speak, startRecording, stopRecording } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { TagBrowser, TagTreeNode } from '../../components/common/TagBrowser';
@@ -272,8 +272,9 @@ const SpeakingCardItem: React.FC<{
     onEdit: (item: NativeSpeakItem) => void;
     onDelete: (item: NativeSpeakItem) => void;
     onFocusChange: (item: NativeSpeakItem, color: FocusColor | null) => void;
+    onToggleFocus: (item: NativeSpeakItem) => void;
     onPractice: (item: NativeSpeakItem) => void;
-}> = ({ item, viewSettings, isSelected, onSelect, onEdit, onDelete, onFocusChange, onPractice }) => {
+}> = ({ item, viewSettings, isSelected, onSelect, onEdit, onDelete, onFocusChange, onToggleFocus, onPractice }) => {
     const answerCount = item.answers?.length || 0;
 
     return (
@@ -286,6 +287,8 @@ const SpeakingCardItem: React.FC<{
             onClick={() => answerCount > 0 && onPractice(item)}
             focusColor={item.focusColor}
             onFocusChange={(c) => onFocusChange(item, c)}
+            isFocused={item.isFocused}
+            onToggleFocus={() => onToggleFocus(item)}
             className={isSelected ? 'ring-2 ring-indigo-500 border-indigo-500' : ''}
             actions={
                 <>
@@ -442,6 +445,9 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(12);
 
+  const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
+  const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
+
   useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
 
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -467,10 +473,13 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   };
 
   useEffect(() => { loadData(); }, [user.id]);
-  useEffect(() => { setPage(0); }, [selectedTag, pageSize]);
+  useEffect(() => { setPage(0); }, [selectedTag, pageSize, focusFilter, colorFilter]);
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
+      if (focusFilter === 'focused' && !item.isFocused) return false;
+      if (colorFilter !== 'all' && item.focusColor !== colorFilter) return false;
+
       if (selectedTag) {
           if (selectedTag === 'Uncategorized') {
              if (item.path && item.path !== '/') return false;
@@ -480,7 +489,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
       }
       return true;
     });
-  }, [items, selectedTag]);
+  }, [items, selectedTag, focusFilter, colorFilter]);
   
   const pagedItems = useMemo(() => {
       const start = page * pageSize;
@@ -518,6 +527,12 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
       await db.saveNativeSpeakItem(updatedItem);
   };
   
+  const handleToggleFocus = async (item: NativeSpeakItem) => {
+      const updatedItem = { ...item, isFocused: !item.isFocused, updatedAt: Date.now() };
+      setItems(prev => prev.map(i => i.id === item.id ? updatedItem : i));
+      await db.saveNativeSpeakItem(updatedItem);
+  };
+
   const handleSelect = (id: string) => {
     setSelectedIds(prev => {
         const next = new Set(prev);
@@ -587,7 +602,33 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
       }
       actions={
         <ResourceActions
-            viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]}/>}
+            viewMenu={
+                <ViewMenu 
+                    isOpen={isViewMenuOpen} 
+                    setIsOpen={setIsViewMenuOpen} 
+                    customSection={
+                        <>
+                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
+                                <Target size={10}/> Focus & Status
+                            </div>
+                            <div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2">
+                                <button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                                    {focusFilter === 'focused' ? 'Focused Only' : 'All Items'}
+                                </button>
+                                <div className="flex gap-1">
+                                    <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                </div>
+                            </div>
+                        </>
+                    }
+                    viewOptions={[
+                        { label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, 
+                        { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }
+                    ]}
+                />
+            }
             browseGroups={{ isOpen: isGroupBrowserOpen, onToggle: () => { setIsGroupBrowserOpen(!isGroupBrowserOpen); setIsTagBrowserOpen(false); } }}
             browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); setIsGroupBrowserOpen(false); } }}
             addActions={[{ label: 'Add', icon: Plus, onClick: handleAdd }]}
@@ -613,6 +654,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                 onEdit={handleEdit} 
                 onDelete={setItemToDelete} 
                 onFocusChange={handleFocusChange} 
+                onToggleFocus={handleToggleFocus}
                 onPractice={setPracticeModalItem}
             />
           ))}

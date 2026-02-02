@@ -1,5 +1,6 @@
-import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook } from '../app/types';
-import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getComparisonGroupsByUserId, bulkSaveComparisonGroups, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks } from '../app/db';
+
+import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, CalendarEvent } from '../app/types';
+import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getComparisonGroupsByUserId, bulkSaveComparisonGroups, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getCalendarEventsByUserId, bulkSaveCalendarEvents } from '../app/db';
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
@@ -92,7 +93,8 @@ const FULL_SCOPE: DataScope = {
     speaking: true,
     listening: true,
     mimic: true,
-    wordBook: true
+    wordBook: true,
+    calendar: true
 };
 
 // --- Export Helper Functions (Refactored) ---
@@ -363,6 +365,7 @@ export const processJsonImport = async (
                 const incomingMimicQueue: any[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.mimicQueue;
                 const incomingWordBooksRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.wordBooks || rawJson.wb);
                 const incomingWordBooks = incomingWordBooksRaw ? incomingWordBooksRaw.map(_mapToLongKeys) : undefined;
+                const incomingCalendarEvents: CalendarEvent[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.calendarEvents || rawJson.ce);
                 
                 const incomingUserRaw: User | undefined = Array.isArray(rawJson) ? undefined : rawJson.user;
                 let incomingUser: User | undefined;
@@ -602,6 +605,14 @@ export const processJsonImport = async (
                         await bulkSaveWordBooks(booksWithUser);
                     }
                 }
+                
+                // --- SCOPED IMPORT: CALENDAR ---
+                if (scope.calendar) {
+                     if (incomingCalendarEvents && Array.isArray(incomingCalendarEvents)) {
+                          const eventsWithUser = incomingCalendarEvents.map(e => ({...e, userId: importedUserId}));
+                          await bulkSaveCalendarEvents(eventsWithUser);
+                     }
+                }
 
                 let updatedUser: User | undefined = undefined;
                 
@@ -736,6 +747,8 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
 
     const wordBooksDataRaw = scope.wordBook ? await getWordBooksByUserId(userId) : [];
     const wordBooksData = wordBooksDataRaw.map(_mapToShortKeys);
+    
+    const calendarEventsData = scope.calendar ? await getCalendarEventsByUserId(userId) : [];
 
     // 2. Process Data
     const processedWords = wordsData; // No need to reset progress on export anymore, that logic was old
@@ -789,6 +802,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         compositions: compositionsData,
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
         wordBooks: wordBooksData,
+        ce: calendarEventsData,
         adv: scope.user ? {
             ch: customChapters ? JSON.parse(customChapters) : null,
             b: customBadges ? JSON.parse(customBadges) : null

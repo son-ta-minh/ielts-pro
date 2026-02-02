@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { ComparisonGroup } from '../../app/types';
+import { ComparisonGroup, FocusColor } from '../../app/types';
 import { ResourcePage } from '../page/ResourcePage';
-import { Puzzle, Search, Plus, BookOpen, Edit3, Trash2 } from 'lucide-react';
+import { Puzzle, Search, Plus, BookOpen, Edit3, Trash2, Target } from 'lucide-react';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { TagBrowser, TagTreeNode } from '../../components/common/TagBrowser';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
@@ -18,6 +18,14 @@ interface Props {
     setViewSettings: React.Dispatch<React.SetStateAction<{ showDesc: boolean; showTags: boolean; compact: boolean; }>>;
     isViewMenuOpen: boolean;
     setIsViewMenuOpen: (v: boolean) => void;
+    
+    focusFilter: 'all' | 'focused';
+    setFocusFilter: (v: 'all' | 'focused') => void;
+    colorFilter: 'all' | 'green' | 'yellow' | 'red';
+    setColorFilter: (v: 'all' | 'green' | 'yellow' | 'red') => void;
+    onFocusChange: (group: ComparisonGroup, color: FocusColor | null) => void;
+    onToggleFocus: (group: ComparisonGroup) => void;
+
     isTagBrowserOpen: boolean;
     setIsTagBrowserOpen: (v: boolean) => void;
     tagTree: TagTreeNode[];
@@ -35,6 +43,7 @@ interface Props {
 export const ComparisonTemplateUI: React.FC<Props> = ({
     loading, filteredGroups, query, onQueryChange, activeFilters,
     viewSettings, setViewSettings, isViewMenuOpen, setIsViewMenuOpen,
+    focusFilter, setFocusFilter, colorFilter, setColorFilter, onFocusChange, onToggleFocus,
     isTagBrowserOpen, setIsTagBrowserOpen, tagTree, selectedTag, setSelectedTag,
     onNew, onRead, onEdit, onDeleteRequest, groupToDelete, onDeleteConfirm, onDeleteCancel
 }) => {
@@ -57,6 +66,23 @@ export const ComparisonTemplateUI: React.FC<Props> = ({
                          <ViewMenu 
                             isOpen={isViewMenuOpen}
                             setIsOpen={setIsViewMenuOpen}
+                            customSection={
+                                <>
+                                    <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
+                                        <Target size={10}/> Focus & Status
+                                    </div>
+                                    <div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2">
+                                        <button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                                            {focusFilter === 'focused' ? 'Focused Only' : 'All Items'}
+                                        </button>
+                                        <div className="flex gap-1">
+                                            <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
+                                            <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
+                                            <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                        </div>
+                                    </div>
+                                </>
+                            }
                             viewOptions={[
                                 { label: 'Show Word List', checked: viewSettings.showDesc, onChange: () => setViewSettings(v => ({...v, showDesc: !v.showDesc})) },
                                 { label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) },
@@ -85,6 +111,10 @@ export const ComparisonTemplateUI: React.FC<Props> = ({
                                 tags={group.tags}
                                 compact={viewSettings.compact}
                                 onClick={() => onRead(group)}
+                                focusColor={group.focusColor}
+                                onFocusChange={(c) => onFocusChange(group, c)}
+                                isFocused={group.isFocused}
+                                onToggleFocus={() => onToggleFocus(group)}
                                 actions={
                                     <>
                                         <button onClick={(e) => { e.stopPropagation(); onRead(group); }} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Read"><BookOpen size={14}/></button>

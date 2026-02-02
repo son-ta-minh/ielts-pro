@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { User, ListeningItem, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import { ResourcePage } from '../page/ResourcePage';
-import { Ear, Plus, Edit3, Trash2, Volume2, Save, X, Info, Tag, Shuffle, FolderTree } from 'lucide-react';
+import { Ear, Plus, Edit3, Trash2, Volume2, Save, X, Info, Tag, Shuffle, FolderTree, Target } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { speak } from '../../utils/audio';
@@ -166,6 +166,9 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
   const [isGroupBrowserOpen, setIsGroupBrowserOpen] = useState(false);
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   
+  const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
+  const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
+
   // Pagination
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(12);
@@ -193,11 +196,14 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
   // Reset pagination on filter change
   useEffect(() => {
     setPage(0);
-  }, [selectedTag, pageSize]);
+  }, [selectedTag, pageSize, focusFilter, colorFilter]);
 
   // Derived Logic
   const filteredItems = useMemo(() => {
     let result = items;
+    if (focusFilter === 'focused') result = result.filter(i => i.isFocused);
+    if (colorFilter !== 'all') result = result.filter(i => i.focusColor === colorFilter);
+    
     if (selectedTag) {
         if (selectedTag === 'Uncategorized') {
             result = result.filter(item => {
@@ -210,7 +216,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
         }
     }
     return result;
-  }, [items, selectedTag]);
+  }, [items, selectedTag, focusFilter, colorFilter]);
   
   const pagedItems = useMemo(() => {
       const start = page * pageSize;
@@ -280,6 +286,12 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       setItems(prev => prev.map(i => i.id === item.id ? updated : i));
       await db.saveListeningItem(updated);
   };
+  
+  const handleToggleFocus = async (item: ListeningItem) => {
+      const updated = { ...item, isFocused: !item.isFocused, updatedAt: Date.now() };
+      setItems(prev => prev.map(i => i.id === item.id ? updated : i));
+      await db.saveListeningItem(updated);
+  };
 
   return (
     <>
@@ -313,6 +325,23 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                 <ViewMenu 
                     isOpen={isViewMenuOpen}
                     setIsOpen={setIsViewMenuOpen}
+                    customSection={
+                        <>
+                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
+                                <Target size={10}/> Focus & Status
+                            </div>
+                            <div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2">
+                                <button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                                    {focusFilter === 'focused' ? 'Focused Only' : 'All Items'}
+                                </button>
+                                <div className="flex gap-1">
+                                    <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                </div>
+                            </div>
+                        </>
+                    }
                     viewOptions={[
                         { label: 'Show Notes', checked: viewSettings.showNote, onChange: () => setViewSettings(v => ({...v, showNote: !v.showNote})) },
                         { label: 'Show Card Type', checked: viewSettings.showType, onChange: () => setViewSettings(v => ({...v, showType: !v.showType})) },
@@ -344,6 +373,8 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                 onClick={() => handlePlay(item.text)}
                 focusColor={item.focusColor}
                 onFocusChange={(c) => handleFocusChange(item, c)}
+                isFocused={item.isFocused}
+                onToggleFocus={() => handleToggleFocus(item)}
                 actions={
                     <>
                         <button onClick={(e) => { e.stopPropagation(); handlePlay(item.text); }} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Play">

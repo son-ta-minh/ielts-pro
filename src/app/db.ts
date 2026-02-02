@@ -1,3 +1,4 @@
+
 import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, ComparisonGroup, IrregularVerb, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, CalendarEvent, WordBook } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
@@ -699,6 +700,7 @@ export const bulkDeleteCompositions = async (ids: string[]): Promise<void> => { 
 export const saveCalendarEvent = async (event: CalendarEvent): Promise<void> => { await crudTemplate(CALENDAR_STORE, tx => tx.objectStore(CALENDAR_STORE).put(event)); };
 export const getCalendarEventsByUserId = async (userId: string): Promise<CalendarEvent[]> => await crudTemplate(CALENDAR_STORE, tx => tx.objectStore(CALENDAR_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
 export const deleteCalendarEvent = async (id: string): Promise<void> => { await crudTemplate(CALENDAR_STORE, tx => tx.objectStore(CALENDAR_STORE).delete(id)); };
+export const bulkSaveCalendarEvents = async (items: CalendarEvent[]): Promise<void> => { await crudTemplate(CALENDAR_STORE, tx => { const store = tx.objectStore(CALENDAR_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Word Book Feature ---
 export const saveWordBook = async (book: WordBook): Promise<void> => { await crudTemplate(WORDBOOK_STORE, tx => tx.objectStore(WORDBOOK_STORE).put(book)); };

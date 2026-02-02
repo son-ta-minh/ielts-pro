@@ -4,7 +4,7 @@ import { User, Composition, VocabularyItem, WritingTopic, WritingLog, Compositio
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { PenLine, Plus, Edit3, Trash2, BookOpen, Swords, Play, Sparkles, Loader2, Save, ArrowLeft, Tag, Layers, FolderTree } from 'lucide-react';
+import { PenLine, Plus, Edit3, Trash2, BookOpen, Swords, Play, Sparkles, Loader2, Save, ArrowLeft, Tag, Layers, FolderTree, Target } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { CompositionEditor } from './CompositionEditor';
@@ -123,7 +123,7 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
              </div>
              <div className="space-y-1">
                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-2"><Tag size={12}/> Tags (Keywords)</label>
-                <input type="text" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. Environment, Charts" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                <input type="text" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. Environment, Technology" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
              </div>
           </div>
   
@@ -170,6 +170,9 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
         compact: false
     }));
 
+    const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
+    const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
+
     // Pagination
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(12);
@@ -200,7 +203,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
     
     useEffect(() => {
         setPage(0);
-    }, [resourceType, selectedTag, pageSize]);
+    }, [resourceType, selectedTag, pageSize, focusFilter, colorFilter]);
 
     useEffect(() => {
         if (initialContextWord) {
@@ -218,19 +221,27 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
     }, [compositions, topics, resourceType]);
 
     const filteredItems = useMemo(() => {
-        const items = resourceType === 'COMPOSITIONS' ? compositions : topics;
+        let items = (resourceType === 'COMPOSITIONS' ? compositions : topics) as (Composition | WritingTopic)[];
+
+        // Apply Focus & Color Filters
+        items = items.filter((item) => {
+             if (focusFilter === 'focused' && !item.isFocused) return false;
+             if (colorFilter !== 'all' && item.focusColor !== colorFilter) return false;
+             return true;
+        });
+
         if (selectedTag) {
             if (selectedTag === 'Uncategorized') {
-                return items.filter((item: any) => {
-                    const path = item.path ?? (item.tags || []).find((t: string) => t.startsWith('/'));
+                return items.filter((item) => {
+                    const path = item.path ?? (item.tags || []).find((t) => t.startsWith('/'));
                     const hasPath = path && path !== '/';
                     return !hasPath;
                 });
             }
-            return items.filter((item: any) => item.path?.startsWith(selectedTag) || item.tags?.includes(selectedTag));
+            return items.filter((item) => item.path?.startsWith(selectedTag) || item.tags?.includes(selectedTag));
         }
         return items;
-    }, [compositions, topics, resourceType, selectedTag]);
+    }, [compositions, topics, resourceType, selectedTag, focusFilter, colorFilter]);
     
     const pagedItems = useMemo(() => {
         const start = page * pageSize;
@@ -295,6 +306,18 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
          }
     };
 
+    const handleToggleFocus = async (item: Composition | WritingTopic) => {
+         const updated = { ...item, isFocused: !item.isFocused, updatedAt: Date.now() };
+         
+         if ('content' in item) { // Composition
+             setCompositions(prev => prev.map(c => c.id === item.id ? updated as Composition : c));
+             await dataStore.saveComposition(updated as Composition);
+         } else { // Topic
+             setTopics(prev => prev.map(t => t.id === item.id ? updated as WritingTopic : t));
+             await db.saveWritingTopic(updated as WritingTopic);
+         }
+    };
+
     if (viewMode === 'EDIT_COMP') {
         return <CompositionEditor user={user} initialComposition={activeComposition} onSave={() => { setViewMode('LIST'); loadData(); }} onCancel={() => setViewMode('LIST')} />;
     }
@@ -341,6 +364,23 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                                 { label: 'Writings', value: 'COMPOSITIONS', isActive: resourceType === 'COMPOSITIONS', onClick: () => { setResourceType('COMPOSITIONS'); setSelectedTag(null); } },
                                 { label: 'Topics', value: 'TOPICS', isActive: resourceType === 'TOPICS', onClick: () => { setResourceType('TOPICS'); setSelectedTag(null); } },
                             ]}
+                            customSection={
+                                <>
+                                    <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
+                                        <Target size={10}/> Focus & Status
+                                    </div>
+                                    <div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2">
+                                        <button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                                            {focusFilter === 'focused' ? 'Focused Only' : 'All Items'}
+                                        </button>
+                                        <div className="flex gap-1">
+                                            <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
+                                            <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
+                                            <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                        </div>
+                                    </div>
+                                </>
+                            }
                             viewOptions={[
                                 { label: 'Show Details', checked: viewSettings.showDetails, onChange: () => setViewSettings(v => ({...v, showDetails: !v.showDetails})) },
                                 { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) },
@@ -356,7 +396,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             {() => (
                 <>
                     {resourceType === 'COMPOSITIONS' ? (
-                        (pagedItems as Composition[]).map(comp => {
+                        (pagedItems as any[]).map(comp => {
                              const effectiveTags = comp.tags || (comp.label ? [comp.label] : []);
                              return (
                                 <UniversalCard
@@ -367,6 +407,8 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                                     onClick={() => { setActiveComposition(comp); setViewMode('EDIT_COMP'); }}
                                     focusColor={comp.focusColor}
                                     onFocusChange={(c) => handleFocusChange(comp, c)}
+                                    isFocused={comp.isFocused}
+                                    onToggleFocus={() => handleToggleFocus(comp)}
                                     actions={
                                         <>
                                             <button onClick={(e) => { e.stopPropagation(); setActiveComposition(comp); setViewMode('EDIT_COMP'); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit"><Edit3 size={14}/></button>
@@ -380,7 +422,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                              );
                         })
                     ) : (
-                        (pagedItems as WritingTopic[]).map(topic => (
+                        (pagedItems as any[]).map(topic => (
                             <UniversalCard
                                 key={topic.id}
                                 title={topic.name} path={topic.path} tags={topic.tags}
@@ -388,6 +430,8 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                                 onClick={() => { setActiveTopic(topic); setViewMode('SESSION'); }}
                                 focusColor={topic.focusColor}
                                 onFocusChange={(c) => handleFocusChange(topic, c)}
+                                isFocused={topic.isFocused}
+                                onToggleFocus={() => handleToggleFocus(topic)}
                                 actions={
                                     <>
                                         <button onClick={(e) => { e.stopPropagation(); setActiveTopic(topic); setViewMode('SESSION'); }} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Practice"><Play size={14}/></button>

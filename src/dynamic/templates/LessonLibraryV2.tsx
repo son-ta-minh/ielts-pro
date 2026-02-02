@@ -4,11 +4,10 @@ import { User, Lesson, VocabularyItem, SessionType, ComparisonGroup, AppView, Fo
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { BookText, Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, Puzzle, FileClock, Eye, Filter, CheckCircle2, Circle, CopyPlus, Sparkles, FolderTree } from 'lucide-react';
+import { BookText, Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, Puzzle, FileClock, Eye, Filter, CheckCircle2, Circle, CopyPlus, Sparkles, FolderTree, Target } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { TagBrowser, TagTreeNode } from '../../components/common/TagBrowser';
-// FIX: getConfig is exported from settingsManager, not storage
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { getConfig } from '../../app/settingsManager';
 import { UniversalCard } from '../../components/common/UniversalCard';
@@ -17,7 +16,7 @@ import LessonPracticeView from './LessonPracticeView';
 import { ComparisonReadView } from './ComparisonReadView';
 import { ComparisonEditView } from './ComparisonEditView';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
-import { getGenerateLessonPrompt } from '../../services/promptService';
+import { getLessonPrompt } from '../../services/promptService';
 import { ResourceActions, AddAction } from '../page/ResourceActions';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { ResourceConfig } from '../types';
@@ -34,7 +33,6 @@ type ResourceItem =
   | { type: 'ESSAY'; data: Lesson; path?: string; tags?: string[]; date: number }
   | { type: 'COMPARISON'; data: ComparisonGroup; path?: string; tags?: string[]; date: number };
 
-// Fix: Imported ResourceConfig to fix type error
 const lessonConfig: ResourceConfig = { filterSchema: [], viewSchema: [] };
 const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
 
@@ -47,7 +45,11 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [isGroupBrowserOpen, setIsGroupBrowserOpen] = useState(false);
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+  
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'ESSAY' | 'COMPARISON'>('ALL');
+  const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
+  const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
+
   const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, { showDesc: true, compact: false }));
   
   const [page, setPage] = useState(0);
@@ -77,11 +79,14 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
 
   useEffect(() => { loadData(); }, [loadData]);
   
-  useEffect(() => { setPage(0); }, [selectedTag, typeFilter, pageSize]);
+  useEffect(() => { setPage(0); }, [selectedTag, typeFilter, focusFilter, colorFilter, pageSize]);
 
   const filteredResources = useMemo(() => {
     return resources.filter(res => {
       if (typeFilter !== 'ALL' && res.type !== typeFilter) return false;
+      if (focusFilter === 'focused' && !res.data.isFocused) return false;
+      if (colorFilter !== 'all' && res.data.focusColor !== colorFilter) return false;
+      
       if (selectedTag) {
         if (selectedTag === 'Uncategorized') {
             const path = res.path ?? (res.tags || []).find(t => t.startsWith('/'));
@@ -93,7 +98,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       }
       return true;
     });
-  }, [resources, selectedTag, typeFilter]);
+  }, [resources, selectedTag, typeFilter, focusFilter, colorFilter]);
   
   const pagedResources = useMemo(() => {
       const start = page * pageSize;
@@ -128,7 +133,8 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     if (JSON.stringify(user.lessonPreferences) !== JSON.stringify(preferences)) { await onUpdateUser({ ...user, lessonPreferences: preferences }); }
     const newLesson: Lesson = {
         id: `lesson-ai-${Date.now()}`, userId: user.id, title: result.title, description: result.description, content: result.content,
-        tags: ['AI Generated', preferences.tone === 'friendly_elementary' ? 'Elementary' : 'Advanced'],
+        // Use Tags returned from AI
+        tags: result.tags || [],
         createdAt: Date.now(), updatedAt: Date.now(), topic1: '', topic2: ''
     };
     await db.saveLesson(newLesson);
@@ -152,6 +158,19 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         await db.saveComparisonGroup(newData as ComparisonGroup);
       }
   };
+  
+  const handleToggleFocus = async (item: ResourceItem) => {
+      const newFocusState = !item.data.isFocused;
+      if (item.type === 'ESSAY') {
+          const newData = { ...item.data, isFocused: newFocusState, updatedAt: Date.now() };
+          setResources(prev => prev.map(r => (r.type === 'ESSAY' && r.data.id === item.data.id) ? { ...r, data: newData } : r));
+          await db.saveLesson(newData as Lesson);
+      } else {
+          const newData = { ...item.data, isFocused: newFocusState, updatedAt: Date.now() };
+          setResources(prev => prev.map(r => (r.type === 'COMPARISON' && r.data.id === item.data.id) ? { ...r, data: newData } : r));
+          await db.saveComparisonGroup(newData as ComparisonGroup);
+      }
+  };
 
   const addActions: AddAction[] = [
       { label: 'AI Lesson', icon: Sparkles, onClick: () => setIsAiModalOpen(true) },
@@ -163,7 +182,14 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       const config = (window as any).CONFIG || getConfig();
       const activeType = config.audioCoach.activeCoach;
       const coachName = config.audioCoach.coaches[activeType].name;
-      return getGenerateLessonPrompt({ ...inputs, coachName });
+      // Using unified getLessonPrompt for generation
+      return getLessonPrompt({
+          topic: inputs.topic,
+          language: inputs.language,
+          targetAudience: inputs.targetAudience,
+          tone: inputs.tone,
+          coachName
+      });
   };
 
   return (
@@ -185,6 +211,23 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                         { label: 'Lesson', value: 'ESSAY', isActive: typeFilter === 'ESSAY', onClick: () => setTypeFilter('ESSAY') },
                         { label: 'Comp.', value: 'COMPARISON', isActive: typeFilter === 'COMPARISON', onClick: () => setTypeFilter('COMPARISON') },
                     ]}
+                    customSection={
+                        <>
+                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
+                                <Target size={10}/> Focus & Status
+                            </div>
+                            <div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2">
+                                <button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                                    {focusFilter === 'focused' ? 'Focused Only' : 'All Items'}
+                                </button>
+                                <div className="flex gap-1">
+                                    <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                </div>
+                            </div>
+                        </>
+                    }
                     viewOptions={[
                         { label: 'Show Description', checked: viewSettings.showDesc, onChange: () => setViewSettings(v => ({...v, showDesc: !v.showDesc})) },
                         { label: 'Compact Mode', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) },
@@ -228,6 +271,8 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                     onClick={onRead}
                     focusColor={item.data.focusColor}
                     onFocusChange={(c) => handleFocusChange(item, c)}
+                    isFocused={item.data.isFocused}
+                    onToggleFocus={() => handleToggleFocus(item)}
                     actions={
                         <>
                             <button onClick={(e) => { e.stopPropagation(); onRead(); }} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Read"><BookOpen size={14}/></button>

@@ -263,7 +263,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
             {/* FLOATING MENU (Chuột phải) */}
             {isOpen && menuPos && (
                 <div 
-                    className="fixed z-[10001] pointer-events-auto"
+                    className="fixed z-[2147483647] pointer-events-auto"
                     style={{ 
                         left: `${menuPos.x}px`, 
                         top: `${menuPos.y}px`, 
@@ -282,7 +282,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
                 </div>
             )}
 
-            <div className="fixed bottom-0 left-6 z-[9999] flex flex-col items-start pointer-events-none">
+            <div className="fixed bottom-0 left-6 z-[2147483646] flex flex-col items-start pointer-events-none">
                 <div 
                     className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" 
                     onMouseEnter={onMouseEnter}
