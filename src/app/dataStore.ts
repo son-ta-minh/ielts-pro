@@ -1,3 +1,4 @@
+
 import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
@@ -70,9 +71,17 @@ function _recalculateStats(userId: string) {
     activeWords.forEach(w => {
         // Exclude reviews from boss battles from daily stats to prevent energy farming
         if (w.lastReview && w.lastReview >= todayTimestamp && w.lastReviewSessionType !== 'boss_battle') {
-            if (w.lastGrade === ReviewGrade.FORGOT) todayReviewedWords.push(w);
-            else if (w.consecutiveCorrect === 1) todayLearnedWords.push(w);
-            else todayReviewedWords.push(w);
+            if (w.lastGrade === ReviewGrade.FORGOT) {
+                todayReviewedWords.push(w);
+            }
+            // FIX: Only count as "Learned" if it's the first success (cc=1) AND it wasn't Hard.
+            // If it was Hard, it implies struggle, so we count it as Reviewed.
+            else if (w.consecutiveCorrect === 1 && w.lastGrade !== ReviewGrade.HARD) {
+                todayLearnedWords.push(w);
+            } 
+            else {
+                todayReviewedWords.push(w);
+            }
         }
     });
 
