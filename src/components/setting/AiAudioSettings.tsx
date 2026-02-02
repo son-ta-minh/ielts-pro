@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { BrainCircuit, Save, Bot, MonitorSmartphone, ChevronDown, BarChart3, Power, Loader2, HardDrive, CheckCircle2, AlertCircle, Hash, RefreshCw, ExternalLink } from 'lucide-react';
+import { BrainCircuit, Save, Bot, MonitorSmartphone, ChevronDown, BarChart3, Power, Loader2, HardDrive, CheckCircle2, AlertCircle, Hash, RefreshCw, ExternalLink, Link } from 'lucide-react';
 import { SystemConfig } from '../../app/settingsManager';
-import { fetchServerVoices, ServerVoice, selectServerVoice, setServerMode, speak } from '../../utils/audio';
+import { fetchServerVoices, ServerVoice, selectServerVoice, setServerMode, speak, resetAudioProtocolCache, getLastConnectedUrl } from '../../utils/audio';
 
 interface AiAudioSettingsProps {
     config: SystemConfig;
@@ -30,17 +30,21 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
 }) => {
     const [serverVoices, setServerVoices] = useState<ServerVoice[]>([]);
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
+    const [connectedUrl, setConnectedUrl] = useState<string | null>(null);
 
     const checkServer = async () => {
         setServerStatus('checking');
-        const data = await fetchServerVoices(config.audio.serverPort);
+        resetAudioProtocolCache(); 
+        const data = await fetchServerVoices(config.audio.serverUrl);
         if (data) {
             setServerVoices(data.voices);
             setServerStatus('connected');
-            await setServerMode('speak', config.audio.serverPort);
+            setConnectedUrl(getLastConnectedUrl());
+            await setServerMode('speak', config.audio.serverUrl);
         } else {
             setServerStatus('disconnected');
             setServerVoices([]);
+            setConnectedUrl(null);
         }
     };
 
@@ -49,13 +53,13 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
         if (config.audio.mode === 'server') {
             checkServer();
         }
-    }, [config.audio.mode, config.audio.serverPort]);
+    }, [config.audio.mode, config.audio.serverUrl]);
 
     const handleServerVoiceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
         const voiceName = e.target.value;
         if (!voiceName) return;
 
-        const success = await selectServerVoice(voiceName, config.audio.serverPort);
+        const success = await selectServerVoice(voiceName, config.audio.serverUrl);
         if (success) {
             // This triggers the updated handleConfigChange in SettingsView
             // which auto-saves to localStorage
@@ -68,11 +72,8 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
         }
     };
 
-    const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const port = parseInt(e.target.value, 10);
-        if (!isNaN(port)) {
-            onConfigChange('audio', 'serverPort', port);
-        }
+    const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        onConfigChange('audio', 'serverUrl', e.target.value);
     };
 
     const usagePercentage = Math.min((apiUsage.count / 500) * 100, 100);
@@ -119,7 +120,7 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
                     </button>
                     <button onClick={() => onAudioModeChange('server')} className={`py-3 text-[10px] font-black rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${config.audio.mode === 'server' ? 'bg-white text-neutral-900 shadow-sm border border-neutral-200' : 'text-neutral-400'}`}>
                         <HardDrive size={14} /> 
-                        <span>macOS Server</span>
+                        <span>TTS Server</span>
                     </button>
                     <button onClick={() => onAudioModeChange('ai')} disabled={!config.ai.enableGeminiApi} className={`py-3 text-[10px] font-black rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${config.audio.mode === 'ai' ? 'bg-white text-neutral-900 shadow-sm border border-neutral-200' : 'text-neutral-400'} ${!config.ai.enableGeminiApi ? 'opacity-50' : ''}`}>
                         <Bot size={14} /> 
@@ -149,7 +150,7 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
                                 <div className="space-y-1">
                                     <p className="text-xs font-bold text-amber-900">Browser Security Check Required</p>
                                     <p className="text-[10px] text-amber-700 leading-relaxed">
-                                        If the server is running but status is "Offline", the browser may be blocking the connection to localhost. 
+                                        If the server is running but status is "Offline", the browser may be blocking the connection. 
                                         Click the <b>Lock Icon</b> next to the URL → <b>Site settings</b> → <b>Insecure content</b> → set to <b>Allow</b>.
                                     </p>
                                 </div>
@@ -157,25 +158,25 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
                         )}
 
                         <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-100 space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4">
                                 <div className="space-y-1">
                                     <div className="flex justify-between items-center px-1">
-                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Hash size={10}/> Server Port</label>
+                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Link size={10}/> Server URL</label>
                                         <button onClick={checkServer} className="text-[10px] font-black text-indigo-600 flex items-center gap-1 hover:underline"><RefreshCw size={10}/> Reconnect</button>
                                     </div>
                                     <input 
-                                        type="number" 
-                                        value={config.audio.serverPort} 
-                                        onChange={handlePortChange}
-                                        className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-neutral-900 outline-none"
-                                        placeholder="3000"
+                                        type="text" 
+                                        value={config.audio.serverUrl} 
+                                        onChange={handleUrlChange}
+                                        className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
+                                        placeholder="http://localhost:3000"
                                     />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1">Connection Status</label>
                                     <div className="flex items-center h-[42px] px-4 bg-white border border-neutral-200 rounded-xl transition-all">
                                         {serverStatus === 'connected' ? (
-                                            <span className="flex items-center gap-1.5 text-xs font-black text-emerald-600"><CheckCircle2 size={14}/> Online (Port {config.audio.serverPort})</span>
+                                            <span className="flex items-center gap-1.5 text-xs font-black text-emerald-600"><CheckCircle2 size={14}/> Connected to {connectedUrl?.replace(/^https?:\/\//, '')}</span>
                                         ) : serverStatus === 'disconnected' ? (
                                             <span className="flex items-center gap-1.5 text-xs font-black text-red-600"><AlertCircle size={14}/> Offline</span>
                                         ) : (

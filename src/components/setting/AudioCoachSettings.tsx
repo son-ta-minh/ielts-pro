@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Save, ChevronDown, CheckCircle2, AlertCircle, Hash, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Globe, Volume2, Mic } from 'lucide-react';
+import { Save, ChevronDown, CheckCircle2, AlertCircle, Hash, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Globe, Volume2, Mic, Link } from 'lucide-react';
 import { SystemConfig, CoachConfig, saveConfig } from '../../app/settingsManager';
-import { fetchServerVoices, ServerVoicesResponse, speak, VoiceDefinition } from '../../utils/audio';
+import { fetchServerVoices, ServerVoicesResponse, speak, VoiceDefinition, getLastConnectedUrl, resetAudioProtocolCache } from '../../utils/audio';
 
 interface AudioCoachSettingsProps {
     config: SystemConfig;
@@ -199,23 +199,27 @@ const CoachCard: React.FC<{
 export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, onConfigChange, onSaveSettings }) => {
     const [serverData, setServerData] = useState<ServerVoicesResponse | null>(null);
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
+    const [connectedUrl, setConnectedUrl] = useState<string | null>(null);
 
     const checkServers = async () => {
         // Check TTS Server
         setServerStatus('checking');
-        const data = await fetchServerVoices(config.audioCoach.serverPort);
+        resetAudioProtocolCache(); 
+        const data = await fetchServerVoices(config.audioCoach.serverUrl);
         if (data) {
             setServerData(data);
             setServerStatus('connected');
+            setConnectedUrl(getLastConnectedUrl());
         } else {
             setServerStatus('disconnected');
             setServerData(null);
+            setConnectedUrl(null);
         }
     };
 
     useEffect(() => {
         checkServers();
-    }, [config.audioCoach.serverPort]);
+    }, [config.audioCoach.serverUrl]);
 
     const handleActiveCoachToggle = (type: 'male' | 'female') => {
         onConfigChange('audioCoach', 'activeCoach', type);
@@ -231,9 +235,8 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
         onConfigChange('audioCoach', 'coaches', currentCoaches);
     };
 
-    const handlePortChange = (field: 'serverPort', e: React.ChangeEvent<HTMLInputElement>) => {
-        const port = parseInt(e.target.value, 10);
-        if (!isNaN(port)) onConfigChange('audioCoach', field, port);
+    const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        onConfigChange('audioCoach', 'serverUrl', e.target.value);
     };
 
     const handleLanguageChange = (lang: 'vi' | 'en') => {
@@ -258,14 +261,17 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
             </div>
 
             <div className="p-5 bg-neutral-50 rounded-2xl border border-neutral-100 flex flex-col md:flex-row items-center gap-6">
-                <div className="flex-1 space-y-3">
-                    <div className="flex items-center gap-2">
+                <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2 mb-1">
                         {serverStatus === 'connected' ? <CheckCircle2 size={16} className="text-emerald-500" /> : <AlertCircle size={16} className="text-red-500" />}
-                        <span className="text-xs font-black uppercase tracking-wider text-neutral-600">Local TTS Server</span>
-                        <div className="relative">
-                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-300" size={14} />
-                            <input type="number" value={config.audioCoach.serverPort} onChange={(e) => handlePortChange('serverPort', e)} className="w-20 pl-8 pr-2 py-1.5 bg-white border border-neutral-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none" placeholder="3000" />
-                        </div>
+                        <span className="text-xs font-black uppercase tracking-wider text-neutral-600">TTS Server</span>
+                    </div>
+                    {serverStatus === 'connected' && connectedUrl && (
+                        <p className="text-[10px] font-mono text-emerald-600 pl-6">{connectedUrl.replace(/^https?:\/\//, '')}</p>
+                    )}
+                    <div className="relative pl-6 pt-1">
+                        <Link className="absolute left-9 top-1/2 -translate-y-1/2 text-neutral-300" size={14} />
+                        <input type="text" value={config.audioCoach.serverUrl} onChange={handleUrlChange} className="w-full pl-8 pr-2 py-1.5 bg-white border border-neutral-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none" placeholder="http://localhost:3000" />
                     </div>
                 </div>
                 <button onClick={checkServers} className="p-2.5 bg-white border border-neutral-200 text-neutral-500 rounded-xl hover:bg-neutral-50 transition-all shadow-sm"><RefreshCw size={16} /></button>

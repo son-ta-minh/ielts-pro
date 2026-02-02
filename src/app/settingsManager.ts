@@ -20,7 +20,7 @@ export interface SrsConfig {
 
 export interface AudioConfig {
   mode: 'system' | 'ai' | 'server';
-  serverPort: number;
+  serverUrl: string; // Changed from serverPort
   preferredSystemVoice: string;
   appliedAccent: 'US' | 'UK';
 }
@@ -37,7 +37,7 @@ export interface CoachConfig {
 
 export interface AudioCoachConfig {
   activeCoach: 'male' | 'female';
-  serverPort: number;
+  serverUrl: string; // Changed from serverPort
   coaches: {
     male: CoachConfig;
     female: CoachConfig;
@@ -89,7 +89,7 @@ export const DEFAULT_SRS_CONFIG: SrsConfig = {
 
 export const DEFAULT_AUDIO_CONFIG: AudioConfig = {
   mode: 'system',
-  serverPort: 3000,
+  serverUrl: 'http://localhost:3000', // Default URL
   preferredSystemVoice: '',
   appliedAccent: 'US',
 };
@@ -123,7 +123,7 @@ export const DEFAULT_CONFIG: SystemConfig = {
   audio: DEFAULT_AUDIO_CONFIG,
   audioCoach: {
     activeCoach: 'female',
-    serverPort: 3000,
+    serverUrl: 'http://localhost:3000', // Default URL
     coaches: {
       male: {
         name: 'Victor',
@@ -189,7 +189,19 @@ export function getConfig(): SystemConfig {
       return DEFAULT_CONFIG;
   }
 
-  return mergeConfigs(DEFAULT_CONFIG, storedJson) as SystemConfig;
+  // Handle migration from port to url if necessary (simple check)
+  const merged = mergeConfigs(DEFAULT_CONFIG, storedJson);
+  
+  // Legacy migration for Audio
+  if (storedJson.audio && storedJson.audio.serverPort && !storedJson.audio.serverUrl) {
+      merged.audio.serverUrl = `http://localhost:${storedJson.audio.serverPort}`;
+  }
+  // Legacy migration for Coach
+  if (storedJson.audioCoach && storedJson.audioCoach.serverPort && !storedJson.audioCoach.serverUrl) {
+      merged.audioCoach.serverUrl = `http://localhost:${storedJson.audioCoach.serverPort}`;
+  }
+
+  return merged as SystemConfig;
 }
 
 export function saveConfig(config: SystemConfig): void {

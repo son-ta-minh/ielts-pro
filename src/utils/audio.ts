@@ -9,15 +9,43 @@ import { getConfig } from '../app/settingsManager';
 
 const MAX_SPEECH_LENGTH = 1500; // Giới hạn an toàn để tránh treo trình duyệt
 
-const getBaseUrl = (portOverride?: number) => {
-    const port = portOverride || getConfig().audioCoach.serverPort || 3000;
-    const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-    return `http://${hostname}:${port}`;
-};
-
 let voices: SpeechSynthesisVoice[] = [];
 let currentServerAudio: HTMLAudioElement | null = null;
 let isSpeaking = false;
+
+// Cache the successfully connected base URL
+let cachedBaseUrl: string | null = null;
+
+/**
+ * Resets the cached server URL. 
+ * Call this when the user manually requests a reconnection/refresh.
+ */
+export const resetAudioProtocolCache = () => {
+    cachedBaseUrl = null;
+    console.log("[Audio] Connection cache cleared.");
+};
+
+export const getLastConnectedUrl = () => cachedBaseUrl;
+
+/**
+ * Determines the base URL for the local server.
+ * Uses the user-configured full URL directly.
+ */
+const getBaseUrl = async (urlOverride?: string): Promise<string> => {
+    if (urlOverride) {
+        cachedBaseUrl = urlOverride.replace(/\/$/, ""); // Strip trailing slash
+        return cachedBaseUrl;
+    }
+
+    if (cachedBaseUrl) return cachedBaseUrl;
+
+    const config = getConfig();
+    // Prioritize Audio Coach URL, fallback to General Audio URL
+    const configuredUrl = config.audioCoach.serverUrl || config.audio.serverUrl || 'http://localhost:3000';
+    
+    cachedBaseUrl = configuredUrl.replace(/\/$/, "");
+    return cachedBaseUrl;
+};
 
 // --- Native Voice Management ---
 
@@ -78,9 +106,11 @@ export interface ServerVoicesResponse {
     voices: VoiceDefinition[];
 }
 
-export const fetchServerVoices = async (port?: number): Promise<ServerVoicesResponse | null> => {
-    const url = `${getBaseUrl(port)}/voices`;
+export const fetchServerVoices = async (urlOverride?: string): Promise<ServerVoicesResponse | null> => {
     try {
+        const baseUrl = await getBaseUrl(urlOverride);
+        const url = `${baseUrl}/voices`;
+        
         const res = await fetch(url, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
@@ -90,13 +120,16 @@ export const fetchServerVoices = async (port?: number): Promise<ServerVoicesResp
         const data = await res.json();
         return data;
     } catch (e: any) {
+        console.warn(`[Audio] Failed to fetch voices from ${urlOverride || 'config'}:`, e.message);
         return null;
     }
 };
 
-export const selectServerVoice = async (voiceName: string, port?: number): Promise<boolean> => {
-    const url = `${getBaseUrl(port)}/select-voice`;
+export const selectServerVoice = async (voiceName: string, urlOverride?: string): Promise<boolean> => {
     try {
+        const baseUrl = await getBaseUrl(urlOverride);
+        const url = `${baseUrl}/select-voice`;
+        
         const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -112,9 +145,11 @@ export const selectServerVoice = async (voiceName: string, port?: number): Promi
     }
 };
 
-export const setServerMode = async (mode: string, port?: number): Promise<boolean> => {
-    const url = `${getBaseUrl(port)}/set-mode`;
+export const setServerMode = async (mode: string, urlOverride?: string): Promise<boolean> => {
     try {
+        const baseUrl = await getBaseUrl(urlOverride);
+        const url = `${baseUrl}/set-mode`;
+        
         const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -147,14 +182,15 @@ export const stopSpeaking = () => {
 
 export const getIsSpeaking = () => isSpeaking;
 
-const speakViaServer = async (text: string, language: 'en' | 'vi', accent: string, voice: string, port?: number) => {
-    const url = `${getBaseUrl(port)}/speak`;
-    const payload = { text, language, accent, voice }; 
-    
+const speakViaServer = async (text: string, language: 'en' | 'vi', accent: string, voice: string, urlOverride?: string) => {
     stopSpeaking(); 
     notifyStatus(true);
 
     try {
+        const baseUrl = await getBaseUrl(urlOverride);
+        const url = `${baseUrl}/speak`;
+        const payload = { text, language, accent, voice }; 
+
         const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -261,7 +297,7 @@ export const speak = async (text: string, isDialogue = false, forcedLang?: 'en' 
   const accentCode = accentOverride !== undefined ? accentOverride : (lang === 'vi' ? coach.viAccent : coach.enAccent);
 
   try {
-      await speakViaServer(cleanedText, lang, accentCode, voiceName, config.audioCoach.serverPort);
+      await speakViaServer(cleanedText, lang, accentCode, voiceName, config.audioCoach.serverUrl);
       return; 
   } catch (e) {
       if (!isDialogue) {
