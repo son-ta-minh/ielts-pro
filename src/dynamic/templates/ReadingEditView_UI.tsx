@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Loader2, Save, Sparkles, Eye, BookText, PenLine, FileText, ArrowLeft, Tag, HelpCircle, X, Plus, CheckCircle2, Circle, Layers, AlertCircle } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
@@ -70,7 +71,7 @@ export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ user, allW
     if (!editWords.trim()) return [];
     const entries = stringToWordArray(editWords);
     return entries.filter(entry => {
-        const [essaySide, baseSide] = entry.split(':').map(s => s.trim());
+        const [essaySide, baseSide] = entry.split(':');
         const baseWord = baseSide || essaySide;
         return !wordsByText.has(baseWord.toLowerCase());
     });
@@ -179,11 +180,7 @@ export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ user, allW
           <div className="space-y-3 flex-1">
             <h3 className="text-xl font-black text-neutral-900 leading-tight">{editName || "Untitled Unit"}</h3>
             <p className="text-sm font-medium text-neutral-500 leading-relaxed whitespace-pre-wrap line-clamp-2">{editDesc || "No description provided."}</p>
-            <div className="grid grid-cols-2 gap-4 pt-2" ref={tagSuggestionsContainerRef}>
-                <div className="space-y-1">
-                    <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-2"><Layers size={12}/> Path</label>
-                    <input type="text" value={editPath} onChange={(e) => setEditPath(e.target.value)} placeholder="e.g. /IELTS/Reading" className="w-full px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none" />
-                </div>
+            <div className="pt-2" ref={tagSuggestionsContainerRef}>
                 <div className="space-y-1 relative">
                     <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-2"><Tag size={12}/> Tags (Keywords)</label>
                     <input ref={tagInputRef} type="text" value={editTags} onChange={(e) => setEditTags(e.target.value)} onFocus={() => setShowTagSuggestions(true)} onKeyDown={handleTagKeyDown} placeholder="e.g. Environment, Technology" className="w-full px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none" autoComplete="off" />

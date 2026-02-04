@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, Composition, VocabularyItem, WritingTopic, WritingLog, CompositionLabel, FocusColor } from '../../app/types';
+import { User, Composition, VocabularyItem, WritingTopic, WritingLog, CompositionLabel, FocusColor, WritingBook } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { PenLine, Plus, Edit3, Trash2, BookOpen, Swords, Play, Sparkles, Loader2, Save, ArrowLeft, Tag, Layers, FolderTree, Target } from 'lucide-react';
+import { PenLine, Plus, Edit3, Trash2, BookOpen, Swords, Play, Sparkles, Loader2, Save, ArrowLeft, Tag, Layers, FolderTree, Target, Library, FolderPlus, Pen, Move, Book, LayoutGrid } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { CompositionEditor } from './CompositionEditor';
@@ -16,6 +16,11 @@ import { ViewMenu } from '../../components/common/ViewMenu';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { UniversalCard } from '../../components/common/UniversalCard';
 import { ResourceActions } from '../page/ResourceActions';
+import { useShelfLogic } from '../../app/hooks/useShelfLogic';
+import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components/wordbook/ShelfModals';
+import { UniversalShelf } from '../../components/common/UniversalShelf';
+import { UniversalBook } from '../../components/common/UniversalBook';
+import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
 
 interface Props {
   user: User;
@@ -116,15 +121,9 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div className="space-y-1">
-                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-2"><Layers size={12}/> Path</label>
-                <input type="text" value={path} onChange={(e) => setPath(e.target.value)} placeholder="e.g. /Academic/Task 1" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
-             </div>
-             <div className="space-y-1">
-                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-2"><Tag size={12}/> Tags (Keywords)</label>
-                <input type="text" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. Environment, Technology" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
-             </div>
+          <div className="space-y-1">
+             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-2"><Tag size={12}/> Tags (Keywords)</label>
+             <input type="text" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. Environment, Technology" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
           </div>
   
           <div className="space-y-1">
@@ -156,6 +155,7 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
 export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, onConsumeContext }) => {
     const [compositions, setCompositions] = useState<Composition[]>([]);
     const [topics, setTopics] = useState<WritingTopic[]>([]);
+    const [writingBooks, setWritingBooks] = useState<WritingBook[]>([]);
     const [loading, setLoading] = useState(true);
     const { showToast } = useToast();
 
@@ -176,26 +176,49 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
     // Pagination
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(12);
-
-    useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
-
+    
     // View Routing
-    const [viewMode, setViewMode] = useState<'LIST' | 'EDIT_COMP' | 'EDIT_TOPIC' | 'SESSION'>('LIST');
+    const [viewMode, setViewMode] = useState<'LIST' | 'SHELF' | 'EDIT_COMP' | 'EDIT_TOPIC' | 'SESSION' | 'BOOK_DETAIL'>('LIST');
     const [activeComposition, setActiveComposition] = useState<Composition | null>(null);
     const [activeTopic, setActiveTopic] = useState<WritingTopic | null>(null);
+    const [activeBook, setActiveBook] = useState<WritingBook | null>(null);
+
     const [itemToDelete, setItemToDelete] = useState<{ id: string, type: 'COMP' | 'TOPIC' } | null>(null);
     
     // AI Generators
     const [isTestGenModalOpen, setIsTestGenModalOpen] = useState(false);
+    
+    // Shelf Logic Hook
+    const { 
+        currentShelfName, 
+        booksOnCurrentShelf, 
+        allShelves,
+        addShelf, 
+        renameShelf, 
+        removeShelf, 
+        nextShelf, 
+        prevShelf,
+        selectShelf
+    } = useShelfLogic(writingBooks, 'writing_books_shelves');
+
+    // Shelf Modal State
+    const [isAddShelfModalOpen, setIsAddShelfModalOpen] = useState(false);
+    const [isRenameShelfModalOpen, setIsRenameShelfModalOpen] = useState(false);
+    const [bookToMove, setBookToMove] = useState<WritingBook | null>(null);
+    const [bookToDelete, setBookToDelete] = useState<WritingBook | null>(null);
+
+    useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
 
     const loadData = useCallback(async () => {
         setLoading(true);
-        const [comps, tops] = await Promise.all([
+        const [comps, tops, books] = await Promise.all([
             db.getCompositionsByUserId(user.id),
-            db.getWritingTopicsByUserId(user.id)
+            db.getWritingTopicsByUserId(user.id),
+            db.getWritingBooksByUserId(user.id)
         ]);
         setCompositions(comps.sort((a,b) => b.createdAt - a.createdAt));
         setTopics(tops.sort((a,b) => b.createdAt - a.createdAt));
+        setWritingBooks(books.sort((a,b) => b.createdAt - a.createdAt));
         setLoading(false);
     }, [user.id]);
 
@@ -318,14 +341,286 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
          }
     };
 
+    // --- Handlers for Shelf Management ---
+    const handleRenameShelf = (newName: string) => {
+        const success = renameShelf(newName, async (oldS, newS) => {
+            setLoading(true);
+            const booksToUpdate = writingBooks.filter(b => {
+                 const parts = b.title.split(':');
+                 const shelf = parts.length > 1 ? parts[0].trim() : 'General';
+                 return shelf === oldS;
+            });
+
+            await Promise.all(booksToUpdate.map(b => {
+                 const parts = b.title.split(':');
+                 const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
+                 const newFullTitle = `${newS}: ${bookTitle}`;
+                 return db.saveWritingBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
+            }));
+            await loadData();
+        });
+        if (success) setIsRenameShelfModalOpen(false);
+    };
+
+    // --- Handlers for Book Management ---
+    const handleCreateEmptyBook = async () => {
+        const newBook: WritingBook = {
+            id: `wb-${Date.now()}`,
+            userId: user.id,
+            title: `${currentShelfName}: New Book`,
+            itemIds: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            color: '#1e88e5',
+            icon: '✍️'
+        };
+        await db.saveWritingBook(newBook);
+        await loadData();
+        setActiveBook(newBook);
+        setViewMode('BOOK_DETAIL');
+        showToast("New book created.", "success");
+    };
+
+    const handleUpdateBook = (updated: Partial<WritingBook>) => {
+        if (!activeBook) return;
+        const newBook = { ...activeBook, ...updated, updatedAt: Date.now() };
+        setWritingBooks(prev => prev.map(b => b.id === newBook.id ? newBook : b));
+        setActiveBook(newBook);
+        db.saveWritingBook(newBook);
+    };
+
+    const handleDeleteBook = async () => {
+        if (!bookToDelete) return;
+        await db.deleteWritingBook(bookToDelete.id);
+        showToast('Book deleted.', 'success');
+        setBookToDelete(null);
+        await loadData();
+    };
+
+    const handleConfirmMoveBook = async (targetShelf: string) => {
+        if (!bookToMove) return;
+        const parts = bookToMove.title.split(':');
+        const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
+        const newTitle = `${targetShelf}: ${bookTitle}`;
+        
+        const updatedBook = { ...bookToMove, title: newTitle, updatedAt: Date.now() };
+        await db.saveWritingBook(updatedBook);
+        setBookToMove(null);
+        await loadData();
+        showToast(`Moved to "${targetShelf}".`, 'success');
+    };
+
+    // --- Data Transformation for GenericBookDetail ---
+    const genericBookItems: GenericBookItem[] = useMemo(() => {
+        if (!activeBook) return [];
+        return activeBook.itemIds.map((id): GenericBookItem | null => {
+            const comp = compositions.find(c => c.id === id);
+            if (comp) {
+                return {
+                    id: comp.id,
+                    title: comp.title || 'Untitled',
+                    subtitle: 'Composition',
+                    data: comp,
+                    focusColor: comp.focusColor,
+                    isFocused: comp.isFocused
+                };
+            }
+            const topic = topics.find(t => t.id === id);
+            if (topic) {
+                return {
+                    id: topic.id,
+                    title: topic.name,
+                    subtitle: 'Topic',
+                    data: topic,
+                    focusColor: topic.focusColor,
+                    isFocused: topic.isFocused
+                };
+            }
+            return null;
+        }).filter((item): item is GenericBookItem => item !== null);
+    }, [activeBook, compositions, topics]);
+
+    const availableGenericItems: GenericBookItem[] = useMemo(() => {
+        const compItems: GenericBookItem[] = compositions.map(c => ({
+            id: c.id,
+            title: c.title || 'Untitled',
+            subtitle: 'Composition',
+            data: c
+        }));
+        const topicItems: GenericBookItem[] = topics.map(t => ({
+            id: t.id,
+            title: t.name,
+            subtitle: 'Topic',
+            data: t
+        }));
+        return [...compItems, ...topicItems];
+    }, [compositions, topics]);
+
+    const handleAddItemsToBook = (ids: string[]) => {
+        if (!activeBook) return;
+        const newIds = Array.from(new Set([...activeBook.itemIds, ...ids]));
+        handleUpdateBook({ itemIds: newIds });
+    };
+    
+    const handleRemoveItemFromBook = (id: string) => {
+        if (!activeBook) return;
+        const newIds = activeBook.itemIds.filter(uid => uid !== id);
+        handleUpdateBook({ itemIds: newIds });
+    };
+    
+    const handleFocusChangeGeneric = (gItem: GenericBookItem, color: any) => {
+        const item = gItem.data as (Composition | WritingTopic);
+        handleFocusChange(item, color);
+    };
+
+    const handleToggleFocusGeneric = (gItem: GenericBookItem) => {
+        const item = gItem.data as (Composition | WritingTopic);
+        handleToggleFocus(item);
+    };
+
+    // --- Views ---
+
     if (viewMode === 'EDIT_COMP') {
-        return <CompositionEditor user={user} initialComposition={activeComposition} onSave={() => { setViewMode('LIST'); loadData(); }} onCancel={() => setViewMode('LIST')} />;
+        return <CompositionEditor user={user} initialComposition={activeComposition} onSave={() => { setViewMode(activeBook ? 'BOOK_DETAIL' : 'LIST'); loadData(); }} onCancel={() => setViewMode(activeBook ? 'BOOK_DETAIL' : 'LIST')} />;
     }
     if (viewMode === 'EDIT_TOPIC' && activeTopic) {
-        return <TopicEditor user={user} topic={activeTopic} onSave={() => { setViewMode('LIST'); loadData(); }} onCancel={() => setViewMode('LIST')} />;
+        return <TopicEditor user={user} topic={activeTopic} onSave={() => { setViewMode(activeBook ? 'BOOK_DETAIL' : 'LIST'); loadData(); }} onCancel={() => setViewMode(activeBook ? 'BOOK_DETAIL' : 'LIST')} />;
     }
     if (viewMode === 'SESSION' && activeTopic) {
-        return <WritingSession user={user} topic={activeTopic} onComplete={() => { setViewMode('LIST'); loadData(); }} />;
+        return <WritingSession user={user} topic={activeTopic} onComplete={() => { setViewMode(activeBook ? 'BOOK_DETAIL' : 'LIST'); loadData(); }} />;
+    }
+
+    if (viewMode === 'BOOK_DETAIL' && activeBook) {
+        return <GenericBookDetail
+            book={activeBook}
+            items={genericBookItems}
+            availableItems={availableGenericItems}
+            onBack={() => { setActiveBook(null); setViewMode('SHELF'); loadData(); }}
+            onUpdateBook={handleUpdateBook}
+            onAddItem={handleAddItemsToBook}
+            onRemoveItem={handleRemoveItemFromBook}
+            onOpenItem={(gItem) => { 
+                const data = gItem.data;
+                if ('content' in data) { setActiveComposition(data as Composition); setViewMode('EDIT_COMP'); }
+                else { setActiveTopic(data as WritingTopic); setViewMode('SESSION'); }
+            }}
+            onEditItem={(gItem) => {
+                const data = gItem.data;
+                if ('content' in data) { setActiveComposition(data as Composition); setViewMode('EDIT_COMP'); }
+                else { setActiveTopic(data as WritingTopic); setViewMode('EDIT_TOPIC'); }
+            }}
+            onFocusChange={handleFocusChangeGeneric}
+            onToggleFocus={handleToggleFocusGeneric}
+            itemIcon={<PenLine size={16}/>}
+        />;
+    }
+
+    if (viewMode === 'SHELF') {
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+             {/* Header */}
+             <div className="flex flex-col gap-4">
+                 <button onClick={() => setViewMode('LIST')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group">
+                      <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+                      <span>Back to Main Library</span>
+                 </button>
+                 
+                 <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                     <div>
+                          <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Writing Shelf</h2>
+                          <p className="text-neutral-500 mt-1 font-medium">Organize your writing practice.</p>
+                     </div>
+                     <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
+                         <FolderPlus size={14}/> Add Shelf
+                     </button>
+                 </header>
+             </div>
+  
+            <UniversalShelf
+              label={currentShelfName}
+              onNext={allShelves.length > 1 ? nextShelf : undefined}
+              onPrev={allShelves.length > 1 ? prevShelf : undefined}
+              actions={
+                  <div className="flex items-center gap-2">
+                       <button onClick={() => setIsRenameShelfModalOpen(true)} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white" title="Rename Shelf"><Pen size={14}/></button>
+                       <button onClick={removeShelf} disabled={booksOnCurrentShelf.length > 0} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-30 disabled:hover:bg-white/20" title="Remove Empty Shelf"><Trash2 size={14}/></button>
+                  </div>
+              }
+              isEmpty={booksOnCurrentShelf.length === 0}
+              emptyAction={
+                   <button onClick={handleCreateEmptyBook} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs uppercase tracking-widest border border-white/20">
+                       Create First Book
+                   </button>
+              }
+            >
+               {booksOnCurrentShelf.map(book => {
+                   const title = book.title;
+                   const parts = title.split(':');
+                   const displayTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : title;
+  
+                   return (
+                      <UniversalBook
+                          key={book.id}
+                          id={book.id}
+                          title={displayTitle}
+                          subTitle={`${book.itemIds.length} Items`}
+                          icon={<PenLine size={24}/>}
+                          color={book.color}
+                          titleColor={book.titleColor}
+                          titleSize={book.titleSize}
+                          titleTop={book.titleTop}
+                          titleLeft={book.titleLeft}
+                          iconTop={book.iconTop}
+                          iconLeft={book.iconLeft}
+  
+                          onClick={() => { setActiveBook(book); setViewMode('BOOK_DETAIL'); }}
+                          actions={
+                              <>
+                                  <button onClick={(e) => { e.stopPropagation(); setBookToMove(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-neutral-700 hover:text-white transition-all shadow-sm" title="Move to Shelf"><Move size={16}/></button>
+                                  <button onClick={(e) => { e.stopPropagation(); setBookToDelete(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-sm" title="Delete">
+                                      <Trash2 size={16} />
+                                  </button>
+                              </>
+                          }
+                      />
+                   );
+               })}
+               
+               {/* New Book Placeholder */}
+               <div className="group [perspective:1000px] translate-y-0">
+                  <div className="relative w-full aspect-[5/7] rounded-lg bg-neutral-800/50 border-2 border-dashed border-neutral-500/50 transition-all duration-300 group-hover:border-neutral-400 group-hover:bg-neutral-800/80 group-hover:shadow-xl flex flex-col items-stretch justify-center overflow-hidden">
+                      <button onClick={handleCreateEmptyBook} className="flex-1 flex flex-col items-center justify-center p-2 text-center text-neutral-400 hover:bg-white/5 transition-colors">
+                          <Plus size={32} className="mb-2 text-neutral-500"/>
+                          <h3 className="font-sans text-xs font-black uppercase tracking-wider">New Book</h3>
+                      </button>
+                  </div>
+              </div>
+  
+            </UniversalShelf>
+  
+            <ConfirmationModal
+              isOpen={!!bookToDelete}
+              title="Delete Book?"
+              message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Items inside will not be deleted.</>}
+              confirmText="Delete"
+              isProcessing={false}
+              onConfirm={handleDeleteBook}
+              onClose={() => setBookToDelete(null)}
+              icon={<Trash2 size={40} className="text-red-500"/>}
+            />
+            
+            <MoveBookModal 
+              isOpen={!!bookToMove} 
+              onClose={() => setBookToMove(null)} 
+              onConfirm={handleConfirmMoveBook} 
+              shelves={allShelves} 
+              currentShelf={bookToMove ? (bookToMove.title.split(':')[0].trim()) : 'General'} 
+              bookTitle={bookToMove?.title || ''} 
+            />
+            <AddShelfModal isOpen={isAddShelfModalOpen} onClose={() => setIsAddShelfModalOpen(false)} onSave={(name) => { if(addShelf(name)) setIsAddShelfModalOpen(false); }} />
+            <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelf} initialName={currentShelfName} />
+          </div>
+        );
     }
 
     return (
@@ -390,6 +685,12 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                     browseGroups={{ isOpen: isGroupBrowserOpen, onToggle: () => { setIsGroupBrowserOpen(!isGroupBrowserOpen); setIsTagBrowserOpen(false); } }}
                     browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); setIsGroupBrowserOpen(false); } }}
                     addActions={[{ label: 'Add', icon: Plus, onClick: handleNew }]}
+                    extraActions={
+                        <button onClick={() => setViewMode('SHELF')} className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs flex items-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-200" title="Bookshelf Mode">
+                            <Library size={16} />
+                            <span>Bookshelf</span>
+                        </button>
+                    }
                 />
             }
         >
@@ -402,13 +703,14 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                                 <UniversalCard
                                     key={comp.id}
                                     title={comp.title || 'Untitled Composition'}
-                                    path={comp.path} tags={effectiveTags}
+                                    tags={effectiveTags}
                                     compact={viewSettings.compact}
                                     onClick={() => { setActiveComposition(comp); setViewMode('EDIT_COMP'); }}
                                     focusColor={comp.focusColor}
                                     onFocusChange={(c) => handleFocusChange(comp, c)}
                                     isFocused={comp.isFocused}
                                     onToggleFocus={() => handleToggleFocus(comp)}
+                                    isCompleted={comp.focusColor === 'green'}
                                     actions={
                                         <>
                                             <button onClick={(e) => { e.stopPropagation(); setActiveComposition(comp); setViewMode('EDIT_COMP'); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit"><Edit3 size={14}/></button>
@@ -425,13 +727,14 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                         (pagedItems as any[]).map(topic => (
                             <UniversalCard
                                 key={topic.id}
-                                title={topic.name} path={topic.path} tags={topic.tags}
+                                title={topic.name} tags={topic.tags}
                                 compact={viewSettings.compact}
                                 onClick={() => { setActiveTopic(topic); setViewMode('SESSION'); }}
                                 focusColor={topic.focusColor}
                                 onFocusChange={(c) => handleFocusChange(topic, c)}
                                 isFocused={topic.isFocused}
                                 onToggleFocus={() => handleToggleFocus(topic)}
+                                isCompleted={topic.focusColor === 'green'}
                                 actions={
                                     <>
                                         <button onClick={(e) => { e.stopPropagation(); setActiveTopic(topic); setViewMode('SESSION'); }} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Practice"><Play size={14}/></button>

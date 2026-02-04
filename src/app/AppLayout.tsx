@@ -1,7 +1,7 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
-  Plus, LayoutDashboard, List, Settings, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Mic, PenLine, AlertTriangle, BookText, Ear, Zap, Calendar, Gamepad2, BookMarked, Waves
+  Plus, LayoutDashboard, List, Settings, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Mic, PenLine, AlertTriangle, BookText, Ear, Zap, Calendar, Gamepad2, BookMarked, Waves, RefreshCw, Save
 } from 'lucide-react';
 import { AppView, SessionType, VocabularyItem } from './types';
 import { useAppController } from './useAppController';
@@ -56,8 +56,35 @@ const Sidebar: React.FC<AppLayoutProps & {
 }> = ({ controller, onNavigate, onLogoutRequest }) => {
   const { 
     currentUser, view, setView, sessionType, isSidebarOpen, setIsSidebarOpen, 
-    forceExpandAdd, openAddWordLibrary
+    forceExpandAdd, openAddWordLibrary, serverStatus, handleBackup, hasUnsavedChanges, nextAutoBackupTime
   } = controller;
+
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  // Update timer for sync tooltip
+  useEffect(() => {
+    if (!nextAutoBackupTime) {
+      setTimeLeft(0);
+      return;
+    }
+    
+    const interval = setInterval(() => {
+      const remaining = Math.ceil((nextAutoBackupTime - Date.now()) / 1000);
+      setTimeLeft(Math.max(0, remaining));
+      if (remaining <= 0) {
+        // Just let it sit at 0 until the backup completes and clears nextAutoBackupTime
+      }
+    }, 1000);
+    
+    // Initial call
+    setTimeLeft(Math.max(0, Math.ceil((nextAutoBackupTime - Date.now()) / 1000)));
+
+    return () => clearInterval(interval);
+  }, [nextAutoBackupTime]);
+
+  const syncTooltip = nextAutoBackupTime 
+    ? `Auto-sync in ${timeLeft}s...` 
+    : (hasUnsavedChanges ? "Unsaved Changes - Sync Now" : "Sync to Server");
 
   if (!currentUser) return null;
 
@@ -86,6 +113,21 @@ const Sidebar: React.FC<AppLayoutProps & {
              <button onClick={() => onNavigate('DISCOVER')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Games & Discover">
                 <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Activities/Video%20Game.png" alt="Games" className="w-6 h-6 object-contain" />
              </button>
+             {serverStatus === 'connected' && (
+                 <button 
+                    onClick={() => handleBackup()} 
+                    className={`p-2 rounded-xl transition-all active:scale-90 border animate-in fade-in relative ${hasUnsavedChanges && !nextAutoBackupTime ? 'bg-orange-50 border-orange-200 shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'bg-neutral-50 border-neutral-100 hover:bg-neutral-100'}`} 
+                    title={syncTooltip}
+                >
+                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-6 h-6 object-contain" />
+                    {hasUnsavedChanges && (
+                        <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-500' : 'bg-orange-500 animate-ping'}`}></span>
+                    )}
+                    {hasUnsavedChanges && (
+                         <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-500' : 'bg-orange-500'}`}></span>
+                    )}
+                 </button>
+             )}
            </div>
         </div>
         
@@ -143,7 +185,13 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     setView,
     lastBackupTime,
     handleBackup,
-    handleRestore,
+    // Restore handlers
+    restoreFromServerAction, 
+    triggerLocalRestore,
+    // Explicit backup handlers
+    triggerLocalBackup,
+    triggerServerBackup,
+    
     handleNavigateToList,
     startDueReviewSession,
     startNewLearnSession,
@@ -174,7 +222,8 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     randomizeWotd,
     handleComposeWithWord,
     writingContextWord,
-    consumeWritingContext
+    consumeWritingContext,
+    serverStatus // Receive serverStatus from controller
   } = controller;
 
   if (!currentUser) return null;
@@ -193,14 +242,19 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
           onViewWotd={setGlobalViewWord}
           setView={setView}
           lastBackupTime={lastBackupTime}
-          onBackup={handleBackup}
-          onRestore={handleRestore}
+          onBackup={handleBackup} // Fallback wrapper logic (though Dashboard overrides with specifics below)
+          onRestore={() => {}} // Fallback
+          restoreFromServerAction={restoreFromServerAction}
+          triggerLocalRestore={triggerLocalRestore}
+          onLocalBackup={triggerLocalBackup}
+          onServerBackup={triggerServerBackup}
           onNavigateToWordList={handleNavigateToList}
           onStartDueReview={startDueReviewSession}
           onStartNewLearn={startNewLearnSession}
           isWotdComposed={isWotdComposed}
           onComposeWotd={handleComposeWithWord}
           onRandomizeWotd={randomizeWotd}
+          serverStatus={serverStatus} // Pass server status to Dashboard
         />
       );
     case 'CALENDAR':

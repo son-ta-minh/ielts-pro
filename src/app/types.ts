@@ -454,6 +454,100 @@ export interface WordBook {
   iconLeft?: number;
 }
 
+// Reading Book (Collection of Units)
+export interface ReadingBook {
+  id: string;
+  userId: string;
+  title: string; // Format: "Shelf: Name"
+  icon?: string;
+  color?: string;
+  unitIds: string[]; // List of IDs of Units in this book
+  createdAt: number;
+  updatedAt: number;
+  // Visual props
+  titleColor?: string;
+  titleSize?: number;
+  titleTop?: number;
+  titleLeft?: number;
+  iconTop?: number;
+  iconLeft?: number;
+}
+
+// Lesson Book (Collection of Lessons & Comparisons)
+export interface LessonBook {
+  id: string;
+  userId: string;
+  title: string; // Format: "Shelf: Name"
+  icon?: string;
+  color?: string;
+  itemIds: string[]; // List of IDs of Lessons or ComparisonGroups
+  createdAt: number;
+  updatedAt: number;
+  // Visual props
+  titleColor?: string;
+  titleSize?: number;
+  titleTop?: number;
+  titleLeft?: number;
+  iconTop?: number;
+  iconLeft?: number;
+}
+
+// Listening Book (Collection of Listening Items)
+export interface ListeningBook {
+  id: string;
+  userId: string;
+  title: string; // Format: "Shelf: Name"
+  icon?: string;
+  color?: string;
+  itemIds: string[]; // List of IDs of ListeningItems
+  createdAt: number;
+  updatedAt: number;
+  // Visual props
+  titleColor?: string;
+  titleSize?: number;
+  titleTop?: number;
+  titleLeft?: number;
+  iconTop?: number;
+  iconLeft?: number;
+}
+
+// Speaking Book (Collection of Speaking Topics & NativeSpeakItems)
+export interface SpeakingBook {
+  id: string;
+  userId: string;
+  title: string; // Format: "Shelf: Name"
+  icon?: string;
+  color?: string;
+  itemIds: string[]; // List of IDs of SpeakingTopics or NativeSpeakItems
+  createdAt: number;
+  updatedAt: number;
+  // Visual props
+  titleColor?: string;
+  titleSize?: number;
+  titleTop?: number;
+  titleLeft?: number;
+  iconTop?: number;
+  iconLeft?: number;
+}
+
+// Writing Book (Collection of Writing Topics & Compositions)
+export interface WritingBook {
+  id: string;
+  userId: string;
+  title: string; // Format: "Shelf: Name"
+  icon?: string;
+  color?: string;
+  itemIds: string[]; // List of IDs of WritingTopics or Compositions
+  createdAt: number;
+  updatedAt: number;
+  // Visual props
+  titleColor?: string;
+  titleSize?: number;
+  titleTop?: number;
+  titleLeft?: number;
+  iconTop?: number;
+  iconLeft?: number;
+}
 
 export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS' | 'MIMIC' | 'LESSON' | 'LISTENING' | 'NATIVE_SPEAK' | 'EXPERIMENT' | 'CALENDAR' | 'WORDBOOK';
 

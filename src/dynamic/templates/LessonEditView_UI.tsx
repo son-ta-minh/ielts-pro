@@ -23,7 +23,7 @@ interface Props {
 }
 
 export const LessonEditViewUI: React.FC<Props> = (props) => {
-    const { title, setTitle, description, setDescription, path, setPath, tagsInput, setTagsInput, content, setContent, isSaving, onSave, onPractice, onCancel, onOpenAiRefine } = props;
+    const { title, setTitle, description, setDescription, tagsInput, setTagsInput, content, setContent, isSaving, onSave, onPractice, onCancel, onOpenAiRefine } = props;
     const [isPreview, setIsPreview] = useState(false);
 
     const previewHtml = useMemo(() => {
@@ -67,20 +67,9 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
       
       <div className="space-y-6 bg-white p-8 rounded-3xl border border-neutral-200 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1 md:col-span-2">
+            <div className="space-y-1">
                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Lesson Title</label>
                 <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"/>
-            </div>
-            <div className="space-y-1">
-                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Path</label>
-                <input 
-                    type="text" 
-                    value={path} 
-                    /* Fixed: Replaced 'setEditPath' with 'setPath' */
-                    onChange={(e) => setPath(e.target.value)} 
-                    placeholder="e.g. /Grammar/Tenses" 
-                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
-                />
             </div>
             <div className="space-y-1">
                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Tag size={12}/> Tags (Keywords)</label>

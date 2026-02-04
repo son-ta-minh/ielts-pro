@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ComparisonGroup, User } from '../../app/types';
 import * as db from '../../app/db';
@@ -18,6 +19,9 @@ export const ComparisonEditView: React.FC<Props> = ({ group, onSave, onCancel, u
     const [wordsInput, setWordsInput] = useState(group.words.join('\n'));
     const [path, setPath] = useState(group.path || '/');
     const [tagsInput, setTagsInput] = useState((group.tags || []).join(', '));
+    // Store comparisonData in state so we can delete rows
+    const [comparisonData, setComparisonData] = useState(group.comparisonData || []);
+    
     const [isSaving, setIsSaving] = useState(false);
     
     // AI State
@@ -38,6 +42,7 @@ export const ComparisonEditView: React.FC<Props> = ({ group, onSave, onCancel, u
         setPath(group.path || '/');
         setTagsInput((group.tags || []).join(', '));
       }
+      setComparisonData(group.comparisonData || []);
     }, [group]);
 
     const handleSave = async () => {
@@ -50,21 +55,35 @@ export const ComparisonEditView: React.FC<Props> = ({ group, onSave, onCancel, u
             finalTags.push('Comparison');
         }
         
-        const updatedData = (group.comparisonData || []).filter(d => finalWords.includes(d.word));
-
+        // Sync comparisonData with finalWords: keep only data for words present in input, or allow disjoint?
+        // Better to trust the explicit deletion. If user deleted row but kept word in input, we keep word in input.
+        // If user removed word from input, we remove row.
+        // But for this "Save", we should prioritize the explicit state.
+        
         const updatedGroup: ComparisonGroup = {
             ...group,
             name,
             words: finalWords,
             path: path.trim(),
             tags: finalTags,
-            comparisonData: updatedData,
+            comparisonData: comparisonData, // Use the state which allows row deletion
             updatedAt: Date.now()
         };
         
         await db.saveComparisonGroup(updatedGroup);
         onSave(updatedGroup);
         setIsSaving(false);
+    };
+
+    const handleDeleteRow = (index: number) => {
+        const itemToDelete = comparisonData[index];
+        const newData = comparisonData.filter((_, i) => i !== index);
+        setComparisonData(newData);
+        
+        // Also remove from the input text to keep in sync
+        const currentWords = wordsInput.split(/[\n,;]+/).map(w => w.trim());
+        const newWords = currentWords.filter(w => w.toLowerCase() !== itemToDelete.word.toLowerCase());
+        setWordsInput(newWords.join('\n'));
     };
 
     const handleGeneratePrompt = () => {
@@ -86,19 +105,23 @@ export const ComparisonEditView: React.FC<Props> = ({ group, onSave, onCancel, u
                 currentTags.push('Comparison');
                 setTagsInput(currentTags.join(', '));
             }
-
+            
+            // Update local state immediately
+            setComparisonData(data.comparisonData);
+            
             const updatedGroup: ComparisonGroup = {
                 ...group,
                 name: data.title || name,
                 words: data.updatedWords,
                 comparisonData: data.comparisonData,
                 tags: currentTags,
-                path: path, // Keep current path
+                path: path,
                 updatedAt: Date.now()
             };
+            
+            // Background save
             db.saveComparisonGroup(updatedGroup).then(() => {
-                onSave(updatedGroup); 
-                showToast("Group refined and saved!", "success");
+                showToast("Group refined! Please verify and Save.", "success");
             });
             setIsAiModalOpen(false);
         }
@@ -115,6 +138,8 @@ export const ComparisonEditView: React.FC<Props> = ({ group, onSave, onCancel, u
                 setPath={setPath}
                 tagsInput={tagsInput}
                 setTagsInput={setTagsInput}
+                comparisonData={comparisonData}
+                onDeleteRow={handleDeleteRow}
                 isSaving={isSaving}
                 onSave={handleSave}
                 onCancel={onCancel}
@@ -131,7 +156,7 @@ export const ComparisonEditView: React.FC<Props> = ({ group, onSave, onCancel, u
                     hidePrimaryInput={true}
                     onGeneratePrompt={handleGeneratePrompt}
                     onJsonReceived={handleAiResult}
-                    actionLabel="Apply & Save"
+                    actionLabel="Apply Refinement"
                 />
             )}
         </>

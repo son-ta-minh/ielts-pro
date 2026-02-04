@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Tag, X, Target } from 'lucide-react';
+import { Tag, X, Target, CheckCircle2 } from 'lucide-react';
 import { FocusColor } from '../../app/types';
 
 export interface CardBadge {
@@ -16,8 +16,6 @@ interface UniversalCardProps {
   badge?: CardBadge;
   /** Additional badges/info to display in the header */
   badges?: CardBadge[];
-  /** A single string for the hierarchical path */
-  path?: string;
   /** Array of single keyword tags to display in the footer */
   tags?: string[];
   /** Secondary actions (Edit, Delete) appearing on hover in the top right */
@@ -40,6 +38,9 @@ interface UniversalCardProps {
   isFocused?: boolean;
   /** Callback to toggle focus state */
   onToggleFocus?: () => void;
+
+  /** Completed State (Visual Halo) */
+  isCompleted?: boolean;
 
   className?: string;
 }
@@ -69,7 +70,6 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
   title,
   badge,
   badges = [],
-  path,
   tags = [],
   actions,
   footer,
@@ -80,6 +80,7 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
   onFocusChange,
   isFocused,
   onToggleFocus,
+  isCompleted,
   className = ''
 }) => {
   const displayBadges = [...(badge ? [badge] : []), ...badges];
@@ -90,7 +91,9 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
       className={`
         group relative flex flex-col bg-white rounded-3xl border border-neutral-200 shadow-sm 
         hover:shadow-md hover:border-neutral-300 transition-all h-full overflow-hidden 
-        ${onClick ? 'cursor-pointer' : ''} ${className}
+        ${onClick ? 'cursor-pointer' : ''} 
+        ${isCompleted ? 'ring-1 ring-emerald-400/50 !border-emerald-400/50 shadow-[0_4px_15px_-3px_rgba(52,211,153,0.15)]' : ''}
+        ${className}
       `}
     >
       {/* Focus Color Triangle Indicator (Visual Only) */}
@@ -104,6 +107,13 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
       {/* Red Dot if Focused */}
       {isFocused && (
           <div className="absolute top-1.5 left-1.5 w-2 h-2 bg-red-600 rounded-full z-10 shadow-sm pointer-events-none animate-in zoom-in" />
+      )}
+      
+      {/* Completed Checkmark (Subtle in corner if no focus color overrides area) */}
+      {isCompleted && !focusColor && (
+          <div className="absolute top-3 left-3 z-0 pointer-events-none opacity-20">
+              <CheckCircle2 size={40} className="text-emerald-100 fill-emerald-50" />
+          </div>
       )}
 
       {/* Actions & Focus - Positioned Absolute Top-Right */}
@@ -170,9 +180,9 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
         )}
 
         {/* ZONE B: Title */}
-        <div className="mb-2">
+        <div className="mb-2 relative z-10">
             {typeof title === 'string' ? (
-                 <h3 className="font-black text-lg text-neutral-900 tracking-tight leading-tight line-clamp-2">
+                 <h3 className="font-black text-lg text-neutral-900 tracking-tight leading-tight truncate" title={title}>
                     {title}
                  </h3>
             ) : (
@@ -181,9 +191,16 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
         </div>
 
         {/* ZONE C: Body Content (Description or Interactive) */}
-        <div className="flex-1 text-sm text-neutral-500 font-medium leading-relaxed">
+        <div className="flex-1 text-sm text-neutral-500 font-medium leading-relaxed relative z-10">
            {children}
         </div>
+        
+        {/* ZONE D: Footer */}
+        {footer && (
+            <div className="mt-4 pt-3 border-t border-neutral-100 relative z-10">
+                {footer}
+            </div>
+        )}
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, ReactNode } from 'react';
 import { Plus, ChevronDown, FolderTree, Tag } from 'lucide-react';
 
@@ -101,11 +102,7 @@ export const ResourceActions: React.FC<ResourceActionsProps> = ({
     <>
       {viewMenu}
       
-      {browseGroups && (
-        <button onClick={browseGroups.onToggle} className={`p-3 border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm ${browseGroups.isOpen ? 'bg-neutral-100' : 'bg-white'}`}>
-            <FolderTree size={16} />
-        </button>
-      )}
+      {/* browseGroups button removed as per user request */}
 
       {browseTags && (
         <button onClick={browseTags.onToggle} className={`p-3 border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm ${browseTags.isOpen ? 'bg-neutral-100' : 'bg-white'}`}>

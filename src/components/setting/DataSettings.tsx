@@ -1,7 +1,9 @@
 
-import React, { useState } from 'react';
-import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench, Plus, Trash2, Tag, Check, Circle, Ear, BookMarked, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench, Plus, Trash2, Tag, Check, Circle, Ear, BookMarked, Calendar, Cloud, Wifi, Link } from 'lucide-react';
 import { DataScope } from '../../app/types';
+import { useToast } from '../../contexts/ToastContext';
+import ConfirmationModal from '../common/ConfirmationModal';
 
 interface JunkTagManagerProps {
     junkTags: string[];
@@ -52,7 +54,6 @@ const JunkTagManager: React.FC<JunkTagManagerProps> = ({ junkTags, onJunkTagsCha
     );
 };
 
-
 interface DataSettingsProps {
     jsonInputRef: React.RefObject<HTMLInputElement>;
     dataScope: DataScope;
@@ -90,7 +91,7 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
     };
 
     return (
-        <section className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col space-y-6">
+        <section className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col space-y-8">
             <div className="flex items-center space-x-4 mb-2">
                 <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl"><FileJson size={24} /></div>
                 <div>
@@ -99,30 +100,34 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
                 </div>
             </div>
 
-            <div className="space-y-3">
-                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Backup / Restore Content</label>
-                <div className="flex flex-wrap gap-2">
-                    <ScopeCheckbox checked={dataScope.user} onChange={() => toggleScope('user')} label="User Profile" />
-                    <ScopeCheckbox checked={dataScope.vocabulary} onChange={() => toggleScope('vocabulary')} label="Word Library" />
-                    <ScopeCheckbox checked={dataScope.wordBook} onChange={() => toggleScope('wordBook')} label="Word Books" icon={BookMarked} />
-                    <ScopeCheckbox checked={dataScope.lesson} onChange={() => toggleScope('lesson')} label="Lessons" />
-                    <ScopeCheckbox checked={dataScope.reading} onChange={() => toggleScope('reading')} label="Reading" />
-                    <ScopeCheckbox checked={dataScope.writing} onChange={() => toggleScope('writing')} label="Writing" />
-                    <ScopeCheckbox checked={dataScope.speaking} onChange={() => toggleScope('speaking')} label="Speaking" />
-                    <ScopeCheckbox checked={dataScope.listening} onChange={() => toggleScope('listening')} label="Listening" />
-                    <ScopeCheckbox checked={dataScope.mimic} onChange={() => toggleScope('mimic')} label="Pronunciation Queue" icon={Ear} />
-                    <ScopeCheckbox checked={dataScope.calendar} onChange={() => toggleScope('calendar')} label="Calendar" icon={Calendar} />
-                </div>
-            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Manual Backup / Restore</label>
+                        <div className="flex flex-wrap gap-2">
+                            <ScopeCheckbox checked={dataScope.user} onChange={() => toggleScope('user')} label="User Profile" />
+                            <ScopeCheckbox checked={dataScope.vocabulary} onChange={() => toggleScope('vocabulary')} label="Word Library" />
+                            <ScopeCheckbox checked={dataScope.wordBook} onChange={() => toggleScope('wordBook')} label="Word Books" icon={BookMarked} />
+                            <ScopeCheckbox checked={dataScope.lesson} onChange={() => toggleScope('lesson')} label="Lessons" />
+                            <ScopeCheckbox checked={dataScope.reading} onChange={() => toggleScope('reading')} label="Reading" />
+                            <ScopeCheckbox checked={dataScope.writing} onChange={() => toggleScope('writing')} label="Writing" />
+                            <ScopeCheckbox checked={dataScope.speaking} onChange={() => toggleScope('speaking')} label="Speaking" />
+                            <ScopeCheckbox checked={dataScope.listening} onChange={() => toggleScope('listening')} label="Listening" />
+                            <ScopeCheckbox checked={dataScope.mimic} onChange={() => toggleScope('mimic')} label="Pronunciation Queue" icon={Ear} />
+                            <ScopeCheckbox checked={dataScope.calendar} onChange={() => toggleScope('calendar')} label="Calendar" icon={Calendar} />
+                        </div>
+                    </div>
 
-            <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => jsonInputRef.current?.click()} className="py-4 border-2 border-neutral-900 text-neutral-900 rounded-2xl font-black text-xs hover:bg-neutral-50 transition-all flex items-center justify-center space-x-2">
-                    <Upload size={16} /> <span>IMPORT</span>
-                    <input type="file" ref={jsonInputRef} className="hidden" accept=".json" onChange={onJSONImport} />
-                </button>
-                <button onClick={onJSONExport} className="py-4 bg-neutral-900 text-white rounded-2xl font-black text-xs hover:bg-neutral-800 transition-all flex items-center justify-center space-x-2">
-                    <Download size={16} /> <span>EXPORT</span>
-                </button>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button onClick={() => jsonInputRef.current?.click()} className="py-4 border-2 border-neutral-900 text-neutral-900 rounded-2xl font-black text-xs hover:bg-neutral-50 transition-all flex items-center justify-center space-x-2">
+                            <Upload size={16} /> <span>IMPORT</span>
+                            <input type="file" ref={jsonInputRef} className="hidden" accept=".json" onChange={onJSONImport} />
+                        </button>
+                        <button onClick={onJSONExport} className="py-4 bg-neutral-900 text-white rounded-2xl font-black text-xs hover:bg-neutral-800 transition-all flex items-center justify-center space-x-2">
+                            <Download size={16} /> <span>EXPORT</span>
+                        </button>
+                    </div>
+                </div>
             </div>
             
             <JunkTagManager junkTags={junkTags} onJunkTagsChange={onJunkTagsChange} />

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { BrainCircuit, Save, Bot, MonitorSmartphone, ChevronDown, BarChart3, Power, Loader2, HardDrive, CheckCircle2, AlertCircle, Hash, RefreshCw, ExternalLink, Link } from 'lucide-react';
-import { SystemConfig } from '../../app/settingsManager';
+import { SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { fetchServerVoices, ServerVoice, selectServerVoice, setServerMode, speak, resetAudioProtocolCache, getLastConnectedUrl } from '../../utils/audio';
 
 interface AiAudioSettingsProps {
@@ -32,15 +32,17 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
     const [connectedUrl, setConnectedUrl] = useState<string | null>(null);
 
+    const fullUrl = getServerUrl(config);
+
     const checkServer = async () => {
         setServerStatus('checking');
         resetAudioProtocolCache(); 
-        const data = await fetchServerVoices(config.audio.serverUrl);
+        const data = await fetchServerVoices(fullUrl);
         if (data) {
             setServerVoices(data.voices);
             setServerStatus('connected');
             setConnectedUrl(getLastConnectedUrl());
-            await setServerMode('speak', config.audio.serverUrl);
+            await setServerMode('speak', fullUrl);
         } else {
             setServerStatus('disconnected');
             setServerVoices([]);
@@ -53,13 +55,13 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
         if (config.audio.mode === 'server') {
             checkServer();
         }
-    }, [config.audio.mode, config.audio.serverUrl]);
+    }, [config.audio.mode, fullUrl]);
 
     const handleServerVoiceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
         const voiceName = e.target.value;
         if (!voiceName) return;
 
-        const success = await selectServerVoice(voiceName, config.audio.serverUrl);
+        const success = await selectServerVoice(voiceName, fullUrl);
         if (success) {
             // This triggers the updated handleConfigChange in SettingsView
             // which auto-saves to localStorage
@@ -73,7 +75,8 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
     };
 
     const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        onConfigChange('audio', 'serverUrl', e.target.value);
+        const newServer = { ...config.server, useCustomUrl: true, customUrl: e.target.value };
+        onConfigChange('server', null, newServer);
     };
 
     const usagePercentage = Math.min((apiUsage.count / 500) * 100, 100);
@@ -166,7 +169,7 @@ export const AiAudioSettings: React.FC<AiAudioSettingsProps> = ({
                                     </div>
                                     <input 
                                         type="text" 
-                                        value={config.audio.serverUrl} 
+                                        value={fullUrl} 
                                         onChange={handleUrlChange}
                                         className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
                                         placeholder="http://localhost:3000"

@@ -5,7 +5,7 @@
  * - Supports multi-language switching based on content.
  */
 
-import { getConfig } from '../app/settingsManager';
+import { getConfig, getServerUrl } from '../app/settingsManager';
 
 const MAX_SPEECH_LENGTH = 1500; // Giới hạn an toàn để tránh treo trình duyệt
 
@@ -29,7 +29,7 @@ export const getLastConnectedUrl = () => cachedBaseUrl;
 
 /**
  * Determines the base URL for the local server.
- * Uses the user-configured full URL directly.
+ * Uses the new unified server config.
  */
 const getBaseUrl = async (urlOverride?: string): Promise<string> => {
     if (urlOverride) {
@@ -40,10 +40,9 @@ const getBaseUrl = async (urlOverride?: string): Promise<string> => {
     if (cachedBaseUrl) return cachedBaseUrl;
 
     const config = getConfig();
-    // Prioritize Audio Coach URL, fallback to General Audio URL
-    const configuredUrl = config.audioCoach.serverUrl || config.audio.serverUrl || 'http://localhost:3000';
+    const serverUrl = getServerUrl(config);
     
-    cachedBaseUrl = configuredUrl.replace(/\/$/, "");
+    cachedBaseUrl = serverUrl;
     return cachedBaseUrl;
 };
 
@@ -146,21 +145,9 @@ export const selectServerVoice = async (voiceName: string, urlOverride?: string)
 };
 
 export const setServerMode = async (mode: string, urlOverride?: string): Promise<boolean> => {
-    try {
-        const baseUrl = await getBaseUrl(urlOverride);
-        const url = `${baseUrl}/set-mode`;
-        
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode })
-        });
-        if (!res.ok) return false;
-        const data = await res.json();
-        return data.success;
-    } catch (e) {
-        return false;
-    }
+    // This function was originally intended for mode switching on a specific custom server
+    // For the unified server, this might be less relevant, but kept for compatibility.
+    return true; 
 };
 
 const notifyStatus = (status: boolean) => {
@@ -291,13 +278,14 @@ export const speak = async (text: string, isDialogue = false, forcedLang?: 'en' 
   const config = getConfig();
   const coachType = config.audioCoach.activeCoach;
   const coach = config.audioCoach.coaches[coachType];
+  const serverUrl = getServerUrl(config);
   
   const lang = forcedLang ? forcedLang : detectLanguage(cleanedText);
   const voiceName = voiceOverride !== undefined ? voiceOverride : (lang === 'vi' ? coach.viVoice : coach.enVoice);
   const accentCode = accentOverride !== undefined ? accentOverride : (lang === 'vi' ? coach.viAccent : coach.enAccent);
 
   try {
-      await speakViaServer(cleanedText, lang, accentCode, voiceName, config.audioCoach.serverUrl);
+      await speakViaServer(cleanedText, lang, accentCode, voiceName, serverUrl);
       return; 
   } catch (e) {
       if (!isDialogue) {

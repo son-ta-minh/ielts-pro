@@ -138,6 +138,7 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
     uniqueTypes.forEach((type: ChallengeType) => {
         const allOfType = availableChallenges.filter(c => c.type === type);
         
+        // Special Case: Word Family (Aggregate score of members)
         if (type === 'WORD_FAMILY') {
             const familyKeys: (keyof WordFamily)[] = ['nouns', 'verbs', 'adjs', 'advs'];
             const typeMap: Record<keyof WordFamily, string> = { nouns: 'n', verbs: 'v', adjs: 'j', advs: 'd' };
@@ -154,19 +155,60 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
             return;
         }
 
+        // Special Case: Sentence Scramble (Group Logic - Pass ONE is enough for mastery display)
+        if (type === 'SENTENCE_SCRAMBLE') {
+            // Check if ANY sentence scramble test has been passed in history
+            // We look for any key starting with 'SENTENCE_SCRAMBLE' or 'sc' that is true
+            const anyPassed = Object.keys(history).some(key => 
+                (key.startsWith('SENTENCE_SCRAMBLE') || key.startsWith('sc')) && history[key] === true
+            );
+            
+            // For UI display purposes in Test Setup:
+            // Score = 1 if passed, 0 if not. Total = 1 (treat as a single skill check).
+            stats.set(type, { score: anyPassed ? 1 : 0, total: 1 });
+            return;
+        }
+
+        // Default Logic for other types
         let currentScore = 0;
         allOfType.forEach(challenge => {
-            let key: string = challenge.type;
-            if (challenge.type === 'COLLOCATION_QUIZ') key += `:${(challenge as any).fullText}`;
-            else if (challenge.type === 'COLLOCATION_MULTICHOICE_QUIZ') key += `:${(challenge as any).fullText}`;
-            else if (challenge.type === 'IDIOM_QUIZ') key += `:${(challenge as any).fullText}`;
-            else if (challenge.type === 'PREPOSITION_QUIZ') key += `:${(challenge as any).answer}`;
-            else if (challenge.type === 'PARAPHRASE_QUIZ') key += `:${(challenge as any).answer}`;
-            else if (challenge.type === 'PARAPHRASE_CONTEXT_QUIZ') key = 'PARAPHRASE_CONTEXT_QUIZ'; // Basic handling for now
-            else if (challenge.type === 'COLLOCATION_CONTEXT_QUIZ') key = 'COLLOCATION_CONTEXT_QUIZ';
-            else if (challenge.type === 'IDIOM_CONTEXT_QUIZ') key = 'IDIOM_CONTEXT_QUIZ';
+            let isPassed = false;
+            let primaryKey = '';
+
+            // 1. Determine Primary Key
+            if (challenge.type === 'COLLOCATION_QUIZ') primaryKey = `COLLOCATION_QUIZ:${(challenge as any).fullText}`;
+            else if (challenge.type === 'COLLOCATION_MULTICHOICE_QUIZ') primaryKey = `COLLOCATION_MULTICHOICE_QUIZ:${(challenge as any).fullText}`;
+            else if (challenge.type === 'IDIOM_QUIZ') primaryKey = `IDIOM_QUIZ:${(challenge as any).fullText}`;
+            else if (challenge.type === 'PREPOSITION_QUIZ') primaryKey = `PREPOSITION_QUIZ:${(challenge as any).answer}`;
+            else if (challenge.type === 'PARAPHRASE_QUIZ') primaryKey = `PARAPHRASE_QUIZ:${(challenge as any).answer}`;
+            else if (challenge.type === 'PARAPHRASE_CONTEXT_QUIZ') primaryKey = 'PARAPHRASE_CONTEXT_QUIZ';
+            else if (challenge.type === 'COLLOCATION_CONTEXT_QUIZ') primaryKey = 'COLLOCATION_CONTEXT_QUIZ';
+            else if (challenge.type === 'IDIOM_CONTEXT_QUIZ') primaryKey = 'IDIOM_CONTEXT_QUIZ';
+            else primaryKey = challenge.type;
+
+            // 2. Check Primary Key
+            if (getResult(primaryKey, type) === true) {
+                isPassed = true;
+            }
+
+            // 3. Check Alternate Keys (Cross-validation)
+            if (!isPassed) {
+                if (challenge.type === 'PARAPHRASE_QUIZ') {
+                    const text = (challenge as any).answer;
+                    if (history[`PARAPHRASE_CONTEXT_QUIZ:${text}`] === true) isPassed = true;
+                }
+                else if (challenge.type === 'COLLOCATION_QUIZ') {
+                    const text = (challenge as any).fullText;
+                    if (history[`COLLOCATION_CONTEXT_QUIZ:${text}`] === true) isPassed = true;
+                    if (getResult(`COLLOCATION_MULTICHOICE_QUIZ:${text}`, 'COLLOCATION_MULTICHOICE_QUIZ' as any) === true) isPassed = true;
+                }
+                else if (challenge.type === 'IDIOM_QUIZ') {
+                    const text = (challenge as any).fullText;
+                    if (history[`IDIOM_CONTEXT_QUIZ:${text}`] === true) isPassed = true;
+                }
+            }
             
-            if (getResult(key, type) === true) currentScore++;
+            if (isPassed) currentScore++;
         });
         stats.set(type, { score: currentScore, total: allOfType.length });
     });
@@ -255,6 +297,17 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       const selectionToUse = overrideSelection || selectedChallengeTypes;
       let selected = availableChallenges.filter(c => selectionToUse.has(c.type));
       
+      // Special handling for SENTENCE_SCRAMBLE to avoid flooding the test with multiple examples
+      // If selected, pick only ONE random sentence scramble challenge.
+      if (selectionToUse.has('SENTENCE_SCRAMBLE')) {
+          const scrambles = selected.filter(c => c.type === 'SENTENCE_SCRAMBLE');
+          if (scrambles.length > 1) {
+              const keptScramble = scrambles[Math.floor(Math.random() * scrambles.length)];
+              selected = selected.filter(c => c.type !== 'SENTENCE_SCRAMBLE'); // Remove all
+              selected.push(keptScramble); // Add back one
+          }
+      }
+
       if (selected.length === 0) return;
       setIsPreparing(true);
       const finalChallenges = await prepareChallenges(selected, word);
@@ -351,27 +404,21 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       }
 
       // Collect required ChallengeTypes for the unpassed units
-      // We need to map back from the logical unit to available challenges.
-      // availableChallenges doesn't directly link to 'unit key', but we can infer or select all.
-      // Simpler approach: select ALL challenge types associated with unpassed areas.
       
-      // We can use a heuristic mapping or just enable types that typically cover these areas.
-      // Or, better, check availableChallenges to see if they address any unpassed unit.
-      
-      // Let's iterate available challenges. If a challenge addresses an unpassed unit, add it.
       availableChallenges.forEach(challenge => {
           // Construct expected keys for this challenge
           let keys: string[] = [];
           if (challenge.type === 'COLLOCATION_QUIZ') keys.push(`COLLOCATION_QUIZ:${(challenge as any).fullText}`);
           else if (challenge.type === 'COLLOCATION_MULTICHOICE_QUIZ') keys.push(`COLLOCATION_MULTICHOICE_QUIZ:${(challenge as any).fullText}`);
-          else if (challenge.type === 'COLLOCATION_CONTEXT_QUIZ') { /* Batch, hard to link to single unit without logic */ }
+          else if (challenge.type === 'COLLOCATION_CONTEXT_QUIZ') { /* Batch */ }
           else if (challenge.type === 'PARAPHRASE_QUIZ') keys.push(`PARAPHRASE_QUIZ:${(challenge as any).answer}`);
           else if (challenge.type === 'PREPOSITION_QUIZ') keys.push(`PREPOSITION_QUIZ:${(challenge as any).answer}`);
           else if (challenge.type === 'SPELLING') keys.push('SPELLING');
           else if (challenge.type === 'PRONUNCIATION') keys.push('PRONUNCIATION');
           else if (challenge.type === 'MEANING_QUIZ') keys.push('MEANING_QUIZ');
           else if (challenge.type === 'IPA_QUIZ') keys.push('IPA_QUIZ');
-          else if (challenge.type === 'WORD_FAMILY') keys.push('WORD_FAMILY'); // General family check
+          else if (challenge.type === 'WORD_FAMILY') keys.push('WORD_FAMILY'); 
+          else if (challenge.type === 'SENTENCE_SCRAMBLE') keys.push('SENTENCE_SCRAMBLE'); // Logical unit 'context' maps here
 
           // If any key produced by this challenge corresponds to an unpassed unit's testKeys
           const addressesUnpassed = keys.some(k => 

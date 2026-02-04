@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { ArrowLeft, Sparkles, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Sparkles, Loader2, Save, Trash2, AlertCircle } from 'lucide-react';
 
 interface Props {
     name: string;
@@ -10,6 +11,10 @@ interface Props {
     setPath: (v: string) => void;
     tagsInput: string;
     setTagsInput: (v: string) => void;
+    
+    comparisonData: { word: string; explanation: string; example: string }[];
+    onDeleteRow: (index: number) => void;
+
     isSaving: boolean;
     onSave: () => void;
     onCancel: () => void;
@@ -17,7 +22,8 @@ interface Props {
 }
 
 export const ComparisonEditViewUI: React.FC<Props> = ({ 
-    name, setName, wordsInput, setWordsInput, path, setPath, tagsInput, setTagsInput,
+    name, setName, wordsInput, setWordsInput, tagsInput, setTagsInput,
+    comparisonData, onDeleteRow,
     isSaving, onSave, onCancel, onOpenAiRefine 
 }) => {
     return (
@@ -48,19 +54,38 @@ export const ComparisonEditViewUI: React.FC<Props> = ({
 
                 <div className="space-y-1">
                     <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Words to Compare</label>
-                    <textarea value={wordsInput} onChange={(e) => setWordsInput(e.target.value)} rows={8} placeholder="Enter words (one per line or comma separated)..." className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-none"/>
+                    <textarea value={wordsInput} onChange={(e) => setWordsInput(e.target.value)} rows={4} placeholder="Enter words (one per line or comma separated)..." className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-none"/>
                     <p className="text-[10px] text-neutral-400 px-1 italic">Tip: Use AI Refine to automatically generate explanations for these words.</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Path</label>
-                        <input type="text" value={path} onChange={(e) => setPath(e.target.value)} placeholder="e.g. /Vocabulary/Nuance" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                {comparisonData && comparisonData.length > 0 && (
+                    <div className="space-y-2 pt-4 border-t border-neutral-100">
+                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Generated Comparisons ({comparisonData.length})</label>
+                        <div className="space-y-2">
+                            {comparisonData.map((item, idx) => (
+                                <div key={idx} className="flex items-start gap-3 p-3 bg-neutral-50 rounded-xl border border-neutral-100 group">
+                                    <div className="flex-1 space-y-1">
+                                        <div className="flex justify-between">
+                                            <span className="font-bold text-sm text-neutral-900">{item.word}</span>
+                                        </div>
+                                        <p className="text-xs text-neutral-600 line-clamp-2">{item.explanation.replace(/\*\*/g, '')}</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => onDeleteRow(idx)}
+                                        className="p-2 text-neutral-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                                        title="Delete Row"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Tags</label>
-                        <input type="text" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. Adjectives, Formal" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
-                    </div>
+                )}
+
+                <div className="space-y-1">
+                    <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Tags</label>
+                    <input type="text" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. Adjectives, Formal" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
                 </div>
             </div>
         </div>

@@ -11,6 +11,7 @@ import { getConfig, saveConfig, SystemConfig, DEFAULT_SRS_CONFIG } from '../../a
 import { SettingsViewUI, SettingView } from './SettingsView_UI';
 import { InterfaceSettings } from './InterfaceSettings'; 
 import { useToast } from '../../contexts/ToastContext';
+import { getDatabaseStats, checkLocalStorageHealth } from '../../app/db';
 
 interface Props {
   user: UserType;
@@ -25,7 +26,25 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   
-  const [currentView, setCurrentView] = useState<SettingView>('PROFILE');
+  const [currentView, setCurrentView] = useState<SettingView>(() => {
+    // Check for direct navigation request from Dashboard
+    const jumpTo = sessionStorage.getItem('vocab_pro_settings_tab');
+    if (jumpTo) {
+        sessionStorage.removeItem('vocab_pro_settings_tab');
+        return jumpTo as SettingView;
+    }
+    return 'PROFILE';
+  });
+
+  // Effect to handle navigation requests when the component is already mounted/alive
+  useEffect(() => {
+    const jumpTo = sessionStorage.getItem('vocab_pro_settings_tab');
+    if (jumpTo) {
+        sessionStorage.removeItem('vocab_pro_settings_tab');
+        setCurrentView(jumpTo as SettingView);
+    }
+  }, []); // Run on mount
+
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
   const [dataScope, setDataScope] = useState<DataScope>({
@@ -58,9 +77,14 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [isVoiceLoading, setIsVoiceLoading] = useState(true);
   const [isApplyingAccent, setIsApplyingAccent] = useState(false);
+  
+  // Diagnostic State
+  const [dbStats, setDbStats] = useState<Record<string, number> | null>(null);
+  const [lsHealth, setLsHealth] = useState<{ hasBackup: boolean, backupSize: number, backupTimestamp: string } | null>(null);
 
   const [profileData, setProfileData] = useState({
     name: user.name,
+    avatar: user.avatar,
     role: user.role || '',
     currentLevel: user.currentLevel || '',
     target: user.target || '',
@@ -72,6 +96,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   useEffect(() => {
     setProfileData({ 
         name: user.name, 
+        avatar: user.avatar,
         role: user.role || '', 
         currentLevel: user.currentLevel || '', 
         target: user.target || '', 
@@ -113,15 +138,19 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
 
   const handleConfigChange = (section: keyof SystemConfig, key: any, value: any) => {
     setConfig(prev => {
-        const newConfig = { 
-            ...prev, 
-            [section]: { ...prev[section], [key]: value } 
-        };
+        const newConfig = { ...prev };
         
-        // Auto-save audio coach updates
-        if (section === 'audioCoach') {
-            saveConfig(newConfig);
+        if (key === null && typeof value === 'object') {
+            // Full section replacement
+            (newConfig as any)[section] = value;
+        } else {
+            // Partial update
+            (newConfig as any)[section] = { ...(prev as any)[section], [key]: value };
         }
+        
+        // Auto-save specific updates immediately if desired, otherwise rely on manual save
+        // For server settings, users expect manual save usually, but let's keep consistency.
+        // We generally rely on the "Save" button for big changes.
         
         return newConfig;
     });
@@ -134,6 +163,10 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setProfileData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
+  
+  const handleAvatarChange = (url: string) => {
+    setProfileData(prev => ({ ...prev, avatar: url }));
+  };
 
   const handleSaveProfile = async () => {
     const updatedUser: UserType = { 
@@ -143,7 +176,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         currentLevel: profileData.currentLevel.trim(), 
         target: profileData.target.trim(), 
         nativeLanguage: profileData.nativeLanguage, 
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profileData.name.trim() || user.name}`,
+        avatar: profileData.avatar, // Save the specific avatar URL
         lessonPreferences: {
             language: profileData.lessonLanguage as 'English' | 'Vietnamese',
             targetAudience: profileData.lessonAudience.trim() as 'Kid' | 'Adult',
@@ -274,6 +307,19 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         setIsNormalizing(false);
     }
   };
+  
+  const handleRunDiagnostics = async () => {
+      setDbStats(null);
+      setLsHealth(null);
+      
+      const stats = await getDatabaseStats();
+      setDbStats(stats);
+      
+      const ls = checkLocalStorageHealth();
+      setLsHealth(ls);
+      
+      showToast("Diagnostic run complete.", "info");
+  };
 
   const handleToggleAdmin = async () => {
       await onUpdateUser({ ...user, isAdmin: !user.isAdmin });
@@ -307,6 +353,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         setCurrentView={setCurrentView}
         setIsDropdownOpen={setIsDropdownOpen}
         onProfileChange={handleProfileChange}
+        onAvatarChange={handleAvatarChange}
         onSaveProfile={handleSaveProfile}
         onConfigChange={handleConfigChange}
         onAiConfigChange={handleAiConfigChange}
@@ -332,6 +379,10 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         onNormalizeOptionsChange={setNormalizeOptions}
         goalConfig={config.dailyGoals}
         onGoalConfigChange={handleGoalConfigChange}
+        // Diagnostic Props
+        dbStats={dbStats}
+        lsHealth={lsHealth}
+        onRunDiagnostics={handleRunDiagnostics}
       >
         {currentView === 'INTERFACE' && <InterfaceSettings />}
       </SettingsViewUI>

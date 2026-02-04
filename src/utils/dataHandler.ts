@@ -1,6 +1,6 @@
 
-import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, CalendarEvent } from '../app/types';
-import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getComparisonGroupsByUserId, bulkSaveComparisonGroups, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getCalendarEventsByUserId, bulkSaveCalendarEvents } from '../app/db';
+import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, CalendarEvent } from '../app/types';
+import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getComparisonGroupsByUserId, bulkSaveComparisonGroups, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getCalendarEventsByUserId, bulkSaveCalendarEvents } from '../app/db';
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
@@ -377,6 +377,11 @@ export const processJsonImport = async (
                 const incomingAdventure: any | undefined = Array.isArray(rawJson) ? undefined : (rawJson.customAdventure || rawJson.adv);
                 const incomingSettings: any | undefined = Array.isArray(rawJson) ? undefined : (rawJson.settings || rawJson.sys);
                 
+                // New: Reading Shelves
+                const incomingReadingShelves = Array.isArray(rawJson) ? undefined : (rawJson.readingShelves || rawJson.rs);
+                // New: Reading Books
+                const incomingReadingBooks: ReadingBook[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.readingBooks || rawJson.rb);
+
                 if (!Array.isArray(incomingItems)) {
                     throw new Error("Invalid JSON format: 'vocabulary' array not found.");
                 }
@@ -497,6 +502,15 @@ export const processJsonImport = async (
                     if (incomingUnits && Array.isArray(incomingUnits)) { 
                         const unitsWithUser = incomingUnits.map(u => ({...u, userId: importedUserId})); 
                         await bulkSaveUnits(unitsWithUser); 
+                    }
+                    // Restore Reading Books
+                    if (incomingReadingBooks && Array.isArray(incomingReadingBooks)) {
+                        const booksWithUser = incomingReadingBooks.map(b => ({ ...b, userId: importedUserId }));
+                        await bulkSaveReadingBooks(booksWithUser);
+                    }
+                    // Restore Reading Shelves (Using correct key 'reading_books_shelves')
+                    if (incomingReadingShelves) {
+                        localStorage.setItem('reading_books_shelves', JSON.stringify(incomingReadingShelves));
                     }
                 }
                 
@@ -727,6 +741,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
     // 1. Determine what data to fetch based on scope
     const wordsData = scope.vocabulary ? await getAllWordsForExport(userId) : [];
     const unitsData = scope.reading ? await getUnitsByUserId(userId) : [];
+    const readingBooksData = scope.reading ? await getReadingBooksByUserId(userId) : [];
     
     const logsData = (scope.lesson || scope.writing) ? await getParaphraseLogs(userId) : [];
     
@@ -782,6 +797,8 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
     const customChapters = localStorage.getItem('vocab_pro_adventure_chapters');
     const customBadges = localStorage.getItem('vocab_pro_custom_badges');
     const systemConfig = localStorage.getItem('vocab_pro_system_config');
+    // FIX: Using correct key for reading shelves to match ReadingUnitPage.tsx
+    const readingShelves = localStorage.getItem('reading_books_shelves');
 
     const exportObject: Record<string, any> = { 
         v: 7, 
@@ -803,12 +820,16 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
         wordBooks: wordBooksData,
         ce: calendarEventsData,
+        // Added Reading Books export
+        readingBooks: readingBooksData,
         adv: scope.user ? {
             ch: customChapters ? JSON.parse(customChapters) : null,
             b: customBadges ? JSON.parse(customBadges) : null
         } : null,
         // Include settings if user scope is active (Full Backup implies User data)
-        settings: (scope.user && systemConfig) ? JSON.parse(systemConfig) : null
+        settings: (scope.user && systemConfig) ? JSON.parse(systemConfig) : null,
+        // New: Reading Shelves included if reading scope active
+        readingShelves: (scope.reading && readingShelves) ? JSON.parse(readingShelves) : null
     };
     
     const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: 'application/json' }); 
@@ -821,91 +842,18 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
 };
 
 export const exportUnitsToJson = async (units: Unit[], userId: string) => {
-    const allWordIds = new Set(units.flatMap(u => u.wordIds));
-    let vocabulary: VocabularyItem[] = [];
-
-    if (allWordIds.size > 0) {
-        const allUserWords = await getAllWordsForExport(userId);
-        const wordMap = new Map(allUserWords.map(w => [w.id, w]));
-        vocabulary = Array.from(allWordIds)
-            .map(id => wordMap.get(id))
-            .filter((w): w is VocabularyItem => !!w);
-    }
+    const exportObject = {
+        v: 7,
+        ca: new Date().toISOString(),
+        u: units,
+        user: { id: userId }
+    };
     
-    const exportObject = { units, vocabulary };
-
-    const jsonString = JSON.stringify(exportObject, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-
-    if (units.length === 1) {
-        const safeName = units[0].name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = `unit-${safeName}.json`;
-    } else {
-        a.download = `units-export-${new Date().toISOString().split('T')[0]}.json`;
-    }
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: 'application/json' }); 
+    const url = URL.createObjectURL(blob); 
+    const a = document.createElement('a'); 
+    a.href = url; 
+    a.download = `vocab-pro-units-${new Date().toISOString().split('T')[0]}.json`; 
+    a.click(); 
     URL.revokeObjectURL(url);
-};
-
-export const importUnitsFromJson = (file: File): Promise<{ units: Unit[], vocabulary: VocabularyItem[] }> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const result = event.target?.result as string;
-                const parsed = JSON.parse(result);
-                
-                let unitsToProcess: any[];
-                let vocabulary: VocabularyItem[] = [];
-
-                // Handle both new {units, vocabulary} format and old Unit[] format
-                if (parsed && Array.isArray(parsed.units)) {
-                    unitsToProcess = parsed.units;
-                    vocabulary = parsed.vocabulary || [];
-                } else {
-                    unitsToProcess = Array.isArray(parsed) ? parsed : [parsed];
-                }
-
-                const validatedUnits: Unit[] = [];
-                for (const unit of unitsToProcess) {
-                    if (typeof unit.id !== 'string' || typeof unit.name !== 'string' || !Array.isArray(unit.wordIds)) {
-                        if (unitsToProcess.length > 1) continue;
-                        throw new Error('Invalid Unit file format: Missing id, name, or wordIds.');
-                    }
-                    
-                    const validatedUnit: Unit = {
-                        id: unit.id,
-                        userId: unit.userId || '',
-                        name: unit.name,
-                        description: unit.description || '',
-                        wordIds: unit.wordIds,
-                        customVocabString: unit.customVocabString,
-                        createdAt: unit.createdAt || Date.now(),
-                        updatedAt: unit.updatedAt || Date.now(),
-                        essay: unit.essay,
-                        isLearned: unit.isLearned || false
-                    };
-                    validatedUnits.push(validatedUnit);
-                }
-                
-                if (validatedUnits.length === 0 && unitsToProcess.length > 0) {
-                    throw new Error("No valid units found in the file.");
-                }
-
-                resolve({ units: validatedUnits, vocabulary });
-            } catch (e: any) {
-                reject(new Error('Failed to parse JSON file: ' + e.message));
-            }
-        };
-        reader.onerror = () => {
-            reject(new Error('Failed to read the file.'));
-        };
-        reader.readAsText(file);
-    });
 };

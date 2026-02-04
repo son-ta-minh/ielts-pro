@@ -1,0 +1,15 @@
+{
+  "name": "vocab-pro-server",
+  "version": "2.0.0",
+  "description": "Unified Backup (Streaming) and TTS (macOS) Server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "gen-cert": "bash generate_cert.sh"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "minimist": "^1.2.8"
+  }
+}

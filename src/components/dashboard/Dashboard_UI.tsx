@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
-  Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2
+  Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive
 } from 'lucide-react';
 import { AppView, VocabularyItem } from '../../app/types';
 import { DailyGoalConfig } from '../../app/settingsManager';
 import { DayProgress } from './DayProgress';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 // New component for Word of the Day
 const WordOfTheDay: React.FC<{ 
@@ -68,8 +69,19 @@ const WordOfTheDay: React.FC<{
   );
 };
 
-const BackupStatus: React.FC<{ lastBackupTime: number | null; onBackup: () => void; onRestore: () => void; }> = ({ lastBackupTime, onBackup, onRestore }) => {
+const BackupStatus: React.FC<{ 
+    lastBackupTime: number | null; 
+    onBackup: (mode: 'server' | 'file') => void; 
+    onRestore: (mode: 'server' | 'file') => void; 
+    serverStatus: 'connected' | 'disconnected';
+}> = ({ lastBackupTime, onBackup, onRestore, serverStatus }) => {
   const [statusText, setStatusText] = useState('');
+  
+  const [isBackupMenuOpen, setIsBackupMenuOpen] = useState(false);
+  const backupMenuRef = useRef<HTMLDivElement>(null);
+  
+  const [isRestoreMenuOpen, setIsRestoreMenuOpen] = useState(false);
+  const restoreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const updateStatus = () => {
@@ -91,22 +103,107 @@ const BackupStatus: React.FC<{ lastBackupTime: number | null; onBackup: () => vo
     return () => clearInterval(intervalId);
   }, [lastBackupTime]);
 
-  const isUrgent = useMemo(() => {
-    if (!lastBackupTime) return true;
-    return (Date.now() - lastBackupTime) > 3 * 24 * 60 * 60 * 1000;
-  }, [lastBackupTime]);
+  useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+          if (backupMenuRef.current && !backupMenuRef.current.contains(event.target as Node)) {
+              setIsBackupMenuOpen(false);
+          }
+          if (restoreMenuRef.current && !restoreMenuRef.current.contains(event.target as Node)) {
+              setIsRestoreMenuOpen(false);
+          }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
-    <div className={`flex shrink-0 items-center justify-between space-x-3 px-3 py-2 rounded-2xl border-2 shadow-sm ${
-      isUrgent ? 'bg-white border-amber-200 text-amber-900' : 'bg-white border-neutral-200 text-neutral-800'
-    }`}>
+    <div className="flex shrink-0 items-center justify-between space-x-3 px-3 py-2 rounded-2xl border-2 shadow-sm bg-white border-neutral-200 text-neutral-800">
       <div className="flex items-center space-x-2">
         <History size={14} />
         <span className="font-medium text-xs whitespace-nowrap">{statusText}</span>
       </div>
       <div className="flex items-center space-x-2 pl-2">
-        <button onClick={onBackup} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center space-x-1.5 ${isUrgent ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-neutral-900 text-white hover:bg-neutral-800'}`}><Download size={12} /><span>Backup</span></button>
-        <button onClick={onRestore} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center space-x-1.5 ${isUrgent ? 'bg-amber-100 text-amber-600 hover:bg-amber-200' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}><Upload size={12} /><span>Restore</span></button>
+        {/* BACKUP BUTTON */}
+        {serverStatus === 'connected' ? (
+            <div className="relative" ref={backupMenuRef}>
+                <button 
+                    onClick={() => setIsBackupMenuOpen(!isBackupMenuOpen)} 
+                    className={`px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-indigo-100 shadow-sm uppercase tracking-widest ${isBackupMenuOpen ? 'bg-indigo-100' : 'hover:bg-indigo-100'}`}
+                >
+                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-3 h-3 object-contain" />
+                    <span>Backup</span>
+                    <ChevronDown size={12} className={`transition-transform ${isBackupMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isBackupMenuOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-36 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
+                        <button 
+                            onClick={() => { onBackup('server'); setIsBackupMenuOpen(false); }}
+                            className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
+                        >
+                            <Cloud size={14} className="text-sky-500" />
+                            To Server
+                        </button>
+                        <div className="h-px bg-neutral-100 mx-2"></div>
+                        <button 
+                            onClick={() => { onBackup('file'); setIsBackupMenuOpen(false); }}
+                            className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
+                        >
+                            <HardDrive size={14} className="text-indigo-500" />
+                            To File
+                        </button>
+                    </div>
+                )}
+            </div>
+        ) : (
+            <button 
+                onClick={() => onBackup('file')} 
+                className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center gap-2 hover:bg-indigo-100 transition-all active:scale-95 border border-indigo-100 shadow-sm uppercase tracking-widest"
+            >
+                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-3 h-3 object-contain" />
+                <span>Backup</span>
+            </button>
+        )}
+
+        {/* RESTORE BUTTON */}
+        {serverStatus === 'connected' ? (
+            <div className="relative" ref={restoreMenuRef}>
+                <button 
+                    onClick={() => setIsRestoreMenuOpen(!isRestoreMenuOpen)} 
+                    className={`px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-emerald-100 shadow-sm uppercase tracking-widest ${isRestoreMenuOpen ? 'bg-emerald-100' : 'hover:bg-emerald-100'}`}
+                >
+                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Down%20Arrow.png" alt="Restore" className="w-3 h-3 object-contain" />
+                    <span>Restore</span>
+                    <ChevronDown size={12} className={`transition-transform ${isRestoreMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isRestoreMenuOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-36 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
+                        <button 
+                            onClick={() => { onRestore('server'); setIsRestoreMenuOpen(false); }}
+                            className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
+                        >
+                            <Cloud size={14} className="text-sky-500" />
+                            From Server
+                        </button>
+                        <div className="h-px bg-neutral-100 mx-2"></div>
+                        <button 
+                            onClick={() => { onRestore('file'); setIsRestoreMenuOpen(false); }}
+                            className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
+                        >
+                            <FileJson size={14} className="text-amber-500" />
+                            From File
+                        </button>
+                    </div>
+                )}
+            </div>
+        ) : (
+            <button 
+                onClick={() => onRestore('file')} 
+                className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center gap-2 hover:bg-emerald-100 transition-all active:scale-95 border border-emerald-100 shadow-sm uppercase tracking-widest"
+            >
+                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Down%20Arrow.png" alt="Restore" className="w-3 h-3 object-contain" />
+                <span>Restore</span>
+            </button>
+        )}
       </div>
     </div>
   );
@@ -122,8 +219,15 @@ const LibraryHealthPanel: React.FC<{
   onVerifyRefined: () => void;
   onViewLibrary: () => void;
 }> = ({ totalCount, newCount, rawCount, refinedCount, reviewStats, onRefineRaw, onVerifyRefined, onViewLibrary }) => {
-  const countLength = totalCount.toString().length;
-  const countTextSize = countLength > 4 ? 'text-2xl' : 'text-4xl';
+  
+  const chartData = [
+    { name: 'New', value: newCount, color: '#3b82f6' }, // blue-500
+    { name: 'Learning', value: reviewStats.learned, color: '#06b6d4' }, // cyan-500
+    { name: 'Mastered', value: reviewStats.mastered, color: '#a855f7' }, // purple-500
+  ];
+
+  // If total is 0, provide placeholder data for empty chart
+  const activeData = totalCount > 0 ? chartData : [{ name: 'Empty', value: 1, color: '#f3f4f6' }];
 
   return (
     <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col h-full">
@@ -134,56 +238,62 @@ const LibraryHealthPanel: React.FC<{
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 my-6 flex-grow">
-        <div className="flex items-center justify-center">
-          <div className="text-center">
-            <div className={`${countTextSize} font-black text-neutral-900`}>{totalCount}</div>
-            <div className="text-xs font-bold text-neutral-400">Total Words</div>
-          </div>
+      <div className="flex-grow flex items-center justify-between gap-2 min-h-[180px]">
+        {/* Chart Section */}
+        <div className="h-44 w-44 relative">
+             <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                    <Pie
+                        data={activeData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={totalCount > 0 ? 5 : 0}
+                        dataKey="value"
+                        stroke="none"
+                        cornerRadius={4}
+                    >
+                        {activeData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                    </Pie>
+                    <Tooltip 
+                         content={({ active, payload }) => {
+                             if (active && payload && payload.length) {
+                                 return (
+                                     <div className="bg-neutral-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xl">
+                                         {payload[0].name}: {payload[0].value}
+                                     </div>
+                                 );
+                             }
+                             return null;
+                         }}
+                    />
+                </PieChart>
+             </ResponsiveContainer>
+             {/* Center Text */}
+             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                 <span className="text-3xl font-black text-neutral-900 leading-none">{totalCount}</span>
+                 <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest mt-1">Total</span>
+             </div>
         </div>
-        <div className="flex flex-col justify-center space-y-3">
-          {(['New', 'Learning', 'Mastered'] as const).map(label => {
-            const count = label === 'New' ? newCount : label === 'Learning' ? reviewStats.learned : reviewStats.mastered;
-            const color = label === 'New' ? 'bg-blue-500' : label === 'Learning' ? 'bg-cyan-500' : 'bg-purple-500';
 
-            if (label === 'Learning') {
-                return (
-                    <div key={label} className="relative group">
-                        <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2 font-bold text-neutral-600">
-                                <div className={`w-2 h-2 rounded-full ${color}`}></div>
-                                {label}
-                                <Eye size={12} className="text-neutral-400 group-hover:text-neutral-900 transition-colors" />
-                            </div>
-                            <div className="font-black text-neutral-900">{count}</div>
-                        </div>
-                        {/* Tooltip */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-32 bg-neutral-900 text-white rounded-lg p-2 text-xs shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                            <div className="space-y-1">
-                                <div className="flex justify-between items-center"><span className="font-bold text-rose-400">Forgot</span><span className="font-black">{reviewStats.statusForgot}</span></div>
-                                <div className="flex justify-between items-center"><span className="font-bold text-orange-400">Hard</span><span className="font-black">{reviewStats.statusHard}</span></div>
-                                <div className="flex justify-between items-center"><span className="font-bold text-cyan-400">Just Learned</span><span className="font-black">{reviewStats.statusLearned}</span></div>
-                                <div className="flex justify-between items-center"><span className="font-bold text-green-400">Easy</span><span className="font-black">{reviewStats.statusEasy}</span></div>
-                            </div>
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-900 rotate-45"></div>
-                        </div>
-                    </div>
-                )
-            }
-
-            return (
-              <div key={label}>
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 font-bold text-neutral-600"><div className={`w-2 h-2 rounded-full ${color}`}></div>{label}</div>
-                  <div className="font-black text-neutral-900">{count}</div>
-                </div>
-              </div>
-            );
-          })}
+        {/* Legend Section */}
+        <div className="flex-1 flex flex-col justify-center gap-3 pl-4">
+             {chartData.map(item => (
+                 <div key={item.name} className="flex items-center justify-between group">
+                     <div className="flex items-center gap-2">
+                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                         <span className="text-xs font-bold text-neutral-600">{item.name}</span>
+                     </div>
+                     <span className="font-black text-neutral-900">{item.value}</span>
+                 </div>
+             ))}
         </div>
       </div>
       
-      <div className="mt-auto flex flex-col sm:flex-row gap-2">
+      <div className="mt-auto flex flex-col sm:flex-row gap-2 pt-4">
         <button onClick={onRefineRaw} disabled={rawCount === 0} className="flex-1 justify-between px-4 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-black text-xs flex items-center hover:bg-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:hover:bg-indigo-50 border border-indigo-100 shadow-sm"><div className="flex items-center space-x-2"><Wand2 size={12} /><span>REFINE RAW</span></div><span className="px-2 py-0.5 bg-indigo-200/50 rounded-md font-black">{rawCount}</span></button>
         <button onClick={onVerifyRefined} disabled={refinedCount === 0} className="flex-1 justify-between px-4 py-3 bg-emerald-50 text-emerald-700 rounded-xl font-black text-xs flex items-center hover:bg-emerald-100 transition-all active:scale-95 disabled:opacity-50 disabled:hover:bg-emerald-50 border border-emerald-100 shadow-sm"><div className="flex items-center space-x-2"><ShieldCheck size={12} /><span>VERIFY REFINED</span></div><span className="px-2 py-0.5 bg-emerald-200/50 rounded-md font-black">{refinedCount}</span></button>
       </div>
@@ -207,13 +317,14 @@ export interface DashboardUIProps {
   onStartDueReview: () => void;
   onStartNewLearn: () => void;
   lastBackupTime: number | null;
-  onBackup: () => void;
-  onRestore: () => void;
+  onBackup: (mode: 'server' | 'file') => void;
+  onRestore: (mode: 'server' | 'file') => void;
   dayProgress: { learned: number; reviewed: number; learnedWords: VocabularyItem[]; reviewedWords: VocabularyItem[]; };
   dailyGoals: DailyGoalConfig;
   isWotdComposed?: boolean;
   onComposeWotd?: (word: VocabularyItem) => void;
   onRandomizeWotd?: () => void;
+  serverStatus: 'connected' | 'disconnected';
 }
 
 // The pure UI component
@@ -237,16 +348,54 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   dailyGoals,
   isWotdComposed,
   onComposeWotd,
-  onRandomizeWotd
+  onRandomizeWotd,
+  serverStatus
 }) => {
   return (
     <div className="space-y-10 animate-in fade-in duration-500">
-      <header className="flex flex-col sm:flex-row justify-between sm:items-center gap-6">
+      <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-6">
         <div>
             <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Vocab Pro</h2>
-            <p className="text-neutral-500 mt-2 font-medium">Don't memorize random lists. Curate the words you actually use.</p>
+            <div className="flex items-center gap-3 mt-2">
+                 {serverStatus === 'connected' ? (
+                    <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Server Mode</span>
+                    </div>
+                 ) : (
+                    <div className="flex items-center gap-2 px-1.5 py-1.5 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm pr-1.5">
+                        <div className="flex items-center gap-2 px-2">
+                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Standalone</span>
+                            
+                            <div className="relative group/tooltip">
+                                <HelpCircle size={12} className="cursor-help opacity-70 hover:opacity-100" />
+                                <div className="absolute left-0 top-full mt-2 w-56 p-3 bg-neutral-900 text-white text-[10px] leading-relaxed font-medium rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-neutral-700">
+                                    Disconnected with Vocab Server. Server backup and high-quality voices are unavailable.
+                                    <div className="absolute -top-1 left-3 w-2 h-2 bg-neutral-900 rotate-45 border-l border-t border-neutral-700"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="w-px h-3 bg-red-200"></div>
+
+                        <button 
+                            onClick={() => {
+                                sessionStorage.setItem('vocab_pro_settings_tab', 'SERVER');
+                                setView('SETTINGS');
+                            }}
+                            className="flex items-center gap-1 px-3 py-1 bg-blue-600 border border-blue-700 rounded-full shadow-sm hover:bg-blue-700 transition-all group/btn"
+                        >
+                            <Link size={10} className="text-white"/>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white">Connect</span>
+                        </button>
+                    </div>
+                 )}
+            </div>
         </div>
-        <BackupStatus lastBackupTime={lastBackupTime} onBackup={onBackup} onRestore={onRestore} />
+        <div className="flex flex-col items-end gap-2">
+             <BackupStatus lastBackupTime={lastBackupTime} onBackup={onBackup} onRestore={onRestore} serverStatus={serverStatus} />
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

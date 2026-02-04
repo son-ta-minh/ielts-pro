@@ -4,6 +4,8 @@ import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
 import { calculateGameEligibility } from '../utils/gameEligibility';
+import { performAutoBackup } from '../services/backupService'; // Import
+import { getConfig } from './settingsManager';
 
 // --- Store State ---
 let _isInitialized = false;
@@ -11,6 +13,8 @@ let _isInitializing = false;
 let _allWords = new Map<string, VocabularyItem>();
 let _composedWordIds = new Set<string>(); // Fast lookup for 'composed' filter
 let _bookWordIds = new Set<string>(); // Fast lookup for 'in book' filter
+let _currentUserId: string | null = null; // Track user ID for backups
+
 let _statsCache: any = {
     reviewCounts: { total: 0, due: 0, new: 0, learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 },
     dashboardStats: { categories: { 'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 }, 'pronun': { total: 0, learned: 0 } }, refinedCount: 0, rawCount: 0 },
@@ -18,6 +22,40 @@ let _statsCache: any = {
 };
 
 // --- Private Functions ---
+
+// Debounce timer for save to LocalStorage backup AND Server
+let _backupTimeout: number | null = null;
+function _triggerBackup() {
+    const config = getConfig();
+    const delay = (config.sync.autoBackupInterval || 60) * 1000;
+    const targetTime = Date.now() + delay;
+
+    if (_backupTimeout) clearTimeout(_backupTimeout);
+    
+    // Notify UI that a backup is pending
+    window.dispatchEvent(new CustomEvent('backup-scheduled', { detail: { targetTime } }));
+    
+    _backupTimeout = window.setTimeout(async () => {
+        try {
+            // 1. Local Storage Backup
+            const allItems = Array.from(_allWords.values());
+            const json = JSON.stringify(allItems);
+            localStorage.setItem('vocab_pro_emergency_backup', json);
+            
+            // 2. Server Auto Backup
+            if (_currentUserId) {
+                // Fetch full user object to ensure sync
+                const user = (await db.getAllUsers()).find(u => u.id === _currentUserId);
+                if (user) {
+                     await performAutoBackup(_currentUserId, user);
+                }
+            }
+        } catch (e) {
+            console.warn("[DataStore] Backup failed:", e);
+        }
+        _backupTimeout = null;
+    }, delay);
+}
 
 function _recalculateStats(userId: string) {
     const now = Date.now();
@@ -112,16 +150,50 @@ const canWrite = (): boolean => {
     return true;
 };
 
+// --- Listen for external triggers (like Settings save) ---
+if (typeof window !== 'undefined') {
+    window.addEventListener('vocab-pro-trigger-backup', () => {
+        if (_isInitialized) {
+            // console.log("[DataStore] External backup trigger received.");
+            _notifyChanges(); // Update UI to show 'unsaved' state immediately
+            _triggerBackup(); // Schedule the backup
+        }
+    });
+}
+
 // --- Public API ---
 
 export async function init(userId: string) {
     if (_isInitialized || _isInitializing) return;
     _isInitializing = true;
+    _currentUserId = userId; // Store ID
     console.log("DataStore: Initializing...");
 
     try {
-        const [words, compositions, books] = await Promise.all([
-            db.getAllWordsForExport(userId),
+        let words = await db.getAllWordsForExport(userId);
+        
+        // --- AUTO-RESTORE CHECK ---
+        // If DB returns 0 words, check Emergency Backup
+        if (words.length === 0) {
+             const backupJson = localStorage.getItem('vocab_pro_emergency_backup');
+             if (backupJson) {
+                 try {
+                     console.log("[DataStore] DB empty. Found backup in LocalStorage. Attempting auto-restore...");
+                     const backupWords = JSON.parse(backupJson);
+                     if (Array.isArray(backupWords) && backupWords.length > 0) {
+                         // Restore to DB
+                         await db.bulkSaveWords(backupWords);
+                         // Re-fetch
+                         words = await db.getAllWordsForExport(userId);
+                         console.log(`[DataStore] Auto-restored ${words.length} items from backup.`);
+                     }
+                 } catch (e) {
+                     console.error("[DataStore] Failed to restore from emergency backup:", e);
+                 }
+             }
+        }
+        
+        const [compositions, books] = await Promise.all([
             db.getCompositionsByUserId(userId),
             db.getWordBooksByUserId(userId)
         ]);
@@ -175,6 +247,7 @@ export async function init(userId: string) {
 
         _allWords = new Map(words.map(w => [w.id, w]));
         _recalculateStats(userId);
+        
         _isInitialized = true;
         console.log(`DataStore: Ready. Loaded ${_allWords.size} items, indexed ${_composedWordIds.size} composed and ${_bookWordIds.size} book words.`);
     } catch (error) {
@@ -308,6 +381,7 @@ export async function saveWordAndUser(word: VocabularyItem, user: User) {
     await db.saveWordAndUser(word, user);
     _allWords.set(word.id, word);
     _recalculateStats(word.userId);
+    _triggerBackup(); // Trigger backup
     _notifyChanges();
 }
 
@@ -321,6 +395,7 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
     await db.saveWordAndUnit(word, unit);
     if (word) {
         _allWords.set(word.id, word);
+        _triggerBackup(); // Trigger backup
     }
     _recalculateStats(unit.userId);
     _notifyChanges();
@@ -334,6 +409,7 @@ export async function saveWord(item: VocabularyItem) {
     await db.saveWord(item);
     _allWords.set(item.id, item);
     _recalculateStats(item.userId);
+    _triggerBackup(); // Trigger backup
     _notifyChanges();
 }
 
@@ -347,6 +423,7 @@ export async function bulkSaveWords(items: VocabularyItem[]) {
     await db.bulkSaveWords(items);
     items.forEach(item => _allWords.set(item.id, item));
     if (items[0]) _recalculateStats(items[0].userId);
+    _triggerBackup(); // Trigger backup
     _notifyChanges();
 }
 
@@ -356,6 +433,7 @@ export async function deleteWord(id: string) {
     await db.deleteWordFromDB(id);
     _allWords.delete(id);
     _recalculateStats(item.userId);
+    _triggerBackup(); // Trigger backup
     _notifyChanges();
 }
 
@@ -366,28 +444,37 @@ export async function bulkDeleteWords(ids: string[]) {
     await db.bulkDeleteWords(ids);
     ids.forEach(id => _allWords.delete(id));
     _recalculateStats(item.userId);
+    _triggerBackup(); // Trigger backup
     _notifyChanges();
 }
 
-export async function saveUser(user: User): Promise<void> { if (canWrite()) await db.saveUser(user); }
-export async function saveUnit(unit: Unit): Promise<void> { if (canWrite()) { await db.saveUnit(unit); _notifyChanges(); } }
+export async function saveUser(user: User): Promise<void> { 
+    if (canWrite()) {
+         await db.saveUser(user);
+         _triggerBackup();
+    }
+}
+export async function saveUnit(unit: Unit): Promise<void> { if (canWrite()) { await db.saveUnit(unit); _triggerBackup(); _notifyChanges(); } }
 
 export async function saveComposition(comp: Composition): Promise<void> {
     if (canWrite()) {
         await db.saveComposition(comp);
         await notifyCompositionChange(comp.userId);
+        _triggerBackup();
     }
 }
 
 export async function deleteComposition(id: string, userId: string): Promise<void> {
     await db.deleteComposition(id);
     await notifyCompositionChange(userId);
+    _triggerBackup();
 }
 
 export async function saveWordBook(book: WordBook): Promise<void> {
     if (canWrite()) {
         await db.saveWordBook(book);
         await notifyWordBookChange(book.userId);
+        _triggerBackup();
     }
 }
 
@@ -395,13 +482,14 @@ export async function bulkSaveWordBooks(books: WordBook[]) {
     if (books.length === 0 || !canWrite()) return;
     await db.bulkSaveWordBooks(books);
     await notifyWordBookChange(books[0].userId);
+    _triggerBackup();
     _notifyChanges();
 }
 
 export async function deleteWordBook(id: string, userId: string): Promise<void> {
-    // FIX: Pass the required userId argument to db.deleteWordBook
     await db.deleteWordBook(id, userId);
     await notifyWordBookChange(userId);
+    _triggerBackup();
 }
 
 export const { getAllUsers, deleteUnit, getUnitsByUserId, getUnitsContainingWord, bulkSaveUnits, saveParaphraseLog, getParaphraseLogs, bulkSaveParaphraseLogs, seedDatabaseIfEmpty, clearVocabularyOnly, findWordByText, getRandomMeanings, getCompositionsByUserId } = db;

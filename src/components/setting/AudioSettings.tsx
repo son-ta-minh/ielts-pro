@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HardDrive, Save, ChevronDown, Power, Loader2, CheckCircle2, AlertCircle, Hash, RefreshCw, Info, Link } from 'lucide-react';
-import { SystemConfig } from '../../app/settingsManager';
+import { SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { fetchServerVoices, ServerVoice, selectServerVoice, speak, resetAudioProtocolCache, getLastConnectedUrl } from '../../utils/audio';
 
 interface AudioSettingsProps {
@@ -19,10 +19,12 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
     const [connectedUrl, setConnectedUrl] = useState<string | null>(null);
 
+    const fullUrl = getServerUrl(config);
+
     const checkServer = async () => {
         setServerStatus('checking');
         resetAudioProtocolCache(); 
-        const data = await fetchServerVoices(config.audio.serverUrl);
+        const data = await fetchServerVoices(fullUrl);
         
         if (data && Array.isArray(data.voices)) {
             setServerVoices(data.voices);
@@ -41,13 +43,13 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
 
     useEffect(() => {
         checkServer();
-    }, [config.audio.serverUrl]);
+    }, [fullUrl]);
 
     const handleServerVoiceChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
         const voiceName = e.target.value;
         if (!voiceName) return;
 
-        const success = await selectServerVoice(voiceName, config.audio.serverUrl);
+        const success = await selectServerVoice(voiceName, fullUrl);
         if (success) {
             onConfigChange('audio', 'preferredSystemVoice', voiceName);
             setTimeout(() => {
@@ -57,7 +59,8 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
     };
 
     const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        onConfigChange('audio', 'serverUrl', e.target.value);
+        const newServer = { ...config.server, useCustomUrl: true, customUrl: e.target.value };
+        onConfigChange('server', null, newServer);
     };
 
     return (
@@ -88,7 +91,7 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
                         <div className="space-y-1">
                             <p className="text-xs font-bold text-amber-900">Server Unreachable</p>
                             <p className="text-[10px] text-amber-700 leading-relaxed">
-                                Ensure your TTS server is running at <b>{config.audio.serverUrl}</b>. 
+                                Ensure your TTS server is running at <b>{fullUrl}</b>. 
                                 <br/>If using HTTPS, ensure the certificate is trusted or allow insecure content.
                             </p>
                         </div>
@@ -103,7 +106,7 @@ export const AudioSettings: React.FC<AudioSettingsProps> = ({
                         </div>
                         <input 
                             type="text" 
-                            value={config.audio.serverUrl} 
+                            value={fullUrl} 
                             onChange={handleUrlChange}
                             className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none transition-all"
                             placeholder="http://localhost:3000"

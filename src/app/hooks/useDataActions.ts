@@ -7,6 +7,8 @@ import { useToast } from '../../contexts/ToastContext';
 import * as db from '../db';
 // Import calculateMasteryScore to fix reference error on line 153
 import { calculateMasteryScore } from '../../utils/srs';
+import { restoreFromServer } from '../../services/backupService';
+import { getConfig } from '../../app/settingsManager';
 
 interface UseDataActionsProps {
     currentUser: User | null;
@@ -19,17 +21,30 @@ interface UseDataActionsProps {
     globalViewWord: VocabularyItem | null;
     setGlobalViewWord: React.Dispatch<React.SetStateAction<VocabularyItem | null>>;
     onUpdateUser: (user: User) => Promise<void>;
+    serverStatus?: 'connected' | 'disconnected';
 }
 
 export const useDataActions = (props: UseDataActionsProps) => {
-    const { currentUser, setView, refreshGlobalStats, sessionWords, setSessionWords, wotd, setWotd, globalViewWord, setGlobalViewWord, onUpdateUser } = props;
+    const { currentUser, setView, refreshGlobalStats, sessionWords, setSessionWords, wotd, setWotd, globalViewWord, setGlobalViewWord, onUpdateUser, serverStatus } = props;
     const { showToast } = useToast();
 
     const [isResetting, setIsResetting] = useState(false);
     const [resetStep, setResetStep] = useState('');
-    const [lastBackupTime, setLastBackupTime] = useState<number | null>(
-        Number(localStorage.getItem('vocab_pro_last_backup_timestamp')) || null
-    );
+
+    // Helper to get latest timestamp from either local backup or server sync
+    const getLastBackup = () => {
+        const local = Number(localStorage.getItem('vocab_pro_last_backup_timestamp')) || 0;
+        const config = getConfig(); 
+        const server = config.sync?.lastSyncTime || 0;
+        const max = Math.max(local, server);
+        return max > 0 ? max : null;
+    };
+
+    const [lastBackupTime, setLastBackupTime] = useState<number | null>(getLastBackup());
+
+    const refreshBackupTime = useCallback(() => {
+        setLastBackupTime(getLastBackup());
+    }, []);
 
     const handleBackup = async (customScope?: DataScope) => {
         if (!currentUser) return;
@@ -52,17 +67,80 @@ export const useDataActions = (props: UseDataActionsProps) => {
         
         const now = Date.now();
         localStorage.setItem('vocab_pro_last_backup_timestamp', String(now));
-        setLastBackupTime(now);
+        refreshBackupTime();
         // Clear restore suppression if any
         sessionStorage.removeItem('vocab_pro_just_restored');
     };
     
-    const handleRestore = () => {
-        if (!currentUser) {
-            console.error("useDataActions: No current user, aborting restore.");
-            return;
-        }
+    // --- Direct Restore Actions (UI must confirm first) ---
+    
+    const handleRestoreSuccess = async (result: any) => {
+        sessionStorage.setItem('vocab_pro_just_restored', 'true');
+        
+        // Mark backup as current since we just restored state
+        const now = Date.now();
+        localStorage.setItem('vocab_pro_last_backup_timestamp', String(now));
+        refreshBackupTime();
+        
+        showToast('Restore successful! Refreshing data...', 'success', 2000);
+        
+        await dataStore.forceReload(currentUser!.id);
 
+        if (result.updatedUser) {
+            await onUpdateUser(result.updatedUser);
+            localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
+        }
+        
+        refreshGlobalStats();
+        
+        // Dispatch custom event to signal restore completion with a delay to override datastore-updated
+        setTimeout(() => {
+            window.dispatchEvent(new Event('vocab-pro-restore-complete'));
+        }, 600);
+        
+        // Reload page to ensure fresh state if needed, though forceReload does a lot
+        // setTimeout(() => window.location.reload(), 1000);
+    };
+
+    const restoreFromServerAction = async () => {
+        if (!currentUser) return;
+        
+        // Set global flag to suppress "Unsaved Changes" highlight in sidebar during bulk writes
+        (window as any).isRestoring = true;
+
+        try {
+            const success = await restoreFromServer(currentUser.id);
+            
+            if (success) {
+                sessionStorage.setItem('vocab_pro_just_restored', 'true');
+                // Mark backup as current
+                const now = Date.now();
+                localStorage.setItem('vocab_pro_last_backup_timestamp', String(now));
+                refreshBackupTime();
+                
+                showToast("Restored from Server successfully!", "success");
+                
+                // Dispatch event with delay
+                setTimeout(() => {
+                    window.dispatchEvent(new Event('vocab-pro-restore-complete'));
+                }, 600);
+                
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                showToast("Server restore failed. Falling back to local file...", "error");
+                triggerLocalRestore();
+            }
+        } catch (err) {
+            console.error("[UI] Error during server restore call:", err);
+            triggerLocalRestore();
+        } finally {
+            // Clear flag after a safety buffer
+            setTimeout(() => { (window as any).isRestoring = false; }, 2000);
+        }
+    };
+
+    const triggerLocalRestore = () => {
+        if (!currentUser) return;
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
@@ -77,7 +155,6 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 const file = (e.target as HTMLInputElement).files?.[0];
                 if (!file) return;
                 
-                // Full restore logic: assumes all scopes true for quick restore action
                 const fullScope: DataScope = {
                     user: true,
                     vocabulary: true,
@@ -94,22 +171,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 const result = await processJsonImport(file, currentUser.id, fullScope);
     
                 if (result.type === 'success') {
-                    // Mark that we just restored to suppress backup nagging
-                    sessionStorage.setItem('vocab_pro_just_restored', 'true');
-                    
-                    showToast('Restore successful! Refreshing data...', 'success', 2000);
-                    
-                    // Force the dataStore to re-read from IndexedDB completely
-                    await dataStore.forceReload(currentUser.id);
-
-                    if (result.updatedUser) {
-                        await onUpdateUser(result.updatedUser);
-                        localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
-                    }
-                    
-                    // Refresh stats for UI
-                    refreshGlobalStats();
-
+                    await handleRestoreSuccess(result);
                 } else {
                     showToast(`Restore data failed. Reason: ${result.detail || result.message}`, 'error', 10000);
                 }
@@ -144,16 +206,11 @@ export const useDataActions = (props: UseDataActionsProps) => {
 
     const updateWord = async (updatedWord: VocabularyItem) => {
         await dataStore.saveWord(updatedWord);
-        
-        // If there's an active session, update the word in that session's state too.
         if (sessionWords) {
             setSessionWords(prevWords => 
                 (prevWords || []).map(w => w.id === updatedWord.id ? updatedWord : w)
             );
         }
-
-        // If the word currently in the global view modal is the one being updated,
-        // we need to update the state to force a re-render of the modal with the new data.
         if (globalViewWord && globalViewWord.id === updatedWord.id) {
             updatedWord.masteryScore = calculateMasteryScore(updatedWord);
             setGlobalViewWord(updatedWord);
@@ -161,7 +218,6 @@ export const useDataActions = (props: UseDataActionsProps) => {
     };
     
     const deleteWord = async (id: string) => {
-        // If we delete the word that is currently open, we should close the modal.
         if (globalViewWord && globalViewWord.id === id) {
             setGlobalViewWord(null);
         }
@@ -180,8 +236,10 @@ export const useDataActions = (props: UseDataActionsProps) => {
         isResetting,
         resetStep,
         lastBackupTime,
+        refreshBackupTime,
         handleBackup,
-        handleRestore,
+        restoreFromServerAction, // Exposed for explicit calling
+        triggerLocalRestore,     // Exposed for explicit calling
         handleLibraryReset,
         updateWord,
         deleteWord,

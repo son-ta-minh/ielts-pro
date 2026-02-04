@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Unit, VocabularyItem, User } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
@@ -126,6 +127,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
     }
     const updatedUnit = { ...unit, wordIds: unit.wordIds.filter(id => id !== wordId), customVocabString: newVocabString, updatedAt: Date.now() };
     await dataStore.saveUnit(updatedUnit);
+    onDataChange();
   };
 
   const handleBulkRemoveWordsFromUnit = async (wordIds: Set<string>) => {
@@ -142,18 +144,21 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
   
     const updatedUnit = { ...unit, wordIds: unit.wordIds.filter(id => !idsToRemove.includes(id)), customVocabString: newVocabString, updatedAt: Date.now() };
     await dataStore.saveUnit(updatedUnit);
+    onDataChange();
   };
 
   const handleHardDeleteWord = async (wordToDelete: VocabularyItem) => {
     await handleRemoveWordFromUnit(wordToDelete.id);
     await dataStore.deleteWord(wordToDelete.id);
     showToast(`"${wordToDelete.word}" permanently deleted.`, 'success');
+    onDataChange();
   };
 
   const handleBulkHardDeleteRawWords = async (wordIds: Set<string>) => {
     await handleBulkRemoveWordsFromUnit(wordIds);
     await dataStore.bulkDeleteWords(Array.from(wordIds));
     showToast(`Permanently deleted ${wordIds.size} raw word(s).`, 'success');
+    onDataChange();
   };
 
   const handleEssayWordAction = async (text: string, action: 'add' | 'remove') => {
@@ -200,6 +205,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
         // ATOMIC UPDATE: Save word (if new) and unit in one go to prevent double-write cooldown
         await dataStore.saveWordAndUnit(wordToAdd, { ...unit, customVocabString: newVocabString, wordIds: newWordIds, updatedAt: Date.now() });
     }
+    onDataChange();
   };
 
   const handleSaveWordUpdate = async (updatedWord: VocabularyItem) => {
@@ -219,8 +225,6 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
         while (newProgress.keyFragments >= 3) { newProgress.keyFragments -= 3; newProgress.keys = (newProgress.keys || 0) + 1; assembledKey = true; }
         const updatedUser = { ...user, adventure: newProgress };
         
-        // Since onUpdateUser performs a database write, we use saveUnit here.
-        // If it still triggers cooldown, we could consider combining these too.
         await dataStore.saveUnit(updatedUnit);
         await onUpdateUser(updatedUser);
         
@@ -229,6 +233,8 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
     } else {
         await dataStore.saveUnit(updatedUnit);
     }
+    // Explicitly notify data change to refresh UI
+    onDataChange();
   };
 
   const handleExportUnit = async () => {

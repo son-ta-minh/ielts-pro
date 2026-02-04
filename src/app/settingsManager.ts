@@ -18,9 +18,18 @@ export interface SrsConfig {
   forgotInterval: number;
 }
 
+// Unified Server Configuration
+export interface ServerConfig {
+  host: string;
+  port: number;
+  useCustomUrl: boolean;
+  customUrl: string;
+  backupPath: string; // The path on the server filesystem
+}
+
 export interface AudioConfig {
   mode: 'system' | 'ai' | 'server';
-  serverUrl: string; // Changed from serverPort
+  // serverUrl: string; // DEPRECATED: Handled by ServerConfig now
   preferredSystemVoice: string;
   appliedAccent: 'US' | 'UK';
 }
@@ -37,7 +46,7 @@ export interface CoachConfig {
 
 export interface AudioCoachConfig {
   activeCoach: 'male' | 'female';
-  serverUrl: string; // Changed from serverPort
+  // serverUrl: string; // DEPRECATED: Handled by ServerConfig now
   coaches: {
     male: CoachConfig;
     female: CoachConfig;
@@ -54,7 +63,7 @@ export interface InterfaceConfig {
   buddyVoiceEnabled: boolean; 
   studyBuddyAvatar: string;
   junkTags: string[];
-  rightClickCommandEnabled: boolean; // Mới: Cho phép chuột phải hiện command box
+  rightClickCommandEnabled: boolean;
 }
 
 export interface TestConfig {
@@ -66,7 +75,15 @@ export interface LessonConfig {
   topic2Options: Record<string, string[]>;
 }
 
+export interface SyncConfig {
+    autoBackupEnabled: boolean;
+    autoBackupInterval: number; // Time in seconds
+    // serverUrl: string; // DEPRECATED: Handled by ServerConfig now
+    lastSyncTime: number | null;
+}
+
 export interface SystemConfig {
+  server: ServerConfig; // New top-level server config
   ai: AiConfig;
   srs: SrsConfig;
   audio: AudioConfig;
@@ -75,6 +92,7 @@ export interface SystemConfig {
   interface: InterfaceConfig;
   test: TestConfig;
   lesson: LessonConfig;
+  sync: SyncConfig;
 }
 
 export const DEFAULT_SRS_CONFIG: SrsConfig = {
@@ -87,9 +105,17 @@ export const DEFAULT_SRS_CONFIG: SrsConfig = {
   forgotInterval: 1,
 };
 
+export const DEFAULT_SERVER_CONFIG: ServerConfig = {
+    host: 'localhost',
+    port: 3000,
+    useCustomUrl: false,
+    customUrl: '',
+    backupPath: 'backups'
+};
+
 export const DEFAULT_AUDIO_CONFIG: AudioConfig = {
   mode: 'system',
-  serverUrl: 'http://localhost:3000', // Default URL
+  // serverUrl: 'http://localhost:3000', // Removed
   preferredSystemVoice: '',
   appliedAccent: 'US',
 };
@@ -112,7 +138,15 @@ export const DEFAULT_LESSON_CONFIG: LessonConfig = {
   }
 };
 
+export const DEFAULT_SYNC_CONFIG: SyncConfig = {
+    autoBackupEnabled: false,
+    autoBackupInterval: 60, // Default 1 minute
+    // serverUrl: 'http://localhost:3001', // Removed
+    lastSyncTime: null
+};
+
 export const DEFAULT_CONFIG: SystemConfig = {
+  server: DEFAULT_SERVER_CONFIG,
   ai: {
     enableGeminiApi: true,
     modelForComplexTasks: 'gemini-3-pro-preview',
@@ -123,7 +157,7 @@ export const DEFAULT_CONFIG: SystemConfig = {
   audio: DEFAULT_AUDIO_CONFIG,
   audioCoach: {
     activeCoach: 'female',
-    serverUrl: 'http://localhost:3000', // Default URL
+    // serverUrl: 'http://localhost:3000', // Removed
     coaches: {
       male: {
         name: 'Victor',
@@ -148,13 +182,14 @@ export const DEFAULT_CONFIG: SystemConfig = {
   dailyGoals: DEFAULT_DAILY_GOAL_CONFIG,
   interface: {
     studyBuddyLanguage: 'vi',
-    buddyVoiceEnabled: true,
+    buddyVoiceEnabled: false, // Changed default to false
     studyBuddyAvatar: 'woman_teacher',
     junkTags: ['ielts', 'general', 'common'],
     rightClickCommandEnabled: true,
   },
   test: DEFAULT_TEST_CONFIG,
-  lesson: DEFAULT_LESSON_CONFIG
+  lesson: DEFAULT_LESSON_CONFIG,
+  sync: DEFAULT_SYNC_CONFIG
 };
 
 const CONFIG_KEY = 'vocab_pro_system_config';
@@ -181,6 +216,17 @@ function mergeConfigs(target: any, source: any): any {
   return output;
 }
 
+// Construct the full server URL helper
+export const getServerUrl = (config: SystemConfig): string => {
+    if (config.server.useCustomUrl && config.server.customUrl) {
+        return config.server.customUrl.replace(/\/$/, "");
+    }
+    // Default to HTTPS as requested, fallback to HTTP if localhost maybe? 
+    // The requirement said "default port 3000, HTTPS".
+    const protocol = 'https';
+    return `${protocol}://${config.server.host}:${config.server.port}`;
+};
+
 export function getConfig(): SystemConfig {
   const storedStr = localStorage.getItem(CONFIG_KEY);
   const storedJson = storedStr ? JSON.parse(storedStr) : null;
@@ -189,25 +235,26 @@ export function getConfig(): SystemConfig {
       return DEFAULT_CONFIG;
   }
 
-  // Handle migration from port to url if necessary (simple check)
+  // Handle migration
   const merged = mergeConfigs(DEFAULT_CONFIG, storedJson);
   
   // Legacy migration for Audio
   if (storedJson.audio && storedJson.audio.serverPort && !storedJson.audio.serverUrl) {
-      merged.audio.serverUrl = `http://localhost:${storedJson.audio.serverPort}`;
-  }
-  // Legacy migration for Coach
-  if (storedJson.audioCoach && storedJson.audioCoach.serverPort && !storedJson.audioCoach.serverUrl) {
-      merged.audioCoach.serverUrl = `http://localhost:${storedJson.audioCoach.serverPort}`;
+     // Old format cleanup, no longer needed as we have central server config
   }
 
   return merged as SystemConfig;
 }
 
-export function saveConfig(config: SystemConfig): void {
+export function saveConfig(config: SystemConfig, suppressBackupTrigger = false): void {
   try {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
     window.dispatchEvent(new Event('config-updated'));
+    
+    // Only trigger backup if not suppressed (e.g. avoid loop when saving lastSyncTime)
+    if (!suppressBackupTrigger) {
+        window.dispatchEvent(new Event('vocab-pro-trigger-backup'));
+    }
   } catch (e) {
     console.error("Failed to save system config.", e);
   }

@@ -4,7 +4,7 @@ import { User, WordBook, WordBookItem, VocabularyItem, FocusColor, WordQuality, 
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
-import { BookMarked, Plus, Loader2, ArrowLeft, Edit3, Trash2, Save, X, ChevronLeft, ChevronRight, Pen, FolderPlus, Volume2, Eye, Sparkles, BookOpen, FilePlus, Library, Palette, Image as ImageIcon, Link as LinkIcon, Type, Move, Search, Layers3 } from 'lucide-react';
+import { BookMarked, Plus, Loader2, ArrowLeft, Trash2, ChevronLeft, ChevronRight, Pen, FolderPlus, Volume2, Eye, Sparkles, BookOpen, FilePlus, Library, Palette, Image as ImageIcon, Link as LinkIcon, Type, Move, Layers3 } from 'lucide-react';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
 import { getGenerateWordBookPrompt, getAutoAddWordsToBookPrompt } from '../../services/promptService';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
@@ -14,357 +14,14 @@ import { createNewWord } from '../../utils/srs';
 import ViewWordModal from '../../components/word_lib/ViewWordModal';
 import EditWordModal from '../../components/word_lib/EditWordModal';
 import { UniversalCard, CardBadge } from '../../components/common/UniversalCard';
+import { WordBookCard, COLORS, TITLE_COLORS, BookIcon } from '../../components/wordbook/WordBookCard';
+import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components/wordbook/ShelfModals';
+import { AddWordToBookModal, AddFromUnitModal, AddFromLibraryModal, MoveWordToBookModal } from '../../components/wordbook/ContentModals';
+import { UniversalBook } from '../../components/common/UniversalBook';
 
 interface Props {
   user: User;
 }
-
-const colors = [
-    '#5d4037', '#3e2723', '#1a237e', '#1b5e20', '#b71c1c', 
-    '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6',
-    '#0f172a', '#171717', '#334155', '#450a0a', '#1e1b4b',
-    '#bae6fd', '#bbf7d0', '#fef08a', '#fecaca', '#ddd6fe'
-];
-
-const titleColors = [
-    '#ffffff', '#000000', '#fef08a', '#bae6fd', '#fecaca', '#ddd6fe',
-    '#f59e0b', '#0ea5e9', '#10b981', '#ef4444', '#8b5cf6', '#ec4899',
-    '#3e2723', '#1e1b4b', '#1b5e20', '#450a0a', '#171717', '#334155',
-    '#94a3b8', '#475569'
-];
-
-const BookIcon: React.FC<{ icon: string; className?: string }> = ({ icon, className }) => {
-    if (!icon) return null;
-    const isUrl = icon?.startsWith('http') || icon?.startsWith('data:image');
-    if (isUrl) {
-        return <img src={icon} className={`object-contain ${className}`} alt="Book icon" />;
-    }
-    return <span className={className}>{icon}</span>;
-};
-
-const AddWordToBookModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (word: string, definition: string) => void;
-}> = ({ isOpen, onClose, onSave }) => {
-    const [word, setWord] = useState('');
-    const [definition, setDefinition] = useState('');
-    useEffect(() => { if (isOpen) { setWord(''); setDefinition(''); } }, [isOpen]);
-    const handleSave = () => { if (word.trim()) onSave(word.trim(), definition.trim()); };
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col">
-                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start">
-                    <div><h3 className="text-xl font-black text-neutral-900">Add Word to Book</h3></div>
-                    <button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
-                </header>
-                <main className="p-8 space-y-4">
-                    <div className="space-y-1"><label className="font-bold text-sm">Word / Phrase</label><input value={word} onChange={e => setWord(e.target.value)} className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg font-medium" autoFocus /></div>
-                    <div className="space-y-1"><label className="font-bold text-sm">Definition (Optional)</label><textarea value={definition} onChange={e => setDefinition(e.target.value)} rows={3} className="w-full p-3 bg-neutral-50 border border-neutral-200 rounded-lg font-medium text-sm" /></div>
-                </main>
-                <footer className="px-8 py-6 border-t border-neutral-100 flex justify-end shrink-0 bg-neutral-50/50 rounded-b-[2.5rem]"><button onClick={handleSave} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest"><Save size={14}/> Save Word</button></footer>
-            </div>
-        </div>
-    );
-};
-
-const AddFromUnitModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (words: VocabularyItem[]) => void;
-    units: Unit[];
-    libraryWords: VocabularyItem[];
-    wordsInBook: WordBookItem[];
-}> = ({ isOpen, onClose, onSave, units, libraryWords, wordsInBook }) => {
-    const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
-    const [staged, setStaged] = useState<VocabularyItem[]>([]);
-    
-    const wordsInBookSet = useMemo(() => new Set(wordsInBook.map(w => w.word.toLowerCase())), [wordsInBook]);
-    const wordsById = useMemo(() => new Map(libraryWords.map(w => [w.id, w])), [libraryWords]);
-
-    useEffect(() => {
-        if (isOpen) {
-            setSelectedUnitId(null);
-            setStaged([]);
-        }
-    }, [isOpen]);
-
-    const handleSelectUnit = (unitId: string) => {
-        setSelectedUnitId(unitId);
-        const unit = units.find(u => u.id === unitId);
-        if (unit) {
-            const unitWords = unit.wordIds
-                .map(id => wordsById.get(id))
-                .filter((w): w is VocabularyItem => !!w && !wordsInBookSet.has(w.word.toLowerCase()));
-            setStaged(unitWords);
-        }
-    };
-
-    const handleRemove = (id: string) => setStaged(prev => prev.filter(w => w.id !== id));
-    const handleConfirm = () => onSave(staged);
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[85vh]">
-                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-center shrink-0">
-                    <h3 className="text-xl font-black text-neutral-900">Add from Reading Unit</h3>
-                    <button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
-                </header>
-                <main className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden flex-1">
-                    <div className="flex flex-col gap-4 overflow-hidden">
-                        <h4 className="text-sm font-bold text-neutral-500 px-1">1. Select a Unit</h4>
-                        <div className="flex-1 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
-                            {units.map(unit => (
-                                <button 
-                                    key={unit.id} 
-                                    onClick={() => handleSelectUnit(unit.id)}
-                                    className={`w-full text-left p-3 rounded-xl border transition-all ${selectedUnitId === unit.id ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-neutral-100 hover:bg-neutral-50'}`}
-                                >
-                                    <p className={`font-bold text-sm ${selectedUnitId === unit.id ? 'text-indigo-900' : 'text-neutral-700'}`}>{unit.name}</p>
-                                    <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">{unit.wordIds.length} words</p>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="flex flex-col gap-4 bg-neutral-50/50 p-4 rounded-2xl border border-neutral-200 overflow-hidden">
-                        <h4 className="text-sm font-bold text-neutral-500 px-1">2. Candidate List ({staged.length})</h4>
-                        <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                            {staged.map(word => (
-                                <div key={word.id} className="flex items-center justify-between p-2 pl-3 rounded-lg bg-white border border-neutral-200 shadow-sm animate-in fade-in">
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-sm truncate">{word.word}</p>
-                                        <p className="text-[10px] text-neutral-500 truncate">{word.meaningVi}</p>
-                                    </div>
-                                    <button onClick={() => handleRemove(word.id)} className="p-1.5 text-neutral-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"><X size={14}/></button>
-                                </div>
-                            ))}
-                            {selectedUnitId && staged.length === 0 && (
-                                <div className="text-center py-10 text-neutral-400 italic text-xs font-medium">All words from this unit are already in the book.</div>
-                            )}
-                            {!selectedUnitId && (
-                                <div className="text-center py-10 text-neutral-300 italic text-xs font-medium">Select a unit to see candidates.</div>
-                            )}
-                        </div>
-                    </div>
-                </main>
-                <footer className="px-8 py-6 border-t border-neutral-100 flex justify-end items-center gap-3 bg-neutral-50/50 rounded-b-[2.5rem] shrink-0">
-                    <button onClick={onClose} className="px-5 py-2.5 bg-neutral-100 text-neutral-600 rounded-xl font-bold text-xs hover:bg-neutral-200">Cancel</button>
-                    <button onClick={handleConfirm} disabled={staged.length === 0} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest disabled:opacity-50">
-                        <Plus size={14}/> Add Selected ({staged.length})
-                    </button>
-                </footer>
-            </div>
-        </div>
-    );
-};
-
-const AddShelfModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (name: string) => void; }> = ({ isOpen, onClose, onSave }) => {
-    const [name, setName] = useState('');
-    useEffect(() => { if (isOpen) setName(''); }, [isOpen]);
-    if (!isOpen) return null;
-    const handleSave = () => { if (name.trim()) onSave(name.trim()); };
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col">
-                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start"><div><h3 className="text-xl font-black text-neutral-900">Add New Shelf</h3></div><button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button></header>
-                <main className="p-8 space-y-2"><label htmlFor="shelf-name-input" className="font-bold text-sm">Shelf Name</label><input id="shelf-name-input" value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg font-medium" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}/></main>
-                <footer className="px-8 py-6 border-t border-neutral-100 flex justify-end items-center gap-3 bg-neutral-50/50 rounded-b-[2.5rem]"><button onClick={onClose} className="px-5 py-2.5 bg-neutral-100 text-neutral-600 rounded-xl font-bold text-xs hover:bg-neutral-200">Cancel</button><button onClick={handleSave} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest"><Save size={14}/> Save</button></footer>
-            </div>
-        </div>
-    );
-};
-
-const RenameShelfModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (newName: string) => void; initialName: string; }> = ({ isOpen, onClose, onSave, initialName }) => {
-    const [name, setName] = useState('');
-    useEffect(() => { if (isOpen) setName(initialName); }, [isOpen, initialName]);
-    if (!isOpen) return null;
-    const handleSave = () => { if (name.trim()) onSave(name.trim()); };
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col">
-                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start"><div><h3 className="text-xl font-black text-neutral-900">Rename Shelf</h3></div><button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button></header>
-                <main className="p-8 space-y-2"><label htmlFor="shelf-rename-input" className="font-bold text-sm">New Shelf Name</label><input id="shelf-rename-input" value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg font-medium" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}/></main>
-                <footer className="px-8 py-6 border-t border-neutral-100 flex justify-end items-center gap-3 bg-neutral-50/50 rounded-b-[2.5rem]"><button onClick={onClose} className="px-5 py-2.5 bg-neutral-100 text-neutral-600 rounded-xl font-bold text-xs hover:bg-neutral-200">Cancel</button><button onClick={handleSave} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest"><Save size={14}/> Save</button></footer>
-            </div>
-        </div>
-    );
-};
-
-const MoveBookModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onConfirm: (targetShelf: string) => void;
-    shelves: string[];
-    currentShelf: string;
-    bookTitle: string;
-}> = ({ isOpen, onClose, onConfirm, shelves, currentShelf, bookTitle }) => {
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col">
-                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
-                    <div>
-                        <h3 className="text-xl font-black text-neutral-900">Move Book</h3>
-                        <p className="text-xs text-neutral-500 font-bold mt-1 truncate">"{bookTitle}"</p>
-                    </div>
-                    <button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
-                </header>
-                <main className="p-6 overflow-y-auto max-h-[50vh] space-y-2">
-                    <p className="text-[10px] font-black uppercase text-neutral-400 tracking-widest px-2 mb-2">Select Destination Shelf</p>
-                    {shelves.filter(s => s !== currentShelf).map(shelf => (
-                        <button 
-                            key={shelf} 
-                            onClick={() => onConfirm(shelf)}
-                            className="w-full text-left px-4 py-3 rounded-xl border border-neutral-100 hover:border-neutral-300 hover:bg-neutral-50 transition-all font-bold text-sm text-neutral-700 flex items-center justify-between group"
-                        >
-                            <span>{shelf}</span>
-                            <ChevronRight size={16} className="text-neutral-300 group-hover:text-neutral-900 transition-colors" />
-                        </button>
-                    ))}
-                    {shelves.length <= 1 && (
-                        <p className="text-center py-4 text-xs font-medium text-neutral-400 italic">No other shelves available.</p>
-                    )}
-                </main>
-                <footer className="px-8 py-4 border-t border-neutral-100 bg-neutral-50/50 rounded-b-[2.5rem] flex justify-end">
-                    <button onClick={onClose} className="px-5 py-2 text-xs font-bold text-neutral-500 hover:text-neutral-900">Cancel</button>
-                </footer>
-            </div>
-        </div>
-    );
-};
-
-const MoveWordToBookModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onConfirm: (targetBookId: string) => void;
-    books: WordBook[];
-    currentBookId: string;
-    wordText: string;
-}> = ({ isOpen, onClose, onConfirm, books, currentBookId, wordText }) => {
-    const [query, setQuery] = useState('');
-    
-    const shelves = useMemo(() => {
-        const otherBooks = books.filter(b => b.id !== currentBookId);
-        const map = new Map<string, WordBook[]>();
-        otherBooks.forEach(b => {
-            const shelfName = b.topic.split(':')[0].trim() || 'General';
-            if (!map.has(shelfName)) map.set(shelfName, []);
-            map.get(shelfName)!.push(b);
-        });
-        return Array.from(map.entries()).sort((a,b) => a[0].localeCompare(b[0]));
-    }, [books, currentBookId]);
-
-    const filteredShelves = useMemo(() => {
-        if (!query.trim()) return shelves;
-        const q = query.toLowerCase();
-        return shelves.map(([name, bks]) => {
-            const filteredBks = bks.filter(b => b.topic.toLowerCase().includes(q));
-            return [name, filteredBks] as [string, WordBook[]];
-        }).filter(([_, bks]) => bks.length > 0);
-    }, [shelves, query]);
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[80vh]">
-                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
-                    <div>
-                        <h3 className="text-xl font-black text-neutral-900">Move Word</h3>
-                        <p className="text-xs text-neutral-500 font-bold mt-1 truncate">Moving "{wordText}" to another book...</p>
-                    </div>
-                    <button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
-                </header>
-                <div className="p-4 border-b border-neutral-50">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-300" size={14} />
-                        <input 
-                            value={query} 
-                            onChange={e => setQuery(e.target.value)} 
-                            placeholder="Search destination book..." 
-                            className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none"
-                            autoFocus
-                        />
-                    </div>
-                </div>
-                <main className="p-4 overflow-y-auto flex-1 space-y-6 custom-scrollbar">
-                    {filteredShelves.map(([shelfName, bks]) => (
-                        <div key={shelfName} className="space-y-2">
-                            <h4 className="px-3 text-[10px] font-black uppercase text-neutral-400 tracking-widest">{shelfName}</h4>
-                            <div className="space-y-1">
-                                {bks.map(b => {
-                                    const displayTopic = b.topic.split(':').slice(1).join(':').trim() || b.topic;
-                                    return (
-                                        <button 
-                                            key={b.id} 
-                                            onClick={() => onConfirm(b.id)}
-                                            className="w-full text-left px-4 py-3 rounded-xl border border-neutral-100 hover:border-neutral-300 hover:bg-neutral-50 transition-all font-bold text-sm text-neutral-700 flex items-center gap-3 group"
-                                        >
-                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-neutral-100 group-hover:bg-white border border-transparent group-hover:border-neutral-200 shrink-0">
-                                                <BookIcon icon={b.icon} className="text-base" />
-                                            </div>
-                                            <span className="flex-1 truncate">{displayTopic}</span>
-                                            <ChevronRight size={14} className="text-neutral-300 group-hover:text-neutral-900" />
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ))}
-                    {filteredShelves.length === 0 && (
-                        <div className="text-center py-10 text-neutral-400 italic text-xs font-medium">No other books found.</div>
-                    )}
-                </main>
-                <footer className="px-8 py-4 border-t border-neutral-100 bg-neutral-50/50 rounded-b-[2.5rem] flex justify-end">
-                    <button onClick={onClose} className="px-5 py-2 text-xs font-bold text-neutral-500 hover:text-neutral-900">Cancel</button>
-                </footer>
-            </div>
-        </div>
-    );
-};
-
-const AddFromLibraryModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (words: VocabularyItem[]) => void;
-    libraryWords: VocabularyItem[];
-    wordsInBook: WordBookItem[];
-}> = ({ isOpen, onClose, onSave, libraryWords, wordsInBook }) => {
-    const [query, setQuery] = useState('');
-    const [staged, setStaged] = useState<VocabularyItem[]>([]);
-    useEffect(() => { if (isOpen) { setQuery(''); setStaged([]); } }, [isOpen]);
-    const wordsInBookSet = useMemo(() => new Set(wordsInBook.map(w => w.word.toLowerCase())), [wordsInBook]);
-    const stagedIdsSet = useMemo(() => new Set(staged.map(w => w.id)), [staged]);
-    const searchResults = useMemo(() => {
-        if (!query) return [];
-        const lowerQuery = query.toLowerCase();
-        return libraryWords.filter(w => w.word.toLowerCase().includes(lowerQuery) && !wordsInBookSet.has(w.word.toLowerCase()) && !stagedIdsSet.has(w.id)).slice(0, 10);
-    }, [query, libraryWords, wordsInBookSet, stagedIdsSet]);
-    const handleStage = (word: VocabularyItem) => setStaged(prev => [...prev, word]);
-    const handleUnstage = (wordId: string) => setStaged(prev => prev.filter(w => w.id !== wordId));
-    const handleConfirm = () => onSave(staged);
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[80vh]">
-                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-center shrink-0"><h3 className="text-xl font-black text-neutral-900">Add from Library</h3><button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button></header>
-                <main className="p-6 grid grid-cols-2 gap-6 overflow-y-auto flex-1"><div className="flex flex-col gap-4"><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search your library..." className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium" autoFocus /><div className="flex-1 overflow-y-auto pr-2 space-y-2">{searchResults.map(word => (<div key={word.id} className="flex items-center justify-between p-3 rounded-lg bg-white hover:bg-neutral-50 border border-neutral-100"><div className="flex-1 overflow-hidden"><p className="font-bold text-sm truncate">{word.word}</p><p className="text-xs text-neutral-500 truncate">{word.meaningVi}</p></div><button onClick={() => handleStage(word)} className="p-2 text-neutral-400 hover:text-green-600 hover:bg-green-50 rounded-full"><Plus size={16}/></button></div>))}</div></div><div className="flex flex-col gap-4 bg-neutral-50/50 p-4 rounded-2xl border border-neutral-200"><h4 className="text-sm font-bold text-neutral-500 px-1">Selected Words ({staged.length})</h4><div className="flex-1 overflow-y-auto pr-2 space-y-2">{staged.map(word => (<div key={word.id} className="flex items-center justify-between p-2 pl-3 rounded-lg bg-white border border-neutral-200 shadow-sm"><p className="font-bold text-sm truncate">{word.word}</p><button onClick={() => handleUnstage(word.id)} className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-full"><X size={14}/></button></div>))}</div></div></main>
-                <footer className="px-8 py-6 border-t border-neutral-100 flex justify-end items-center gap-3 bg-neutral-50/50 rounded-b-[2.5rem] shrink-0"><button onClick={onClose} className="px-5 py-2.5 bg-neutral-100 text-neutral-600 rounded-xl font-bold text-xs hover:bg-neutral-200">Cancel</button><button onClick={handleConfirm} disabled={staged.length === 0} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest disabled:opacity-50"><Plus size={14}/> Add ({staged.length})</button></footer>
-            </div>
-        </div>
-    );
-};
-
-const stringToHash = (str: string) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return hash;
-};
 
 export const WordBookPage: React.FC<Props> = ({ user }) => {
     const [books, setBooks] = useState<WordBook[]>([]);
@@ -457,7 +114,14 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
     const allShelves = useMemo(() => {
         const shelvesFromBooks = new Set(books.map(b => b.topic.split(':')[0].trim()).filter(Boolean));
         const combined = new Set([...customShelves, ...Array.from(shelvesFromBooks)]);
-        const sorted = Array.from(combined).sort((a, b) => a.localeCompare(b));
+        
+        const sorted = Array.from(combined).sort((a, b) => {
+            if (a === 'General') return -1;
+            if (b === 'General') return 1;
+            return a.localeCompare(b);
+        });
+
+        // Only default to General if absolutely no shelves exist
         return sorted.length > 0 ? sorted : ['General'];
     }, [books, customShelves]);
 
@@ -469,7 +133,14 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
         }
     }, [allShelves, shelfToSelect]);
 
-    const currentShelfName = allShelves[currentShelfIndex];
+    // Ensure index is valid
+    useEffect(() => {
+        if (currentShelfIndex >= allShelves.length) {
+            setCurrentShelfIndex(Math.max(0, allShelves.length - 1));
+        }
+    }, [allShelves.length]);
+
+    const currentShelfName = allShelves[currentShelfIndex] || 'General';
     const booksOnCurrentShelf = useMemo(() => books.filter(b => (b.topic.split(':')[0].trim() || 'General') === currentShelfName), [books, currentShelfName]);
     const handleAddShelf = () => setIsAddShelfModalOpen(true);
     const handleRenameShelf = () => setIsRenameShelfModalOpen(true);
@@ -723,8 +394,6 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
     if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-neutral-300" size={32} /></div>;
 
     if (activeBook) {
-        const isImageCover = !!(activeBook.color?.startsWith('http') || activeBook.color?.startsWith('data:image'));
-
         return (
             <div className="h-full flex flex-col animate-in fade-in duration-500">
                 <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 gap-4 shrink-0 bg-white border-b border-neutral-100 z-20">
@@ -766,7 +435,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
                                     <div className="space-y-3">
                                         <div className="flex items-center gap-2 px-1 border-b border-neutral-50 pb-2"><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Select Cover Color</span></div>
                                         <div className="grid grid-cols-5 gap-3 justify-items-center">
-                                            {colors.map(c => (<button key={c} onClick={() => handleUpdateBookDesign({ color: c })} className={`w-8 h-8 rounded-full transition-all hover:scale-125 active:scale-90 ${activeBook.color === c ? 'ring-2 ring-neutral-900 ring-offset-2 scale-110 shadow-md' : 'opacity-90 hover:opacity-100 shadow-sm border border-black/5'}`} style={{ backgroundColor: c }} title="Choose color" />))}
+                                            {COLORS.map(c => (<button key={c} onClick={() => handleUpdateBookDesign({ color: c })} className={`w-8 h-8 rounded-full transition-all hover:scale-125 active:scale-90 ${activeBook.color === c ? 'ring-2 ring-neutral-900 ring-offset-2 scale-110 shadow-md' : 'opacity-90 hover:opacity-100 shadow-sm border border-black/5'}`} style={{ backgroundColor: c }} title="Choose color" />))}
                                         </div>
                                     </div>
                                     <div className="space-y-3 pt-2 border-t border-neutral-50">
@@ -774,7 +443,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
                                         <div className="space-y-3 px-1">
                                             <div className="space-y-2">
                                                 <div className="grid grid-cols-5 gap-3 justify-items-center">
-                                                    {titleColors.map(c => (<button key={c} onClick={() => handleUpdateBookDesign({ titleColor: c })} className={`w-6 h-6 rounded-md border transition-all ${activeBook.titleColor === c ? 'ring-2 ring-indigo-500' : 'border-neutral-200'}`} style={{ backgroundColor: c }} />))}
+                                                    {TITLE_COLORS.map(c => (<button key={c} onClick={() => handleUpdateBookDesign({ titleColor: c })} className={`w-6 h-6 rounded-md border transition-all ${activeBook.titleColor === c ? 'ring-2 ring-indigo-500' : 'border-neutral-200'}`} style={{ backgroundColor: c }} />))}
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3 bg-neutral-50 p-2 rounded-xl">
@@ -806,8 +475,8 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
                                     <div className="space-y-2 pt-2 border-t border-neutral-50">
                                         <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1.5"><ImageIcon size={10}/> Custom Image URL / Base64</label>
                                         <div className="flex gap-2">
-                                            <input value={customColorUrl} onChange={(e) => setCustomColorUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { handleUpdateBookDesign({ color: customColorUrl.trim() }); setIsColorPickerOpen(false); } }} placeholder="https://... or data:image/..." className="flex-1 px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-[10px] font-medium focus:ring-1 focus:ring-neutral-900 outline-none" />
-                                            <button onClick={() => { handleUpdateBookDesign({ color: customColorUrl.trim() }); setIsColorPickerOpen(false); }} className="p-1.5 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors" ><Plus size={14}/></button>
+                                            <input value={customColorUrl} onChange={(e) => setCustomColorUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { handleUpdateBookDesign({ color: customColorUrl.trim() }); setIsColorPickerOpen(false); } }} placeholder="https://..." className="flex-1 px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-[10px] font-medium focus:ring-1 focus:ring-neutral-900 outline-none" />
+                                            <button onClick={() => handleUpdateBookDesign({ color: customColorUrl.trim() })} className="p-1.5 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800" ><Plus size={14}/></button>
                                         </div>
                                     </div>
                                 </div>
@@ -824,14 +493,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
                 </header>
                 
                 <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-neutral-50/50 relative">
-                    <div className="absolute top-0 left-0 right-0 h-48 pointer-events-none transition-all duration-700 overflow-hidden">
-                        {isImageCover ? (
-                            <img src={activeBook.color} className="w-full h-full object-cover opacity-10" alt="" />
-                        ) : (
-                            <div className="w-full h-full opacity-10" style={{ backgroundColor: activeBook.color || '#5d4037' }} />
-                        )}
-                    </div>
-                    
+                    {/* Units Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 relative z-10">
                         {activeBook.words.map((item, i) => {
                              const isBookmarked = libraryWordsMap.has(item.word.toLowerCase());
@@ -908,55 +570,22 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
                         <div className="bg-gradient-to-b from-slate-200 to-slate-400 px-6 py-2 rounded-lg shadow-inner border-t border-slate-400/50 w-fit flex items-center gap-4"><h3 className="text-xl font-black text-neutral-900 tracking-tight">{currentShelfName}</h3></div>
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={handleRenameShelf} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white" title="Rename Shelf"><Pen size={14}/></button>
-                            <button onClick={handleRemoveShelf} disabled={booksOnCurrentShelf.length > 0} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/20" title={booksOnCurrentShelf.length > 0 ? "Cannot remove non-empty shelf" : "Remove Empty Shelf"}><Trash2 size={14}/></button>
+                            <button onClick={handleRemoveShelf} disabled={booksOnCurrentShelf.length > 0 || currentShelfName === 'General'} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white/20" title={booksOnCurrentShelf.length > 0 ? "Cannot remove non-empty shelf" : "Remove Empty Shelf"}><Trash2 size={14}/></button>
                         </div>
                     </div>
                     <button onClick={() => navigateShelf(1)} className="p-3 bg-black/20 text-white/50 rounded-full hover:bg-black/40 hover:text-white transition-all"><ChevronRight size={24}/></button>
                 </div>
 
                 <div className="grid grid-cols-[repeat(auto-fill,10rem)] gap-x-8 gap-y-10 min-h-[50vh] -mt-12" style={{ backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent 14rem, rgba(0,0,0,0.4) 14rem, rgba(0,0,0,0.4) 14.25rem, transparent 14.25rem, transparent 16.5rem)` }}>
-                    {booksOnCurrentShelf.map(book => {
-                        const color = book.color || colors[Math.abs(stringToHash(book.id)) % colors.length];
-                        const bookParts = book.topic.split(':').map(p => p.trim());
-                        const bookDisplayTitle = bookParts.length > 1 ? bookParts.slice(1).join(':').trim() : book.topic;
-                        const isImage = !!(color.startsWith('http') || color.startsWith('data:image'));
-
-                        return (
-                            <div key={book.id} className="group [perspective:1000px] translate-y-0 cursor-pointer" onClick={() => setActiveBook(book)}>
-                                <div className="relative w-full aspect-[5/7] rounded-lg shadow-lg transition-all duration-300 transform group-hover:shadow-2xl group-hover:shadow-black/40 group-hover:[transform:rotateY(-15deg)_scale(1.05)] overflow-hidden" style={{ backgroundColor: isImage ? '#262626' : color, transformStyle: 'preserve-3d', transform: 'rotateY(-5deg) rotateX(2deg)' }}>
-                                    {isImage && <img src={color} className="absolute inset-0 w-full h-full object-cover" alt="" />}
-                                    <div className="absolute top-0 left-0 bottom-0 w-6 bg-gradient-to-r from-black/40 to-transparent rounded-l-lg z-10"></div>
-                                    <div className={`absolute inset-2 border-2 border-black/10 rounded-sm z-10 ${isImage ? '' : 'bg-black/5'}`}>
-                                        {book.icon && (
-                                            <div 
-                                                className="absolute flex items-center justify-center w-12 h-12"
-                                                style={{ top: `${book.iconTop ?? 40}%`, left: `${book.iconLeft ?? 50}%`, transform: 'translate(-50%, -50%)' }}
-                                            >
-                                                <BookIcon icon={book.icon} className="text-4xl w-full h-full object-contain drop-shadow-lg" />
-                                            </div>
-                                        )}
-                                        <h3 
-                                            className="absolute w-full text-center font-serif font-bold leading-tight drop-shadow-md px-2 line-clamp-3" 
-                                            style={{ 
-                                                color: book.titleColor || '#ffffff', 
-                                                fontSize: book.titleSize ? `${Math.min(book.titleSize, 18)}px` : '18px',
-                                                top: `${book.titleTop ?? 55}%`,
-                                                left: `${book.titleLeft ?? 50}%`,
-                                                transform: 'translate(-50%, -50%)'
-                                            }}
-                                        >
-                                            {bookDisplayTitle}
-                                        </h3>
-                                    </div>
-                                    {!isImage && (<><div className="absolute top-4 left-4 right-4 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent z-10"></div><div className="absolute bottom-4 left-4 right-4 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent z-10"></div></>)}
-                                    <div className="absolute top-2 right-2 z-20 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
-                                        <button onClick={(e) => { e.stopPropagation(); setBookToMove(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-neutral-700 hover:text-white transition-all shadow-sm"><Move size={16} /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); setBookToDelete(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-sm"><X size={16} /></button>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
+                    {booksOnCurrentShelf.map(book => (
+                        <WordBookCard 
+                            key={book.id} 
+                            book={book} 
+                            onClick={() => setActiveBook(book)}
+                            onMove={(e) => { e.stopPropagation(); setBookToMove(book); }}
+                            onDelete={(e) => { e.stopPropagation(); setBookToDelete(book); }}
+                        />
+                    ))}
                     <div className="group [perspective:1000px] translate-y-0">
                         <div className="relative w-full aspect-[5/7] rounded-lg bg-neutral-800/50 border-2 border-dashed border-neutral-500/50 transition-all duration-300 group-hover:border-neutral-400 group-hover:bg-neutral-800/80 group-hover:shadow-xl flex flex-col items-stretch justify-center overflow-hidden">
                             <button onClick={() => setIsAiModalOpen(true)} className="flex-1 flex flex-col items-center justify-center p-2 text-center text-neutral-400 hover:bg-white/5 transition-colors"><Sparkles size={28} className="mb-2 text-amber-400/80"/><h3 className="font-sans text-xs font-black uppercase tracking-wider">New via AI</h3></button>

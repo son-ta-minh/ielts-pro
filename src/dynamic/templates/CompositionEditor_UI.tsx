@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { ArrowLeft, Save, Loader2, Link, Bot, X, Sparkles, ChevronDown, Tag, PenLine, Eye } from 'lucide-react';
 import { VocabularyItem } from '../../app/types';
@@ -78,27 +79,15 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                         <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Title (Optional)</label>
                         <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="My Awesome Essay" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"/>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Path</label>
-                            <input 
-                                type="text" 
-                                value={path} 
-                                onChange={(e) => setPath(e.target.value)} 
-                                placeholder="e.g. /IELTS/Task 2" 
-                                className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Tag size={12}/> Tags (Keywords)</label>
-                            <input 
-                                type="text" 
-                                value={tagsInput} 
-                                onChange={(e) => setTagsInput(e.target.value)} 
-                                placeholder="e.g. Environment, Technology" 
-                                className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
-                            />
-                        </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Tag size={12}/> Tags (Keywords)</label>
+                        <input 
+                            type="text" 
+                            value={tagsInput} 
+                            onChange={(e) => setTagsInput(e.target.value)} 
+                            placeholder="e.g. Environment, Technology" 
+                            className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
+                        />
                     </div>
                 </div>
 

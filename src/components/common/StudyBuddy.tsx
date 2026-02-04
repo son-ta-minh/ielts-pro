@@ -54,7 +54,19 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
     
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
-    const avatarInfo = (AVATAR_DEFINITIONS as any)[coach.avatar] || AVATAR_DEFINITIONS.woman_teacher;
+    
+    // Helper to determine avatar properties whether it's a key or a raw URL
+    const getAvatarProps = (avatarStr: string) => {
+        // If it looks like a URL (http, https, data:), assume it's a custom avatar
+        if (avatarStr.startsWith('http') || avatarStr.startsWith('data:')) {
+            return { url: avatarStr, bg: 'bg-white border-2 border-neutral-100' };
+        }
+        // Otherwise try to find it in definitions, or fallback
+        const def = (AVATAR_DEFINITIONS as any)[avatarStr];
+        return def || AVATAR_DEFINITIONS.woman_teacher;
+    };
+    
+    const avatarInfo = getAvatarProps(coach.avatar);
 
     useEffect(() => {
         const handleConfigUpdate = () => setConfig(getConfig());

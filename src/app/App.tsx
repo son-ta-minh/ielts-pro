@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Sparkles, Loader2, Database, RefreshCw, AlertCircle } from 'lucide-react';
 import AuthView from '../components/setting/AuthView';
 import { useAppController } from './useAppController';
 import { AppLayout } from './AppLayout';
 import { ToastProvider } from '../contexts/ToastContext';
+import { tryPersistStorage } from './db';
 
 const DbConnectionLostModal: React.FC = () => (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-neutral-950/90 backdrop-blur-md animate-in fade-in duration-500">
@@ -29,7 +31,11 @@ const DbConnectionLostModal: React.FC = () => (
                 </div>
 
                 <button 
-                    onClick={() => window.location.reload()}
+                    onClick={() => {
+                        // Set flag to attempt server restore on next boot
+                        localStorage.setItem('vocab_pro_auto_restore', 'true');
+                        window.location.reload();
+                    }}
                     className="w-full py-5 bg-neutral-900 text-white rounded-2xl font-black text-sm hover:bg-neutral-800 transition-all shadow-xl shadow-neutral-900/20 active:scale-95 flex items-center justify-center space-x-3"
                 >
                     <RefreshCw size={20} />
@@ -50,6 +56,9 @@ const AppContent: React.FC = () => {
   const [isDbLost, setIsDbLost] = useState(false);
 
   useEffect(() => {
+    // Request persistent storage on app load
+    tryPersistStorage();
+
     const handleDbLost = () => setIsDbLost(true);
     window.addEventListener('db-connection-lost', handleDbLost);
     return () => window.removeEventListener('db-connection-lost', handleDbLost);

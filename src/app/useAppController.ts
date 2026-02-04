@@ -9,6 +9,8 @@ import { useDataFetching } from './hooks/useDataFetching';
 import { useDataActions } from './hooks/useDataActions';
 import { getDueWords, getNewWords } from './db';
 import * as dataStore from './dataStore';
+import { getConfig, getServerUrl } from './settingsManager';
+import { performAutoBackup } from '../services/backupService';
 
 // Re-export for backward compatibility with external components that might import from here.
 export const calculateWordDifficultyXp = movedCalc;
@@ -25,6 +27,13 @@ export const useAppController = () => {
     const [forceExpandAdd, setForceExpandAdd] = useState(false);
     const [lastMasteryScoreUpdateTimestamp, setLastMasteryScoreUpdateTimestamp] = useState(Date.now());
     
+    // Server Status State
+    const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected'>('disconnected');
+    
+    // Unsaved Changes Tracking & Backup Timer
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [nextAutoBackupTime, setNextAutoBackupTime] = useState<number | null>(null);
+
     // New state to pass a word to Writing Practice
     const [writingContextWord, setWritingContextWord] = useState<VocabularyItem | null>(null);
 
@@ -33,6 +42,98 @@ export const useAppController = () => {
     const { sessionWords, setSessionWords, sessionType, sessionFocus, startSession, clearSessionState } = useSession({ setView, setIsSidebarOpen });
     
     const { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
+
+    // --- Server Connection Check ---
+    useEffect(() => {
+        const checkServer = async () => {
+            try {
+                // Always get the latest config from storage to ensure we check the new URL
+                const config = getConfig();
+                const url = getServerUrl(config);
+                // Use short timeout to avoid blocking
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), 1500);
+                const res = await fetch(`${url}/api/health`, { signal: controller.signal });
+                clearTimeout(id);
+                if (res.ok) setServerStatus('connected');
+                else setServerStatus('disconnected');
+            } catch {
+                setServerStatus('disconnected');
+            }
+        };
+
+        // Check on load
+        if (isLoaded) {
+             checkServer();
+             // And re-check periodically
+             const interval = setInterval(checkServer, 30000);
+             
+             // Also re-check immediately if config changes (e.g. user hits Save in Settings)
+             window.addEventListener('config-updated', checkServer);
+
+             return () => {
+                 clearInterval(interval);
+                 window.removeEventListener('config-updated', checkServer);
+             };
+        }
+    }, [isLoaded]);
+
+    const { isResetting, resetStep, lastBackupTime, refreshBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, handleLibraryReset, deleteWord, bulkDeleteWords, bulkUpdateWords } = useDataActions({
+        currentUser, setView, refreshGlobalStats,
+        sessionWords, setSessionWords, wotd, setWotd, globalViewWord, setGlobalViewWord,
+        onUpdateUser: handleUpdateUser,
+        serverStatus // Pass serverStatus
+    });
+
+    // --- Unsaved Changes & Backup Listeners ---
+    useEffect(() => {
+         const onDataUpdate = () => {
+             // If connected to server AND not currently restoring, mark as unsaved
+             if (serverStatus === 'connected' && !(window as any).isRestoring) {
+                setHasUnsavedChanges(true);
+             }
+         };
+
+         // When a local restore completes, we are in sync with the file just loaded
+         const onRestoreComplete = () => {
+             setHasUnsavedChanges(false);
+             setNextAutoBackupTime(null);
+         };
+         
+         const onBackupScheduled = (e: Event) => {
+             const customEvent = e as CustomEvent;
+             if (customEvent.detail && customEvent.detail.targetTime) {
+                 setNextAutoBackupTime(customEvent.detail.targetTime);
+             }
+         };
+         
+         const onBackupComplete = (e: Event) => {
+             const customEvent = e as CustomEvent;
+             if (customEvent.detail) {
+                 if (customEvent.detail.success) {
+                     setHasUnsavedChanges(false);
+                     setNextAutoBackupTime(null);
+                     refreshBackupTime();
+                 } else {
+                     // If backup failed, ensure UI still shows unsaved state so user can try again
+                     setHasUnsavedChanges(true);
+                     setNextAutoBackupTime(null);
+                 }
+             }
+         };
+
+         window.addEventListener('datastore-updated', onDataUpdate);
+         window.addEventListener('vocab-pro-restore-complete', onRestoreComplete);
+         window.addEventListener('backup-scheduled', onBackupScheduled);
+         window.addEventListener('backup-complete', onBackupComplete);
+         
+         return () => {
+            window.removeEventListener('datastore-updated', onDataUpdate);
+            window.removeEventListener('vocab-pro-restore-complete', onRestoreComplete);
+            window.removeEventListener('backup-scheduled', onBackupScheduled);
+            window.removeEventListener('backup-complete', onBackupComplete);
+         };
+    }, [serverStatus, refreshBackupTime]);
 
     // --- Helper for Energy Rewards ---
     const checkEnergyRewards = async () => {
@@ -103,12 +204,28 @@ export const useAppController = () => {
         // Manual check is still useful for immediate feedback, though useEffect handles it too
         await checkEnergyRewards();
     };
+    
+    // Explicit trigger for Server Backup
+    const triggerServerBackup = async () => {
+        if (!currentUser) return;
+        // Optimistic UI Update: Clear warning immediately to show responsiveness
+        setHasUnsavedChanges(false);
+        setNextAutoBackupTime(null);
+        
+        await performAutoBackup(currentUser.id, currentUser, true);
+        showToast("Sync to Server initiated.", "success");
+    };
 
-    const { isResetting, resetStep, lastBackupTime, handleBackup, handleRestore, handleLibraryReset, deleteWord, bulkDeleteWords, bulkUpdateWords } = useDataActions({
-        currentUser, setView, refreshGlobalStats,
-        sessionWords, setSessionWords, wotd, setWotd, globalViewWord, setGlobalViewWord,
-        onUpdateUser: handleUpdateUser
-    });
+    // Wrapper for handleBackup (Smart wrapper for Sidebar). 
+    // If connected, uploads to server. If not, does local backup.
+    const handleBackupWrapper = async () => {
+        if (serverStatus === 'connected' && currentUser) {
+            await triggerServerBackup();
+        } else {
+            // Fallback to local download
+            await handleBackup();
+        }
+    };
     
     // Wrapper for bulk update to also check energy
     const bulkUpdateWordsAndNotify = async (updatedWords: VocabularyItem[]) => {
@@ -236,7 +353,15 @@ export const useAppController = () => {
         sessionWords, sessionFocus, sessionType, startSession, handleSessionComplete,
         stats, wotd, refreshGlobalStats, isWotdComposed, randomizeWotd,
         globalViewWord, setGlobalViewWord,
-        lastBackupTime, handleBackup, handleRestore, handleLibraryReset,
+        lastBackupTime, 
+        handleBackup: handleBackupWrapper, // Smart wrapper (for sidebar)
+        triggerLocalBackup: handleBackup, // Direct local download (for menu)
+        triggerServerBackup, // Direct server upload (for menu)
+        
+        // Restore actions
+        restoreFromServerAction, 
+        triggerLocalRestore,
+        handleLibraryReset,
         initialListFilter, setInitialListFilter,
         forceExpandAdd, setForceExpandAdd,
         apiUsage,
@@ -259,6 +384,9 @@ export const useAppController = () => {
         // New writing context props
         writingContextWord,
         handleComposeWithWord,
-        consumeWritingContext
+        consumeWritingContext,
+        serverStatus, // Expose server status
+        hasUnsavedChanges, // Expose unsaved changes state
+        nextAutoBackupTime // Expose backup timer
     };
 };
