@@ -1,3 +1,4 @@
+
 import { KNOWN_HOSTS, SERVER_PORT_START, SERVER_PORT_END } from '../app/settingsManager';
 
 export interface ScanResult {
@@ -67,7 +68,8 @@ export const scanForServer = async (): Promise<ScanResult | null> => {
 
 const checkCandidate = async (candidate: { url: string, host: string, port: number }): Promise<ScanResult> => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 400); // 400ms timeout per check
+    // Increased timeout to 1000ms (1s) to allow for slower HTTPS handshakes on self-signed certs
+    const timeoutId = setTimeout(() => controller.abort(), 1000); 
 
     try {
         const res = await fetch(`${candidate.url}/api/health`, { 

@@ -62,14 +62,14 @@ export const generateJsonExport = async (userId: string, user: User, scope: Data
     
     if (scope.writing) {
         exportData.writingTopics = await db.getWritingTopicsByUserId(userId);
-        exportData.writingLogs = await db.getWritingLogsByUserId(userId);
+        exportData.writingLogs = await db.getWritingLogs(userId);
         exportData.compositions = await db.getCompositionsByUserId(userId);
         exportData.writingBooks = await db.getWritingBooksByUserId(userId);
     }
     
     if (scope.speaking) {
         exportData.speakingTopics = await db.getSpeakingTopicsByUserId(userId);
-        exportData.speakingLogs = await db.getSpeakingLogsByUserId(userId);
+        exportData.speakingLogs = await db.getSpeakingLogs(userId);
         exportData.nativeSpeakItems = await db.getNativeSpeakItemsByUserId(userId);
         exportData.speakingBooks = await db.getSpeakingBooksByUserId(userId);
     }

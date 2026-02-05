@@ -143,7 +143,33 @@ function saveMetadata(data) {
     }
 }
 
-// --- Feature 0: Server Configuration ---
+// --- Feature 0: Server Configuration & Root ---
+
+// Friendly Landing Page for Trusting Certs
+app.get('/', (req, res) => {
+    res.send(`
+        <html>
+            <head>
+                <title>Vocab Pro Server</title>
+                <style>
+                    body { font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0fdf4; color: #166534; }
+                    .card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; border: 1px solid #bbf7d0; }
+                    h1 { margin: 0 0 10px; }
+                    .status { display: inline-flex; align-items: center; gap: 8px; font-weight: bold; background: #dcfce7; padding: 8px 16px; border-radius: 100px; color: #15803d; }
+                    .dot { width: 10px; height: 10px; background: #22c55e; border-radius: 50%; display: block; }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <div class="status"><span class="dot"></span> Online</div>
+                    <h1>Vocab Pro Server</h1>
+                    <p>Secure connection established.</p>
+                    <p style="color: #64748b; font-size: 0.9em;">You can now close this tab and return to the app.</p>
+                </div>
+            </body>
+        </html>
+    `);
+});
 
 app.get('/api/health', (req, res) => {
     res.json({ 

@@ -10,6 +10,7 @@ import ViewWordModal from '../components/word_lib/ViewWordModal';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import { StudyBuddy } from '../components/common/StudyBuddy';
 import { ServerRestoreModal } from '../components/common/ServerRestoreModal';
+import { ConnectionModal } from '../components/common/ConnectionModal';
 
 // Lazy load major views for performance
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
@@ -250,7 +251,14 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     setIsAutoRestoreOpen,
     autoRestoreCandidates,
     handleNewUserSetup,
-    handleLocalRestoreSetup
+    handleLocalRestoreSetup,
+    
+    // Connection Modal props
+    isConnectionModalOpen,
+    setIsConnectionModalOpen,
+    connectionScanStatus,
+    handleScanAndConnect,
+    handleStopScan
   } = controller;
 
   if (!currentUser) return null;
@@ -355,7 +363,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
   const { 
     view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary, currentUser, stats, startDueReviewSession, startNewLearnSession, lastBackupTime, 
     isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction,
-    handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser
+    handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser,
+    isConnectionModalOpen, setIsConnectionModalOpen, connectionScanStatus, handleScanAndConnect, handleStopScan
   } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
 
@@ -468,6 +477,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
           description="We found existing profiles on the server. Select yours to restore."
           onNewUser={handleNewUserSetup}
           onLocalRestore={handleLocalRestoreSetup}
+      />
+
+      <ConnectionModal
+        isOpen={isConnectionModalOpen}
+        onClose={() => setIsConnectionModalOpen(false)}
+        onRetry={handleScanAndConnect}
+        onStop={handleStopScan}
+        status={connectionScanStatus}
       />
     </div>
   );

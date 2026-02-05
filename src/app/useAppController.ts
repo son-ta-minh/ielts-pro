@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { AppView, User, VocabularyItem } from './types';
 import { useToast } from '../contexts/ToastContext';
 import { useAuthAndUser } from './hooks/useAuthAndUser';
@@ -32,6 +32,11 @@ export const useAppController = () => {
     // Server Status State
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected'>('disconnected');
     
+    // Connection Modal State
+    const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
+    const [connectionScanStatus, setConnectionScanStatus] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
+    const hasCheckedInitialConnection = useRef(false);
+    
     // Unsaved Changes Tracking & Backup Timer
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [nextAutoBackupTime, setNextAutoBackupTime] = useState<number | null>(null);
@@ -50,13 +55,13 @@ export const useAppController = () => {
     const { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
 
     // --- Server Connection Check with Auto-Scan ---
-    const checkServerConnection = useCallback(async (allowScan = false) => {
+    const checkServerConnection = useCallback(async (allowScan = false, urlOverride?: string) => {
         const config = getConfig();
-        const url = getServerUrl(config);
+        const url = urlOverride || getServerUrl(config);
 
         const tryConnect = async (targetUrl: string) => {
              const controller = new AbortController();
-             const id = setTimeout(() => controller.abort(), 1500);
+             const id = setTimeout(() => controller.abort(), 2000); // 2s timeout for manual check
              try {
                  const res = await fetch(`${targetUrl}/api/health`, { signal: controller.signal });
                  clearTimeout(id);
@@ -66,16 +71,22 @@ export const useAppController = () => {
              }
         };
 
-        // 1. Try current config
+        // 1. Try provided URL or current config
         const isConnected = await tryConnect(url);
         
         if (isConnected) {
             setServerStatus('connected');
+            // If we used a custom/manual URL override that worked, update the config
+            if (urlOverride) {
+                 const newConfig = { ...config, server: { ...config.server, useCustomUrl: true, customUrl: urlOverride } };
+                 saveConfig(newConfig, true);
+                 showToast(`Connected to ${urlOverride}`, "success");
+            }
             return true;
         }
 
-        // 2. If failed and scan is allowed, try to find it
-        if (!isConnected && allowScan && !config.server.useCustomUrl) {
+        // 2. If failed and scan is allowed (only if no override was provided), try to find it
+        if (!isConnected && allowScan && !urlOverride && !config.server.useCustomUrl) {
             // console.log("[App] Server not found. Scanning network...");
             const scanResult = await scanForServer();
             if (scanResult) {
@@ -99,14 +110,60 @@ export const useAppController = () => {
         return false;
     }, [showToast]);
 
+    // Function specifically for the modal interaction
+    // If urlOverride is passed, we check ONLY that URL.
+    // If urlOverride is undefined, we trigger the auto-scan logic.
+    const handleScanAndConnect = async (urlOverride?: string) => {
+        setConnectionScanStatus('scanning');
+        
+        // Pass true for allowScan ONLY if no URL override is provided
+        const allowAutoScan = !urlOverride;
+        
+        const success = await checkServerConnection(allowAutoScan, urlOverride);
+        
+        if (success) {
+            setConnectionScanStatus('success');
+            setTimeout(() => setIsConnectionModalOpen(false), 1000);
+            return true;
+        } else {
+            setConnectionScanStatus('failed');
+            return false;
+        }
+    };
+    
+    const handleStopScan = () => {
+        setConnectionScanStatus('failed');
+    };
+
+    // Initial Load Logic: Check connection, then maybe show modal
     useEffect(() => {
-        // Initial check with scan allowed
-        if (isLoaded) {
-             checkServerConnection(true);
+        if (isLoaded && !hasCheckedInitialConnection.current) {
+             hasCheckedInitialConnection.current = true;
+             
+             const isDefaultUser = currentUser && currentUser.id === DEFAULT_USER_ID;
+
+             if (isDefaultUser) {
+                 setIsConnectionModalOpen(true);
+                 setConnectionScanStatus('scanning');
+             }
+
+             // Perform the check (this includes timeout + deep scan if allowed)
+             checkServerConnection(true).then((connected) => {
+                 if (connected) {
+                     setServerStatus('connected');
+                     if (isDefaultUser) {
+                         setConnectionScanStatus('success');
+                         setTimeout(() => setIsConnectionModalOpen(false), 800);
+                     }
+                 } else {
+                     if (isDefaultUser) {
+                         setConnectionScanStatus('failed');
+                     }
+                 }
+             });
              
              // Periodic re-check (light check, no scan)
              const interval = setInterval(() => checkServerConnection(false), 30000);
-             
              window.addEventListener('config-updated', () => checkServerConnection(false));
 
              return () => {
@@ -114,13 +171,14 @@ export const useAppController = () => {
                  window.removeEventListener('config-updated', () => checkServerConnection(false));
              };
         }
-    }, [isLoaded, checkServerConnection]);
+    }, [isLoaded, checkServerConnection, currentUser?.id]);
     
     // --- Auto Restore Logic Effect ---
     useEffect(() => {
         const checkForBackups = async () => {
              // Only run if loaded, connected, AND user is the default seeded user (fresh state)
-             if (isLoaded && serverStatus === 'connected' && currentUser && currentUser.id === DEFAULT_USER_ID) {
+             // AND connection modal is closed (don't overlap)
+             if (isLoaded && serverStatus === 'connected' && currentUser && currentUser.id === DEFAULT_USER_ID && !isConnectionModalOpen) {
                  try {
                      const backups = await fetchServerBackups();
                      if (backups && backups.length > 0) {
@@ -136,7 +194,7 @@ export const useAppController = () => {
         // Debounce slightly to ensure auth state is settled
         const t = setTimeout(checkForBackups, 1000);
         return () => clearTimeout(t);
-    }, [isLoaded, serverStatus, currentUser?.id]);
+    }, [isLoaded, serverStatus, currentUser?.id, isConnectionModalOpen]);
 
 
     const { isResetting, resetStep, lastBackupTime, refreshBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, handleLibraryReset, deleteWord, bulkDeleteWords, bulkUpdateWords } = useDataActions({
@@ -165,13 +223,15 @@ export const useAppController = () => {
         triggerLocalRestore();
     };
 
-    // New: Manual Switch User Action with Dynamic Scan
+    // Manual Switch User Action with Dynamic Scan
     const handleSwitchUser = async () => {
-        // 1. Force a check/scan first to ensure we have the best chance of connection
+        // 1. Force a check/scan first
         const connected = await checkServerConnection(true);
 
         if (!connected) {
-            showToast("Server unreachable even after scanning. Cannot switch users.", "error");
+            // Show troubleshooting modal instead of just error toast
+            setIsConnectionModalOpen(true);
+            setConnectionScanStatus('failed'); // Set to failed so user sees options immediately
             return;
         }
 
@@ -512,6 +572,13 @@ export const useAppController = () => {
         autoRestoreCandidates,
         handleNewUserSetup,
         handleLocalRestoreSetup,
-        handleSwitchUser
+        handleSwitchUser,
+
+        // Connection Modal Props
+        isConnectionModalOpen,
+        setIsConnectionModalOpen,
+        connectionScanStatus,
+        handleScanAndConnect,
+        handleStopScan
     };
 };
