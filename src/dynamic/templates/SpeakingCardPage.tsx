@@ -4,7 +4,7 @@ import { User, NativeSpeakItem, VocabularyItem, WordQuality, FocusColor, Speakin
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Mic, Volume2, Eye, EyeOff, Tag, ChevronRight, Shuffle, Plus, Edit3, Trash2, AudioLines, Sparkles, Save, X, StickyNote, Info, ChevronLeft, Loader2, Target, Library, FolderPlus, Pen, Move, Book, ArrowLeft, Users, MessageSquare, Play, ChevronDown, Pause, MessageCircle, UserCircle, Square, Languages } from 'lucide-react';
+import { Mic, Volume2, Eye, EyeOff, Tag, ChevronRight, Shuffle, Plus, Edit3, Trash2, AudioLines, Sparkles, Save, X, StickyNote, Info, ChevronLeft, Loader2, Target, Library, FolderPlus, Pen, Move, Book, ArrowLeft, Users, MessageSquare, Play, ChevronDown, Pause, MessageCircle, UserCircle, Square as SquareIcon, Languages, Headphones } from 'lucide-react';
 import { speak, startRecording, stopRecording, fetchServerVoices, ServerVoicesResponse, stopSpeaking } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { TagBrowser } from '../../components/common/TagBrowser';
@@ -373,14 +373,21 @@ interface ConversationPracticeModalProps {
 const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ isOpen, onClose, item }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [isPlayingAll, setIsPlayingAll] = useState(false);
     const [actingAs, setActingAs] = useState<string | null>(null); // Name of character user is playing
     const [isUserTurn, setIsUserTurn] = useState(false);
     
+    // User recordings state
+    const [userRecordings, setUserRecordings] = useState<Record<number, { base64: string, mime: string }>>({});
+    
+    // Inline recording state
     const [isRecordingUser, setIsRecordingUser] = useState(false);
     const [userTranscript, setUserTranscript] = useState('');
     const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null);
     const [userAudioMime, setUserAudioMime] = useState<string>('audio/webm');
     const [isListeningForStt, setIsListeningForStt] = useState(false);
+    /* Added missing mimicTarget state */
+    const [mimicTarget, setMimicTarget] = useState<string | null>(null);
 
     const [config] = useState(() => getConfig());
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -393,44 +400,56 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
         onClose();
     };
 
-    // Autoplay & Sequence Logic
+    // Autoplay & Turn Management Logic
     useEffect(() => {
         let isCancelled = false;
         
         const runSequence = async () => {
-            if (isPlaying && item && currentIndex < item.sentences.length) {
+            if ((isPlaying || isPlayingAll) && item && currentIndex < item.sentences.length) {
                 const s = item.sentences[currentIndex];
                 
-                // CHECK IF USER TURN
-                if (actingAs && s.speakerName === actingAs) {
+                // CHECK IF USER TURN (Skip check if isPlayingAll is active)
+                if (!isPlayingAll && actingAs && s.speakerName === actingAs) {
                     setIsPlaying(false);
                     setIsUserTurn(true);
                     return;
                 }
 
-                // AI Speaker Logic
-                const sp = item.speakers.find(src => src.name === s.speakerName);
-                let voice = sp?.voiceName;
-                let accent = sp?.accentCode;
+                // NEW: CHECK FOR USER SOUND (Priority in Play All mode)
+                const userAudioData = userRecordings[currentIndex];
+                if (userAudioData && isPlayingAll) {
+                    await new Promise((resolve) => {
+                        const audio = new Audio(`data:${userAudioData.mime};base64,${userAudioData.base64}`);
+                        audio.onended = () => resolve(true);
+                        audio.onerror = () => resolve(false);
+                        audio.play().catch(() => resolve(false));
+                    });
+                } else {
+                    // AI Speaker Logic
+                    const sp = item.speakers.find(src => src.name === s.speakerName);
+                    let voice = sp?.voiceName;
+                    let accent = sp?.accentCode;
 
-                if (!voice) {
-                    const activeType = sp?.sex === 'male' ? 'male' : 'female';
-                    const coach = config.audioCoach.coaches[activeType];
-                    voice = coach.enVoice;
-                    accent = coach.enAccent;
+                    if (!voice) {
+                        const activeType = sp?.sex === 'male' ? 'male' : 'female';
+                        const coach = config.audioCoach.coaches[activeType];
+                        voice = coach.enVoice;
+                        accent = coach.enAccent;
+                    }
+
+                    try {
+                        await speak(s.text, true, 'en', voice, accent);
+                    } catch (e) {
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
                 }
 
-                try {
-                    await speak(s.text, true, 'en', voice, accent);
-                } catch (e) {
-                    await new Promise(r => setTimeout(r, 2000));
-                }
-
-                if (!isCancelled && isPlaying) {
+                if (!isCancelled && (isPlaying || isPlayingAll)) {
                     if (currentIndex < item.sentences.length - 1) {
                         setCurrentIndex(prev => prev + 1);
                     } else {
                         setIsPlaying(false);
+                        setIsPlayingAll(false);
                     }
                 }
             }
@@ -438,7 +457,7 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
 
         runSequence();
         return () => { isCancelled = true; };
-    }, [isPlaying, currentIndex, item, config, actingAs]);
+    }, [isPlaying, isPlayingAll, currentIndex, item, config, actingAs, userRecordings]);
 
     // Auto-scroll logic
     useEffect(() => {
@@ -446,12 +465,14 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
         if (activeEl && scrollContainerRef.current) {
             activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-    }, [currentIndex, isPlaying]);
+    }, [currentIndex, isPlaying, isPlayingAll, isUserTurn]);
 
     if (!isOpen || !item || !item.sentences || item.sentences.length === 0) return null;
 
     const sentences = item.sentences;
     const activeSentence = sentences[currentIndex];
+    
+    // --- USER INTERACTION HANDLERS ---
     
     const handleToggleRecording = async () => {
         if (isRecordingUser) {
@@ -471,24 +492,32 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                 await startRecording();
                 setIsRecordingUser(true);
                 setIsListeningForStt(true);
+                // Fix: use setUserTranscript for live display and final result
                 recognitionManager.current.start(
                     (final, interim) => setUserTranscript(final + interim),
-                    (final) => setUserTranscript(final)
+                    (finalTranscript) => setUserTranscript(finalTranscript)
                 );
             } catch (e) {
+                console.error("Failed to start recording", e);
                 setIsRecordingUser(false);
             }
         }
     };
 
-    const handlePlayUserAudio = () => {
-        if (userAudioUrl) {
-            const audio = new Audio(`data:${userAudioMime};base64,${userAudioUrl}`);
+    const handlePlayUserAudio = (index?: number) => {
+        const audioData = index !== undefined ? userRecordings[index] : (userAudioUrl ? { base64: userAudioUrl, mime: userAudioMime } : null);
+        if (audioData) {
+            const audio = new Audio(`data:${audioData.mime};base64,${audioData.base64}`);
             audio.play();
         }
     };
 
     const handleConfirmUserTurn = () => {
+        // Save recording to dictionary
+        if (userAudioUrl) {
+            setUserRecordings(prev => ({ ...prev, [currentIndex]: { base64: userAudioUrl, mime: userAudioMime } }));
+        }
+        
         setIsUserTurn(false);
         setUserTranscript('');
         setUserAudioUrl(null);
@@ -516,31 +545,55 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
     };
 
     // Derived list based on play mode
-    const visibleSentences = isPlaying ? [sentences[currentIndex]] : sentences;
+    const visibleSentences = (isPlaying || isPlayingAll || isUserTurn) 
+        ? [sentences[currentIndex]] 
+        : sentences;
+
+    const handleToggleFullPlayback = () => {
+        if (isPlayingAll) {
+            setIsPlayingAll(false);
+            stopSpeaking();
+        } else {
+            stopSpeaking();
+            setIsPlaying(false);
+            setIsUserTurn(false);
+            // setActingAs(null); // Keep actingAs if they want to act after listening, but PlayAll ignores turns anyway
+            setIsPlayingAll(true);
+            setCurrentIndex(0);
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl border border-neutral-200 flex flex-col h-[85vh] overflow-hidden">
                 <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-center shrink-0 bg-white z-10">
                     <div className="flex flex-col gap-1">
-                        <h3 className="text-xl font-black text-neutral-900 leading-none">{item.title}</h3>
+                        <h3 className="text-xl font-black text-neutral-900 tracking-tight leading-none">{item.title}</h3>
                         <div className="flex items-center gap-3">
                              <div className="flex items-center gap-1 text-[9px] font-black uppercase text-neutral-400">
                                 <UserCircle size={10}/> Role Play:
                              </div>
                              <div className="flex bg-neutral-100 p-0.5 rounded-lg">
-                                <button onClick={() => { setActingAs(null); setIsUserTurn(false); }} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${!actingAs ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Spectator</button>
+                                <button onClick={() => { setActingAs(null); setIsUserTurn(false); setIsPlayingAll(false); }} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${!actingAs && !isPlayingAll ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Spectator</button>
                                 {item.speakers.map(s => (
-                                    <button key={s.name} onClick={() => { setActingAs(s.name); setIsUserTurn(false); }} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${actingAs === s.name ? 'bg-indigo-600 text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Act as {s.name}</button>
+                                    <button key={s.name} onClick={() => { setActingAs(s.name); setIsUserTurn(false); setIsPlayingAll(false); }} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${actingAs === s.name ? 'bg-indigo-600 text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Act as {s.name}</button>
                                 ))}
                              </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
                         {!isUserTurn && (
-                            <div className="flex bg-neutral-100 p-1 rounded-2xl">
-                                <button onClick={() => { setIsPlaying(true); }} className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Play size={14} fill="currentColor"/> Play</button>
-                                <button onClick={() => { setIsPlaying(false); stopSpeaking(); }} className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${!isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Pause size={14} fill="currentColor"/> Pause</button>
+                            <div className="flex bg-neutral-100 p-1 rounded-2xl gap-1">
+                                <button onClick={handleToggleFullPlayback} className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${isPlayingAll ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`} title="Play whole conversation non-stop">
+                                    <Headphones size={14} /> 
+                                    {isPlayingAll ? 'Stop' : 'Play All'}
+                                </button>
+                                {!isPlayingAll && (
+                                    <>
+                                        <button onClick={() => { setIsPlaying(true); setIsPlayingAll(false); }} className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Play size={14} fill="currentColor"/> Play</button>
+                                        <button onClick={() => { setIsPlaying(false); stopSpeaking(); }} className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${!isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Pause size={14} fill="currentColor"/> Pause</button>
+                                    </>
+                                )}
                             </div>
                         )}
                         <button type="button" onClick={handleClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={24}/></button>
@@ -574,22 +627,25 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                     </div>
                 </div>
                 
-                {/* Dialogue List / Interaction Area */}
+                {/* Dialogue List / Action Area */}
                 <main ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6 md:p-8 space-y-4 custom-scrollbar bg-white scroll-smooth pb-32">
                     {visibleSentences.map((s, i) => {
-                        const actualIndex = isPlaying ? currentIndex : i;
-                        const isCurrent = isPlaying ? true : i === currentIndex;
+                        const actualIndex = (isPlaying || isPlayingAll || isUserTurn) ? currentIndex : i;
+                        const isCurrent = (isPlaying || isPlayingAll || isUserTurn) ? true : i === currentIndex;
                         const isUserRole = actingAs === s.speakerName;
                         const sp = item.speakers.find(src => src.name === s.speakerName);
                         const isMale = sp?.sex === 'male';
-                        const needsToAct = isUserTurn && i === currentIndex;
+                        const hasUserRecording = userRecordings[actualIndex] !== undefined;
+
+                        // Turn specific logic
+                        const needsToAct = isUserTurn && actualIndex === currentIndex;
 
                         return (
                             <div 
                                 key={`${actualIndex}-${i}`} 
-                                ref={el => { if (!isPlaying) itemRefs.current[i] = el; }}
-                                onClick={() => { if (!isPlaying && !isUserTurn) { setCurrentIndex(i); } }} 
-                                className={`flex items-start gap-4 p-4 rounded-[2rem] transition-all border-2 ${isCurrent ? 'bg-indigo-50/30 border-indigo-200 shadow-sm' : 'border-transparent hover:bg-neutral-50'} ${isPlaying || isUserTurn ? 'cursor-default' : 'cursor-pointer'}`}
+                                ref={el => { if (!isPlaying && !isPlayingAll) itemRefs.current[i] = el; }}
+                                onClick={() => { if (!isPlaying && !isPlayingAll && !isUserTurn) { setCurrentIndex(i); } }} 
+                                className={`flex items-start gap-4 p-4 rounded-[2rem] transition-all border-2 ${isCurrent ? 'bg-indigo-50/30 border-indigo-200 shadow-sm' : 'border-transparent hover:bg-neutral-50'} ${isPlaying || isPlayingAll || isUserTurn ? 'cursor-default' : 'cursor-pointer'}`}
                             >
                                 <div className={`w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center text-xl shadow-sm ${isMale ? 'bg-blue-100' : 'bg-pink-100'} ${isCurrent ? 'scale-110 ring-2 ring-white' : ''}`}>
                                     {isUserRole ? '🌟' : (s.icon || (isMale ? '👨' : '👩'))}
@@ -599,16 +655,29 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                                         <span className={`text-[10px] font-black uppercase tracking-widest ${isCurrent ? 'text-indigo-600' : 'text-neutral-400'}`}>
                                             {isUserRole ? `YOU (as ${s.speakerName})` : s.speakerName}
                                         </span>
-                                        {isCurrent && !isPlaying && !isUserTurn && (
-                                            <div className="flex items-center gap-2 animate-in fade-in zoom-in-95">
-                                                <button onClick={(e) => { e.stopPropagation(); handleSpeakAiSentence(s); }} className="p-2 bg-neutral-900 text-white rounded-xl hover:scale-105 transition-transform"><Volume2 size={14}/></button>
-                                                <button onClick={(e) => { e.stopPropagation(); }} className="p-2 bg-rose-500 text-white rounded-xl hover:scale-105 transition-transform opacity-50 cursor-not-allowed"><Mic size={14}/></button>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className={`text-sm md:text-lg leading-relaxed font-bold transition-colors ${isCurrent ? 'text-neutral-900' : 'text-neutral-500'}`}>{s.text}</p>
+                                        
+                                        <div className="flex items-center gap-1">
+                                            {/* Special Button to listen back to user attempt */}
+                                            {hasUserRecording && (
+                                                <button onClick={(e) => { e.stopPropagation(); handlePlayUserAudio(actualIndex); }} className="p-2 bg-rose-50 text-rose-600 rounded-xl hover:bg-rose-100 transition-all" title="Listen back to your attempt">
+                                                    <Mic size={14}/>
+                                                </button>
+                                            )}
 
-                                    {/* INLINE RECORDING UI */}
+                                            {isCurrent && !isPlaying && !isPlayingAll && !isUserTurn && (
+                                                <div className="flex items-center gap-2 animate-in fade-in zoom-in-95">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleSpeakAiSentence(s); }} className="p-2 bg-neutral-900 text-white rounded-xl hover:scale-105 transition-transform"><Volume2 size={14}/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setMimicTarget(s.text); }} className="p-2 bg-rose-500 text-white rounded-xl hover:scale-105 transition-transform"><Mic size={14}/></button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    <p className={`text-sm md:text-lg leading-relaxed font-bold transition-colors ${isCurrent ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                                        {s.text}
+                                    </p>
+
+                                    {/* INLINE ROLE PLAY INTERFACE */}
                                     {needsToAct && (
                                         <div className="mt-4 p-6 bg-white border-2 border-indigo-500 rounded-[2rem] shadow-xl animate-in zoom-in-95 space-y-4">
                                             <div className="flex items-center justify-between">
@@ -616,7 +685,12 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                                                     <Languages size={18}/>
                                                     <span className="text-xs font-black uppercase tracking-widest">Your Turn to Speak</span>
                                                 </div>
-                                                {isListeningForStt && <span className="flex h-2 w-2 rounded-full bg-red-500 animate-ping"></span>}
+                                                <div className="flex items-center gap-2">
+                                                    <button onClick={() => handleSpeakAiSentence(s)} className="p-2 bg-neutral-100 text-neutral-600 rounded-lg hover:text-neutral-900 transition-all" title="Listen to Model">
+                                                        <Volume2 size={16}/>
+                                                    </button>
+                                                    {isListeningForStt && <span className="flex h-2 w-2 rounded-full bg-red-500 animate-ping"></span>}
+                                                </div>
                                             </div>
 
                                             <div className="min-h-[60px] p-4 bg-neutral-50 rounded-2xl border border-neutral-100 flex flex-col items-center justify-center text-center">
@@ -632,11 +706,11 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                                                     onClick={handleToggleRecording} 
                                                     className={`w-14 h-14 rounded-full flex items-center justify-center transition-all transform active:scale-90 ${isRecordingUser ? 'bg-red-500 text-white animate-pulse ring-8 ring-red-100' : 'bg-neutral-900 text-white hover:bg-neutral-800'}`}
                                                 >
-                                                    {isRecordingUser ? <Square size={24} fill="white" /> : <Mic size={24} />}
+                                                    {isRecordingUser ? <SquareIcon size={24} fill="white" /> : <Mic size={24} />}
                                                 </button>
                                                 
                                                 {userAudioUrl && (
-                                                    <button onClick={handlePlayUserAudio} className="p-4 bg-white border border-neutral-200 text-neutral-600 rounded-2xl hover:text-indigo-600 hover:border-indigo-300 transition-all">
+                                                    <button onClick={() => handlePlayUserAudio()} className="p-4 bg-white border border-neutral-200 text-neutral-600 rounded-2xl hover:text-indigo-600 hover:border-indigo-300 transition-all">
                                                         <Play size={20} fill="currentColor"/>
                                                     </button>
                                                 )}
@@ -669,7 +743,12 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                     </div>
 
                     <div className="flex items-center gap-3">
-                         {isUserTurn ? (
+                         {isPlayingAll ? (
+                             <div className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-2xl shadow-lg animate-in fade-in">
+                                <Headphones size={14} />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Full Playback Mode</span>
+                             </div>
+                         ) : isUserTurn ? (
                              <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-2xl border border-indigo-100 animate-in slide-in-from-right-2">
                                 <Sparkles size={14} className="text-indigo-600" />
                                 <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Waiting for User</span>
@@ -684,6 +763,8 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                     </div>
                 </footer>
             </div>
+            {/* Added missing mimicTarget state and component usage */}
+            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
         </div>
     );
 };
@@ -894,10 +975,10 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                <button onClick={() => setViewMode('LIST')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group"><ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" /><span>Back to Main Library</span></button>
                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"><div className="shrink-0"><h2 className="text-3xl font-black text-neutral-900 tracking-tight">Speaking Shelf</h2><p className="text-neutral-500 mt-1 font-medium">Organize your speaking topics.</p></div><ShelfSearchBar shelves={allShelves} books={speakingBooks} onNavigateShelf={handleNavigateShelf} onNavigateBook={handleNavigateBook} /><button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm"><FolderPlus size={14}/> Add Shelf</button></header>
            </div>
-          <UniversalShelf label={currentShelfName} onNext={allShelves.length > 1 ? nextShelf : undefined} onPrev={allShelves.length > 1 ? prevShelf : undefined} actions={<div className="flex items-center gap-2"><button onClick={() => setIsRenameShelfModalOpen(true)} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white"><Pen size={14}/></button><button onClick={removeShelf} disabled={booksOnCurrentShelf.length > 0} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-30"><Trash2 size={14}/></button></div>} isEmpty={booksOnCurrentShelf.length === 0} emptyAction={<button onClick={handleCreateEmptyBook} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs uppercase tracking-widest border border-white/20">Create First Book</button>} >
+          <UniversalShelf label={currentShelfName} onNext={allShelves.length > 1 ? nextShelf : undefined} onPrev={allShelves.length > 1 ? prevShelf : undefined} actions={<div className="flex items-center gap-2"><button onClick={() => setIsRenameShelfModalOpen(true)} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white" title="Rename Shelf"><Pen size={14}/></button><button onClick={removeShelf} disabled={booksOnCurrentShelf.length > 0} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-30 disabled:hover:bg-white/20" title="Remove Empty Shelf"><Trash2 size={14}/></button></div>} isEmpty={booksOnCurrentShelf.length === 0} emptyAction={<button onClick={handleCreateEmptyBook} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs uppercase tracking-widest border border-white/20">Create First Book</button>} >
              {booksOnCurrentShelf.map(book => {
                  const displayTitle = book.title.split(':').pop()?.trim() || book.title;
-                 return <UniversalBook key={book.id} id={book.id} title={displayTitle} subTitle={`${book.itemIds.length} Items`} icon={<Mic size={24}/>} color={book.color} titleColor={book.titleColor} titleSize={book.titleSize} titleTop={book.titleTop} titleLeft={book.titleLeft} iconTop={book.iconTop} iconLeft={book.iconLeft} onClick={() => { setActiveBook(book); setViewMode('BOOK_DETAIL'); }} actions={<><button onClick={(e) => { e.stopPropagation(); setBookToMove(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-neutral-700 hover:text-white transition-all shadow-sm"><Move size={16}/></button><button onClick={(e) => { e.stopPropagation(); setBookToDelete(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={16}/></button></>} />;
+                 return <UniversalBook key={book.id} id={book.id} title={displayTitle} subTitle={`${book.itemIds.length} Items`} icon={<Mic size={24}/>} color={book.color} titleColor={book.titleColor} titleSize={book.titleSize} titleTop={book.titleTop} titleLeft={book.titleLeft} iconTop={book.iconTop} iconLeft={book.iconLeft} onClick={() => { setActiveBook(book); setViewMode('BOOK_DETAIL'); }} actions={<><button onClick={(e) => { e.stopPropagation(); setBookToMove(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-neutral-700 hover:text-white transition-all shadow-sm" title="Move to Shelf"><Move size={16}/></button><button onClick={(e) => { e.stopPropagation(); setBookToDelete(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-sm" title="Delete"><Trash2 size={16}/></button></>} />;
              })}
              <div className="group translate-y-0"><div className="relative w-full aspect-[5/7] rounded-lg bg-neutral-800/50 border-2 border-dashed border-neutral-500/50 transition-all duration-300 group-hover:border-neutral-400 group-hover:bg-neutral-800/80 group-hover:shadow-xl flex flex-col items-stretch justify-center overflow-hidden"><button onClick={handleCreateEmptyBook} className="flex-1 flex flex-col items-center justify-center p-2 text-center text-neutral-400 hover:bg-white/5 transition-colors"><Plus size={32} className="mb-2 text-neutral-500"/><h3 className="font-sans text-xs font-black uppercase tracking-wider">New Book</h3></button></div></div>
           </UniversalShelf>

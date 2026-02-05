@@ -18,8 +18,8 @@ import { UniversalCard } from '../../components/common/UniversalCard';
 import { ResourceActions } from '../page/ResourceActions';
 import { useShelfLogic } from '../../app/hooks/useShelfLogic';
 import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components/wordbook/ShelfModals';
-import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { UniversalBook } from '../../components/common/UniversalBook';
+import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
 import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
 
@@ -163,7 +163,6 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
     // Filters & View State
     const [resourceType, setResourceType] = useState<'COMPOSITIONS' | 'TOPICS'>('COMPOSITIONS');
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
-    const [isGroupBrowserOpen, setIsGroupBrowserOpen] = useState(false);
     const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
     const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
     const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, {
@@ -631,7 +630,6 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             <MoveBookModal 
               isOpen={!!bookToMove} 
               onClose={() => setBookToMove(null)} 
-              {/* FIX: handleMoveBook corrected to handleConfirmMoveBook */}
               onConfirm={handleConfirmMoveBook} 
               shelves={allShelves} 
               currentShelf={bookToMove ? (bookToMove.title.split(':')[0].trim()) : 'General'} 
