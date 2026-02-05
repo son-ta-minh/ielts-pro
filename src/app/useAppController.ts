@@ -47,6 +47,7 @@ export const useAppController = () => {
     // --- Auto Restore Logic State ---
     const [autoRestoreCandidates, setAutoRestoreCandidates] = useState<ServerBackupItem[]>([]);
     const [isAutoRestoreOpen, setIsAutoRestoreOpen] = useState(false);
+    const hasCheckedAutoRestore = useRef(false);
 
 
     // --- Composed Logic Hooks ---
@@ -134,15 +135,21 @@ export const useAppController = () => {
     const handleStopScan = () => {
         setConnectionScanStatus('failed');
     };
+    
+    // Check if the user is truly the default seed user (ID matches AND Name is default)
+    // This prevents the modal from showing if the user customized their profile but kept the ID.
+    const isStrictDefaultUser = useCallback(() => {
+        return currentUser && currentUser.id === DEFAULT_USER_ID && currentUser.name === 'Vocab Master';
+    }, [currentUser]);
 
     // Initial Load Logic: Check connection, then maybe show modal
     useEffect(() => {
         if (isLoaded && !hasCheckedInitialConnection.current) {
              hasCheckedInitialConnection.current = true;
              
-             const isDefaultUser = currentUser && currentUser.id === DEFAULT_USER_ID;
+             const isDefault = isStrictDefaultUser();
 
-             if (isDefaultUser) {
+             if (isDefault) {
                  setIsConnectionModalOpen(true);
                  setConnectionScanStatus('scanning');
              }
@@ -151,12 +158,12 @@ export const useAppController = () => {
              checkServerConnection(true).then((connected) => {
                  if (connected) {
                      setServerStatus('connected');
-                     if (isDefaultUser) {
+                     if (isDefault) {
                          setConnectionScanStatus('success');
                          setTimeout(() => setIsConnectionModalOpen(false), 800);
                      }
                  } else {
-                     if (isDefaultUser) {
+                     if (isDefault) {
                          setConnectionScanStatus('failed');
                      }
                  }
@@ -171,14 +178,17 @@ export const useAppController = () => {
                  window.removeEventListener('config-updated', () => checkServerConnection(false));
              };
         }
-    }, [isLoaded, checkServerConnection, currentUser?.id]);
+    }, [isLoaded, checkServerConnection, isStrictDefaultUser]);
     
     // --- Auto Restore Logic Effect ---
     useEffect(() => {
         const checkForBackups = async () => {
-             // Only run if loaded, connected, AND user is the default seeded user (fresh state)
+             if (hasCheckedAutoRestore.current) return;
+
+             // Only run if loaded, connected, AND user is the strict default seeded user (fresh state)
              // AND connection modal is closed (don't overlap)
-             if (isLoaded && serverStatus === 'connected' && currentUser && currentUser.id === DEFAULT_USER_ID && !isConnectionModalOpen) {
+             if (isLoaded && serverStatus === 'connected' && isStrictDefaultUser() && !isConnectionModalOpen) {
+                 hasCheckedAutoRestore.current = true;
                  try {
                      const backups = await fetchServerBackups();
                      if (backups && backups.length > 0) {
@@ -194,7 +204,7 @@ export const useAppController = () => {
         // Debounce slightly to ensure auth state is settled
         const t = setTimeout(checkForBackups, 1000);
         return () => clearTimeout(t);
-    }, [isLoaded, serverStatus, currentUser?.id, isConnectionModalOpen]);
+    }, [isLoaded, serverStatus, isStrictDefaultUser, isConnectionModalOpen]);
 
 
     const { isResetting, resetStep, lastBackupTime, refreshBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, handleLibraryReset, deleteWord, bulkDeleteWords, bulkUpdateWords } = useDataActions({
