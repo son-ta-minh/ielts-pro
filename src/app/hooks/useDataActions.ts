@@ -7,7 +7,7 @@ import * as db from '../db';
 // Import calculateMasteryScore to fix reference error on line 153
 import { calculateMasteryScore } from '../../utils/srs';
 import { restoreFromServer } from '../../services/backupService';
-import { getConfig } from '../../app/settingsManager';
+import { getConfig, saveConfig } from '../../app/settingsManager';
 
 interface UseDataActionsProps {
     currentUser: User | null;
@@ -76,26 +76,30 @@ export const useDataActions = (props: UseDataActionsProps) => {
     
     // --- Direct Restore Actions (UI must confirm first) ---
     
-    const handleRestoreSuccess = async (result: ImportResult, preservedConfigJson: string | null) => {
-        console.log("[RESTORE_DEBUG] handleRestoreSuccess started.");
+    const handleRestoreSuccess = async (result: ImportResult, preservedConfigJson: string | null, serverMtime?: number) => {
+        console.log("[RESTORE_DEBUG] handleRestoreSuccess started. serverMtime:", serverMtime);
         
         // --- FIX LỖI DISCONNECT: Ghi đè lại cấu hình server từ RAM ---
         if (preservedConfigJson) {
-            console.log("[RESTORE_DEBUG] Re-applying captured config from RAM.");
+            console.log("[RESTORE_DEBUG] Re-applying preserved config from RAM.");
             localStorage.setItem('vocab_pro_system_config', preservedConfigJson);
-            // Phát event để controller nhận diện lại server ngay lập tức
+            // Phát event để hệ thống reconnect ngay lập tức
             window.dispatchEvent(new Event('config-updated'));
-        } else {
-            console.warn("[RESTORE_DEBUG] No config to preserve in RAM.");
         }
 
         sessionStorage.setItem('vocab_pro_just_restored', 'true');
         
-        // Cập nhật timestamp để tránh sync prompt hiện lại ngay sau khi reload
-        const backupTime = result.backupTimestamp || Date.now();
-        localStorage.setItem('vocab_pro_last_backup_timestamp', String(backupTime));
-        localStorage.setItem('vocab_pro_local_last_modified', String(backupTime));
+        // --- FIX LỖI SAI TIMESTAMP: Cập nhật local_last_modified khớp với server ---
+        // Nếu có serverMtime (thời gian file trên server), dùng nó. Nếu không dùng thời gian hiện tại.
+        // Không dùng result.backupTimestamp vì đó là thời gian tạo JSON, thường cũ hơn thời gian file trên server.
+        const syncTime = serverMtime || Date.now();
+        localStorage.setItem('vocab_pro_last_backup_timestamp', String(syncTime));
+        localStorage.setItem('vocab_pro_local_last_modified', String(syncTime));
         
+        // Cập nhật config để hệ thống biết vừa sync xong
+        const config = getConfig();
+        saveConfig({ ...config, sync: { ...config.sync, lastSyncTime: syncTime } }, true);
+
         if (result.updatedUser) {
             localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
             localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
@@ -103,21 +107,20 @@ export const useDataActions = (props: UseDataActionsProps) => {
         
         showToast('Restore successful! Reloading...', 'success', 2000);
         
-        // --- FIX LỖI QUAY MÃI: Không gọi forceReload vì nó dễ gây treo IDB sau khi ghi đè dữ liệu lớn ---
-        // Thay vào đó reload trang ngay lập tức để app khởi tạo lại từ đầu với dữ liệu mới
+        // Không gọi forceReload vì ta sẽ reload toàn bộ trang web
         setTimeout(() => {
             console.log("[RESTORE_DEBUG] Executing final page reload.");
             window.location.reload();
         }, 800);
     };
 
-    const restoreFromServerAction = async (forcedIdentifier?: string) => {
-        // 1. Capture config
+    const restoreFromServerAction = async (forcedIdentifier?: string, serverMtime?: number) => {
+        // 1. Capture cấu hình ĐANG HOẠT ĐỘNG vào RAM
         const currentActiveConfig = getConfig();
         const preservedConfigJson = JSON.stringify(currentActiveConfig);
-        console.log("[RESTORE_DEBUG] restoreFromServerAction: Captured active config in RAM.");
+        console.log("[RESTORE_DEBUG] restoreFromServerAction: Captured active config.");
 
-        // Set global flag to suppress "Unsaved Changes"
+        // Chặn hiện thông báo "Unsaved Changes" trong khi đang ghi đè dữ liệu
         (window as any).isRestoring = true;
 
         try {
@@ -127,7 +130,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
             const result = await restoreFromServer(identifier);
             if (result && result.type === 'success') {
                 console.log("[RESTORE_DEBUG] Server restore API success.");
-                await handleRestoreSuccess(result, preservedConfigJson);
+                await handleRestoreSuccess(result, preservedConfigJson, serverMtime);
             } else {
                 showToast("Server restore failed. Falling back to local file...", "error");
                 triggerLocalRestore();

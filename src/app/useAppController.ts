@@ -40,7 +40,7 @@ export const useAppController = () => {
     const scanAbortControllerRef = useRef<AbortController | null>(null);
 
     // Sync Prompt State
-    const [syncPrompt, setSyncPrompt] = useState<{ isOpen: boolean; type: 'push' | 'restore'; localDate: string; serverDate: string; serverId: string } | null>(null);
+    const [syncPrompt, setSyncPrompt] = useState<{ isOpen: boolean; type: 'push' | 'restore'; localDate: string; serverDate: string; serverId: string; serverMtime: number } | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const hasCheckedSyncThisSession = useRef(false);
     
@@ -266,7 +266,8 @@ export const useAppController = () => {
                             type: 'restore',
                             localDate: localTime === 0 ? 'Never' : new Date(localTime).toLocaleString(),
                             serverDate: new Date(serverTime).toLocaleString(),
-                            serverId: userBackup.id
+                            serverId: userBackup.id,
+                            serverMtime: serverTime
                         });
                     } else if (localTime > serverTime + THRESHOLD) {
                         setSyncPrompt({
@@ -274,7 +275,8 @@ export const useAppController = () => {
                             type: 'push',
                             localDate: new Date(localTime).toLocaleString(),
                             serverDate: new Date(serverTime).toLocaleString(),
-                            serverId: userBackup.id
+                            serverId: userBackup.id,
+                            serverMtime: serverTime
                         });
                     }
                 }
@@ -324,7 +326,12 @@ export const useAppController = () => {
         setIsAutoRestoreOpen(false);
         setIsSyncing(true);
         try {
-            await restoreFromServerAction(identifier);
+            // Fetch backups to get mtime for the specific user we are auto-restoring
+            const backups = await fetchServerBackups();
+            const target = backups.find(b => b.id === identifier);
+            const mtime = target ? new Date(target.date).getTime() : undefined;
+
+            await restoreFromServerAction(identifier, mtime);
             // Sau khi IndexDB ghi xong, tắt spinner để người dùng thấy dashboard 
             // trước khi reload page (reload diễn ra trong handleRestoreSuccess sau 800ms)
             setIsSyncing(false);
@@ -408,7 +415,7 @@ export const useAppController = () => {
         if (!syncPrompt) return;
         setIsSyncing(true);
         try {
-            await restoreFromServerAction(syncPrompt.serverId);
+            await restoreFromServerAction(syncPrompt.serverId, syncPrompt.serverMtime);
             // SUCCESS: Tắt toàn bộ overlay/modal ngay sau khi IndexDB được cập nhật
             setSyncPrompt(null);
             setIsSyncing(false);

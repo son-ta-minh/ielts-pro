@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Cloud, X, User, Loader2, Plus, FileJson } from 'lucide-react';
 import { ServerBackupItem } from '../../services/backupService';
@@ -55,7 +54,7 @@ export const ServerRestoreModal: React.FC<RestoreModalProps> = ({
                                     <div className="min-w-0">
                                         <h4 className="font-bold text-sm text-neutral-900 truncate">{backup.name}</h4>
                                         <div className="flex items-center gap-2 text-[10px] text-neutral-500 font-medium">
-                                            <span>{new Date(backup.date).toLocaleDateString()}</span>
+                                            <span className="font-black text-indigo-600">{new Date(backup.date).toLocaleString()}</span>
                                             <span className="w-1 h-1 rounded-full bg-neutral-300"></span>
                                             <span>{formatSize(backup.size)}</span>
                                         </div>
