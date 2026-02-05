@@ -1,10 +1,10 @@
 
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ComparisonGroup, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, CalendarEvent } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
 import { calculateGameEligibility } from '../utils/gameEligibility';
-import { performAutoBackup } from '../services/backupService'; // Import
+import { performAutoBackup } from '../services/backupService';
 import { getConfig } from './settingsManager';
 
 // --- Store State ---
@@ -60,7 +60,6 @@ function _triggerBackup() {
     const delay = (config.sync.autoBackupInterval || 60) * 1000;
     
     // Safety Net: Force backup after 5 minutes OR 3x the interval (whichever is larger)
-    // This prevents continuous typing/updating from blocking backup forever.
     const maxDelay = Math.max(delay * 3, 300000); 
 
     // 1. Handle Debounce (Standard behavior: wait for idle)
@@ -73,7 +72,6 @@ function _triggerBackup() {
     _backupTimeout = window.setTimeout(_executeBackup, delay);
 
     // 2. Handle Max Wait (Safety behavior: ensure execution eventually)
-    // If a max timer is NOT running, start it. We do NOT clear/reset it here.
     if (!_maxWaitTimeout) {
         _maxWaitTimeout = window.setTimeout(() => {
             console.log("[DataStore] Max wait time reached. Forcing backup.");
@@ -89,15 +87,11 @@ function _recalculateStats(userId: string) {
 
     const total = activeWords.length;
     
-    // Due: Matches DB logic (Learned = has history, not failed). Allows reviewing raw words if they were learned before.
     const due = activeWords.filter(w => w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED).length;
     
-    // New: STRICTLY requires VERIFIED quality.
     const newCount = activeWords.filter(w => !w.lastReview && w.quality === WordQuality.VERIFIED).length;
     
     const masteredCount = activeWords.filter(w => w.interval > 21).length;
-    const learningCount = total - newCount - masteredCount; 
-    
     const learningWords = activeWords.filter(w => !!w.lastReview && w.interval <= 21);
     const calculatedLearningCount = learningWords.length;
 
@@ -132,13 +126,10 @@ function _recalculateStats(userId: string) {
     const todayReviewedWords: VocabularyItem[] = [];
 
     activeWords.forEach(w => {
-        // Exclude reviews from boss battles from daily stats to prevent energy farming
         if (w.lastReview && w.lastReview >= todayTimestamp && w.lastReviewSessionType !== 'boss_battle') {
             if (w.lastGrade === ReviewGrade.FORGOT) {
                 todayReviewedWords.push(w);
             }
-            // FIX: Only count as "Learned" if it's the first success (cc=1) AND it wasn't Hard.
-            // If it was Hard, it implies struggle, so we count it as Reviewed.
             else if (w.consecutiveCorrect === 1 && w.lastGrade !== ReviewGrade.HARD) {
                 todayLearnedWords.push(w);
             } 
@@ -175,12 +166,12 @@ const canWrite = (): boolean => {
     return true;
 };
 
-// --- Listen for external triggers (like Settings save) ---
+// --- Listen for external triggers ---
 if (typeof window !== 'undefined') {
     window.addEventListener('vocab-pro-trigger-backup', () => {
         if (_isInitialized) {
-            _notifyChanges(); // Update UI to show 'unsaved' state immediately
-            _triggerBackup(); // Schedule the backup
+            _notifyChanges(); 
+            _triggerBackup();
         }
     });
 }
@@ -190,26 +181,20 @@ if (typeof window !== 'undefined') {
 export async function init(userId: string) {
     if (_isInitialized || _isInitializing) return;
     _isInitializing = true;
-    _currentUserId = userId; // Store ID
+    _currentUserId = userId; 
     console.log("DataStore: Initializing...");
 
     try {
         let words = await db.getAllWordsForExport(userId);
         
-        // --- AUTO-RESTORE CHECK ---
-        // If DB returns 0 words, check Emergency Backup
         if (words.length === 0) {
              const backupJson = localStorage.getItem('vocab_pro_emergency_backup');
              if (backupJson) {
                  try {
-                     console.log("[DataStore] DB empty. Found backup in LocalStorage. Attempting auto-restore...");
                      const backupWords = JSON.parse(backupJson);
                      if (Array.isArray(backupWords) && backupWords.length > 0) {
-                         // Restore to DB
                          await db.bulkSaveWords(backupWords);
-                         // Re-fetch
                          words = await db.getAllWordsForExport(userId);
-                         console.log(`[DataStore] Auto-restored ${words.length} items from backup.`);
                      }
                  } catch (e) {
                      console.error("[DataStore] Failed to restore from emergency backup:", e);
@@ -222,58 +207,37 @@ export async function init(userId: string) {
             db.getWordBooksByUserId(userId)
         ]);
 
-        // --- Build Inverted Index for Composition Usage ---
         _composedWordIds.clear();
         compositions.forEach(comp => {
             (comp.linkedWordIds || []).forEach(wordId => _composedWordIds.add(wordId));
         });
 
-        // --- Build Inverted Index for Word Book Membership ---
         _bookWordIds.clear();
         books.forEach(book => {
             (book.words || []).forEach(item => _bookWordIds.add(item.word.toLowerCase()));
         });
         
         const wordsToMigrate: VocabularyItem[] = [];
-        
         for (const word of words) {
             let changed = false;
-            
-            // Recalculate everything to ensure UI is in sync with latest formulas
             const currentComplexity = calculateComplexity(word);
             const currentMastery = calculateMasteryScore(word);
             const currentGameEligibility = calculateGameEligibility(word);
             
-            if (word.complexity !== currentComplexity) {
-                word.complexity = currentComplexity;
-                changed = true;
-            }
-            if (word.masteryScore !== currentMastery) {
-                word.masteryScore = currentMastery;
-                changed = true;
-            }
-            if (JSON.stringify(word.gameEligibility) !== JSON.stringify(currentGameEligibility)) {
-                word.gameEligibility = currentGameEligibility;
-                changed = true;
-            }
-            if (typeof word.register === 'undefined') {
-                word.register = 'raw';
-                changed = true;
-            }
-
+            if (word.complexity !== currentComplexity) { word.complexity = currentComplexity; changed = true; }
+            if (word.masteryScore !== currentMastery) { word.masteryScore = currentMastery; changed = true; }
+            if (JSON.stringify(word.gameEligibility) !== JSON.stringify(currentGameEligibility)) { word.gameEligibility = currentGameEligibility; changed = true; }
+            if (typeof word.register === 'undefined') { word.register = 'raw'; changed = true; }
             if (changed) wordsToMigrate.push(word);
         }
 
         if (wordsToMigrate.length > 0) {
-            console.log(`DataStore: Repairing Complexity/Mastery data for ${wordsToMigrate.length} words...`);
             await db.bulkSaveWords(wordsToMigrate);
         }
 
         _allWords = new Map(words.map(w => [w.id, w]));
         _recalculateStats(userId);
-        
         _isInitialized = true;
-        console.log(`DataStore: Ready. Loaded ${_allWords.size} items, indexed ${_composedWordIds.size} composed and ${_bookWordIds.size} book words.`);
     } catch (error) {
         console.error("DataStore initialization failed:", error);
         _isInitialized = false; 
@@ -282,12 +246,7 @@ export async function init(userId: string) {
     }
 }
 
-/**
- * Force re-initializes the data store from the database.
- * Call this after bulk import/restore operations to ensure the UI reflects new data.
- */
 export async function forceReload(userId: string) {
-    console.log("DataStore: Forcing reload from DB...");
     _isInitialized = false;
     _isInitializing = false;
     _allWords.clear();
@@ -297,45 +256,23 @@ export async function forceReload(userId: string) {
     _notifyChanges();
 }
 
-/**
- * Destructive wipe of ALL local data. 
- * Clears database and in-memory caches.
- * Preserves ONLY the system config (server connection info).
- */
 export async function wipeAllLocalData() {
-    console.warn("DataStore: Wiping all local data...");
-    
-    // 1. Clear In-Memory Cache
     _allWords.clear();
     _composedWordIds.clear();
     _bookWordIds.clear();
     _isInitialized = false;
     _currentUserId = null;
-    
-    // 2. Clear Database
     await db.clearVocabularyOnly();
-    
-    // 3. Clear relevant LocalStorage keys (Identity, History, Session)
     const preserveKeys = ['vocab_pro_system_config', 'gemini_api_keys'];
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && !preserveKeys.includes(key)) {
-            keysToRemove.push(key);
-        }
+        if (key && !preserveKeys.includes(key)) keysToRemove.push(key);
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
-    
-    // Clear session storage too
     sessionStorage.clear();
-    
-    console.log("DataStore: Wipe complete.");
 }
 
-/**
- * Triggers a rebuild of the composition index. 
- * Should be called whenever a composition is added, updated, or deleted.
- */
 export async function notifyCompositionChange(userId: string) {
     try {
         const compositions = await db.getCompositionsByUserId(userId);
@@ -344,14 +281,9 @@ export async function notifyCompositionChange(userId: string) {
             (comp.linkedWordIds || []).forEach(wordId => _composedWordIds.add(wordId));
         });
         _notifyChanges(); 
-    } catch (e) {
-        console.error("Failed to refresh composition index", e);
-    }
+    } catch (e) { console.error("Failed to refresh composition index", e); }
 }
 
-/**
- * Triggers a rebuild of the Word Book index.
- */
 export async function notifyWordBookChange(userId: string) {
     try {
         const books = await db.getWordBooksByUserId(userId);
@@ -360,45 +292,18 @@ export async function notifyWordBookChange(userId: string) {
             (book.words || []).forEach(item => _bookWordIds.add(item.word.toLowerCase()));
         });
         _notifyChanges();
-    } catch (e) {
-        console.error("Failed to refresh word book index", e);
-    }
+    } catch (e) { console.error("Failed to refresh word book index", e); }
 }
 
-export function isWordComposed(id: string): boolean {
-    return _composedWordIds.has(id);
-}
-
-export function isWordInBook(wordText: string): boolean {
-    return _bookWordIds.has(wordText.toLowerCase());
-}
-
-export function getComposedWordIds(): Set<string> {
-    return _composedWordIds;
-}
-
-export function getBookWordIds(): Set<string> {
-    return _bookWordIds;
-}
-
+export function isWordComposed(id: string): boolean { return _composedWordIds.has(id); }
+export function isWordInBook(wordText: string): boolean { return _bookWordIds.has(wordText.toLowerCase()); }
+export function getComposedWordIds(): Set<string> { return _composedWordIds; }
+export function getBookWordIds(): Set<string> { return _bookWordIds; }
 export function getStats() { return _statsCache; }
 export function getAllWords(): VocabularyItem[] { return Array.from(_allWords.values()); }
 export function getWordById(id: string): VocabularyItem | undefined { return _allWords.get(id); }
 
-export function getWordsPaged(
-    userId: string, 
-    page: number, 
-    pageSize: number, 
-    query = '', 
-    filterTypes = ['all'], 
-    refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', 
-    statusFilter = 'all', 
-    registerFilter = 'all', 
-    sourceFilter = 'all', 
-    groupFilter: string | null = null, 
-    compositionFilter: 'all' | 'composed' | 'not_composed' = 'all',
-    bookFilter: 'all' | 'in_book' | 'not_in_book' = 'all'
-): { words: VocabularyItem[], totalCount: number } {
+export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', sourceFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' = 'all'): { words: VocabularyItem[], totalCount: number } {
     const allItems = Array.from(_allWords.values()).filter(w => w.userId === userId);
     let baseItems = allItems;
     if (filterTypes.includes('duplicate')) {
@@ -409,27 +314,15 @@ export function getWordsPaged(
         baseItems = baseItems.filter(item => duplicateWords.has(item.word.toLowerCase().trim()));
     }
     const otherFilterTypes = filterTypes.filter(t => t !== 'duplicate');
-    
-    const filtered = baseItems.filter(item => filterItem(
-        item, 
-        query, 
-        otherFilterTypes, 
-        refinedFilter, 
-        statusFilter, 
-        registerFilter, 
-        sourceFilter, 
-        groupFilter, 
-        compositionFilter, 
-        _composedWordIds,
-        bookFilter,
-        _bookWordIds
-    ));
-    
+    const filtered = baseItems.filter(item => filterItem(item, query, otherFilterTypes, refinedFilter, statusFilter, registerFilter, sourceFilter, groupFilter, compositionFilter, _composedWordIds, bookFilter, _bookWordIds));
     if (filterTypes.includes('duplicate')) filtered.sort((a, b) => a.word.localeCompare(b.word) || a.createdAt - b.createdAt);
-    else filtered.sort((a, b) => b.createdAt - a.createdAt); // Default sort
-    
+    else filtered.sort((a, b) => b.createdAt - a.createdAt);
     const start = page * pageSize;
     return { words: filtered.slice(start, start + pageSize), totalCount: filtered.length };
+}
+
+export async function findWordByText(userId: string, word: string) {
+    return db.findWordByText(userId, word);
 }
 
 export async function saveWordAndUser(word: VocabularyItem, user: User) {
@@ -441,7 +334,7 @@ export async function saveWordAndUser(word: VocabularyItem, user: User) {
     await db.saveWordAndUser(word, user);
     _allWords.set(word.id, word);
     _recalculateStats(word.userId);
-    _triggerBackup(); // Trigger backup
+    _triggerBackup();
     _notifyChanges();
 }
 
@@ -454,10 +347,8 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
         word.gameEligibility = calculateGameEligibility(word);
     }
     await db.saveWordAndUnit(word, unit);
-    if (word) {
-        _allWords.set(word.id, word);
-        _triggerBackup(); // Trigger backup
-    }
+    if (word) _allWords.set(word.id, word);
+    _triggerBackup();
     _recalculateStats(unit.userId);
     _notifyChanges();
 }
@@ -471,7 +362,7 @@ export async function saveWord(item: VocabularyItem) {
     await db.saveWord(item);
     _allWords.set(item.id, item);
     _recalculateStats(item.userId);
-    _triggerBackup(); // Trigger backup
+    _triggerBackup();
     _notifyChanges();
 }
 
@@ -486,7 +377,7 @@ export async function bulkSaveWords(items: VocabularyItem[]) {
     await db.bulkSaveWords(items);
     items.forEach(item => _allWords.set(item.id, item));
     if (items[0]) _recalculateStats(items[0].userId);
-    _triggerBackup(); // Trigger backup
+    _triggerBackup();
     _notifyChanges();
 }
 
@@ -497,7 +388,7 @@ export async function deleteWord(id: string) {
     await db.deleteWordFromDB(id);
     _allWords.delete(id);
     _recalculateStats(item.userId);
-    _triggerBackup(); // Trigger backup
+    _triggerBackup();
     _notifyChanges();
 }
 
@@ -509,7 +400,7 @@ export async function bulkDeleteWords(ids: string[]) {
     await db.bulkDeleteWords(ids);
     ids.forEach(id => _allWords.delete(id));
     _recalculateStats(item.userId);
-    _triggerBackup(); // Trigger backup
+    _triggerBackup();
     _notifyChanges();
 }
 
@@ -520,6 +411,7 @@ export async function saveUser(user: User): Promise<void> {
          _triggerBackup();
     }
 }
+
 export async function saveUnit(unit: Unit): Promise<void> { if (canWrite()) { _updateLocalLastModified(); await db.saveUnit(unit); _triggerBackup(); _notifyChanges(); } }
 
 export async function saveComposition(comp: Composition): Promise<void> {
@@ -563,6 +455,236 @@ export async function deleteWordBook(id: string, userId: string): Promise<void> 
     _triggerBackup();
 }
 
+// --- Scoped Entity Wrappers ---
+
+export async function saveLesson(lesson: Lesson) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveLesson(lesson);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteLesson(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteLesson(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveComparisonGroup(group: ComparisonGroup) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveComparisonGroup(group);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteComparisonGroup(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteComparisonGroup(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveListeningItem(item: ListeningItem) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveListeningItem(item);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteListeningItem(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteListeningItem(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveSpeakingTopic(topic: SpeakingTopic) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveSpeakingTopic(topic);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteSpeakingTopic(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteSpeakingTopic(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveWritingTopic(topic: WritingTopic) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveWritingTopic(topic);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteWritingTopic(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteWritingTopic(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+// --- Book Wrappers ---
+
+export async function saveReadingBook(book: ReadingBook) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveReadingBook(book);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteReadingBook(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteReadingBook(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveLessonBook(book: LessonBook) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveLessonBook(book);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteLessonBook(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteLessonBook(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveListeningBook(book: ListeningBook) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveListeningBook(book);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteListeningBook(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteListeningBook(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveWritingBook(book: WritingBook) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveWritingBook(book);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteWritingBook(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteWritingBook(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveCalendarEvent(event: CalendarEvent) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveCalendarEvent(event);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteCalendarEvent(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteCalendarEvent(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+// --- Speaking Feature Wrappers ---
+
+export async function saveNativeSpeakItem(item: NativeSpeakItem) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveNativeSpeakItem(item);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteNativeSpeakItem(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteNativeSpeakItem(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function bulkSaveNativeSpeakItems(items: NativeSpeakItem[]) {
+    if (items.length === 0 || !canWrite()) return;
+    _updateLocalLastModified();
+    await db.bulkSaveNativeSpeakItems(items);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function bulkDeleteNativeSpeakItems(ids: string[]) {
+    if (ids.length === 0 || !canWrite()) return;
+    _updateLocalLastModified();
+    await db.bulkDeleteNativeSpeakItems(ids);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveConversationItem(item: ConversationItem) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveConversationItem(item);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteConversationItem(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteConversationItem(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveSpeakingBook(book: SpeakingBook) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveSpeakingBook(book);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteSpeakingBook(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteSpeakingBook(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
 // --- Planning Feature Wrapper ---
 export async function savePlanningGoal(goal: PlanningGoal): Promise<void> {
     if (canWrite()) {
@@ -582,4 +704,4 @@ export async function deletePlanningGoal(id: string): Promise<void> {
     }
 }
 
-export const { getAllUsers, deleteUnit, getUnitsByUserId, getUnitsContainingWord, bulkSaveUnits, saveParaphraseLog, getParaphraseLogs, bulkSaveParaphraseLogs, seedDatabaseIfEmpty, clearVocabularyOnly, findWordByText, getRandomMeanings, getCompositionsByUserId, getPlanningGoalsByUserId, bulkSavePlanningGoals } = db;
+export const { getAllUsers, deleteUnit, getUnitsByUserId, getUnitsContainingWord, bulkSaveUnits, saveParaphraseLog, getParaphraseLogs, bulkSaveParaphraseLogs, seedDatabaseIfEmpty, clearVocabularyOnly, getRandomMeanings, getCompositionsByUserId, getPlanningGoalsByUserId, bulkSavePlanningGoals } = db;

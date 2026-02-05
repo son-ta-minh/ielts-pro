@@ -1,6 +1,6 @@
 
-import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, CalendarEvent, PlanningGoal } from '../app/types';
-import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getComparisonGroupsByUserId, bulkSaveComparisonGroups, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getCalendarEventsByUserId, bulkSaveCalendarEvents, getPlanningGoalsByUserId, bulkSavePlanningGoals } from '../app/db';
+import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, CalendarEvent, PlanningGoal, ConversationItem } from '../app/types';
+import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getComparisonGroupsByUserId, bulkSaveComparisonGroups, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getCalendarEventsByUserId, bulkSaveCalendarEvents, getPlanningGoalsByUserId, bulkSavePlanningGoals, getConversationItemsByUserId, bulkSaveConversationItems } from '../app/db';
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
@@ -34,9 +34,15 @@ const keyMap: { [key: string]: string } = {
     adjs: 'j',        // in WordFamily
     advs: 'd',        // in WordFamily
     
-    // Native Speak
+    // Native Speak & Conversation
     type: 'ty',       // in NativeSpeakItem
     alternatives: 'alt', // in NativeSpeakItem
+    speakers: 'spks',
+    sentences: 'snts',
+    speakerName: 'sn',
+    voiceName: 'vn',
+    accentCode: 'ac',
+    sex: 'sx'
 };
 const reverseKeyMap = Object.fromEntries(Object.entries(keyMap).map(([k, v]) => [v, k]));
 
@@ -118,7 +124,7 @@ function _mapNestedArrayToShort(arr: any[] | undefined, outerKey: string): any[]
         });
     }
 
-    // Generic handling for other types (e.g., collocations, family members)
+    // Generic handling for other types (e.g., collocations, family members, speakers, sentences)
     return arr.map(obj => {
         if (typeof obj !== 'object' || obj === null) return obj;
         const mapped: any = {};
@@ -152,7 +158,7 @@ export function _mapToShortKeys(item: any): any {
         const value = (item as any)[key];
         const shortKey = keyMap[key] || key;
 
-        if (['collocationsArray', 'idiomsList', 'prepositions', 'paraphrases', 'words'].includes(key)) {
+        if (['collocationsArray', 'idiomsList', 'prepositions', 'paraphrases', 'words', 'speakers', 'sentences'].includes(key)) {
             shortItem[shortKey] = _mapNestedArrayToShort(value, key);
         } else if (key === 'wordFamily') {
             shortItem[shortKey] = _mapWordFamilyToShort(value);
@@ -290,7 +296,7 @@ function _mapToLongKeys(item: any): any {
         const value = item[shortKey];
         const longKey = reverseKeyMap[shortKey] || shortKey;
 
-        if (['collocationsArray', 'idiomsList', 'prepositions', 'paraphrases', 'words'].includes(longKey)) {
+        if (['collocationsArray', 'idiomsList', 'prepositions', 'paraphrases', 'words', 'speakers', 'sentences'].includes(longKey)) {
             longItem[longKey] = _mapNestedArrayToLong(value, longKey);
         } else if (longKey === 'wordFamily' && value) {
             longItem[longKey] = _mapFamilyToLong(value);
@@ -366,8 +372,11 @@ export const processJsonImport = async (
                 const incomingListeningItems: ListeningItem[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.listeningItems;
                 const incomingNativeSpeakItemsRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.nativeSpeakItems;
                 const incomingNativeSpeakItems = incomingNativeSpeakItemsRaw ? incomingNativeSpeakItemsRaw.map(_mapToLongKeys) : undefined;
-                const incomingNativeSpeakItemsShort = incomingNativeSpeakItemsRaw ? incomingNativeSpeakItemsRaw.map(_mapToLongKeys) : undefined;
-                const incomingNativeSpeakItemsShort2 = incomingNativeSpeakItemsRaw ? incomingNativeSpeakItemsRaw.map(_mapToLongKeys) : undefined;
+                
+                // --- FIX: Restoring Conversations ---
+                const incomingConversationItemsRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.conversationItems;
+                const incomingConversationItems = incomingConversationItemsRaw ? incomingConversationItemsRaw.map(_mapToLongKeys) : undefined;
+
                 const incomingCompositions: Composition[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.compositions;
                 const incomingMimicQueue: any[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.mimicQueue;
                 const incomingWordBooksRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.wordBooks || rawJson.wb);
@@ -386,9 +395,7 @@ export const processJsonImport = async (
                 const incomingAdventure: any | undefined = Array.isArray(rawJson) ? undefined : (rawJson.customAdventure || rawJson.adv);
                 const incomingSettings: any | undefined = Array.isArray(rawJson) ? undefined : (rawJson.settings || rawJson.sys);
                 
-                // New: Reading Shelves
                 const incomingReadingShelves = Array.isArray(rawJson) ? undefined : (rawJson.readingShelves || rawJson.rs);
-                // New: Reading Books
                 const incomingReadingBooks: ReadingBook[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.readingBooks || rawJson.rb);
 
                 if (!Array.isArray(incomingItems)) {
@@ -488,9 +495,6 @@ export const processJsonImport = async (
                                 newItem.lastTestResults = sanitizedResults;
                             }
 
-                            // Keep progress if it exists in the incoming data (assuming user wants to restore backup state)
-                            // If user explicitly excluded user/progress scope, we could reset.
-                            // But here 'vocabulary' scope implies the word data.
                             if (newItem.lastReview && typeof newItem.interval !== 'undefined') {
                                 const ONE_DAY = 24 * 60 * 60 * 1000;
                                 newItem.nextReview = newItem.lastReview + (newItem.interval * ONE_DAY);
@@ -512,12 +516,10 @@ export const processJsonImport = async (
                         const unitsWithUser = incomingUnits.map(u => ({...u, userId: importedUserId})); 
                         await bulkSaveUnits(unitsWithUser); 
                     }
-                    // Restore Reading Books
                     if (incomingReadingBooks && Array.isArray(incomingReadingBooks)) {
                         const booksWithUser = incomingReadingBooks.map(b => ({ ...b, userId: importedUserId }));
                         await bulkSaveReadingBooks(booksWithUser);
                     }
-                    // Restore Reading Shelves (Using correct key 'reading_books_shelves')
                     if (incomingReadingShelves) {
                         localStorage.setItem('reading_books_shelves', JSON.stringify(incomingReadingShelves));
                     }
@@ -550,6 +552,11 @@ export const processJsonImport = async (
                             note: item.note || item.n 
                         }));
                         await bulkSaveNativeSpeakItems(itemsWithUser);
+                    }
+                    // Restoring Conversations
+                    if (incomingConversationItems && Array.isArray(incomingConversationItems)) {
+                        const itemsWithUser = incomingConversationItems.map(c => ({ ...c, userId: importedUserId }));
+                        await bulkSaveConversationItems(itemsWithUser);
                     }
                 }
 
@@ -649,7 +656,6 @@ export const processJsonImport = async (
                 
                 // --- SCOPED IMPORT: USER ---
                 if (scope.user && incomingUser) {
-                    // --- REPAIR / SANITIZE USER DATA ---
                     const sanitizedUser = { ...incomingUser };
                     
                     let safeLevel = parseInt(String(sanitizedUser.level), 10);
@@ -669,7 +675,6 @@ export const processJsonImport = async (
                     const adv = sanitizedUser.adventure;
                     adv.currentNodeIndex = typeof adv.currentNodeIndex === 'number' && !isNaN(adv.currentNodeIndex) ? adv.currentNodeIndex : 0;
                     
-                    // Auto-repair Energy: If invalid or missing, reset to 5. Allows 0.
                     if (typeof adv.energy !== 'number' || isNaN(adv.energy)) {
                         adv.energy = 5;
                     }
@@ -683,11 +688,9 @@ export const processJsonImport = async (
                     adv.completedSegmentIds = Array.isArray(adv.completedSegmentIds) ? adv.completedSegmentIds : [];
                     adv.segmentStars = adv.segmentStars || {};
 
-                    // Regenerate Map if missing or invalid
                     if (!adv.map || !Array.isArray(adv.map) || adv.map.length === 0) {
                         adv.map = generateMap(100);
                     } else {
-                        // Refresh Bosses: If using old map data, ensure boss details are current
                         let bossCounter = 0;
                         adv.map = adv.map.map((node: any, index: number) => {
                             if ((index + 1) % 10 === 0) {
@@ -721,9 +724,7 @@ export const processJsonImport = async (
                     }
                 }
                 
-                // --- SCOPED IMPORT: SETTINGS (Attached to User Scope) ---
                 if (scope.user && incomingSettings) {
-                    // Logic ghi đè đơn giản (như ban đầu của bạn)
                     localStorage.setItem('vocab_pro_system_config', JSON.stringify(incomingSettings));
                     window.dispatchEvent(new Event('config-updated'));
                 }
@@ -740,7 +741,7 @@ export const processJsonImport = async (
                     detail: `Words: ${newCount} new, ${mergedCount} updated, ${skippedCount} skipped.`,
                     updatedUser,
                     customAdventureRestored,
-                    backupTimestamp // Pass the timestamp to the result
+                    backupTimestamp 
                 });
             } catch(err: any) { 
                 resolve({ type: 'error', message: "JSON Import Error", detail: err.message }); 
@@ -754,10 +755,8 @@ export const processJsonImport = async (
 };
 
 export const generateJsonExport = async (userId: string, currentUser: User, scopeInput: any = FULL_SCOPE) => {
-    // Guard: If scopeInput is not a valid DataScope (e.g. it's a DOM Event from an onClick handler), fallback to FULL_SCOPE
     const scope = (scopeInput && typeof scopeInput === 'object' && typeof scopeInput.vocabulary === 'boolean') ? scopeInput : FULL_SCOPE;
 
-    // 1. Determine what data to fetch based on scope
     const wordsData = scope.vocabulary ? await getAllWordsForExport(userId) : [];
     const unitsData = scope.reading ? await getUnitsByUserId(userId) : [];
     const readingBooksData = scope.reading ? await getReadingBooksByUserId(userId) : [];
@@ -767,6 +766,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
     const speakingTopicsData = scope.speaking ? await getAllSpeakingTopicsForExport(userId) : [];
     const speakingLogsData = scope.speaking ? await getAllSpeakingLogsForExport(userId) : [];
     const nativeSpeakItemsDataRaw = scope.speaking ? await getNativeSpeakItemsByUserId(userId) : [];
+    const conversationItemsDataRaw = scope.speaking ? await getConversationItemsByUserId(userId) : [];
 
     const writingTopicsData = scope.writing ? await getAllWritingTopicsForExport(userId) : [];
     const writingLogsData = scope.writing ? await getAllWritingLogsForExport(userId) : [];
@@ -783,34 +783,21 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
     const wordBooksData = wordBooksDataRaw.map(_mapToShortKeys);
     
     const calendarEventsData = scope.calendar ? await getCalendarEventsByUserId(userId) : [];
-    
     const planningGoalsData = scope.planning ? await getPlanningGoalsByUserId(userId) : [];
 
-    // 2. Process Data
-    const processedWords = wordsData; // No need to reset progress on export anymore, that logic was old
-    const finalWordsData = processedWords.map(({ collocations, idioms, ...rest }) => rest);
+    // Short-key mappings
+    const finalWordsData = wordsData.map(({ collocations, idioms, ...rest }) => rest);
     const shortWordsData = finalWordsData.map(w => _mapToShortKeys(w as VocabularyItem));
     const shortNativeSpeakItems = nativeSpeakItemsDataRaw.map(item => _mapToShortKeys(item as NativeSpeakItem));
+    const shortConversationItems = conversationItemsDataRaw.map(item => _mapToShortKeys(item as ConversationItem));
 
-    const finalUnitsData = unitsData; // includeEssays assumed true for full export
-    
-    // Map comparisons to lessons and combine for backup structure if Lesson scope is active
     let allLessons = lessonsData;
     if (scope.lesson) {
         const comparisonLessons: Lesson[] = comparisonGroupsData.map(cg => ({
-            id: cg.id,
-            userId: cg.userId,
-            type: 'comparison',
-            title: cg.name,
-            description: `Comparison group: ${cg.words.join(', ')}`,
-            content: '',
-            comparisonData: cg.comparisonData,
-            words: cg.words,
-            tags: cg.tags,
-            createdAt: cg.createdAt,
-            updatedAt: cg.updatedAt,
-            topic1: '',
-            topic2: ''
+            id: cg.id, userId: cg.userId, type: 'comparison', title: cg.name,
+            description: `Comparison: ${cg.words.join(', ')}`, content: '',
+            comparisonData: cg.comparisonData, words: cg.words, tags: cg.tags,
+            createdAt: cg.createdAt, updatedAt: cg.updatedAt, topic1: '', topic2: ''
         }));
         allLessons = [...lessonsData, ...comparisonLessons];
     }
@@ -818,7 +805,6 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
     const customChapters = localStorage.getItem('vocab_pro_adventure_chapters');
     const customBadges = localStorage.getItem('vocab_pro_custom_badges');
     const systemConfig = localStorage.getItem('vocab_pro_system_config');
-    // FIX: Using correct key for reading shelves to match ReadingUnitPage.tsx
     const readingShelves = localStorage.getItem('reading_books_shelves');
 
     const exportObject: Record<string, any> = { 
@@ -826,32 +812,29 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         ca: new Date().toISOString(), 
         user: scope.user ? _mapUserToShortKeys(currentUser) : null,
         vocab: shortWordsData, 
-        u: finalUnitsData,
+        u: unitsData,
         pl: logsData,
         st: speakingTopicsData,
         sl: speakingLogsData,
         wt: writingTopicsData,
         wl: writingLogsData,
-        cg: [], // Legacy compat
+        cg: [], 
         iv: irregularVerbsData,
         lessons: allLessons,
         listeningItems: listeningItemsData,
         nativeSpeakItems: shortNativeSpeakItems,
+        conversationItems: shortConversationItems,
         compositions: compositionsData,
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
         wordBooks: wordBooksData,
         ce: calendarEventsData,
-        // Added Reading Books export
         readingBooks: readingBooksData,
-        // Added Planning export
         pg: planningGoalsData,
         adv: scope.user ? {
             ch: customChapters ? JSON.parse(customChapters) : null,
             b: customBadges ? JSON.parse(customBadges) : null
         } : null,
-        // Include settings if user scope is active (Full Backup implies User data)
         settings: (scope.user && systemConfig) ? JSON.parse(systemConfig) : null,
-        // New: Reading Shelves included if reading scope active
         readingShelves: (scope.reading && readingShelves) ? JSON.parse(readingShelves) : null
     };
     

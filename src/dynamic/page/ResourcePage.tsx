@@ -12,6 +12,7 @@ interface ResourcePageProps {
   subtitle?: string;
   icon?: ReactNode;
   minorSkills?: ReactNode;
+  centerContent?: ReactNode;
   actions?: ReactNode;
 
   // Logic
@@ -47,7 +48,7 @@ interface ResourcePageProps {
 
 export const ResourcePage: React.FC<ResourcePageProps> = (props) => {
   const { 
-    title, subtitle, icon, minorSkills, actions,
+    title, subtitle, icon, minorSkills, centerContent, actions,
     config,
     query, onQueryChange, activeFilters, onFilterChange,
     isLoading, isEmpty, emptyMessage,
@@ -75,6 +76,7 @@ export const ResourcePage: React.FC<ResourcePageProps> = (props) => {
         subtitle={subtitle} 
         icon={icon} 
         minorSkills={minorSkills} 
+        centerContent={centerContent}
         actions={actions} 
       />
 

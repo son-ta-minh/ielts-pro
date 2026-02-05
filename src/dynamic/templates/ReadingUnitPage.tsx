@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Unit, VocabularyItem, ReadingBook, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
@@ -20,6 +19,7 @@ import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components/wordbook/ShelfModals';
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
 import { useShelfLogic } from '../../app/hooks/useShelfLogic';
+import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
 
 interface Props {
   user: User;
@@ -122,7 +122,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   }, [filteredUnits, page, pageSize]);
 
   // --- Handlers for Shelf Management ---
-  const handleRenameShelf = (newName: string) => {
+  const handleRenameShelfAction = (newName: string) => {
       const success = renameShelf(newName, async (oldS, newS) => {
           setLoading(true);
           const booksToUpdate = readingBooks.filter(b => {
@@ -280,6 +280,16 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       handleUpdateBook({ unitIds: newIds });
   };
 
+  const handleNavigateShelf = (name: string) => {
+      selectShelf(name);
+      setViewMode('SHELF');
+  };
+
+  const handleNavigateBook = (book: ReadingBook) => {
+      setActiveBook(book);
+      setViewMode('BOOK_DETAIL');
+  };
+
   // --- Render Views ---
 
   if (viewMode === 'READ' && activeUnit) {
@@ -329,10 +339,18 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                </button>
                
                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                   <div>
+                   <div className="shrink-0">
                         <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Reading Shelf</h2>
                         <p className="text-neutral-500 mt-1 font-medium">Browse your books.</p>
                    </div>
+                   
+                   <ShelfSearchBar 
+                        shelves={allShelves} 
+                        books={readingBooks} 
+                        onNavigateShelf={handleNavigateShelf} 
+                        onNavigateBook={handleNavigateBook} 
+                    />
+
                    <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
                        <FolderPlus size={14}/> Add Shelf
                    </button>
@@ -420,7 +438,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
             bookTitle={bookToMove?.title || ''} 
           />
           <AddShelfModal isOpen={isAddShelfModalOpen} onClose={() => setIsAddShelfModalOpen(false)} onSave={(name) => { if(addShelf(name)) setIsAddShelfModalOpen(false); }} />
-          <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelf} initialName={currentShelfName} />
+          <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelfAction} initialName={currentShelfName} />
         </div>
       );
   }
@@ -432,6 +450,14 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
         title="Reading Library"
         subtitle="Curated collections for intensive reading & vocab."
         icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png" className="w-8 h-8 object-contain" alt="Reading" />}
+        centerContent={
+            <ShelfSearchBar 
+                shelves={allShelves} 
+                books={readingBooks} 
+                onNavigateShelf={handleNavigateShelf} 
+                onNavigateBook={handleNavigateBook} 
+            />
+        }
         config={{}}
         isLoading={loading}
         isEmpty={filteredUnits.length === 0}
@@ -564,3 +590,5 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
     </>
   );
 };
+
+export default ReadingUnitPage;

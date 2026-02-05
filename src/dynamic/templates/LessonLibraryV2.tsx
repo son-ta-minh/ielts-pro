@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Lesson, VocabularyItem, SessionType, ComparisonGroup, AppView, FocusColor, LessonBook } from '../../app/types';
 import * as db from '../../app/db';
+import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
 import { Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, FileClock, Target, Library, FolderPlus, Pen, Move, Book, Sparkles, FolderTree, ArrowLeft, LayoutGrid } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
@@ -24,6 +25,7 @@ import { UniversalBook } from '../../components/common/UniversalBook';
 import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components/wordbook/ShelfModals';
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
 import { useShelfLogic } from '../../app/hooks/useShelfLogic';
+import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
 
 interface Props {
   user: User;
@@ -47,7 +49,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   
   // Filter & View
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  // isGroupBrowserOpen state removed/unused for Browse Groups button
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   
@@ -139,7 +140,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   }, [filteredResources, page, pageSize]);
 
   // --- Handlers for Shelf Management ---
-  const handleRenameShelf = (newName: string) => {
+  const handleRenameShelfAction = (newName: string) => {
       const success = renameShelf(newName, async (oldS, newS) => {
           setLoading(true);
           const booksToUpdate = lessonBooks.filter(b => {
@@ -152,7 +153,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                const parts = b.title.split(':');
                const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
                const newFullTitle = `${newS}: ${bookTitle}`;
-               return db.saveLessonBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
+               return dataStore.saveLessonBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
           }));
           await loadData();
       });
@@ -171,24 +172,24 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         color: '#1a237e',
         icon: '📘'
     };
-    await db.saveLessonBook(newBook);
+    await dataStore.saveLessonBook(newBook);
     await loadData();
     setActiveBook(newBook);
     setViewMode('book_detail');
     showToast("New book created.", "success");
   };
 
-  const handleUpdateBook = (updated: Partial<LessonBook>) => {
+  const handleUpdateBook = async (updated: Partial<LessonBook>) => {
       if (!activeBook) return;
       const newBook = { ...activeBook, ...updated, updatedAt: Date.now() };
       setLessonBooks(prev => prev.map(b => b.id === newBook.id ? newBook : b));
       setActiveBook(newBook);
-      db.saveLessonBook(newBook);
+      await dataStore.saveLessonBook(newBook);
   };
 
   const handleDeleteBook = async () => {
       if (!bookToDelete) return;
-      await db.deleteLessonBook(bookToDelete.id);
+      await dataStore.deleteLessonBook(bookToDelete.id);
       showToast('Book deleted.', 'success');
       setBookToDelete(null);
       await loadData();
@@ -201,18 +202,18 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       const newTitle = `${targetShelf}: ${bookTitle}`;
       
       const updatedBook = { ...bookToMove, title: newTitle, updatedAt: Date.now() };
-      await db.saveLessonBook(updatedBook);
+      await dataStore.saveLessonBook(updatedBook);
       setBookToMove(null);
       await loadData();
       showToast(`Moved to "${targetShelf}".`, 'success');
   };
 
   // --- Handlers for Item Management ---
-  const handleDeleteLesson = async () => { if (!lessonToDelete) return; await db.deleteLesson(lessonToDelete.id); showToast('Lesson deleted.', 'success'); setLessonToDelete(null); loadData(); };
-  const handleDeleteComparison = async () => { if (!comparisonToDelete) return; await db.deleteComparisonGroup(comparisonToDelete.id); showToast('Comparison deleted.', 'success'); setComparisonToDelete(null); loadData(); };
+  const handleDeleteLesson = async () => { if (!lessonToDelete) return; await dataStore.deleteLesson(lessonToDelete.id); showToast('Lesson deleted.', 'success'); setLessonToDelete(null); loadData(); };
+  const handleDeleteComparison = async () => { if (!comparisonToDelete) return; await dataStore.deleteComparisonGroup(comparisonToDelete.id); showToast('Comparison deleted.', 'success'); setComparisonToDelete(null); loadData(); };
   
   const handleSaveLesson = async (lesson: Lesson) => { 
-      await db.saveLesson(lesson); 
+      await dataStore.saveLesson(lesson); 
       showToast('Lesson saved!', 'success'); 
       setViewMode(activeBook ? 'book_detail' : 'list'); 
       setActiveLesson(null); 
@@ -220,7 +221,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   };
   
   const handleSaveComparison = async (group: ComparisonGroup) => { 
-      await db.saveComparisonGroup(group); 
+      await dataStore.saveComparisonGroup(group); 
       showToast('Comparison saved!', 'success'); 
       setViewMode('read_comparison'); 
       setActiveComparison(group); 
@@ -248,7 +249,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         tags: result.tags || [],
         createdAt: Date.now(), updatedAt: Date.now(), topic1: '', topic2: ''
     };
-    await db.saveLesson(newLesson);
+    await dataStore.saveLesson(newLesson);
     showToast("Lesson created with AI!", "success");
     setIsAiModalOpen(false);
     setActiveLesson(newLesson);
@@ -261,9 +262,9 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       if (!color) delete newDataBase.focusColor;
       
       if (item.type === 'ESSAY') {
-        await db.saveLesson(newDataBase as Lesson);
+        await dataStore.saveLesson(newDataBase as Lesson);
       } else { 
-        await db.saveComparisonGroup(newDataBase as ComparisonGroup);
+        await dataStore.saveComparisonGroup(newDataBase as ComparisonGroup);
       }
       
       setResources(prev => prev.map(r => {
@@ -282,9 +283,9 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       const newDataBase = { ...item.data, isFocused: !item.data.isFocused, updatedAt: Date.now() };
       
       if (item.type === 'ESSAY') {
-          await db.saveLesson(newDataBase as Lesson);
+          await dataStore.saveLesson(newDataBase as Lesson);
       } else {
-          await db.saveComparisonGroup(newDataBase as ComparisonGroup);
+          await dataStore.saveComparisonGroup(newDataBase as ComparisonGroup);
       }
       
       setResources(prev => prev.map(r => {
@@ -386,6 +387,16 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
        handleToggleFocus(res);
   };
 
+  const handleNavigateShelf = (name: string) => {
+      selectShelf(name);
+      setViewMode('shelf');
+  };
+
+  const handleNavigateBook = (book: LessonBook) => {
+      setActiveBook(book);
+      setViewMode('book_detail');
+  };
+
   // --- Views ---
 
   if (viewMode === 'read_lesson' && activeLesson) {
@@ -439,10 +450,18 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                </button>
                
                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                   <div>
+                   <div className="flex-shrink-0">
                         <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Lesson Shelf</h2>
                         <p className="text-neutral-500 mt-1 font-medium">Organize your knowledge.</p>
                    </div>
+                   
+                   <ShelfSearchBar 
+                        shelves={allShelves} 
+                        books={lessonBooks} 
+                        onNavigateShelf={handleNavigateShelf} 
+                        onNavigateBook={handleNavigateBook} 
+                    />
+
                    <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
                        <FolderPlus size={14}/> Add Shelf
                    </button>
@@ -532,7 +551,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
             bookTitle={bookToMove?.title || ''} 
           />
           <AddShelfModal isOpen={isAddShelfModalOpen} onClose={() => setIsAddShelfModalOpen(false)} onSave={(name) => { if(addShelf(name)) setIsAddShelfModalOpen(false); }} />
-          <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelf} initialName={currentShelfName} />
+          <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelfAction} initialName={currentShelfName} />
         </div>
       );
   }
@@ -544,6 +563,14 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       title="Knowledge Library"
       subtitle="Your collection of lessons and comparisons."
       icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png" className="w-8 h-8 object-contain" alt="Lessons" />}
+      centerContent={
+        <ShelfSearchBar 
+            shelves={allShelves} 
+            books={lessonBooks} 
+            onNavigateShelf={handleNavigateShelf} 
+            onNavigateBook={handleNavigateBook} 
+        />
+      }
       minorSkills={ <button onClick={() => onNavigate('IRREGULAR_VERBS')} className="flex items-center gap-2 px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors"><FileClock size={16} /><span className="hidden sm:inline">Irregular Verbs</span></button> }
       pagination={{ page, totalPages: Math.ceil(filteredResources.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredResources.length }}
       actions={
@@ -569,7 +596,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                                 <div className="flex gap-1">
                                     <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
                                     <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
-                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-50 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
                                 </div>
                             </div>
                         </>

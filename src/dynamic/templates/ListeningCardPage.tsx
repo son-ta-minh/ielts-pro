@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, ListeningItem, FocusColor, ListeningBook } from '../../app/types';
 import * as db from '../../app/db';
+import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
 import { Ear, Plus, Edit3, Trash2, Volume2, Save, X, Info, Tag, Shuffle, FolderTree, Target, LayoutList, FolderPlus, Book, Move, Pen, Library, ArrowLeft } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
@@ -17,6 +18,7 @@ import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components
 import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { UniversalBook } from '../../components/common/UniversalBook';
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
+import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
 
 interface Props {
   user: User;
@@ -234,7 +236,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
         if (selectedTag === 'Uncategorized') {
             result = result.filter(item => {
                 const path = item.path ?? (item.tags || []).find(t => t.startsWith('/'));
-                const hasPath = path && path !== '/';
+                const hasPath = path && path !== '/' && path !== '';
                 return !hasPath;
             });
         } else {
@@ -262,7 +264,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
 
   const handleDelete = async () => {
     if (!itemToDelete) return;
-    await db.deleteListeningItem(itemToDelete.id);
+    await dataStore.deleteListeningItem(itemToDelete.id);
     setItemToDelete(null);
     showToast("Deleted item.", "success");
     loadData();
@@ -273,7 +275,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       const now = Date.now();
       if (editingItem) {
         const updated = { ...editingItem, text, note, path, tags, updatedAt: now };
-        await db.saveListeningItem(updated);
+        await dataStore.saveListeningItem(updated);
         showToast("Item updated!", "success");
       } else {
         const newItem: ListeningItem = {
@@ -286,7 +288,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
           createdAt: now,
           updatedAt: now
         };
-        await db.saveListeningItem(newItem);
+        await dataStore.saveListeningItem(newItem);
         showToast("Item added!", "success");
       }
       setIsModalOpen(false);
@@ -310,17 +312,17 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       const updated = { ...item, focusColor: color || undefined, updatedAt: Date.now() };
       if (!color) delete updated.focusColor;
       setItems(prev => prev.map(i => i.id === item.id ? updated : i));
-      await db.saveListeningItem(updated);
+      await dataStore.saveListeningItem(updated);
   };
   
   const handleToggleFocus = async (item: ListeningItem) => {
       const updated = { ...item, isFocused: !item.isFocused, updatedAt: Date.now() };
       setItems(prev => prev.map(i => i.id === item.id ? updated : i));
-      await db.saveListeningItem(updated);
+      await dataStore.saveListeningItem(updated);
   };
 
   // --- Handlers for Shelf Management ---
-  const handleRenameShelf = (newName: string) => {
+  const handleRenameShelfAction = (newName: string) => {
       const success = renameShelf(newName, async (oldS, newS) => {
           setLoading(true);
           const booksToUpdate = listeningBooks.filter(b => {
@@ -333,7 +335,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                const parts = b.title.split(':');
                const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
                const newFullTitle = `${newS}: ${bookTitle}`;
-               return db.saveListeningBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
+               return dataStore.saveListeningBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
           }));
           await loadData();
       });
@@ -352,24 +354,24 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
         color: '#ff9800',
         icon: '🎧'
     };
-    await db.saveListeningBook(newBook);
+    await dataStore.saveListeningBook(newBook);
     await loadData();
     setActiveBook(newBook);
     setViewMode('BOOK_DETAIL');
     showToast("New book created.", "success");
   };
 
-  const handleUpdateBook = (updated: Partial<ListeningBook>) => {
+  const handleUpdateBook = async (updated: Partial<ListeningBook>) => {
       if (!activeBook) return;
       const newBook = { ...activeBook, ...updated, updatedAt: Date.now() };
       setListeningBooks(prev => prev.map(b => b.id === newBook.id ? newBook : b));
       setActiveBook(newBook);
-      db.saveListeningBook(newBook);
+      await dataStore.saveListeningBook(newBook);
   };
 
   const handleDeleteBook = async () => {
       if (!bookToDelete) return;
-      await db.deleteListeningBook(bookToDelete.id);
+      await dataStore.deleteListeningBook(bookToDelete.id);
       showToast('Book deleted.', 'success');
       setBookToDelete(null);
       await loadData();
@@ -382,7 +384,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       const newTitle = `${targetShelf}: ${bookTitle}`;
       
       const updatedBook = { ...bookToMove, title: newTitle, updatedAt: Date.now() };
-      await db.saveListeningBook(updatedBook);
+      await dataStore.saveListeningBook(updatedBook);
       setBookToMove(null);
       await loadData();
       showToast(`Moved to "${targetShelf}".`, 'success');
@@ -409,7 +411,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       return items.map(item => ({
           id: item.id,
           title: item.text,
-          subtitle: item.note || 'Listening Practice',
+          subtitle: `${item.text.length} characters`,
           data: item
       }));
   }, [items]);
@@ -434,6 +436,16 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
   const handleToggleFocusGeneric = (gItem: GenericBookItem) => {
       const item = gItem.data as ListeningItem;
       handleToggleFocus(item);
+  };
+
+  const handleNavigateShelf = (name: string) => {
+      selectShelf(name);
+      setViewMode('SHELF');
+  };
+
+  const handleNavigateBook = (book: ListeningBook) => {
+      setActiveBook(book);
+      setViewMode('BOOK_DETAIL');
   };
 
   // --- Views ---
@@ -466,10 +478,18 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                </button>
                
                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                   <div>
+                   <div className="shrink-0">
                         <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Listening Shelf</h2>
                         <p className="text-neutral-500 mt-1 font-medium">Organize your listening practice.</p>
                    </div>
+                   
+                   <ShelfSearchBar 
+                        shelves={allShelves} 
+                        books={listeningBooks} 
+                        onNavigateShelf={handleNavigateShelf} 
+                        onNavigateBook={handleNavigateBook} 
+                    />
+
                    <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
                        <FolderPlus size={14}/> Add Shelf
                    </button>
@@ -558,7 +578,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
             bookTitle={bookToMove?.title || ''} 
           />
           <AddShelfModal isOpen={isAddShelfModalOpen} onClose={() => setIsAddShelfModalOpen(false)} onSave={(name) => { if(addShelf(name)) setIsAddShelfModalOpen(false); }} />
-          <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelf} initialName={currentShelfName} />
+          <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelfAction} initialName={currentShelfName} />
         </div>
       );
   }
@@ -570,6 +590,14 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       title="Listening Library"
       subtitle="Practice listening reflexes and capture difficult phrases."
       icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Headphone.png" className="w-8 h-8 object-contain" alt="Listening" />}
+      centerContent={
+        <ShelfSearchBar 
+            shelves={allShelves} 
+            books={listeningBooks} 
+            onNavigateShelf={handleNavigateShelf} 
+            onNavigateBook={handleNavigateBook} 
+        />
+      }
       config={{}}
       isLoading={loading}
       isEmpty={filteredItems.length === 0}
@@ -586,7 +614,6 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       }}
       aboveGrid={
         <>
-            {isGroupBrowserOpen && <TagBrowser items={items} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="groups" title="Browse Groups" icon={<FolderTree size={16}/>} />}
             {isTagBrowserOpen && <TagBrowser items={items} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}
         </>
       }
@@ -608,7 +635,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                                 <div className="flex gap-1">
                                     <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
                                     <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
-                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-50 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
                                 </div>
                             </div>
                         </>
@@ -620,8 +647,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                     ]}
                 />
             }
-            browseGroups={{ isOpen: isGroupBrowserOpen, onToggle: () => { setIsGroupBrowserOpen(!isGroupBrowserOpen); setIsTagBrowserOpen(false); } }}
-            browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); setIsGroupBrowserOpen(false); } }}
+            browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }}
             addActions={[{ label: 'Add Phrase', icon: Plus, onClick: handleNew }]}
             extraActions={
                  <>
@@ -642,7 +668,6 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                 key={item.id}
                 title={<HighlightedText text={item.text} />}
                 badge={viewSettings.showType ? { label: 'Listening', colorClass: 'bg-red-50 text-red-600 border-red-100', icon: Ear } : undefined}
-                // path={item.path} // Path hidden from card as per request
                 tags={item.tags}
                 compact={viewSettings.compact}
                 onClick={() => handlePlay(item.text)}
@@ -696,3 +721,5 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
     </>
   );
 };
+
+export default ListeningCardPage;

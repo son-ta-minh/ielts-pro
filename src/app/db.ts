@@ -1,5 +1,5 @@
 
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, CalendarEvent, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, CalendarEvent, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -17,6 +17,7 @@ const IRREGULAR_VERBS_STORE = 'irregular_verbs';
 const LESSON_STORE = 'lessons';
 const LISTENING_STORE = 'listening_items';
 const NATIVE_SPEAK_STORE = 'native_speak_items';
+const CONVERSATION_STORE = 'conversation_items';
 const COMPOSITIONS_STORE = 'compositions';
 const CALENDAR_STORE = 'calendar_events';
 const WORDBOOK_STORE = 'word_books';
@@ -27,7 +28,7 @@ const SPEAKING_BOOK_STORE = 'speaking_books';
 const WRITING_BOOK_STORE = 'writing_books';
 const PLANNING_STORE = 'planning_goals';
 
-const DB_VERSION = 23; // Bump version for Planning
+const DB_VERSION = 24; // Bump version for Conversation
 
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -269,6 +270,13 @@ const openDB = (): Promise<IDBDatabase> => {
                 planningStore.createIndex('userId', 'userId', { unique: false });
             }
         }
+
+        if (event.oldVersion < 24) {
+            if (!db.objectStoreNames.contains(CONVERSATION_STORE)) {
+                const convStore = db.createObjectStore(CONVERSATION_STORE, { keyPath: 'id' });
+                convStore.createIndex('userId', 'userId', { unique: false });
+            }
+        }
       };
       
       request.onsuccess = () => {
@@ -304,7 +312,28 @@ const openDB = (): Promise<IDBDatabase> => {
   return _dbPromise;
 };
 
-// ... (existing code for retry and crudTemplate) ...
+// ... (Rest of existing CRUD logic) ...
+
+export const clearVocabularyOnly = async (): Promise<void> => {
+  console.warn("[DB] ⚠️ clearVocabularyOnly called! This wipes data.");
+  return withRetry(async () => {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, COMPARISON_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, COMPOSITIONS_STORE, CALENDAR_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
+        const tx = db.transaction(stores, 'readwrite');
+        stores.forEach(s => tx.objectStore(s).clear());
+        tx.oncomplete = () => {
+            console.log("[DB] Vocabulary cleared successfully.");
+            localStorage.removeItem('vocab_pro_mimic_practice_queue');
+            localStorage.removeItem('vocab_pro_db_marker'); // REMOVE SAFETY MARKER
+            localStorage.removeItem('vocab_pro_emergency_backup'); // Remove Emergency Backup
+            resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+      });
+  });
+};
+
 // Retry wrapper for DB operations
 const withRetry = async <T,>(operation: () => Promise<T>, retries = 3, delay = 200): Promise<T> => {
     for (let i = 0; i < retries; i++) {
@@ -345,27 +374,6 @@ const crudTemplate = async <T,>(storeName: string | string[], operation: (tx: ID
     });
 };
 
-export const clearVocabularyOnly = async (): Promise<void> => {
-  console.warn("[DB] ⚠️ clearVocabularyOnly called! This wipes data.");
-  return withRetry(async () => {
-      const db = await openDB();
-      return new Promise((resolve, reject) => {
-        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, COMPARISON_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, COMPOSITIONS_STORE, CALENDAR_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
-        const tx = db.transaction(stores, 'readwrite');
-        stores.forEach(s => tx.objectStore(s).clear());
-        tx.oncomplete = () => {
-            console.log("[DB] Vocabulary cleared successfully.");
-            localStorage.removeItem('vocab_pro_mimic_practice_queue');
-            localStorage.removeItem('vocab_pro_db_marker'); // REMOVE SAFETY MARKER
-            localStorage.removeItem('vocab_pro_emergency_backup'); // Remove Emergency Backup
-            resolve();
-        };
-        tx.onerror = () => reject(tx.error);
-      });
-  });
-};
-
-// ... (existing exports like getAllUsers, saveUser, etc.) ...
 export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User | null> => {
   console.log(`[DB] Checking seedDatabaseIfEmpty (force=${force})...`);
   try {
@@ -378,7 +386,6 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
       });
 
       // --- AUTO-HEAL: CHECK EMERGENCY BACKUP ---
-      // If DB is empty but we have an emergency backup in LocalStorage, Restore it!
       const emergencyBackupJson = localStorage.getItem('vocab_pro_emergency_backup');
       const dbMarker = localStorage.getItem('vocab_pro_db_marker');
       
@@ -390,7 +397,6 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
                    await bulkSaveWords(backup);
                    console.log(`[DB] 🚑 Restored ${backup.length} words from Emergency Backup.`);
                    
-                   // If we restored words, we also need to ensure a user exists
                    if (existingUsers.length === 0) {
                         const targetUser = {
                             id: backup[0].userId || DEFAULT_USER_ID,
@@ -422,7 +428,6 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
            }
       }
 
-      // --- SAFETY LOCK CHECK ---
       if (existingUsers.length === 0 && dbMarker === 'exists' && !force) {
           console.error("[DB] 🛑 CRITICAL: LocalStorage marker found but IDB returned 0 users. Aborting auto-seed to prevent data loss.");
           return null;
@@ -775,6 +780,19 @@ export const getSpeakingTopicsByUserId = async (userId: string): Promise<Speakin
 export const getAllSpeakingTopicsForExport = async (userId: string): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
 export const bulkSaveSpeakingTopics = async (items: SpeakingTopic[]): Promise<void> => { await crudTemplate(SPEAKING_TOPIC_STORE, tx => { const store = tx.objectStore(SPEAKING_TOPIC_STORE); items.forEach(i => store.put(i)); }); };
 
+// --- Native Speak & Conversation Features ---
+export const saveNativeSpeakItem = async (item: NativeSpeakItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).put(item)); };
+export const getNativeSpeakItemsByUserId = async (userId: string): Promise<NativeSpeakItem[]> => await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const deleteNativeSpeakItem = async (id: string): Promise<void> => { await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).delete(id)); };
+export const bulkSaveNativeSpeakItems = async (items: NativeSpeakItem[]): Promise<void> => { await crudTemplate(NATIVE_SPEAK_STORE, tx => { const store = tx.objectStore(NATIVE_SPEAK_STORE); items.forEach(i => store.put(i)); }); };
+export const bulkDeleteNativeSpeakItems = async (ids: string[]): Promise<void> => { await crudTemplate(NATIVE_SPEAK_STORE, tx => { const store = tx.objectStore(NATIVE_SPEAK_STORE); ids.forEach(id => store.delete(id)); }); };
+
+export const saveConversationItem = async (item: ConversationItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(CONVERSATION_STORE, tx => tx.objectStore(CONVERSATION_STORE).put(item)); };
+export const getConversationItemsByUserId = async (userId: string): Promise<ConversationItem[]> => await crudTemplate(CONVERSATION_STORE, tx => tx.objectStore(CONVERSATION_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const deleteConversationItem = async (id: string): Promise<void> => { await crudTemplate(CONVERSATION_STORE, tx => tx.objectStore(CONVERSATION_STORE).delete(id)); };
+export const bulkSaveConversationItems = async (items: ConversationItem[]): Promise<void> => { await crudTemplate(CONVERSATION_STORE, tx => { const store = tx.objectStore(CONVERSATION_STORE); items.forEach(i => store.put(i)); }); };
+export const bulkDeleteConversationItems = async (ids: string[]): Promise<void> => { await crudTemplate(CONVERSATION_STORE, tx => { const store = tx.objectStore(CONVERSATION_STORE); ids.forEach(id => store.delete(id)); }); };
+
 // --- Writing Feature ---
 export const saveWritingLog = async (log: WritingLog): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).put(log)); };
 export const getWritingLogs = async (userId: string): Promise<WritingLog[]> => { const logs = await crudTemplate<WritingLog[]>(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
@@ -813,13 +831,6 @@ export const saveListeningItem = async (item: ListeningItem): Promise<void> => {
 export const getListeningItemsByUserId = async (userId: string): Promise<ListeningItem[]> => await crudTemplate(LISTENING_STORE, tx => tx.objectStore(LISTENING_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
 export const deleteListeningItem = async (id: string): Promise<void> => { await crudTemplate(LISTENING_STORE, tx => tx.objectStore(LISTENING_STORE).delete(id)); };
 export const bulkSaveListeningItems = async (items: ListeningItem[]): Promise<void> => { await crudTemplate(LISTENING_STORE, tx => { const store = tx.objectStore(LISTENING_STORE); items.forEach(i => store.put(i)); }); };
-
-// --- Native Speak Feature ---
-export const saveNativeSpeakItem = async (item: NativeSpeakItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).put(item)); };
-export const getNativeSpeakItemsByUserId = async (userId: string): Promise<NativeSpeakItem[]> => await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const deleteNativeSpeakItem = async (id: string): Promise<void> => { await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).delete(id)); };
-export const bulkSaveNativeSpeakItems = async (items: NativeSpeakItem[]): Promise<void> => { await crudTemplate(NATIVE_SPEAK_STORE, tx => { const store = tx.objectStore(NATIVE_SPEAK_STORE); items.forEach(i => store.put(i)); }); };
-export const bulkDeleteNativeSpeakItems = async (ids: string[]): Promise<void> => { await crudTemplate(NATIVE_SPEAK_STORE, tx => { const store = tx.objectStore(NATIVE_SPEAK_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- Composition Feature ---
 export const saveComposition = async (comp: Composition): Promise<void> => { comp.updatedAt = Date.now(); await crudTemplate(COMPOSITIONS_STORE, tx => tx.objectStore(COMPOSITIONS_STORE).put(comp)); };

@@ -178,6 +178,9 @@ export interface VocabularyItem {
   isPhrasalVerb?: boolean;
   isCollocation?: boolean;
   isStandardPhrase?: boolean;
+  isInterrogative?: boolean;
+  isExclamatory?: boolean;
+  isImperative?: boolean;
   isIrregular?: boolean; 
   needsPronunciationFocus?: boolean;
   isExampleLocked?: boolean;
@@ -421,6 +424,34 @@ export interface NativeSpeakItem {
     isFocused?: boolean;
 }
 
+export interface ConversationSpeaker {
+    name: string;
+    sex: 'male' | 'female';
+    voiceName?: string;
+    accentCode?: string;
+}
+
+export interface ConversationSentence {
+    speakerName: string;
+    text: string;
+    icon?: string; // Emoji representing emotion
+}
+
+export interface ConversationItem {
+    id: string;
+    userId: string;
+    title: string;
+    description: string;
+    speakers: ConversationSpeaker[];
+    sentences: ConversationSentence[];
+    path?: string;
+    tags: string[];
+    createdAt: number;
+    updatedAt: number;
+    focusColor?: FocusColor;
+    isFocused?: boolean;
+}
+
 export interface CalendarEvent {
   id: string;
   userId: string;
@@ -519,7 +550,7 @@ export interface SpeakingBook {
   title: string; // Format: "Shelf: Name"
   icon?: string;
   color?: string;
-  itemIds: string[]; // List of IDs of SpeakingTopics or NativeSpeakItems
+  itemIds: string[]; // List of IDs of SpeakingTopics, NativeSpeakItems or ConversationItems
   createdAt: number;
   updatedAt: number;
   // Visual props

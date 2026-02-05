@@ -1,3 +1,4 @@
+
 import { generateJsonExport, processJsonImport, ImportResult } from '../utils/dataHandler';
 import { User, DataScope } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
@@ -132,6 +133,7 @@ async function getFullExportData(userId: string, user: User) {
      const speakingTopicsData = await db.getAllSpeakingTopicsForExport(userId);
      const speakingLogsData = await db.getAllSpeakingLogsForExport(userId);
      const nativeSpeakItemsDataRaw = await db.getNativeSpeakItemsByUserId(userId);
+     const conversationItemsDataRaw = await db.getConversationItemsByUserId(userId);
      const writingTopicsData = await db.getAllWritingTopicsForExport(userId);
      const writingLogsData = await db.getAllWritingLogsForExport(userId);
      const compositionsData = await db.getCompositionsByUserId(userId);
@@ -151,6 +153,7 @@ async function getFullExportData(userId: string, user: User) {
 
      const shortWords = wordsData.map(w => _mapToShortKeys(w));
      const shortNative = nativeSpeakItemsDataRaw.map(w => _mapToShortKeys(w));
+     const shortConversation = conversationItemsDataRaw.map(w => _mapToShortKeys(w));
      const shortBooks = wordBooksDataRaw.map(b => _mapToShortKeys(b));
 
      const comparisonLessons = comparisonGroupsData.map(cg => ({
@@ -175,6 +178,7 @@ async function getFullExportData(userId: string, user: User) {
         lessons: [...lessonsData, ...comparisonLessons],
         listeningItems: listeningItemsData,
         nativeSpeakItems: shortNative,
+        conversationItems: shortConversation,
         compositions: compositionsData,
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
         wordBooks: shortBooks,

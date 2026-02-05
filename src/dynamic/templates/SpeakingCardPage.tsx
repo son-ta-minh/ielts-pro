@@ -1,59 +1,47 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, NativeSpeakItem, VocabularyItem, WordQuality, FocusColor, SpeakingTopic, NativeSpeakAnswer, AppView, SpeakingBook } from '../../app/types';
+import { User, NativeSpeakItem, VocabularyItem, WordQuality, FocusColor, SpeakingTopic, NativeSpeakAnswer, AppView, SpeakingBook, ConversationItem, ConversationSpeaker, ConversationSentence } from '../../app/types';
 import * as db from '../../app/db';
+import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Mic, Volume2, Eye, EyeOff, Tag, Coffee, GraduationCap, School, ChevronRight, Shuffle, Plus, Edit3, Trash2, Swords, AudioLines, Sparkles, Save, X, Braces, StickyNote, FolderTree, Lightbulb, Info, ChevronLeft, Loader2, Square, Combine, CheckSquare, Waves, Target, Library, FolderPlus, Pen, Move, Book, ArrowLeft, LayoutGrid } from 'lucide-react';
-import { speak, startRecording, stopRecording } from '../../utils/audio';
+import { Mic, Volume2, Eye, EyeOff, Tag, ChevronRight, Shuffle, Plus, Edit3, Trash2, AudioLines, Sparkles, Save, X, StickyNote, Info, ChevronLeft, Loader2, Target, Library, FolderPlus, Pen, Move, Book, ArrowLeft, Users, MessageSquare, Play, ChevronDown, Pause, MessageCircle, UserCircle, Square, Languages } from 'lucide-react';
+import { speak, startRecording, stopRecording, fetchServerVoices, ServerVoicesResponse, stopSpeaking } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
-import { TagBrowser, TagTreeNode } from '../../components/common/TagBrowser';
+import { TagBrowser } from '../../components/common/TagBrowser';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
-import { getRefineNativeSpeakPrompt, getMergeNativeSpeakPrompt } from '../../services/promptService';
-import { generateFullSpeakingTest } from '../../services/geminiService';
-import { MimicPractice } from '../../components/labs/MimicPractice';
+import { getRefineNativeSpeakPrompt, getMergeNativeSpeakPrompt, getGenerateConversationPrompt } from '../../services/promptService';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { UniversalCard } from '../../components/common/UniversalCard';
-import FullTestSetupModal from './FullTestSetupModal';
-import SpeakingSessionView from './SpeakingSessionView';
 import { ResourceActions } from '../page/ResourceActions';
-import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { useShelfLogic } from '../../app/hooks/useShelfLogic';
 import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components/wordbook/ShelfModals';
-import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { UniversalBook } from '../../components/common/UniversalBook';
+import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
+import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
+import { SimpleMimicModal } from '../../components/common/SimpleMimicModal';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
+import { SpeechRecognitionManager } from '../../utils/speechRecognition';
+
+const VIEW_SETTINGS_KEY = 'vocab_pro_speaking_card_view';
 
 interface Props {
   user: User;
   onNavigate?: (view: AppView) => void;
 }
 
-const VIEW_SETTINGS_KEY = 'vocab_pro_speaking_card_view';
+type SpeakingItem = 
+  | { type: 'card'; data: NativeSpeakItem }
+  | { type: 'conversation'; data: ConversationItem };
 
 const PatternRenderer: React.FC<{ text: string }> = ({ text }) => {
     const parts = text.split(/({.*?}|\[.*?\]|<.*?>)/g);
-    
-    // Case 1: The entire string is a standalone tip, e.g., "[This is a tip.]"
-    if (parts.length === 3 && parts[0] === '' && parts[2] === '' && parts[1].startsWith('[') && parts[1].endsWith(']')) {
-        const tipContent = parts[1].slice(1, -1);
-        return (
-            <div className="flex items-start gap-3 my-2 p-3 bg-sky-50 border-l-4 border-sky-400 rounded-r-lg shadow-sm">
-                <Lightbulb size={18} className="shrink-0 mt-0.5 text-sky-500"/>
-                <div className="text-xs text-sky-900 font-medium leading-relaxed">
-                    {tipContent}
-                </div>
-            </div>
-        );
-    }
-
-    // Case 2: Inline text with highlights and/or tips
     return (
         <>
             {parts.map((part, i) => {
                 if (part.startsWith('{') && part.endsWith('}')) {
-                    // This is the existing highlight style (or rephrasing explanation)
                     return (
                         <span key={i} className="mx-0.5 px-1 py-0.5 rounded bg-amber-100 text-amber-800 font-bold font-mono text-[0.9em] border border-amber-200 inline-block shadow-sm">
                             {part.slice(1, -1)}
@@ -61,22 +49,10 @@ const PatternRenderer: React.FC<{ text: string }> = ({ text }) => {
                     );
                 }
                 if (part.startsWith('[') && part.endsWith(']')) {
-                    // This is the new inline tip style
-                    const tipContent = part.slice(1, -1);
                     return (
                          <span key={i} className="mx-1 inline-flex items-center gap-1.5 text-[10px] text-sky-700 bg-sky-100 border border-sky-200 px-2 py-1 rounded-full font-medium">
-                            <Lightbulb size={12} />
-                            {tipContent}
-                        </span>
-                    );
-                }
-                if (part.startsWith('<') && part.endsWith('>')) {
-                    // This is the new preposition note style
-                    const noteContent = part.slice(1, -1);
-                    return (
-                         <span key={i} className="mx-1 inline-flex items-center gap-1.5 text-[10px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-1 rounded-full font-medium italic">
                             <Info size={12} />
-                            {noteContent}
+                            {part.slice(1, -1)}
                         </span>
                     );
                 }
@@ -86,7 +62,7 @@ const PatternRenderer: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-// --- Add/Edit Modal (with JSON Paste & Feedback) ---
+// --- Add/Edit Card Modal ---
 interface AddEditModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -113,52 +89,7 @@ const AddEditModal: React.FC<AddEditModalProps> = ({ isOpen, onClose, onSave, in
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!standard.trim()) return;
-    const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
-    onSave({ standard: standard.trim(), tags, note: note.trim(), answers });
-  };
-
-  const handleAiClick = () => {
-    onOpenAiRefine({
-        standard,
-        tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
-        note,
-        answers
-    });
-  };
-  
-  const addAnswer = () => {
-    setAnswers(prev => [...prev, { tone: 'casual', anchor: '', sentence: '', note: '' }]);
-  };
-
-  const updateAnswer = (index: number, field: keyof NativeSpeakAnswer, value: string | NativeSpeakAnswer['tone']) => {
-      setAnswers(prev => {
-          const next = [...prev];
-          next[index] = { ...next[index], [field]: value };
-          return next;
-      });
-  };
-
-  const removeAnswer = (index: number) => {
-      setAnswers(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleJsonPaste = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const jsonString = e.target.value;
-    if (!jsonString.trim()) {
-        setAnswers([]);
-        return;
-    }
-    try {
-        const parsed = JSON.parse(jsonString);
-        if (parsed.standard && Array.isArray(parsed.answers)) {
-            setStandard(parsed.standard);
-            setAnswers(parsed.answers);
-        } else if (Array.isArray(parsed.answers)) {
-            setAnswers(parsed.answers);
-        }
-    } catch (error) {
-        console.warn("Invalid JSON pasted");
-    }
+    onSave({ standard: standard.trim(), tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean), note: note.trim(), answers });
   };
 
   if (!isOpen) return null;
@@ -171,324 +102,666 @@ const AddEditModal: React.FC<AddEditModalProps> = ({ isOpen, onClose, onSave, in
             <h3 className="text-xl font-black text-neutral-900">{initialData ? 'Edit Expression' : 'New Expression'}</h3>
             <p className="text-sm text-neutral-500">Define context and generate expressions.</p>
           </div>
-          <div className="flex items-center gap-2">
-               <button type="button" onClick={handleAiClick} className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors" title="Generate/Refine with AI"><Sparkles size={18} /></button>
-               <button type="button" onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={20}/></button>
-          </div>
+          <button type="button" onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
         </header>
-        
-        <main className="p-8 space-y-6 overflow-y-auto">
+        <main className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
           <div className="space-y-1">
-            <label className="block text-xs font-bold text-neutral-500">Context / Standard Meaning</label>
-            <textarea value={standard} onChange={e => setStandard(e.target.value)} placeholder="e.g., Expressing skepticism or doubt" rows={3} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-none" required autoFocus/>
+            <label className="block text-xs font-bold text-neutral-500">Context / Meaning</label>
+            <textarea value={standard} onChange={e => setStandard(e.target.value)} placeholder="e.g., Disagreeing politely" rows={2} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-none" required />
           </div>
           <div className="space-y-1">
-             <label className="block text-xs font-bold text-neutral-500 flex items-center gap-1"><StickyNote size={12}/> User Note (Optional)</label>
-             <textarea rows={2} value={note} onChange={e => setNote(e.target.value)} placeholder="Usage tips, nuance explanation..." className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium text-sm focus:ring-1 focus:ring-neutral-300 outline-none resize-none"/>
+             <label className="block text-xs font-bold text-neutral-500 flex items-center gap-1"><Tag size={12}/> Tags</label>
+             <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="linking, academic..." className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium text-sm" />
           </div>
-          <div className="space-y-1">
-             <label className="block text-xs font-bold text-neutral-500 flex items-center gap-1"><Tag size={12}/> Tags (Optional)</label>
-             <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="Business, Casual, Speaking Part 3..." className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium text-sm focus:ring-1 focus:ring-neutral-300 outline-none"/>
-          </div>
-          
-          <div className="space-y-4 pt-4 border-t border-neutral-100">
-            <div className="flex justify-between items-center">
-              <label className="block text-xs font-bold text-neutral-500 flex items-center gap-1.5"><AudioLines size={12}/> Expressions ({answers.length})</label>
-              <button type="button" onClick={addAnswer} className="px-3 py-1.5 bg-neutral-100 text-neutral-600 rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-neutral-200 transition-colors">
-                  <Plus size={14}/> Add
-              </button>
-            </div>
-            
-            <div className="space-y-3 max-h-[250px] overflow-y-auto -mr-3 pr-3 stable-scrollbar">
-              {answers.length === 0 && (
-                <div className="text-center py-8 border-2 border-dashed border-neutral-200 rounded-xl">
-                  <p className="text-sm font-bold text-neutral-400">No expressions yet.</p>
-                  <p className="text-xs text-neutral-400 mt-1">Click "Add" or paste JSON below.</p>
-                </div>
-              )}
-              {answers.map((answer, index) => (
-                <div key={index} className="p-3 bg-white border border-neutral-200 rounded-xl space-y-2 relative group animate-in fade-in">
-                  <button type="button" onClick={() => removeAnswer(index)} className="absolute top-2 right-2 p-1 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <Trash2 size={12} />
-                  </button>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={answer.tone}
-                      onChange={(e) => updateAnswer(index, 'tone', e.target.value as NativeSpeakAnswer['tone'])}
-                      className="px-2 py-1 bg-neutral-100 border border-neutral-200 rounded-md text-xs font-bold text-neutral-600 focus:ring-1 focus:ring-neutral-900 outline-none"
-                    >
-                      <option value="casual">Casual</option>
-                      <option value="semi-academic">Semi-Academic</option>
-                      <option value="academic">Academic</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Anchor"
-                      value={answer.anchor}
-                      onChange={(e) => updateAnswer(index, 'anchor', e.target.value)}
-                      className="flex-1 px-3 py-1.5 bg-neutral-100 border border-neutral-200 rounded-md text-xs font-bold text-neutral-800 focus:ring-1 focus:ring-neutral-900 outline-none"
-                    />
-                  </div>
-                  <textarea
-                    rows={2}
-                    placeholder="Sentence (use {curly braces} to highlight)"
-                    value={answer.sentence}
-                    onChange={(e) => updateAnswer(index, 'sentence', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-neutral-100 border border-neutral-200 rounded-md text-xs font-medium text-neutral-800 focus:ring-1 focus:ring-neutral-900 outline-none resize-none"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Note (optional)"
-                    value={answer.note || ''}
-                    onChange={(e) => updateAnswer(index, 'note', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-neutral-100 border border-neutral-200 rounded-md text-[10px] font-medium text-neutral-500 focus:ring-1 focus:ring-neutral-900 outline-none"
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-2 pt-2">
-              <label className="block text-xs font-bold text-neutral-500">Quick-add from JSON</label>
-              <textarea
-                  placeholder="Paste JSON from AI here to populate expressions..."
-                  rows={2}
-                  onFocus={(e) => e.target.select()}
-                  onChange={handleJsonPaste}
-                  className="w-full p-3 bg-neutral-50 border border-neutral-200 rounded-xl font-mono text-xs focus:ring-1 focus:ring-neutral-900 outline-none resize-none"
-              />
-            </div>
+          <div className="space-y-3 pt-2">
+             <div className="flex justify-between items-center">
+                 <label className="text-xs font-bold text-neutral-500 uppercase">Answers</label>
+                 <button type="button" onClick={() => setAnswers([...answers, { tone: 'semi-academic', anchor: '', sentence: '' }])} className="p-1.5 bg-neutral-100 rounded-lg text-neutral-600 hover:bg-neutral-200 transition-colors"><Plus size={14}/></button>
+             </div>
+             {answers.map((ans, idx) => (
+                 <div key={idx} className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 space-y-2 relative group">
+                     <button type="button" onClick={() => setAnswers(answers.filter((_, i) => i !== idx))} className="absolute top-2 right-2 text-neutral-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={12}/></button>
+                     <div className="flex gap-2">
+                         <select value={ans.tone} onChange={e => { const n = [...answers]; n[idx].tone = e.target.value as any; setAnswers(n); }} className="px-2 py-1 bg-white border border-neutral-200 rounded-lg text-[10px] font-bold outline-none">
+                             <option value="casual">Casual</option>
+                             <option value="semi-academic">Semi-Academic</option>
+                             <option value="academic">Academic</option>
+                         </select>
+                         <input value={ans.anchor} onChange={e => { const n = [...answers]; n[idx].anchor = e.target.value; setAnswers(n); }} placeholder="Anchor phrase" className="flex-1 px-2 py-1 bg-white border border-neutral-200 rounded-lg text-xs font-bold outline-none" />
+                     </div>
+                     <textarea value={ans.sentence} onChange={e => { const n = [...answers]; n[idx].sentence = e.target.value; setAnswers(n); }} placeholder="Example sentence with {curly braces}" className="w-full p-2 bg-white border border-neutral-200 rounded-lg text-xs font-medium resize-none outline-none" rows={2} />
+                 </div>
+             ))}
           </div>
         </main>
-        
         <footer className="px-8 py-6 border-t border-neutral-100 flex justify-end shrink-0 bg-neutral-50/50 rounded-b-[2.5rem]">
-          <button type="submit" className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest"><Save size={14}/> Save</button>
+          <button type="submit" className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs uppercase tracking-widest"><Save size={14}/> Save</button>
         </footer>
       </form>
     </div>
   );
 };
 
-// --- SpeakingCardItem: Individual Card Logic ---
-const SpeakingCardItem: React.FC<{ 
-    item: NativeSpeakItem;
-    viewSettings: { showTags: boolean; compact: boolean };
-    isSelected: boolean;
-    onSelect: (id: string) => void;
-    onEdit: (item: NativeSpeakItem) => void;
-    onDelete: (item: NativeSpeakItem) => void;
-    onFocusChange: (item: NativeSpeakItem, color: FocusColor | null) => void;
-    onToggleFocus: (item: NativeSpeakItem) => void;
-    onPractice: (item: NativeSpeakItem) => void;
-}> = ({ item, viewSettings, isSelected, onSelect, onEdit, onDelete, onFocusChange, onToggleFocus, onPractice }) => {
-    const answerCount = item.answers?.length || 0;
-
-    return (
-         <UniversalCard
-            key={item.id}
-            title={item.standard}
-            // removed path prop to avoid showing path
-            tags={viewSettings.showTags ? item.tags : undefined}
-            compact={viewSettings.compact}
-            onClick={() => answerCount > 0 && onPractice(item)}
-            focusColor={item.focusColor}
-            onFocusChange={(c) => onFocusChange(item, c)}
-            isFocused={item.isFocused}
-            onToggleFocus={() => onToggleFocus(item)}
-            isCompleted={item.focusColor === 'green'}
-            className={isSelected ? 'ring-2 ring-indigo-500 border-indigo-500' : ''}
-            actions={
-                <>
-                    <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"><Edit3 size={14}/></button>
-                    <button onClick={(e) => { e.stopPropagation(); onDelete(item); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 size={14}/></button>
-                </>
-            }
-         >
-             <div className="absolute top-4 left-4 z-20">
-                <button 
-                    onClick={(e) => { e.stopPropagation(); onSelect(item.id); }} 
-                    className={`p-1 rounded-md transition-all duration-200 ${isSelected ? 'bg-indigo-600 text-white' : 'bg-white/30 backdrop-blur-sm text-neutral-400 opacity-0 group-hover:opacity-100'}`}
-                    aria-label={isSelected ? `Deselect ${item.standard}` : `Select ${item.standard}`}
-                >
-                    {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
-                </button>
-            </div>
-             <div className="flex justify-between items-center mt-2">
-                <div className="text-xs font-medium text-neutral-500">
-                    {answerCount > 0 ? `${answerCount} expressions available` : 'No expressions yet. Refine with AI!'}
-                </div>
-                <button onClick={(e) => { e.stopPropagation(); onPractice(item); }} className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded-xl font-black text-xs uppercase tracking-wider hover:bg-rose-600 transition-all shadow-lg shadow-rose-200 active:scale-95 disabled:opacity-50" disabled={answerCount === 0}>
-                    <Volume2 size={14}/> Speak
-                </button>
-             </div>
-         </UniversalCard>
-    );
-};
-
-// --- NEW COMPONENT: SpeakingPracticeModal ---
-interface SpeakingPracticeModalProps {
+// --- Add/Edit Conversation Modal ---
+interface AddEditConversationModalProps {
     isOpen: boolean;
     onClose: () => void;
-    item: NativeSpeakItem | null;
+    onSave: (data: Partial<ConversationItem>) => void;
+    initialData?: ConversationItem | null;
+    onOpenAiGen: () => void;
 }
 
-const SpeakingPracticeModal: React.FC<SpeakingPracticeModalProps> = ({ isOpen, onClose, item }) => {
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [isRevealed, setIsRevealed] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
-    const [userTranscript, setUserTranscript] = useState('');
-    const recognitionManager = useRef(new SpeechRecognitionManager());
+const AddEditConversationModal: React.FC<AddEditConversationModalProps> = ({ isOpen, onClose, onSave, initialData, onOpenAiGen }) => {
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [speakers, setSpeakers] = useState<ConversationSpeaker[]>([]);
+    const [sentences, setSentences] = useState<ConversationSentence[]>([]);
+    const [tagsInput, setTagsInput] = useState('');
+    const [serverVoices, setServerVoices] = useState<ServerVoicesResponse | null>(null);
 
     useEffect(() => {
         if (isOpen) {
-            setCurrentIndex(0);
-            setIsRevealed(false);
-            setUserTranscript('');
-            setIsRecording(false);
+            setTitle(initialData?.title || '');
+            setDescription(initialData?.description || '');
+            setSpeakers(initialData?.speakers || []);
+            setSentences(initialData?.sentences || []);
+            setTagsInput(initialData?.tags?.join(', ') || '');
+            
+            const url = getServerUrl(getConfig());
+            fetchServerVoices(url).then(setServerVoices).catch(() => setServerVoices(null));
         }
-    }, [isOpen]);
+    }, [isOpen, initialData]);
 
-    if (!isOpen || !item || !item.answers || item.answers.length === 0) return null;
-
-    const currentAnswer = item.answers[currentIndex];
-    const isFirst = currentIndex === 0;
-    const isLast = currentIndex === item.answers.length - 1;
-
-    const handleRecord = async () => {
-        if (isRecording) {
-            recognitionManager.current.stop();
-            await stopRecording();
-            setIsRecording(false);
-        } else {
-            setUserTranscript('');
-            try {
-                await startRecording();
-                setIsRecording(true);
-                recognitionManager.current.start(
-                    (final, interim) => setUserTranscript(final + interim),
-                    (final) => { setUserTranscript(final); setIsRecording(false); }
-                );
-            } catch(e) { console.error(e); setIsRecording(false); }
-        }
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+        onSave({ title: title.trim(), description, speakers, sentences, tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean) });
     };
 
-    const getToneConfig = (tone: string) => {
-        switch(tone) {
-            case 'casual': return { icon: Coffee, colorClass: 'bg-sky-100 text-sky-700 border-sky-200', label: 'Casual' };
-            case 'semi-academic': return { icon: School, colorClass: 'bg-indigo-100 text-indigo-700 border-indigo-200', label: 'Semi-Academic' };
-            case 'academic': return { icon: GraduationCap, colorClass: 'bg-purple-100 text-purple-700 border-purple-200', label: 'Academic' };
-            default: return { icon: Mic, colorClass: 'bg-neutral-100 text-neutral-600 border-neutral-200', label: 'Expression' };
-        }
+    const updateSpeaker = (idx: number, updates: Partial<ConversationSpeaker>) => {
+        setSpeakers(prev => prev.map((s, i) => i === idx ? { ...s, ...updates } : s));
     };
-    const toneConfig = getToneConfig(currentAnswer.tone);
+
+    const enVoices = useMemo(() => {
+        if (!serverVoices) return [];
+        return serverVoices.voices.filter(v => 
+            v.language.startsWith('en') && 
+            (v.name.toLowerCase().includes('enhanced') || v.name.toLowerCase().includes('premium'))
+        );
+    }, [serverVoices]);
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[90vh]">
-                <header className="px-6 py-4 flex justify-end items-center shrink-0">
-                     <button type="button" onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={20}/></button>
+            <form onSubmit={handleSubmit} className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[90vh]">
+                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
+                    <div>
+                        <h3 className="text-xl font-black text-neutral-900">{initialData ? 'Edit Conversation' : 'New Conversation'}</h3>
+                        <p className="text-sm text-neutral-500">Create interactive multi-speaker dialogues.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button type="button" onClick={onOpenAiGen} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors" title="Generate with AI"><Sparkles size={18} /></button>
+                        <button type="button" onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={20}/></button>
+                    </div>
                 </header>
-                <main className="p-6 pt-0 flex-1 flex flex-col items-center justify-center text-center space-y-4">
-                    <h3 className="text-xl font-bold text-neutral-800 tracking-tight">{item.standard}</h3>
-                    
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border ${toneConfig.colorClass}`}>
-                        <toneConfig.icon size={12} /> {toneConfig.label}
+                <main className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-neutral-400">Title</label>
+                            <input value={title} onChange={e => setTitle(e.target.value)} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-bold focus:ring-2 focus:ring-neutral-900 outline-none" required />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-neutral-400">Tags</label>
+                            <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium text-sm focus:ring-1 focus:ring-neutral-300 outline-none" />
+                        </div>
                     </div>
-                    
-                    <div className="w-full min-h-[150px] p-6 bg-neutral-50 rounded-2xl border border-neutral-200 flex flex-col items-center justify-center">
-                        {isRevealed ? (
-                            <div className="space-y-4 animate-in fade-in duration-300">
-                                <div className="text-xl font-medium leading-relaxed text-neutral-900">
-                                    <PatternRenderer text={currentAnswer.sentence} />
-                                </div>
-                                {currentAnswer.note && (
-                                    <div className="p-3 bg-sky-50 rounded-xl border border-sky-200 text-xs font-medium text-sky-800 leading-relaxed">
-                                        <PatternRenderer text={currentAnswer.note} />
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <h2 className="text-4xl font-black text-neutral-900 animate-in fade-in duration-300">{currentAnswer.anchor}</h2>
-                        )}
-                    </div>
-                    
-                    <button onClick={() => setIsRevealed(prev => !prev)} className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
-                        {isRevealed ? <EyeOff size={14}/> : <Eye size={14}/>}
-                        <span>{isRevealed ? 'Hide Answer' : 'Show Answer'}</span>
-                    </button>
-                    
-                    {userTranscript && <p className="text-sm font-medium italic text-neutral-500 mt-4">"{userTranscript}"</p>}
 
-                </main>
-                <footer className="px-6 py-6 border-t border-neutral-100 flex items-center justify-between shrink-0 bg-neutral-50/50 rounded-b-[2.5rem]">
-                    <button onClick={() => { setIsRevealed(false); setCurrentIndex(i => i - 1); }} disabled={isFirst} className="p-4 rounded-full bg-white border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30"><ChevronLeft size={20}/></button>
-                    
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => speak(currentAnswer.sentence)} className="p-5 rounded-full bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100 hover:text-indigo-600 transition-colors shadow-sm"><Volume2 size={24}/></button>
-                        <button onClick={handleRecord} className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-rose-500 text-white hover:bg-rose-600'}`}>
-                            {isRecording ? <Square size={28} fill="currentColor"/> : <Mic size={28} />}
-                        </button>
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                            <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-2"><Users size={14}/> Speakers ({speakers.length}/3)</label>
+                            <button type="button" onClick={() => setSpeakers([...speakers, { name: '', sex: 'female' }])} disabled={speakers.length >= 3} className="p-1.5 bg-neutral-100 rounded-lg text-neutral-600 hover:bg-neutral-200 transition-colors disabled:opacity-50"><Plus size={14}/></button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2">
+                            {speakers.map((s, i) => (
+                                <div key={i} className="p-4 bg-neutral-50 rounded-2xl border border-neutral-200 relative group animate-in zoom-in-95 grid grid-cols-1 sm:grid-cols-[1fr,auto,2fr] gap-4 items-center">
+                                    <button type="button" onClick={() => setSpeakers(speakers.filter((_, idx) => idx !== i))} className="absolute -top-1.5 -right-1.5 p-1 bg-white text-neutral-300 hover:text-red-500 border border-neutral-200 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10"><X size={10} /></button>
+                                    
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black uppercase text-neutral-400">Speaker Name</label>
+                                        <input value={s.name} onChange={e => updateSpeaker(i, { name: e.target.value })} placeholder="Name" className="w-full bg-white border border-neutral-200 rounded-lg px-3 py-1.5 font-bold text-xs outline-none focus:border-neutral-900" />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black uppercase text-neutral-400">Sex</label>
+                                        <div className="flex bg-white rounded-lg p-0.5 border border-neutral-200 h-[32px]">
+                                            <button type="button" onClick={() => updateSpeaker(i, { sex: 'male' })} className={`flex-1 px-3 py-1 text-[8px] font-black uppercase rounded ${s.sex === 'male' ? 'bg-blue-500 text-white shadow-sm' : 'text-neutral-400'}`}>Male</button>
+                                            <button type="button" onClick={() => updateSpeaker(i, { sex: 'female' })} className={`flex-1 px-3 py-1 text-[8px] font-black uppercase rounded ${s.sex === 'female' ? 'bg-pink-500 text-white shadow-sm' : 'text-neutral-400'}`}>Female</button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black uppercase text-neutral-400">High Quality Voice</label>
+                                        <div className="relative">
+                                            <select 
+                                                value={s.voiceName || ''} 
+                                                onChange={e => {
+                                                    const v = enVoices.find(v => v.name === e.target.value);
+                                                    updateSpeaker(i, { voiceName: e.target.value, accentCode: v?.accent });
+                                                    if (e.target.value) {
+                                                        speak(`Hello, this is ${e.target.value}`, false, 'en', e.target.value, v?.accent);
+                                                    }
+                                                }}
+                                                className="w-full bg-white border border-neutral-200 rounded-xl px-4 py-3 pr-10 text-[10px] font-bold outline-none focus:border-neutral-900 appearance-none"
+                                            >
+                                                <option value="">Auto Select</option>
+                                                {enVoices.map(v => (
+                                                    <option key={v.name} value={v.name}>{v.name} ({v.accent})</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    
-                    <button onClick={() => { setIsRevealed(false); setCurrentIndex(i => i + 1); }} disabled={isLast} className="p-4 rounded-full bg-white border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30"><ChevronRight size={20}/></button>
+
+                    <div className="space-y-3 pt-4 border-t border-neutral-100">
+                        <div className="flex justify-between items-center">
+                            <label className="text-xs font-bold text-neutral-500 uppercase flex items-center gap-2"><MessageSquare size={14}/> Script ({sentences.length})</label>
+                            <button type="button" onClick={() => setSentences([...sentences, { speakerName: speakers[0]?.name || '', text: '' }])} disabled={speakers.length === 0} className="px-3 py-1.5 bg-neutral-900 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 hover:bg-neutral-800 disabled:opacity-50 transition-colors"><Plus size={14}/> Add Line</button>
+                        </div>
+                        <div className="space-y-2">
+                            {sentences.map((s, i) => (
+                                <div key={i} className="flex gap-2 items-start animate-in slide-in-from-top-2">
+                                    <select value={s.speakerName} onChange={e => { const n = [...sentences]; n[i].speakerName = e.target.value; setSentences(n); }} className="w-24 shrink-0 px-2 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-[10px] font-black uppercase tracking-wider outline-none focus:ring-1 focus:ring-neutral-900">
+                                        {speakers.map(sp => <option key={sp.name} value={sp.name}>{sp.name || '?'}</option>)}
+                                    </select>
+                                    <div className="flex-1 flex flex-col gap-1">
+                                        <textarea value={s.text} onChange={e => { const n = [...sentences]; n[i].text = e.target.value; setSentences(n); }} rows={2} placeholder="Speech..." className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-medium focus:ring-1 focus:ring-neutral-900 outline-none resize-none" />
+                                        <div className="flex gap-2 items-center">
+                                            <label className="text-[8px] font-black text-neutral-400 uppercase">Emoji</label>
+                                            <input value={s.icon || ''} onChange={e => { const n = [...sentences]; n[i].icon = e.target.value; setSentences(n); }} className="bg-neutral-50 border border-neutral-100 rounded px-2 py-1 text-xs w-12" placeholder="😊" />
+                                        </div>
+                                    </div>
+                                    <button type="button" onClick={setSentences.bind(null, sentences.filter((_, idx) => idx !== i))} className="p-2 text-neutral-300 hover:text-red-500"><Trash2 size={14}/></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </main>
+                <footer className="px-8 py-6 border-t border-neutral-100 flex justify-end shrink-0 bg-neutral-50/50 rounded-b-[2.5rem]">
+                    <button type="submit" className="px-8 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest"><Save size={14}/> Save Conversation</button>
+                </footer>
+            </form>
+        </div>
+    );
+};
+
+// --- SpeakingPracticeModal Definition ---
+const SpeakingPracticeModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    item: NativeSpeakItem | null;
+}> = ({ isOpen, onClose, item }) => {
+    const [revealed, setRevealed] = useState<Set<number>>(new Set());
+    const [mimicTarget, setMimicTarget] = useState<string | null>(null);
+
+    if (!isOpen || !item) return null;
+
+    const toggleReveal = (idx: number) => {
+        setRevealed(prev => {
+            const next = new Set(prev);
+            if (next.has(idx)) next.delete(idx); else next.add(idx);
+            return next;
+        });
+    };
+
+    const handleMimic = (sentence: string) => {
+        const cleanText = sentence.replace(/{|}/g, '');
+        setMimicTarget(cleanText);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[85vh]">
+                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-center shrink-0">
+                    <div>
+                        <h3 className="text-xl font-black text-neutral-900">{item.standard}</h3>
+                        <p className="text-xs text-neutral-500 font-bold mt-1">Native Expressions Practice</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={24}/></button>
+                </header>
+                <main className="flex-1 overflow-y-auto p-8 space-y-4 custom-scrollbar bg-neutral-50/30">
+                    {item.answers.map((ans, idx) => (
+                        <div key={idx} className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-3 relative overflow-hidden group">
+                            <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${ans.tone === 'academic' ? 'bg-purple-50 text-purple-700 border-purple-100' : ans.tone === 'semi-academic' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-neutral-50 text-neutral-600 border-neutral-100'}`}>{ans.tone}</span>
+                                    <span className="text-sm font-black text-neutral-900">{ans.anchor}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => speak(ans.sentence.replace(/{|}/g, ''))} className="p-2 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Listen"><Volume2 size={16}/></button>
+                                    <button onClick={() => handleMimic(ans.sentence)} className="p-2 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all" title="Practice Speaking"><Mic size={16}/></button>
+                                    <button onClick={() => toggleReveal(idx)} className="p-2 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-all">{revealed.has(idx) ? <EyeOff size={16}/> : <Eye size={16}/>}</button>
+                                </div>
+                            </div>
+                            <div className="min-h-[1.5rem] flex items-center">
+                                {revealed.has(idx) ? <div className="text-base font-medium text-neutral-800 animate-in fade-in slide-in-from-top-1"><PatternRenderer text={ans.sentence} /></div> : <div className="flex gap-1 items-center">{Array.from({length: 3}).map((_, i) => (<div key={i} className="h-1.5 w-8 bg-neutral-100 rounded-full animate-pulse"></div>))}</div>}
+                            </div>
+                            {ans.note && revealed.has(idx) && <div className="pt-2 mt-2 border-t border-neutral-50 text-[10px] text-neutral-500 font-medium italic">"{ans.note}"</div>}
+                        </div>
+                    ))}
+                </main>
+                <footer className="px-8 py-4 border-t border-neutral-100 bg-white rounded-b-[2.5rem] flex justify-end">
+                    <button onClick={onClose} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-md">Done</button>
+                </footer>
+            </div>
+            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
+        </div>
+    );
+};
+
+// --- NEW COMPONENT: ConversationPracticeModal ---
+interface ConversationPracticeModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    item: ConversationItem | null;
+}
+
+const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ isOpen, onClose, item }) => {
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [actingAs, setActingAs] = useState<string | null>(null); // Name of character user is playing
+    const [isUserTurn, setIsUserTurn] = useState(false);
+    
+    const [isRecordingUser, setIsRecordingUser] = useState(false);
+    const [userTranscript, setUserTranscript] = useState('');
+    const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null);
+    const [userAudioMime, setUserAudioMime] = useState<string>('audio/webm');
+    const [isListeningForStt, setIsListeningForStt] = useState(false);
+
+    const [config] = useState(() => getConfig());
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const itemRefs = useRef<Record<number, HTMLDivElement | null>>({});
+    const recognitionManager = useRef(new SpeechRecognitionManager());
+
+    const handleClose = () => {
+        stopSpeaking();
+        recognitionManager.current.stop();
+        onClose();
+    };
+
+    // Autoplay & Sequence Logic
+    useEffect(() => {
+        let isCancelled = false;
+        
+        const runSequence = async () => {
+            if (isPlaying && item && currentIndex < item.sentences.length) {
+                const s = item.sentences[currentIndex];
+                
+                // CHECK IF USER TURN
+                if (actingAs && s.speakerName === actingAs) {
+                    setIsPlaying(false);
+                    setIsUserTurn(true);
+                    return;
+                }
+
+                // AI Speaker Logic
+                const sp = item.speakers.find(src => src.name === s.speakerName);
+                let voice = sp?.voiceName;
+                let accent = sp?.accentCode;
+
+                if (!voice) {
+                    const activeType = sp?.sex === 'male' ? 'male' : 'female';
+                    const coach = config.audioCoach.coaches[activeType];
+                    voice = coach.enVoice;
+                    accent = coach.enAccent;
+                }
+
+                try {
+                    await speak(s.text, true, 'en', voice, accent);
+                } catch (e) {
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+
+                if (!isCancelled && isPlaying) {
+                    if (currentIndex < item.sentences.length - 1) {
+                        setCurrentIndex(prev => prev + 1);
+                    } else {
+                        setIsPlaying(false);
+                    }
+                }
+            }
+        };
+
+        runSequence();
+        return () => { isCancelled = true; };
+    }, [isPlaying, currentIndex, item, config, actingAs]);
+
+    // Auto-scroll logic
+    useEffect(() => {
+        const activeEl = itemRefs.current[currentIndex];
+        if (activeEl && scrollContainerRef.current) {
+            activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, [currentIndex, isPlaying]);
+
+    if (!isOpen || !item || !item.sentences || item.sentences.length === 0) return null;
+
+    const sentences = item.sentences;
+    const activeSentence = sentences[currentIndex];
+    
+    const handleToggleRecording = async () => {
+        if (isRecordingUser) {
+            recognitionManager.current.stop();
+            setIsListeningForStt(false);
+            const result = await stopRecording();
+            if (result) {
+                setUserAudioUrl(result.base64);
+                setUserAudioMime(result.mimeType);
+            }
+            setIsRecordingUser(false);
+        } else {
+            stopSpeaking(); 
+            setUserTranscript('');
+            setUserAudioUrl(null);
+            try {
+                await startRecording();
+                setIsRecordingUser(true);
+                setIsListeningForStt(true);
+                recognitionManager.current.start(
+                    (final, interim) => setUserTranscript(final + interim),
+                    (final) => setUserTranscript(final)
+                );
+            } catch (e) {
+                setIsRecordingUser(false);
+            }
+        }
+    };
+
+    const handlePlayUserAudio = () => {
+        if (userAudioUrl) {
+            const audio = new Audio(`data:${userAudioMime};base64,${userAudioUrl}`);
+            audio.play();
+        }
+    };
+
+    const handleConfirmUserTurn = () => {
+        setIsUserTurn(false);
+        setUserTranscript('');
+        setUserAudioUrl(null);
+        if (currentIndex < sentences.length - 1) {
+            setCurrentIndex(prev => prev + 1);
+            setIsPlaying(true);
+        } else {
+            setIsPlaying(false);
+        }
+    };
+
+    const handleSpeakAiSentence = (s: ConversationSentence) => {
+        const sp = item.speakers.find(src => src.name === s.speakerName);
+        let voice = sp?.voiceName;
+        let accent = sp?.accentCode;
+
+        if (!voice) {
+            const activeType = sp?.sex === 'male' ? 'male' : 'female';
+            const coach = config.audioCoach.coaches[activeType];
+            voice = coach.enVoice;
+            accent = coach.enAccent;
+        }
+
+        speak(s.text, false, 'en', voice, accent);
+    };
+
+    // Derived list based on play mode
+    const visibleSentences = isPlaying ? [sentences[currentIndex]] : sentences;
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl border border-neutral-200 flex flex-col h-[85vh] overflow-hidden">
+                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-center shrink-0 bg-white z-10">
+                    <div className="flex flex-col gap-1">
+                        <h3 className="text-xl font-black text-neutral-900 leading-none">{item.title}</h3>
+                        <div className="flex items-center gap-3">
+                             <div className="flex items-center gap-1 text-[9px] font-black uppercase text-neutral-400">
+                                <UserCircle size={10}/> Role Play:
+                             </div>
+                             <div className="flex bg-neutral-100 p-0.5 rounded-lg">
+                                <button onClick={() => { setActingAs(null); setIsUserTurn(false); }} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${!actingAs ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Spectator</button>
+                                {item.speakers.map(s => (
+                                    <button key={s.name} onClick={() => { setActingAs(s.name); setIsUserTurn(false); }} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${actingAs === s.name ? 'bg-indigo-600 text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Act as {s.name}</button>
+                                ))}
+                             </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        {!isUserTurn && (
+                            <div className="flex bg-neutral-100 p-1 rounded-2xl">
+                                <button onClick={() => { setIsPlaying(true); }} className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Play size={14} fill="currentColor"/> Play</button>
+                                <button onClick={() => { setIsPlaying(false); stopSpeaking(); }} className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${!isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Pause size={14} fill="currentColor"/> Pause</button>
+                            </div>
+                        )}
+                        <button type="button" onClick={handleClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={24}/></button>
+                    </div>
+                </header>
+
+                {/* Speaker Row */}
+                <div className="bg-neutral-50/50 py-6 px-8 border-b border-neutral-100 shrink-0">
+                    <div className="flex justify-center items-end gap-10 md:gap-20">
+                        {item.speakers.map((s, idx) => {
+                            const isTalking = activeSentence.speakerName === s.name;
+                            const isUser = actingAs === s.name;
+                            return (
+                                <div key={idx} className="flex flex-col items-center relative group">
+                                    {isTalking && (
+                                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-neutral-900 text-white px-3 py-1.5 rounded-xl text-lg animate-bounce shadow-xl whitespace-nowrap z-20">
+                                            {activeSentence.icon || '💬'}
+                                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-900 rotate-45"></div>
+                                        </div>
+                                    )}
+                                    
+                                    <div className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center text-3xl md:text-4xl transition-all duration-300 ${isTalking ? 'bg-white scale-110 shadow-2xl ring-4 ring-indigo-500/20' : 'bg-neutral-200/50 grayscale opacity-40'} ${isUser ? 'border-2 border-indigo-500' : ''}`}>
+                                        {s.sex === 'male' ? '👨' : '👩'}
+                                    </div>
+                                    <div className={`mt-2 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-colors ${isTalking ? 'bg-neutral-900 text-white' : 'text-neutral-400 bg-neutral-100'} ${isUser ? 'ring-1 ring-indigo-500' : ''}`}>
+                                        {isUser ? 'YOU' : s.name}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                
+                {/* Dialogue List / Interaction Area */}
+                <main ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6 md:p-8 space-y-4 custom-scrollbar bg-white scroll-smooth pb-32">
+                    {visibleSentences.map((s, i) => {
+                        const actualIndex = isPlaying ? currentIndex : i;
+                        const isCurrent = isPlaying ? true : i === currentIndex;
+                        const isUserRole = actingAs === s.speakerName;
+                        const sp = item.speakers.find(src => src.name === s.speakerName);
+                        const isMale = sp?.sex === 'male';
+                        const needsToAct = isUserTurn && i === currentIndex;
+
+                        return (
+                            <div 
+                                key={`${actualIndex}-${i}`} 
+                                ref={el => { if (!isPlaying) itemRefs.current[i] = el; }}
+                                onClick={() => { if (!isPlaying && !isUserTurn) { setCurrentIndex(i); } }} 
+                                className={`flex items-start gap-4 p-4 rounded-[2rem] transition-all border-2 ${isCurrent ? 'bg-indigo-50/30 border-indigo-200 shadow-sm' : 'border-transparent hover:bg-neutral-50'} ${isPlaying || isUserTurn ? 'cursor-default' : 'cursor-pointer'}`}
+                            >
+                                <div className={`w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center text-xl shadow-sm ${isMale ? 'bg-blue-100' : 'bg-pink-100'} ${isCurrent ? 'scale-110 ring-2 ring-white' : ''}`}>
+                                    {isUserRole ? '🌟' : (s.icon || (isMale ? '👨' : '👩'))}
+                                </div>
+                                <div className="flex-1 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className={`text-[10px] font-black uppercase tracking-widest ${isCurrent ? 'text-indigo-600' : 'text-neutral-400'}`}>
+                                            {isUserRole ? `YOU (as ${s.speakerName})` : s.speakerName}
+                                        </span>
+                                        {isCurrent && !isPlaying && !isUserTurn && (
+                                            <div className="flex items-center gap-2 animate-in fade-in zoom-in-95">
+                                                <button onClick={(e) => { e.stopPropagation(); handleSpeakAiSentence(s); }} className="p-2 bg-neutral-900 text-white rounded-xl hover:scale-105 transition-transform"><Volume2 size={14}/></button>
+                                                <button onClick={(e) => { e.stopPropagation(); }} className="p-2 bg-rose-500 text-white rounded-xl hover:scale-105 transition-transform opacity-50 cursor-not-allowed"><Mic size={14}/></button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className={`text-sm md:text-lg leading-relaxed font-bold transition-colors ${isCurrent ? 'text-neutral-900' : 'text-neutral-500'}`}>{s.text}</p>
+
+                                    {/* INLINE RECORDING UI */}
+                                    {needsToAct && (
+                                        <div className="mt-4 p-6 bg-white border-2 border-indigo-500 rounded-[2rem] shadow-xl animate-in zoom-in-95 space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 text-indigo-600">
+                                                    <Languages size={18}/>
+                                                    <span className="text-xs font-black uppercase tracking-widest">Your Turn to Speak</span>
+                                                </div>
+                                                {isListeningForStt && <span className="flex h-2 w-2 rounded-full bg-red-500 animate-ping"></span>}
+                                            </div>
+
+                                            <div className="min-h-[60px] p-4 bg-neutral-50 rounded-2xl border border-neutral-100 flex flex-col items-center justify-center text-center">
+                                                {userTranscript ? (
+                                                    <p className="text-sm font-medium italic text-neutral-800 leading-relaxed">"{userTranscript}"</p>
+                                                ) : (
+                                                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Tap mic and read the sentence aloud</p>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center justify-center gap-4">
+                                                <button 
+                                                    onClick={handleToggleRecording} 
+                                                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all transform active:scale-90 ${isRecordingUser ? 'bg-red-500 text-white animate-pulse ring-8 ring-red-100' : 'bg-neutral-900 text-white hover:bg-neutral-800'}`}
+                                                >
+                                                    {isRecordingUser ? <Square size={24} fill="white" /> : <Mic size={24} />}
+                                                </button>
+                                                
+                                                {userAudioUrl && (
+                                                    <button onClick={handlePlayUserAudio} className="p-4 bg-white border border-neutral-200 text-neutral-600 rounded-2xl hover:text-indigo-600 hover:border-indigo-300 transition-all">
+                                                        <Play size={20} fill="currentColor"/>
+                                                    </button>
+                                                )}
+                                                
+                                                <button 
+                                                    onClick={handleConfirmUserTurn} 
+                                                    disabled={isRecordingUser}
+                                                    className="px-6 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50"
+                                                >
+                                                    Confirm & Continue
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </main>
+                
+                {/* Fixed Footer */}
+                <footer className="px-8 py-6 border-t border-neutral-100 bg-white/80 backdrop-blur-md flex justify-between items-center shrink-0 absolute bottom-0 left-0 right-0 z-20">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => { setCurrentIndex(prev => Math.max(0, prev - 1)); stopSpeaking(); setIsUserTurn(false); }} disabled={currentIndex === 0 || isUserTurn} className="p-3 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all"><ChevronLeft size={20}/></button>
+                        <div className="flex flex-col items-center min-w-[80px]">
+                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em] mb-1">Sentence</span>
+                            <span className="text-sm font-black text-neutral-900">{currentIndex + 1} / {sentences.length}</span>
+                        </div>
+                        <button onClick={() => { setCurrentIndex(prev => Math.min(sentences.length - 1, prev + 1)); stopSpeaking(); setIsUserTurn(false); }} disabled={currentIndex === sentences.length - 1 || isUserTurn} className="p-3 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all"><ChevronRight size={20}/></button>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                         {isUserTurn ? (
+                             <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-2xl border border-indigo-100 animate-in slide-in-from-right-2">
+                                <Sparkles size={14} className="text-indigo-600" />
+                                <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Waiting for User</span>
+                             </div>
+                         ) : !isPlaying && (
+                             <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-neutral-50 rounded-2xl border border-neutral-100 animate-in fade-in">
+                                <Info size={14} className="text-neutral-400" />
+                                <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Manual Mode Active</span>
+                             </div>
+                         )}
+                         <button onClick={handleClose} className="px-8 py-3 bg-neutral-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-lg active:scale-95">Finish Session</button>
+                    </div>
                 </footer>
             </div>
         </div>
     );
 };
 
+const SpeakingCardItem: React.FC<{ 
+    item: NativeSpeakItem; 
+    viewSettings: any; 
+    onEdit: () => void;
+    onDelete: () => void;
+    onFocusChange: (item: NativeSpeakItem, color: FocusColor | null) => void;
+    onToggleFocus: () => void;
+    onPractice: (item: NativeSpeakItem) => void;
+}> = ({ item, viewSettings, onEdit, onDelete, onFocusChange, onToggleFocus, onPractice }) => {
+    return (
+        <UniversalCard
+            title={<div className="flex items-center gap-2 font-black text-neutral-900">{item.standard}</div>}
+            badge={{ label: 'Native Expression', colorClass: 'bg-teal-50 text-teal-700 border-teal-100', icon: AudioLines }}
+            tags={viewSettings.showTags ? item.tags : undefined}
+            compact={viewSettings.compact}
+            onClick={() => onPractice(item)}
+            focusColor={item.focusColor}
+            onFocusChange={(c) => onFocusChange(item, c)}
+            isFocused={item.isFocused}
+            onToggleFocus={onToggleFocus}
+            actions={
+                <div className="flex items-center gap-1">
+                    <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"><Edit3 size={14}/></button>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 size={14}/></button>
+                </div>
+            }
+        >
+            <div className="space-y-2 mt-2">
+                <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{item.answers.length} variations</div>
+                <div className="flex justify-end">
+                    <button onClick={(e) => { e.stopPropagation(); onPractice(item); }} className="flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-lg active:scale-95">
+                        <Play size={14} fill="currentColor"/> Practice
+                    </button>
+                </div>
+            </div>
+        </UniversalCard>
+    );
+};
 
 export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
-  const [items, setItems] = useState<NativeSpeakItem[]>([]);
+  const [items, setItems] = useState<SpeakingItem[]>([]);
   const [speakingBooks, setSpeakingBooks] = useState<SpeakingBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
-  const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, {
-      showTags: true,
-      compact: false
-  }));
+  const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, { showTags: true, compact: false, resourceType: 'ALL' }));
+  const handleSettingChange = (key: string, value: any) => setViewSettings(prev => ({ ...prev, [key]: value }));
   
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(12);
-
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
   const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
   
-  // View Routing
   const [viewMode, setViewMode] = useState<'LIST' | 'SHELF' | 'BOOK_DETAIL'>('LIST');
   const [activeBook, setActiveBook] = useState<SpeakingBook | null>(null);
 
-  useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
-
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
-  
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConversationModalOpen, setIsConversationModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<NativeSpeakItem | null>(null);
-  const [itemToDelete, setItemToDelete] = useState<NativeSpeakItem | null>(null);
+  const [editingConversation, setEditingConversation] = useState<ConversationItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string, type: 'card' | 'conversation' } | null>(null);
+  
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isConversationAiModalOpen, setIsConversationAiModalOpen] = useState(false);
   const [itemToRefine, setItemToRefine] = useState<Partial<NativeSpeakItem> | null>(null);
-  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const { showToast } = useToast();
   
   const [practiceModalItem, setPracticeModalItem] = useState<NativeSpeakItem | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [practiceConversation, setPracticeConversation] = useState<ConversationItem | null>(null);
   
-  // Shelf Logic Hook
-  const { 
-      currentShelfName, 
-      booksOnCurrentShelf, 
-      allShelves,
-      addShelf, 
-      renameShelf, 
-      removeShelf, 
-      nextShelf, 
-      prevShelf,
-      selectShelf
-  } = useShelfLogic(speakingBooks, 'speaking_books_shelves');
-
-  // Shelf Modal State
+  const { currentShelfName, booksOnCurrentShelf, allShelves, addShelf, renameShelf, removeShelf, nextShelf, prevShelf, selectShelf } = useShelfLogic(speakingBooks, 'speaking_books_shelves');
   const [isAddShelfModalOpen, setIsAddShelfModalOpen] = useState(false);
   const [isRenameShelfModalOpen, setIsRenameShelfModalOpen] = useState(false);
   const [bookToMove, setBookToMove] = useState<SpeakingBook | null>(null);
@@ -496,124 +769,93 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
 
   const loadData = async () => {
     setLoading(true);
-    const [data, books] = await Promise.all([
-        db.getNativeSpeakItemsByUserId(user.id),
-        db.getSpeakingBooksByUserId(user.id)
-    ]);
-    setItems(data.sort((a, b) => b.createdAt - a.createdAt));
+    const [cards, conversations, books] = await Promise.all([ db.getNativeSpeakItemsByUserId(user.id), db.getConversationItemsByUserId(user.id), db.getSpeakingBooksByUserId(user.id) ]);
+    const combined: SpeakingItem[] = [ ...cards.map(c => ({ type: 'card' as const, data: c })), ...conversations.map(c => ({ type: 'conversation' as const, data: c })) ];
+    setItems(combined.sort((a, b) => b.data.createdAt - a.data.createdAt));
     setSpeakingBooks(books.sort((a, b) => b.createdAt - a.createdAt));
     setLoading(false);
   };
 
   useEffect(() => { loadData(); }, [user.id]);
-  useEffect(() => { setPage(0); }, [selectedTag, pageSize, focusFilter, colorFilter]);
+  useEffect(() => { setPage(0); }, [selectedTag, pageSize, focusFilter, colorFilter, viewSettings.resourceType]);
+  useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
-      if (focusFilter === 'focused' && !item.isFocused) return false;
-      if (colorFilter !== 'all' && item.focusColor !== colorFilter) return false;
-
+      if (viewSettings.resourceType !== 'ALL' && item.type.toUpperCase() !== viewSettings.resourceType) return false;
+      if (focusFilter === 'focused' && !item.data.isFocused) return false;
+      if (colorFilter !== 'all' && item.data.focusColor !== colorFilter) return false;
       if (selectedTag) {
-          if (selectedTag === 'Uncategorized') {
-             if (item.path && item.path !== '/') return false;
-          } else {
-             if (!item.path?.startsWith(selectedTag) && !item.tags?.includes(selectedTag)) return false;
-          }
+          if (selectedTag === 'Uncategorized') { if (item.data.path && item.data.path !== '/') return false; } 
+          else { if (!item.data.path?.startsWith(selectedTag) && !item.data.tags?.includes(selectedTag)) return false; }
       }
       return true;
     });
-  }, [items, selectedTag, focusFilter, colorFilter]);
+  }, [items, selectedTag, focusFilter, colorFilter, viewSettings.resourceType]);
   
-  const pagedItems = useMemo(() => {
-      const start = page * pageSize;
-      return filteredItems.slice(start, start + pageSize);
-  }, [filteredItems, page, pageSize]);
+  const pagedItems = useMemo(() => { const start = page * pageSize; return filteredItems.slice(start, start + pageSize); }, [filteredItems, page, pageSize]);
 
-  const handleRandomize = () => { setItems(prev => [...prev].sort(() => Math.random() - 0.5)); showToast("Shuffled!", "success"); };
-  const handleAdd = () => { setEditingItem(null); setIsModalOpen(true); };
-  const handleEdit = (item: NativeSpeakItem) => { setEditingItem(item); setIsModalOpen(true); };
-  const handleDelete = async () => { if (!itemToDelete) return; await db.deleteNativeSpeakItem(itemToDelete.id); setItemToDelete(null); loadData(); };
-  
-  const handleSave = async (data: { standard: string, tags: string[], note: string, answers: NativeSpeakAnswer[] }) => {
+  const handleSaveItem = async (data: any) => {
     const now = Date.now();
-    if (editingItem) {
-        await db.saveNativeSpeakItem({ ...editingItem, ...data, updatedAt: now });
-    } else {
-        const newItem: NativeSpeakItem = { 
-            id: `ns-${now}-${Math.random()}`, 
-            userId: user.id, 
-            createdAt: now, 
-            updatedAt: now,
-            ...data
-        };
-        await db.saveNativeSpeakItem(newItem);
+    if (editingItem && editingItem.id) { 
+        await dataStore.saveNativeSpeakItem({ ...editingItem, ...data, updatedAt: now }); 
+    } else { 
+        await dataStore.saveNativeSpeakItem({ id: `ns-${now}-${Math.random()}`, userId: user.id, createdAt: now, updatedAt: now, ...data }); 
     }
-    setIsModalOpen(false);
-    loadData();
-    showToast("Saved successfully!", "success");
+    setIsModalOpen(false); loadData(); showToast("Saved!", "success");
+  };
+
+  const handleSaveConversation = async (formData: Partial<ConversationItem>) => {
+    const now = Date.now();
+    if (editingConversation && editingConversation.id) { 
+        await dataStore.saveConversationItem({ ...editingConversation, ...formData, updatedAt: now } as ConversationItem); 
+    } else { 
+        await dataStore.saveConversationItem({ id: `conv-${now}-${Math.random()}`, userId: user.id, createdAt: now, updatedAt: now, title: formData.title || '', description: formData.description || '', speakers: formData.speakers || [], sentences: formData.sentences || [], tags: formData.tags || [] } as ConversationItem); 
+    }
+    setIsConversationModalOpen(false); loadData(); showToast("Saved!", "success");
+  };
+
+  const handleEditItem = (item: SpeakingItem) => {
+    if (item.type === 'card') { setEditingItem(item.data as NativeSpeakItem); setIsModalOpen(true); } 
+    else { setEditingConversation(item.data as ConversationItem); setIsConversationModalOpen(true); }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    if (itemToDelete.type === 'card') await dataStore.deleteNativeSpeakItem(itemToDelete.id);
+    else await dataStore.deleteConversationItem(itemToDelete.id);
+    setItemToDelete(null); loadData(); showToast("Deleted!", "success");
+  };
+
+  const handleFocusChange = async (item: SpeakingItem, color: FocusColor | null) => {
+      const updated = { ...item.data, focusColor: color || undefined, updatedAt: Date.now() };
+      if (!color) delete (updated as any).focusColor;
+      if (item.type === 'card') await dataStore.saveNativeSpeakItem(updated as NativeSpeakItem);
+      else await dataStore.saveConversationItem(updated as ConversationItem);
+      loadData();
   };
   
-  const handleFocusChange = async (item: NativeSpeakItem, color: FocusColor | null) => {
-      const updatedItem = { ...item, focusColor: color || undefined, updatedAt: Date.now() };
-      if (!color) delete updatedItem.focusColor;
-      setItems(prev => prev.map(i => i.id === item.id ? updatedItem : i));
-      await db.saveNativeSpeakItem(updatedItem);
-  };
-  
-  const handleToggleFocus = async (item: NativeSpeakItem) => {
-      const updatedItem = { ...item, isFocused: !item.isFocused, updatedAt: Date.now() };
-      setItems(prev => prev.map(i => i.id === item.id ? updatedItem : i));
-      await db.saveNativeSpeakItem(updatedItem);
+  const handleToggleFocus = async (item: SpeakingItem) => {
+      const updated = { ...item.data, isFocused: !item.data.isFocused, updatedAt: Date.now() };
+      if (item.type === 'card') await dataStore.saveNativeSpeakItem(updated as NativeSpeakItem);
+      else await dataStore.saveConversationItem(updated as ConversationItem);
+      loadData();
   };
 
-  const handleSelect = (id: string) => {
-    setSelectedIds(prev => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-    });
-  };
-  
-  const selectedItems = useMemo(() => items.filter(item => selectedIds.has(item.id)), [items, selectedIds]);
-
-  const handleMergeResult = async (mergedData: any) => {
-      if (!mergedData || !mergedData.standard || !Array.isArray(mergedData.answers)) {
-          showToast("Invalid JSON format from AI for merging.", "error");
-          return;
-      }
-      setIsMergeModalOpen(false);
-      setIsProcessing(true);
-      try {
-          const now = Date.now();
-          const mergedTags = new Set<string>();
-          selectedItems.forEach(item => { (item.tags || []).forEach(tag => mergedTags.add(tag)); });
-          mergedTags.add('merged');
-
-          const newItem: NativeSpeakItem = {
-              id: `ns-${now}-${Math.random()}`,
-              userId: user.id,
-              standard: mergedData.standard,
-              answers: mergedData.answers,
-              tags: Array.from(mergedTags),
-              createdAt: now,
-              updatedAt: now,
-          };
-          await db.saveNativeSpeakItem(newItem);
-          await db.bulkDeleteNativeSpeakItems(Array.from(selectedIds));
-
-          showToast(`Successfully merged ${selectedIds.size} cards!`, 'success');
-          setSelectedIds(new Set());
-          await loadData();
-      } catch (e) {
-          showToast("Failed to merge cards.", "error");
-      } finally {
-          setIsProcessing(false);
-      }
+  const handleConversationAiResult = (data: any) => {
+      setEditingConversation(prev => ({ ...prev || {}, title: data.title, description: data.description, speakers: data.speakers, sentences: data.sentences, tags: data.tags } as ConversationItem));
+      setIsConversationAiModalOpen(false); showToast("Conversation generated!", "success");
   };
 
-  // --- Handlers for Shelf Management ---
-  const handleRenameShelf = (newName: string) => {
+  // --- Shelf Navigation ---
+  const handleNavigateShelf = (name: string) => { selectShelf(name); setViewMode('SHELF'); };
+  const handleNavigateBook = (book: SpeakingBook) => { setActiveBook(book); setViewMode('BOOK_DETAIL'); };
+  const handleCreateEmptyBook = async () => {
+    const nb: SpeakingBook = { id: `sb-${Date.now()}`, userId: user.id, title: `${currentShelfName}: New Book`, itemIds: [], createdAt: Date.now(), updatedAt: Date.now(), color: '#d81b60', icon: '🗣️' };
+    await dataStore.saveSpeakingBook(nb); await loadData(); setActiveBook(nb); setViewMode('BOOK_DETAIL');
+  };
+
+  const handleRenameShelfAction = (newName: string) => {
       const success = renameShelf(newName, async (oldS, newS) => {
           setLoading(true);
           const booksToUpdate = speakingBooks.filter(b => {
@@ -633,383 +875,57 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
       if (success) setIsRenameShelfModalOpen(false);
   };
 
-  // --- Handlers for Book Management ---
-  const handleCreateEmptyBook = async () => {
-    const newBook: SpeakingBook = {
-        id: `sb-${Date.now()}`,
-        userId: user.id,
-        title: `${currentShelfName}: New Book`,
-        itemIds: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        color: '#d81b60',
-        icon: '🗣️'
-    };
-    await db.saveSpeakingBook(newBook);
-    await loadData();
-    setActiveBook(newBook);
-    setViewMode('BOOK_DETAIL');
-    showToast("New book created.", "success");
-  };
-
-  const handleUpdateBook = (updated: Partial<SpeakingBook>) => {
-      if (!activeBook) return;
-      const newBook = { ...activeBook, ...updated, updatedAt: Date.now() };
-      setSpeakingBooks(prev => prev.map(b => b.id === newBook.id ? newBook : b));
-      setActiveBook(newBook);
-      db.saveSpeakingBook(newBook);
-  };
-
-  const handleDeleteBook = async () => {
-      if (!bookToDelete) return;
-      await db.deleteSpeakingBook(bookToDelete.id);
-      showToast('Book deleted.', 'success');
-      setBookToDelete(null);
-      await loadData();
-  };
-
-  const handleConfirmMoveBook = async (targetShelf: string) => {
-      if (!bookToMove) return;
-      const parts = bookToMove.title.split(':');
-      const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
-      const newTitle = `${targetShelf}: ${bookTitle}`;
-      
-      const updatedBook = { ...bookToMove, title: newTitle, updatedAt: Date.now() };
-      await db.saveSpeakingBook(updatedBook);
-      setBookToMove(null);
-      await loadData();
-      showToast(`Moved to "${targetShelf}".`, 'success');
-  };
-
-  // --- Data Transformation for GenericBookDetail ---
-  const genericBookItems: GenericBookItem[] = useMemo(() => {
-      if (!activeBook) return [];
-      return activeBook.itemIds.map((id): GenericBookItem | null => {
-          const item = items.find(i => i.id === id);
-          if (!item) return null;
-          return {
-              id: item.id,
-              title: item.standard,
-              subtitle: `${item.answers.length} expressions`,
-              data: item,
-              focusColor: item.focusColor,
-              isFocused: item.isFocused
-          };
-      }).filter((item): item is GenericBookItem => item !== null);
-  }, [activeBook, items]);
-
-  const availableGenericItems: GenericBookItem[] = useMemo(() => {
-      return items.map(item => ({
-          id: item.id,
-          title: item.standard,
-          subtitle: `${item.answers.length} expressions`,
-          data: item
-      }));
-  }, [items]);
-
-  const handleAddItemsToBook = (ids: string[]) => {
-      if (!activeBook) return;
-      const newIds = Array.from(new Set([...activeBook.itemIds, ...ids]));
-      handleUpdateBook({ itemIds: newIds });
-  };
-  
-  const handleRemoveItemFromBook = (id: string) => {
-      if (!activeBook) return;
-      const newIds = activeBook.itemIds.filter(uid => uid !== id);
-      handleUpdateBook({ itemIds: newIds });
-  };
-  
-  const handleFocusChangeGeneric = (gItem: GenericBookItem, color: any) => {
-      const item = gItem.data as NativeSpeakItem;
-      handleFocusChange(item, color);
-  };
-
-  const handleToggleFocusGeneric = (gItem: GenericBookItem) => {
-      const item = gItem.data as NativeSpeakItem;
-      handleToggleFocus(item);
-  };
-
-  // --- Views ---
-  
   if (viewMode === 'BOOK_DETAIL' && activeBook) {
-      return <GenericBookDetail
-          book={activeBook}
-          items={genericBookItems}
-          availableItems={availableGenericItems}
-          onBack={() => { setActiveBook(null); setViewMode('SHELF'); loadData(); }}
-          onUpdateBook={handleUpdateBook}
-          onAddItem={handleAddItemsToBook}
-          onRemoveItem={handleRemoveItemFromBook}
-          onOpenItem={(gItem) => setPracticeModalItem(gItem.data as NativeSpeakItem)}
-          onEditItem={(gItem) => handleEdit(gItem.data as NativeSpeakItem)}
-          onFocusChange={handleFocusChangeGeneric}
-          onToggleFocus={handleToggleFocusGeneric}
-          itemIcon={<Mic size={16}/>}
-      />;
+      const itemsMap = new Map(items.map(i => [i.data.id, i]));
+      const gItems = activeBook.itemIds.map(id => {
+          const item = itemsMap.get(id); if (!item) return null;
+          return { id, title: item.type === 'card' ? (item.data as NativeSpeakItem).standard : (item.data as ConversationItem).title, subtitle: item.type === 'card' ? 'Expression' : 'Conversation', data: item, focusColor: item.data.focusColor, isFocused: item.data.isFocused } as GenericBookItem;
+      }).filter((x): x is GenericBookItem => x !== null);
+      
+      const avItems = items.map(i => ({ id: i.data.id, title: i.type === 'card' ? (i.data as NativeSpeakItem).standard : (i.data as ConversationItem).title, subtitle: i.type === 'card' ? 'Expression' : 'Conversation', data: i } as GenericBookItem));
+
+      return <GenericBookDetail book={activeBook} items={gItems} availableItems={avItems} onBack={() => { setActiveBook(null); setViewMode('SHELF'); loadData(); }} onUpdateBook={async (u) => { const nb = { ...activeBook, ...u }; await dataStore.saveSpeakingBook(nb); setActiveBook(nb); }} onAddItem={async (ids) => { const nb = { ...activeBook, itemIds: Array.from(new Set([...activeBook.itemIds, ...ids])) }; await dataStore.saveSpeakingBook(nb); setActiveBook(nb); }} onRemoveItem={async (id) => { const nb = { ...activeBook, itemIds: activeBook.itemIds.filter(x => x !== id) }; await dataStore.saveSpeakingBook(nb); setActiveBook(nb); }} onOpenItem={(g) => { const si = g.data as SpeakingItem; if (si.type === 'card') setPracticeModalItem(si.data); else setPracticeConversation(si.data); }} onEditItem={(g) => handleEditItem(g.data as SpeakingItem)} onFocusChange={(g, c) => handleFocusChange(g.data as SpeakingItem, c)} onToggleFocus={(g) => handleToggleFocus(g.data as SpeakingItem)} itemIcon={<Mic size={16}/>} />;
   }
 
   if (viewMode === 'SHELF') {
       return (
         <div className="space-y-6 animate-in fade-in duration-500">
-           {/* Header */}
            <div className="flex flex-col gap-4">
-               <button onClick={() => setViewMode('LIST')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group">
-                    <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-                    <span>Back to Main Library</span>
-               </button>
-               
-               <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                   <div>
-                        <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Speaking Shelf</h2>
-                        <p className="text-neutral-500 mt-1 font-medium">Organize your speaking topics.</p>
-                   </div>
-                   <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
-                       <FolderPlus size={14}/> Add Shelf
-                   </button>
-               </header>
+               <button onClick={() => setViewMode('LIST')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group"><ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" /><span>Back to Main Library</span></button>
+               <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"><div className="shrink-0"><h2 className="text-3xl font-black text-neutral-900 tracking-tight">Speaking Shelf</h2><p className="text-neutral-500 mt-1 font-medium">Organize your speaking topics.</p></div><ShelfSearchBar shelves={allShelves} books={speakingBooks} onNavigateShelf={handleNavigateShelf} onNavigateBook={handleNavigateBook} /><button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm"><FolderPlus size={14}/> Add Shelf</button></header>
            </div>
-
-          <UniversalShelf
-            label={currentShelfName}
-            onNext={allShelves.length > 1 ? nextShelf : undefined}
-            onPrev={allShelves.length > 1 ? prevShelf : undefined}
-            actions={
-                <div className="flex items-center gap-2">
-                     <button onClick={() => setIsRenameShelfModalOpen(true)} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white" title="Rename Shelf"><Pen size={14}/></button>
-                     <button onClick={removeShelf} disabled={booksOnCurrentShelf.length > 0} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-30 disabled:hover:bg-white/20" title="Remove Empty Shelf"><Trash2 size={14}/></button>
-                </div>
-            }
-            isEmpty={booksOnCurrentShelf.length === 0}
-            emptyAction={
-                 <button onClick={handleCreateEmptyBook} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs uppercase tracking-widest border border-white/20">
-                     Create First Book
-                 </button>
-            }
-          >
+          <UniversalShelf label={currentShelfName} onNext={allShelves.length > 1 ? nextShelf : undefined} onPrev={allShelves.length > 1 ? prevShelf : undefined} actions={<div className="flex items-center gap-2"><button onClick={() => setIsRenameShelfModalOpen(true)} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white"><Pen size={14}/></button><button onClick={removeShelf} disabled={booksOnCurrentShelf.length > 0} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-30"><Trash2 size={14}/></button></div>} isEmpty={booksOnCurrentShelf.length === 0} emptyAction={<button onClick={handleCreateEmptyBook} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs uppercase tracking-widest border border-white/20">Create First Book</button>} >
              {booksOnCurrentShelf.map(book => {
-                 const title = book.title;
-                 const parts = title.split(':');
-                 const displayTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : title;
-
-                 return (
-                    <UniversalBook
-                        key={book.id}
-                        id={book.id}
-                        title={displayTitle}
-                        subTitle={`${book.itemIds.length} Items`}
-                        icon={<Mic size={24}/>}
-                        color={book.color}
-                        titleColor={book.titleColor}
-                        titleSize={book.titleSize}
-                        titleTop={book.titleTop}
-                        titleLeft={book.titleLeft}
-                        iconTop={book.iconTop}
-                        iconLeft={book.iconLeft}
-
-                        onClick={() => { setActiveBook(book); setViewMode('BOOK_DETAIL'); }}
-                        actions={
-                            <>
-                                <button onClick={(e) => { e.stopPropagation(); setBookToMove(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-neutral-700 hover:text-white transition-all shadow-sm" title="Move to Shelf"><Move size={16}/></button>
-                                <button onClick={(e) => { e.stopPropagation(); setBookToDelete(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-sm" title="Delete">
-                                    <Trash2 size={16} />
-                                </button>
-                            </>
-                        }
-                    />
-                 );
+                 const displayTitle = book.title.split(':').pop()?.trim() || book.title;
+                 return <UniversalBook key={book.id} id={book.id} title={displayTitle} subTitle={`${book.itemIds.length} Items`} icon={<Mic size={24}/>} color={book.color} titleColor={book.titleColor} titleSize={book.titleSize} titleTop={book.titleTop} titleLeft={book.titleLeft} iconTop={book.iconTop} iconLeft={book.iconLeft} onClick={() => { setActiveBook(book); setViewMode('BOOK_DETAIL'); }} actions={<><button onClick={(e) => { e.stopPropagation(); setBookToMove(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-neutral-700 hover:text-white transition-all shadow-sm"><Move size={16}/></button><button onClick={(e) => { e.stopPropagation(); setBookToDelete(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={16}/></button></>} />;
              })}
-             
-             {/* New Book Placeholder */}
-             <div className="group [perspective:1000px] translate-y-0">
-                <div className="relative w-full aspect-[5/7] rounded-lg bg-neutral-800/50 border-2 border-dashed border-neutral-500/50 transition-all duration-300 group-hover:border-neutral-400 group-hover:bg-neutral-800/80 group-hover:shadow-xl flex flex-col items-stretch justify-center overflow-hidden">
-                    <button onClick={handleCreateEmptyBook} className="flex-1 flex flex-col items-center justify-center p-2 text-center text-neutral-400 hover:bg-white/5 transition-colors">
-                        <Plus size={32} className="mb-2 text-neutral-500"/>
-                        <h3 className="font-sans text-xs font-black uppercase tracking-wider">New Book</h3>
-                    </button>
-                </div>
-            </div>
-
+             <div className="group translate-y-0"><div className="relative w-full aspect-[5/7] rounded-lg bg-neutral-800/50 border-2 border-dashed border-neutral-500/50 transition-all duration-300 group-hover:border-neutral-400 group-hover:bg-neutral-800/80 group-hover:shadow-xl flex flex-col items-stretch justify-center overflow-hidden"><button onClick={handleCreateEmptyBook} className="flex-1 flex flex-col items-center justify-center p-2 text-center text-neutral-400 hover:bg-white/5 transition-colors"><Plus size={32} className="mb-2 text-neutral-500"/><h3 className="font-sans text-xs font-black uppercase tracking-wider">New Book</h3></button></div></div>
           </UniversalShelf>
-
-          <ConfirmationModal
-            isOpen={!!bookToDelete}
-            title="Delete Book?"
-            message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Items inside will not be deleted.</>}
-            confirmText="Delete"
-            isProcessing={false}
-            onConfirm={handleDeleteBook}
-            onClose={() => setBookToDelete(null)}
-            icon={<Trash2 size={40} className="text-red-500"/>}
-          />
-          
-          <MoveBookModal 
-            isOpen={!!bookToMove} 
-            onClose={() => setBookToMove(null)} 
-            onConfirm={handleConfirmMoveBook} 
-            shelves={allShelves} 
-            currentShelf={bookToMove ? (bookToMove.title.split(':')[0].trim()) : 'General'} 
-            bookTitle={bookToMove?.title || ''} 
-          />
+          <ConfirmationModal isOpen={!!bookToDelete} title="Delete Book?" message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Items inside will not be deleted.</>} confirmText="Delete" isProcessing={false} onConfirm={async () => { if (bookToDelete) await dataStore.deleteSpeakingBook(bookToDelete.id); setBookToDelete(null); loadData(); }} onClose={() => setBookToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
+          <MoveBookModal isOpen={!!bookToMove} onClose={() => setBookToMove(null)} onConfirm={async (s) => { if (bookToMove) { const nb = { ...bookToMove, title: `${s}: ${bookToMove.title.split(':').pop()?.trim()}` }; await dataStore.saveSpeakingBook(nb); setBookToMove(null); loadData(); } }} shelves={allShelves} currentShelf={bookToMove ? (bookToMove.title.split(':')[0].trim()) : 'General'} bookTitle={bookToMove?.title || ''} />
           <AddShelfModal isOpen={isAddShelfModalOpen} onClose={() => setIsAddShelfModalOpen(false)} onSave={(name) => { if(addShelf(name)) setIsAddShelfModalOpen(false); }} />
-          <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelf} initialName={currentShelfName} />
+          <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelfAction} initialName={currentShelfName} />
         </div>
       );
   }
 
-  // --- List View (Default) ---
   return (
     <>
-    <ResourcePage
-      title="Speaking Library"
-      subtitle="Master natural phrases and expressions for any context."
-      icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png" className="w-8 h-8 object-contain" alt="Speaking" />}
-      config={{}}
-      isLoading={loading || isProcessing}
-      isEmpty={filteredItems.length === 0}
-      emptyMessage="No expressions found."
-      activeFilters={{}}
-      onFilterChange={() => {}}
-      pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }}
-      aboveGrid={
-        <>
-            {isTagBrowserOpen && <TagBrowser items={items} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}
-        </>
-      }
-      minorSkills={
-          onNavigate ? (
-            <button onClick={() => onNavigate('MIMIC')} className="flex items-center gap-2 px-3 py-2 bg-neutral-100 text-neutral-600 rounded-lg text-xs font-bold hover:bg-neutral-200 transition-colors">
-                <Mic size={16} />
-                <span className="hidden sm:inline">Pronunciation</span>
-            </button>
-          ) : undefined
-      }
-      actions={
-        <ResourceActions
-            viewMenu={
-                <ViewMenu 
-                    isOpen={isViewMenuOpen} 
-                    setIsOpen={setIsViewMenuOpen} 
-                    customSection={
-                        <>
-                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
-                                <Target size={10}/> Focus & Status
-                            </div>
-                            <div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2">
-                                <button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
-                                    {focusFilter === 'focused' ? 'Focused Only' : 'All Items'}
-                                </button>
-                                <div className="flex gap-1">
-                                    <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
-                                    <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
-                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
-                                </div>
-                            </div>
-                        </>
-                    }
-                    viewOptions={[
-                        { label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, 
-                        { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }
-                    ]}
-                />
-            }
-            browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => setIsTagBrowserOpen(!isTagBrowserOpen) }}
-            addActions={[{ label: 'Add', icon: Plus, onClick: handleAdd }]}
-            extraActions={
-                 <>
-                    <button onClick={handleRandomize} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button>
-                    <button onClick={() => setViewMode('SHELF')} className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs flex items-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-200" title="Bookshelf Mode">
-                        <Library size={16} />
-                        <span>Bookshelf</span>
-                    </button>
-                 </>
-            }
-        />
-      }
-    >
-      {() => (
-        <>
-          {pagedItems.map(item => (
-             <SpeakingCardItem 
-                key={item.id} 
-                item={item} 
-                viewSettings={viewSettings}
-                isSelected={selectedIds.has(item.id)}
-                onSelect={handleSelect}
-                onEdit={handleEdit} 
-                onDelete={setItemToDelete} 
-                onFocusChange={handleFocusChange} 
-                onToggleFocus={handleToggleFocus}
-                onPractice={setPracticeModalItem}
-            />
-          ))}
-        </>
-      )}
+    <ResourcePage title="Speaking Library" subtitle="Master natural phrases." icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png" className="w-8 h-8 object-contain" alt="Speaking" />} centerContent={<ShelfSearchBar shelves={allShelves} books={speakingBooks} onNavigateShelf={handleNavigateShelf} onNavigateBook={handleNavigateBook} />} config={{}} isLoading={loading || isProcessing} isEmpty={filteredItems.length === 0} emptyMessage="No items found." activeFilters={{}} onFilterChange={() => {}} pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }} aboveGrid={<>{isTagBrowserOpen && <TagBrowser items={items.map(i => i.data)} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}</>} minorSkills={<button onClick={() => onNavigate?.('MIMIC')} className="flex items-center gap-2 px-3 py-2 bg-neutral-100 text-neutral-600 rounded-lg text-xs font-bold hover:bg-neutral-200 transition-colors"><Mic size={16} /><span className="hidden sm:inline">Pronunciation</span></button>} actions={<ResourceActions viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} filterOptions={[{ label: 'All', value: 'ALL', isActive: viewSettings.resourceType === 'ALL', onClick: () => handleSettingChange('resourceType', 'ALL') }, { label: 'Card', value: 'CARD', isActive: viewSettings.resourceType === 'CARD', onClick: () => handleSettingChange('resourceType', 'CARD') }, { label: 'Conv.', value: 'CONVERSATION', isActive: viewSettings.resourceType === 'CONVERSATION', onClick: () => handleSettingChange('resourceType', 'CONVERSATION') }]} customSection={<><div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2"><Target size={10}/> Focus & Status</div><div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2"><button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>{focusFilter === 'focused' ? 'Focused Only' : 'All Items'}</button><div className="flex gap-1"><button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-50 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} /></div></div></>} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]} />} browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => setIsTagBrowserOpen(!isTagBrowserOpen) }} addActions={[{ label: 'New Card', icon: Plus, onClick: () => { setEditingItem(null); setIsModalOpen(true); } }, { label: 'New Conversation', icon: MessageSquare, onClick: () => { setEditingConversation(null); setIsConversationModalOpen(true); } }]} extraActions={<><button onClick={() => setItems([...items].sort(() => Math.random() - 0.5))} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button><button onClick={() => setViewMode('SHELF')} className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs flex items-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-200" title="Bookshelf Mode"><Library size={16} /><span>Bookshelf</span></button></>} />}>
+      {() => (<>{pagedItems.map(item => item.type === 'card' ? ( <SpeakingCardItem key={item.data.id} item={item.data as NativeSpeakItem} viewSettings={viewSettings} onEdit={() => handleEditItem(item)} onDelete={() => setItemToDelete({ id: item.data.id, type: 'card' })} onFocusChange={(i, c) => handleFocusChange(item, c)} onToggleFocus={() => handleToggleFocus(item)} onPractice={(i) => setPracticeModalItem(i)} /> ) : ( <UniversalCard key={item.data.id} title={item.data.title} badge={{ label: 'Conversation', colorClass: 'bg-indigo-50 text-indigo-700 border-indigo-100', icon: MessageSquare }} tags={viewSettings.showTags ? item.data.tags : undefined} compact={viewSettings.compact} onClick={() => setPracticeConversation(item.data as ConversationItem)} focusColor={item.data.focusColor} onFocusChange={(c) => handleFocusChange(item, c)} isFocused={item.data.isFocused} onToggleFocus={handleToggleFocus.bind(null, item)} actions={<><button onClick={(e) => { e.stopPropagation(); handleEditItem(item); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit"><Edit3 size={14}/></button><button onClick={(e) => { e.stopPropagation(); setItemToDelete({ id: item.data.id, type: 'conversation' }); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete"><Trash2 size={14}/></button></>} ><div className="flex justify-between items-center mt-2"><div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{(item.data as ConversationItem).sentences.length} lines</div><button onClick={(e) => { e.stopPropagation(); setPracticeConversation(item.data as ConversationItem); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-indigo-200 shadow-indigo-200 active:scale-95"><Play size={14}/> Practice</button></div></UniversalCard> ))}</>)}
     </ResourcePage>
     
-    {selectedIds.size > 0 && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[150] w-full max-w-md px-4 animate-in slide-in-from-bottom-8">
-            <div className="bg-neutral-900 text-white rounded-2xl p-3 shadow-2xl flex items-center justify-between border border-neutral-800 gap-4">
-                <div className="flex items-center gap-3 pl-2">
-                    <button onClick={() => setSelectedIds(new Set())} className="p-1 text-neutral-500 hover:text-white"><X size={16}/></button>
-                    <span className="text-sm font-bold">{selectedIds.size} selected</span>
-                </div>
-                <button
-                    onClick={() => setIsMergeModalOpen(true)}
-                    disabled={selectedIds.size < 2 || isProcessing}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-black text-xs flex items-center gap-2 uppercase tracking-wider hover:bg-indigo-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Combine size={14} /> Merge
-                </button>
-            </div>
-        </div>
-    )}
-
-    {isProcessing && (
-        <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-[250] flex items-center justify-center">
-            <Loader2 size={32} className="animate-spin text-neutral-900" />
-        </div>
-    )}
+    <AddEditModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveItem} initialData={editingItem} onOpenAiRefine={(d) => { setItemToRefine(d); setIsAiModalOpen(true); }} />
+    <AddEditConversationModal isOpen={isConversationModalOpen} onClose={() => setIsConversationModalOpen(false)} onSave={handleSaveConversation} initialData={editingConversation} onOpenAiGen={() => setIsConversationAiModalOpen(true)} />
+    <ConfirmationModal isOpen={!!itemToDelete} title="Delete Item?" message="This action cannot be undone." confirmText="Delete" isProcessing={false} onConfirm={handleConfirmDelete} onClose={() => setItemToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
     
-    <AddEditModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} initialData={editingItem} onOpenAiRefine={(d) => { setItemToRefine(d); setIsAiModalOpen(true); }} />
-    <ConfirmationModal isOpen={!!itemToDelete} title="Delete Card?" message="Delete this expression?" confirmText="Delete" isProcessing={false} onConfirm={handleDelete} onClose={() => setItemToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
-    {isAiModalOpen && <UniversalAiModal 
-        isOpen={isAiModalOpen} 
-        onClose={() => setIsAiModalOpen(false)} 
-        type="REFINE_UNIT"
-        title="Refine Expression"
-        description="Enter instructions for the AI to generate expressions."
-        initialData={{}}
-        onGeneratePrompt={(i) => getRefineNativeSpeakPrompt(itemToRefine?.standard || '', i.request)} 
-        onJsonReceived={(d) => { 
-            if (d.answers) { 
-                setEditingItem(prev => {
-                    const baseItem = prev || { id: '', userId: user.id, createdAt: 0, updatedAt: 0, standard: '', answers: [], tags: [], note: '' };
-                    return { ...baseItem, standard: d.standard, answers: d.answers };
-                });
-                setIsAiModalOpen(false); 
-                showToast("Refined! Expressions generated.", "success"); 
-            } 
-        }} 
-        actionLabel="Apply" 
-    />}
-    {isMergeModalOpen && (
-        <UniversalAiModal 
-            isOpen={isMergeModalOpen}
-            onClose={() => setIsMergeModalOpen(false)}
-            type="REFINE_UNIT"
-            title="Merge Expressions"
-            description="AI will combine the selected cards into a single, cohesive one."
-            initialData={{}}
-            onGeneratePrompt={() => getMergeNativeSpeakPrompt(selectedItems)}
-            onJsonReceived={handleMergeResult}
-            actionLabel="Apply Merge"
-        />
-    )}
-    <SpeakingPracticeModal 
-        isOpen={!!practiceModalItem}
-        onClose={() => setPracticeModalItem(null)}
-        item={practiceModalItem}
-    />
+    {isAiModalOpen && <UniversalAiModal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} type="REFINE_UNIT" title="Refine Expression" description="Enter instructions for AI refinement." initialData={{}} onGeneratePrompt={(i) => getRefineNativeSpeakPrompt(itemToRefine?.standard || '', i.request)} onJsonReceived={(d) => { if (d.answers) { setEditingItem(prev => ({ ...prev || { id: '', userId: user.id, createdAt: 0, updatedAt: 0, standard: '', answers: [], tags: [], note: '' }, standard: d.standard, answers: d.answers })); setIsAiModalOpen(false); showToast("Refined!", "success"); } }} actionLabel="Apply" />}
+    {isConversationAiModalOpen && <UniversalAiModal isOpen={isConversationAiModalOpen} onClose={() => setIsConversationAiModalOpen(false)} type="GENERATE_UNIT" title="AI Conversation Creator" description="Enter a topic to generate a dialogue." initialData={{}} onGeneratePrompt={(i) => getGenerateConversationPrompt(i.request)} onJsonReceived={handleConversationAiResult} actionLabel="Generate" closeOnSuccess={true} />}
+    
+    <SpeakingPracticeModal isOpen={!!practiceModalItem} onClose={() => setPracticeModalItem(null)} item={practiceModalItem} />
+    <ConversationPracticeModal isOpen={!!practiceConversation} onClose={() => setPracticeConversation(null)} item={practiceConversation} />
     </>
   );
 };
+
+export default SpeakingCardPage;

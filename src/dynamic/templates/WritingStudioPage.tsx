@@ -21,6 +21,7 @@ import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components
 import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { UniversalBook } from '../../components/common/UniversalBook';
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
+import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
 
 interface Props {
   user: User;
@@ -28,7 +29,7 @@ interface Props {
   onConsumeContext?: () => void;
 }
 
-const VIEW_SETTINGS_KEY = 'vocab_pro_writing_view';
+const VIEW_SETTINGS_KEY = 'vocab_pro_writing_view_settings';
 
 // --- Helper: Topic Editor Inline ---
 const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => void, onCancel: () => void }> = ({ user, topic, onSave, onCancel }) => {
@@ -69,7 +70,7 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
         tags: finalTags,
         updatedAt: Date.now()
       };
-      await db.saveWritingTopic(updatedTopic);
+      await dataStore.saveWritingTopic(updatedTopic);
       showToast('Topic saved!', 'success');
       setIsSaving(false);
       onSave();
@@ -287,7 +288,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
         if (itemToDelete.type === 'COMP') {
             await dataStore.deleteComposition(itemToDelete.id, user.id);
         } else {
-            await db.deleteWritingTopic(itemToDelete.id);
+            await dataStore.deleteWritingTopic(itemToDelete.id);
         }
         showToast("Item deleted.", "success");
         setItemToDelete(null);
@@ -303,7 +304,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                     task1: data.task1, task2: data.task2, tags: ['Mock Test', 'Generated'],
                     createdAt: Date.now(), updatedAt: Date.now()
                 };
-                await db.saveWritingTopic(newTopic);
+                await dataStore.saveWritingTopic(newTopic);
                 await loadData();
                 showToast("Test generated successfully!", "success");
                 setActiveTopic(newTopic);
@@ -325,7 +326,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
              await dataStore.saveComposition(updated as Composition);
          } else { // Topic
              setTopics(prev => prev.map(t => t.id === item.id ? updated as WritingTopic : t));
-             await db.saveWritingTopic(updated as WritingTopic);
+             await dataStore.saveWritingTopic(updated as WritingTopic);
          }
     };
 
@@ -337,12 +338,12 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
              await dataStore.saveComposition(updated as Composition);
          } else { // Topic
              setTopics(prev => prev.map(t => t.id === item.id ? updated as WritingTopic : t));
-             await db.saveWritingTopic(updated as WritingTopic);
+             await dataStore.saveWritingTopic(updated as WritingTopic);
          }
     };
 
     // --- Handlers for Shelf Management ---
-    const handleRenameShelf = (newName: string) => {
+    const handleRenameShelfAction = (newName: string) => {
         const success = renameShelf(newName, async (oldS, newS) => {
             setLoading(true);
             const booksToUpdate = writingBooks.filter(b => {
@@ -355,7 +356,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                  const parts = b.title.split(':');
                  const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
                  const newFullTitle = `${newS}: ${bookTitle}`;
-                 return db.saveWritingBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
+                 return dataStore.saveWritingBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
             }));
             await loadData();
         });
@@ -374,24 +375,24 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             color: '#1e88e5',
             icon: '✍️'
         };
-        await db.saveWritingBook(newBook);
+        await dataStore.saveWritingBook(newBook);
         await loadData();
         setActiveBook(newBook);
         setViewMode('BOOK_DETAIL');
         showToast("New book created.", "success");
     };
 
-    const handleUpdateBook = (updated: Partial<WritingBook>) => {
+    const handleUpdateBook = async (updated: Partial<WritingBook>) => {
         if (!activeBook) return;
         const newBook = { ...activeBook, ...updated, updatedAt: Date.now() };
         setWritingBooks(prev => prev.map(b => b.id === newBook.id ? newBook : b));
         setActiveBook(newBook);
-        db.saveWritingBook(newBook);
+        await dataStore.saveWritingBook(newBook);
     };
 
     const handleDeleteBook = async () => {
         if (!bookToDelete) return;
-        await db.deleteWritingBook(bookToDelete.id);
+        await dataStore.deleteWritingBook(bookToDelete.id);
         showToast('Book deleted.', 'success');
         setBookToDelete(null);
         await loadData();
@@ -404,7 +405,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
         const newTitle = `${targetShelf}: ${bookTitle}`;
         
         const updatedBook = { ...bookToMove, title: newTitle, updatedAt: Date.now() };
-        await db.saveWritingBook(updatedBook);
+        await dataStore.saveWritingBook(updatedBook);
         setBookToMove(null);
         await loadData();
         showToast(`Moved to "${targetShelf}".`, 'success');
@@ -478,6 +479,16 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
         handleToggleFocus(item);
     };
 
+    const handleNavigateShelf = (name: string) => {
+        selectShelf(name);
+        setViewMode('SHELF');
+    };
+
+    const handleNavigateBook = (book: WritingBook) => {
+        setActiveBook(book);
+        setViewMode('BOOK_DETAIL');
+    };
+
     // --- Views ---
 
     if (viewMode === 'EDIT_COMP') {
@@ -526,10 +537,18 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                  </button>
                  
                  <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                     <div>
+                     <div className="shrink-0">
                           <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Writing Shelf</h2>
                           <p className="text-neutral-500 mt-1 font-medium">Organize your writing practice.</p>
                      </div>
+
+                     <ShelfSearchBar 
+                        shelves={allShelves} 
+                        books={writingBooks} 
+                        onNavigateShelf={handleNavigateShelf} 
+                        onNavigateBook={handleNavigateBook} 
+                    />
+
                      <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
                          <FolderPlus size={14}/> Add Shelf
                      </button>
@@ -601,7 +620,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             <ConfirmationModal
               isOpen={!!bookToDelete}
               title="Delete Book?"
-              message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Items inside will not be deleted.</>}
+              message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Units inside will not be deleted.</>}
               confirmText="Delete"
               isProcessing={false}
               onConfirm={handleDeleteBook}
@@ -612,13 +631,14 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             <MoveBookModal 
               isOpen={!!bookToMove} 
               onClose={() => setBookToMove(null)} 
+              {/* FIX: handleMoveBook corrected to handleConfirmMoveBook */}
               onConfirm={handleConfirmMoveBook} 
               shelves={allShelves} 
               currentShelf={bookToMove ? (bookToMove.title.split(':')[0].trim()) : 'General'} 
               bookTitle={bookToMove?.title || ''} 
             />
             <AddShelfModal isOpen={isAddShelfModalOpen} onClose={() => setIsAddShelfModalOpen(false)} onSave={(name) => { if(addShelf(name)) setIsAddShelfModalOpen(false); }} />
-            <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelf} initialName={currentShelfName} />
+            <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelfAction} initialName={currentShelfName} />
           </div>
         );
     }
@@ -629,6 +649,14 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             title="Writing Library"
             subtitle="Practice writing and track vocabulary usage."
             icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png" className="w-8 h-8 object-contain" alt="Writing" />}
+            centerContent={
+                <ShelfSearchBar 
+                    shelves={allShelves} 
+                    books={writingBooks} 
+                    onNavigateShelf={handleNavigateShelf} 
+                    onNavigateBook={handleNavigateBook} 
+                />
+            }
             config={{}}
             activeFilters={{}}
             onFilterChange={() => {}}
@@ -638,7 +666,6 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }}
             aboveGrid={
                 <>
-                    {isGroupBrowserOpen && <TagBrowser items={allItemsForTagging} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="groups" title="Browse Groups" icon={<FolderTree size={16}/>} />}
                     {isTagBrowserOpen && <TagBrowser items={allItemsForTagging} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}
                 </>
             }
@@ -671,7 +698,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                                         <div className="flex gap-1">
                                             <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
                                             <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
-                                            <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                            <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-50 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
                                         </div>
                                     </div>
                                 </>
@@ -682,8 +709,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                             ]}
                         />
                     }
-                    browseGroups={{ isOpen: isGroupBrowserOpen, onToggle: () => { setIsGroupBrowserOpen(!isGroupBrowserOpen); setIsTagBrowserOpen(false); } }}
-                    browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); setIsGroupBrowserOpen(false); } }}
+                    browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }}
                     addActions={[{ label: 'Add', icon: Plus, onClick: handleNew }]}
                     extraActions={
                         <button onClick={() => setViewMode('SHELF')} className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs flex items-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-200" title="Bookshelf Mode">
@@ -766,3 +792,5 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
         </>
     );
 };
+
+export default WritingStudioPage;
