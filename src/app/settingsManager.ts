@@ -113,6 +113,10 @@ export const DEFAULT_SERVER_CONFIG: ServerConfig = {
     backupPath: 'backups'
 };
 
+export const KNOWN_HOSTS = ['localhost', 'macm2.local', 'macm4.local'];
+export const SERVER_PORT_START = 3000;
+export const SERVER_PORT_END = 3020;
+
 export const DEFAULT_AUDIO_CONFIG: AudioConfig = {
   mode: 'system',
   // serverUrl: 'http://localhost:3000', // Removed

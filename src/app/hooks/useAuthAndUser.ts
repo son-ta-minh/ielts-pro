@@ -18,6 +18,7 @@ export const useAuthAndUser = () => {
         setShouldSkipAuth(false);
 
         const savedUserId = localStorage.getItem('vocab_pro_current_user_id');
+        const savedUserName = localStorage.getItem('vocab_pro_current_user_name');
         const manualRestoreFlag = localStorage.getItem('vocab_pro_auto_restore');
         
         // Check current DB state
@@ -26,36 +27,41 @@ export const useAuthAndUser = () => {
         // --- SMART AUTO-RESTORE LOGIC ---
         // 1. Manual Flag: User clicked "Refresh" in Error Modal.
         // 2. Data Loss: DB is empty (users=0). We treat this as a signal to try restoring.
-        //    If we have a savedUserId, use it. If not, use DEFAULT_USER_ID (assuming single-user server usage).
+        //    Prioritize restoring by USERNAME if available (to support multiple users on server), fallback to ID, then default.
         const isDataLossDetected = currentUsers.length === 0;
         const shouldAttemptRestore = manualRestoreFlag === 'true' || isDataLossDetected;
         
-        const targetRestoreId = savedUserId || DEFAULT_USER_ID;
+        // Target Identifier: UserName > UserId > Default
+        // "Vocab Master" is the name of the default user, use it as fallback name key if no other info.
+        const targetRestoreIdentifier = savedUserName || savedUserId || "Vocab Master";
 
         if (shouldAttemptRestore) {
             console.log(isDataLossDetected 
-                ? `[Auth] Data loss detected (DB empty). Attempting auto-restore for ID: ${targetRestoreId}...` 
-                : `[Auth] Manual restore flag detected. Attempting restore for ID: ${targetRestoreId}...`
+                ? `[Auth] Data loss detected (DB empty). Attempting auto-restore for: ${targetRestoreIdentifier}...` 
+                : `[Auth] Manual restore flag detected. Attempting restore for: ${targetRestoreIdentifier}...`
             );
 
             // Set global flag to suppress "Unsaved Changes" highlight during bulk writes
             (window as any).isRestoring = true;
 
             try {
-                // Attempt restore from server
-                const success = await restoreFromServer(targetRestoreId);
-                if (success) {
+                // Attempt restore from server using identifier
+                const result = await restoreFromServer(targetRestoreIdentifier);
+                if (result && result.type === 'success') {
                     console.log("[Auth] Auto-restore successful.");
+                    
+                    // Update timestamp on auto-restore
+                    if (result.backupTimestamp) {
+                        localStorage.setItem('vocab_pro_last_backup_timestamp', String(result.backupTimestamp));
+                    }
+
                     // Re-fetch users after successful restore to update state
                     currentUsers = await getAllUsers();
                     
-                    // If we restored successfully but didn't have a saved ID, save it now so auto-login works
-                    if (!savedUserId && currentUsers.length > 0) {
-                         // Prefer the ID we just restored with, or the first user found
-                         const restoredUser = currentUsers.find(u => u.id === targetRestoreId) || currentUsers[0];
-                         if (restoredUser) {
-                             localStorage.setItem('vocab_pro_current_user_id', restoredUser.id);
-                         }
+                    // If we restored successfully, ensure local storage aligns with restored user
+                    if (result.updatedUser) {
+                        localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
+                        localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
                     }
                 } else {
                     console.warn("[Auth] Auto-restore failed or no backup found.");
@@ -131,6 +137,7 @@ export const useAuthAndUser = () => {
             
             setCurrentUser(userToLogin);
             localStorage.setItem('vocab_pro_current_user_id', userToLogin.id);
+            localStorage.setItem('vocab_pro_current_user_name', userToLogin.name);
         }
         setIsLoaded(true);
     }, []);
@@ -148,6 +155,7 @@ export const useAuthAndUser = () => {
         
         setCurrentUser(user);
         localStorage.setItem('vocab_pro_current_user_id', user.id);
+        localStorage.setItem('vocab_pro_current_user_name', user.name);
         const updated = { ...user, lastLogin: Date.now() };
         saveUser(updated);
     };
@@ -155,11 +163,17 @@ export const useAuthAndUser = () => {
     const handleLogout = () => {
         setCurrentUser(null);
         localStorage.removeItem('vocab_pro_current_user_id');
+        // We keep user_name in case they want to auto-restore same user next time, 
+        // or we could clear it. For now, keep it as hint.
     };
 
     const handleUpdateUser = async (updatedUser: User) => {
         await saveUser(updatedUser);
         setCurrentUser(updatedUser);
+        // Sync local storage name if active user
+        if (updatedUser.id === localStorage.getItem('vocab_pro_current_user_id')) {
+            localStorage.setItem('vocab_pro_current_user_name', updatedUser.name);
+        }
     };
 
     return { currentUser, isLoaded, handleLogin, handleLogout, handleUpdateUser, setCurrentUser, shouldSkipAuth };

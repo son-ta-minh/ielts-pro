@@ -1,3 +1,4 @@
+
 /**
  * Unified Vocab Pro Server
  * Features:
@@ -26,13 +27,50 @@ try {
 
 // --- Configuration ---
 const args = minimist(process.argv.slice(2));
-const PORT = args.p || args.port || process.env.PORT || 3000;
+const DEFAULT_PORT = args.p || args.port || process.env.PORT || 3000;
+const MAX_PORT_ATTEMPTS = 20; // Will try 3000 to 3020
 const HOST = '0.0.0.0';
 
 // Directories
-let BACKUP_DIR = path.join(__dirname, 'backups');
 const AUDIO_DIR = path.join(__dirname, 'audio');
 const CERT_DIR = path.join(__dirname, '.certs');
+const META_FILENAME = 'metadata.json';
+
+// Determine Backup Directory (Prioritize iCloud)
+function getInitialBackupPath() {
+    const homeDir = os.homedir();
+    const iCloudPath = path.join(homeDir, 'Library', 'Mobile Documents', 'com~apple~CloudDocs', 'VocabPro');
+    const localPath = path.join(__dirname, 'backups');
+
+    try {
+        // Only attempt iCloud on macOS
+        if (process.platform === 'darwin') {
+            const cloudDocsRoot = path.join(homeDir, 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
+            
+            // Check if iCloud Drive is actually enabled/present
+            if (fs.existsSync(cloudDocsRoot)) {
+                if (!fs.existsSync(iCloudPath)) {
+                    fs.mkdirSync(iCloudPath, { recursive: true });
+                }
+                
+                // Verify Write Access
+                const testFile = path.join(iCloudPath, '.test_write');
+                fs.writeFileSync(testFile, 'test');
+                fs.unlinkSync(testFile);
+                
+                console.log(`[Init] iCloud detected. Defaulting storage to: ${iCloudPath}`);
+                return iCloudPath;
+            }
+        }
+    } catch (e) {
+        console.warn(`[Init] iCloud auto-detection failed (${e.message}). Falling back to local.`);
+    }
+
+    console.log(`[Init] Using local backup directory: ${localPath}`);
+    return localPath;
+}
+
+let BACKUP_DIR = getInitialBackupPath();
 
 // Ensure directories exist
 [AUDIO_DIR, CERT_DIR].forEach(dir => {
@@ -70,6 +108,40 @@ app.use((req, res, next) => {
     });
     next();
 });
+
+// --- Helper Functions ---
+
+// Transliterate Unicode to ASCII (e.g. "Đình" -> "Dinh")
+function sanitizeToAscii(str) {
+    if (!str) return 'unknown';
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d").replace(/Đ/g, "D")
+        .replace(/[^a-zA-Z0-9\-_]/g, "_");
+}
+
+function getMetaPath() {
+    return path.join(BACKUP_DIR, META_FILENAME);
+}
+
+function loadMetadata() {
+    try {
+        const p = getMetaPath();
+        if (fs.existsSync(p)) {
+            return JSON.parse(fs.readFileSync(p, 'utf8'));
+        }
+    } catch (e) {
+        console.error("[Meta] Failed to load metadata", e);
+    }
+    return {};
+}
+
+function saveMetadata(data) {
+    try {
+        fs.writeFileSync(getMetaPath(), JSON.stringify(data, null, 2));
+    } catch (e) {
+        console.error("[Meta] Failed to save metadata", e);
+    }
+}
 
 // --- Feature 0: Server Configuration ---
 
@@ -120,20 +192,59 @@ app.post('/api/config/backup-path', (req, res) => {
 
 // --- Feature 1: Backup System (Streaming) ---
 
-app.post('/api/backup', (req, res) => {
-    const userId = req.query.userId;
+app.get('/api/backups', (req, res) => {
+    const meta = loadMetadata();
 
-    if (!userId) {
-        return res.status(400).json({ error: 'Missing userId in query parameters.' });
+    fs.readdir(BACKUP_DIR, (err, files) => {
+        if (err) {
+            console.error(`[Backup] List error: ${err.message}`);
+            return res.status(500).json({ error: 'Failed to scan backup directory' });
+        }
+
+        const backups = files
+            .filter(file => file.startsWith('backup_') && file.endsWith('.json'))
+            .map(file => {
+                const filePath = path.join(BACKUP_DIR, file);
+                try {
+                    const stats = fs.statSync(filePath);
+                    // Extract identifier from "backup_{identifier}.json"
+                    const id = file.slice(7, -5); 
+                    
+                    // Use display name from metadata if available, otherwise prettify the filename
+                    const displayName = meta[file]?.displayName || id.replace(/_/g, ' ');
+
+                    return {
+                        id: id, // The identifier used for restore (the filename part)
+                        name: displayName, 
+                        size: stats.size,
+                        date: stats.mtime
+                    };
+                } catch (e) {
+                    return null;
+                }
+            })
+            .filter(Boolean)
+            .sort((a, b) => new Date(b.date) - new Date(a.date)); // Newest first
+
+        res.json({ backups });
+    });
+});
+
+app.post('/api/backup', (req, res) => {
+    // Prefer username, fallback to userId
+    const identifier = req.query.username || req.query.userId;
+
+    if (!identifier) {
+        return res.status(400).json({ error: 'Missing username or userId in query parameters.' });
     }
 
-    // Sanitize filename to prevent directory traversal
-    const safeUserId = userId.replace(/[^a-z0-9\-_]/gi, '_');
-    const fileName = `backup_${safeUserId}.json`;
+    // Sanitize filename to ASCII (e.g. Đình -> Dinh)
+    const safeIdentifier = sanitizeToAscii(identifier);
+    const fileName = `backup_${safeIdentifier}.json`;
     const filePath = path.join(BACKUP_DIR, fileName);
     const writeStream = fs.createWriteStream(filePath);
 
-    console.log(`[Backup] Receiving stream for user: ${userId} into ${filePath}`);
+    console.log(`[Backup] Receiving stream for: ${identifier} -> ${fileName}`);
 
     req.pipe(writeStream);
 
@@ -141,7 +252,17 @@ app.post('/api/backup', (req, res) => {
         try {
             const stats = fs.statSync(filePath);
             const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
-            console.log(`[Backup] Saved ${sizeMB} MB for ${userId}`);
+            
+            // Save metadata to map the clean filename back to the original display name
+            const meta = loadMetadata();
+            meta[fileName] = {
+                displayName: identifier, // "Đình"
+                originalId: req.query.userId,
+                updatedAt: Date.now()
+            };
+            saveMetadata(meta);
+
+            console.log(`[Backup] Saved ${sizeMB} MB for ${identifier}`);
             res.json({ success: true, size: stats.size, timestamp: Date.now() });
         } catch (err) {
             console.error(`[Backup] Stat error: ${err.message}`);
@@ -155,20 +276,23 @@ app.post('/api/backup', (req, res) => {
     });
 });
 
-app.get('/api/backup/:userId', (req, res) => {
-    const userId = req.params.userId;
-    console.log(`[Backup] Request received for restore: ${userId}`);
+app.get('/api/backup/:identifier', (req, res) => {
+    const identifier = req.params.identifier;
+    console.log(`[Backup] Request received for restore: ${identifier}`);
     
-    const safeUserId = userId.replace(/[^a-z0-9\-_]/gi, '_');
-    const fileName = `backup_${safeUserId}.json`;
+    // Sanitize again to ensure we match the storage convention
+    // If client sends "Dinh" (from list ID), it remains "Dinh".
+    // If client sends "Đình" (from user input?), it becomes "Dinh".
+    const safeIdentifier = sanitizeToAscii(identifier);
+    const fileName = `backup_${safeIdentifier}.json`;
     const filePath = path.join(BACKUP_DIR, fileName);
 
     if (!fs.existsSync(filePath)) {
         console.warn(`[Backup] No file found at ${filePath}`);
-        return res.status(404).json({ error: 'No backup found for this user.' });
+        return res.status(404).json({ error: `No backup found for ${identifier} (file: ${fileName}).` });
     }
 
-    console.log(`[Backup] Streaming download for user: ${userId}`);
+    console.log(`[Backup] Streaming download for: ${fileName}`);
 
     const readStream = fs.createReadStream(filePath);
     readStream.on('error', (err) => {
@@ -303,7 +427,7 @@ app.post('/speak', async (req, res) => {
     }
 });
 
-// --- Server Startup ---
+// --- Server Startup Logic with Port Scanning ---
 
 function loadHttpsCertificates() {
     if (!fs.existsSync(CERT_DIR)) return null;
@@ -321,8 +445,11 @@ function loadHttpsCertificates() {
     return null;
 }
 
-(async () => {
-    await loadVoicesFromOS();
+const startServer = (port) => {
+    if (port > DEFAULT_PORT + MAX_PORT_ATTEMPTS) {
+        console.error(`[CRITICAL] Could not bind to any port from ${DEFAULT_PORT} to ${DEFAULT_PORT + MAX_PORT_ATTEMPTS}. Exiting.`);
+        process.exit(1);
+    }
 
     const httpsOptions = loadHttpsCertificates();
     let server;
@@ -335,11 +462,20 @@ function loadHttpsCertificates() {
         server = http.createServer(app);
     }
 
-    server.listen(PORT, HOST, () => {
+    server.once('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.warn(`[WARN] Port ${port} is busy. Trying ${port + 1}...`);
+            startServer(port + 1);
+        } else {
+            console.error('[CRITICAL] Server failed to start:', err);
+        }
+    });
+
+    server.listen(port, HOST, () => {
         console.log(`==================================================`);
         console.log(`[INFO] Unified Server running`);
         console.log(`[INFO] Protocol: ${protocol.toUpperCase()}`);
-        console.log(`[INFO] Address:  ${protocol}://localhost:${PORT}`);
+        console.log(`[INFO] Address:  ${protocol}://localhost:${port}`);
         console.log(`[INFO] Storage:  ${BACKUP_DIR}`);
         console.log(`[INFO] TTS:      ${Object.keys(voiceIndex).length} voices loaded`);
         if (protocol === 'http') {
@@ -347,4 +483,9 @@ function loadHttpsCertificates() {
         }
         console.log(`==================================================`);
     });
+};
+
+(async () => {
+    await loadVoicesFromOS();
+    startServer(DEFAULT_PORT);
 })();

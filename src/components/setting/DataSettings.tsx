@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench, Plus, Trash2, Tag, Check, Circle, Ear, BookMarked, Calendar, Cloud, Wifi, Link } from 'lucide-react';
+import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench, Plus, Trash2, Tag, Check, Circle, Ear, BookMarked, Calendar, Cloud, Wifi, Link, ListTodo } from 'lucide-react';
 import { DataScope } from '../../app/types';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -115,6 +115,7 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
                             <ScopeCheckbox checked={dataScope.listening} onChange={() => toggleScope('listening')} label="Listening" />
                             <ScopeCheckbox checked={dataScope.mimic} onChange={() => toggleScope('mimic')} label="Pronunciation Queue" icon={Ear} />
                             <ScopeCheckbox checked={dataScope.calendar} onChange={() => toggleScope('calendar')} label="Calendar" icon={Calendar} />
+                            <ScopeCheckbox checked={dataScope.planning} onChange={() => toggleScope('planning')} label="Planning" icon={ListTodo} />
                         </div>
                     </div>
 

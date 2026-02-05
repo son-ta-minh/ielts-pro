@@ -1,5 +1,5 @@
 
-import { generateJsonExport, processJsonImport } from '../utils/dataHandler';
+import { generateJsonExport, processJsonImport, ImportResult } from '../utils/dataHandler';
 import { User, DataScope } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
 import * as dataStore from '../app/dataStore';
@@ -17,7 +17,8 @@ const FULL_SCOPE: DataScope = {
     listening: true,
     mimic: true,
     wordBook: true,
-    calendar: true
+    calendar: true,
+    planning: true
 };
 
 export const performAutoBackup = async (userId: string, user: User, force: boolean = false) => {
@@ -31,7 +32,9 @@ export const performAutoBackup = async (userId: string, user: User, force: boole
         const payloadString = JSON.stringify(payloadObj);
         const sizeInMB = (new Blob([payloadString]).size / (1024 * 1024)).toFixed(2);
         
-        const response = await fetch(`${serverUrl}/api/backup?userId=${encodeURIComponent(userId)}`, {
+        // Pass username as query param. Server logic prioritizes username for filename if present.
+        const usernameParam = user.name ? `&username=${encodeURIComponent(user.name)}` : '';
+        const response = await fetch(`${serverUrl}/api/backup?userId=${encodeURIComponent(userId)}${usernameParam}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: payloadString 
@@ -52,8 +55,31 @@ export const performAutoBackup = async (userId: string, user: User, force: boole
     }
 };
 
-export const restoreFromServer = async (userId: string): Promise<boolean> => {
-    console.log("[Backup] Attempting restore for:", userId);
+export interface ServerBackupItem {
+    id: string;
+    name: string;
+    size: number;
+    date: string;
+}
+
+export const fetchServerBackups = async (): Promise<ServerBackupItem[]> => {
+    try {
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+        const response = await fetch(`${serverUrl}/api/backups`);
+        if (response.ok) {
+            const data = await response.json();
+            return data.backups || [];
+        }
+        return [];
+    } catch (e) {
+        console.warn("[Backup] Failed to fetch list:", e);
+        return [];
+    }
+};
+
+export const restoreFromServer = async (identifier: string): Promise<ImportResult | null> => {
+    console.log("[Backup] Attempting restore for:", identifier);
     
     try {
         const config = getConfig();
@@ -61,7 +87,8 @@ export const restoreFromServer = async (userId: string): Promise<boolean> => {
         // Note: Server URL comes from LocalStorage, so it persists even if DB is lost.
         console.log(`[Backup] Connecting to: ${serverUrl}`);
         
-        const targetUrl = `${serverUrl}/api/backup/${encodeURIComponent(userId)}?t=${Date.now()}`;
+        // Use the generic identifier (can be username or userId)
+        const targetUrl = `${serverUrl}/api/backup/${encodeURIComponent(identifier)}?t=${Date.now()}`;
 
         const response = await fetch(targetUrl, {
             method: 'GET',
@@ -71,24 +98,25 @@ export const restoreFromServer = async (userId: string): Promise<boolean> => {
         
         if (!response.ok) {
             console.warn(`[Backup] Restore fetch failed: ${response.status}`);
-            return false;
+            return null;
         }
 
         const blob = await response.blob();
         const file = new File([blob], "restore.json", { type: "application/json" });
 
-        const result = await processJsonImport(file, userId, FULL_SCOPE);
+        // We temporarily pass 'identifier' as userId placeholder, but processJsonImport extracts real user ID from JSON
+        const result = await processJsonImport(file, identifier, FULL_SCOPE);
         
-        if (result.type === 'success') {
-            console.log(`[Backup] Restore success. Reloading store...`);
-            await dataStore.forceReload(userId);
-            return true;
+        if (result.type === 'success' && result.updatedUser) {
+            console.log(`[Backup] Restore success. Reloading store for user ${result.updatedUser.id}...`);
+            await dataStore.forceReload(result.updatedUser.id);
+            return result;
         }
-        return false;
+        return null;
 
     } catch (e: any) {
         console.error("[Backup] Restore exception:", e);
-        return false;
+        return null;
     }
 };
 
@@ -109,6 +137,7 @@ async function getFullExportData(userId: string, user: User) {
      const listeningItemsData = await db.getListeningItemsByUserId(userId);
      const wordBooksDataRaw = await db.getWordBooksByUserId(userId);
      const calendarEventsData = await db.getCalendarEventsByUserId(userId);
+     const planningGoalsData = await db.getPlanningGoalsByUserId(userId);
      
      const mimicQueueData = localStorage.getItem('vocab_pro_mimic_practice_queue');
      const customChapters = localStorage.getItem('vocab_pro_adventure_chapters');
@@ -147,6 +176,7 @@ async function getFullExportData(userId: string, user: User) {
         wordBooks: shortBooks,
         ce: calendarEventsData,
         readingBooks: readingBooksData,
+        pg: planningGoalsData,
         adv: {
             ch: customChapters ? JSON.parse(customChapters) : null,
             b: customBadges ? JSON.parse(customBadges) : null

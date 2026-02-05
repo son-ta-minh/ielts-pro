@@ -9,8 +9,10 @@ import { useDataFetching } from './hooks/useDataFetching';
 import { useDataActions } from './hooks/useDataActions';
 import { getDueWords, getNewWords } from './db';
 import * as dataStore from './dataStore';
-import { getConfig, getServerUrl } from './settingsManager';
-import { performAutoBackup } from '../services/backupService';
+import { getConfig, getServerUrl, saveConfig } from './settingsManager';
+import { performAutoBackup, fetchServerBackups, ServerBackupItem } from '../services/backupService';
+import { DEFAULT_USER_ID } from '../data/user_data';
+import { scanForServer } from '../utils/networkScanner';
 
 // Re-export for backward compatibility with external components that might import from here.
 export const calculateWordDifficultyXp = movedCalc;
@@ -36,6 +38,10 @@ export const useAppController = () => {
 
     // New state to pass a word to Writing Practice
     const [writingContextWord, setWritingContextWord] = useState<VocabularyItem | null>(null);
+    
+    // --- Auto Restore Logic State ---
+    const [autoRestoreCandidates, setAutoRestoreCandidates] = useState<ServerBackupItem[]>([]);
+    const [isAutoRestoreOpen, setIsAutoRestoreOpen] = useState(false);
 
 
     // --- Composed Logic Hooks ---
@@ -43,40 +49,95 @@ export const useAppController = () => {
     
     const { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
 
-    // --- Server Connection Check ---
-    useEffect(() => {
-        const checkServer = async () => {
-            try {
-                // Always get the latest config from storage to ensure we check the new URL
-                const config = getConfig();
-                const url = getServerUrl(config);
-                // Use short timeout to avoid blocking
-                const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), 1500);
-                const res = await fetch(`${url}/api/health`, { signal: controller.signal });
-                clearTimeout(id);
-                if (res.ok) setServerStatus('connected');
-                else setServerStatus('disconnected');
-            } catch {
-                setServerStatus('disconnected');
-            }
+    // --- Server Connection Check with Auto-Scan ---
+    const checkServerConnection = useCallback(async (allowScan = false) => {
+        const config = getConfig();
+        const url = getServerUrl(config);
+
+        const tryConnect = async (targetUrl: string) => {
+             const controller = new AbortController();
+             const id = setTimeout(() => controller.abort(), 1500);
+             try {
+                 const res = await fetch(`${targetUrl}/api/health`, { signal: controller.signal });
+                 clearTimeout(id);
+                 return res.ok;
+             } catch {
+                 return false;
+             }
         };
 
-        // Check on load
+        // 1. Try current config
+        const isConnected = await tryConnect(url);
+        
+        if (isConnected) {
+            setServerStatus('connected');
+            return true;
+        }
+
+        // 2. If failed and scan is allowed, try to find it
+        if (!isConnected && allowScan && !config.server.useCustomUrl) {
+            // console.log("[App] Server not found. Scanning network...");
+            const scanResult = await scanForServer();
+            if (scanResult) {
+                // Update config with found server details
+                const newConfig = { 
+                    ...config, 
+                    server: { 
+                        ...config.server, 
+                        host: scanResult.host, 
+                        port: scanResult.port 
+                    } 
+                };
+                saveConfig(newConfig, true); // Suppress backup trigger
+                setServerStatus('connected');
+                showToast(`Server found and connected at ${scanResult.host}:${scanResult.port}`, "success");
+                return true;
+            }
+        }
+        
+        setServerStatus('disconnected');
+        return false;
+    }, [showToast]);
+
+    useEffect(() => {
+        // Initial check with scan allowed
         if (isLoaded) {
-             checkServer();
-             // And re-check periodically
-             const interval = setInterval(checkServer, 30000);
+             checkServerConnection(true);
              
-             // Also re-check immediately if config changes (e.g. user hits Save in Settings)
-             window.addEventListener('config-updated', checkServer);
+             // Periodic re-check (light check, no scan)
+             const interval = setInterval(() => checkServerConnection(false), 30000);
+             
+             window.addEventListener('config-updated', () => checkServerConnection(false));
 
              return () => {
                  clearInterval(interval);
-                 window.removeEventListener('config-updated', checkServer);
+                 window.removeEventListener('config-updated', () => checkServerConnection(false));
              };
         }
-    }, [isLoaded]);
+    }, [isLoaded, checkServerConnection]);
+    
+    // --- Auto Restore Logic Effect ---
+    useEffect(() => {
+        const checkForBackups = async () => {
+             // Only run if loaded, connected, AND user is the default seeded user (fresh state)
+             if (isLoaded && serverStatus === 'connected' && currentUser && currentUser.id === DEFAULT_USER_ID) {
+                 try {
+                     const backups = await fetchServerBackups();
+                     if (backups && backups.length > 0) {
+                         setAutoRestoreCandidates(backups);
+                         setIsAutoRestoreOpen(true);
+                     }
+                 } catch (e) {
+                     console.warn("[AutoRestore] Failed to fetch backups on init:", e);
+                 }
+             }
+        };
+        
+        // Debounce slightly to ensure auth state is settled
+        const t = setTimeout(checkForBackups, 1000);
+        return () => clearTimeout(t);
+    }, [isLoaded, serverStatus, currentUser?.id]);
+
 
     const { isResetting, resetStep, lastBackupTime, refreshBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, handleLibraryReset, deleteWord, bulkDeleteWords, bulkUpdateWords } = useDataActions({
         currentUser, setView, refreshGlobalStats,
@@ -84,6 +145,62 @@ export const useAppController = () => {
         onUpdateUser: handleUpdateUser,
         serverStatus // Pass serverStatus
     });
+    
+    // Wrapper for restore action to close modal
+    const handleAutoRestoreAction = async (identifier?: string) => {
+        setIsAutoRestoreOpen(false);
+        await restoreFromServerAction(identifier);
+    };
+
+    // New: Handle "Create New Profile" flow
+    const handleNewUserSetup = () => {
+        setIsAutoRestoreOpen(false);
+        setView('SETTINGS');
+        showToast("Welcome! Please set up your new profile.", "info");
+    };
+
+    // New: Handle "Local Restore" from modal
+    const handleLocalRestoreSetup = () => {
+        setIsAutoRestoreOpen(false);
+        triggerLocalRestore();
+    };
+
+    // New: Manual Switch User Action with Dynamic Scan
+    const handleSwitchUser = async () => {
+        // 1. Force a check/scan first to ensure we have the best chance of connection
+        const connected = await checkServerConnection(true);
+
+        if (!connected) {
+            showToast("Server unreachable even after scanning. Cannot switch users.", "error");
+            return;
+        }
+
+        // 2. Backup current user if valid
+        if (currentUser && currentUser.id !== DEFAULT_USER_ID) {
+             showToast("Syncing current profile...", "info");
+             try {
+                await performAutoBackup(currentUser.id, currentUser, true);
+             } catch (e) {
+                 console.error("Backup failed", e);
+                 showToast("Backup failed, proceeding...", "error");
+             }
+        }
+
+        try {
+            // 3. Clear Data
+            await dataStore.clearVocabularyOnly();
+            
+            // 4. Fetch list for modal
+            const backups = await fetchServerBackups();
+            setAutoRestoreCandidates(backups);
+
+            // 5. Open Modal
+            setIsAutoRestoreOpen(true);
+            
+        } catch (e) {
+             showToast("Failed to fetch user list from server.", "error");
+        }
+    };
 
     // --- Unsaved Changes & Backup Listeners ---
     useEffect(() => {
@@ -359,8 +476,8 @@ export const useAppController = () => {
         triggerServerBackup, // Direct server upload (for menu)
         
         // Restore actions
-        restoreFromServerAction, 
-        triggerLocalRestore,
+        restoreFromServerAction: handleAutoRestoreAction, // Use wrapper to close modal
+        triggerLocalRestore,     // Exposed for explicit calling
         handleLibraryReset,
         initialListFilter, setInitialListFilter,
         forceExpandAdd, setForceExpandAdd,
@@ -387,6 +504,14 @@ export const useAppController = () => {
         consumeWritingContext,
         serverStatus, // Expose server status
         hasUnsavedChanges, // Expose unsaved changes state
-        nextAutoBackupTime // Expose backup timer
+        nextAutoBackupTime, // Expose backup timer
+        
+        // Auto Restore Props
+        isAutoRestoreOpen,
+        setIsAutoRestoreOpen,
+        autoRestoreCandidates,
+        handleNewUserSetup,
+        handleLocalRestoreSetup,
+        handleSwitchUser
     };
 };

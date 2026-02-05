@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Clipboard, Check, Bot, Sparkles, Command, CornerDownLeft, AlertCircle, Loader2, MessageSquareDashed, FileText, Plus, Globe, User as UserIcon, Radio, BookOpen } from 'lucide-react';
+import { X, Clipboard, Check, Bot, Sparkles, Command, CornerDownLeft, AlertCircle, Loader2, MessageSquareDashed, FileText, Plus, Globe, User as UserIcon, Radio, BookOpen, Target } from 'lucide-react';
 import { copyToClipboard } from '../../utils/text';
 import { User, ParaphraseMode } from '../../app/types';
 
-export type AiActionType = 'REFINE_WORDS' | 'REFINE_UNIT' | 'GENERATE_PARAPHRASE' | 'EVALUATE_PARAPHRASE' | 'GENERATE_UNIT' | 'GENERATE_CHAPTER' | 'GENERATE_SEGMENT' | 'GENERATE_LESSON';
+export type AiActionType = 'REFINE_WORDS' | 'REFINE_UNIT' | 'GENERATE_PARAPHRASE' | 'EVALUATE_PARAPHRASE' | 'GENERATE_UNIT' | 'GENERATE_CHAPTER' | 'GENERATE_SEGMENT' | 'GENERATE_LESSON' | 'GENERATE_PLAN';
 
 interface Props {
   isOpen: boolean;
@@ -50,6 +51,9 @@ const UniversalAiModal: React.FC<Props> = ({
   const [lessonLang, setLessonLang] = useState<'English'|'Vietnamese'>('English');
   const [lessonTone, setLessonTone] = useState<'friendly_elementary'|'professional_professor'>('friendly_elementary');
 
+  // Plan Gen State
+  const [planRequest, setPlanRequest] = useState('');
+
   // --- Common States ---
   const [jsonInput, setJsonInput] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +76,7 @@ const UniversalAiModal: React.FC<Props> = ({
         setParaTone('CASUAL');
         setParaContext('');
         setParaMode(ParaphraseMode.VARIETY);
+        setPlanRequest('');
         
         // Then, set initial data for the current type
         if (type === 'REFINE_WORDS' && initialData?.words) {
@@ -114,13 +119,15 @@ const UniversalAiModal: React.FC<Props> = ({
         inputs = { topic: lessonTopic, language: lessonLang, targetAudience: lessonAudience, tone: lessonTone };
     } else if (type === 'GENERATE_UNIT') {
         inputs = { request: unitRequestInput };
+    } else if (type === 'GENERATE_PLAN') {
+        inputs = { request: planRequest };
     }
     
     setCurrentPrompt(onGeneratePrompt(inputs));
 
   // The dependency array is intentionally missing `onGeneratePrompt` to prevent re-renders, as it's a prop function.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, wordListInput, unitRequestInput, chapterRequestInput, segmentRequestInput, paraTone, paraContext, paraMode, initialData, hidePrimaryInput, lessonTopic, lessonAudience, lessonLang, lessonTone]);
+  }, [type, wordListInput, unitRequestInput, chapterRequestInput, segmentRequestInput, paraTone, paraContext, paraMode, initialData, hidePrimaryInput, lessonTopic, lessonAudience, lessonLang, lessonTone, planRequest]);
 
 
   if (!isOpen) return null;
@@ -354,6 +361,18 @@ const renderSegmentGenInput = () => (
       </div>
   );
 
+  const renderPlanGenInput = () => (
+      <div className="space-y-1">
+          <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Target size={10}/> Goal Request</label>
+          <textarea 
+            value={planRequest} 
+            onChange={(e) => setPlanRequest(e.target.value)} 
+            placeholder='e.g., "Create a study plan for Collins Reading for IELTS" or "Plan to learn 50 Phrasal Verbs in 2 weeks"' 
+            className="w-full h-32 p-4 bg-neutral-50/50 border border-neutral-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-none shadow-inner transition-all focus:bg-white disabled:opacity-50"
+          />
+      </div>
+  );
+
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-white/10 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl flex flex-col overflow-hidden border border-neutral-200 relative ring-4 ring-neutral-100">
@@ -382,6 +401,7 @@ const renderSegmentGenInput = () => (
                 {type === 'EVALUATE_PARAPHRASE' && renderEvaluateParaphraseInput()}
                 {type === 'GENERATE_LESSON' && renderLessonGenInput()}
                 {type === 'GENERATE_UNIT' && renderGenerateUnitInput()}
+                {type === 'GENERATE_PLAN' && renderPlanGenInput()}
             </div>
 
             {/* Action Flow: 1. Copy -> 2. Paste */}

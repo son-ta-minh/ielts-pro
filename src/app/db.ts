@@ -1,5 +1,5 @@
 
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, CalendarEvent, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, CalendarEvent, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -22,11 +22,12 @@ const CALENDAR_STORE = 'calendar_events';
 const WORDBOOK_STORE = 'word_books';
 const READING_BOOK_STORE = 'reading_books';
 const LESSON_BOOK_STORE = 'lesson_books';
-const LISTENING_BOOK_STORE = 'listening_books'; // New
-const SPEAKING_BOOK_STORE = 'speaking_books'; // New
-const WRITING_BOOK_STORE = 'writing_books'; // New
+const LISTENING_BOOK_STORE = 'listening_books';
+const SPEAKING_BOOK_STORE = 'speaking_books';
+const WRITING_BOOK_STORE = 'writing_books';
+const PLANNING_STORE = 'planning_goals';
 
-const DB_VERSION = 22; // Bump version for new book types
+const DB_VERSION = 23; // Bump version for Planning
 
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -261,6 +262,13 @@ const openDB = (): Promise<IDBDatabase> => {
                wrtStore.createIndex('userId', 'userId', { unique: false });
            }
         }
+
+        if (event.oldVersion < 23) {
+            if (!db.objectStoreNames.contains(PLANNING_STORE)) {
+                const planningStore = db.createObjectStore(PLANNING_STORE, { keyPath: 'id' });
+                planningStore.createIndex('userId', 'userId', { unique: false });
+            }
+        }
       };
       
       request.onsuccess = () => {
@@ -342,7 +350,7 @@ export const clearVocabularyOnly = async (): Promise<void> => {
   return withRetry(async () => {
       const db = await openDB();
       return new Promise((resolve, reject) => {
-        const stores: string[] = [STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, COMPARISON_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, COMPOSITIONS_STORE, CALENDAR_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE];
+        const stores: string[] = [STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, COMPARISON_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, COMPOSITIONS_STORE, CALENDAR_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
         const tx = db.transaction(stores, 'readwrite');
         stores.forEach(s => tx.objectStore(s).clear());
         tx.oncomplete = () => {
@@ -861,3 +869,9 @@ export const saveWritingBook = async (book: WritingBook): Promise<void> => { awa
 export const getWritingBooksByUserId = async (userId: string): Promise<WritingBook[]> => await crudTemplate(WRITING_BOOK_STORE, tx => tx.objectStore(WRITING_BOOK_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
 export const deleteWritingBook = async (id: string): Promise<void> => { await crudTemplate(WRITING_BOOK_STORE, tx => tx.objectStore(WRITING_BOOK_STORE).delete(id)); };
 export const bulkSaveWritingBooks = async (items: WritingBook[]): Promise<void> => { await crudTemplate(WRITING_BOOK_STORE, tx => { const store = tx.objectStore(WRITING_BOOK_STORE); items.forEach(i => store.put(i)); }); };
+
+// --- Planning Feature ---
+export const savePlanningGoal = async (goal: PlanningGoal): Promise<void> => { await crudTemplate(PLANNING_STORE, tx => tx.objectStore(PLANNING_STORE).put(goal)); };
+export const getPlanningGoalsByUserId = async (userId: string): Promise<PlanningGoal[]> => await crudTemplate(PLANNING_STORE, tx => tx.objectStore(PLANNING_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const deletePlanningGoal = async (id: string): Promise<void> => { await crudTemplate(PLANNING_STORE, tx => tx.objectStore(PLANNING_STORE).delete(id)); };
+export const bulkSavePlanningGoals = async (items: PlanningGoal[]): Promise<void> => { await crudTemplate(PLANNING_STORE, tx => { const store = tx.objectStore(PLANNING_STORE); items.forEach(i => store.put(i)); }); };

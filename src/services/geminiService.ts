@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ParaphraseMode, User, WritingTopic } from "../app/types";
 import { 
@@ -18,7 +19,8 @@ import {
   getPronunciationAnalysisPrompt,
   getGenerateLessonPrompt,
   LessonGenerationParams,
-  getGenerateWordBookPrompt
+  getGenerateWordBookPrompt,
+  getGeneratePlanningGoalPrompt
 } from './promptService';
 import { getConfig } from "../app/settingsManager";
 import { getStoredJSON, setStoredJSON } from "../utils/storage";
@@ -475,4 +477,35 @@ export async function generateWordBook(topic: string): Promise<{ topic: string, 
         }
     });
     return safeJsonParse(response.text, { topic: '', icon: '', words: [] });
+}
+
+export async function generatePlanningGoal(request: string): Promise<{ title: string; description: string; todos: { text: string }[] }> {
+  const config = getConfig();
+  const prompt = getGeneratePlanningGoalPrompt(request);
+  const response = await callAiWithRetry({
+      model: config.ai.modelForComplexTasks,
+      contents: prompt,
+      config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                  title: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  todos: {
+                      type: Type.ARRAY,
+                      items: {
+                          type: Type.OBJECT,
+                          properties: {
+                              text: { type: Type.STRING }
+                          },
+                          required: ["text"]
+                      }
+                  }
+              },
+              required: ["title", "description", "todos"]
+          }
+      }
+  });
+  return safeJsonParse(response.text, { title: "New Goal", description: "", todos: [] });
 }

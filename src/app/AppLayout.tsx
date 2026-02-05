@@ -1,15 +1,15 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
-  Plus, LayoutDashboard, List, Settings, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Mic, PenLine, AlertTriangle, BookText, Ear, Zap, Calendar, Gamepad2, BookMarked, Waves, RefreshCw, Save
+  Plus, LayoutDashboard, List, Settings, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Mic, PenLine, AlertTriangle, BookText, Ear, Zap, Calendar, Gamepad2, BookMarked, Waves, RefreshCw, Save, ListTodo, Users
 } from 'lucide-react';
 import { AppView, SessionType, VocabularyItem } from './types';
 import { useAppController } from './useAppController';
 import EditWordModal from '../components/word_lib/EditWordModal';
 import ViewWordModal from '../components/word_lib/ViewWordModal';
 import ConfirmationModal from '../components/common/ConfirmationModal';
-// Fixed: StudyBuddy is a named export, not a default export
 import { StudyBuddy } from '../components/common/StudyBuddy';
+import { ServerRestoreModal } from '../components/common/ServerRestoreModal';
 
 // Lazy load major views for performance
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
@@ -27,6 +27,8 @@ const MimicPractice = React.lazy(() => import('../components/labs/MimicPractice'
 const ListeningCardPage = React.lazy(() => import('../dynamic/templates/ListeningCardPage').then(module => ({ default: module.ListeningCardPage })));
 // Lessons
 const KnowledgeLibrary = React.lazy(() => import('../dynamic/templates/LessonLibraryV2').then(module => ({ default: module.LessonLibraryV2 })));
+// Planning
+const PlanningPage = React.lazy(() => import('../dynamic/templates/PlanningPage').then(module => ({ default: module.PlanningPage })));
 
 // Native Expressions (formerly NativeSpeak)
 const ExpressionPage = React.lazy(() => import('../dynamic/templates/SpeakingCardPage').then(module => ({ default: module.SpeakingCardPage })));
@@ -43,6 +45,7 @@ interface AppLayoutProps {
 const navItems = [
   { id: 'DASHBOARD', view: 'DASHBOARD', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Mobile%20Phone.png", label: 'Dashboard' },
   { id: 'BROWSE', view: 'BROWSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png", label: 'Library' },
+  { id: 'PLANNING', view: 'PLANNING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Spiral%20Calendar.png", label: 'Planning' },
   { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Lesson' },
   { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },
   { id: 'LISTENING', view: 'LISTENING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Headphone.png", label: 'Listening' },
@@ -53,15 +56,17 @@ const navItems = [
 const Sidebar: React.FC<AppLayoutProps & { 
     onNavigate: (view: AppView, action?: () => void) => void;
     onLogoutRequest: () => void;
-}> = ({ controller, onNavigate, onLogoutRequest }) => {
+    onSwitchUser: () => void;
+}> = ({ controller, onNavigate, onLogoutRequest, onSwitchUser }) => {
   const { 
     currentUser, view, setView, sessionType, isSidebarOpen, setIsSidebarOpen, 
-    forceExpandAdd, openAddWordLibrary, serverStatus, handleBackup, hasUnsavedChanges, nextAutoBackupTime
+    forceExpandAdd, openAddWordLibrary, serverStatus, handleBackup, hasUnsavedChanges, nextAutoBackupTime,
+    triggerServerBackup
   } = controller;
 
   const [timeLeft, setTimeLeft] = useState(0);
 
-  // Update timer for sync tooltip
+  // Update timer for sync tooltip with Watchdog
   useEffect(() => {
     if (!nextAutoBackupTime) {
       setTimeLeft(0);
@@ -69,18 +74,30 @@ const Sidebar: React.FC<AppLayoutProps & {
     }
     
     const interval = setInterval(() => {
-      const remaining = Math.ceil((nextAutoBackupTime - Date.now()) / 1000);
+      const now = Date.now();
+      const diff = nextAutoBackupTime - now;
+      const remaining = Math.ceil(diff / 1000);
+      
       setTimeLeft(Math.max(0, remaining));
-      if (remaining <= 0) {
-        // Just let it sit at 0 until the backup completes and clears nextAutoBackupTime
+
+      // Watchdog: If the timer goes past 0s (allowing 2s buffer), force the backup.
+      // This fixes the issue where the backend debounce timer gets throttled or lost.
+      if (remaining <= -2) {
+          if (serverStatus === 'connected') {
+             // triggerServerBackup cleans up the UI state (sets nextAutoBackupTime to null) immediately
+             // and initiates the upload.
+             triggerServerBackup();
+          }
+          clearInterval(interval);
       }
     }, 1000);
     
     // Initial call
-    setTimeLeft(Math.max(0, Math.ceil((nextAutoBackupTime - Date.now()) / 1000)));
+    const initialDiff = nextAutoBackupTime - Date.now();
+    setTimeLeft(Math.max(0, Math.ceil(initialDiff / 1000)));
 
     return () => clearInterval(interval);
-  }, [nextAutoBackupTime]);
+  }, [nextAutoBackupTime, serverStatus, triggerServerBackup]);
 
   const syncTooltip = nextAutoBackupTime 
     ? `Auto-sync in ${timeLeft}s...` 
@@ -92,15 +109,25 @@ const Sidebar: React.FC<AppLayoutProps & {
     <>
       <aside className={`fixed md:relative inset-y-0 left-0 z-50 w-64 bg-white border-r border-neutral-200 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col p-6`}>
         <div className="mb-6">
-           <div className="flex items-center justify-between">
-             <div className="flex items-center space-x-3 overflow-hidden">
+           <div className="flex items-center justify-between gap-2">
+             <div className="flex items-center space-x-3 overflow-hidden flex-1">
                <img src={currentUser.avatar} className="w-10 h-10 rounded-2xl bg-neutral-100 shrink-0" />
                <div className="flex-1 overflow-hidden">
                  <div className="text-sm font-bold text-neutral-900 truncate">{currentUser.name}</div>
                  <div className="text-[10px] text-neutral-400 font-bold truncate">{currentUser.role}</div>
                </div>
              </div>
-             <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-neutral-400"><X size={24} /></button>
+             
+             <div className="flex items-center gap-1">
+                 <button 
+                    onClick={onSwitchUser} 
+                    className="p-2 rounded-full border-2 border-indigo-100 bg-white text-indigo-500 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm" 
+                    title="Switch User"
+                 >
+                    <Users size={16} />
+                 </button>
+                 <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-neutral-400"><X size={24} /></button>
+             </div>
            </div>
            
            <div className="mt-4 flex items-center space-x-2">
@@ -121,7 +148,7 @@ const Sidebar: React.FC<AppLayoutProps & {
                 >
                     <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-6 h-6 object-contain" />
                     {hasUnsavedChanges && (
-                        <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-500' : 'bg-orange-500 animate-ping'}`}></span>
+                        <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-50' : 'bg-orange-500 animate-ping'}`}></span>
                     )}
                     {hasUnsavedChanges && (
                          <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-500' : 'bg-orange-500'}`}></span>
@@ -140,10 +167,8 @@ const Sidebar: React.FC<AppLayoutProps & {
               </button>
             </div>
           )}
-          {/* Fix: Explicitly type 'item' as 'any' to avoid type narrowing errors ('Property icon does not exist on type never') caused by 'as const' tuple mapping. */}
           {navItems.map((item: any) => {
             const isActive = view === item.view && (item.id !== 'BROWSE' || !forceExpandAdd);
-            // Handle Speaking active state also for mock test sub-view
             const isSpeakingActive = item.id === 'SPEAKING' && view === 'SPEAKING';
             
             return (
@@ -185,10 +210,8 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     setView,
     lastBackupTime,
     handleBackup,
-    // Restore handlers
     restoreFromServerAction, 
     triggerLocalRestore,
-    // Explicit backup handlers
     triggerLocalBackup,
     triggerServerBackup,
     
@@ -217,13 +240,17 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     apiUsage,
     xpGained,
     lastMasteryScoreUpdateTimestamp,
-    // Composition Props
     isWotdComposed,
     randomizeWotd,
     handleComposeWithWord,
     writingContextWord,
     consumeWritingContext,
-    serverStatus // Receive serverStatus from controller
+    serverStatus,
+    isAutoRestoreOpen,
+    setIsAutoRestoreOpen,
+    autoRestoreCandidates,
+    handleNewUserSetup,
+    handleLocalRestoreSetup
   } = controller;
 
   if (!currentUser) return null;
@@ -242,9 +269,9 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
           onViewWotd={setGlobalViewWord}
           setView={setView}
           lastBackupTime={lastBackupTime}
-          onBackup={handleBackup} // Fallback wrapper logic (though Dashboard overrides with specifics below)
-          onRestore={() => {}} // Fallback
-          restoreFromServerAction={restoreFromServerAction}
+          onBackup={handleBackup} 
+          onRestore={() => {}} 
+          restoreFromServerAction={async () => await restoreFromServerAction()} // Use wrapper
           triggerLocalRestore={triggerLocalRestore}
           onLocalBackup={triggerLocalBackup}
           onServerBackup={triggerServerBackup}
@@ -254,13 +281,15 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
           isWotdComposed={isWotdComposed}
           onComposeWotd={handleComposeWithWord}
           onRandomizeWotd={randomizeWotd}
-          serverStatus={serverStatus} // Pass server status to Dashboard
+          serverStatus={serverStatus} 
         />
       );
     case 'CALENDAR':
       return <CalendarPage user={currentUser} />;
     case 'WORDBOOK':
       return <WordBookPage user={currentUser} />;
+    case 'PLANNING':
+        return <PlanningPage user={currentUser} />;
     case 'REVIEW':
       return sessionWords && sessionType ? (
         <ReviewSession
@@ -305,7 +334,6 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
         return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} onRecalculateXp={recalculateXpAndLevelUp} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} lastMasteryScoreUpdateTimestamp={lastMasteryScoreUpdateTimestamp} onBulkUpdate={bulkUpdateWords} />;
     case 'SPEAKING':
         return <ExpressionPage user={currentUser} onNavigate={setView} />;
-    // Deprecated NATIVE_SPEAK view key handling for safety
     case 'NATIVE_SPEAK':
         return <ExpressionPage user={currentUser} onNavigate={setView} />;
     case 'WRITING':
@@ -317,7 +345,6 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'LISTENING':
         return <ListeningCardPage user={currentUser} />;
     case 'EXPERIMENT':
-        // Fallback
         return <ExpressionPage user={currentUser} onNavigate={setView} />;
     default:
       return <div>Unknown view: {view}</div>;
@@ -325,7 +352,11 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
 };
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary, currentUser, stats, startDueReviewSession, startNewLearnSession, lastBackupTime } = controller;
+  const { 
+    view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary, currentUser, stats, startDueReviewSession, startNewLearnSession, lastBackupTime, 
+    isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction,
+    handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser
+  } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
 
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
@@ -345,7 +376,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
           case 'REVIEW':
               startDueReviewSession();
               break;
-          case 'BROWSE': // Map to new learn or just browse
+          case 'BROWSE': 
               startNewLearnSession();
               break;
           default:
@@ -371,7 +402,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
             setForceExpandAdd(false);
         }
         setIsSidebarOpen(false);
-    } else if (endSessionModal.andThen) { // For logout
+    } else if (endSessionModal.andThen) { 
         clearSessionState();
         endSessionModal.andThen();
     }
@@ -391,10 +422,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
     updateWord(updated);
     setEditingWord(null);
   }
+  
+  const [isRestoring, setIsRestoring] = useState(false);
 
   return (
     <div className="min-h-screen bg-neutral-50 md:flex">
-      <Sidebar controller={controller} onNavigate={handleNavigation} onLogoutRequest={handleLogoutRequest}/>
+      <Sidebar controller={controller} onNavigate={handleNavigation} onLogoutRequest={handleLogoutRequest} onSwitchUser={handleSwitchUser} />
       <div className={`fixed inset-0 bg-black/30 z-40 md:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
 
       <main className="flex-1 p-6 md:p-10 overflow-y-auto relative">
@@ -406,11 +439,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
         </Suspense>
       </main>
       
-      {/* 
-        CHANGED: Removed '!sessionType' condition. 
-        Now the StudyBuddy will render as long as currentUser exists, 
-        making it available in 'REVIEW' view (sessions, quizzes, etc.) as requested.
-      */}
       {currentUser && (
           <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={handleSpecialAction} />
       )}
@@ -428,6 +456,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
         onClose={cancelEndSession}
         icon={<AlertTriangle size={40} className="text-orange-500" />}
         confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200"
+      />
+      
+      <ServerRestoreModal 
+          isOpen={isAutoRestoreOpen} 
+          onClose={() => setIsAutoRestoreOpen(false)} 
+          backups={autoRestoreCandidates} 
+          onRestore={(id) => { setIsRestoring(true); restoreFromServerAction(id).finally(() => setIsRestoring(false)); }} 
+          isRestoring={isRestoring}
+          title="User Selection"
+          description="We found existing profiles on the server. Select yours to restore."
+          onNewUser={handleNewUserSetup}
+          onLocalRestore={handleLocalRestoreSetup}
       />
     </div>
   );

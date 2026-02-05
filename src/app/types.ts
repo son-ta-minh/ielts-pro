@@ -45,6 +45,7 @@ export interface DataScope {
   mimic: boolean;
   wordBook: boolean;
   calendar: boolean;
+  planning: boolean;
 }
 
 export interface WordFamilyMember {
@@ -549,6 +550,28 @@ export interface WritingBook {
   iconLeft?: number;
 }
 
-export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS' | 'MIMIC' | 'LESSON' | 'LISTENING' | 'NATIVE_SPEAK' | 'EXPERIMENT' | 'CALENDAR' | 'WORDBOOK';
+// Planning Feature
+export type PlanningStatus = 'NEW' | 'IN_PROGRESS' | 'CLOSED';
+
+export interface PlanningTodo {
+  id: string;
+  text: string;
+  status: PlanningStatus;
+}
+
+export interface PlanningGoal {
+  id: string;
+  userId: string;
+  title: string;
+  description: string;
+  todos: PlanningTodo[];
+  createdAt: number;
+  updatedAt: number;
+  order?: number; // New field for drag and drop sorting
+  focusColor?: FocusColor;
+  isFocused?: boolean;
+}
+
+export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS' | 'MIMIC' | 'LESSON' | 'LISTENING' | 'NATIVE_SPEAK' | 'EXPERIMENT' | 'CALENDAR' | 'WORDBOOK' | 'PLANNING';
 
 export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'COLLO_CONNECT' | 'IPA_SORTER' | 'MEANING_MATCH' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'WORD_TRANSFORMER' | 'IDIOM_CONNECT' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER';

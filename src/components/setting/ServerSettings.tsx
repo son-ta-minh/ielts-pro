@@ -1,8 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Server, Save, CheckCircle2, AlertCircle, Loader2, FolderOpen, Network, Cloud, Clock, RefreshCw, Unlink, Settings2, Link, Info, ChevronDown, Edit2, X } from 'lucide-react';
+import { Server, Save, CheckCircle2, AlertCircle, Loader2, FolderOpen, Network, Cloud, Clock, RefreshCw, Unlink, Settings2, Link, Info, ChevronDown, Edit2, X, Download, User } from 'lucide-react';
 import { SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
+import { fetchServerBackups, ServerBackupItem, restoreFromServer } from '../../services/backupService';
+import * as dataStore from '../../app/dataStore';
+import { ServerRestoreModal } from '../common/ServerRestoreModal';
+import { processJsonImport } from '../../utils/dataHandler';
 
 const HOST_OPTIONS = ['localhost', 'macm2.local', 'macm4.local'];
 
@@ -22,6 +26,12 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
     const [isEditingPath, setIsEditingPath] = useState(false);
     const [pathInput, setPathInput] = useState('');
 
+    // Backup & Restore
+    const [availableBackups, setAvailableBackups] = useState<ServerBackupItem[]>([]);
+    const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+    const [isRestoring, setIsRestoring] = useState(false);
+    const [jsonInputRef, setJsonInputRef] = useState<HTMLInputElement | null>(null);
+
     const { showToast } = useToast();
     const fullUrl = getServerUrl(config);
 
@@ -34,20 +44,23 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                 setStatus('connected');
                 setIsEditingConnection(false); 
                 
-                // Update reported path from server
                 if (data.backupDir) {
                     setServerReportedPath(data.backupDir);
-                    // Sync local config if different? Optional, but good for consistency.
-                    // We won't auto-update config here to avoid infinite loops or overwrites, 
-                    // but we will use this for display.
                 }
+                
+                // --- Fetch Available Backups immediately on connection ---
+                const backups = await fetchServerBackups();
+                setAvailableBackups(backups);
+
             } else {
                 setStatus('error');
                 setIsEditingConnection(true); 
+                setAvailableBackups([]);
             }
         } catch (e: any) {
             setStatus('error');
             setIsEditingConnection(true);
+            setAvailableBackups([]);
         }
     };
 
@@ -109,6 +122,66 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
             showToast(e.message, 'error');
             setTimeout(() => setFolderStatus('idle'), 3000);
         }
+    };
+
+    const handleServerRestore = async (identifier: string) => {
+        setIsRestoring(true);
+        // Set global flag to suppress "Unsaved Changes" highlight during bulk writes
+        (window as any).isRestoring = true;
+
+        try {
+            const result = await restoreFromServer(identifier);
+            if (result && result.type === 'success') {
+                showToast("Data restored successfully! Reloading...", "success");
+                
+                if (result.updatedUser) {
+                    localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
+                    localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
+                    // Update timestamp
+                    if (result.backupTimestamp) {
+                         localStorage.setItem('vocab_pro_last_backup_timestamp', String(result.backupTimestamp));
+                    }
+                }
+                
+                // Force reload to apply changes cleanly
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast("Restore failed.", "error");
+                setIsRestoring(false);
+                (window as any).isRestoring = false;
+            }
+        } catch (e) {
+            showToast("Restore encountered an error.", "error");
+            setIsRestoring(false);
+            (window as any).isRestoring = false;
+        }
+    };
+
+    const handleLocalRestoreTrigger = () => {
+        // Trigger file input
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.style.display = 'none';
+
+        input.onchange = async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            
+            const userId = localStorage.getItem('vocab_pro_current_user_id') || 'u-vocab-master';
+            
+            const result = await processJsonImport(file, userId);
+            if (result.type === 'success') {
+                showToast('Restore successful! Reloading...', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showToast(`Restore failed: ${result.message}`, 'error');
+            }
+            if (input.parentNode) input.parentNode.removeChild(input);
+        };
+        
+        document.body.appendChild(input);
+        input.click();
     };
 
     const formatPathDisplay = (path: string) => {
@@ -224,6 +297,25 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                         </div>
                     </div>
                 )}
+                
+                {/* Server Data Section (New) */}
+                {status === 'connected' && availableBackups.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t border-neutral-200/50 animate-in fade-in">
+                         <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Cloud size={10}/> Server Data</label>
+                         <div className="flex items-center justify-between p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                             <div className="flex flex-col">
+                                 <span className="text-xs font-bold text-indigo-900">Found {availableBackups.length} user backups</span>
+                                 <span className="text-[10px] text-indigo-600">You can restore a profile from the server.</span>
+                             </div>
+                             <button 
+                                onClick={() => setIsRestoreModalOpen(true)}
+                                className="px-4 py-2 bg-white text-indigo-700 rounded-lg font-black text-[10px] uppercase shadow-sm hover:bg-indigo-100 transition-colors border border-indigo-200"
+                            >
+                                Browse & Restore
+                            </button>
+                         </div>
+                    </div>
+                )}
 
                 {/* Backup Settings (Only when Connected) */}
                 {status === 'connected' && (
@@ -312,6 +404,16 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                     </div>
                 )}
             </div>
+            
+            <ServerRestoreModal 
+                isOpen={isRestoreModalOpen} 
+                onClose={() => setIsRestoreModalOpen(false)} 
+                backups={availableBackups} 
+                onRestore={handleServerRestore}
+                onNewUser={() => setIsRestoreModalOpen(false)} // No-op in this context but required by prop
+                onLocalRestore={handleLocalRestoreTrigger}
+                isRestoring={isRestoring}
+            />
         </section>
     );
 };

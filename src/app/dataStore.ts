@@ -1,5 +1,5 @@
 
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
@@ -23,38 +23,59 @@ let _statsCache: any = {
 
 // --- Private Functions ---
 
-// Debounce timer for save to LocalStorage backup AND Server
-let _backupTimeout: number | null = null;
+// Timers
+let _backupTimeout: number | null = null; // Resets on every activity (Debounce)
+let _maxWaitTimeout: number | null = null; // Does NOT reset on activity (Safety Net)
+
+async function _executeBackup() {
+    // Clear both timers to prevent double execution
+    if (_backupTimeout) { clearTimeout(_backupTimeout); _backupTimeout = null; }
+    if (_maxWaitTimeout) { clearTimeout(_maxWaitTimeout); _maxWaitTimeout = null; }
+
+    try {
+        // 1. Local Storage Backup
+        const allItems = Array.from(_allWords.values());
+        const json = JSON.stringify(allItems);
+        localStorage.setItem('vocab_pro_emergency_backup', json);
+        
+        // 2. Server Auto Backup
+        if (_currentUserId) {
+            // Fetch full user object to ensure sync
+            const user = (await db.getAllUsers()).find(u => u.id === _currentUserId);
+            if (user) {
+                    await performAutoBackup(_currentUserId, user);
+            }
+        }
+    } catch (e) {
+        console.warn("[DataStore] Backup failed:", e);
+    }
+}
+
 function _triggerBackup() {
     const config = getConfig();
     const delay = (config.sync.autoBackupInterval || 60) * 1000;
-    const targetTime = Date.now() + delay;
+    
+    // Safety Net: Force backup after 5 minutes OR 3x the interval (whichever is larger)
+    // This prevents continuous typing/updating from blocking backup forever.
+    const maxDelay = Math.max(delay * 3, 300000); 
 
+    // 1. Handle Debounce (Standard behavior: wait for idle)
     if (_backupTimeout) clearTimeout(_backupTimeout);
     
-    // Notify UI that a backup is pending
+    // Notify UI that a backup is pending (targetTime is the optimistic idle time)
+    const targetTime = Date.now() + delay;
     window.dispatchEvent(new CustomEvent('backup-scheduled', { detail: { targetTime } }));
     
-    _backupTimeout = window.setTimeout(async () => {
-        try {
-            // 1. Local Storage Backup
-            const allItems = Array.from(_allWords.values());
-            const json = JSON.stringify(allItems);
-            localStorage.setItem('vocab_pro_emergency_backup', json);
-            
-            // 2. Server Auto Backup
-            if (_currentUserId) {
-                // Fetch full user object to ensure sync
-                const user = (await db.getAllUsers()).find(u => u.id === _currentUserId);
-                if (user) {
-                     await performAutoBackup(_currentUserId, user);
-                }
-            }
-        } catch (e) {
-            console.warn("[DataStore] Backup failed:", e);
-        }
-        _backupTimeout = null;
-    }, delay);
+    _backupTimeout = window.setTimeout(_executeBackup, delay);
+
+    // 2. Handle Max Wait (Safety behavior: ensure execution eventually)
+    // If a max timer is NOT running, start it. We do NOT clear/reset it here.
+    if (!_maxWaitTimeout) {
+        _maxWaitTimeout = window.setTimeout(() => {
+            console.log("[DataStore] Max wait time reached. Forcing backup.");
+            _executeBackup();
+        }, maxDelay);
+    }
 }
 
 function _recalculateStats(userId: string) {
@@ -154,7 +175,6 @@ const canWrite = (): boolean => {
 if (typeof window !== 'undefined') {
     window.addEventListener('vocab-pro-trigger-backup', () => {
         if (_isInitialized) {
-            // console.log("[DataStore] External backup trigger received.");
             _notifyChanges(); // Update UI to show 'unsaved' state immediately
             _triggerBackup(); // Schedule the backup
         }
@@ -492,4 +512,21 @@ export async function deleteWordBook(id: string, userId: string): Promise<void> 
     _triggerBackup();
 }
 
-export const { getAllUsers, deleteUnit, getUnitsByUserId, getUnitsContainingWord, bulkSaveUnits, saveParaphraseLog, getParaphraseLogs, bulkSaveParaphraseLogs, seedDatabaseIfEmpty, clearVocabularyOnly, findWordByText, getRandomMeanings, getCompositionsByUserId } = db;
+// --- Planning Feature Wrapper ---
+export async function savePlanningGoal(goal: PlanningGoal): Promise<void> {
+    if (canWrite()) {
+        await db.savePlanningGoal(goal);
+        _triggerBackup();
+        _notifyChanges();
+    }
+}
+
+export async function deletePlanningGoal(id: string): Promise<void> {
+    if (canWrite()) {
+        await db.deletePlanningGoal(id);
+        _triggerBackup();
+        _notifyChanges();
+    }
+}
+
+export const { getAllUsers, deleteUnit, getUnitsByUserId, getUnitsContainingWord, bulkSaveUnits, saveParaphraseLog, getParaphraseLogs, bulkSaveParaphraseLogs, seedDatabaseIfEmpty, clearVocabularyOnly, findWordByText, getRandomMeanings, getCompositionsByUserId, getPlanningGoalsByUserId, bulkSavePlanningGoals } = db;

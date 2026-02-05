@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { User, VocabularyItem, DataScope } from '../types';
 import * as dataStore from '../dataStore';
-import { processJsonImport, generateJsonExport } from '../../utils/dataHandler';
+import { processJsonImport, generateJsonExport, ImportResult } from '../../utils/dataHandler';
 import { useToast } from '../../contexts/ToastContext';
 import * as db from '../db';
 // Import calculateMasteryScore to fix reference error on line 153
@@ -60,7 +60,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
             listening: true,
             mimic: true,
             wordBook: true,
-            calendar: true
+            calendar: true,
+            planning: true
         };
         
         await generateJsonExport(currentUser.id, currentUser, fullScope);
@@ -74,21 +75,24 @@ export const useDataActions = (props: UseDataActionsProps) => {
     
     // --- Direct Restore Actions (UI must confirm first) ---
     
-    const handleRestoreSuccess = async (result: any) => {
+    const handleRestoreSuccess = async (result: ImportResult) => {
         sessionStorage.setItem('vocab_pro_just_restored', 'true');
         
         // Mark backup as current since we just restored state
-        const now = Date.now();
-        localStorage.setItem('vocab_pro_last_backup_timestamp', String(now));
+        const backupTime = result.backupTimestamp || Date.now();
+        localStorage.setItem('vocab_pro_last_backup_timestamp', String(backupTime));
         refreshBackupTime();
         
         showToast('Restore successful! Refreshing data...', 'success', 2000);
         
-        await dataStore.forceReload(currentUser!.id);
-
         if (result.updatedUser) {
             await onUpdateUser(result.updatedUser);
             localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
+            localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
+            // Reload with correct ID
+            await dataStore.forceReload(result.updatedUser.id);
+        } else {
+            await dataStore.forceReload(currentUser!.id);
         }
         
         refreshGlobalStats();
@@ -102,20 +106,37 @@ export const useDataActions = (props: UseDataActionsProps) => {
         // setTimeout(() => window.location.reload(), 1000);
     };
 
-    const restoreFromServerAction = async () => {
-        if (!currentUser) return;
+    const restoreFromServerAction = async (forcedIdentifier?: string) => {
+        // Allow restore even if no currentUser (e.g. during fresh start or switch user flow)
+        // if (!currentUser && !forcedIdentifier) return; 
         
         // Set global flag to suppress "Unsaved Changes" highlight in sidebar during bulk writes
         (window as any).isRestoring = true;
 
         try {
-            const success = await restoreFromServer(currentUser.id);
+            // Use forced identifier, or Name, or fallback to ID
+            const identifier = forcedIdentifier || (currentUser ? currentUser.name || currentUser.id : null);
             
-            if (success) {
+            if (!identifier) {
+                console.warn("[DataActions] No identifier found for restore.");
+                return;
+            }
+
+            const result = await restoreFromServer(identifier);
+            
+            if (result && result.type === 'success') {
                 sessionStorage.setItem('vocab_pro_just_restored', 'true');
+
+                // IMMEDIATELY update the user state in the UI to reflect the switched user (name/avatar)
+                if (result.updatedUser) {
+                     await onUpdateUser(result.updatedUser);
+                     localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
+                     localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
+                }
+
                 // Mark backup as current
-                const now = Date.now();
-                localStorage.setItem('vocab_pro_last_backup_timestamp', String(now));
+                const backupTime = result.backupTimestamp || Date.now();
+                localStorage.setItem('vocab_pro_last_backup_timestamp', String(backupTime));
                 refreshBackupTime();
                 
                 showToast("Restored from Server successfully!", "success");
@@ -125,6 +146,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
                     window.dispatchEvent(new Event('vocab-pro-restore-complete'));
                 }, 600);
                 
+                // Reload to ensure all subsystems (audio, settings) re-mount with new user context
                 setTimeout(() => window.location.reload(), 1000);
             } else {
                 showToast("Server restore failed. Falling back to local file...", "error");
@@ -140,7 +162,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
     };
 
     const triggerLocalRestore = () => {
-        if (!currentUser) return;
+        // if (!currentUser) return; // Allow even if not logged in
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
@@ -165,10 +187,14 @@ export const useDataActions = (props: UseDataActionsProps) => {
                     listening: true,
                     mimic: true,
                     wordBook: true,
-                    calendar: true
+                    calendar: true,
+                    planning: true
                 };
 
-                const result = await processJsonImport(file, currentUser.id, fullScope);
+                // Use current user ID as placeholder if available, otherwise generic. 
+                // processJsonImport extracts real ID from file anyway.
+                const tempId = currentUser ? currentUser.id : 'temp-restore';
+                const result = await processJsonImport(file, tempId, fullScope);
     
                 if (result.type === 'success') {
                     await handleRestoreSuccess(result);
