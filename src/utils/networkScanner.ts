@@ -2,7 +2,7 @@
  * Scans a range of ports on localhost and common macOS hostnames
  * to find the Vocab Pro Server.
  */
-export const scanForServer = async (onProgress?: (url: string) => void): Promise<{ host: string; port: number } | null> => {
+export const scanForServer = async (onProgress?: (url: string) => void, signal?: AbortSignal): Promise<{ host: string; port: number } | null> => {
     // Hosts to scan
     const hosts = ['localhost', '127.0.0.1', 'macm2.local', 'macm4.local'];
     // Port range: 3000 to 3020
@@ -22,11 +22,17 @@ export const scanForServer = async (onProgress?: (url: string) => void): Promise
 
     // Helper to check a single URL with a reasonable timeout
     const checkUrl = async (candidate: { host: string; port: number; url: string }) => {
+        if (signal?.aborted) return null;
         if (onProgress) onProgress(candidate.url);
         
         const controller = new AbortController();
         // 1.5s timeout for better reliability across different network resolution speeds (.local can be slow)
         const timeoutId = setTimeout(() => controller.abort(), 1500); 
+        
+        // If master signal is aborted, abort the local fetch too
+        const onAbort = () => controller.abort();
+        signal?.addEventListener('abort', onAbort);
+
         try {
             const res = await fetch(`${candidate.url}/api/health`, { 
                 signal: controller.signal,
@@ -34,9 +40,12 @@ export const scanForServer = async (onProgress?: (url: string) => void): Promise
                 cache: 'no-cache'
             });
             clearTimeout(timeoutId);
+            signal?.removeEventListener('abort', onAbort);
             if (res.ok) return candidate;
             return null;
         } catch {
+            clearTimeout(timeoutId);
+            signal?.removeEventListener('abort', onAbort);
             return null;
         }
     };
@@ -44,6 +53,9 @@ export const scanForServer = async (onProgress?: (url: string) => void): Promise
     // Process candidates in batches for speed without overwhelming the browser's fetch queue
     const BATCH_SIZE = 8;
     for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+        // Check if we were cancelled before starting next batch
+        if (signal?.aborted) return null;
+        
         const batch = candidates.slice(i, i + BATCH_SIZE);
         const results = await Promise.all(batch.map(checkUrl));
         const found = results.find(r => r !== null);

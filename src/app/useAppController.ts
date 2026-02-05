@@ -38,6 +38,7 @@ export const useAppController = () => {
     const [connectionScanStatus, setConnectionScanStatus] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
     const [scanningUrl, setScanningUrl] = useState(''); // Tracking current scan URL for UI
     const hasCheckedInitialConnection = useRef(false);
+    const scanAbortControllerRef = useRef<AbortController | null>(null);
     
     // Unsaved Changes Tracking & Backup Timer
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -62,21 +63,29 @@ export const useAppController = () => {
     const { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
 
     // --- Server Connection Check with Auto-Scan ---
-    const checkServerConnection = useCallback(async (allowScan = false, urlOverride?: string, forceScan = false) => {
+    const checkServerConnection = useCallback(async (allowScan = false, urlOverride?: string, forceScan = false, signal?: AbortSignal) => {
         const config = getConfig();
         const url = urlOverride || getServerUrl(config);
 
         const tryConnect = async (targetUrl: string) => {
              const controller = new AbortController();
              const id = setTimeout(() => controller.abort(), 1200); // Tighter timeout for interactive feel
+             
+             // If master signal is aborted, abort this check too
+             const onAbort = () => controller.abort();
+             signal?.addEventListener('abort', onAbort);
+
              try {
                  const res = await fetch(`${targetUrl}/api/health`, { 
                      signal: controller.signal,
                      mode: 'cors'
                  });
                  clearTimeout(id);
+                 signal?.removeEventListener('abort', onAbort);
                  return res.ok;
              } catch {
+                 clearTimeout(id);
+                 signal?.removeEventListener('abort', onAbort);
                  return false;
              }
         };
@@ -100,9 +109,12 @@ export const useAppController = () => {
 
         // 2. If failed and scan is allowed (only if no override was provided), try to find it
         if ((!urlOverride && allowScan) || forceScan) {
+            if (signal?.aborted) return false;
+            
             const scanResult = await scanForServer((url) => {
                 setScanningUrl(url); // Update UI with current scanning URL
-            });
+            }, signal);
+
             if (scanResult) {
                 // Update config with found server details
                 const newConfig = { 
@@ -121,33 +133,62 @@ export const useAppController = () => {
             }
         }
         
-        setServerStatus('disconnected');
+        // Don't downgrade status if we were aborted (another scan might be starting)
+        if (!signal?.aborted) {
+            setServerStatus('disconnected');
+        }
         return false;
     }, [showToast]);
 
     // Function specifically for the modal interaction
     const handleScanAndConnect = async (urlOverride?: string) => {
+        // Stop any existing scan process
+        if (scanAbortControllerRef.current) {
+            scanAbortControllerRef.current.abort();
+        }
+        
+        scanAbortControllerRef.current = new AbortController();
+        const signal = scanAbortControllerRef.current.signal;
+
         setConnectionScanStatus('scanning');
         
-        // UX: Small delay to ensure the user sees the scanning animation
-        await new Promise(resolve => setTimeout(resolve, 800));
+        try {
+            // UX: Small delay to ensure the user sees the scanning animation
+            await new Promise((resolve, reject) => {
+                const t = setTimeout(resolve, 800);
+                signal.addEventListener('abort', () => {
+                    clearTimeout(t);
+                    reject(new Error('aborted'));
+                });
+            });
 
-        const allowAutoScan = !urlOverride;
-        const forceScan = !urlOverride; // Bypass initial check if it's a generic "Scan" button click
-        
-        const success = await checkServerConnection(allowAutoScan, urlOverride, forceScan);
-        
-        if (success) {
-            setConnectionScanStatus('success');
-            setTimeout(() => setIsConnectionModalOpen(false), 1000);
-            return true;
-        } else {
+            const allowAutoScan = !urlOverride;
+            const forceScan = !urlOverride; // Bypass initial check if it's a generic "Scan" button click
+            
+            const success = await checkServerConnection(allowAutoScan, urlOverride, forceScan, signal);
+            
+            if (signal.aborted) return false;
+
+            if (success) {
+                setConnectionScanStatus('success');
+                setTimeout(() => setIsConnectionModalOpen(false), 1000);
+                return true;
+            } else {
+                setConnectionScanStatus('failed');
+                return false;
+            }
+        } catch (e: any) {
+            if (e.message === 'aborted') return false;
             setConnectionScanStatus('failed');
             return false;
         }
     };
     
     const handleStopScan = () => {
+        if (scanAbortControllerRef.current) {
+            scanAbortControllerRef.current.abort();
+            scanAbortControllerRef.current = null;
+        }
         setConnectionScanStatus('failed');
     };
     
@@ -168,6 +209,7 @@ export const useAppController = () => {
                  setConnectionScanStatus('scanning');
              }
 
+             // We don't use the ref for initial boot scan as it's not user-stoppable in the same way
              checkServerConnection(true).then((connected) => {
                  if (connected) {
                      setServerStatus('connected');
@@ -233,7 +275,7 @@ export const useAppController = () => {
         triggerLocalRestore();
     };
 
-    const handleNewUserSetup = async () => {
+    const handleNewUserSetup = async (e?: any) => {
         setIsAutoRestoreOpen(false);
         setIsResetting(true);
         setResetStep('Wiping all data and preparing new profile...');

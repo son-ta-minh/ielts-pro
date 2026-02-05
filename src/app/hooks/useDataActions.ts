@@ -83,7 +83,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
         localStorage.setItem('vocab_pro_last_backup_timestamp', String(backupTime));
         refreshBackupTime();
         
-        showToast('Restore successful! Refreshing data...', 'success', 2000);
+        showToast('Restore successful! Reloading application...', 'success', 2000);
         
         if (result.updatedUser) {
             await onUpdateUser(result.updatedUser);
@@ -102,8 +102,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
             window.dispatchEvent(new Event('vocab-pro-restore-complete'));
         }, 600);
         
-        // Reload page to ensure fresh state if needed, though forceReload does a lot
-        // setTimeout(() => window.location.reload(), 1000);
+        // Reload page to ensure fresh state (reset all global hooks and caches)
+        setTimeout(() => window.location.reload(), 1200);
     };
 
     const restoreFromServerAction = async (forcedIdentifier?: string) => {
@@ -139,7 +139,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 localStorage.setItem('vocab_pro_last_backup_timestamp', String(backupTime));
                 refreshBackupTime();
                 
-                showToast("Restored from Server successfully!", "success");
+                showToast("Restored from Server successfully! Reloading...", "success");
                 
                 // Dispatch event with delay
                 setTimeout(() => {
@@ -147,7 +147,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 }, 600);
                 
                 // Reload to ensure all subsystems (audio, settings) re-mount with new user context
-                setTimeout(() => window.location.reload(), 1000);
+                setTimeout(() => window.location.reload(), 1200);
             } else {
                 showToast("Server restore failed. Falling back to local file...", "error");
                 triggerLocalRestore();
