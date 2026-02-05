@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Loader2, Server, Wifi, AlertTriangle, ExternalLink, RefreshCw, X, ShieldAlert, Square, ScanSearch, Link } from 'lucide-react';
 import { getServerUrl, getConfig } from '../../app/settingsManager';
@@ -10,9 +9,10 @@ interface Props {
     onStop: () => void;
     status: 'idle' | 'scanning' | 'success' | 'failed';
     serverUrl?: string;
+    scanningUrl?: string; // Prop for active scan progress
 }
 
-export const ConnectionModal: React.FC<Props> = ({ isOpen, onClose, onRetry, onStop, status, serverUrl }) => {
+export const ConnectionModal: React.FC<Props> = ({ isOpen, onClose, onRetry, onStop, status, serverUrl, scanningUrl }) => {
     const config = getConfig();
     const [localStatus, setLocalStatus] = useState(status);
     const [manualUrl, setManualUrl] = useState(serverUrl || getServerUrl(config));
@@ -74,9 +74,8 @@ export const ConnectionModal: React.FC<Props> = ({ isOpen, onClose, onRetry, onS
                              localStatus === 'failed' ? 'Connection Failed' : 'Connected!'}
                         </h3>
                         <p className="text-sm font-medium text-neutral-500">
-                            {localStatus === 'scanning' && "Contacting Vocab Pro Server..."}
-                            {localStatus === 'failed' && "Could not talk to the server."}
-                            {localStatus === 'success' && "Server found. Syncing..."}
+                            {localStatus === 'scanning' ? (scanningUrl ? "Scanning network..." : "Contacting Vocab Pro Server...") : 
+                             localStatus === 'failed' ? "Could not talk to the server." : "Server found. Syncing..."}
                         </p>
                     </div>
                 </div>
@@ -88,7 +87,10 @@ export const ConnectionModal: React.FC<Props> = ({ isOpen, onClose, onRetry, onS
                             <div className="h-2 w-full bg-neutral-100 rounded-full overflow-hidden">
                                 <div className="h-full bg-indigo-500 animate-progress-indeterminate"></div>
                             </div>
-                            <p className="text-xs text-center text-neutral-400 font-medium">Checking {manualUrl}...</p>
+                            <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-100 text-center animate-pulse">
+                                <p className="text-[10px] font-black uppercase text-neutral-400 tracking-widest mb-1">Checking Endpoint</p>
+                                <p className="text-sm font-bold text-neutral-600 truncate">{scanningUrl || '...'}</p>
+                            </div>
                             <button 
                                 onClick={handleStop}
                                 className="mx-auto px-6 py-2 bg-white border border-red-200 text-red-600 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-red-50 transition-colors shadow-sm"

@@ -27,8 +27,7 @@ try {
 
 // --- Configuration ---
 const args = minimist(process.argv.slice(2));
-const DEFAULT_PORT = args.p || args.port || process.env.PORT || 3000;
-const MAX_PORT_ATTEMPTS = 20; // Will try 3000 to 3020
+const PORT = args.p || args.port || process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 
 // Directories
@@ -143,33 +142,7 @@ function saveMetadata(data) {
     }
 }
 
-// --- Feature 0: Server Configuration & Root ---
-
-// Friendly Landing Page for Trusting Certs
-app.get('/', (req, res) => {
-    res.send(`
-        <html>
-            <head>
-                <title>Vocab Pro Server</title>
-                <style>
-                    body { font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0fdf4; color: #166534; }
-                    .card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; border: 1px solid #bbf7d0; }
-                    h1 { margin: 0 0 10px; }
-                    .status { display: inline-flex; align-items: center; gap: 8px; font-weight: bold; background: #dcfce7; padding: 8px 16px; border-radius: 100px; color: #15803d; }
-                    .dot { width: 10px; height: 10px; background: #22c55e; border-radius: 50%; display: block; }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <div class="status"><span class="dot"></span> Online</div>
-                    <h1>Vocab Pro Server</h1>
-                    <p>Secure connection established.</p>
-                    <p style="color: #64748b; font-size: 0.9em;">You can now close this tab and return to the app.</p>
-                </div>
-            </body>
-        </html>
-    `);
-});
+// --- Feature 0: Server Configuration ---
 
 app.get('/api/health', (req, res) => {
     res.json({ 
@@ -453,7 +426,7 @@ app.post('/speak', async (req, res) => {
     }
 });
 
-// --- Server Startup Logic with Port Scanning ---
+// --- Server Startup ---
 
 function loadHttpsCertificates() {
     if (!fs.existsSync(CERT_DIR)) return null;
@@ -471,11 +444,8 @@ function loadHttpsCertificates() {
     return null;
 }
 
-const startServer = (port) => {
-    if (port > DEFAULT_PORT + MAX_PORT_ATTEMPTS) {
-        console.error(`[CRITICAL] Could not bind to any port from ${DEFAULT_PORT} to ${DEFAULT_PORT + MAX_PORT_ATTEMPTS}. Exiting.`);
-        process.exit(1);
-    }
+(async () => {
+    await loadVoicesFromOS();
 
     const httpsOptions = loadHttpsCertificates();
     let server;
@@ -488,20 +458,11 @@ const startServer = (port) => {
         server = http.createServer(app);
     }
 
-    server.once('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-            console.warn(`[WARN] Port ${port} is busy. Trying ${port + 1}...`);
-            startServer(port + 1);
-        } else {
-            console.error('[CRITICAL] Server failed to start:', err);
-        }
-    });
-
-    server.listen(port, HOST, () => {
+    server.listen(PORT, HOST, () => {
         console.log(`==================================================`);
         console.log(`[INFO] Unified Server running`);
         console.log(`[INFO] Protocol: ${protocol.toUpperCase()}`);
-        console.log(`[INFO] Address:  ${protocol}://localhost:${port}`);
+        console.log(`[INFO] Address:  ${protocol}://localhost:${PORT}`);
         console.log(`[INFO] Storage:  ${BACKUP_DIR}`);
         console.log(`[INFO] TTS:      ${Object.keys(voiceIndex).length} voices loaded`);
         if (protocol === 'http') {
@@ -509,9 +470,4 @@ const startServer = (port) => {
         }
         console.log(`==================================================`);
     });
-};
-
-(async () => {
-    await loadVoicesFromOS();
-    startServer(DEFAULT_PORT);
 })();

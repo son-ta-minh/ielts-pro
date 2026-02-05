@@ -294,6 +294,41 @@ export async function forceReload(userId: string) {
 }
 
 /**
+ * Destructive wipe of ALL local data. 
+ * Clears database and in-memory caches.
+ * Preserves ONLY the system config (server connection info).
+ */
+export async function wipeAllLocalData() {
+    console.warn("DataStore: Wiping all local data...");
+    
+    // 1. Clear In-Memory Cache
+    _allWords.clear();
+    _composedWordIds.clear();
+    _bookWordIds.clear();
+    _isInitialized = false;
+    _currentUserId = null;
+    
+    // 2. Clear Database
+    await db.clearVocabularyOnly();
+    
+    // 3. Clear relevant LocalStorage keys (Identity, History, Session)
+    const preserveKeys = ['vocab_pro_system_config', 'gemini_api_keys'];
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && !preserveKeys.includes(key)) {
+            keysToRemove.push(key);
+        }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    
+    // Clear session storage too
+    sessionStorage.clear();
+    
+    console.log("DataStore: Wipe complete.");
+}
+
+/**
  * Triggers a rebuild of the composition index. 
  * Should be called whenever a composition is added, updated, or deleted.
  */

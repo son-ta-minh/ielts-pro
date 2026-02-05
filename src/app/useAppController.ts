@@ -9,6 +9,7 @@ import { useDataFetching } from './hooks/useDataFetching';
 import { useDataActions } from './hooks/useDataActions';
 import { getDueWords, getNewWords } from './db';
 import * as dataStore from './dataStore';
+import * as db from './db';
 import { getConfig, getServerUrl, saveConfig } from './settingsManager';
 import { performAutoBackup, fetchServerBackups, ServerBackupItem } from '../services/backupService';
 import { DEFAULT_USER_ID } from '../data/user_data';
@@ -35,6 +36,7 @@ export const useAppController = () => {
     // Connection Modal State
     const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
     const [connectionScanStatus, setConnectionScanStatus] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
+    const [scanningUrl, setScanningUrl] = useState(''); // Tracking current scan URL for UI
     const hasCheckedInitialConnection = useRef(false);
     
     // Unsaved Changes Tracking & Backup Timer
@@ -49,6 +51,10 @@ export const useAppController = () => {
     const [isAutoRestoreOpen, setIsAutoRestoreOpen] = useState(false);
     const hasCheckedAutoRestore = useRef(false);
 
+    // Resetting State
+    const [isResetting, setIsResetting] = useState(false);
+    const [resetStep, setResetStep] = useState('');
+
 
     // --- Composed Logic Hooks ---
     const { sessionWords, setSessionWords, sessionType, sessionFocus, startSession, clearSessionState } = useSession({ setView, setIsSidebarOpen });
@@ -56,15 +62,18 @@ export const useAppController = () => {
     const { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
 
     // --- Server Connection Check with Auto-Scan ---
-    const checkServerConnection = useCallback(async (allowScan = false, urlOverride?: string) => {
+    const checkServerConnection = useCallback(async (allowScan = false, urlOverride?: string, forceScan = false) => {
         const config = getConfig();
         const url = urlOverride || getServerUrl(config);
 
         const tryConnect = async (targetUrl: string) => {
              const controller = new AbortController();
-             const id = setTimeout(() => controller.abort(), 2000); // 2s timeout for manual check
+             const id = setTimeout(() => controller.abort(), 1200); // Tighter timeout for interactive feel
              try {
-                 const res = await fetch(`${targetUrl}/api/health`, { signal: controller.signal });
+                 const res = await fetch(`${targetUrl}/api/health`, { 
+                     signal: controller.signal,
+                     mode: 'cors'
+                 });
                  clearTimeout(id);
                  return res.ok;
              } catch {
@@ -72,24 +81,28 @@ export const useAppController = () => {
              }
         };
 
-        // 1. Try provided URL or current config
-        const isConnected = await tryConnect(url);
-        
-        if (isConnected) {
-            setServerStatus('connected');
-            // If we used a custom/manual URL override that worked, update the config
-            if (urlOverride) {
-                 const newConfig = { ...config, server: { ...config.server, useCustomUrl: true, customUrl: urlOverride } };
-                 saveConfig(newConfig, true);
-                 showToast(`Connected to ${urlOverride}`, "success");
+        // 1. Try provided URL or current config (Unless we are forced to skip and scan)
+        if (!forceScan) {
+            setScanningUrl(url);
+            const isConnected = await tryConnect(url);
+            
+            if (isConnected) {
+                setServerStatus('connected');
+                // If we used a custom/manual URL override that worked, update the config
+                if (urlOverride) {
+                     const newConfig = { ...config, server: { ...config.server, useCustomUrl: true, customUrl: urlOverride } };
+                     saveConfig(newConfig, true);
+                     showToast(`Connected to ${urlOverride}`, "success");
+                }
+                return true;
             }
-            return true;
         }
 
         // 2. If failed and scan is allowed (only if no override was provided), try to find it
-        if (!isConnected && allowScan && !urlOverride && !config.server.useCustomUrl) {
-            // console.log("[App] Server not found. Scanning network...");
-            const scanResult = await scanForServer();
+        if ((!urlOverride && allowScan) || forceScan) {
+            const scanResult = await scanForServer((url) => {
+                setScanningUrl(url); // Update UI with current scanning URL
+            });
             if (scanResult) {
                 // Update config with found server details
                 const newConfig = { 
@@ -97,12 +110,13 @@ export const useAppController = () => {
                     server: { 
                         ...config.server, 
                         host: scanResult.host, 
-                        port: scanResult.port 
+                        port: scanResult.port,
+                        useCustomUrl: false // Reset to standard host:port if found via scan
                     } 
                 };
-                saveConfig(newConfig, true); // Suppress backup trigger
+                saveConfig(newConfig, true); 
                 setServerStatus('connected');
-                showToast(`Server found and connected at ${scanResult.host}:${scanResult.port}`, "success");
+                showToast(`Server found at ${scanResult.host}:${scanResult.port}`, "success");
                 return true;
             }
         }
@@ -112,15 +126,16 @@ export const useAppController = () => {
     }, [showToast]);
 
     // Function specifically for the modal interaction
-    // If urlOverride is passed, we check ONLY that URL.
-    // If urlOverride is undefined, we trigger the auto-scan logic.
     const handleScanAndConnect = async (urlOverride?: string) => {
         setConnectionScanStatus('scanning');
         
-        // Pass true for allowScan ONLY if no URL override is provided
+        // UX: Small delay to ensure the user sees the scanning animation
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         const allowAutoScan = !urlOverride;
+        const forceScan = !urlOverride; // Bypass initial check if it's a generic "Scan" button click
         
-        const success = await checkServerConnection(allowAutoScan, urlOverride);
+        const success = await checkServerConnection(allowAutoScan, urlOverride, forceScan);
         
         if (success) {
             setConnectionScanStatus('success');
@@ -136,13 +151,12 @@ export const useAppController = () => {
         setConnectionScanStatus('failed');
     };
     
-    // Check if the user is truly the default seed user (ID matches AND Name is default)
-    // This prevents the modal from showing if the user customized their profile but kept the ID.
+    // Check if the user is truly the default seed user
     const isStrictDefaultUser = useCallback(() => {
         return currentUser && currentUser.id === DEFAULT_USER_ID && currentUser.name === 'Vocab Master';
     }, [currentUser]);
 
-    // Initial Load Logic: Check connection, then maybe show modal
+    // Initial Load Logic
     useEffect(() => {
         if (isLoaded && !hasCheckedInitialConnection.current) {
              hasCheckedInitialConnection.current = true;
@@ -154,7 +168,6 @@ export const useAppController = () => {
                  setConnectionScanStatus('scanning');
              }
 
-             // Perform the check (this includes timeout + deep scan if allowed)
              checkServerConnection(true).then((connected) => {
                  if (connected) {
                      setServerStatus('connected');
@@ -169,7 +182,6 @@ export const useAppController = () => {
                  }
              });
              
-             // Periodic re-check (light check, no scan)
              const interval = setInterval(() => checkServerConnection(false), 30000);
              window.addEventListener('config-updated', () => checkServerConnection(false));
 
@@ -185,8 +197,6 @@ export const useAppController = () => {
         const checkForBackups = async () => {
              if (hasCheckedAutoRestore.current) return;
 
-             // Only run if loaded, connected, AND user is the strict default seeded user (fresh state)
-             // AND connection modal is closed (don't overlap)
              if (isLoaded && serverStatus === 'connected' && isStrictDefaultUser() && !isConnectionModalOpen) {
                  hasCheckedAutoRestore.current = true;
                  try {
@@ -201,51 +211,59 @@ export const useAppController = () => {
              }
         };
         
-        // Debounce slightly to ensure auth state is settled
         const t = setTimeout(checkForBackups, 1000);
         return () => clearTimeout(t);
     }, [isLoaded, serverStatus, isStrictDefaultUser, isConnectionModalOpen]);
 
 
-    const { isResetting, resetStep, lastBackupTime, refreshBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, handleLibraryReset, deleteWord, bulkDeleteWords, bulkUpdateWords } = useDataActions({
+    const { lastBackupTime, refreshBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, handleLibraryReset, deleteWord, bulkDeleteWords, bulkUpdateWords } = useDataActions({
         currentUser, setView, refreshGlobalStats,
         sessionWords, setSessionWords, wotd, setWotd, globalViewWord, setGlobalViewWord,
         onUpdateUser: handleUpdateUser,
-        serverStatus // Pass serverStatus
+        serverStatus
     });
     
-    // Wrapper for restore action to close modal
     const handleAutoRestoreAction = async (identifier?: string) => {
         setIsAutoRestoreOpen(false);
         await restoreFromServerAction(identifier);
     };
 
-    // New: Handle "Create New Profile" flow
-    const handleNewUserSetup = () => {
-        setIsAutoRestoreOpen(false);
-        setView('SETTINGS');
-        showToast("Welcome! Please set up your new profile.", "info");
-    };
-
-    // New: Handle "Local Restore" from modal
     const handleLocalRestoreSetup = () => {
         setIsAutoRestoreOpen(false);
         triggerLocalRestore();
     };
 
-    // Manual Switch User Action with Dynamic Scan
+    const handleNewUserSetup = async () => {
+        setIsAutoRestoreOpen(false);
+        setIsResetting(true);
+        setResetStep('Wiping all data and preparing new profile...');
+        
+        try {
+            await dataStore.wipeAllLocalData(); 
+            const defaultUser = await db.seedDatabaseIfEmpty(true);
+            
+            if (defaultUser) {
+                handleLogin(defaultUser);
+                setView('SETTINGS');
+                showToast("Welcome! Your data has been wiped. Please set up your new profile.", "success");
+            }
+        } catch (e) {
+            console.error(e);
+            showToast("Failed to prepare new profile.", "error");
+        } finally {
+            setIsResetting(false);
+        }
+    };
+
     const handleSwitchUser = async () => {
-        // 1. Force a check/scan first
         const connected = await checkServerConnection(true);
 
         if (!connected) {
-            // Show troubleshooting modal instead of just error toast
             setIsConnectionModalOpen(true);
-            setConnectionScanStatus('failed'); // Set to failed so user sees options immediately
+            setConnectionScanStatus('failed'); 
             return;
         }
 
-        // 2. Backup current user if valid
         if (currentUser && currentUser.id !== DEFAULT_USER_ID) {
              showToast("Syncing current profile...", "info");
              try {
@@ -257,31 +275,22 @@ export const useAppController = () => {
         }
 
         try {
-            // 3. Clear Data
             await dataStore.clearVocabularyOnly();
-            
-            // 4. Fetch list for modal
             const backups = await fetchServerBackups();
             setAutoRestoreCandidates(backups);
-
-            // 5. Open Modal
             setIsAutoRestoreOpen(true);
-            
         } catch (e) {
              showToast("Failed to fetch user list from server.", "error");
         }
     };
 
-    // --- Unsaved Changes & Backup Listeners ---
     useEffect(() => {
          const onDataUpdate = () => {
-             // If connected to server AND not currently restoring, mark as unsaved
              if (serverStatus === 'connected' && !(window as any).isRestoring) {
                 setHasUnsavedChanges(true);
              }
          };
 
-         // When a local restore completes, we are in sync with the file just loaded
          const onRestoreComplete = () => {
              setHasUnsavedChanges(false);
              setNextAutoBackupTime(null);
@@ -302,7 +311,6 @@ export const useAppController = () => {
                      setNextAutoBackupTime(null);
                      refreshBackupTime();
                  } else {
-                     // If backup failed, ensure UI still shows unsaved state so user can try again
                      setHasUnsavedChanges(true);
                      setNextAutoBackupTime(null);
                  }
@@ -322,30 +330,23 @@ export const useAppController = () => {
          };
     }, [serverStatus, refreshBackupTime]);
 
-    // --- Helper for Energy Rewards ---
     const checkEnergyRewards = async () => {
         if (!currentUser) return;
         
-        // 1. Get fresh stats
-        // DataStore counts are based on UNIQUE word IDs, preventing duplicate rewards for the same word.
         const currentStats = dataStore.getStats(); 
         const { learned, reviewed } = currentStats.dayProgress;
         const todayStr = new Date().toISOString().split('T')[0];
 
-        // 2. Calculate entitlement
-        // +1 Energy for every 3 new words learned
         const earnedFromLearned = Math.floor(learned / 3);
-        // +1 Energy for every 10 words reviewed (updated from 5)
         const earnedFromReviewed = Math.floor(reviewed / 10);
         const totalEarnedToday = earnedFromLearned + earnedFromReviewed;
 
-        // 3. Compare with user state
         const adventure = currentUser.adventure;
         const lastDate = adventure.lastDailyEnergyAwardDate || '';
         let dailyAwarded = adventure.dailyEnergyAwarded || 0;
 
         if (lastDate !== todayStr) {
-            dailyAwarded = 0; // Reset for new day if dates mismatch
+            dailyAwarded = 0; 
         }
 
         if (totalEarnedToday > dailyAwarded) {
@@ -367,12 +368,11 @@ export const useAppController = () => {
         }
     };
 
-    // Automatically check rewards when stats change (e.g. after restore, bulk update, or session complete)
     useEffect(() => {
         if (isLoaded && currentUser) {
             checkEnergyRewards();
         }
-    }, [stats, isLoaded, currentUser?.id]); // Depend on stats to trigger check
+    }, [stats, isLoaded, currentUser?.id]); 
 
     const updateWordAndNotify = async (updatedWord: VocabularyItem) => {
         const oldWord = dataStore.getWordById(updatedWord.id);
@@ -388,14 +388,11 @@ export const useAppController = () => {
             setGlobalViewWord(updatedWord);
         }
         
-        // Manual check is still useful for immediate feedback, though useEffect handles it too
         await checkEnergyRewards();
     };
     
-    // Explicit trigger for Server Backup
     const triggerServerBackup = async () => {
         if (!currentUser) return;
-        // Optimistic UI Update: Clear warning immediately to show responsiveness
         setHasUnsavedChanges(false);
         setNextAutoBackupTime(null);
         
@@ -403,18 +400,14 @@ export const useAppController = () => {
         showToast("Sync to Server initiated.", "success");
     };
 
-    // Wrapper for handleBackup (Smart wrapper for Sidebar). 
-    // If connected, uploads to server. If not, does local backup.
     const handleBackupWrapper = async () => {
         if (serverStatus === 'connected' && currentUser) {
             await triggerServerBackup();
         } else {
-            // Fallback to local download
             await handleBackup();
         }
     };
     
-    // Wrapper for bulk update to also check energy
     const bulkUpdateWordsAndNotify = async (updatedWords: VocabularyItem[]) => {
         await bulkUpdateWords(updatedWords);
         await checkEnergyRewards();
@@ -438,11 +431,9 @@ export const useAppController = () => {
         await checkEnergyRewards();
     };
 
-    // FIX: Destructure `recalculateXpAndLevelUp` from `useGamification`.
     const { gainExperienceAndLevelUp, recalculateXpAndLevelUp, xpGained, xpToNextLevel } = useGamification({ 
         currentUser, 
         onUpdateUser: handleUpdateUser,
-        // Fix: Pass the 'onSaveWordAndUser' prop to the 'useGamification' hook.
         onSaveWordAndUser: saveWordAndUserAndUpdateState,
     });
 
@@ -494,17 +485,13 @@ export const useAppController = () => {
 
     const startDueReviewSession = useCallback(async () => {
         if (!currentUser) return;
-        console.log('[SESSION_DEBUG] Attempting to start DUE session...');
         const words = await getDueWords(currentUser.id, 30);
-        console.log(`[SESSION_DEBUG] Found ${words.length} due words.`);
         startSession(words, 'due');
     }, [currentUser, startSession]);
 
     const startNewLearnSession = useCallback(async () => {
         if (!currentUser) return;
-        console.log('[SESSION_DEBUG] Attempting to start NEW session...');
         const words = await getNewWords(currentUser.id, 20);
-        console.log(`[SESSION_DEBUG] Found ${words.length} new words.`);
         startSession(words, 'new');
     }, [currentUser, startSession]);
   
@@ -541,13 +528,12 @@ export const useAppController = () => {
         stats, wotd, refreshGlobalStats, isWotdComposed, randomizeWotd,
         globalViewWord, setGlobalViewWord,
         lastBackupTime, 
-        handleBackup: handleBackupWrapper, // Smart wrapper (for sidebar)
-        triggerLocalBackup: handleBackup, // Direct local download (for menu)
-        triggerServerBackup, // Direct server upload (for menu)
+        handleBackup: handleBackupWrapper, 
+        triggerLocalBackup: handleBackup, 
+        triggerServerBackup, 
         
-        // Restore actions
-        restoreFromServerAction: handleAutoRestoreAction, // Use wrapper to close modal
-        triggerLocalRestore,     // Exposed for explicit calling
+        restoreFromServerAction: handleAutoRestoreAction, 
+        triggerLocalRestore,     
         handleLibraryReset,
         initialListFilter, setInitialListFilter,
         forceExpandAdd, setForceExpandAdd,
@@ -555,28 +541,25 @@ export const useAppController = () => {
         updateWord: updateWordAndNotify,
         deleteWord,
         bulkDeleteWords,
-        bulkUpdateWords: bulkUpdateWordsAndNotify, // Wrapped version
+        bulkUpdateWords: bulkUpdateWordsAndNotify, 
         handleNavigateToList,
         openAddWordLibrary,
         clearSessionState,
         handleRetrySession,
         gainExperienceAndLevelUp,
-        // FIX: Add `recalculateXpAndLevelUp` to the returned object.
         recalculateXpAndLevelUp,
         xpGained,
         xpToNextLevel,
         startDueReviewSession,
         startNewLearnSession,
         lastMasteryScoreUpdateTimestamp,
-        // New writing context props
         writingContextWord,
         handleComposeWithWord,
         consumeWritingContext,
-        serverStatus, // Expose server status
-        hasUnsavedChanges, // Expose unsaved changes state
-        nextAutoBackupTime, // Expose backup timer
+        serverStatus, 
+        hasUnsavedChanges, 
+        nextAutoBackupTime, 
         
-        // Auto Restore Props
         isAutoRestoreOpen,
         setIsAutoRestoreOpen,
         autoRestoreCandidates,
@@ -584,10 +567,10 @@ export const useAppController = () => {
         handleLocalRestoreSetup,
         handleSwitchUser,
 
-        // Connection Modal Props
         isConnectionModalOpen,
         setIsConnectionModalOpen,
         connectionScanStatus,
+        scanningUrl, // Returning new state
         handleScanAndConnect,
         handleStopScan
     };

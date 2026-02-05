@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Server, Save, CheckCircle2, AlertCircle, Loader2, FolderOpen, Network, Cloud, Clock, RefreshCw, Unlink, Settings2, Link, Info, ChevronDown, Edit2, X, Download, User, ExternalLink } from 'lucide-react';
+import { Server, Save, CheckCircle2, AlertCircle, Loader2, FolderOpen, Network, Cloud, Clock, RefreshCw, Unlink, Settings2, Link, Info, ChevronDown, Edit2, X, Download, User } from 'lucide-react';
 import { SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
 import { fetchServerBackups, ServerBackupItem, restoreFromServer } from '../../services/backupService';
@@ -17,7 +17,7 @@ interface ServerSettingsProps {
 }
 
 export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfigChange, onSaveSettings }) => {
-    const [status, setStatus] = useState<'connected' | 'error' | 'checking' | 'disconnected'>('checking');
+    const [status, setStatus] = useState<'connected' | 'error' | 'checking'>('checking');
     const [folderStatus, setFolderStatus] = useState<'idle' | 'updating' | 'success' | 'error'>('idle');
     const [isEditingConnection, setIsEditingConnection] = useState(false);
     
@@ -30,10 +30,10 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
     const [availableBackups, setAvailableBackups] = useState<ServerBackupItem[]>([]);
     const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
     const [isRestoring, setIsRestoring] = useState(false);
-    
+    const [jsonInputRef, setJsonInputRef] = useState<HTMLInputElement | null>(null);
+
     const { showToast } = useToast();
     const fullUrl = getServerUrl(config);
-    const isHttps = fullUrl.startsWith('https');
 
     const checkConnection = async () => {
         setStatus('checking');
@@ -58,8 +58,7 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                 setAvailableBackups([]);
             }
         } catch (e: any) {
-            // Distinguish between hard error and disconnect, but practically both mean we can't talk
-            setStatus('disconnected');
+            setStatus('error');
             setIsEditingConnection(true);
             setAvailableBackups([]);
         }
@@ -94,11 +93,6 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
     const handleSetIcloudPath = () => {
         const icloudPath = "~/Library/Mobile Documents/com~apple~CloudDocs/VocabPro";
         setPathInput(icloudPath);
-    };
-
-    const handleTrustConnection = () => {
-        window.open(fullUrl, '_blank');
-        showToast("Opened server tab. Please click 'Advanced' -> 'Proceed' to trust the certificate.", "info", 6000);
     };
 
     const saveServerFolder = async () => {
@@ -231,11 +225,11 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                     <div className="flex items-center gap-3">
                          {status === 'checking' && <Loader2 size={18} className="animate-spin text-neutral-400" />}
                          {status === 'connected' && <CheckCircle2 size={18} className="text-emerald-500" />}
-                         {(status === 'error' || status === 'disconnected') && <AlertCircle size={18} className="text-red-500" />}
+                         {status === 'error' && <AlertCircle size={18} className="text-red-500" />}
                          
                          <div className="flex flex-col">
                              <span className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Status</span>
-                             <span className={`text-sm font-bold ${status === 'connected' ? 'text-emerald-700' : 'text-red-600'}`}>
+                             <span className={`text-sm font-bold ${status === 'connected' ? 'text-emerald-700' : status === 'error' ? 'text-red-600' : 'text-neutral-600'}`}>
                                  {status === 'checking' ? 'Checking...' : status === 'connected' ? 'Active' : 'Disconnected'}
                              </span>
                          </div>
@@ -295,35 +289,12 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                             />
                         )}
                         
-                        {/* Certificate Trust Helper - Show whenever disconnected on HTTPS */}
-                         {status !== 'connected' && isHttps && (
-                            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2">
-                                <div className="flex gap-2">
-                                     <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-bold text-amber-800">
-                                            HTTPS Connection Check
-                                        </p>
-                                        <p className="text-[10px] text-amber-700 leading-relaxed">
-                                            If the server is running but you see "Disconnected", the browser might be blocking the certificate. 
-                                            You must manually trust it once.
-                                        </p>
-                                     </div>
-                                </div>
-                                <button onClick={handleTrustConnection} className="self-end px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-sm">
-                                    <ExternalLink size={12}/> Open & Trust Certificate
-                                </button>
-                            </div>
-                         )}
-
-                        {status !== 'connected' && !isHttps && (
-                            <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 flex gap-2">
-                                <Info size={14} className="text-blue-500 shrink-0 mt-0.5" />
-                                <p className="text-[10px] text-blue-700 font-medium leading-tight">
-                                    Using HTTP? Ensure your server is not enforcing HTTPS redirection.
-                                </p>
-                            </div>
-                        )}
+                        <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 flex gap-2">
+                             <Info size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                             <p className="text-[10px] text-blue-700 font-medium leading-tight">
+                                 Server must run on HTTPS. If stuck, try opening <a href={`${fullUrl}/api/health`} target="_blank" rel="noreferrer" className="underline font-bold">Health Check</a> to verify certificate.
+                             </p>
+                        </div>
                     </div>
                 )}
                 

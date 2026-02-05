@@ -251,14 +251,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     setIsAutoRestoreOpen,
     autoRestoreCandidates,
     handleNewUserSetup,
-    handleLocalRestoreSetup,
-    
-    // Connection Modal props
-    isConnectionModalOpen,
-    setIsConnectionModalOpen,
-    connectionScanStatus,
-    handleScanAndConnect,
-    handleStopScan
+    handleLocalRestoreSetup
   } = controller;
 
   if (!currentUser) return null;
@@ -478,13 +471,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
           onNewUser={handleNewUserSetup}
           onLocalRestore={handleLocalRestoreSetup}
       />
-
-      <ConnectionModal
-        isOpen={isConnectionModalOpen}
-        onClose={() => setIsConnectionModalOpen(false)}
-        onRetry={handleScanAndConnect}
-        onStop={handleStopScan}
-        status={connectionScanStatus}
+      
+      <ConnectionModal 
+          isOpen={isConnectionModalOpen}
+          onClose={() => setIsConnectionModalOpen(false)}
+          onRetry={handleScanAndConnect}
+          onStop={handleStopScan}
+          status={connectionScanStatus}
+          scanningUrl={controller.scanningUrl}
       />
     </div>
   );
