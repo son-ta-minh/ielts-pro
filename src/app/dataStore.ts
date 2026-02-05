@@ -23,6 +23,10 @@ let _statsCache: any = {
 
 // --- Private Functions ---
 
+function _updateLocalLastModified() {
+    localStorage.setItem('vocab_pro_local_last_modified', String(Date.now()));
+}
+
 // Timers
 let _backupTimeout: number | null = null; // Resets on every activity (Debounce)
 let _maxWaitTimeout: number | null = null; // Does NOT reset on activity (Safety Net)
@@ -430,6 +434,7 @@ export function getWordsPaged(
 
 export async function saveWordAndUser(word: VocabularyItem, user: User) {
     if (!canWrite()) return;
+    _updateLocalLastModified();
     word.complexity = calculateComplexity(word);
     word.masteryScore = calculateMasteryScore(word);
     word.gameEligibility = calculateGameEligibility(word);
@@ -442,6 +447,7 @@ export async function saveWordAndUser(word: VocabularyItem, user: User) {
 
 export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
     if (!canWrite()) return;
+    _updateLocalLastModified();
     if (word) {
         word.complexity = calculateComplexity(word);
         word.masteryScore = calculateMasteryScore(word);
@@ -458,6 +464,7 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
 
 export async function saveWord(item: VocabularyItem) {
     if (!canWrite()) return;
+    _updateLocalLastModified();
     item.complexity = calculateComplexity(item);
     item.masteryScore = calculateMasteryScore(item);
     item.gameEligibility = calculateGameEligibility(item);
@@ -470,6 +477,7 @@ export async function saveWord(item: VocabularyItem) {
 
 export async function bulkSaveWords(items: VocabularyItem[]) {
     if (items.length === 0) return;
+    _updateLocalLastModified();
     items.forEach(item => {
         item.complexity = calculateComplexity(item);
         item.masteryScore = calculateMasteryScore(item);
@@ -485,6 +493,7 @@ export async function bulkSaveWords(items: VocabularyItem[]) {
 export async function deleteWord(id: string) {
     const item = _allWords.get(id);
     if (!item || !canWrite()) return;
+    _updateLocalLastModified();
     await db.deleteWordFromDB(id);
     _allWords.delete(id);
     _recalculateStats(item.userId);
@@ -496,6 +505,7 @@ export async function bulkDeleteWords(ids: string[]) {
     if (ids.length === 0) return;
     const item = _allWords.get(ids[0]);
     if (!item) return;
+    _updateLocalLastModified();
     await db.bulkDeleteWords(ids);
     ids.forEach(id => _allWords.delete(id));
     _recalculateStats(item.userId);
@@ -505,14 +515,16 @@ export async function bulkDeleteWords(ids: string[]) {
 
 export async function saveUser(user: User): Promise<void> { 
     if (canWrite()) {
+         _updateLocalLastModified();
          await db.saveUser(user);
          _triggerBackup();
     }
 }
-export async function saveUnit(unit: Unit): Promise<void> { if (canWrite()) { await db.saveUnit(unit); _triggerBackup(); _notifyChanges(); } }
+export async function saveUnit(unit: Unit): Promise<void> { if (canWrite()) { _updateLocalLastModified(); await db.saveUnit(unit); _triggerBackup(); _notifyChanges(); } }
 
 export async function saveComposition(comp: Composition): Promise<void> {
     if (canWrite()) {
+        _updateLocalLastModified();
         await db.saveComposition(comp);
         await notifyCompositionChange(comp.userId);
         _triggerBackup();
@@ -520,6 +532,7 @@ export async function saveComposition(comp: Composition): Promise<void> {
 }
 
 export async function deleteComposition(id: string, userId: string): Promise<void> {
+    _updateLocalLastModified();
     await db.deleteComposition(id);
     await notifyCompositionChange(userId);
     _triggerBackup();
@@ -527,6 +540,7 @@ export async function deleteComposition(id: string, userId: string): Promise<voi
 
 export async function saveWordBook(book: WordBook): Promise<void> {
     if (canWrite()) {
+        _updateLocalLastModified();
         await db.saveWordBook(book);
         await notifyWordBookChange(book.userId);
         _triggerBackup();
@@ -535,6 +549,7 @@ export async function saveWordBook(book: WordBook): Promise<void> {
 
 export async function bulkSaveWordBooks(books: WordBook[]) {
     if (books.length === 0 || !canWrite()) return;
+    _updateLocalLastModified();
     await db.bulkSaveWordBooks(books);
     await notifyWordBookChange(books[0].userId);
     _triggerBackup();
@@ -542,6 +557,7 @@ export async function bulkSaveWordBooks(books: WordBook[]) {
 }
 
 export async function deleteWordBook(id: string, userId: string): Promise<void> {
+    _updateLocalLastModified();
     await db.deleteWordBook(id, userId);
     await notifyWordBookChange(userId);
     _triggerBackup();
@@ -550,6 +566,7 @@ export async function deleteWordBook(id: string, userId: string): Promise<void> 
 // --- Planning Feature Wrapper ---
 export async function savePlanningGoal(goal: PlanningGoal): Promise<void> {
     if (canWrite()) {
+        _updateLocalLastModified();
         await db.savePlanningGoal(goal);
         _triggerBackup();
         _notifyChanges();
@@ -558,6 +575,7 @@ export async function savePlanningGoal(goal: PlanningGoal): Promise<void> {
 
 export async function deletePlanningGoal(id: string): Promise<void> {
     if (canWrite()) {
+        _updateLocalLastModified();
         await db.deletePlanningGoal(id);
         _triggerBackup();
         _notifyChanges();

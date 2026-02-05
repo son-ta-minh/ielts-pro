@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { AppView, User, VocabularyItem } from './types';
 import { useToast } from '../contexts/ToastContext';
@@ -39,6 +38,11 @@ export const useAppController = () => {
     const [scanningUrl, setScanningUrl] = useState(''); // Tracking current scan URL for UI
     const hasCheckedInitialConnection = useRef(false);
     const scanAbortControllerRef = useRef<AbortController | null>(null);
+
+    // Sync Prompt State
+    const [syncPrompt, setSyncPrompt] = useState<{ isOpen: boolean; type: 'push' | 'restore'; localDate: string; serverDate: string; serverId: string } | null>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const hasCheckedSyncThisSession = useRef(false);
     
     // Unsaved Changes Tracking & Backup Timer
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -233,6 +237,55 @@ export const useAppController = () => {
              };
         }
     }, [isLoaded, checkServerConnection, isStrictDefaultUser]);
+
+    // --- AUTOMATIC SYNC CHECK ---
+    useEffect(() => {
+        const performSyncCheck = async () => {
+            if (!isLoaded || serverStatus !== 'connected' || !currentUser || hasCheckedSyncThisSession.current || isConnectionModalOpen || isAutoRestoreOpen) {
+                return;
+            }
+
+            hasCheckedSyncThisSession.current = true;
+            
+            try {
+                const backups = await fetchServerBackups();
+                const identifier = currentUser.name || currentUser.id;
+                // Find backup matching this user by ID or Name (Server mapping logic)
+                const userBackup = backups.find(b => b.id === identifier || b.name === identifier);
+
+                if (userBackup) {
+                    const serverTime = new Date(userBackup.date).getTime();
+                    const localTime = Number(localStorage.getItem('vocab_pro_local_last_modified') || 0);
+
+                    // Threshold of 2s to account for network lag / clock drift
+                    const THRESHOLD = 2000;
+                    
+                    if (serverTime > localTime + THRESHOLD) {
+                        setSyncPrompt({
+                            isOpen: true,
+                            type: 'restore',
+                            localDate: localTime === 0 ? 'Never' : new Date(localTime).toLocaleString(),
+                            serverDate: new Date(serverTime).toLocaleString(),
+                            serverId: userBackup.id
+                        });
+                    } else if (localTime > serverTime + THRESHOLD) {
+                        setSyncPrompt({
+                            isOpen: true,
+                            type: 'push',
+                            localDate: new Date(localTime).toLocaleString(),
+                            serverDate: new Date(serverTime).toLocaleString(),
+                            serverId: userBackup.id
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn("[Sync] Initial check failed:", e);
+            }
+        };
+
+        const t = setTimeout(performSyncCheck, 2000); // Wait for things to settle
+        return () => clearTimeout(t);
+    }, [isLoaded, serverStatus, currentUser?.id, isConnectionModalOpen, isAutoRestoreOpen]);
     
     // --- Auto Restore Logic Effect ---
     useEffect(() => {
@@ -266,8 +319,19 @@ export const useAppController = () => {
     });
     
     const handleAutoRestoreAction = async (identifier?: string) => {
+        // Tắt modal ngay lập tức
+        setSyncPrompt(null);
         setIsAutoRestoreOpen(false);
-        await restoreFromServerAction(identifier);
+        setIsSyncing(true);
+        try {
+            await restoreFromServerAction(identifier);
+            // Sau khi IndexDB ghi xong, tắt spinner để người dùng thấy dashboard 
+            // trước khi reload page (reload diễn ra trong handleRestoreSuccess sau 800ms)
+            setIsSyncing(false);
+        } catch (e) {
+            setIsSyncing(false);
+            showToast("Restore failed.", "error");
+        }
     };
 
     const handleLocalRestoreSetup = () => {
@@ -323,6 +387,34 @@ export const useAppController = () => {
             setIsAutoRestoreOpen(true);
         } catch (e) {
              showToast("Failed to fetch user list from server.", "error");
+        }
+    };
+
+    const handleSyncPush = async () => {
+        if (!currentUser) return;
+        setIsSyncing(true);
+        try {
+            await performAutoBackup(currentUser.id, currentUser, true);
+            showToast("Cloud backup updated!", "success");
+            setSyncPrompt(null);
+        } catch (e) {
+            showToast("Push failed.", "error");
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleSyncRestore = async () => {
+        if (!syncPrompt) return;
+        setIsSyncing(true);
+        try {
+            await restoreFromServerAction(syncPrompt.serverId);
+            // SUCCESS: Tắt toàn bộ overlay/modal ngay sau khi IndexDB được cập nhật
+            setSyncPrompt(null);
+            setIsSyncing(false);
+        } catch (e) {
+            showToast("Restore failed.", "error");
+            setIsSyncing(false);
         }
     };
 
@@ -531,6 +623,13 @@ export const useAppController = () => {
         startSession(words, 'due');
     }, [currentUser, startSession]);
 
+    const handleNewLearnSessionWithLimit = useCallback(async () => {
+        if (!currentUser) return;
+        const limit = getConfig().dailyGoals.max_learn_per_day;
+        const words = await getNewWords(currentUser.id, limit);
+        startSession(words, 'new');
+    }, [currentUser, startSession]);
+
     const startNewLearnSession = useCallback(async () => {
         if (!currentUser) return;
         const words = await getNewWords(currentUser.id, 20);
@@ -614,6 +713,12 @@ export const useAppController = () => {
         connectionScanStatus,
         scanningUrl, // Returning new state
         handleScanAndConnect,
-        handleStopScan
+        handleStopScan,
+
+        syncPrompt,
+        setSyncPrompt,
+        isSyncing,
+        handleSyncPush,
+        handleSyncRestore
     };
 };

@@ -366,6 +366,8 @@ export const processJsonImport = async (
                 const incomingListeningItems: ListeningItem[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.listeningItems;
                 const incomingNativeSpeakItemsRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.nativeSpeakItems;
                 const incomingNativeSpeakItems = incomingNativeSpeakItemsRaw ? incomingNativeSpeakItemsRaw.map(_mapToLongKeys) : undefined;
+                const incomingNativeSpeakItemsShort = incomingNativeSpeakItemsRaw ? incomingNativeSpeakItemsRaw.map(_mapToLongKeys) : undefined;
+                const incomingNativeSpeakItemsShort2 = incomingNativeSpeakItemsRaw ? incomingNativeSpeakItemsRaw.map(_mapToLongKeys) : undefined;
                 const incomingCompositions: Composition[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.compositions;
                 const incomingMimicQueue: any[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.mimicQueue;
                 const incomingWordBooksRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.wordBooks || rawJson.wb);
@@ -721,26 +723,9 @@ export const processJsonImport = async (
                 
                 // --- SCOPED IMPORT: SETTINGS (Attached to User Scope) ---
                 if (scope.user && incomingSettings) {
-                     // RESERVE LATEST CONNECTION INFO: Ensure we don't overwrite server config
-                     const currentConfigStr = localStorage.getItem('vocab_pro_system_config');
-                     let finalSettings = incomingSettings;
-                     if (currentConfigStr) {
-                         try {
-                             const currentConfig = JSON.parse(currentConfigStr);
-                             if (currentConfig.server) {
-                                 // Preserve current server connection info
-                                 finalSettings = {
-                                     ...incomingSettings,
-                                     server: currentConfig.server
-                                 };
-                                 console.log("[Import] Reserving current server connection info.");
-                             }
-                         } catch (e) {
-                             console.warn("[Import] Failed to parse current config for server preservation", e);
-                         }
-                     }
-                     localStorage.setItem('vocab_pro_system_config', JSON.stringify(finalSettings));
-                     window.dispatchEvent(new Event('config-updated'));
+                    // Logic ghi đè đơn giản (như ban đầu của bạn)
+                    localStorage.setItem('vocab_pro_system_config', JSON.stringify(incomingSettings));
+                    window.dispatchEvent(new Event('config-updated'));
                 }
                 
                 sessionStorage.removeItem('vocab_pro_active_session');

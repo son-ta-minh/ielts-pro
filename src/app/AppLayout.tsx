@@ -11,6 +11,7 @@ import ConfirmationModal from '../components/common/ConfirmationModal';
 import { StudyBuddy } from '../components/common/StudyBuddy';
 import { ServerRestoreModal } from '../components/common/ServerRestoreModal';
 import { ConnectionModal } from '../components/common/ConnectionModal';
+import { SyncPromptModal } from '../components/common/SyncPromptModal';
 
 // Lazy load major views for performance
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
@@ -357,7 +358,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
     view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary, currentUser, stats, startDueReviewSession, startNewLearnSession, lastBackupTime, 
     isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction,
     handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser,
-    isConnectionModalOpen, setIsConnectionModalOpen, connectionScanStatus, handleScanAndConnect, handleStopScan
+    isConnectionModalOpen, setIsConnectionModalOpen, connectionScanStatus, handleScanAndConnect, handleStopScan,
+    syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore
   } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
 
@@ -480,6 +482,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
           status={connectionScanStatus}
           scanningUrl={controller.scanningUrl}
       />
+
+      {syncPrompt && (
+          <SyncPromptModal 
+            isOpen={syncPrompt.isOpen}
+            onClose={() => setSyncPrompt(null)}
+            onPush={handleSyncPush}
+            onRestore={handleSyncRestore}
+            type={syncPrompt.type}
+            localDate={syncPrompt.localDate}
+            serverDate={syncPrompt.serverDate}
+            isProcessing={isSyncing}
+          />
+      )}
     </div>
   );
 };

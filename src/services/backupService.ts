@@ -1,4 +1,3 @@
-
 import { generateJsonExport, processJsonImport, ImportResult } from '../utils/dataHandler';
 import { User, DataScope } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
@@ -42,10 +41,15 @@ export const performAutoBackup = async (userId: string, user: User, force: boole
 
         if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
 
+        const now = Date.now();
         const newConfig = { ...config };
-        newConfig.sync.lastSyncTime = Date.now();
+        newConfig.sync.lastSyncTime = now;
         // Pass true to suppress backup trigger, avoiding a loop
         saveConfig(newConfig, true);
+        
+        // CRITICAL: When we successfully backup to server, the local "modified" state 
+        // effectively matches the server's newest version.
+        localStorage.setItem('vocab_pro_local_last_modified', String(now));
         
         // console.log(`[Backup] Auto-backup success (${sizeInMB} MB)`);
         window.dispatchEvent(new CustomEvent('backup-complete', { detail: { success: true, size: sizeInMB } }));
