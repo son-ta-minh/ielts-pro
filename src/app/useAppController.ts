@@ -6,13 +6,15 @@ import { useSession } from './hooks/useSession';
 import { useGamification, calculateWordDifficultyXp as movedCalc } from './hooks/useGamification';
 import { useDataFetching } from './hooks/useDataFetching';
 import { useDataActions } from './hooks/useDataActions';
-import { getDueWords, getNewWords } from './db';
+import { getDueWords, getNewWords, saveUser } from './db';
 import * as dataStore from './dataStore';
 import * as db from './db';
 import { getConfig, getServerUrl, saveConfig } from './settingsManager';
 import { performAutoBackup, fetchServerBackups, ServerBackupItem } from '../services/backupService';
 import { DEFAULT_USER_ID } from '../data/user_data';
 import { scanForServer } from '../utils/networkScanner';
+// Added missing import for generateMap
+import { generateMap } from '../data/adventure_map';
 
 // Re-export for backward compatibility with external components that might import from here.
 export const calculateWordDifficultyXp = movedCalc;
@@ -294,7 +296,10 @@ export const useAppController = () => {
         const checkForBackups = async () => {
              if (hasCheckedAutoRestore.current) return;
 
-             if (isLoaded && serverStatus === 'connected' && isStrictDefaultUser() && !isConnectionModalOpen) {
+             // CẬP NHẬT: Kiểm tra xem người dùng có yêu cầu bỏ qua tự động khôi phục trong phiên này không
+             const isSuppressed = sessionStorage.getItem('vocab_pro_suppress_auto_restore') === 'true';
+
+             if (isLoaded && serverStatus === 'connected' && isStrictDefaultUser() && !isConnectionModalOpen && !isSuppressed) {
                  hasCheckedAutoRestore.current = true;
                  try {
                      const backups = await fetchServerBackups();
@@ -347,6 +352,9 @@ export const useAppController = () => {
     };
 
     const handleNewUserSetup = async (e?: any) => {
+        // CẬP NHẬT: Ngăn chặn tự động khôi phục trong phiên này
+        sessionStorage.setItem('vocab_pro_suppress_auto_restore', 'true');
+        
         setIsAutoRestoreOpen(false);
         setIsResetting(true);
         setResetStep('Wiping all data and preparing new profile...');
@@ -376,6 +384,10 @@ export const useAppController = () => {
             setConnectionScanStatus('failed'); 
             return;
         }
+
+        // CẬP NHẬT: Khi chủ động chuyển user, cho phép quét lại nếu cần
+        sessionStorage.removeItem('vocab_pro_suppress_auto_restore');
+        hasCheckedAutoRestore.current = false;
 
         if (currentUser && currentUser.id !== DEFAULT_USER_ID) {
              showToast("Syncing current profile...", "info");
@@ -591,15 +603,34 @@ export const useAppController = () => {
         }
     }, [isLoaded, shouldSkipAuth, currentUser?.id]);
 
-    const handleLoginAndNavigate = (user: User) => {
-        handleLogin(user);
-        setView('DASHBOARD');
+    // FIX: Marked function as async to allow await calls inside.
+    const handleLoginAndNavigate = async (user: User) => {
+        // CẬP NHẬT: Khi đổi user thủ công, cho phép quét lại nếu cần
+        if (user.id !== DEFAULT_USER_ID) {
+            sessionStorage.removeItem('vocab_pro_suppress_auto_restore');
+        }
+
+        // Ensure new user logging in also has map generated
+        if (!user.adventure.map) {
+            // FIX: Added missing call to generateMap from adventure_map util.
+            user.adventure.map = generateMap(100);
+            // FIX: Changed saveUser to db.saveUser as db is the imported namespace.
+            await db.saveUser(user);
+        }
+        
+        setCurrentUser(user);
+        localStorage.setItem('vocab_pro_current_user_id', user.id);
+        localStorage.setItem('vocab_pro_current_user_name', user.name);
+        const updated = { ...user, lastLogin: Date.now() };
+        // FIX: Changed saveUser to db.saveUser and added await for proper async execution.
+        await db.saveUser(updated);
     };
 
     const handleLogoutAndNavigate = () => {
-        handleLogout();
-        setView('AUTH');
-        setIsSidebarOpen(false);
+        setCurrentUser(null);
+        localStorage.removeItem('vocab_pro_current_user_id');
+        // We keep user_name in case they want to auto-restore same user next time, 
+        // or we could clear it. For now, keep it as hint.
     };
 
     const handleSessionComplete = useCallback(() => {

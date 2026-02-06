@@ -259,10 +259,12 @@ export const detectLanguage = (text: string): 'vi' | 'en' => {
 const cleanTextForTts = (text: string): string => {
     if (!text) return '';
     return text
-        .substring(0, MAX_SPEECH_LENGTH) // Cắt bớt nếu quá dài
-        .replace(/\*+/g, '') // Remove Markdown bold/italic
-        .replace(/—/g, ', ') // Convert em-dash to comma for natural pause
-        .replace(/[^a-zA-Z0-9.,!?%'\-\s\u00C0-\u024F\u1E00-\u1EFF]/g, '')
+        .substring(0, MAX_SPEECH_LENGTH)
+        .normalize("NFC") // Quan trọng: Đưa các ký tự về dạng chuẩn (composed) trước khi regex
+        .replace(/\*+/g, '') // Xóa Markdown bold/italic
+        .replace(/—/g, ', ') // Thay gạch ngang dài thành dấu phẩy để ngắt quãng tự nhiên
+        // Hỗ trợ dải ký tự Latin mở rộng bao gồm tiếng Việt và các ký tự phổ biến
+        .replace(/[^a-zA-Z0-9.,!?%'\-\s\u00C0-\u1EF9]/g, '')
         .trim();
 };
 
@@ -288,9 +290,8 @@ export const speak = async (text: string, isDialogue = false, forcedLang?: 'en' 
       await speakViaServer(cleanedText, lang, accentCode, voiceName, serverUrl);
       return; 
   } catch (e) {
-      if (!isDialogue) {
-          speakViaBrowser(cleanedText, voiceName, lang);
-      }
+      // LUÔN LUÔN fallback trình duyệt nếu server lỗi để đảm bảo tính năng hoạt động
+      speakViaBrowser(cleanedText, voiceName, lang);
   }
 };
 

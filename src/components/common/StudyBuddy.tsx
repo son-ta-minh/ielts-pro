@@ -180,7 +180,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
                 const translation = data.responseData.translatedText;
                 setMessage({ text: `**Dịch:** ${translation}`, icon: <Languages size={18} className="text-blue-500" /> });
                 setIsOpen(true);
-                if (config.interface.buddyVoiceEnabled) speak(translation, true, 'vi', coach.viVoice, coach.viAccent);
+                // LUÔN đọc bản dịch vì đây là hành động chủ động của người dùng
+                speak(translation, false, 'vi', coach.viVoice, coach.viAccent);
             }
         } catch (e) { 
             showToast("Lỗi dịch thuật!", "error"); 
@@ -204,7 +205,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
             const meaning = data[0].meanings[0].definitions[0].definition;
             setMessage({ text: `**${data[0].word}**\n\n"${meaning}"`, icon: <Book size={18} className="text-emerald-500" /> });
             setIsOpen(true);
-            if (config.interface.buddyVoiceEnabled) speak(meaning, true, 'en', coach.enVoice, coach.enAccent);
+            // LUÔN đọc định nghĩa vì đây là hành động chủ động
+            speak(meaning, false, 'en', coach.enVoice, coach.enAccent);
         } catch (e) { 
             showToast("Không tìm thấy định nghĩa!", "error"); 
         } finally { 

@@ -22,6 +22,12 @@ const FULL_SCOPE: DataScope = {
 };
 
 export const performAutoBackup = async (userId: string, user: User, force: boolean = false) => {
+    // CRITICAL SAFETY: Never backup if we are in restoration mode
+    if ((window as any).isRestoring) {
+        console.log("[Backup] Auto-backup aborted: Restoration in progress.");
+        return;
+    }
+
     const config = getConfig();
     if (!config.sync.autoBackupEnabled && !force) return;
     

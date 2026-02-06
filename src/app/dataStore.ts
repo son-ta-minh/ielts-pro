@@ -55,7 +55,23 @@ async function _executeBackup() {
     }
 }
 
+/**
+ * Explicitly cancels any scheduled backup operations.
+ * Essential during restoration to prevent partial state from being synced.
+ */
+export function cancelPendingBackup() {
+    console.log("[DataStore] 🛑 Cancelling all pending backup timers.");
+    if (_backupTimeout) { clearTimeout(_backupTimeout); _backupTimeout = null; }
+    if (_maxWaitTimeout) { clearTimeout(_maxWaitTimeout); _maxWaitTimeout = null; }
+}
+
 function _triggerBackup() {
+    // CRITICAL SAFETY: Never schedule a backup if we are currently restoring data
+    if ((window as any).isRestoring) {
+        console.log("[DataStore] Backup trigger ignored: System is in Restore Mode.");
+        return;
+    }
+
     const config = getConfig();
     const delay = (config.sync.autoBackupInterval || 60) * 1000;
     

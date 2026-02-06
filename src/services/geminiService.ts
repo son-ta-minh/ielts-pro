@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ParaphraseMode, User, WritingTopic } from "../app/types";
 import { 
@@ -35,34 +34,15 @@ export class ManualApiResponseError extends Error {
   }
 }
 
+// Fix: The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const getApiKey = () => {
-  // 1. Process Env (Build time / Dev)
-  // Vite replaces process.env.API_KEY with the string literal.
-  // If it's the placeholder from .env.local, ignore it.
-  if (process.env.API_KEY && process.env.API_KEY !== 'PLACEHOLDER_API_KEY') {
-    return process.env.API_KEY;
-  }
-
-  // 2. Runtime Env (Docker injection via index.html)
-  const runtimeKey = (window as any).ENV?.API_KEY;
-  if (runtimeKey && runtimeKey !== 'PLACEHOLDER_API_KEY') {
-      return runtimeKey;
-  }
-
-  // 3. Local Storage (User Settings)
-  const localKeys = localStorage.getItem('gemini_api_keys');
-  if (localKeys) {
-      // Handle comma-separated keys (basic rotation logic could be added here, currently taking first)
-      const keys = localKeys.split(',').map(k => k.trim()).filter(Boolean);
-      if (keys.length > 0) return keys[0];
-  }
-  
-  return '';
+  return process.env.API_KEY || '';
 };
 
 const getClient = () => {
   const key = getApiKey();
   if (!key) throw new Error("API_KEY_MISSING");
+  // Always use a named parameter for apiKey initialization.
   return new GoogleGenAI({ apiKey: key });
 };
 
@@ -143,8 +123,9 @@ async function callAiWithRetry(requestPayload: any, maxRetries = 3) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const ai = getClient();
+      // Guidelines: Call generateContent with model name and contents in a single object.
       const response = await ai.models.generateContent(requestPayload);
-      // Fix: Access text property instead of calling text() method
+      // Guidelines: Access text property instead of calling text() method.
       return response;
     } catch (err: any) {
       lastError = err;
@@ -168,7 +149,11 @@ async function callAiWithRetry(requestPayload: any, maxRetries = 3) {
 export async function generateWordDetails(words: string[], nativeLanguage: string = 'Vietnamese'): Promise<any[]> {
     const config = getConfig();
     const prompt = getWordDetailsPrompt(words, nativeLanguage);
-    const response = await callAiWithRetry({ model: config.ai.modelForComplexTasks, contents: prompt, config: { responseMimeType: "application/json" } });
+    const response = await callAiWithRetry({ 
+        model: config.ai.modelForComplexTasks, 
+        contents: prompt, 
+        config: { responseMimeType: "application/json" } 
+    });
     const result = safeJsonParse(response.text, []);
     return Array.isArray(result) ? result : [result];
 }
@@ -188,14 +173,46 @@ export async function generateIpaAccents(words: string[]): Promise<any[]> {
 export async function generateParaphraseTaskWithHints(tone: 'CASUAL' | 'ACADEMIC', targetMode: ParaphraseMode, user: User, context: string, sentence?: string): Promise<{ sentence: string; hints: string[] }> {
     const config = getConfig();
     const prompt = getParaphraseTaskPrompt(tone, targetMode, user, context, sentence);
-    const response = await callAiWithRetry({ model: config.ai.modelForBasicTasks, contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { sentence: { type: Type.STRING }, hints: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ["sentence", "hints"] } } });
+    const response = await callAiWithRetry({ 
+        model: config.ai.modelForBasicTasks, 
+        contents: prompt, 
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: { 
+                type: Type.OBJECT, 
+                properties: { 
+                    sentence: { type: Type.STRING }, 
+                    hints: { type: Type.ARRAY, items: { type: Type.STRING } } 
+                }, 
+                required: ["sentence", "hints"] 
+            } 
+        } 
+    });
     return safeJsonParse(response.text, { sentence: '', hints: [] });
 }
 
 export async function evaluateParaphrase(original: string, draft: string, mode: ParaphraseMode): Promise<{ score: number; meaningScore: number; lexicalScore: number; grammarScore: number; feedback: string; modelAnswer: string }> {
     const config = getConfig();
     const prompt = getParaphraseEvaluationPrompt(original, draft, mode);
-    const response = await callAiWithRetry({ model: config.ai.modelForComplexTasks, contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { score: { type: Type.NUMBER }, meaningScore: { type: Type.NUMBER }, lexicalScore: { type: Type.NUMBER }, grammarScore: { type: Type.NUMBER }, feedback: { type: Type.STRING }, modelAnswer: { type: Type.STRING } }, required: ["score", "meaningScore", "lexicalScore", "grammarScore", "feedback", "modelAnswer"] } } });
+    const response = await callAiWithRetry({ 
+        model: config.ai.modelForComplexTasks, 
+        contents: prompt, 
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: { 
+                type: Type.OBJECT, 
+                properties: { 
+                    score: { type: Type.NUMBER }, 
+                    meaningScore: { type: Type.NUMBER }, 
+                    lexicalScore: { type: Type.NUMBER }, 
+                    grammarScore: { type: Type.NUMBER }, 
+                    feedback: { type: Type.STRING }, 
+                    modelAnswer: { type: Type.STRING } 
+                }, 
+                required: ["score", "meaningScore", "lexicalScore", "grammarScore", "feedback", "modelAnswer"] 
+            } 
+        } 
+    });
     return safeJsonParse(response.text, { score: 0, meaningScore: 0, lexicalScore: 0, grammarScore: 0, feedback: '', modelAnswer: '' });
 }
 
@@ -203,7 +220,18 @@ export async function generateSpeech(text: string): Promise<string | null> {
     try {
         const config = getConfig();
         const ai = getClient();
-        const response = await ai.models.generateContent({ model: config.ai.modelForTts, contents: [{ parts: getSpeechGenerationParts(text) }], config: { responseModalities: [Modality.AUDIO], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } } });
+        const response = await ai.models.generateContent({ 
+            model: config.ai.modelForTts, 
+            contents: [{ parts: getSpeechGenerationParts(text) }], 
+            config: { 
+                responseModalities: [Modality.AUDIO], 
+                speechConfig: { 
+                    voiceConfig: { 
+                        prebuiltVoiceConfig: { voiceName: 'Kore' } 
+                    } 
+                } 
+            } 
+        });
         const audioPart = response.candidates?.[0]?.content?.parts?.[0];
         if (audioPart && 'inlineData' in audioPart && audioPart.inlineData) return audioPart.inlineData.data;
         return null;
@@ -213,7 +241,22 @@ export async function generateSpeech(text: string): Promise<string | null> {
 export async function refineSpeakingTopic(topicName: string, description: string, currentQuestions: string, userRequest: string, user: User): Promise<{ name: string; description: string; questions: string[] }> {
     const config = getConfig();
     const prompt = getRefineSpeakingTopicPrompt(topicName, description, currentQuestions, userRequest, user);
-    const response = await callAiWithRetry({ model: config.ai.modelForComplexTasks, contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, description: { type: Type.STRING }, questions: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ["name", "description", "questions"] } } });
+    const response = await callAiWithRetry({ 
+        model: config.ai.modelForComplexTasks, 
+        contents: prompt, 
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: { 
+                type: Type.OBJECT, 
+                properties: { 
+                    name: { type: Type.STRING }, 
+                    description: { type: Type.STRING }, 
+                    questions: { type: Type.ARRAY, items: { type: Type.STRING } } 
+                }, 
+                required: ["name", "description", "questions"] 
+            } 
+        } 
+    });
     return safeJsonParse(response.text, { name: topicName, description, questions: currentQuestions.split('\n') });
 }
 
@@ -361,21 +404,66 @@ export async function transcribeAudios(sessionData: { question: string, audioBas
 export async function refineWritingTopic(currentTopic: WritingTopic, userRequest: string, user: User): Promise<{ name: string; description: string; task1: string; task2: string }> {
     const config = getConfig();
     const prompt = getRefineWritingTopicPrompt(currentTopic, userRequest, user);
-    const response = await callAiWithRetry({ model: config.ai.modelForComplexTasks, contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, description: { type: Type.STRING }, task1: { type: Type.STRING }, task2: { type: Type.STRING } }, required: ["name", "description", "task1", "task2"] } } });
+    const response = await callAiWithRetry({ 
+        model: config.ai.modelForComplexTasks, 
+        contents: prompt, 
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: { 
+                type: Type.OBJECT, 
+                properties: { 
+                    name: { type: Type.STRING }, 
+                    description: { type: Type.STRING }, 
+                    task1: { type: Type.STRING }, 
+                    task2: { type: Type.STRING } 
+                }, 
+                required: ["name", "description", "task1", "task2"] 
+            } 
+        } 
+    });
     return safeJsonParse(response.text, { name: currentTopic.name, description: currentTopic.description, task1: currentTopic.task1, task2: currentTopic.task2 });
 }
 
 export async function evaluateWriting(task1Response: string, task2Response: string, topic: WritingTopic): Promise<{ band: number, feedback: string }> {
     const config = getConfig();
     const prompt = getWritingEvaluationPrompt(task1Response, task2Response, topic);
-    const response = await callAiWithRetry({ model: config.ai.modelForComplexTasks, contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { band: { type: Type.NUMBER }, feedback: { type: Type.STRING } }, required: ["band", "feedback"] } } });
+    const response = await callAiWithRetry({ 
+        model: config.ai.modelForComplexTasks, 
+        contents: prompt, 
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: { 
+                type: Type.OBJECT, 
+                properties: { 
+                    band: { type: Type.NUMBER }, 
+                    feedback: { type: Type.STRING } 
+                }, 
+                required: ["band", "feedback"] 
+            } 
+        } 
+    });
     return safeJsonParse(response.text, { band: 0, feedback: '<p>Error evaluating response.</p>' });
 }
 
 export async function generateFullWritingTest(theme: string): Promise<any> {
     const config = getConfig();
     const prompt = getFullWritingTestPrompt(theme);
-    const response = await callAiWithRetry({ model: config.ai.modelForComplexTasks, contents: prompt, config: { responseMimeType: "application/json", responseSchema: { type: Type.OBJECT, properties: { topic: { type: Type.STRING }, task1: { type: Type.STRING }, task2: { type: Type.STRING } }, required: ["topic", "task1", "task2"] } } });
+    const response = await callAiWithRetry({ 
+        model: config.ai.modelForComplexTasks, 
+        contents: prompt, 
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: { 
+                type: Type.OBJECT, 
+                properties: { 
+                    topic: { type: Type.STRING }, 
+                    task1: { type: Type.STRING }, 
+                    task2: { type: Type.STRING } 
+                }, 
+                required: ["topic", "task1", "task2"] 
+            } 
+        } 
+    });
     return safeJsonParse(response.text, null);
 }
 

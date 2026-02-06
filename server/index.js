@@ -321,19 +321,23 @@ function runCommand(cmd) {
 }
 
 function mapLanguage(accent) {
-    if (accent.startsWith("vi")) return "vi";
-    if (accent.startsWith("en")) return "en";
+    if (!accent) return null;
+    const lower = accent.toLowerCase();
+    if (lower.startsWith("vi")) return "vi";
+    if (lower.startsWith("en")) return "en";
     return null;
 }
 
 async function loadVoicesFromOS() {
     try {
+        // macOS 'say -v ?' returns name, locale and description
         const raw = await runCommand("say -v ?");
         const lines = raw.split("\n").filter(Boolean);
         voiceIndex = {};
 
         for (const line of lines) {
-            const match = line.match(/^(.+?)\s{2,}([a-z_]+)\s+#/i);
+            // Regex improved to handle names with spaces and locales with underscores or hyphens (en_AU, en-US)
+            const match = line.match(/^(.+?)\s{2,}([a-zA-Z_\-]+)\s+#/i);
             if (!match) continue;
 
             const name = match[1].trim();
@@ -342,9 +346,12 @@ async function loadVoicesFromOS() {
 
             if (!language) continue;
 
-            voiceIndex[name] = { language, accent };
+            voiceIndex[name] = { 
+                language, 
+                accent: accent.replace('-', '_') // Normalize to underscore format
+            };
         }
-        console.log(`[TTS] Loaded ${Object.keys(voiceIndex).length} voices.`);
+        console.log(`[TTS] Successfully loaded ${Object.keys(voiceIndex).length} voices from OS.`);
     } catch (e) {
         console.error("[TTS] Failed to load voices (Are you on macOS?):", e.message);
     }
@@ -355,7 +362,18 @@ app.get('/voices', (req, res) => {
         name,
         language: info.language,
         accent: info.accent
-    }));
+    })).sort((a, b) => {
+        // Prioritize English, then specific high-quality indicators
+        if (a.language === 'en' && b.language !== 'en') return -1;
+        if (a.language !== 'en' && b.language === 'en') return 1;
+        
+        const aIsHigh = a.name.includes('Siri') || a.name.includes('Enhanced');
+        const bIsHigh = b.name.includes('Siri') || b.name.includes('Enhanced');
+        if (aIsHigh && !bIsHigh) return -1;
+        if (!aIsHigh && bIsHigh) return 1;
+        
+        return a.name.localeCompare(b.name);
+    });
 
     res.json({
         currentVoice: selectedVoice || "",
@@ -381,7 +399,7 @@ app.post('/select-voice', (req, res) => {
     selectedLanguage = info.language;
     selectedAccent = info.accent;
 
-    console.log(`[TTS] Selected voice: ${voice}`);
+    console.log(`[TTS] Selected voice context: ${voice} (${selectedAccent})`);
     res.json({
         success: true,
         voice: selectedVoice,
@@ -409,6 +427,10 @@ app.post('/speak', async (req, res) => {
 
     try {
         await runCommand(cmd);
+
+        if (!fs.existsSync(outFile)) {
+            throw new Error("Output file was not generated.");
+        }
 
         res.setHeader("Content-Type", "audio/aiff");
         const stream = fs.createReadStream(outFile);

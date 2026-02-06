@@ -50,7 +50,7 @@ const DbConnectionLostModal: React.FC = () => (
     </div>
 );
 
-const AppContent: React.FC = () => {
+const AppInner: React.FC = () => {
   const controller = useAppController();
   const { isLoaded, isResetting, resetStep, view, currentUser, handleLogin } = controller;
   const [isDbLost, setIsDbLost] = useState(false);
@@ -94,9 +94,21 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const forceUIReload = useCallback(() => {
+      console.log("[App] 🚀 Forcing full UI reload via key change.");
+      setReloadKey(prev => prev + 1);
+  }, []);
+
+  useEffect(() => {
+      window.addEventListener('vocab-pro-force-ui-reload', forceUIReload);
+      return () => window.removeEventListener('vocab-pro-force-ui-reload', forceUIReload);
+  }, [forceUIReload]);
+
   return (
     <ToastProvider>
-      <AppContent />
+      <AppInner key={reloadKey} />
     </ToastProvider>
   );
 };
