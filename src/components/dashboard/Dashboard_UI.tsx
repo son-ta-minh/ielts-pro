@@ -219,8 +219,8 @@ const LibraryHealthPanel: React.FC<{
   onViewLibrary: () => void;
 }> = ({ totalCount, newCount, rawCount, refinedCount, reviewStats, onRefineRaw, onVerifyRefined, onViewLibrary }) => {
   
-  // Debug State for Centering - Initialized to user calibration
-  const [offset, setOffset] = useState({ x: 11, y: 14 });
+  // Debug State for Centering
+  const [offset, setOffset] = useState({ x: 11, y: 13 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const startOffset = useRef({ x: 0, y: 0 });
@@ -311,7 +311,7 @@ const LibraryHealthPanel: React.FC<{
              </div>
              
              {/* Debug Coordinates display - Hidden if default */}
-             {(offset.x !== 11 || offset.y !== 14) && (
+             {(offset.x !== 11 || offset.y !== 13) && (
                  <div className="absolute -bottom-4 left-0 right-0 text-center z-20">
                      <span className="text-[8px] font-mono bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-500">
                         x: {Math.round(offset.x)}, y: {Math.round(offset.y)}
