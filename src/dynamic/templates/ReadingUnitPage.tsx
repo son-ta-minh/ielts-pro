@@ -98,6 +98,10 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { setPage(0); }, [selectedTag, focusFilter, colorFilter, pageSize]);
 
+  const hasActiveFilters = useMemo(() => {
+    return focusFilter !== 'all' || colorFilter !== 'all';
+  }, [focusFilter, colorFilter]);
+
   // --- Logic for List View ---
   const filteredUnits = useMemo(() => {
       return units.filter(u => {
@@ -277,6 +281,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   const handleRemoveUnitFromBook = (id: string) => {
       if (!activeBook) return;
       const newIds = activeBook.unitIds.filter(uid => uid !== id);
+      // Fixed: itemIds does not exist in type 'Partial<ReadingBook>', using unitIds instead.
       handleUpdateBook({ unitIds: newIds });
   };
 
@@ -332,6 +337,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   if (viewMode === 'SHELF') {
       return (
         <div className="space-y-6 animate-in fade-in duration-500">
+           {/* Header */}
            <div className="flex flex-col gap-4">
                <button onClick={() => setViewMode('LIST')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group">
                     <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
@@ -477,6 +483,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                     <ViewMenu 
                         isOpen={isViewMenuOpen}
                         setIsOpen={setIsViewMenuOpen}
+                        hasActiveFilters={hasActiveFilters}
                         customSection={
                             <>
                                 <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
@@ -522,7 +529,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                         key={unit.id}
                         title={unit.name}
                         tags={unit.tags}
-                        compact={viewSettings.compact}
+                        compact={unit.isFocused || viewSettings.compact}
                         onClick={() => { setActiveUnit(unit); setViewMode('READ'); }}
                         focusColor={unit.focusColor}
                         onFocusChange={(c) => handleFocusChange(unit, c)}

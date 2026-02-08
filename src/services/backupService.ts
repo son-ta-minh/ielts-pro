@@ -1,9 +1,8 @@
 
-import { generateJsonExport, processJsonImport, ImportResult } from '../utils/dataHandler';
+import { generateJsonExport, processJsonImport, ImportResult, _mapToShortKeys, _mapUserToShortKeys } from '../utils/dataHandler';
 import { User, DataScope } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
 import * as dataStore from '../app/dataStore';
-import { _mapToShortKeys } from '../utils/dataHandler';
 import * as db from '../app/db';
 
 // Scope for auto backup - usually everything
@@ -17,14 +16,12 @@ const FULL_SCOPE: DataScope = {
     listening: true,
     mimic: true,
     wordBook: true,
-    calendar: true,
     planning: true
 };
 
 export const performAutoBackup = async (userId: string, user: User, force: boolean = false) => {
     // CRITICAL SAFETY: Never backup if we are in restoration mode
     if ((window as any).isRestoring) {
-        console.log("[Backup] Auto-backup aborted: Restoration in progress.");
         return;
     }
 
@@ -58,7 +55,6 @@ export const performAutoBackup = async (userId: string, user: User, force: boole
         // effectively matches the server's newest version.
         localStorage.setItem('vocab_pro_local_last_modified', String(now));
         
-        // console.log(`[Backup] Auto-backup success (${sizeInMB} MB)`);
         window.dispatchEvent(new CustomEvent('backup-complete', { detail: { success: true, size: sizeInMB } }));
     } catch (e) {
         console.warn("[Backup] Upload failed:", e);
@@ -90,13 +86,10 @@ export const fetchServerBackups = async (): Promise<ServerBackupItem[]> => {
 };
 
 export const restoreFromServer = async (identifier: string): Promise<ImportResult | null> => {
-    console.log("[Backup] Attempting restore for:", identifier);
-    
     try {
         const config = getConfig();
         const serverUrl = getServerUrl(config);
         // Note: Server URL comes from LocalStorage, so it persists even if DB is lost.
-        console.log(`[Backup] Connecting to: ${serverUrl}`);
         
         // Use the generic identifier (can be username or userId)
         const targetUrl = `${serverUrl}/api/backup/${encodeURIComponent(identifier)}?t=${Date.now()}`;
@@ -108,7 +101,6 @@ export const restoreFromServer = async (identifier: string): Promise<ImportResul
         });
         
         if (!response.ok) {
-            console.warn(`[Backup] Restore fetch failed: ${response.status}`);
             return null;
         }
 
@@ -119,7 +111,6 @@ export const restoreFromServer = async (identifier: string): Promise<ImportResul
         const result = await processJsonImport(file, identifier, FULL_SCOPE);
         
         if (result.type === 'success' && result.updatedUser) {
-            console.log(`[Backup] Restore success. Reloading store for user ${result.updatedUser.id}...`);
             await dataStore.forceReload(result.updatedUser.id);
             return result;
         }
@@ -132,48 +123,38 @@ export const restoreFromServer = async (identifier: string): Promise<ImportResul
 };
 
 async function getFullExportData(userId: string, user: User) {
-     const wordsData = await db.getAllWordsForExport(userId);
-     const unitsData = await db.getUnitsByUserId(userId);
-     const readingBooksData = await db.getReadingBooksByUserId(userId);
-     const logsData = await db.getParaphraseLogs(userId);
-     const speakingTopicsData = await db.getAllSpeakingTopicsForExport(userId);
-     const speakingLogsData = await db.getAllSpeakingLogsForExport(userId);
-     const nativeSpeakItemsDataRaw = await db.getNativeSpeakItemsByUserId(userId);
-     const conversationItemsDataRaw = await db.getConversationItemsByUserId(userId);
-     const writingTopicsData = await db.getAllWritingTopicsForExport(userId);
-     const writingLogsData = await db.getAllWritingLogsForExport(userId);
-     const compositionsData = await db.getCompositionsByUserId(userId);
-     const irregularVerbsData = await db.getIrregularVerbsByUserId(userId);
-     const lessonsData = await db.getLessonsByUserId(userId);
-     const comparisonGroupsData = await db.getComparisonGroupsByUserId(userId);
-     const listeningItemsData = await db.getListeningItemsByUserId(userId);
-     const wordBooksDataRaw = await db.getWordBooksByUserId(userId);
-     const calendarEventsData = await db.getCalendarEventsByUserId(userId);
-     const planningGoalsData = await db.getPlanningGoalsByUserId(userId);
-     
+     const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
+        db.getAllWordsForExport(userId),
+        db.getUnitsByUserId(userId),
+        db.getReadingBooksByUserId(userId),
+        db.getParaphraseLogs(userId),
+        db.getAllSpeakingTopicsForExport(userId),
+        db.getAllSpeakingLogsForExport(userId),
+        db.getNativeSpeakItemsByUserId(userId),
+        db.getConversationItemsByUserId(userId),
+        db.getAllWritingTopicsForExport(userId),
+        db.getAllWritingLogsForExport(userId),
+        db.getCompositionsByUserId(userId),
+        db.getIrregularVerbsByUserId(userId),
+        db.getLessonsByUserId(userId),
+        // getComparisonGroupsByUserId removed
+        db.getListeningItemsByUserId(userId),
+        db.getWordBooksByUserId(userId),
+        // getCalendarEventsByUserId removed
+        db.getPlanningGoalsByUserId(userId)
+     ]);
+
      const mimicQueueData = localStorage.getItem('vocab_pro_mimic_practice_queue');
      const customChapters = localStorage.getItem('vocab_pro_adventure_chapters');
      const customBadges = localStorage.getItem('vocab_pro_custom_badges');
      const readingShelves = localStorage.getItem('reading_books_shelves');
      const systemConfig = localStorage.getItem('vocab_pro_system_config');
 
-     const shortWords = wordsData.map(w => _mapToShortKeys(w));
-     const shortNative = nativeSpeakItemsDataRaw.map(w => _mapToShortKeys(w));
-     const shortConversation = conversationItemsDataRaw.map(w => _mapToShortKeys(w));
-     const shortBooks = wordBooksDataRaw.map(b => _mapToShortKeys(b));
-
-     const comparisonLessons = comparisonGroupsData.map(cg => ({
-        id: cg.id, userId: cg.userId, type: 'comparison', title: cg.name,
-        description: `Comparison: ${cg.words.join(', ')}`, content: '',
-        comparisonData: cg.comparisonData, words: cg.words, tags: cg.tags,
-        createdAt: cg.createdAt, updatedAt: cg.updatedAt, topic1: '', topic2: ''
-    }));
-
      return {
-        v: 7,
+        v: 8,
         ca: new Date().toISOString(),
-        user: user,
-        vocab: shortWords,
+        user: _mapUserToShortKeys(user), // Consistent shortening using the specific user mapper
+        vocab: wordsData.map(w => _mapToShortKeys(w)),
         u: unitsData,
         pl: logsData,
         st: speakingTopicsData,
@@ -181,14 +162,14 @@ async function getFullExportData(userId: string, user: User) {
         wt: writingTopicsData,
         wl: writingLogsData,
         iv: irregularVerbsData,
-        lessons: [...lessonsData, ...comparisonLessons],
+        lessons: lessonsData,
         listeningItems: listeningItemsData,
-        nativeSpeakItems: shortNative,
-        conversationItems: shortConversation,
+        nativeSpeakItems: nativeSpeakItemsDataRaw.map(w => _mapToShortKeys(w)),
+        conversationItems: conversationItemsDataRaw.map(w => _mapToShortKeys(w)),
         compositions: compositionsData,
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
-        wordBooks: shortBooks,
-        ce: calendarEventsData,
+        wordBooks: wordBooksDataRaw.map(b => _mapToShortKeys(b)),
+        // ce (calendar events) removed
         readingBooks: readingBooksData,
         pg: planningGoalsData,
         adv: {

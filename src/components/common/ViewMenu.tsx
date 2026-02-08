@@ -20,9 +20,10 @@ interface Props {
     viewOptions: ViewOption[];
     filterOptions?: FilterOption[];
     customSection?: React.ReactNode;
+    hasActiveFilters?: boolean;
 }
 
-export const ViewMenu: React.FC<Props> = ({ isOpen, setIsOpen, viewOptions, filterOptions, customSection }) => {
+export const ViewMenu: React.FC<Props> = ({ isOpen, setIsOpen, viewOptions, filterOptions, customSection, hasActiveFilters }) => {
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -39,10 +40,13 @@ export const ViewMenu: React.FC<Props> = ({ isOpen, setIsOpen, viewOptions, filt
         <div className="relative" ref={menuRef}>
             <button 
                 onClick={() => setIsOpen(!isOpen)} 
-                className={`p-3 rounded-xl border transition-all shadow-sm ${isOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'}`} 
+                className={`p-3 rounded-xl border transition-all shadow-sm relative ${isOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'}`} 
                 title="View & Filter"
             >
                 <Eye size={16} />
+                {hasActiveFilters && (
+                    <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 border-2 border-white rounded-full -mt-0.5 -mr-0.5 shadow-sm animate-in zoom-in duration-300"></span>
+                )}
             </button>
 
             {isOpen && (

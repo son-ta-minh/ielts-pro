@@ -7,7 +7,7 @@ import {
 import { AppView, VocabularyItem } from '../../app/types';
 import { DailyGoalConfig } from '../../app/settingsManager';
 import { DayProgress } from './DayProgress';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 
 // New component for Word of the Day
 const WordOfTheDay: React.FC<{ 
@@ -220,6 +220,34 @@ const LibraryHealthPanel: React.FC<{
   onViewLibrary: () => void;
 }> = ({ totalCount, newCount, rawCount, refinedCount, reviewStats, onRefineRaw, onVerifyRefined, onViewLibrary }) => {
   
+  // Debug State for Centering - Initialized to user calibration
+  const [offset, setOffset] = useState({ x: 9, y: 12 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const startOffset = useRef({ x: 0, y: 0 });
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    startOffset.current = { ...offset };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    setOffset({ x: startOffset.current.x + dx, y: startOffset.current.y + dy });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    setIsDragging(false);
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+  };
+
   const chartData = [
     { name: 'New', value: newCount, color: '#3b82f6' }, // blue-500
     { name: 'Learning', value: reviewStats.learned, color: '#06b6d4' }, // cyan-500
@@ -230,72 +258,86 @@ const LibraryHealthPanel: React.FC<{
   const activeData = totalCount > 0 ? chartData : [{ name: 'Empty', value: 1, color: '#f3f4f6' }];
 
   return (
-    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col h-full">
-      <div className="flex justify-between items-start">
+    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col h-full">
+      <div className="flex justify-between items-start mb-1">
         <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Library Health</h3>
-        <button onClick={onViewLibrary} className="group text-neutral-300 hover:text-neutral-900 transition-colors p-2 -mr-2">
-            <ChevronRight size={20} />
+        <button onClick={onViewLibrary} className="group text-neutral-300 hover:text-neutral-900 transition-colors p-1.5 -mr-1.5 -mt-1.5">
+            <ChevronRight size={18} />
         </button>
       </div>
 
-      <div className="flex-grow flex items-center justify-between gap-2 min-h-[180px]">
+      <div className="flex-grow flex items-start justify-center gap-6 pt-1 pb-4">
         {/* Chart Section */}
-        <div className="h-44 w-44 relative">
-             <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                    <Pie
-                        data={activeData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={55}
-                        outerRadius={75}
-                        paddingAngle={totalCount > 0 ? 5 : 0}
-                        dataKey="value"
-                        stroke="none"
-                        cornerRadius={4}
-                    >
-                        {activeData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                    </Pie>
-                    <Tooltip 
-                         content={({ active, payload }) => {
-                             if (active && payload && payload.length) {
-                                 return (
-                                     <div className="bg-neutral-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xl">
-                                         {payload[0].name}: {payload[0].value}
-                                     </div>
-                                 );
-                             }
-                             return null;
-                         }}
-                    />
-                </PieChart>
-             </ResponsiveContainer>
-             {/* Center Text */}
-             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                 <span className="text-3xl font-black text-neutral-900 leading-none">{totalCount}</span>
-                 <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest mt-1">Total</span>
+        <div className="h-40 w-40 relative select-none shrink-0">
+             <PieChart width={160} height={160}>
+                <Pie
+                    data={activeData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={70}
+                    paddingAngle={totalCount > 0 ? 5 : 0}
+                    dataKey="value"
+                    stroke="none"
+                    cornerRadius={4}
+                >
+                    {activeData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                </Pie>
+                <Tooltip 
+                     content={({ active, payload }) => {
+                         if (active && payload && payload.length) {
+                             return (
+                                 <div className="bg-neutral-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xl">
+                                     {payload[0].name}: {payload[0].value}
+                                 </div>
+                             );
+                         }
+                         return null;
+                     }}
+                />
+            </PieChart>
+             {/* Center Text - Draggable for Calibration */}
+             <div 
+                className="absolute inset-0 flex flex-col items-center justify-center cursor-move z-10"
+                style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                title="Drag to adjust position"
+             >
+                 <span className="text-2xl font-black text-neutral-900 leading-none pointer-events-none">{totalCount}</span>
+                 <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest mt-1 pointer-events-none">Total</span>
              </div>
+             
+             {/* Debug Coordinates display - Hidden if default */}
+             {(offset.x !== 9 || offset.y !== 12) && (
+                 <div className="absolute -bottom-4 left-0 right-0 text-center z-20">
+                     <span className="text-[8px] font-mono bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-500">
+                        x: {Math.round(offset.x)}, y: {Math.round(offset.y)}
+                     </span>
+                 </div>
+             )}
         </div>
 
         {/* Legend Section */}
-        <div className="flex-1 flex flex-col justify-center gap-3 pl-4">
+        <div className="flex-1 flex flex-col justify-center gap-3 self-center">
              {chartData.map(item => (
                  <div key={item.name} className="flex items-center justify-between group">
                      <div className="flex items-center gap-2">
                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                         <span className="text-xs font-bold text-neutral-600">{item.name}</span>
+                         <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide">{item.name}</span>
                      </div>
-                     <span className="font-black text-neutral-900">{item.value}</span>
+                     <span className="font-black text-neutral-900 text-xs">{item.value}</span>
                  </div>
              ))}
         </div>
       </div>
       
-      <div className="mt-auto flex flex-col sm:flex-row gap-2 pt-4">
-        <button onClick={onRefineRaw} disabled={rawCount === 0} className="flex-1 justify-between px-4 py-3 bg-indigo-50 text-indigo-700 rounded-xl font-black text-xs flex items-center hover:bg-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:hover:bg-indigo-50 border border-indigo-100 shadow-sm"><div className="flex items-center space-x-2"><Wand2 size={12} /><span>REFINE RAW</span></div><span className="px-2 py-0.5 bg-indigo-200/50 rounded-md font-black">{rawCount}</span></button>
-        <button onClick={onVerifyRefined} disabled={refinedCount === 0} className="flex-1 justify-between px-4 py-3 bg-emerald-50 text-emerald-700 rounded-xl font-black text-xs flex items-center hover:bg-emerald-100 transition-all active:scale-95 disabled:opacity-50 disabled:hover:bg-emerald-50 border border-emerald-100 shadow-sm"><div className="flex items-center space-x-2"><ShieldCheck size={12} /><span>VERIFY REFINED</span></div><span className="px-2 py-0.5 bg-emerald-200/50 rounded-md font-black">{refinedCount}</span></button>
+      <div className="mt-2 flex flex-col sm:flex-row gap-2">
+        <button onClick={onRefineRaw} disabled={rawCount === 0} className="flex-1 justify-between px-3 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center hover:bg-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:hover:bg-indigo-50 border border-indigo-100 shadow-sm"><div className="flex items-center space-x-1.5"><Wand2 size={12} /><span>REFINE RAW</span></div><span className="px-1.5 py-0.5 bg-indigo-200/50 rounded-md font-black">{rawCount}</span></button>
+        <button onClick={onVerifyRefined} disabled={refinedCount === 0} className="flex-1 justify-between px-3 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center hover:bg-emerald-100 transition-all active:scale-95 disabled:opacity-50 disabled:hover:bg-emerald-50 border border-emerald-100 shadow-sm"><div className="flex items-center space-x-1.5"><ShieldCheck size={12} /><span>VERIFY REFINED</span></div><span className="px-1.5 py-0.5 bg-emerald-200/50 rounded-md font-black">{refinedCount}</span></button>
       </div>
     </div>
   );
@@ -327,6 +369,16 @@ export interface DashboardUIProps {
   serverStatus: 'connected' | 'disconnected';
 }
 
+const getAppVersion = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    return `v${year}${month}${day}_${hours}${minutes}`;
+};
+
 // The pure UI component
 export const DashboardUI: React.FC<DashboardUIProps> = ({
   totalCount,
@@ -351,11 +403,16 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   onRandomizeWotd,
   serverStatus
 }) => {
+  const version = useMemo(() => getAppVersion(), []);
+
   return (
     <div className="space-y-10 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-6">
         <div>
-            <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Vocab Pro</h2>
+            <div className="flex items-baseline gap-2">
+                <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Vocab Pro</h2>
+                <span className="text-[10px] font-bold text-neutral-400 font-mono tracking-tighter bg-neutral-100 px-1.5 py-0.5 rounded-md border border-neutral-200">{version}</span>
+            </div>
             <div className="flex items-center gap-3 mt-2">
                  {serverStatus === 'connected' ? (
                     <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">

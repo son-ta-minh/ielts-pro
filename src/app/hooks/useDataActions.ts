@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { User, VocabularyItem, DataScope } from '../types';
 import * as dataStore from '../dataStore';
@@ -46,7 +47,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
         const fullScope: DataScope = customScope || {
             user: true, vocabulary: true, lesson: true, reading: true, writing: true, 
             speaking: true, listening: true, mimic: true, wordBook: true, 
-            calendar: true, planning: true
+            planning: true
         };
         
         await generateJsonExport(currentUser.id, currentUser, fullScope);
@@ -68,7 +69,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
 
         sessionStorage.setItem('vocab_pro_just_restored', 'true');
         
-        const syncTime = serverMtime || Date.now();
+        // CRITICAL: Set local modified time to match the server's time
+        const syncTime = serverMtime || result.backupTimestamp || Date.now();
         localStorage.setItem('vocab_pro_last_backup_timestamp', String(syncTime));
         localStorage.setItem('vocab_pro_local_last_modified', String(syncTime));
         
@@ -78,38 +80,62 @@ export const useDataActions = (props: UseDataActionsProps) => {
         if (result.updatedUser) {
             localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
             localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
+            // Refresh app user state
+            await onUpdateUser(result.updatedUser);
         }
         
-        showToast('Restore successful! Finalizing...', 'success', 2000);
-        window.dispatchEvent(new Event('vocab-pro-force-ui-reload'));
+        showToast('Restore successful!', 'success', 2000);
         
+        // Refresh global stats to reflect new data without a page reload
+        refreshGlobalStats();
+        
+        // Dispatch completion event to UI controllers immediately to clear any previous states
+        window.dispatchEvent(new Event('vocab-pro-restore-complete'));
+        
+        // Final UI refresh notification
+        window.dispatchEvent(new Event('vocab-pro-force-ui-reload'));
+
+        // Delay clearing the restoration flag to swallow trailing datastore update events from the import process
         setTimeout(() => {
-            window.location.reload();
-        }, 800);
+            (window as any).isRestoring = false;
+        }, 1000);
     };
 
     const restoreFromServerAction = async (forcedIdentifier?: string, serverMtime?: number) => {
         const currentActiveConfig = getConfig();
         const preservedConfigJson = JSON.stringify(currentActiveConfig);
 
+        // Set global flag to prevent backup triggers during restoration
         (window as any).isRestoring = true;
         dataStore.cancelPendingBackup();
 
         try {
             const identifier = forcedIdentifier || (currentUser ? currentUser.name || currentUser.id : null);
-            if (!identifier) return;
+            if (!identifier) {
+                (window as any).isRestoring = false;
+                return;
+            }
+
+            // FRESH INSTALL SIMULATION: Wipe entire database and local storage before applying server data
+            await dataStore.wipeAllLocalData();
+            
+            // Immediately restore server connection config so the following restore call can work
+            if (preservedConfigJson) {
+                localStorage.setItem('vocab_pro_system_config', preservedConfigJson);
+                window.dispatchEvent(new Event('config-updated'));
+            }
 
             const result = await restoreFromServer(identifier);
             if (result && result.type === 'success') {
                 await handleRestoreSuccess(result, preservedConfigJson, serverMtime);
             } else {
-                showToast("Server restore failed. Falling back to local file...", "error");
-                triggerLocalRestore();
+                showToast("Server restore failed. Manual restore may be required.", "error");
+                (window as any).isRestoring = false;
             }
         } catch (err) {
-            triggerLocalRestore();
-        } finally {
-            setTimeout(() => { (window as any).isRestoring = false; }, 2000);
+            console.error("[DataActions] Restore error:", err);
+            showToast("Restore encountered a fatal error.", "error");
+            (window as any).isRestoring = false;
         }
     };
 
@@ -132,19 +158,26 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 const fullScope: DataScope = {
                     user: true, vocabulary: true, lesson: true, reading: true, writing: true, 
                     speaking: true, listening: true, mimic: true, wordBook: true, 
-                    calendar: true, planning: true
+                    planning: true
                 };
 
+                // Set flag for local restore as well
+                (window as any).isRestoring = true;
+                
                 const tempId = currentUser ? currentUser.id : 'temp-restore';
                 const result = await processJsonImport(file, tempId, fullScope);
     
                 if (result.type === 'success') {
                     await handleRestoreSuccess(result, preservedConfigJson);
+                    // Local file restores still trigger reload for absolute safety as they aren't part of the "fresh server install" flow
+                    setTimeout(() => window.location.reload(), 1000);
                 } else {
                     showToast(`Restore failed: ${result.message}`, 'error', 5000);
+                    (window as any).isRestoring = false;
                 }
             } catch (err) {
                 console.error("Fatal error during local restore:", err);
+                (window as any).isRestoring = false;
             }
         };
         

@@ -67,7 +67,6 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
       if (isOverdue) {
           // If overdue, use the actual elapsed time as the base, essentially "skipping" the missed steps.
           baseIntervalForCalc = Math.max(currentInterval, elapsedDays);
-          console.log(`[SRS] Overdue Bonus Applied: Scheduled=${currentInterval}d, Elapsed=${elapsedDays.toFixed(1)}d. New Base=${baseIntervalForCalc.toFixed(1)}d`);
       }
 
       if (item.lastGrade === ReviewGrade.HARD) {

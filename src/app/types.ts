@@ -44,7 +44,6 @@ export interface DataScope {
   listening: boolean;
   mimic: boolean;
   wordBook: boolean;
-  calendar: boolean;
   planning: boolean;
 }
 
@@ -327,25 +326,6 @@ export interface WritingLog {
   feedbackHtml: string;
 }
 
-export interface ComparisonGroup {
-  id: string;
-  userId: string;
-  name: string;
-  words: string[];
-  comparisonData: {
-      word: string;
-      explanation: string;
-      example: string;
-      userNote?: string;
-  }[];
-  path?: string;
-  tags?: string[];
-  createdAt: number;
-  updatedAt: number;
-  focusColor?: FocusColor;
-  isFocused?: boolean;
-}
-
 export interface IrregularVerb {
   id: string;
   userId: string;
@@ -359,7 +339,7 @@ export interface IrregularVerb {
   lastTestIncorrectForms?: ('v1' | 'v2' | 'v3')[];
 }
 
-export type LessonType = 'essay' | 'comparison';
+export type LessonType = 'essay';
 
 export interface Lesson {
   id: string;
@@ -371,17 +351,8 @@ export interface Lesson {
   
   title: string;
   description: string;
-  content: string; // Stored as HTML. For comparisons, this can be empty or auto-generated.
+  content: string; // Stored as HTML.
   
-  // New: For 'comparison' type
-  comparisonData?: {
-      word: string;
-      explanation: string;
-      example: string;
-      userNote?: string;
-  }[];
-  words?: string[]; // Words involved in the comparison
-
   path?: string;
   tags?: string[];
   createdAt: number;
@@ -452,18 +423,6 @@ export interface ConversationItem {
     isFocused?: boolean;
 }
 
-export interface CalendarEvent {
-  id: string;
-  userId: string;
-  title: string;
-  start: number; // timestamp
-  end: number; // timestamp
-  description?: string;
-  color: 'blue' | 'green' | 'purple' | 'orange' | 'red';
-  createdAt: number;
-  updatedAt: number;
-}
-
 export interface WordBookItem {
   word: string;
   definition: string;
@@ -505,14 +464,14 @@ export interface ReadingBook {
   iconLeft?: number;
 }
 
-// Lesson Book (Collection of Lessons & Comparisons)
+// Lesson Book (Collection of Lessons)
 export interface LessonBook {
   id: string;
   userId: string;
   title: string; // Format: "Shelf: Name"
   icon?: string;
   color?: string;
-  itemIds: string[]; // List of IDs of Lessons or ComparisonGroups
+  itemIds: string[]; // List of IDs of Lessons
   createdAt: number;
   updatedAt: number;
   // Visual props
@@ -603,6 +562,6 @@ export interface PlanningGoal {
   isFocused?: boolean;
 }
 
-export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'SPEAKING' | 'WRITING' | 'COMPARISON' | 'IRREGULAR_VERBS' | 'MIMIC' | 'LESSON' | 'LISTENING' | 'NATIVE_SPEAK' | 'EXPERIMENT' | 'CALENDAR' | 'WORDBOOK' | 'PLANNING';
+export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'SPEAKING' | 'WRITING' | 'IRREGULAR_VERBS' | 'MIMIC' | 'LESSON' | 'LISTENING' | 'NATIVE_SPEAK' | 'EXPERIMENT' | 'WORDBOOK' | 'PLANNING';
 
 export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'COLLO_CONNECT' | 'IPA_SORTER' | 'MEANING_MATCH' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'WORD_TRANSFORMER' | 'IDIOM_CONNECT' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER';

@@ -36,11 +36,6 @@ export const useAuthAndUser = () => {
         const targetRestoreIdentifier = savedUserName || savedUserId || "Vocab Master";
 
         if (shouldAttemptRestore) {
-            console.log(isDataLossDetected 
-                ? `[Auth] Data loss detected (DB empty). Attempting auto-restore for: ${targetRestoreIdentifier}...` 
-                : `[Auth] Manual restore flag detected. Attempting restore for: ${targetRestoreIdentifier}...`
-            );
-
             // Set global flag to suppress "Unsaved Changes" highlight during bulk writes
             (window as any).isRestoring = true;
 
@@ -48,7 +43,6 @@ export const useAuthAndUser = () => {
                 // Attempt restore from server using identifier
                 const result = await restoreFromServer(targetRestoreIdentifier);
                 if (result && result.type === 'success') {
-                    console.log("[Auth] Auto-restore successful.");
                     
                     // Update timestamp on auto-restore
                     if (result.backupTimestamp) {
@@ -64,10 +58,10 @@ export const useAuthAndUser = () => {
                         localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
                     }
                 } else {
-                    console.warn("[Auth] Auto-restore failed or no backup found.");
+                    // Removed log
                 }
             } catch (e) {
-                console.warn("[Auth] Auto-restore exception:", e);
+                // Removed log
             } finally {
                 // Clear flag after a safety buffer to ensure events settle
                 setTimeout(() => { (window as any).isRestoring = false; }, 2000);

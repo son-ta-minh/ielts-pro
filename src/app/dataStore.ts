@@ -1,5 +1,5 @@
 
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ComparisonGroup, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, CalendarEvent } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
@@ -60,7 +60,6 @@ async function _executeBackup() {
  * Essential during restoration to prevent partial state from being synced.
  */
 export function cancelPendingBackup() {
-    console.log("[DataStore] 🛑 Cancelling all pending backup timers.");
     if (_backupTimeout) { clearTimeout(_backupTimeout); _backupTimeout = null; }
     if (_maxWaitTimeout) { clearTimeout(_maxWaitTimeout); _maxWaitTimeout = null; }
 }
@@ -68,7 +67,6 @@ export function cancelPendingBackup() {
 function _triggerBackup() {
     // CRITICAL SAFETY: Never schedule a backup if we are currently restoring data
     if ((window as any).isRestoring) {
-        console.log("[DataStore] Backup trigger ignored: System is in Restore Mode.");
         return;
     }
 
@@ -90,7 +88,6 @@ function _triggerBackup() {
     // 2. Handle Max Wait (Safety behavior: ensure execution eventually)
     if (!_maxWaitTimeout) {
         _maxWaitTimeout = window.setTimeout(() => {
-            console.log("[DataStore] Max wait time reached. Forcing backup.");
             _executeBackup();
         }, maxDelay);
     }
@@ -120,7 +117,7 @@ function _recalculateStats(userId: string) {
     const rawCount = activeWords.filter(w => w.quality === WordQuality.RAW).length;
 
     const categories: Record<string, { total: number; learned: number }> = {
-      'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 }, 'pronun': { total: 0, learned: 0 },
+      'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 }, 'pronun': { total: 0, learned: 0 }
     };
 
     activeWords.forEach(w => {
@@ -198,7 +195,6 @@ export async function init(userId: string) {
     if (_isInitialized || _isInitializing) return;
     _isInitializing = true;
     _currentUserId = userId; 
-    console.log("DataStore: Initializing...");
 
     try {
         let words = await db.getAllWordsForExport(userId);
@@ -218,9 +214,11 @@ export async function init(userId: string) {
              }
         }
         
-        const [compositions, books] = await Promise.all([
+        const [compositions, books, spkCards, convs] = await Promise.all([
             db.getCompositionsByUserId(userId),
-            db.getWordBooksByUserId(userId)
+            db.getWordBooksByUserId(userId),
+            db.getNativeSpeakItemsByUserId(userId),
+            db.getConversationItemsByUserId(userId)
         ]);
 
         _composedWordIds.clear();
@@ -473,6 +471,38 @@ export async function deleteWordBook(id: string, userId: string): Promise<void> 
 
 // --- Scoped Entity Wrappers ---
 
+export async function saveNativeSpeakItem(item: NativeSpeakItem) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveNativeSpeakItem(item);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteNativeSpeakItem(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteNativeSpeakItem(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveConversationItem(item: ConversationItem) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveConversationItem(item);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteConversationItem(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteConversationItem(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
 export async function saveLesson(lesson: Lesson) {
     if (!canWrite()) return;
     _updateLocalLastModified();
@@ -485,22 +515,6 @@ export async function deleteLesson(id: string) {
     if (!canWrite()) return;
     _updateLocalLastModified();
     await db.deleteLesson(id);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-export async function saveComparisonGroup(group: ComparisonGroup) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.saveComparisonGroup(group);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-export async function deleteComparisonGroup(id: string) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.deleteComparisonGroup(id);
     _triggerBackup();
     _notifyChanges();
 }
@@ -615,72 +629,6 @@ export async function deleteWritingBook(id: string) {
     if (!canWrite()) return;
     _updateLocalLastModified();
     await db.deleteWritingBook(id);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-export async function saveCalendarEvent(event: CalendarEvent) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.saveCalendarEvent(event);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-export async function deleteCalendarEvent(id: string) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.deleteCalendarEvent(id);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-// --- Speaking Feature Wrappers ---
-
-export async function saveNativeSpeakItem(item: NativeSpeakItem) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.saveNativeSpeakItem(item);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-export async function deleteNativeSpeakItem(id: string) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.deleteNativeSpeakItem(id);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-export async function bulkSaveNativeSpeakItems(items: NativeSpeakItem[]) {
-    if (items.length === 0 || !canWrite()) return;
-    _updateLocalLastModified();
-    await db.bulkSaveNativeSpeakItems(items);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-export async function bulkDeleteNativeSpeakItems(ids: string[]) {
-    if (ids.length === 0 || !canWrite()) return;
-    _updateLocalLastModified();
-    await db.bulkDeleteNativeSpeakItems(ids);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-export async function saveConversationItem(item: ConversationItem) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.saveConversationItem(item);
-    _triggerBackup();
-    _notifyChanges();
-}
-
-export async function deleteConversationItem(id: string) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.deleteConversationItem(id);
     _triggerBackup();
     _notifyChanges();
 }

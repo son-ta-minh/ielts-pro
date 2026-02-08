@@ -34,7 +34,6 @@ const PlanningPage = React.lazy(() => import('../dynamic/templates/PlanningPage'
 
 // Native Expressions (formerly NativeSpeak)
 const ExpressionPage = React.lazy(() => import('../dynamic/templates/SpeakingCardPage').then(module => ({ default: module.SpeakingCardPage })));
-const CalendarPage = React.lazy(() => import('../dynamic/templates/CalendarPage').then(module => ({ default: module.CalendarPage })));
 const WordBookPage = React.lazy(() => import('../dynamic/templates/WordBookPage').then(module => ({ default: module.WordBookPage })));
 
 
@@ -47,7 +46,6 @@ interface AppLayoutProps {
 const navItems = [
   { id: 'DASHBOARD', view: 'DASHBOARD', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Mobile%20Phone.png", label: 'Dashboard' },
   { id: 'BROWSE', view: 'BROWSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png", label: 'Library' },
-  { id: 'PLANNING', view: 'PLANNING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Spiral%20Calendar.png", label: 'Planning' },
   { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Lesson' },
   { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },
   { id: 'LISTENING', view: 'LISTENING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Headphone.png", label: 'Listening' },
@@ -136,8 +134,8 @@ const Sidebar: React.FC<AppLayoutProps & {
              <button onClick={() => onNavigate('SETTINGS')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Settings">
                 <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Gear.png" alt="Settings" className="w-6 h-6 object-contain" />
              </button>
-             <button onClick={() => onNavigate('CALENDAR')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Study Calendar">
-                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Calendar.png" alt="Calendar" className="w-6 h-6 object-contain" />
+             <button onClick={() => onNavigate('PLANNING')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Study Plan">
+                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Spiral%20Calendar.png" alt="Planning" className="w-6 h-6 object-contain" />
              </button>
              <button onClick={() => onNavigate('DISCOVER')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Games & Discover">
                 <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Activities/Video%20Game.png" alt="Games" className="w-6 h-6 object-contain" />
@@ -252,7 +250,8 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     setIsAutoRestoreOpen,
     autoRestoreCandidates,
     handleNewUserSetup,
-    handleLocalRestoreSetup
+    handleLocalRestoreSetup,
+    handleSwitchUser
   } = controller;
 
   if (!currentUser) return null;
@@ -286,8 +285,6 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
           serverStatus={serverStatus} 
         />
       );
-    case 'CALENDAR':
-      return <CalendarPage user={currentUser} />;
     case 'WORDBOOK':
       return <WordBookPage user={currentUser} />;
     case 'PLANNING':

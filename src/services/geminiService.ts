@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { ParaphraseMode, User, WritingTopic } from "../app/types";
 import { 
@@ -13,7 +14,6 @@ import {
   getFullWritingTestPrompt,
   getWritingEvaluationPrompt,
   getIpaAccentsPrompt,
-  getComparisonPrompt,
   getIrregularVerbFormsPrompt,
   getPronunciationAnalysisPrompt,
   getGenerateLessonPrompt,
@@ -465,27 +465,6 @@ export async function generateFullWritingTest(theme: string): Promise<any> {
         } 
     });
     return safeJsonParse(response.text, null);
-}
-
-export async function generateWordComparison(groupName: string, words: string[]): Promise<{ updatedWords: string[], comparisonHtml: string }> {
-    const config = getConfig();
-    const prompt = getComparisonPrompt(groupName, words);
-    const response = await callAiWithRetry({
-        model: config.ai.modelForComplexTasks,
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    updatedWords: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    comparisonHtml: { type: Type.STRING }
-                },
-                required: ["updatedWords", "comparisonHtml"]
-            }
-        }
-    });
-    return safeJsonParse(response.text, { updatedWords: words, comparisonHtml: '<p>Error generating comparison.</p>' });
 }
 
 export async function generateIrregularVerbForms(verbs: string[]): Promise<{v1: string, v2: string, v3: string}[]> {

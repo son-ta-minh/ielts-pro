@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, Lesson, VocabularyItem, SessionType, ComparisonGroup, AppView, FocusColor, LessonBook } from '../../app/types';
+import { User, Lesson, VocabularyItem, SessionType, AppView, FocusColor, LessonBook } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
@@ -13,8 +12,6 @@ import { getConfig } from '../../app/settingsManager';
 import { UniversalCard } from '../../components/common/UniversalCard';
 import LessonEditView from './LessonEditView';
 import LessonPracticeView from './LessonPracticeView';
-import { ComparisonReadView } from './ComparisonReadView';
-import { ComparisonEditView } from './ComparisonEditView';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
 import { getLessonPrompt } from '../../services/promptService';
 import { ResourceActions, AddAction } from '../page/ResourceActions';
@@ -36,8 +33,7 @@ interface Props {
 }
 
 type ResourceItem = 
-  | { type: 'ESSAY'; data: Lesson; path?: string; tags?: string[]; date: number }
-  | { type: 'COMPARISON'; data: ComparisonGroup; path?: string; tags?: string[]; date: number };
+  | { type: 'ESSAY'; data: Lesson; path?: string; tags?: string[]; date: number };
 
 const lessonConfig: ResourceConfig = { filterSchema: [], viewSchema: [] };
 const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
@@ -52,7 +48,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'ESSAY' | 'COMPARISON'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'ESSAY'>('ALL');
   const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
   const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
@@ -61,13 +57,11 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(12);
   
-  const [viewMode, setViewMode] = useState<'list' | 'shelf' | 'edit_lesson' | 'read_lesson' | 'read_comparison' | 'edit_comparison' | 'book_detail'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'shelf' | 'edit_lesson' | 'read_lesson' | 'book_detail'>('list');
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
-  const [activeComparison, setActiveComparison] = useState<ComparisonGroup | null>(null);
   const [activeBook, setActiveBook] = useState<LessonBook | null>(null);
 
   const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
-  const [comparisonToDelete, setComparisonToDelete] = useState<ComparisonGroup | null>(null);
   const [bookToDelete, setBookToDelete] = useState<LessonBook | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -96,14 +90,12 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [userLessons, userGroups, userBooks] = await Promise.all([ 
+      const [userLessons, userBooks] = await Promise.all([ 
           db.getLessonsByUserId(user.id), 
-          db.getComparisonGroupsByUserId(user.id),
           db.getLessonBooksByUserId(user.id)
       ]);
       const combined: ResourceItem[] = [
           ...userLessons.map(l => ({ type: 'ESSAY' as const, data: l, path: l.path, tags: l.tags, date: l.createdAt })),
-          ...userGroups.map(g => ({ type: 'COMPARISON' as const, data: g, path: g.path, tags: g.tags, date: g.createdAt }))
       ];
       setResources(combined.sort((a, b) => b.date - a.date));
       setLessonBooks(userBooks.sort((a, b) => b.createdAt - a.createdAt));
@@ -113,6 +105,10 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   useEffect(() => { loadData(); }, [loadData]);
   
   useEffect(() => { setPage(0); }, [selectedTag, typeFilter, focusFilter, colorFilter, pageSize]);
+
+  const hasActiveFilters = useMemo(() => {
+    return typeFilter !== 'ALL' || focusFilter !== 'all' || colorFilter !== 'all';
+  }, [typeFilter, focusFilter, colorFilter]);
 
   // --- Logic for List View (Item Browser) ---
   const filteredResources = useMemo(() => {
@@ -210,7 +206,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
 
   // --- Handlers for Item Management ---
   const handleDeleteLesson = async () => { if (!lessonToDelete) return; await dataStore.deleteLesson(lessonToDelete.id); showToast('Lesson deleted.', 'success'); setLessonToDelete(null); loadData(); };
-  const handleDeleteComparison = async () => { if (!comparisonToDelete) return; await dataStore.deleteComparisonGroup(comparisonToDelete.id); showToast('Comparison deleted.', 'success'); setComparisonToDelete(null); loadData(); };
   
   const handleSaveLesson = async (lesson: Lesson) => { 
       await dataStore.saveLesson(lesson); 
@@ -220,24 +215,10 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       loadData(); 
   };
   
-  const handleSaveComparison = async (group: ComparisonGroup) => { 
-      await dataStore.saveComparisonGroup(group); 
-      showToast('Comparison saved!', 'success'); 
-      setViewMode('read_comparison'); 
-      setActiveComparison(group); 
-      loadData(); 
-  };
-  
   const handleNewLesson = () => {
     const newLesson: Lesson = { id: `lesson-${Date.now()}`, userId: user.id, topic1: '', topic2: '', title: `New Lesson`, description: '', content: '', tags: [], createdAt: Date.now(), updatedAt: Date.now() };
     setActiveLesson(newLesson);
     setViewMode('edit_lesson');
-  };
-
-  const handleNewComparison = () => {
-    const newGroup: ComparisonGroup = { id: `cmp-${Date.now()}`, userId: user.id, name: `New Comparison`, words: [], tags: [], comparisonData: [], createdAt: Date.now(), updatedAt: Date.now() };
-    setActiveComparison(newGroup);
-    setViewMode('edit_comparison');
   };
 
   const handleGenerateLesson = async (data: any) => {
@@ -261,19 +242,11 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       const newDataBase = { ...item.data, focusColor: color || undefined, updatedAt: Date.now() };
       if (!color) delete newDataBase.focusColor;
       
-      if (item.type === 'ESSAY') {
-        await dataStore.saveLesson(newDataBase as Lesson);
-      } else { 
-        await dataStore.saveComparisonGroup(newDataBase as ComparisonGroup);
-      }
+      await dataStore.saveLesson(newDataBase as Lesson);
       
       setResources(prev => prev.map(r => {
         if (r.data.id === item.data.id) {
-           if (r.type === 'ESSAY') {
              return { ...r, data: { ...(r.data as Lesson), focusColor: color || undefined, updatedAt: Date.now() } };
-           } else {
-             return { ...r, data: { ...(r.data as ComparisonGroup), focusColor: color || undefined, updatedAt: Date.now() } };
-           }
         }
         return r;
       }));
@@ -282,19 +255,11 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const handleToggleFocus = async (item: ResourceItem) => {
       const newDataBase = { ...item.data, isFocused: !item.data.isFocused, updatedAt: Date.now() };
       
-      if (item.type === 'ESSAY') {
-          await dataStore.saveLesson(newDataBase as Lesson);
-      } else {
-          await dataStore.saveComparisonGroup(newDataBase as ComparisonGroup);
-      }
+      await dataStore.saveLesson(newDataBase as Lesson);
       
       setResources(prev => prev.map(r => {
         if (r.data.id === item.data.id) {
-           if (r.type === 'ESSAY') {
              return { ...r, data: { ...(r.data as Lesson), isFocused: !r.data.isFocused, updatedAt: Date.now() } };
-           } else {
-             return { ...r, data: { ...(r.data as ComparisonGroup), isFocused: !r.data.isFocused, updatedAt: Date.now() } };
-           }
         }
         return r;
       }));
@@ -306,18 +271,12 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
           return;
       }
       const randomItem = filteredResources[Math.floor(Math.random() * filteredResources.length)];
-      if (randomItem.type === 'ESSAY') {
-          setActiveLesson(randomItem.data as Lesson);
-          setViewMode('read_lesson');
-      } else {
-          setActiveComparison(randomItem.data as ComparisonGroup);
-          setViewMode('read_comparison');
-      }
+      setActiveLesson(randomItem.data as Lesson);
+      setViewMode('read_lesson');
   };
 
   const addActions: AddAction[] = [
       { label: 'AI Lesson', icon: Sparkles, onClick: () => setIsAiModalOpen(true) },
-      { label: 'New Comparison', icon: FolderPlus, onClick: handleNewComparison },
       { label: 'New Lesson', icon: Plus, onClick: handleNewLesson },
   ];
 
@@ -341,11 +300,10 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
           const res = resources.find(r => r.data.id === id);
           if (!res) return null;
           
-          const isLesson = res.type === 'ESSAY';
           return {
               id: res.data.id,
-              title: isLesson ? (res.data as Lesson).title : (res.data as ComparisonGroup).name,
-              subtitle: isLesson ? 'Lesson' : 'Comparison',
+              title: (res.data as Lesson).title,
+              subtitle: 'Lesson',
               data: res, // Pass the whole ResourceItem
               focusColor: res.data.focusColor,
               isFocused: res.data.isFocused
@@ -355,11 +313,10 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
 
   const availableGenericItems: GenericBookItem[] = useMemo(() => {
       return resources.map((res): GenericBookItem => {
-          const isLesson = res.type === 'ESSAY';
           return {
               id: res.data.id,
-              title: isLesson ? (res.data as Lesson).title : (res.data as ComparisonGroup).name,
-              subtitle: isLesson ? 'Lesson' : 'Comparison',
+              title: (res.data as Lesson).title,
+              subtitle: 'Lesson',
               data: res // Pass the whole ResourceItem
           };
       });
@@ -405,12 +362,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   if (viewMode === 'edit_lesson' && activeLesson) {
       return <LessonEditView lesson={activeLesson} user={user} onSave={handleSaveLesson} onPractice={(l) => { setActiveLesson(l); setViewMode('read_lesson'); }} onCancel={() => setViewMode(activeBook ? 'book_detail' : 'list')} />;
   }
-  if (viewMode === 'read_comparison' && activeComparison) {
-      return <ComparisonReadView group={activeComparison} onBack={() => setViewMode(activeBook ? 'book_detail' : 'list')} onEdit={() => setViewMode('edit_comparison')} />;
-  }
-  if (viewMode === 'edit_comparison' && activeComparison) {
-      return <ComparisonEditView group={activeComparison} onSave={handleSaveComparison} onCancel={() => setViewMode(activeComparison.words.length > 0 ? 'read_comparison' : (activeBook ? 'book_detail' : 'list'))} user={user} />;
-  }
   
   // --- Book Detail View (Using Generic) ---
   if (viewMode === 'book_detail' && activeBook) {
@@ -424,13 +375,13 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
           onRemoveItem={handleRemoveItemFromBook}
           onOpenItem={(item) => { 
                const res = item.data as ResourceItem;
-               if (res.type === 'ESSAY') { setActiveLesson(res.data as Lesson); setViewMode('read_lesson'); }
-               else { setActiveComparison(res.data as ComparisonGroup); setViewMode('read_comparison'); }
+               setActiveLesson(res.data as Lesson); 
+               setViewMode('read_lesson');
           }}
           onEditItem={(item) => {
                const res = item.data as ResourceItem;
-               if (res.type === 'ESSAY') { setActiveLesson(res.data as Lesson); setViewMode('edit_lesson'); }
-               else { setActiveComparison(res.data as ComparisonGroup); setViewMode('edit_comparison'); }
+               setActiveLesson(res.data as Lesson); 
+               setViewMode('edit_lesson');
           }}
           onFocusChange={handleFocusChangeGeneric}
           onToggleFocus={handleToggleFocusGeneric}
@@ -444,7 +395,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         <div className="space-y-6 animate-in fade-in duration-500">
            {/* New Header Design */}
            <div className="flex flex-col gap-4">
-               <button onClick={() => setViewMode('list')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group">
+               <button onClick={() => setViewMode('list')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors group">
                     <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
                     <span>Back to Main Library</span>
                </button>
@@ -579,10 +530,10 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                 <ViewMenu 
                     isOpen={isViewMenuOpen}
                     setIsOpen={setIsViewMenuOpen}
+                    hasActiveFilters={hasActiveFilters}
                     filterOptions={[
                         { label: 'All', value: 'ALL', isActive: typeFilter === 'ALL', onClick: () => setTypeFilter('ALL') },
                         { label: 'Lesson', value: 'ESSAY', isActive: typeFilter === 'ESSAY', onClick: () => setTypeFilter('ESSAY') },
-                        { label: 'Comp.', value: 'COMPARISON', isActive: typeFilter === 'COMPARISON', onClick: () => setTypeFilter('COMPARISON') },
                     ]}
                     customSection={
                         <>
@@ -638,10 +589,10 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         <>
           {pagedResources.map((item) => {
             const isLesson = item.type === 'ESSAY';
-            const titleContent = isLesson ? (item.data as Lesson).title : (item.data as ComparisonGroup).name;
-            const onRead = isLesson ? () => { setActiveLesson(item.data as Lesson); setViewMode('read_lesson'); } : () => { setActiveComparison(item.data as ComparisonGroup); setViewMode('read_comparison'); };
-            const onEdit = isLesson ? () => { setActiveLesson(item.data as Lesson); setViewMode('edit_lesson'); } : () => { setActiveComparison(item.data as ComparisonGroup); setViewMode('edit_comparison'); };
-            const onDelete = isLesson ? () => setLessonToDelete(item.data as Lesson) : () => setComparisonToDelete(item.data as ComparisonGroup);
+            const titleContent = (item.data as Lesson).title;
+            const onRead = () => { setActiveLesson(item.data as Lesson); setViewMode('read_lesson'); };
+            const onEdit = () => { setActiveLesson(item.data as Lesson); setViewMode('edit_lesson'); };
+            const onDelete = () => setLessonToDelete(item.data as Lesson);
 
             return (
                 <UniversalCard
@@ -664,7 +615,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                         </>
                     }
                 >
-                    {viewSettings.showDesc && (isLesson ? ((item.data as Lesson).description && <p className="line-clamp-2">{(item.data as Lesson).description}</p>) : (<div className="flex flex-wrap gap-1.5">{(item.data as ComparisonGroup).words.slice(0, 4).map(w => <span key={w} className="px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded text-[10px] font-bold">{w}</span>)}{(item.data as ComparisonGroup).words.length > 4 && <span className="text-[10px] text-neutral-400 font-bold">+{ (item.data as ComparisonGroup).words.length - 4}</span>}</div>))}
+                    {viewSettings.showDesc && ((item.data as Lesson).description && <p className="line-clamp-2">{(item.data as Lesson).description}</p>)}
                 </UniversalCard>
             );
           })}
@@ -672,7 +623,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       )}
     </ResourcePage>
     <ConfirmationModal isOpen={!!lessonToDelete} title="Delete Lesson?" message="Confirm delete?" confirmText="Yes, Delete" isProcessing={false} onConfirm={handleDeleteLesson} onClose={() => setLessonToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
-    <ConfirmationModal isOpen={!!comparisonToDelete} title="Delete Comparison?" message="Confirm delete?" confirmText="Yes, Delete" isProcessing={false} onConfirm={handleDeleteComparison} onClose={() => setComparisonToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
     <UniversalAiModal 
         isOpen={isAiModalOpen} 
         onClose={() => setIsAiModalOpen(false)} 

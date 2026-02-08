@@ -22,7 +22,6 @@ let cachedBaseUrl: string | null = null;
  */
 export const resetAudioProtocolCache = () => {
     cachedBaseUrl = null;
-    console.log("[Audio] Connection cache cleared.");
 };
 
 export const getLastConnectedUrl = () => cachedBaseUrl;
@@ -119,7 +118,6 @@ export const fetchServerVoices = async (urlOverride?: string): Promise<ServerVoi
         const data = await res.json();
         return data;
     } catch (e: any) {
-        console.warn(`[Audio] Failed to fetch voices from ${urlOverride || 'config'}:`, e.message);
         return null;
     }
 };

@@ -1,5 +1,5 @@
 
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, ComparisonGroup, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, CalendarEvent, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -12,14 +12,12 @@ const SPEAKING_LOG_STORE = 'speaking_logs';
 const SPEAKING_TOPIC_STORE = 'speaking_topics';
 const WRITING_LOG_STORE = 'writing_logs';
 const WRITING_TOPIC_STORE = 'writing_topics';
-const COMPARISON_STORE = 'comparison_groups';
 const IRREGULAR_VERBS_STORE = 'irregular_verbs';
 const LESSON_STORE = 'lessons';
 const LISTENING_STORE = 'listening_items';
 const NATIVE_SPEAK_STORE = 'native_speak_items';
 const CONVERSATION_STORE = 'conversation_items';
 const COMPOSITIONS_STORE = 'compositions';
-const CALENDAR_STORE = 'calendar_events';
 const WORDBOOK_STORE = 'word_books';
 const READING_BOOK_STORE = 'reading_books';
 const LESSON_BOOK_STORE = 'lesson_books';
@@ -28,7 +26,7 @@ const SPEAKING_BOOK_STORE = 'speaking_books';
 const WRITING_BOOK_STORE = 'writing_books';
 const PLANNING_STORE = 'planning_goals';
 
-const DB_VERSION = 24; // Bump version for Conversation
+const DB_VERSION = 25; // Bumped version to clean up old stores
 
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -39,13 +37,10 @@ export const tryPersistStorage = async () => {
         try {
             const isPersisted = await navigator.storage.persisted();
             if (!isPersisted) {
-                const granted = await navigator.storage.persist();
-                console.log(`[Storage] Persistence granted: ${granted}`);
-            } else {
-                console.log("[Storage] Storage is already persisted.");
+                await navigator.storage.persist();
             }
         } catch (e) {
-            console.warn("[Storage] Failed to request persistence:", e);
+            // Silent fail is fine here
         }
     }
 };
@@ -110,8 +105,6 @@ const openDB = (): Promise<IDBDatabase> => {
     return _dbPromise;
   }
 
-  console.log(`[DB] Opening database connection (${DB_NAME} v${DB_VERSION})...`);
-
   _dbPromise = new Promise((resolve, reject) => {
     try {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -121,7 +114,6 @@ const openDB = (): Promise<IDBDatabase> => {
       };
 
       request.onupgradeneeded = (event) => {
-        console.log(`[DB] Upgrade needed from version ${event.oldVersion} to ${event.newVersion}`);
         const db = (event.target as IDBOpenDBRequest).result;
         
         if (!db) {
@@ -177,12 +169,9 @@ const openDB = (): Promise<IDBDatabase> => {
         }
 
         if (event.oldVersion < 12) {
+             // Cleanup old comparison store if it exists
             if (db.objectStoreNames.contains('word_comparison_groups')) {
                 db.deleteObjectStore('word_comparison_groups');
-            }
-            if (!db.objectStoreNames.contains(COMPARISON_STORE)) {
-                const pairStore = db.createObjectStore(COMPARISON_STORE, { keyPath: 'id' });
-                pairStore.createIndex('userId', 'userId', { unique: false });
             }
         }
 
@@ -221,11 +210,9 @@ const openDB = (): Promise<IDBDatabase> => {
             }
         }
         
-        if (event.oldVersion < 18) {
-             if (!db.objectStoreNames.contains(CALENDAR_STORE)) {
-                const calendarStore = db.createObjectStore(CALENDAR_STORE, { keyPath: 'id' });
-                calendarStore.createIndex('userId', 'userId', { unique: false });
-            }
+        // Removed Calendar Store logic for version 18 check or cleanup
+        if (db.objectStoreNames.contains('calendar_events')) {
+             db.deleteObjectStore('calendar_events');
         }
 
         if (event.oldVersion < 19) {
@@ -277,6 +264,11 @@ const openDB = (): Promise<IDBDatabase> => {
                 convStore.createIndex('userId', 'userId', { unique: false });
             }
         }
+
+        // Cleanup deprecated stores if they exist
+        if (db.objectStoreNames.contains('comparison_groups')) {
+            db.deleteObjectStore('comparison_groups');
+        }
       };
       
       request.onsuccess = () => {
@@ -315,15 +307,18 @@ const openDB = (): Promise<IDBDatabase> => {
 // ... (Rest of existing CRUD logic) ...
 
 export const clearVocabularyOnly = async (): Promise<void> => {
-  console.warn("[DB] ⚠️ clearVocabularyOnly called! This wipes data.");
   return withRetry(async () => {
       const db = await openDB();
       return new Promise((resolve, reject) => {
-        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, COMPARISON_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, COMPOSITIONS_STORE, CALENDAR_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
+        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
+        // Note: comparison_groups and calendar_events omitted as they are removed
         const tx = db.transaction(stores, 'readwrite');
-        stores.forEach(s => tx.objectStore(s).clear());
+        stores.forEach(s => {
+             if (db.objectStoreNames.contains(s)) {
+                 tx.objectStore(s).clear();
+             }
+        });
         tx.oncomplete = () => {
-            console.log("[DB] Vocabulary cleared successfully.");
             localStorage.removeItem('vocab_pro_mimic_practice_queue');
             localStorage.removeItem('vocab_pro_db_marker'); // REMOVE SAFETY MARKER
             localStorage.removeItem('vocab_pro_emergency_backup'); // Remove Emergency Backup
@@ -344,7 +339,6 @@ const withRetry = async <T,>(operation: () => Promise<T>, retries = 3, delay = 2
             
             // Force reset connection if it looks like a connection issue
             if (err?.name === 'InvalidStateError' || err?.message?.toLowerCase().includes('closed') || err?.target?.error?.name === 'InvalidStateError') {
-                 console.log("[DB] Resetting connection for retry...");
                  _dbInstance = null;
                  _dbPromise = null;
             }
@@ -375,7 +369,6 @@ const crudTemplate = async <T,>(storeName: string | string[], operation: (tx: ID
 };
 
 export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User | null> => {
-  console.log(`[DB] Checking seedDatabaseIfEmpty (force=${force})...`);
   try {
       const db = await openDB();
       const usersTx = db.transaction(USER_STORE, 'readonly');
@@ -390,12 +383,10 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
       const dbMarker = localStorage.getItem('vocab_pro_db_marker');
       
       if (existingUsers.length === 0 && emergencyBackupJson) {
-           console.log("[DB] 🚑 Emergency Protocol: DB is empty but LocalStorage backup found. Restoring...");
            try {
                const backup = JSON.parse(emergencyBackupJson);
                if (Array.isArray(backup) && backup.length > 0) {
                    await bulkSaveWords(backup);
-                   console.log(`[DB] 🚑 Restored ${backup.length} words from Emergency Backup.`);
                    
                    if (existingUsers.length === 0) {
                         const targetUser = {
@@ -442,7 +433,7 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
             resolve(true); 
         };
       });
-      console.log(`[DB] Existing Users: ${existingUsers.length}, Has Vocab: ${hasData}`);
+      
       if (!force && existingUsers.length > 0) {
           if (dbMarker !== 'exists') {
                localStorage.setItem('vocab_pro_db_marker', 'exists');
@@ -478,7 +469,6 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
             map: [], 
           }
         };
-        console.log("[DB] Creating default user...");
         await saveUser(targetUser);
         localStorage.setItem('vocab_pro_db_marker', 'exists');
       } else {
@@ -503,7 +493,6 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
         await saveUser(targetUser); 
       }
       if (!hasData) {
-          console.log("[DB] Seeding vocabulary...");
           let vocabToSeed: VocabularyItem[] = [];
           try {
             const localResponse = await fetch(LOCAL_SHIPPED_DATA_PATH);
@@ -806,12 +795,6 @@ export const getWritingTopicsByUserId = async (userId: string): Promise<WritingT
 export const getAllWritingTopicsForExport = async (userId: string): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
 export const bulkSaveWritingTopics = async (items: WritingTopic[]): Promise<void> => { await crudTemplate(WRITING_TOPIC_STORE, tx => { const store = tx.objectStore(WRITING_TOPIC_STORE); items.forEach(i => store.put(i)); }); };
 
-// --- Comparison Feature ---
-export const saveComparisonGroup = async (group: ComparisonGroup): Promise<void> => { group.updatedAt = Date.now(); await crudTemplate(COMPARISON_STORE, tx => tx.objectStore(COMPARISON_STORE).put(group)); };
-export const getComparisonGroupsByUserId = async (userId: string): Promise<ComparisonGroup[]> => await crudTemplate(COMPARISON_STORE, tx => tx.objectStore(COMPARISON_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const deleteComparisonGroup = async (id: string): Promise<void> => { await crudTemplate(COMPARISON_STORE, tx => tx.objectStore(COMPARISON_STORE).delete(id)); };
-export const bulkSaveComparisonGroups = async (items: ComparisonGroup[]): Promise<void> => { await crudTemplate(COMPARISON_STORE, tx => { const store = tx.objectStore(COMPARISON_STORE); items.forEach(i => store.put(i)); }); };
-
 // --- Irregular Verbs Feature ---
 export const saveIrregularVerb = async (verb: IrregularVerb): Promise<void> => { verb.updatedAt = Date.now(); await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).put(verb)); };
 export const getIrregularVerbsByUserId = async (userId: string): Promise<IrregularVerb[]> => await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
@@ -838,12 +821,6 @@ export const getCompositionsByUserId = async (userId: string): Promise<Compositi
 export const deleteComposition = async (id: string): Promise<void> => { await crudTemplate(COMPOSITIONS_STORE, tx => tx.objectStore(COMPOSITIONS_STORE).delete(id)); };
 export const bulkSaveCompositions = async (items: Composition[]): Promise<void> => { await crudTemplate(COMPOSITIONS_STORE, tx => { const store = tx.objectStore(COMPOSITIONS_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteCompositions = async (ids: string[]): Promise<void> => { await crudTemplate(COMPOSITIONS_STORE, tx => { const store = tx.objectStore(COMPOSITIONS_STORE); ids.forEach(id => store.delete(id)); }); };
-
-// --- Calendar Feature ---
-export const saveCalendarEvent = async (event: CalendarEvent): Promise<void> => { await crudTemplate(CALENDAR_STORE, tx => tx.objectStore(CALENDAR_STORE).put(event)); };
-export const getCalendarEventsByUserId = async (userId: string): Promise<CalendarEvent[]> => await crudTemplate(CALENDAR_STORE, tx => tx.objectStore(CALENDAR_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
-export const deleteCalendarEvent = async (id: string): Promise<void> => { await crudTemplate(CALENDAR_STORE, tx => tx.objectStore(CALENDAR_STORE).delete(id)); };
-export const bulkSaveCalendarEvents = async (items: CalendarEvent[]): Promise<void> => { await crudTemplate(CALENDAR_STORE, tx => { const store = tx.objectStore(CALENDAR_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Word Book Feature ---
 export const saveWordBook = async (book: WordBook): Promise<void> => { await crudTemplate(WORDBOOK_STORE, tx => tx.objectStore(WORDBOOK_STORE).put(book)); };

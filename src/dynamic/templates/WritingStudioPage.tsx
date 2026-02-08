@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Composition, VocabularyItem, WritingTopic, WritingLog, CompositionLabel, FocusColor, WritingBook } from '../../app/types';
 import * as db from '../../app/db';
@@ -188,6 +187,23 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
     // AI Generators
     const [isTestGenModalOpen, setIsTestGenModalOpen] = useState(false);
     
+    // Fixed: Added missing loadData definition at the top of the component scope.
+    const loadData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [userComps, userTopics, userBooks] = await Promise.all([
+                db.getCompositionsByUserId(user.id),
+                db.getWritingTopicsByUserId(user.id),
+                db.getWritingBooksByUserId(user.id)
+            ]);
+            setCompositions(userComps.sort((a, b) => b.createdAt - a.createdAt));
+            setTopics(userTopics.sort((a, b) => b.createdAt - a.createdAt));
+            setWritingBooks(userBooks.sort((a, b) => b.createdAt - a.createdAt));
+        } finally {
+            setLoading(false);
+        }
+    }, [user.id]);
+
     // Shelf Logic Hook
     const { 
         currentShelfName, 
@@ -207,21 +223,6 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
     const [bookToMove, setBookToMove] = useState<WritingBook | null>(null);
     const [bookToDelete, setBookToDelete] = useState<WritingBook | null>(null);
 
-    useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
-
-    const loadData = useCallback(async () => {
-        setLoading(true);
-        const [comps, tops, books] = await Promise.all([
-            db.getCompositionsByUserId(user.id),
-            db.getWritingTopicsByUserId(user.id),
-            db.getWritingBooksByUserId(user.id)
-        ]);
-        setCompositions(comps.sort((a,b) => b.createdAt - a.createdAt));
-        setTopics(tops.sort((a,b) => b.createdAt - a.createdAt));
-        setWritingBooks(books.sort((a,b) => b.createdAt - a.createdAt));
-        setLoading(false);
-    }, [user.id]);
-
     useEffect(() => { loadData(); }, [loadData]);
     
     useEffect(() => {
@@ -238,6 +239,10 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             if (onConsumeContext) onConsumeContext();
         }
     }, [initialContextWord, onConsumeContext, user.id]);
+
+    const hasActiveFilters = useMemo(() => {
+        return resourceType !== 'COMPOSITIONS' || focusFilter !== 'all' || colorFilter !== 'all';
+    }, [resourceType, focusFilter, colorFilter]);
 
     const allItemsForTagging = useMemo(() => {
         return resourceType === 'COMPOSITIONS' ? compositions : topics;
@@ -488,7 +493,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
         setViewMode('BOOK_DETAIL');
     };
 
-    // --- Views ---
+    // --- Fixed: Moved early returns below all definition statements ---
 
     if (viewMode === 'EDIT_COMP') {
         return <CompositionEditor user={user} initialComposition={activeComposition} onSave={() => { setViewMode(activeBook ? 'BOOK_DETAIL' : 'LIST'); loadData(); }} onCancel={() => setViewMode(activeBook ? 'BOOK_DETAIL' : 'LIST')} />;
@@ -530,7 +535,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
           <div className="space-y-6 animate-in fade-in duration-500">
              {/* Header */}
              <div className="flex flex-col gap-4">
-                 <button onClick={() => setViewMode('LIST')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group">
+                 <button onClick={() => setViewMode('LIST')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors group">
                       <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
                       <span>Back to Main Library</span>
                  </button>
@@ -680,6 +685,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
                         <ViewMenu 
                             isOpen={isViewMenuOpen}
                             setIsOpen={setIsViewMenuOpen}
+                            hasActiveFilters={hasActiveFilters}
                             filterOptions={[
                                 { label: 'Writings', value: 'COMPOSITIONS', isActive: resourceType === 'COMPOSITIONS', onClick: () => { setResourceType('COMPOSITIONS'); setSelectedTag(null); } },
                                 { label: 'Topics', value: 'TOPICS', isActive: resourceType === 'TOPICS', onClick: () => { setResourceType('TOPICS'); setSelectedTag(null); } },

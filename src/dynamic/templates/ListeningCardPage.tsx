@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, ListeningItem, FocusColor, ListeningBook } from '../../app/types';
 import * as db from '../../app/db';
@@ -15,8 +14,8 @@ import { TagBrowser } from '../../components/common/TagBrowser';
 import { ResourceActions } from '../page/ResourceActions';
 import { useShelfLogic } from '../../app/hooks/useShelfLogic';
 import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components/wordbook/ShelfModals';
-import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { UniversalBook } from '../../components/common/UniversalBook';
+import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
 import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
 
@@ -226,6 +225,10 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
     setPage(0);
   }, [selectedTag, pageSize, focusFilter, colorFilter]);
 
+  const hasActiveFilters = useMemo(() => {
+    return focusFilter !== 'all' || colorFilter !== 'all';
+  }, [focusFilter, colorFilter]);
+
   // Derived Logic for List View
   const filteredItems = useMemo(() => {
     let result = items;
@@ -333,7 +336,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
 
           await Promise.all(booksToUpdate.map(b => {
                const parts = b.title.split(':');
-               const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
+               const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : b.title;
                const newFullTitle = `${newS}: ${bookTitle}`;
                return dataStore.saveListeningBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
           }));
@@ -623,6 +626,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                 <ViewMenu 
                     isOpen={isViewMenuOpen}
                     setIsOpen={setIsViewMenuOpen}
+                    hasActiveFilters={hasActiveFilters}
                     customSection={
                         <>
                             <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">

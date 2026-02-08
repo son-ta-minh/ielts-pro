@@ -18,20 +18,7 @@ interface Props {
 }
 
 export const logSrsUpdate = (grade: ReviewGrade, before: VocabularyItem, after: VocabularyItem) => {
-    console.group(`[SRS DEBUG] Grading "${before.word}" as ${grade}`);
-    console.log('Word BEFORE update:', {
-        interval: before.interval,
-        consecutiveCorrect: before.consecutiveCorrect,
-        nextReview: new Date(before.nextReview).toLocaleString(),
-        lastGrade: before.lastGrade,
-    });
-    console.log('Word AFTER update:', {
-        interval: after.interval,
-        consecutiveCorrect: after.consecutiveCorrect,
-        nextReview: new Date(after.nextReview).toLocaleString(),
-        lastGrade: after.lastGrade,
-    });
-    console.groupEnd();
+    // Debug logging removed for production
 };
 
 const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onBulkUpdate, onComplete, onRetry }) => {
@@ -127,8 +114,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     
     setSessionOutcomes(prev => ({...prev, [currentWord.id]: grade}));
     const updated = updateSRS(currentWord, grade);
-    logSrsUpdate(grade, currentWord, updated);
-
+    
     setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
     
     nextItem();
@@ -168,7 +154,6 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         setSessionOutcomes(prev => ({...prev, [currentWord.id]: autoGrade}));
         
         const updated = updateSRS(wordWithUpdatedFlags, autoGrade);
-        logSrsUpdate(autoGrade, currentWord, updated);
 
         if (testResults) updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
         updated.masteryScore = calculateMasteryScore(updated);
@@ -185,7 +170,6 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       setSessionOutcomes(prev => ({...prev, [currentWord.id]: outcomeStatus}));
 
       const updated = updateSRS(wordWithUpdatedFlags, grade);
-      logSrsUpdate(grade, currentWord, updated);
 
       if (testResults) updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
       updated.masteryScore = calculateMasteryScore(updated);

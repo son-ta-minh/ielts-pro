@@ -114,7 +114,6 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
                             <ScopeCheckbox checked={dataScope.speaking} onChange={() => toggleScope('speaking')} label="Speaking" />
                             <ScopeCheckbox checked={dataScope.listening} onChange={() => toggleScope('listening')} label="Listening" />
                             <ScopeCheckbox checked={dataScope.mimic} onChange={() => toggleScope('mimic')} label="Pronunciation Queue" icon={Ear} />
-                            <ScopeCheckbox checked={dataScope.calendar} onChange={() => toggleScope('calendar')} label="Calendar" icon={Calendar} />
                             <ScopeCheckbox checked={dataScope.planning} onChange={() => toggleScope('planning')} label="Planning" icon={ListTodo} />
                         </div>
                     </div>

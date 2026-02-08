@@ -97,7 +97,6 @@ const App: React.FC = () => {
   const [reloadKey, setReloadKey] = useState(0);
 
   const forceUIReload = useCallback(() => {
-      console.log("[App] 🚀 Forcing full UI reload via key change.");
       setReloadKey(prev => prev + 1);
   }, []);
 

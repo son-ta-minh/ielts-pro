@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen, Download, Tag, HelpCircle, X, Check, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
+import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen, Tag, HelpCircle, X, Check, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
 import EditWordModal from '../../components/word_lib/EditWordModal';
@@ -173,11 +173,7 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
                 <button onClick={() => setIsPracticeMode(!isPracticeMode)} className={`px-4 py-2 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest border transition-all ${isPracticeMode ? 'bg-amber-100 text-amber-700 border-amber-200 shadow-inner' : 'bg-white text-neutral-600 border-neutral-200'}`}>
                     <BrainCircuit size={16} /><span>Context Recall</span>
                 </button>
-                <button onClick={onOpenComprehensionModal} className="px-4 py-2 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest border transition-all bg-white text-neutral-600 border-neutral-200">
-                    <HelpCircle size={16} /><span>Fill Answers</span>
-                </button>
                 <div className="w-px h-6 bg-neutral-200 mx-1 hidden sm:block"></div>
-                <button onClick={handleExportUnit} className="p-2 bg-white text-neutral-600 rounded-xl border border-neutral-200 hover:bg-neutral-100 transition-all active:scale-95" title="Export Unit"><Download size={16}/></button>
                 <button onClick={onSwitchToEdit} className="p-2 bg-white text-neutral-600 rounded-xl border border-neutral-200 hover:bg-neutral-100 transition-all active:scale-95" title="Edit Unit"><Edit3 size={16} /></button>
                 <button onClick={() => onStartSession(unitWords)} disabled={unitWords.length === 0} className="px-6 py-2 bg-neutral-900 text-white rounded-xl font-black text-[10px] flex items-center space-x-2 transition-all active:scale-95 hover:bg-neutral-800 disabled:opacity-50 uppercase tracking-widest shadow-sm"><Play size={16} fill="white" /><span>Practice</span></button>
             </div>

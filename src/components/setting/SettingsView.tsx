@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import { RotateCw, ShieldAlert, Wrench } from 'lucide-react';
 import { User as UserType, VocabularyItem, DataScope } from '../../app/types';
@@ -57,7 +56,6 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
       listening: true,
       mimic: true,
       wordBook: true,
-      calendar: true,
       planning: true
   });
   

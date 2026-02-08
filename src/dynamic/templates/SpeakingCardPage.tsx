@@ -3,13 +3,14 @@ import { User, NativeSpeakItem, VocabularyItem, WordQuality, FocusColor, Speakin
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Mic, Volume2, Eye, EyeOff, Tag, ChevronRight, Shuffle, Plus, Edit3, Trash2, AudioLines, Sparkles, Save, X, StickyNote, Info, ChevronLeft, Loader2, Target, Library, FolderPlus, Pen, Move, Book, ArrowLeft, Users, MessageSquare, Play, ChevronDown, Pause, MessageCircle, UserCircle, Square as SquareIcon, Languages, Headphones, Download, Target as TargetIcon, LayoutList } from 'lucide-react';
+import { Mic, Volume2, Eye, EyeOff, Tag, ChevronRight, Shuffle, Plus, Edit3, Trash2, AudioLines, Sparkles, Save, X, StickyNote, Info, ChevronLeft, Loader2, Target, Library, FolderPlus, Pen, Move, Book, ArrowLeft, Users, MessageSquare, Play, ChevronDown, Pause, MessageCircle, UserCircle, Square as SquareIcon, Languages, Headphones, Download, LayoutList, Target as TargetIcon, ChevronsLeft, Ear } from 'lucide-react';
 import { speak, startRecording, stopRecording, fetchServerVoices, ServerVoicesResponse, stopSpeaking } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { TagBrowser } from '../../components/common/TagBrowser';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
-import { getRefineNativeSpeakPrompt, getMergeNativeSpeakPrompt, getGenerateConversationPrompt } from '../../services/promptService';
+// Fixed: Removed getMergeNativeSpeakPrompt which is not exported by promptService
+import { getRefineNativeSpeakPrompt, getGenerateConversationPrompt } from '../../services/promptService';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { UniversalCard } from '../../components/common/UniversalCard';
@@ -418,6 +419,9 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
     const [isSavingAll, setIsSavingAll] = useState(false);
     const [isFocusMode, setIsFocusMode] = useState(true); // Default: Focus on current turn
     
+    // Role change confirmation state
+    const [roleChangeCandidate, setRoleChangeCandidate] = useState<string | null>(null);
+
     // User recordings state
     const [userRecordings, setUserRecordings] = useState<Record<number, { base64: string, mime: string }>>({});
     // AI audio cache to avoid re-fetching
@@ -430,6 +434,9 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
     const [userAudioMime, setUserAudioMime] = useState<string>('audio/webm');
     const [isListeningForStt, setIsListeningForStt] = useState(false);
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
+    
+    // Preview Full Audio State
+    const [isPreviewing, setIsPreviewing] = useState(false);
 
     const [config] = useState(() => getConfig());
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -589,11 +596,68 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
             activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }, [currentIndex, isPlaying, isPlayingAll, isUserTurn, isFocusMode]);
+    
+    // --- ROLE CHANGE LOGIC WITH CONFIRMATION ---
+    const hasProgress = currentIndex > 0 || Object.keys(userRecordings).length > 0;
+
+    const requestRoleChange = (role: string | null) => {
+        if (hasProgress) {
+            setRoleChangeCandidate(role); // Triggers Modal
+        } else {
+            // Apply immediately if fresh start
+            confirmRoleChange(role);
+        }
+    };
+
+    const confirmRoleChange = (role: string | null) => {
+        // Reset everything
+        stopAllAudio();
+        setIsPlaying(false);
+        setIsPlayingAll(false);
+        setIsUserTurn(false);
+        setCurrentIndex(0);
+        setUserRecordings({}); 
+        // We keep AI cache as that is expensive/slow to re-fetch
+        
+        setActingAs(role);
+        setRoleChangeCandidate(null); // Close modal if open via state
+        
+        // If switching to spectator, we might want to auto-play or just reset.
+        // Let's just reset and let user decide.
+        if (role) {
+             showToast(`Role changed to ${role}. Practice reset.`, 'info');
+        } else {
+             showToast("Role changed to Spectator. Practice reset.", 'info');
+        }
+    };
 
     if (!isOpen || !item || !item.sentences || item.sentences.length === 0) return null;
 
     const sentences = item.sentences;
     const activeSentence = sentences[currentIndex];
+    
+    // --- NAVIGATION HANDLERS ---
+    const handleNavFirst = () => {
+        stopAllAudio();
+        setIsUserTurn(false);
+        setCurrentIndex(0);
+    };
+
+    const handleNavPrev = () => {
+        if (currentIndex > 0) {
+            stopAllAudio();
+            setIsUserTurn(false);
+            setCurrentIndex(prev => prev - 1);
+        }
+    };
+
+    const handleNavNext = () => {
+        if (currentIndex < sentences.length - 1) {
+            stopAllAudio();
+            setIsUserTurn(false);
+            setCurrentIndex(prev => prev + 1);
+        }
+    };
     
     // --- USER INTERACTION HANDLERS ---
     
@@ -714,57 +778,96 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
         }
     };
 
-    const handleSaveAll = async () => {
-        if (isSavingAll) return;
-        setIsSavingAll(true);
-        showToast("Tổng hợp file âm thanh (Toàn bộ)...", "info");
+    // Shared logic for generating full audio buffer
+    const generateFullAudioBuffer = async () => {
+         const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+         const segments: AudioBuffer[] = [];
+         let hasContent = false;
+
+         for (let i = 0; i < item.sentences.length; i++) {
+             const userRec = userRecordings[i];
+             const aiRec = aiAudioCache[i];
+             
+             const data = userRec || aiRec;
+             if (!data) continue; 
+             hasContent = true;
+
+             const binaryString = atob(data.base64);
+             const bytes = new Uint8Array(binaryString.length);
+             for (let j = 0; j < binaryString.length; j++) bytes[j] = binaryString.charCodeAt(j);
+             
+             try {
+                 const decodedBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+                 segments.push(decodedBuffer);
+             } catch (e) {
+                 console.warn(`Failed to decode segment ${i}`, e);
+             }
+         }
+
+         if (!hasContent || segments.length === 0) return null;
+
+         const totalLength = segments.reduce((sum, buf) => sum + buf.length, 0);
+         const combinedBuffer = audioCtx.createBuffer(
+             segments[0].numberOfChannels,
+             totalLength,
+             segments[0].sampleRate
+         );
+
+         let offset = 0;
+         segments.forEach(buf => {
+             for (let channel = 0; channel < buf.numberOfChannels; channel++) {
+                 combinedBuffer.getChannelData(channel).set(buf.getChannelData(channel), offset);
+             }
+             offset += buf.length;
+         });
+         
+         return combinedBuffer;
+    };
+
+    const handlePreviewFullAudio = async () => {
+        if (isPreviewing) return;
+        setIsPreviewing(true);
+        stopAllAudio();
 
         try {
-            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const segments: AudioBuffer[] = [];
-
-            // LOOP ALL SENTENCES FROM START TO END (0 to end)
-            for (let i = 0; i < item.sentences.length; i++) {
-                const userRec = userRecordings[i];
-                const aiRec = aiAudioCache[i];
-                
-                // Priority: User Voice > AI Cache > Skip
-                const data = userRec || aiRec;
-                if (!data) continue; 
-
-                const binaryString = atob(data.base64);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let j = 0; j < binaryString.length; j++) bytes[j] = binaryString.charCodeAt(j);
-                
-                try {
-                    const decodedBuffer = await audioCtx.decodeAudioData(bytes.buffer);
-                    segments.push(decodedBuffer);
-                } catch (e) {
-                    console.warn(`Failed to decode segment ${i}`, e);
-                }
-            }
-
-            if (segments.length === 0) {
-                showToast("Chưa có đoạn âm thanh nào sẵn sàng.", "info");
-                setIsSavingAll(false);
+            const buffer = await generateFullAudioBuffer();
+            if (!buffer) {
+                showToast("No audio segments available to play.", "info");
+                setIsPreviewing(false);
                 return;
             }
 
-            // Combine buffers
-            const totalLength = segments.reduce((sum, buf) => sum + buf.length, 0);
-            const combinedBuffer = audioCtx.createBuffer(
-                segments[0].numberOfChannels,
-                totalLength,
-                segments[0].sampleRate
-            );
+            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            source.onended = () => setIsPreviewing(false);
+            source.start(0);
 
-            let offset = 0;
-            segments.forEach(buf => {
-                for (let channel = 0; channel < buf.numberOfChannels; channel++) {
-                    combinedBuffer.getChannelData(channel).set(buf.getChannelData(channel), offset);
-                }
-                offset += buf.length;
-            });
+            // Store ref to stop if needed (not activeAudioRef as it's an Audio Element, but close enough concept)
+            // Ideally we'd store source node, but simplest is just let it play out or stop via context if implemented.
+            // For now, simple play.
+
+        } catch (e) {
+            console.error("Preview failed", e);
+            showToast("Failed to preview audio.", "error");
+            setIsPreviewing(false);
+        }
+    };
+
+    const handleSaveAll = async () => {
+        if (isSavingAll) return;
+        setIsSavingAll(true);
+        showToast("Generating full audio file...", "info");
+
+        try {
+            const combinedBuffer = await generateFullAudioBuffer();
+            
+            if (!combinedBuffer) {
+                showToast("No audio segments available to save.", "info");
+                setIsSavingAll(false);
+                return;
+            }
 
             const wavBlob = bufferToWav(combinedBuffer);
             const url = URL.createObjectURL(wavBlob);
@@ -776,10 +879,10 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
 
-            showToast("Đã lưu file âm thanh hoàn chỉnh!", "success");
+            showToast("Audio file saved!", "success");
         } catch (e) {
             console.error("Save All failed", e);
-            showToast("Lỗi khi tạo file âm thanh.", "error");
+            showToast("Error generating audio file.", "error");
         } finally {
             setIsSavingAll(false);
         }
@@ -803,46 +906,26 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                                 <UserCircle size={10}/> Role Play:
                              </div>
                              <div className="flex bg-neutral-100 p-0.5 rounded-lg">
-                                <button onClick={() => { setActingAs(null); setIsUserTurn(false); setIsPlayingAll(false); stopAllAudio(); }} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${!actingAs && !isPlayingAll ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Spectator</button>
+                                <button onClick={() => requestRoleChange(null)} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${!actingAs && !isPlayingAll ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Spectator</button>
                                 {item.speakers.map(s => (
-                                    <button key={s.name} onClick={() => { setActingAs(s.name); setIsUserTurn(false); setIsPlayingAll(false); stopAllAudio(); }} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${actingAs === s.name ? 'bg-indigo-600 text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Act as {s.name}</button>
+                                    <button key={s.name} onClick={() => requestRoleChange(s.name)} className={`px-2 py-1 rounded-md text-[9px] font-black uppercase transition-all ${actingAs === s.name ? 'bg-indigo-600 text-white shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}>Act as {s.name}</button>
                                 ))}
                              </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        {/* Display Mode Toggle */}
                         <div className="flex bg-neutral-100 p-1 rounded-xl gap-1">
-                            <button 
-                                onClick={() => setIsFocusMode(true)} 
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase flex items-center gap-1.5 transition-all ${isFocusMode ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
-                                title="Show current turn only"
-                            >
-                                <TargetIcon size={12} /> Focus
+                            <button onClick={handleToggleFullPlayback} className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 transition-all ${isPlayingAll ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`} title="Play whole conversation non-stop">
+                                <Headphones size={14} /> 
+                                {isPlayingAll ? 'Stop' : 'Play All'}
                             </button>
-                            <button 
-                                onClick={() => setIsFocusMode(false)} 
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase flex items-center gap-1.5 transition-all ${!isFocusMode ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
-                                title="Show full script"
-                            >
-                                <LayoutList size={12} /> Script
-                            </button>
+                            {!isPlayingAll && (
+                                <>
+                                    <button onClick={() => { stopAllAudio(); setIsPlaying(true); setIsPlayingAll(false); }} className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 transition-all ${isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Play size={14} fill="currentColor"/> Play</button>
+                                    <button onClick={() => { setIsPlaying(false); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 transition-all ${!isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Pause size={14} fill="currentColor"/> Pause</button>
+                                </>
+                            )}
                         </div>
-
-                        {!isUserTurn && (
-                            <div className="flex bg-neutral-100 p-1 rounded-xl gap-1">
-                                <button onClick={handleToggleFullPlayback} className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 transition-all ${isPlayingAll ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`} title="Play whole conversation non-stop">
-                                    <Headphones size={14} /> 
-                                    {isPlayingAll ? 'Stop' : 'Play All'}
-                                </button>
-                                {!isPlayingAll && (
-                                    <>
-                                        <button onClick={() => { stopAllAudio(); setIsPlaying(true); setIsPlayingAll(false); }} className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 transition-all ${isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Play size={14} fill="currentColor"/> Play</button>
-                                        <button onClick={() => { setIsPlaying(false); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 transition-all ${!isPlaying ? 'bg-neutral-900 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`}><Pause size={14} fill="currentColor"/> Pause</button>
-                                    </>
-                                )}
-                            </div>
-                        )}
                         <button type="button" onClick={handleClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={24}/></button>
                     </div>
                 </header>
@@ -873,6 +956,37 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                     </div>
                 </div>
                 
+                {/* TOOLBAR: Mode & Navigation */}
+                <div className="px-6 py-2 bg-white border-b border-neutral-100 flex items-center justify-between">
+                    {/* Display Mode Toggle */}
+                    <div className="flex bg-neutral-100 p-1 rounded-lg gap-1">
+                        <button 
+                            onClick={() => setIsFocusMode(true)} 
+                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase flex items-center gap-1.5 transition-all ${isFocusMode ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
+                            title="Show current turn only"
+                        >
+                            <TargetIcon size={12} /> Focus
+                        </button>
+                        <button 
+                            onClick={() => setIsFocusMode(false)} 
+                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase flex items-center gap-1.5 transition-all ${!isFocusMode ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
+                            title="Show full script"
+                        >
+                            <LayoutList size={12} /> Script
+                        </button>
+                    </div>
+
+                    {/* Manual Navigation - Only visible in Focus Mode */}
+                    {isFocusMode && (
+                        <div className="flex items-center gap-1 bg-neutral-50 p-1 rounded-lg border border-neutral-100 animate-in fade-in slide-in-from-right-2">
+                             <button onClick={handleNavFirst} disabled={currentIndex === 0 || isUserTurn} className="p-1.5 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all rounded hover:bg-white"><ChevronsLeft size={16}/></button>
+                             <div className="w-px h-4 bg-neutral-200"></div>
+                             <button onClick={handleNavPrev} disabled={currentIndex === 0 || isUserTurn} className="p-1.5 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all rounded hover:bg-white"><ChevronLeft size={16}/></button>
+                             <button onClick={handleNavNext} disabled={currentIndex === sentences.length - 1 || isUserTurn} className="p-1.5 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all rounded hover:bg-white"><ChevronRight size={16}/></button>
+                        </div>
+                    )}
+                </div>
+
                 <main ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6 md:p-8 space-y-4 custom-scrollbar bg-white scroll-smooth pb-32">
                     {visibleSentences.map((s, i) => {
                         const actualIndex = isFocusMode ? currentIndex : i;
@@ -975,12 +1089,12 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                 
                 <footer className="px-8 py-6 border-t border-neutral-100 bg-white/80 backdrop-blur-md flex justify-between items-center shrink-0 absolute bottom-0 left-0 right-0 z-20">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => { setCurrentIndex(prev => Math.max(0, prev - 1)); stopAllAudio(); setIsUserTurn(false); }} disabled={currentIndex === 0 || isUserTurn} className="p-3 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all"><ChevronLeft size={20}/></button>
+                        <button onClick={handleNavPrev} disabled={currentIndex === 0 || isUserTurn} className="p-3 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all"><ChevronLeft size={20}/></button>
                         <div className="flex flex-col items-center min-w-[80px]">
                             <span className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em] mb-1">Sentence</span>
                             <span className="text-sm font-black text-neutral-900">{currentIndex + 1} / {sentences.length}</span>
                         </div>
-                        <button onClick={() => { setCurrentIndex(prev => Math.min(sentences.length - 1, prev + 1)); stopAllAudio(); setIsUserTurn(false); }} disabled={currentIndex === sentences.length - 1 || isUserTurn} className="p-3 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all"><ChevronRight size={20}/></button>
+                        <button onClick={handleNavNext} disabled={currentIndex === sentences.length - 1 || isUserTurn} className="p-3 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all"><ChevronRight size={20}/></button>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -1000,6 +1114,16 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                                 <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Manual Mode Active</span>
                              </div>
                          )}
+                         
+                         <button 
+                             onClick={handlePreviewFullAudio}
+                             disabled={isPreviewing || !hasAnyRecordings}
+                             className={`px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-md active:scale-95 flex items-center gap-2 disabled:opacity-50 ${isPreviewing ? 'bg-amber-100 text-amber-700' : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'}`}
+                             title="Listen to full audio without downloading"
+                         >
+                             {isPreviewing ? <Loader2 size={14} className="animate-spin" /> : <Ear size={14}/>}
+                             <span className="hidden sm:inline">{isPreviewing ? 'Playing...' : 'Listen Full'}</span>
+                         </button>
 
                          <button 
                             onClick={handleSaveAll}
@@ -1016,6 +1140,16 @@ const ConversationPracticeModal: React.FC<ConversationPracticeModalProps> = ({ i
                 </footer>
             </div>
             {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
+            
+            <ConfirmationModal
+                 isOpen={!!roleChangeCandidate}
+                 title="Switch Role?"
+                 message="Changing roles will reset your current practice progress. Recordings will be lost."
+                 confirmText="Switch & Reset"
+                 isProcessing={false}
+                 onConfirm={() => confirmRoleChange(roleChangeCandidate)}
+                 onClose={() => setRoleChangeCandidate(null)}
+            />
         </div>
     );
 };
@@ -1040,6 +1174,7 @@ const SpeakingCardItem: React.FC<{
             onFocusChange={(c) => onFocusChange(item, c)}
             isFocused={item.isFocused}
             onToggleFocus={onToggleFocus}
+            isCompleted={item.focusColor === 'green'}
             actions={
                 <div className="flex items-center gap-1">
                     <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"><Edit3 size={14}/></button>
@@ -1111,6 +1246,10 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   useEffect(() => { loadData(); }, [user.id]);
   useEffect(() => { setPage(0); }, [selectedTag, pageSize, focusFilter, colorFilter, viewSettings.resourceType]);
   useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
+
+  const hasActiveFilters = useMemo(() => {
+    return viewSettings.resourceType !== 'ALL' || focusFilter !== 'all' || colorFilter !== 'all';
+  }, [viewSettings.resourceType, focusFilter, colorFilter]);
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
@@ -1188,7 +1327,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   };
 
   const handleRenameShelfAction = (newName: string) => {
-      const success = renameShelf(newName, async (oldS, newS) => {
+      const success = renameShelf(newName, async (oldS, nS) => {
           setLoading(true);
           const booksToUpdate = speakingBooks.filter(b => {
                const parts = b.title.split(':');
@@ -1199,7 +1338,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
           await Promise.all(booksToUpdate.map(b => {
                const parts = b.title.split(':');
                const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
-               const newFullTitle = `${newS}: ${bookTitle}`;
+               const newFullTitle = `${nS}: ${bookTitle}`;
                return db.saveSpeakingBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
           }));
           await loadData();
@@ -1221,7 +1360,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
 
   if (viewMode === 'SHELF') {
       return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-300">
            <div className="flex flex-col gap-4">
                <button onClick={() => setViewMode('LIST')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group"><ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" /><span>Back to Main Library</span></button>
                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"><div className="shrink-0"><h2 className="text-3xl font-black text-neutral-900 tracking-tight">Speaking Shelf</h2><p className="text-neutral-500 mt-1 font-medium">Organize your speaking topics.</p></div><ShelfSearchBar shelves={allShelves} books={speakingBooks} onNavigateShelf={handleNavigateShelf} onNavigateBook={handleNavigateBook} /><button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm"><FolderPlus size={14}/> Add Shelf</button></header>
@@ -1243,7 +1382,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
 
   return (
     <>
-    <ResourcePage title="Speaking Library" subtitle="Master natural phrases." icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png" className="w-8 h-8 object-contain" alt="Speaking" />} centerContent={<ShelfSearchBar shelves={allShelves} books={speakingBooks} onNavigateShelf={handleNavigateShelf} onNavigateBook={handleNavigateBook} />} config={{}} isLoading={loading || isProcessing} isEmpty={filteredItems.length === 0} emptyMessage="No items found." activeFilters={{}} onFilterChange={() => {}} pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }} aboveGrid={<>{isTagBrowserOpen && <TagBrowser items={items.map(i => i.data)} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}</>} minorSkills={<button onClick={() => onNavigate?.('MIMIC')} className="flex items-center gap-2 px-3 py-2 bg-neutral-100 text-neutral-600 rounded-lg text-xs font-bold hover:bg-neutral-200 transition-colors"><Mic size={16} /><span className="hidden sm:inline">Pronunciation</span></button>} actions={<ResourceActions viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} filterOptions={[{ label: 'All', value: 'ALL', isActive: viewSettings.resourceType === 'ALL', onClick: () => handleSettingChange('resourceType', 'ALL') }, { label: 'Card', value: 'CARD', isActive: viewSettings.resourceType === 'CARD', onClick: () => handleSettingChange('resourceType', 'CARD') }, { label: 'Conv.', value: 'CONVERSATION', isActive: viewSettings.resourceType === 'CONVERSATION', onClick: () => handleSettingChange('resourceType', 'CONVERSATION') }]} customSection={<><div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2"><Target size={10}/> Focus & Status</div><div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2"><button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>{focusFilter === 'focused' ? 'Focused Only' : 'All Items'}</button><div className="flex gap-1"><button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-50 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} /></div></div></>} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]} />} browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => setIsTagBrowserOpen(!isTagBrowserOpen) }} addActions={[{ label: 'New Card', icon: Plus, onClick: () => { setEditingItem(null); setIsModalOpen(true); } }, { label: 'New Conversation', icon: MessageSquare, onClick: () => { setEditingConversation(null); setIsConversationModalOpen(true); } }]} extraActions={<><button onClick={() => setItems([...items].sort(() => Math.random() - 0.5))} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button><button onClick={() => setViewMode('SHELF')} className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs flex items-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-200" title="Bookshelf Mode"><Library size={16} /><span>Bookshelf</span></button></>} />}>
+    <ResourcePage title="Speaking Library" subtitle="Master natural phrases." icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png" className="w-8 h-8 object-contain" alt="Speaking" />} centerContent={<ShelfSearchBar shelves={allShelves} books={speakingBooks} onNavigateShelf={handleNavigateShelf} onNavigateBook={handleNavigateBook} />} config={{}} isLoading={loading || isProcessing} isEmpty={filteredItems.length === 0} emptyMessage="No items found." activeFilters={{}} onFilterChange={() => {}} pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }} aboveGrid={<>{isTagBrowserOpen && <TagBrowser items={items.map(i => i.data)} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}</>} minorSkills={<button onClick={() => onNavigate?.('MIMIC')} className="flex items-center gap-2 px-3 py-2 bg-neutral-100 text-neutral-600 rounded-lg text-xs font-bold hover:bg-neutral-200 transition-colors"><Mic size={16} /><span className="hidden sm:inline">Pronunciation</span></button>} actions={<ResourceActions viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} hasActiveFilters={hasActiveFilters} filterOptions={[{ label: 'All', value: 'ALL', isActive: viewSettings.resourceType === 'ALL', onClick: () => handleSettingChange('resourceType', 'ALL') }, { label: 'Card', value: 'CARD', isActive: viewSettings.resourceType === 'CARD', onClick: () => handleSettingChange('resourceType', 'CARD') }, { label: 'Conv.', value: 'CONVERSATION', isActive: viewSettings.resourceType === 'CONVERSATION', onClick: () => handleSettingChange('resourceType', 'CONVERSATION') }]} customSection={<><div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2"><Target size={10}/> Focus & Status</div><div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2"><button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>{focusFilter === 'focused' ? 'Focused Only' : 'All Items'}</button><div className="flex gap-1"><button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} /></div></div></>} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]} />} browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }} addActions={[{ label: 'New Card', icon: Plus, onClick: () => { setEditingItem(null); setIsModalOpen(true); } }, { label: 'New Conversation', icon: MessageSquare, onClick: () => { setEditingConversation(null); setIsConversationModalOpen(true); } }]} extraActions={<><button onClick={() => setItems([...items].sort(() => Math.random() - 0.5))} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button><button onClick={() => setViewMode('SHELF')} className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs flex items-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-200" title="Bookshelf Mode"><Library size={16} /><span>Bookshelf</span></button></>} />}>
       {() => (<>{pagedItems.map(item => item.type === 'card' ? ( <SpeakingCardItem key={item.data.id} item={item.data as NativeSpeakItem} viewSettings={viewSettings} onEdit={() => handleEditItem(item)} onDelete={() => setItemToDelete({ id: item.data.id, type: 'card' })} onFocusChange={(i, c) => handleFocusChange(item, c)} onToggleFocus={() => handleToggleFocus(item)} onPractice={(i) => setPracticeModalItem(i)} /> ) : ( <UniversalCard key={item.data.id} title={item.data.title} badge={{ label: 'Conversation', colorClass: 'bg-indigo-50 text-indigo-700 border-indigo-100', icon: MessageSquare }} tags={viewSettings.showTags ? item.data.tags : undefined} compact={viewSettings.compact} onClick={() => setPracticeConversation(item.data as ConversationItem)} focusColor={item.data.focusColor} onFocusChange={(c) => handleFocusChange(item, c)} isFocused={item.data.isFocused} onToggleFocus={handleToggleFocus.bind(null, item)} actions={<><button onClick={(e) => { e.stopPropagation(); handleEditItem(item); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit"><Edit3 size={14}/></button><button onClick={(e) => { e.stopPropagation(); setItemToDelete({ id: item.data.id, type: 'conversation' }); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete"><Trash2 size={14}/></button></>} ><div className="flex justify-between items-center mt-2"><div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{(item.data as ConversationItem).sentences.length} lines</div><button onClick={(e) => { e.stopPropagation(); setPracticeConversation(item.data as ConversationItem); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-indigo-200 shadow-indigo-200 active:scale-95"><Play size={14}/> Practice</button></div></UniversalCard> ))}</>)}
     </ResourcePage>
     
