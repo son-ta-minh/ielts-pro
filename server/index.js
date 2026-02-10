@@ -5,6 +5,7 @@
  * 2. Local macOS TTS (High quality, unlimited usage)
  * 3. HTTPS Support (Auto-detects certificates)
  * 4. Dynamic Configuration
+ * 5. IPA Mode 2: Cambridge Dictionary Scraping (US Accent)
  */
 
 const express = require('express');
@@ -13,9 +14,10 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const minimist = require('minimist');
 const os = require('os');
+const cheerio = require('cheerio');
 
 // --- Stability Fix: Force CWD ---
 try {
@@ -34,6 +36,7 @@ const DAILY_BACKUP_RETENTION = 3; // Keep the last 3 daily backups
 const AUDIO_DIR = path.join(__dirname, 'audio');
 const CERT_DIR = path.join(__dirname, '.certs');
 const META_FILENAME = 'metadata.json';
+const DICT_PATH = path.join(__dirname, 'cmudict.dict');
 
 // Determine Backup Directory (Prioritize iCloud)
 function getInitialBackupPath() {
@@ -156,13 +159,254 @@ function saveMetadata(data, appDir) {
     }
 }
 
+// --- IPA Logic ---
+const CMU = {};
+const MAP = {
+  AA: "ɑ", AE: "æ", AH: "ʌ", AO: "ɔ",
+  AW: "aʊ", AY: "aɪ", EH: "ɛ", ER: "ɝ",
+  EY: "eɪ", IH: "ɪ", IY: "iː", // Refined for longer 'ee'
+  OW: "oʊ", OY: "ɔɪ", UH: "ʊ", UW: "uː", // Refined for longer 'oo'
+
+  P: "p", B: "b", T: "t", D: "d", K: "k", G: "ɡ",
+  F: "f", V: "v", TH: "θ", DH: "ð",
+  S: "s", Z: "z", SH: "ʃ", ZH: "ʒ",
+  M: "m", N: "n", NG: "ŋ",
+  L: "l", R: "r", W: "w", Y: "j",
+  CH: "tʃ", JH: "dʒ", HH: "h"
+};
+
+function ensureDictionary() {
+    if (!fs.existsSync(DICT_PATH)) {
+        console.log("[IPA] cmudict.dict missing. Downloading...");
+        try {
+            execSync(`curl -L -o "${DICT_PATH}" https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict`);
+        } catch (e) {
+            console.error("[IPA] Failed to download dictionary:", e.message);
+            return;
+        }
+    }
+    try {
+        const lines = fs.readFileSync(DICT_PATH, "utf8").split("\n");
+        let loadedCount = 0;
+        for (const line of lines) {
+            if (!line || line.startsWith(";;;")) continue;
+            const parts = line.split(/\s+/);
+            if (parts.length < 2) continue;
+            const word = parts[0].toLowerCase();
+            const phones = parts.slice(1).join(" ");
+            CMU[word] = phones;
+            loadedCount++;
+        }
+        console.log(`[IPA] Dictionary loaded: ${loadedCount} words.`);
+    } catch (err) {
+        console.error("[IPA] Failed to parse dictionary:", err.message);
+    }
+}
+
+function cmuToIPA(cmu) {
+  let ipa = "";
+  let stressed = false;
+  for (const token of cmu.split(" ")) {
+    const m = token.match(/^([A-Z]+)([012])?$/);
+    if (!m) continue;
+    const [, ph, stress] = m;
+    
+    // Logic for schwa: Unstressed AH is usually /ə/
+    let symbol = MAP[ph] || "";
+    if (ph === 'AH' && (stress === '0' || !stress)) {
+        symbol = "ə";
+    }
+
+    if (stress === "1" && !stressed) {
+        ipa += "ˈ";
+        stressed = true;
+    }
+    if (stress === "2") ipa += "ˌ";
+    ipa += symbol;
+  }
+  return ipa;
+}
+
+function splitCompound(word) {
+  for (let i = 3; i < word.length - 2; i++) {
+    const left = word.slice(0, i);
+    const right = word.slice(i);
+    if (CMU[left] && CMU[right]) {
+      return [left, right];
+    }
+  }
+  return null;
+}
+
+function wordToIPA(word) {
+  const clean = word.toLowerCase().trim();
+  if (!clean) return word;
+
+  const cmu = CMU[clean];
+  if (cmu) {
+    console.log(`[IPA DEBUG] Word: "${word}", CMU: "${cmu}"`);
+    return cmuToIPA(cmu);
+  }
+
+  // hyphen handling
+  if (clean.includes("-")) {
+    return clean
+      .split("-")
+      .map(w => wordToIPA(w))
+      .join("-");
+  }
+
+  // cyber- heuristic
+  if (clean.startsWith("cyber") && CMU["crime"]) {
+      const cyber = CMU["cyber"] ? cmuToIPA(CMU["cyber"]) : "ˈsaɪbər";
+      return cyber + wordToIPA(clean.replace("cyber", ""));
+  }
+
+  // fallback compound splitting
+  const parts = splitCompound(clean.replace(/[^a-z']/g, ""));
+  if (parts) {
+    return parts.map(p => wordToIPA(p)).join(" ");
+  }
+
+  return word;
+}
+
+function textToIPA(text) {
+    if (!text) return "";
+    const words = text.split(/\s+/);
+    const result = words.map((raw, i) => {
+        const clean = raw.toLowerCase().replace(/[^a-z-]/g, "");
+        
+        // special: "the" weak/strong form
+        if (clean === "the") {
+            const next = words[i + 1]?.[0]?.toLowerCase();
+            if (next && "aeiou".includes(next)) return "ði";
+            return "ðə";
+        }
+
+        const ipa = wordToIPA(clean);
+        return ipa ?? raw;
+    }).join(" ");
+    
+    return `/${result}/`;
+}
+
+// --- Mode 2: Cambridge IPA Scraping ---
+
+async function getCambridgeIPA(word) {
+    const cleanWord = word.toLowerCase().replace(/[^a-z-]/g, "");
+    if (!cleanWord) return word;
+
+    const url = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(cleanWord)}`;
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        
+        const response = await fetch(url, {
+            headers: { 
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://dictionary.cambridge.org/"
+            },
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            console.warn(`[IPA MODE 2] Cambridge fetch failed for "${cleanWord}" status: ${response.status}`);
+            return null;
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        
+        // VERIFICATION: Ensure the page content belongs to the requested word
+        const pageHw = $(".hw.dhw").first().text().toLowerCase().trim();
+        if (pageHw && pageHw !== cleanWord) {
+            console.warn(`[IPA MODE 2] Mismatch (Redirect): requested "${cleanWord}", found "${pageHw}". Falling back to Mode 1.`);
+            return null;
+        }
+
+        let usIpa = null;
+        const ipaElements = $(".ipa");
+        console.log(`[IPA DEBUG] Word: "${cleanWord}", Total .ipa elements: ${ipaElements.length}`);
+
+        // Strategy 1: Iterate .pron-info (Standard structure)
+        $(".pron-info").each((i, el) => {
+            const label = $(el).find(".region").text().toLowerCase();
+            const ipaText = $(el).find(".ipa").first().text();
+            console.log(`[IPA DEBUG] pron-info[${i}] label: "${label}", text: "${ipaText}"`);
+            if (label.includes("us") && !usIpa) {
+                usIpa = ipaText;
+            }
+        });
+
+        // Strategy 2: Fallback to direct .us element or parent region check
+        if (!usIpa) {
+            console.log(`[IPA DEBUG] Strategy 1 failed for "${cleanWord}", trying Strategy 2...`);
+            $(".us .ipa").each((i, el) => {
+                const text = $(el).text();
+                if (text && !usIpa) usIpa = text;
+            });
+        }
+
+        // Strategy 3: Search all IPA and check nearest header
+        if (!usIpa) {
+            $(".ipa").each((i, el) => {
+                const context = $(el).closest(".pos-header").text().toLowerCase();
+                if (context.includes("us") && !usIpa) {
+                    usIpa = $(el).text();
+                }
+            });
+        }
+        
+        if (usIpa) {
+            console.log(`[IPA MODE 2] SUCCESS: "${cleanWord}" -> "${usIpa}"`);
+        } else {
+            console.warn(`[IPA MODE 2] FAILED: Could not find US IPA for "${cleanWord}" in HTML length ${html.length}`);
+        }
+        return usIpa;
+    } catch (e) {
+        console.error(`[IPA MODE 2] Error scraping "${cleanWord}":`, e.message);
+        return null;
+    }
+}
+
+async function textToCambridgeIPA(text) {
+    if (!text) return "";
+    const words = text.split(/\s+/);
+    
+    // Process all words in parallel for speed
+    const promises = words.map(async (raw, i) => {
+        const clean = raw.toLowerCase().replace(/[^a-z-]/g, "");
+        
+        // Handle "the" special case even in mode 2
+        if (clean === "the") {
+            const next = words[i + 1]?.[0]?.toLowerCase();
+            if (next && "aeiou".includes(next)) return "ði";
+            return "ðə";
+        }
+
+        const cambridge = await getCambridgeIPA(clean);
+        if (cambridge) return cambridge;
+        
+        // Fallback to mode 1 if Cambridge fails for an individual word
+        return wordToIPA(clean);
+    });
+
+    const results = await Promise.all(promises);
+    return `/${results.join(" ")}/`;
+}
+
 // --- Feature 0: Server Configuration ---
 
 app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
         backupDir: BACKUP_DIR,
-        ttsEngine: process.platform === 'darwin' ? 'mock' : 'mock'
+        dictSize: Object.keys(CMU).length,
+        ttsEngine: process.platform === 'darwin' ? 'macOS-Say' : 'none'
     });
 });
 
@@ -231,10 +475,7 @@ app.get('/api/backups', async (req, res) => {
     };
 
     try {
-        const allFilesPromises = [
-            readDirSafe(appDir) // MODIFIED: Do not read from archive
-        ];
-        const allFilesNested = await Promise.all(allFilesPromises);
+        const allFilesNested = await Promise.all([readDirSafe(appDir)]);
         const allFiles = allFilesNested.flat();
 
         const backups = allFiles
@@ -371,7 +612,6 @@ app.get('/api/backup/:identifier', (req, res) => {
     const fileName = `backup_${safeIdentifier}.json`;
     const filePath = path.join(appDir, fileName);
 
-    // MODIFIED: Do not check archive directory.
     if (!fs.existsSync(filePath)) {
         console.warn(`[Backup] No backup file found for identifier '${identifier}' in app '${appName}'. Looked for: ${filePath}`);
         return res.status(404).json({ error: `No backup found for ${identifier}.` });
@@ -417,13 +657,11 @@ function mapLanguage(accent) {
 
 async function loadVoicesFromOS() {
     try {
-        // macOS 'say -v ?' returns name, locale and description
         const raw = await runCommand("say -v ?");
         const lines = raw.split("\n").filter(Boolean);
         voiceIndex = {};
 
         for (const line of lines) {
-            // Regex improved to handle names with spaces and locales with underscores or hyphens (en_AU, en-US)
             const match = line.match(/^(.+?)\s{2,}([a-zA-Z_\-]+)\s+#/i);
             if (!match) continue;
 
@@ -435,7 +673,7 @@ async function loadVoicesFromOS() {
 
             voiceIndex[name] = { 
                 language, 
-                accent: accent.replace('-', '_') // Normalize to underscore format
+                accent: accent.replace('-', '_') 
             };
         }
         console.log(`[TTS] Successfully loaded ${Object.keys(voiceIndex).length} voices from OS.`);
@@ -450,15 +688,12 @@ app.get('/voices', (req, res) => {
         language: info.language,
         accent: info.accent
     })).sort((a, b) => {
-        // Prioritize English, then specific high-quality indicators
         if (a.language === 'en' && b.language !== 'en') return -1;
         if (a.language !== 'en' && b.language === 'en') return 1;
-        
         const aIsHigh = a.name.includes('Siri') || a.name.includes('Enhanced');
         const bIsHigh = b.name.includes('Siri') || b.name.includes('Enhanced');
         if (aIsHigh && !bIsHigh) return -1;
         if (!aIsHigh && bIsHigh) return 1;
-        
         return a.name.localeCompare(b.name);
     });
 
@@ -535,6 +770,38 @@ app.post('/speak', async (req, res) => {
     }
 });
 
+// --- Feature 3: IPA Conversion ---
+
+app.get('/api/convert/ipa', async (req, res) => {
+    const { text, mode } = req.query;
+    if (!text) return res.status(400).json({ error: 'Text required' });
+    
+    let result;
+    if (String(mode) === '2') {
+        result = await textToCambridgeIPA(text);
+    } else {
+        result = textToIPA(text);
+    }
+    
+    res.json({ text, ipa: result });
+});
+
+// --- Feature 4: Cambridge Lookup ---
+
+app.get('/api/lookup/cambridge', (req, res) => {
+    const { word } = req.query;
+    if (!word) return res.status(400).json({ error: 'word_required' });
+    const slug = word.toLowerCase().replace(/\s+/g, '-');
+    const url = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(slug)}`;
+    
+    const options = { method: 'HEAD', headers: { 'User-Agent': 'Mozilla/5.0' } };
+    const checkReq = https.request(url, options, (checkRes) => {
+        res.json({ exists: checkRes.statusCode === 200, url });
+    });
+    checkReq.on('error', () => res.json({ exists: false }));
+    checkReq.end();
+});
+
 // --- Server Startup ---
 
 function loadHttpsCertificates() {
@@ -554,6 +821,7 @@ function loadHttpsCertificates() {
 }
 
 (async () => {
+    ensureDictionary();
     await loadVoicesFromOS();
 
     const httpsOptions = loadHttpsCertificates();
@@ -569,7 +837,7 @@ function loadHttpsCertificates() {
 
     server.listen(PORT, HOST, () => {
         console.log(`==================================================`);
-        console.log(`[INFO] Unified Server running`);
+        console.log(`[INFO] Unified Server running on port ${PORT}`);
         console.log(`[INFO] Protocol: ${protocol.toUpperCase()}`);
         console.log(`[INFO] Address:  ${protocol}://localhost:${PORT}`);
         console.log(`[INFO] Storage:  ${BACKUP_DIR}`);

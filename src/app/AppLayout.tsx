@@ -1,4 +1,3 @@
-
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
   Plus, LayoutDashboard, List, Settings, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Mic, PenLine, AlertTriangle, BookText, Ear, Zap, Calendar, Gamepad2, BookMarked, Waves, RefreshCw, Save, ListTodo, Users
@@ -441,7 +440,15 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
       </main>
       
       {currentUser && (
-          <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={handleSpecialAction} />
+          <StudyBuddy 
+            user={currentUser} 
+            stats={stats} 
+            currentView={view} 
+            lastBackupTime={lastBackupTime} 
+            onNavigate={handleSpecialAction} 
+            onViewWord={setGlobalViewWord}
+            isAnyModalOpen={!!globalViewWord || !!editingWord}
+          />
       )}
 
       {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { User, AppView, WordQuality } from '../../app/types';
-import { X, MessageSquare, BookOpen, Languages, Book, Volume2, Mic, Binary, Loader2, Plus } from 'lucide-react';
+import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
+import { X, MessageSquare, BookOpen, Languages, Book, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Info, AudioLines } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, getIsSpeaking } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
@@ -17,6 +17,8 @@ interface Props {
     currentView: AppView;
     lastBackupTime: number | null;
     onNavigate: (view: string) => void;
+    onViewWord?: (word: VocabularyItem) => void;
+    isAnyModalOpen?: boolean;
 }
 
 interface Message {
@@ -37,7 +39,7 @@ const AVATAR_DEFINITIONS = {
     unicorn: { url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Unicorn.png', bg: 'bg-purple-100' },
 };
 
-export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) => {
+export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onViewWord, isAnyModalOpen }) => {
     const { showToast } = useToast();
     const [config, setConfig] = useState<SystemConfig>(getConfig());
     const [isAudioPlaying, setIsAudioPlaying] = useState(getIsSpeaking());
@@ -155,8 +157,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) =
             if (selectedText.length > MAX_READ_LENGTH) {
                 return showToast("Text is too long to read!", "error");
             }
-            setIsOpen(false);
-            setMenuPos(null);
             speak(selectedText, false, lang, lang === 'en' ? coach.enVoice : coach.viVoice, lang === 'en' ? coach.enAccent : coach.viAccent);
         }
     };
@@ -173,7 +173,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) =
             if (data?.responseData?.translatedText) {
                 const translation = data.responseData.translatedText;
                 setMessage({ 
-                    text: `**Translation:** ${translation}`, 
+                    text: translation, 
                     icon: <Languages size={18} className="text-blue-500" /> 
                 });
                 setIsOpen(true);
@@ -186,10 +186,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) =
         }
     };
 
-    const handleIpaConversion = async () => {
+    const handleReadAndIpa = async () => {
         const selectedText = window.getSelection()?.toString().trim();
         if (!selectedText) return;
-        
+
+        // 1. Read
+        if (selectedText.length > MAX_READ_LENGTH) {
+            showToast("Text is too long to read!", "error");
+        } else {
+            speak(selectedText, false, 'en', coach.enVoice, coach.enAccent);
+        }
+
+        // 2. Fetch & Show IPA
         setIsThinking(true);
         setIsOpen(false);
         setMenuPos(null);
@@ -198,7 +206,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) =
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
             if (existing && existing.ipa) {
                 setMessage({ 
-                    text: `**IPA (Library):** ${existing.ipa}`, 
+                    text: `**IPA:** ${existing.ipa}`, 
                     icon: <Binary size={18} className="text-emerald-500" /> 
                 });
                 setIsOpen(true);
@@ -207,7 +215,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) =
             }
 
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(selectedText)}`);
+            const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(selectedText)}&mode=2`);
             if (res.ok) {
                 const data = await res.json();
                 setMessage({ 
@@ -217,7 +225,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) =
                 setIsOpen(true);
             }
         } catch (e) {
-            showToast("IPA Server error!", "error");
+            // Silence error or show toast
         } finally {
             setIsThinking(false);
         }
@@ -242,6 +250,17 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) =
             showToast("Add error!", "error");
         } finally {
             setIsAddingToLibrary(false);
+        }
+    };
+
+    const handleViewWord = async () => {
+        const selectedText = window.getSelection()?.toString().trim();
+        if (!selectedText || !user.id || !onViewWord || isAnyModalOpen) return;
+        const wordObj = await dataStore.findWordByText(user.id, selectedText);
+        if (wordObj) {
+            setIsOpen(false);
+            setMenuPos(null);
+            onViewWord(wordObj);
         }
     };
 
@@ -273,43 +292,58 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) =
     const CommandBox = () => (
         <div 
             ref={commandBoxRef} 
-            className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200"
+            className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[200px] animate-in fade-in zoom-in-95 duration-200"
         >
             <div className="grid grid-cols-3 gap-1">
                 <button 
                     type="button" 
                     onClick={handleTranslateSelection} 
-                    className="aspect-square bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm" 
-                    title="Translate"
+                    className="aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" 
+                    title="Tiếng Việt"
                 >
-                    <Languages size={15}/>
+                    VI
                 </button>
+                
+                {!isAlreadyInLibrary ? (
+                    <button 
+                        type="button" 
+                        onClick={handleAddToLibrary} 
+                        disabled={isAddingToLibrary} 
+                        className="aspect-square bg-green-50 text-green-600 rounded-2xl flex items-center justify-center hover:bg-green-100 transition-all active:scale-90 shadow-sm" 
+                        title="Add to Library"
+                    >
+                        {isAddingToLibrary ? <Loader2 size={14} className="animate-spin"/> : <Plus size={15}/>}
+                    </button>
+                ) : (
+                    <button 
+                        type="button" 
+                        onClick={handleViewWord} 
+                        disabled={isAnyModalOpen} 
+                        className="aspect-square bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center hover:bg-sky-100 transition-all active:scale-90 shadow-sm" 
+                        title="View Word Details"
+                    >
+                        <Eye size={15}/>
+                    </button>
+                )}
+                
                 <button 
                     type="button" 
-                    onClick={handleAddToLibrary} 
-                    disabled={isAlreadyInLibrary || isAddingToLibrary} 
-                    className={`aspect-square rounded-2xl flex items-center justify-center transition-all shadow-sm ${isAlreadyInLibrary ? 'bg-neutral-100 text-neutral-400' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} 
-                    title="Add to Library"
-                >
-                    {isAddingToLibrary ? <Loader2 size={14} className="animate-spin"/> : <Plus size={15}/>}
-                </button>
-                <button 
-                    type="button" 
-                    onClick={handleIpaConversion} 
+                    onClick={handleReadAndIpa} 
                     className="aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" 
-                    title="Phonetics (IPA)"
+                    title="Read & Phonetics (EN)"
                 >
-                    <Binary size={15}/>
+                    <Volume2 size={15}/>
                 </button>
                 
                 <button 
                     type="button" 
                     onClick={handleSpeakSelection} 
-                    className="aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-90 shadow-sm" 
+                    className="aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" 
                     title="Mimic Practice"
                 >
                     <Mic size={15}/>
                 </button>
+
                 <button 
                     type="button" 
                     onClick={handleCambridgeLookup} 
@@ -317,26 +351,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate }) =
                     className={`aspect-square rounded-2xl flex items-center justify-center transition-all shadow-sm ${isCambridgeValid ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`} 
                     title="Cambridge Lookup"
                 >
-                    {isCambridgeChecking ? <Loader2 size={14} className="animate-spin"/> : <Book size={15}/>}
+                    {isCambridgeChecking ? <Loader2 size={14} className="animate-spin"/> : <Search size={15}/>}
                 </button>
-                <button 
-                    type="button" 
-                    onClick={() => handleReadSelection('en')} 
-                    className="aspect-square bg-neutral-100 text-neutral-500 rounded-2xl flex items-center justify-center hover:bg-neutral-200 transition-all active:scale-95 shadow-sm" 
-                    title="Read (EN)"
-                >
-                    <BookOpen size={15} fill="currentColor"/>
-                </button>
-                <div /> {/* Spacer */}
-                <div /> {/* Spacer */}
-                <button 
-                    type="button" 
-                    onClick={() => handleReadSelection('vi')} 
-                    className="aspect-square bg-rose-50 text-rose-400 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" 
-                    title="Read (VI)"
-                >
-                    <Volume2 size={15} />
-                </button>
+                
+                <div className="aspect-square"></div> {/* Empty Slot for balance */}
             </div>
         </div>
     );
