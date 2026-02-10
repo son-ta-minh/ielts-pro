@@ -368,14 +368,29 @@ export interface DashboardUIProps {
   serverStatus: 'connected' | 'disconnected';
 }
 
-const getAppVersion = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const day = now.getDate().toString().padStart(2, '0');
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    return `v${year}${month}${day}_${hours}${minutes}`;
+const getFormattedBuildDate = () => {
+    // Vite injects this at build time. It will be undefined in dev mode.
+    const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
+    if (!buildTimestamp) {
+        // Fallback for dev environment
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const day = now.getDate().toString().padStart(2, '0');
+        return `v${year}${month}${day}_dev`;
+    }
+    try {
+        const d = new Date(buildTimestamp);
+        const year = d.getFullYear();
+        const month = (d.getMonth() + 1).toString().padStart(2, '0');
+        const day = d.getDate().toString().padStart(2, '0');
+        const hours = d.getHours().toString().padStart(2, '0');
+        const minutes = d.getMinutes().toString().padStart(2, '0');
+        return `v${year}${month}${day}_${hours}${minutes}`;
+    } catch (e) {
+        // Fallback in case of parsing error
+        return 'v_error';
+    }
 };
 
 // The pure UI component
@@ -402,7 +417,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   onRandomizeWotd,
   serverStatus
 }) => {
-  const version = useMemo(() => getAppVersion(), []);
+  const version = useMemo(() => getFormattedBuildDate(), []);
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500">

@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
     base: '/ielts-pro/', 
     define: {
       'process.env.API_KEY': JSON.stringify(env.API_KEY),
+      'process.env.BUILD_TIMESTAMP': JSON.stringify(new Date().toISOString()),
     },
   }
 })
