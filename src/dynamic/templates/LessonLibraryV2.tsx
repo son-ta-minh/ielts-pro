@@ -13,7 +13,7 @@ import { UniversalCard } from '../../components/common/UniversalCard';
 import LessonEditView from './LessonEditView';
 import LessonPracticeView from './LessonPracticeView';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
-import { getLessonPrompt } from '../../services/promptService';
+import { getLessonPrompt, getGenerateWordLessonPrompt } from '../../services/promptService';
 import { ResourceActions, AddAction } from '../page/ResourceActions';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { ResourceConfig } from '../types';
@@ -23,6 +23,7 @@ import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
 import { useShelfLogic } from '../../app/hooks/useShelfLogic';
 import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
+import WordSelectorModal from '../../components/discover/games/adventure/WordSelectorModal';
 
 interface Props {
   user: User;
@@ -41,6 +42,7 @@ const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
 export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavigate, onUpdateUser }) => {
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [lessonBooks, setLessonBooks] = useState<LessonBook[]>([]);
+  const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Filter & View
@@ -65,8 +67,10 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [bookToDelete, setBookToDelete] = useState<LessonBook | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isWordLessonAiModalOpen, setIsWordLessonAiModalOpen] = useState(false);
+  const [isWordSelectorOpen, setIsWordSelectorOpen] = useState(false);
+  const [selectedWordForLesson, setSelectedWordForLesson] = useState<VocabularyItem | null>(null);
   
-  // --- Shelf State ---
   const { 
       currentShelfName, 
       booksOnCurrentShelf, 
@@ -90,15 +94,17 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [userLessons, userBooks] = await Promise.all([ 
+      const [userLessons, userBooks, allWordsData] = await Promise.all([ 
           db.getLessonsByUserId(user.id), 
-          db.getLessonBooksByUserId(user.id)
+          db.getLessonBooksByUserId(user.id),
+          dataStore.getAllWords()
       ]);
       const combined: ResourceItem[] = [
           ...userLessons.map(l => ({ type: 'ESSAY' as const, data: l, path: l.path, tags: l.tags, date: l.createdAt })),
       ];
       setResources(combined.sort((a, b) => b.date - a.date));
       setLessonBooks(userBooks.sort((a, b) => b.createdAt - a.createdAt));
+      setAllWords(allWordsData);
     } finally { setLoading(false); }
   }, [user.id]);
 
@@ -110,7 +116,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     return typeFilter !== 'ALL' || focusFilter !== 'all' || colorFilter !== 'all';
   }, [typeFilter, focusFilter, colorFilter]);
 
-  // --- Logic for List View (Item Browser) ---
   const filteredResources = useMemo(() => {
     return resources.filter(res => {
       if (typeFilter !== 'ALL' && res.type !== typeFilter) return false;
@@ -135,7 +140,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       return filteredResources.slice(start, start + pageSize);
   }, [filteredResources, page, pageSize]);
 
-  // --- Handlers for Shelf Management ---
   const handleRenameShelfAction = (newName: string) => {
       const success = renameShelf(newName, async (oldS, newS) => {
           setLoading(true);
@@ -156,7 +160,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       if (success) setIsRenameShelfModalOpen(false);
   };
 
-  // --- Handlers for Book Management ---
   const handleCreateEmptyBook = async () => {
     const newBook: LessonBook = {
         id: `lb-${Date.now()}`,
@@ -204,7 +207,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       showToast(`Moved to "${targetShelf}".`, 'success');
   };
 
-  // --- Handlers for Item Management ---
   const handleDeleteLesson = async () => { if (!lessonToDelete) return; await dataStore.deleteLesson(lessonToDelete.id); showToast('Lesson deleted.', 'success'); setLessonToDelete(null); loadData(); };
   
   const handleSaveLesson = async (lesson: Lesson) => { 
@@ -233,6 +235,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     await dataStore.saveLesson(newLesson);
     showToast("Lesson created with AI!", "success");
     setIsAiModalOpen(false);
+    setIsWordLessonAiModalOpen(false);
     setActiveLesson(newLesson);
     setViewMode('read_lesson');
     loadData();
@@ -275,239 +278,122 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       setViewMode('read_lesson');
   };
 
+  const handleNavigateShelf = (name: string) => {
+    selectShelf(name);
+    setViewMode('shelf');
+  };
+
+  const handleNavigateBook = (book: LessonBook) => {
+    setActiveBook(book);
+    setViewMode('book_detail');
+  };
+
   const addActions: AddAction[] = [
-      { label: 'AI Lesson', icon: Sparkles, onClick: () => setIsAiModalOpen(true) },
-      { label: 'New Lesson', icon: Plus, onClick: handleNewLesson },
+      { label: 'Topic Lesson (AI)', icon: Sparkles, onClick: () => setIsAiModalOpen(true) },
+      { label: 'Word Lesson (AI)', icon: BookOpen, onClick: () => setIsWordSelectorOpen(true) },
+      { label: 'New Lesson (Manual)', icon: Plus, onClick: handleNewLesson },
   ];
 
   const handleGeneratePromptWithCoach = (inputs: any) => {
-      const config = (window as any).CONFIG || getConfig();
+      const config = getConfig();
       const activeType = config.audioCoach.activeCoach;
       const coachName = config.audioCoach.coaches[activeType].name;
+      // Fix: Add missing 'task' property as required by LessonPromptParams.
       return getLessonPrompt({
           topic: inputs.topic,
           language: inputs.language,
           targetAudience: inputs.targetAudience,
           tone: inputs.tone,
-          coachName
+          format: inputs.format,
+          coachName,
+          task: 'create_reading'
       });
   };
 
-  // --- Data Transformation for GenericBookDetail ---
-  const genericBookItems: GenericBookItem[] = useMemo(() => {
-      if (!activeBook) return [];
-      return activeBook.itemIds.map((id): GenericBookItem | null => {
-          const res = resources.find(r => r.data.id === id);
-          if (!res) return null;
-          
-          return {
-              id: res.data.id,
-              title: (res.data as Lesson).title,
-              subtitle: 'Lesson',
-              data: res, // Pass the whole ResourceItem
-              focusColor: res.data.focusColor,
-              isFocused: res.data.isFocused
-          };
-      }).filter((item): item is GenericBookItem => item !== null);
-  }, [activeBook, resources]);
-
-  const availableGenericItems: GenericBookItem[] = useMemo(() => {
-      return resources.map((res): GenericBookItem => {
-          return {
-              id: res.data.id,
-              title: (res.data as Lesson).title,
-              subtitle: 'Lesson',
-              data: res // Pass the whole ResourceItem
-          };
-      });
-  }, [resources]);
-
-  const handleAddItemsToBook = (ids: string[]) => {
-      if (!activeBook) return;
-      const newIds = Array.from(new Set([...activeBook.itemIds, ...ids]));
-      handleUpdateBook({ itemIds: newIds });
-  };
-  
-  const handleRemoveItemFromBook = (id: string) => {
-      if (!activeBook) return;
-      const newIds = activeBook.itemIds.filter(uid => uid !== id);
-      handleUpdateBook({ itemIds: newIds });
-  };
-  
-  const handleFocusChangeGeneric = (item: GenericBookItem, color: any) => {
-       const res = item.data as ResourceItem;
-       handleFocusChange(res, color);
+  const handleGenerateWordLessonPromptWithCoach = (inputs: any) => {
+    if (!selectedWordForLesson) return '';
+    const config = getConfig();
+    const activeType = config.audioCoach.activeCoach;
+    const coachName = config.audioCoach.coaches[activeType].name;
+    
+    // FIX: Pass 'format' from inputs to getGenerateWordLessonPrompt
+    return getGenerateWordLessonPrompt(
+      selectedWordForLesson, 
+      {
+        language: inputs.language,
+        targetAudience: inputs.targetAudience,
+        tone: inputs.tone,
+        format: inputs.format 
+      } as any, 
+      coachName
+    );
   };
 
-  const handleToggleFocusGeneric = (item: GenericBookItem) => {
-       const res = item.data as ResourceItem;
-       handleToggleFocus(res);
+  const handleWordSelectedForLesson = (selected: string[]) => {
+    if (selected.length === 0) return;
+    const wordText = selected[0];
+    const wordObj = allWords.find(w => w.word.toLowerCase() === wordText.toLowerCase());
+    if (wordObj) {
+      setSelectedWordForLesson(wordObj);
+      setIsWordSelectorOpen(false);
+      setIsWordLessonAiModalOpen(true);
+    }
   };
-
-  const handleNavigateShelf = (name: string) => {
-      selectShelf(name);
-      setViewMode('shelf');
-  };
-
-  const handleNavigateBook = (book: LessonBook) => {
-      setActiveBook(book);
-      setViewMode('book_detail');
-  };
-
-  // --- Views ---
 
   if (viewMode === 'read_lesson' && activeLesson) {
-      return <LessonPracticeView lesson={activeLesson} onComplete={() => setViewMode(activeBook ? 'book_detail' : 'list')} onEdit={() => setViewMode('edit_lesson')} />;
+      // Fix: Pass onUpdate to sync state when Audio Script is added
+      return <LessonPracticeView user={user} lesson={activeLesson} onComplete={() => setViewMode(activeBook ? 'book_detail' : 'list')} onEdit={() => setViewMode('edit_lesson')} onUpdate={(updated) => setActiveLesson(updated)} />;
   }
   if (viewMode === 'edit_lesson' && activeLesson) {
       return <LessonEditView lesson={activeLesson} user={user} onSave={handleSaveLesson} onPractice={(l) => { setActiveLesson(l); setViewMode('read_lesson'); }} onCancel={() => setViewMode(activeBook ? 'book_detail' : 'list')} />;
   }
   
-  // --- Book Detail View (Using Generic) ---
   if (viewMode === 'book_detail' && activeBook) {
-      return <GenericBookDetail
-          book={activeBook}
-          items={genericBookItems}
-          availableItems={availableGenericItems}
-          onBack={() => { setActiveBook(null); setViewMode('shelf'); loadData(); }}
-          onUpdateBook={handleUpdateBook}
-          onAddItem={handleAddItemsToBook}
-          onRemoveItem={handleRemoveItemFromBook}
-          onOpenItem={(item) => { 
-               const res = item.data as ResourceItem;
-               setActiveLesson(res.data as Lesson); 
-               setViewMode('read_lesson');
-          }}
-          onEditItem={(item) => {
-               const res = item.data as ResourceItem;
-               setActiveLesson(res.data as Lesson); 
-               setViewMode('edit_lesson');
-          }}
-          onFocusChange={handleFocusChangeGeneric}
-          onToggleFocus={handleToggleFocusGeneric}
-          itemIcon={<BookOpen size={16}/>}
-      />;
+      const itemsMap = new Map(resources.map(i => [i.data.id, i]));
+      const gItems = activeBook.itemIds.map(id => {
+          const item = itemsMap.get(id); if (!item) return null;
+          return { id, title: (item.data as Lesson).title, subtitle: (item.data as Lesson).description, data: item.data, focusColor: item.data.focusColor, isFocused: item.data.isFocused } as GenericBookItem;
+      }).filter((item): item is GenericBookItem => item !== null);
+      
+      const avItems = resources.map(i => ({ id: i.data.id, title: (i.data as Lesson).title, subtitle: (i.data as Lesson).description, data: i.data } as GenericBookItem));
+
+      return <GenericBookDetail book={activeBook} items={gItems} availableItems={avItems} onBack={() => { setActiveBook(null); setViewMode('shelf'); loadData(); }} onUpdateBook={handleUpdateBook} onAddItem={async (ids) => { const nb = { ...activeBook, itemIds: Array.from(new Set([...activeBook.itemIds, ...ids])) }; await dataStore.saveLessonBook(nb); setActiveBook(nb); }} onRemoveItem={async (id) => { const nb = { ...activeBook, itemIds: activeBook.itemIds.filter(x => x !== id) }; await dataStore.saveLessonBook(nb); setActiveBook(nb); }} onOpenItem={(g) => { setActiveLesson(g.data); setViewMode('read_lesson'); }} onEditItem={(g) => { setActiveLesson(g.data); setViewMode('edit_lesson'); }} onFocusChange={(g, c) => handleFocusChange({ type: 'ESSAY', data: g.data, date: 0 }, c)} onToggleFocus={(g) => handleToggleFocus({ type: 'ESSAY', data: g.data, date: 0 })} itemIcon={<BookOpen size={16}/>} />;
   }
 
-  // --- Shelf View ---
   if (viewMode === 'shelf') {
-      return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-           {/* New Header Design */}
-           <div className="flex flex-col gap-4">
-               <button onClick={() => setViewMode('list')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors group">
-                    <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-                    <span>Back to Main Library</span>
-               </button>
-               
-               <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                   <div className="flex-shrink-0">
-                        <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Lesson Shelf</h2>
-                        <p className="text-neutral-500 mt-1 font-medium">Organize your knowledge.</p>
-                   </div>
-                   
-                   <ShelfSearchBar 
-                        shelves={allShelves} 
-                        books={lessonBooks} 
-                        onNavigateShelf={handleNavigateShelf} 
-                        onNavigateBook={handleNavigateBook} 
-                    />
-
-                   <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
-                       <FolderPlus size={14}/> Add Shelf
-                   </button>
-               </header>
-           </div>
-
-          <UniversalShelf
-            label={currentShelfName}
-            onNext={allShelves.length > 1 ? nextShelf : undefined}
-            onPrev={allShelves.length > 1 ? prevShelf : undefined}
-            actions={
-                <div className="flex items-center gap-2">
-                     <button onClick={() => setIsRenameShelfModalOpen(true)} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white" title="Rename Shelf"><Pen size={14}/></button>
-                     <button onClick={removeShelf} disabled={booksOnCurrentShelf.length > 0} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-30 disabled:hover:bg-white/20" title="Remove Empty Shelf"><Trash2 size={14}/></button>
-                </div>
-            }
-            isEmpty={booksOnCurrentShelf.length === 0}
-            emptyAction={
-                 <button onClick={handleCreateEmptyBook} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs uppercase tracking-widest border border-white/20">
-                     Create First Book
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+         <div className="flex flex-col gap-4">
+             <button onClick={() => setViewMode('list')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group">
+                  <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+                  <span>Back to Main Library</span>
+             </button>
+             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                 <div className="shrink-0">
+                      <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Lesson Shelf</h2>
+                      <p className="text-neutral-500 mt-1 font-medium">Browse your lesson collections.</p>
+                 </div>
+                 <ShelfSearchBar shelves={allShelves} books={lessonBooks} onNavigateShelf={handleNavigateShelf} onNavigateBook={handleNavigateBook} />
+                 <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
+                     <FolderPlus size={14}/> Add Shelf
                  </button>
-            }
-          >
-             {booksOnCurrentShelf.map(book => {
-                 const title = book.title;
-                 const parts = title.split(':');
-                 const displayTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : title;
-
-                 return (
-                    <UniversalBook
-                        key={book.id}
-                        id={book.id}
-                        title={displayTitle}
-                        subTitle={`${book.itemIds.length} Items`}
-                        icon={<Book size={24}/>}
-                        color={book.color}
-                        // Styling props
-                        titleColor={book.titleColor}
-                        titleSize={book.titleSize}
-                        titleTop={book.titleTop}
-                        titleLeft={book.titleLeft}
-                        iconTop={book.iconTop}
-                        iconLeft={book.iconLeft}
-
-                        onClick={() => { setActiveBook(book); setViewMode('book_detail'); }}
-                        actions={
-                            <>
-                                <button onClick={(e) => { e.stopPropagation(); setBookToMove(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-neutral-700 hover:text-white transition-all shadow-sm" title="Move to Shelf"><Move size={16}/></button>
-                                <button onClick={(e) => { e.stopPropagation(); setBookToDelete(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-sm" title="Delete">
-                                    <Trash2 size={16} />
-                                </button>
-                            </>
-                        }
-                    />
-                 );
-             })}
-             
-             {/* New Book Placeholder */}
-             <div className="group [perspective:1000px] translate-y-0">
-                <div className="relative w-full aspect-[5/7] rounded-lg bg-neutral-800/50 border-2 border-dashed border-neutral-500/50 transition-all duration-300 group-hover:border-neutral-400 group-hover:bg-neutral-800/80 group-hover:shadow-xl flex flex-col items-stretch justify-center overflow-hidden">
-                    <button onClick={handleCreateEmptyBook} className="flex-1 flex flex-col items-center justify-center p-2 text-center text-neutral-400 hover:bg-white/5 transition-colors">
-                        <Plus size={32} className="mb-2 text-neutral-500"/>
-                        <h3 className="font-sans text-xs font-black uppercase tracking-wider">New Book</h3>
-                    </button>
-                </div>
-            </div>
-
-          </UniversalShelf>
-
-          <ConfirmationModal
-            isOpen={!!bookToDelete}
-            title="Delete Book?"
-            message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Items inside will not be deleted.</>}
-            confirmText="Delete"
-            isProcessing={false}
-            onConfirm={handleDeleteBook}
-            onClose={() => setBookToDelete(null)}
-            icon={<Trash2 size={40} className="text-red-500"/>}
-          />
-          
-          <MoveBookModal 
-            isOpen={!!bookToMove} 
-            onClose={() => setBookToMove(null)} 
-            onConfirm={handleConfirmMoveBook} 
-            shelves={allShelves} 
-            currentShelf={bookToMove ? (bookToMove.title.split(':')[0].trim()) : 'General'} 
-            bookTitle={bookToMove?.title || ''} 
-          />
-          <AddShelfModal isOpen={isAddShelfModalOpen} onClose={() => setIsAddShelfModalOpen(false)} onSave={(name) => { if(addShelf(name)) setIsAddShelfModalOpen(false); }} />
-          <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelfAction} initialName={currentShelfName} />
-        </div>
-      );
+             </header>
+         </div>
+        <UniversalShelf label={currentShelfName} onNext={allShelves.length > 1 ? nextShelf : undefined} onPrev={allShelves.length > 1 ? prevShelf : undefined} actions={<div className="flex items-center gap-2"><button onClick={() => setIsRenameShelfModalOpen(true)} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white" title="Rename Shelf"><Pen size={14}/></button><button onClick={removeShelf} disabled={booksOnCurrentShelf.length > 0} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-30 disabled:hover:bg-white/20" title="Remove Empty Shelf"><Trash2 size={14}/></button></div>} isEmpty={booksOnCurrentShelf.length === 0} emptyAction={<button onClick={handleCreateEmptyBook} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs uppercase tracking-widest border border-white/20">Create First Book</button>} >
+           {booksOnCurrentShelf.map(book => {
+               const displayTitle = book.title.split(':').pop()?.trim() || book.title;
+               return <UniversalBook key={book.id} id={book.id} title={displayTitle} subTitle={`${book.itemIds.length} Items`} icon={<BookOpen size={24}/>} color={book.color} titleColor={book.titleColor} titleSize={book.titleSize} titleTop={book.titleTop} titleLeft={book.titleLeft} iconTop={book.iconTop} iconLeft={book.iconLeft} onClick={() => { setActiveBook(book); setViewMode('book_detail'); }} actions={<><button onClick={(e) => { e.stopPropagation(); setBookToMove(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-neutral-700 hover:text-white transition-all shadow-sm" title="Move to Shelf"><Move size={16}/></button><button onClick={(e) => { e.stopPropagation(); setBookToDelete(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-sm" title="Delete"><Trash2 size={16}/></button></>} />;
+           })}
+           <div className="group translate-y-0"><div className="relative w-full aspect-[5/7] rounded-lg bg-neutral-800/50 border-2 border-dashed border-neutral-500/50 transition-all duration-300 group-hover:border-neutral-400 group-hover:bg-neutral-800/80 group-hover:shadow-xl flex flex-col items-stretch justify-center overflow-hidden"><button onClick={handleCreateEmptyBook} className="flex-1 flex flex-col items-center justify-center p-2 text-center text-neutral-400 hover:bg-white/5 transition-colors"><Plus size={32} className="mb-2 text-neutral-500"/><h3 className="font-sans text-xs font-black uppercase tracking-wider">New Book</h3></button></div></div>
+        </UniversalShelf>
+        <ConfirmationModal isOpen={!!bookToDelete} title="Delete Book?" message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Items inside will not be deleted.</>} confirmText="Delete" isProcessing={false} onConfirm={async () => { if (bookToDelete) await dataStore.deleteLessonBook(bookToDelete.id); setBookToDelete(null); loadData(); }} onClose={() => setBookToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
+        <MoveBookModal isOpen={!!bookToMove} onClose={() => setBookToMove(null)} onConfirm={handleConfirmMoveBook} shelves={allShelves} currentShelf={bookToMove ? (bookToMove.title.split(':')[0].trim()) : 'General'} bookTitle={bookToMove?.title || ''} />
+        <AddShelfModal isOpen={isAddShelfModalOpen} onClose={() => setIsAddShelfModalOpen(false)} onSave={(name) => { if(addShelf(name)) setIsAddShelfModalOpen(false); }} />
+        <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelfAction} initialName={currentShelfName} />
+      </div>
+    );
   }
 
-  // --- List View (Default - Items) ---
   return (
     <>
     <ResourcePage
@@ -558,7 +444,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                     ]}
                 />
             }
-            // Removed browseGroups as per request
             browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }}
             addActions={addActions}
             extraActions={
@@ -574,7 +459,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       }
       aboveGrid={
         <>
-            {/* TagBrowser for Groups removed */}
             {isTagBrowserOpen && <TagBrowser items={resources} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}
         </>
       }
@@ -588,8 +472,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       {() => (
         <>
           {pagedResources.map((item) => {
-            const isLesson = item.type === 'ESSAY';
-            const titleContent = (item.data as Lesson).title;
             const onRead = () => { setActiveLesson(item.data as Lesson); setViewMode('read_lesson'); };
             const onEdit = () => { setActiveLesson(item.data as Lesson); setViewMode('edit_lesson'); };
             const onDelete = () => setLessonToDelete(item.data as Lesson);
@@ -597,8 +479,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
             return (
                 <UniversalCard
                     key={`${item.type}-${item.data.id}`}
-                    title={titleContent} 
-                    // removed path prop to avoid rendering path
+                    title={<div className="font-black text-lg text-neutral-900 tracking-tight leading-tight truncate">{(item.data as Lesson).title}</div>} 
                     tags={item.data.tags} 
                     compact={viewSettings.compact}
                     onClick={onRead}
@@ -623,6 +504,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       )}
     </ResourcePage>
     <ConfirmationModal isOpen={!!lessonToDelete} title="Delete Lesson?" message="Confirm delete?" confirmText="Yes, Delete" isProcessing={false} onConfirm={handleDeleteLesson} onClose={() => setLessonToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
+    
     <UniversalAiModal 
         isOpen={isAiModalOpen} 
         onClose={() => setIsAiModalOpen(false)} 
@@ -635,6 +517,30 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         actionLabel="Create Lesson" 
         closeOnSuccess={true} 
     />
+
+    <UniversalAiModal 
+        isOpen={isWordLessonAiModalOpen} 
+        onClose={() => setIsWordLessonAiModalOpen(false)} 
+        type="GENERATE_WORD_LESSON" 
+        title={`AI Word Lesson: ${selectedWordForLesson?.word}`} 
+        description="Creating a deep-dive lesson based on your library data." 
+        initialData={user.lessonPreferences} 
+        onGeneratePrompt={handleGenerateWordLessonPromptWithCoach} 
+        onJsonReceived={handleGenerateLesson} 
+        actionLabel="Create Word Lesson" 
+        closeOnSuccess={true} 
+    />
+
+    {isWordSelectorOpen && (
+      <WordSelectorModal 
+          isOpen={isWordSelectorOpen}
+          onClose={() => setIsWordSelectorOpen(false)}
+          onSelect={handleWordSelectedForLesson}
+          allWords={allWords}
+          wordsToExclude={new Set()}
+          loading={loading}
+      />
+    )}
     </>
   );
 };

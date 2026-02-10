@@ -1,4 +1,3 @@
-
 /**
  * Centralized service for generating AI prompts to ensure consistency.
  * This file imports and exports all individual prompt functions from the /prompts directory.
@@ -22,6 +21,7 @@ export * from './prompts/getAutoAddWordsToBookPrompt';
 export * from './prompts/getGeneratePlanningGoalPrompt';
 export * from './prompts/getGenerateConversationPrompt';
 export * from './prompts/getPronunciationAnalysisPrompt';
+export * from './prompts/getGenerateWordLessonPrompt'; // Added
 
 // Speaking feature prompts
 export { getTranscriptionForSpeakingPrompt, getFullSpeakingTestPrompt, getRefineSpeakingTopicPrompt } from './prompts/getSpeakingPart1QuestionsPrompt';

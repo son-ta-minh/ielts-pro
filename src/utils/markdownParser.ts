@@ -257,6 +257,7 @@ const processAudioBlocks = (text: string): string => {
             .replace(/\[Multi:.*?\]/gi, '') // remove multi quiz
             .replace(/[#*`_~[\]()]/g, '') 
             .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '') 
+            .replace(/\n/g, ' ') // FIX: Thay thế newline bằng space để không làm gãy thuộc tính onclick của HTML
             .trim()
             .replace(/'/g, "\\'"); 
 
@@ -397,7 +398,7 @@ export const parseMarkdown = (text: string): string => {
     return output.join('')
         .replace(/!\[(.*?)\]\((.*?)\)/g, '<img alt="$1" src="$2" class="max-w-full h-auto rounded-lg my-4 shadow-md border border-neutral-200" />')
         .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-indigo-600 font-bold hover:underline">$1</a>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-black text-neutral-900">$1</strong>')
-        .replace(/\*(.*?)\*/g, '<span class="italic font-normal text-inherit">$1</span>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-black text-neutral-900">${1}</strong>')
+        .replace(/\*(.*?)\*/g, '<span class="italic font-normal text-inherit">${1}</span>')
         .replace(/`([^`]+)`/g, '<code class="bg-neutral-100 text-pink-600 px-1.5 py-0.5 rounded text-xs font-mono font-bold border border-neutral-200">$1</code>');
 };

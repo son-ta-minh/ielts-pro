@@ -21,17 +21,17 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   const [path, setPath] = useState(lesson.path || '/');
   const [tagsInput, setTagsInput] = useState((lesson.tags || []).join(', '));
   const [content, setContent] = useState(lesson.content);
+  const [listeningContent, setListeningContent] = useState(lesson.listeningContent || '');
+  
   const [isSaving, setIsSaving] = useState(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   
   const { showToast } = useToast();
   
-  // NOTE: Legacy topic1/topic2 are maintained in DB but hidden from UI as per V2 requirements.
   const topic1 = lesson.topic1;
   const topic2 = lesson.topic2;
 
   useEffect(() => {
-    // Migration-on-edit: Split legacy tags if new fields aren't used yet.
     if (lesson.path === undefined && lesson.tags) {
       const legacyTags = lesson.tags || [];
       const pathFromTags = legacyTags.find(t => t.startsWith('/'));
@@ -40,7 +40,6 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
       setPath(pathFromTags || '/');
       setTagsInput(singleTags.join(', '));
     } else {
-      // New data structure exists, use it directly.
       setPath(lesson.path || '/');
       setTagsInput((lesson.tags || []).join(', '));
     }
@@ -53,12 +52,12 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
       ...lesson,
       title,
       description,
-      // topic1 and topic2 are deprecated in V2 UI but kept for compatibility
       topic1, 
       topic2,
       path: path.trim(),
       tags: finalTags,
       content,
+      listeningContent,
       updatedAt: Date.now(),
     };
   };
@@ -75,34 +74,41 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
     onPractice(updatedLesson);
   };
 
-  const handleGenerateRefinePrompt = (inputs: { request: string }) => {
+  const handleGenerateRefinePrompt = (inputs: { request: string, language: string, tone: string, format?: 'reading' | 'listening' }) => {
     const config = getConfig();
     const activeType = config.audioCoach.activeCoach;
     const coachName = config.audioCoach.coaches[activeType].name;
     
-    // Using unified getLessonPrompt for refinement
     return getLessonPrompt({
+      task: inputs.format === 'listening' ? 'convert_to_listening' : 'refine_reading',
       currentLesson: { title, description, content },
       userRequest: inputs.request,
-      language: user.lessonPreferences?.language || 'English',
+      language: (inputs.language as any) || user.lessonPreferences?.language || 'English',
       targetAudience: user.lessonPreferences?.targetAudience || 'Adult',
-      tone: user.lessonPreferences?.tone || 'professional_professor',
-      coachName
+      tone: (inputs.tone as any) || user.lessonPreferences?.tone || 'professional_professor',
+      coachName,
+      format: inputs.format || 'reading'
     });
   };
 
-  const handleAiResult = (data: { title: string; description: string; content: string; tags?: string[] }) => {
-    setTitle(data.title);
-    setDescription(data.description);
-    setContent(data.content);
+  const handleAiResult = (data: any) => {
+    const result = data.result || data;
     
-    // Auto-fill tags if empty
-    if (!tagsInput.trim() && data.tags && data.tags.length > 0) {
-        setTagsInput(data.tags.join(', '));
+    // Check if result returned listening content or refined reading
+    if (result.content.includes('[Audio-')) {
+        setListeningContent(result.content);
+        showToast("Listening script updated!", "success");
+    } else {
+        setTitle(result.title);
+        setDescription(result.description);
+        setContent(result.content);
+        if (!tagsInput.trim() && result.tags && result.tags.length > 0) {
+            setTagsInput(result.tags.join(', '));
+        }
+        showToast("Lesson content refined!", "success");
     }
 
     setIsAiModalOpen(false);
-    showToast("Lesson content refined!", "success");
   };
 
   return (
@@ -118,6 +124,8 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         setTagsInput={setTagsInput}
         content={content}
         setContent={setContent}
+        listeningContent={listeningContent}
+        setListeningContent={setListeningContent}
         isSaving={isSaving}
         onSave={handleSave}
         onPractice={handlePractice}
@@ -128,9 +136,9 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         <UniversalAiModal
           isOpen={isAiModalOpen}
           onClose={() => setIsAiModalOpen(false)}
-          type="REFINE_UNIT" // Re-using type for generic request UI
-          title="Refine Lesson Content"
-          description="AI will format your notes into Markdown, fix errors, and add structure."
+          type="REFINE_UNIT"
+          title="Refine Lesson"
+          description="AI will format your notes or generate a Listening Podcast script."
           onGeneratePrompt={handleGenerateRefinePrompt}
           onJsonReceived={handleAiResult}
           actionLabel="Apply Changes"

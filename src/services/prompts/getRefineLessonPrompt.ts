@@ -5,94 +5,84 @@ export interface LessonPromptParams {
   targetAudience: 'Kid' | 'Adult';
   tone: 'friendly_elementary' | 'professional_professor';
   coachName: string;
+  task: 'create_reading' | 'refine_reading' | 'convert_to_listening';
   
-  // Create New Mode
+  // Data
   topic?: string;
-  
-  // Refine Mode
-  currentLesson?: { title: string; description: string; content: string };
+  currentLesson?: { title: string; description: string; content: string; listeningContent?: string };
   userRequest?: string;
+  format?: 'reading' | 'listening';
 }
 
 export function getLessonPrompt(params: LessonPromptParams): string {
-  const { topic, currentLesson, userRequest, language, targetAudience, tone, coachName } = params;
+  const { topic, currentLesson, userRequest, language, targetAudience, tone, coachName, task } = params;
   
-  const audioTag = language === 'Vietnamese' ? 'Audio-VN' : 'Audio-EN';
-  const isRefineMode = !!currentLesson;
+  const isVietnamese = language === 'Vietnamese';
+  const explanationLang = isVietnamese ? 'Vietnamese' : 'English';
+  const audioTag = isVietnamese ? 'Audio-VN' : 'Audio-EN';
 
-  let taskDescription = "";
+  let systemTask = "";
+  let formattingInstructions = "";
   let contextBlock = "";
 
-  if (isRefineMode && currentLesson) {
-    taskDescription = `Refine and reformat the user's lesson notes into a structured, high-quality study resource.`;
+  if (task === 'convert_to_listening') {
+    systemTask = `TRANSFORM the provided Reading Lesson into a high-quality, focused LISTENING SCRIPT (Podcast style).`;
+    contextBlock = `
+    READING CONTENT TO CONVERT:
+    Title: ${currentLesson?.title}
+    Content: ${currentLesson?.content}
+    `;
+    formattingInstructions = `
+    FORMATTING STYLE: LISTENING ONLY (PODCAST SCRIPT)
+    - **No Meta-Talk**: Skip explaining what an idiom or collocation is. Focus 100% on usage.
+    - **Language of Instruction**: Explain everything in ${explanationLang}. 
+    - **Tagging**: Inside [${audioTag}], you MUST translate all linguistic terms to ${explanationLang}.
+    - **Strict Tag Splitting**: [${audioTag}]Meaning of[/] [Audio-EN]word[/] [${audioTag}]is...[/]
+    `;
+  } else if (task === 'refine_reading') {
+    systemTask = `Refine the provided Reading Lesson. Fix ambiguous quizzes.`;
     contextBlock = `
     CURRENT CONTENT:
-    Title: ${currentLesson.title}
-    Description: ${currentLesson.description}
-    Body:
-    ${currentLesson.content || '(empty)'}
-    
-    USER INSTRUCTIONS: "${userRequest || 'Format deeply, improve structure, correct errors, and add educational value.'}"
+    Title: ${currentLesson?.title}
+    Body: ${currentLesson?.content}
+    USER REQUEST: "${userRequest || 'Make it sharper and remove redundant meta-explanation.'}"
+    `;
+    formattingInstructions = `
+    FORMATTING STYLE: READING & INTERACTIVE
+    - **Fix Quizzes**: If there are [Quiz: ...] tags where the answer isn't 100% unique (like a fixed preposition), you MUST CONVERT them to [Select: Correct | Distractor 1 | Distractor 2] to ensure the user knows exactly what is expected.
+    - **Explanation Language**: Strictly use ${explanationLang} for all instructional text.
+    - **Tagging**: Apply strict tag splitting.
     `;
   } else {
-    taskDescription = `Create a brand new lesson for a ${targetAudience} on topic: "${topic || 'General Knowledge'}".`;
-    contextBlock = `USER REQUEST: "${userRequest || 'Create a comprehensive lesson.'}"`;
+    systemTask = `Create a sharp, focused Reading Lesson in ${explanationLang} for a ${targetAudience} on: "${topic}".`;
+    contextBlock = `USER REQUEST: "${userRequest || 'Create a targeted lesson.'}"`;
+    formattingInstructions = `
+    FORMATTING STYLE: READING & INTERACTIVE
+    - **Rule**: Prefer [Select: ...] over [Quiz: ...] unless the answer is a fixed single word.
+    - **Language**: Instructions and explanations MUST be in ${explanationLang}.
+    `;
   }
 
-  return `You are an expert educational content designer and IELTS coach.
+  return `You are an expert IELTS coach.
   ROLE: You are '${coachName}', acting as a ${tone === 'friendly_elementary' ? 'friendly teacher' : 'professional professor'}.
     
-  TASK: ${taskDescription}
+  TASK: ${systemTask}
 
   ${contextBlock}
 
-  STRICT LANGUAGE RULES:
-  1. CORE MATERIAL (Vocabulary Lists, Example Sentences, Exercises): Must be in English.
-  2. META CONTENT (Greetings, CONCEPT DEFINITIONS, Explanations, Strategy Tips): In ${language}.
+  ${formattingInstructions}
 
-  FORMATTING RULES (CRITICAL):
-  - **VOCAB LISTS**: List simple words on a SINGLE line separated by commas.
-  - **NUMBERED LISTS**: Use sequential numbering (e.g., 1., 2., 3.) for ordered lists.
-  - **DEFINITIONS**: Treat definitions as explanations. They MUST be spoken in ${language}.
-  - **CONCISE TITLE**: Keep the title short and direct.
-  - **TITLE OVERRIDE RULE**: If it's a pattern, use the BASE form (e.g., "be associated with", not "is associated with").
-  - **COMPACT SPACING**: Keep the text dense. No extra empty lines between headings and content.
+  STRICT CONTENT RULES:
+  1. DO NOT explain definitions of linguistic terms (e.g., "what an idiom is").
+  2. QUIZ CLARITY: Use [Select: ...] for any blank that could have multiple synonyms. Provide clear distractors.
+  3. MANDATORY: All explanations, feedback, and meta-text MUST be in ${explanationLang}.
+  4. Use Markdown with [Audio-VN] (for Vietnamese explanation parts) and [Audio-EN] (for English examples/words) tags correctly.
 
-  INTERACTIVE ELEMENTS SYNTAX:
-  1. **Hidden Answer**: Use \`[HIDDEN: content]\` for answers that should be hidden initially.
-  2. **Tips**: Use \`[Content]\` (text inside brackets on a NEW LINE) for tips and notes.
-  3. **Fill-in Quiz**: Use \`[Quiz: answer]\` for a text input field checking against 'answer'.
-  4. **Multiple Choice**: Use \`[Multi: Correct Answer | Wrong Option | Wrong Option]\`. The FIRST option provided must be the correct one. The system will shuffle them automatically.
-  5. **Dropdown Select**: Use \`[Select: Correct Answer | Wrong Option | Wrong Option]\`. It renders as a dropdown menu. The FIRST option provided must be the correct one. The system will shuffle them automatically. Use this for "Fill in the blank" exercises where you want to give hints.
-
-  AUDIO BLOCK RULE (TOKEN SAVER - CRITICAL):
-  - **WRAP ONLY META CONTENT**: Only wrap your explanations, greetings, and definitions inside \`[${audioTag}]\` and \`[/]\`.
-  - **EXCLUDE CORE MATERIAL**: Do NOT wrap vocabulary lists, exercises, or headers (##) inside audio tags.
-  
-  EXAMPLE OF CORRECT STRUCTURE:
-    ## Key Concepts
-    [${audioTag}]
-    ${language === 'Vietnamese' ? 'Chào con! Hôm nay chúng mình sẽ học về...' : 'Hello! Today we will learn about...'}
-    [/]
-    [Make sure to practice these daily!]
-    * Word1, Word2, Word3
-    
-    1. Select the correct word:
-    [Multi: Apple | Car | Sky]
-    
-    2. Type the missing word:
-    The sky is [Quiz: blue].
-    
-    3. Choose the best fit:
-    The ocean is [Select: deep | high | tall].
-
-  TAGGING (STRICT): Return exactly ONE tag from: ["Writing", "Speaking", "Listening", "Reading", "Grammar", "Writing Task 1", "Writing Task 2", "Speaking Academic", "Speaking Casual", "Pattern", "Comparison"].
-
-  STRICT JSON OUTPUT FORMAT:
+  Return a strict JSON object:
   {
     "title": "string",
     "description": "string",
-    "content": "string (Markdown using the tags defined above)",
+    "content": "string",
     "tags": ["string"]
   }`;
 }

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ArrowDownAZ, ListFilter, Copy, ShieldCheck, ShieldX, Ghost, Zap, GitCommit, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, Sparkles, PenLine, BookMarked, BookPlus } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, WordQuality, WordTypeOption, WordBook } from '../../app/types';
@@ -13,7 +12,7 @@ export type StatusFilter = 'all' | 'new' | 'forgot' | 'hard' | 'easy' | 'learned
 export type RegisterFilter = 'all' | 'academic' | 'casual' | 'neutral' | 'raw';
 export type SourceFilter = 'all' | 'app' | 'manual' | 'refine';
 export type CompositionFilter = 'all' | 'composed' | 'not_composed';
-export type BookFilter = 'all' | 'in_book' | 'not_in_book';
+export type BookFilter = 'all' | 'in_book' | 'not_in_book' | 'specific';
 
 interface VisibilitySettings {
   showIPA: boolean;
@@ -217,6 +216,8 @@ export interface WordTableUIProps {
   sourceFilter: SourceFilter;
   compositionFilter: CompositionFilter;
   bookFilter: BookFilter;
+  specificBookId: string;
+  onSpecificBookChange: (id: string) => void;
   isAddExpanded: boolean;
   isFilterMenuOpen: boolean;
   quickAddInput: string;
@@ -282,7 +283,7 @@ export interface WordTableUIProps {
 export const WordTableUI: React.FC<WordTableUIProps> = ({
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
   onPractice, context, onViewWord, onEditWord, onDelete, onHardDelete, query, setQuery, activeFilters,
-  refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, isAddExpanded, isFilterMenuOpen, quickAddInput,
+  refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, specificBookId, onSpecificBookChange, isAddExpanded, isFilterMenuOpen, quickAddInput,
   setQuickAddInput, isAdding, isViewMenuOpen, selectedIds, setSelectedIds,
   wordToDelete, setWordToDelete, isDeleting, setIsDeleting,
   wordToHardDelete, setWordToHardDelete, isHardDeleting, setIsHardDeleting,
@@ -419,11 +420,33 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                             {[ { id: 'all', label: 'Any' }, { id: 'composed', label: 'Used in Writing' }, { id: 'not_composed', label: 'Not Used' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                         </select>
                     </div>
-                    <div>
-                        <label htmlFor="book-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1 flex items-center gap-1"><BookMarked size={10}/> In Book</label>
-                        <select id="book-filter" value={bookFilter} onChange={(e) => setBookFilter(e.target.value as BookFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
-                            {[ { id: 'all', label: 'Any' }, { id: 'in_book', label: 'In a Word Book' }, { id: 'not_in_book', label: 'Not in Book' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
-                        </select>
+                    <div className="flex flex-col gap-1">
+                        <label htmlFor="book-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1 flex items-center gap-1"><BookMarked size={10}/> Book</label>
+                        <div className="flex gap-1">
+                            <select 
+                                id="book-filter" 
+                                value={bookFilter} 
+                                onChange={(e) => setBookFilter(e.target.value as BookFilter)} 
+                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none ${bookFilter === 'specific' ? 'w-24' : ''}`}
+                            >
+                                {[ { id: 'all', label: 'Any' }, { id: 'in_book', label: 'In a Book' }, { id: 'not_in_book', label: 'Not in Book' }, { id: 'specific', label: 'Specific Book' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                            </select>
+                            {bookFilter === 'specific' && (
+                                <select 
+                                    value={specificBookId} 
+                                    onChange={(e) => onSpecificBookChange(e.target.value)}
+                                    className="flex-[2] px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none animate-in slide-in-from-left-2"
+                                >
+                                    <option value="">Select Book...</option>
+                                    {wordBooks.map(book => {
+                                        const parts = book.topic.split(':');
+                                        const display = parts.length > 1 ? parts.slice(1).join(':').trim() : book.topic;
+                                        const shelf = parts.length > 1 ? parts[0].trim() : 'General';
+                                        return <option key={book.id} value={book.id}>{shelf}: {display}</option>
+                                    })}
+                                </select>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

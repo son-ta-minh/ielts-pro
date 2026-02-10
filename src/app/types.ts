@@ -339,7 +339,7 @@ export interface IrregularVerb {
   lastTestIncorrectForms?: ('v1' | 'v2' | 'v3')[];
 }
 
-export type LessonType = 'essay';
+export type LessonType = 'essay' | 'word';
 
 export interface Lesson {
   id: string;
@@ -352,6 +352,7 @@ export interface Lesson {
   title: string;
   description: string;
   content: string; // Stored as HTML.
+  listeningContent?: string; // Stored as Markdown (Listening version - Podcast style)
   
   path?: string;
   tags?: string[];

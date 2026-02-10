@@ -1,4 +1,3 @@
-
 import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
@@ -13,10 +12,11 @@ let _isInitializing = false;
 let _allWords = new Map<string, VocabularyItem>();
 let _composedWordIds = new Set<string>(); // Fast lookup for 'composed' filter
 let _bookWordIds = new Set<string>(); // Fast lookup for 'in book' filter
+let _bookWordMap = new Map<string, Set<string>>(); // Map bookId -> Set of word texts
 let _currentUserId: string | null = null; // Track user ID for backups
 
 let _statsCache: any = {
-    reviewCounts: { total: 0, due: 0, new: 0, learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 },
+    reviewCounts: { total: 0, due: 0, n: 0, learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 },
     dashboardStats: { categories: { 'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 }, 'pronun': { total: 0, learned: 0 } }, refinedCount: 0, rawCount: 0 },
     dayProgress: { learned: 0, reviewed: 0, learnedWords: [], reviewedWords: [] }
 };
@@ -153,7 +153,7 @@ function _recalculateStats(userId: string) {
     });
 
     _statsCache = {
-        reviewCounts: { total, due, new: newCount, learned: calculatedLearningCount, mastered: masteredCount, statusForgot, statusHard, statusEasy, statusLearned },
+        reviewCounts: { total, due, n: newCount, learned: calculatedLearningCount, mastered: masteredCount, statusForgot, statusHard, statusEasy, statusLearned },
         dashboardStats: { categories, refinedCount, rawCount },
         dayProgress: { learned: todayLearnedWords.length, reviewed: todayReviewedWords.length, learnedWords: todayLearnedWords, reviewedWords: todayReviewedWords }
     };
@@ -214,11 +214,9 @@ export async function init(userId: string) {
              }
         }
         
-        const [compositions, books, spkCards, convs] = await Promise.all([
+        const [compositions, books] = await Promise.all([
             db.getCompositionsByUserId(userId),
-            db.getWordBooksByUserId(userId),
-            db.getNativeSpeakItemsByUserId(userId),
-            db.getConversationItemsByUserId(userId)
+            db.getWordBooksByUserId(userId)
         ]);
 
         _composedWordIds.clear();
@@ -227,8 +225,15 @@ export async function init(userId: string) {
         });
 
         _bookWordIds.clear();
+        _bookWordMap.clear();
         books.forEach(book => {
-            (book.words || []).forEach(item => _bookWordIds.add(item.word.toLowerCase()));
+            const wordSet = new Set<string>();
+            (book.words || []).forEach(item => {
+                const text = item.word.toLowerCase();
+                _bookWordIds.add(text);
+                wordSet.add(text);
+            });
+            _bookWordMap.set(book.id, wordSet);
         });
         
         const wordsToMigrate: VocabularyItem[] = [];
@@ -266,6 +271,7 @@ export async function forceReload(userId: string) {
     _allWords.clear();
     _composedWordIds.clear();
     _bookWordIds.clear();
+    _bookWordMap.clear();
     await init(userId);
     _notifyChanges();
 }
@@ -274,6 +280,7 @@ export async function wipeAllLocalData() {
     _allWords.clear();
     _composedWordIds.clear();
     _bookWordIds.clear();
+    _bookWordMap.clear();
     _isInitialized = false;
     _currentUserId = null;
     await db.clearVocabularyOnly();
@@ -302,8 +309,15 @@ export async function notifyWordBookChange(userId: string) {
     try {
         const books = await db.getWordBooksByUserId(userId);
         _bookWordIds.clear();
+        _bookWordMap.clear();
         books.forEach(book => {
-            (book.words || []).forEach(item => _bookWordIds.add(item.word.toLowerCase()));
+            const wordSet = new Set<string>();
+            (book.words || []).forEach(item => {
+                const text = item.word.toLowerCase();
+                _bookWordIds.add(text);
+                wordSet.add(text);
+            });
+            _bookWordMap.set(book.id, wordSet);
         });
         _notifyChanges();
     } catch (e) { console.error("Failed to refresh word book index", e); }
@@ -317,7 +331,7 @@ export function getStats() { return _statsCache; }
 export function getAllWords(): VocabularyItem[] { return Array.from(_allWords.values()); }
 export function getWordById(id: string): VocabularyItem | undefined { return _allWords.get(id); }
 
-export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', sourceFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' = 'all'): { words: VocabularyItem[], totalCount: number } {
+export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', sourceFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = ''): { words: VocabularyItem[], totalCount: number } {
     const allItems = Array.from(_allWords.values()).filter(w => w.userId === userId);
     let baseItems = allItems;
     if (filterTypes.includes('duplicate')) {
@@ -328,7 +342,27 @@ export function getWordsPaged(userId: string, page: number, pageSize: number, qu
         baseItems = baseItems.filter(item => duplicateWords.has(item.word.toLowerCase().trim()));
     }
     const otherFilterTypes = filterTypes.filter(t => t !== 'duplicate');
-    const filtered = baseItems.filter(item => filterItem(item, query, otherFilterTypes, refinedFilter, statusFilter, registerFilter, sourceFilter, groupFilter, compositionFilter, _composedWordIds, bookFilter, _bookWordIds));
+    
+    // Process book IDs if specific book filter is requested
+    let specificBookWords: Set<string> | null = null;
+    if (bookFilter === 'specific' && specificBookId) {
+        specificBookWords = _bookWordMap.get(specificBookId) || null;
+    }
+
+    const filtered = baseItems.filter(item => {
+        // First check standard filters
+        if (!filterItem(item, query, otherFilterTypes, refinedFilter, statusFilter, registerFilter, sourceFilter, groupFilter, compositionFilter, _composedWordIds, bookFilter === 'specific' ? 'all' : bookFilter, _bookWordIds)) {
+            return false;
+        }
+
+        // Apply Specific Book filter if active
+        if (bookFilter === 'specific' && specificBookWords) {
+            return specificBookWords.has(item.word.toLowerCase());
+        }
+
+        return true;
+    });
+
     if (filterTypes.includes('duplicate')) filtered.sort((a, b) => a.word.localeCompare(b.word) || a.createdAt - b.createdAt);
     else filtered.sort((a, b) => b.createdAt - a.createdAt);
     const start = page * pageSize;

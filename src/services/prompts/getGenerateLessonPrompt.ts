@@ -10,52 +10,38 @@ export interface LessonGenerationParams {
 export function getGenerateLessonPrompt(params: LessonGenerationParams): string {
   const { topic, language, targetAudience, tone, coachName } = params;
 
-  // Set audio tag based on user's language preference
-  const audioTag = language === 'Vietnamese' ? 'Audio-VN' : 'Audio-EN';
-
   return `You are an expert educational content creator.
-  ROLE: You are '${coachName}', acting as a ${tone === 'friendly_elementary' ? 'friendly teacher' : 'professional professor'}.
+  ROLE: You are '${coachName}'.
 
-  STRICT LANGUAGE RULES:
-  1. CORE MATERIAL (Vocabulary Lists, Example Sentences, Exercises): Must be in English.
-  2. META CONTENT (Greetings, CONCEPT DEFINITIONS, Explanations, Strategy Tips): In ${language}.
-  
-  FORMATTING RULES (CRITICAL):
-  - **VOCAB LISTS**: If you are listing simple words (like pronouns, basic nouns), do NOT put them one-per-line. List them on a SINGLE line separated by commas or bullets.
-  - **NUMBERED LISTS**: Use sequential numbering (e.g., 1., 2., 3.) for ordered lists.
-  - **DEFINITIONS**: Treat definitions (e.g., "A pronoun is...") as explanations. They MUST be wrapped in audio tags and written in ${language}.
-  - **INTERACTIVE ELEMENTS**:
-    - **Hidden/Reveal**: Use \`[HIDDEN: content]\` for answers to questions, key takeaways, or pop-quiz answers.
-    - **Tips**: Use \`[Content]\` (text inside brackets on a NEW LINE) for strategy tips, exam advice, or important notes.
-    - **Fill-in Quiz**: Use \`[Quiz: answer]\` for input fields.
-    - **Multi Choice Buttons**: Use \`[Multi: Correct | Option | Option]\`.
-    - **Dropdown Select**: Use \`[Select: Correct | Option | Option]\`. (Good for sentence completion with hints).
+  STRICT CONTENT RULES:
+  1. **NO LINGUISTIC THEORY**: Don't define what idioms/collocations are. Explain the specific phrase "${topic}" only.
+  2. **NO ENGLISH IN VN TAGS**: Every English word MUST be in [Audio-EN]. Break [Audio-VN] tags to accommodate this.
+     Example: [Audio-VN]Cụm từ[/] [Audio-EN]from the horse's mouth[/] [Audio-VN]nghĩa là...[/]
+  3. **TRANSLATE TERMS**: Use "thành ngữ", "ví dụ", "cụm từ" instead of "idiom", "example", "collocation" inside Vietnamese blocks.
+  4. **NO EMPTY/PUNCTUATION TAGS**: Absolutely no tags like [Audio-VN].[/].
+  5. **NO IPA**: Do not include phonetic symbols in audio tags.
 
-  AUDIO BLOCK RULE (TOKEN SAVER - CRITICAL):
-  - **WRAP ONLY META CONTENT**: Only wrap your explanations, greetings, and definitions inside \`[${audioTag}]\` and \`[/]\`.
-  - **EXCLUDE CORE MATERIAL**: Do NOT wrap vocabulary lists meant for study or exercises inside audio tags.
-  - **NO HEADERS INSIDE**: Do NOT wrap headers (##) inside audio tags.
-  
-  EXAMPLE OF CORRECT STRUCTURE:
-    ## What Is a Pronoun?
-    [${audioTag}]
-    ${language === 'Vietnamese' ? 'Đại từ là từ dùng để thay thế cho danh từ để tránh lặp lại đấy con!' : 'A pronoun is a word used to replace a noun to avoid repetition!'}
-    [/]
-    [Remember: Pronouns must agree with the noun!]
-    * I, You, He, She, It, We, They
-    
-    1. What replaces a noun?
-    Answer: [HIDDEN: A pronoun]
-    
-    2. Give an example.
-    Answer: [Select: He | The | A]
+  COMPACT LAYOUT RULES:
+  - **NO HORIZONTAL LINES**: Do not use "---" or any thematic breaks.
+  - **MINIMAL SPACING**: Use single newlines for standard separation. Use double newlines (\n\n) ONLY between major sections. NEVER use triple newlines.
+  - **AUDIO TAG INTEGRITY**: Ensure the text inside [Audio-XX]...[/] does NOT contain actual line breaks.
 
-  TASK: Create a lesson for a ${targetAudience} on topic: "${topic}".
+  INTERACTIVE QUIZ RULES:
+  - **PRIORITIZE SELECTION**: Use [Select: Correct | Distractor 1 | Distractor 2] for context-based blanks.
+  - **USE MULTI-CHOICE**: Use [Multi: Correct | Distractor 1 | Distractor 2] for choosing between meanings or synonyms.
+  - **AVOID AMBIGUOUS FILL-INS**: Only use [Quiz: answer] if the answer is 100% unique and obvious (e.g., a fixed preposition). If multiple synonyms could fit, you MUST use [Select: ...].
+  - **GOOD DISTRACTORS**: For [Select], use distractors that make sense grammatically but are slightly off in meaning or collocation nuance.
+
+  LANGUAGE RULES:
+  - CORE MATERIAL: English.
+  - EXPLANATIONS: ${language}.
+
+  TASK: Create a focused lesson for a ${targetAudience} on topic: "${topic}".
 
   OUTPUT: Return a single JSON object:
   {
     "title": "string",
     "description": "string",
-    "content": "string (Markdown using the [${audioTag}]...[/] wrappers, [HIDDEN:...] blocks, [Quiz:...], [Multi:...] and [Select:...] tags)"
+    "content": "string (Markdown with interactive tags and Audio tags. Apply strict tag splitting and term translation.)"
   }`;
 }

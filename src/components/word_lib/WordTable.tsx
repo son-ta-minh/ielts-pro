@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
@@ -26,6 +25,7 @@ interface PersistedFilters {
     sourceFilter?: SourceFilter;
     compositionFilter?: CompositionFilter;
     bookFilter?: BookFilter;
+    specificBookId?: string;
     isFilterMenuOpen?: boolean;
     page?: number;
     pageSize?: number;
@@ -41,7 +41,7 @@ interface Props {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onSearch: (query: string) => void;
-  onFilterChange: (filters: { types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, source: SourceFilter, composition: CompositionFilter, book: BookFilter }) => void;
+  onFilterChange: (filters: { types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, source: SourceFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }) => void;
   onAddWords: (wordsInput: string, types: Set<WordTypeOption>) => Promise<void>;
   onViewWord: (word: VocabularyItem) => void; // This is for OPENING the view modal
   onEditWord: (word: VocabularyItem) => void; // This is for OPENING the edit modal
@@ -94,6 +94,7 @@ const WordTable: React.FC<Props> = ({
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(persistedFilters.sourceFilter || 'all');
   const [compositionFilter, setCompositionFilter] = useState<CompositionFilter>(persistedFilters.compositionFilter || 'all');
   const [bookFilter, setBookFilter] = useState<BookFilter>(persistedFilters.bookFilter || 'all');
+  const [specificBookId, setSpecificBookId] = useState<string>(persistedFilters.specificBookId || '');
   
   const [isAddExpanded, setIsAddExpanded] = useState(false);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(persistedFilters.isFilterMenuOpen || false);
@@ -115,11 +116,12 @@ const WordTable: React.FC<Props> = ({
         sourceFilter,
         compositionFilter,
         bookFilter,
+        specificBookId,
         isFilterMenuOpen,
         page,      // Save current page
         pageSize   // Save current pageSize
     });
-  }, [query, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, isFilterMenuOpen, page, pageSize]);
+  }, [query, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, specificBookId, isFilterMenuOpen, page, pageSize]);
 
   // New state for Word Type selection in Quick Add
   // Default to 'vocab' selected
@@ -188,7 +190,7 @@ const WordTable: React.FC<Props> = ({
   }, [query]);
 
   useEffect(() => {
-      onFilterChange({ types: activeFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, source: sourceFilter, composition: compositionFilter, book: bookFilter });
+      onFilterChange({ types: activeFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, source: sourceFilter, composition: compositionFilter, book: bookFilter, specificBookId });
       
       // If it's the first mount, do NOT reset the page to 0. 
       // Allow WordList to initialize it from storage.
@@ -198,7 +200,7 @@ const WordTable: React.FC<Props> = ({
           onPageChange(0);
           setSelectedIds(new Set());
       }
-  }, [activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter]);
+  }, [activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, specificBookId]);
 
   useEffect(() => { if (notification) { const t = setTimeout(() => setNotification(null), 4000); return () => clearTimeout(t); } }, [notification]);
 
@@ -541,11 +543,20 @@ const WordTable: React.FC<Props> = ({
     setSelectedIds(new Set());
   };
 
+  // Pre-fetch books list for the specific book filter dropdown
+  useEffect(() => {
+    const fetchBooks = async () => {
+        const allBooks = await db.getWordBooksByUserId(user.id);
+        setAvailableBooks(allBooks);
+    };
+    fetchBooks();
+  }, [user.id]);
+
   const uiProps: Omit<WordTableUIProps, 'viewingWord' | 'setViewingWord' | 'editingWord' | 'setEditingWord'> = {
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
     onPractice, context, onDelete,
     onViewWord, onEditWord,
-    query, setQuery, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, isAddExpanded,
+    query, setQuery, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, specificBookId, onSpecificBookChange: setSpecificBookId, isAddExpanded,
     isFilterMenuOpen, quickAddInput, setQuickAddInput, isAdding, isViewMenuOpen,
     selectedIds, setSelectedIds, 
     wordToDelete, setWordToDelete, isDeleting, setIsDeleting,

@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
@@ -38,7 +37,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
   const [loading, setLoading] = useState(true);
   
   const [currentQuery, setCurrentQuery] = useState(savedState.query || '');
-  const [currentFilters, setCurrentFilters] = useState<{ types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, source: SourceFilter, composition: CompositionFilter, book: BookFilter }>({ types: new Set(['all']), refined: 'all', status: 'all', register: 'all', source: 'all', composition: 'all', book: 'all' });
+  const [currentFilters, setCurrentFilters] = useState<{ types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, source: SourceFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }>({ types: new Set(['all']), refined: 'all', status: 'all', register: 'all', source: 'all', composition: 'all', book: 'all', specificBookId: '' });
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   
   const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
@@ -191,7 +190,8 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
         currentFilters.source, 
         selectedTag, 
         currentFilters.composition,
-        currentFilters.book
+        currentFilters.book,
+        currentFilters.specificBookId
       );
       setTotal(totalCount);
       setWords(data);
