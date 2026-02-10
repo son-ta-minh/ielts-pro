@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User } from '../../app/types';
 import { getAllUsers, saveUser } from '../../app/db';
@@ -50,7 +49,7 @@ const AuthView: React.FC<Props> = ({ onLogin }) => {
         setHasApiKey(hasKey);
       }
       
-      const allUsers = await getAllUsers();
+      const allUsers = (await getAllUsers()).filter(u => !u.name.toLowerCase().includes('book'));
       setUsers(allUsers);
     } catch (err) {
       console.error("Auth initialization error:", err);

@@ -1,8 +1,7 @@
-
 /**
  * Unified Vocab Pro Server
  * Features:
- * 1. Streaming Backup System (Unlimited size, low RAM usage)
+ * 1. Streaming Backup System (Unlimited size, low RAM usage) with daily rotation.
  * 2. Local macOS TTS (High quality, unlimited usage)
  * 3. HTTPS Support (Auto-detects certificates)
  * 4. Dynamic Configuration
@@ -29,6 +28,7 @@ try {
 const args = minimist(process.argv.slice(2));
 const PORT = args.p || args.port || process.env.PORT || 3000;
 const HOST = '0.0.0.0';
+const DAILY_BACKUP_RETENTION = 3; // Keep the last 3 daily backups
 
 // Directories
 const AUDIO_DIR = path.join(__dirname, 'audio');
@@ -118,14 +118,25 @@ function sanitizeToAscii(str) {
         .replace(/[^a-zA-Z0-9\-_]/g, "_");
 }
 
-function getMetaPath() {
-    return path.join(BACKUP_DIR, META_FILENAME);
+function getAppBackupPath(appName, createIfNotExist = false) {
+    if (!appName) return null;
+    const safeAppName = sanitizeToAscii(appName);
+    const appDir = path.join(BACKUP_DIR, safeAppName);
+    if (createIfNotExist && !fs.existsSync(appDir)) {
+        fs.mkdirSync(appDir, { recursive: true });
+    }
+    return appDir;
 }
 
-function loadMetadata() {
+function getMetaPath(appDir) {
+    if (!appDir) return null;
+    return path.join(appDir, META_FILENAME);
+}
+
+function loadMetadata(appDir) {
     try {
-        const p = getMetaPath();
-        if (fs.existsSync(p)) {
+        const p = getMetaPath(appDir);
+        if (p && fs.existsSync(p)) {
             return JSON.parse(fs.readFileSync(p, 'utf8'));
         }
     } catch (e) {
@@ -134,9 +145,12 @@ function loadMetadata() {
     return {};
 }
 
-function saveMetadata(data) {
+function saveMetadata(data, appDir) {
     try {
-        fs.writeFileSync(getMetaPath(), JSON.stringify(data, null, 2));
+        const p = getMetaPath(appDir);
+        if (p) {
+            fs.writeFileSync(p, JSON.stringify(data, null, 2));
+        }
     } catch (e) {
         console.error("[Meta] Failed to save metadata", e);
     }
@@ -148,7 +162,7 @@ app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
         backupDir: BACKUP_DIR,
-        ttsEngine: process.platform === 'darwin' ? 'macOS' : 'mock'
+        ttsEngine: process.platform === 'darwin' ? 'mock' : 'mock'
     });
 });
 
@@ -189,62 +203,126 @@ app.post('/api/config/backup-path', (req, res) => {
     }
 });
 
-// --- Feature 1: Backup System (Streaming) ---
+// --- Feature 1: Backup System (Streaming with Daily Rotation) ---
 
-app.get('/api/backups', (req, res) => {
-    const meta = loadMetadata();
+app.get('/api/backups', async (req, res) => {
+    const appName = req.query.app;
+    if (!appName) {
+        return res.status(400).json({ error: 'app parameter is required' });
+    }
+    
+    const appDir = getAppBackupPath(appName);
+    if (!appDir || !fs.existsSync(appDir)) {
+        return res.json({ backups: [] });
+    }
 
-    fs.readdir(BACKUP_DIR, (err, files) => {
-        if (err) {
-            console.error(`[Backup] List error: ${err.message}`);
-            return res.status(500).json({ error: 'Failed to scan backup directory' });
+    const meta = loadMetadata(appDir);
+
+    const readDirSafe = async (dir) => {
+        try {
+            if (fs.existsSync(dir)) {
+                const files = await fs.promises.readdir(dir);
+                return files.map(file => ({ file, dir }));
+            }
+        } catch (e) {
+            console.error(`[Backup] Error reading dir ${dir}:`, e.message);
         }
+        return [];
+    };
 
-        const backups = files
-            .filter(file => file.startsWith('backup_') && file.endsWith('.json'))
-            .map(file => {
-                const filePath = path.join(BACKUP_DIR, file);
+    try {
+        const allFilesPromises = [
+            readDirSafe(appDir) // MODIFIED: Do not read from archive
+        ];
+        const allFilesNested = await Promise.all(allFilesPromises);
+        const allFiles = allFilesNested.flat();
+
+        const backups = allFiles
+            .filter(({ file }) => file.startsWith('backup_') && file.endsWith('.json'))
+            .map(({ file, dir }) => {
+                const filePath = path.join(dir, file);
                 try {
                     const stats = fs.statSync(filePath);
-                    // Extract identifier from "backup_{identifier}.json"
-                    const id = file.slice(7, -5); 
-                    
-                    // Use display name from metadata if available, otherwise prettify the filename
-                    const displayName = meta[file]?.displayName || id.replace(/_/g, ' ');
+                    const id = file.startsWith('backup_') ? file.substring(7, file.lastIndexOf('.json')) : file;
+                    const displayName = meta[file]?.displayName || id.replace(/_\d{4}-\d{2}-\d{2}$/, '').replace(/_/g, ' ');
 
-                    return {
-                        id: id, // The identifier used for restore (the filename part)
-                        name: displayName, 
-                        size: stats.size,
-                        date: stats.mtime
-                    };
+                    return { id, name: displayName, size: stats.size, date: stats.mtime };
                 } catch (e) {
                     return null;
                 }
             })
             .filter(Boolean)
-            .sort((a, b) => new Date(b.date) - new Date(a.date)); // Newest first
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
 
         res.json({ backups });
-    });
+
+    } catch (err) {
+        console.error(`[Backup] List error: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to scan backup directories' });
+    }
 });
 
 app.post('/api/backup', (req, res) => {
-    // Prefer username, fallback to userId
-    const identifier = req.query.username || req.query.userId;
+    const appName = req.query.app;
+    if (!appName) {
+        return res.status(400).json({ error: 'app parameter is required' });
+    }
+    
+    const appDir = getAppBackupPath(appName, true); // Create directory if it doesn't exist
+    if (!appDir) {
+        return res.status(500).json({ error: 'Could not resolve app backup path' });
+    }
 
+    const identifier = req.query.username || req.query.userId;
     if (!identifier) {
         return res.status(400).json({ error: 'Missing username or userId in query parameters.' });
     }
 
-    // Sanitize filename to ASCII (e.g. Đình -> Dinh)
     const safeIdentifier = sanitizeToAscii(identifier);
     const fileName = `backup_${safeIdentifier}.json`;
-    const filePath = path.join(BACKUP_DIR, fileName);
+    const filePath = path.join(appDir, fileName);
+
+    try {
+        if (fs.existsSync(filePath)) {
+            const stats = fs.statSync(filePath);
+            const today = new Date().toISOString().split('T')[0];
+            const lastModDate = new Date(stats.mtime).toISOString().split('T')[0];
+
+            if (today !== lastModDate) {
+                console.log(`[Backup] New day detected. Archiving previous day's data for ${safeIdentifier}.`);
+                
+                const archiveDir = path.join(appDir, 'archive');
+                if (!fs.existsSync(archiveDir)) {
+                    fs.mkdirSync(archiveDir, { recursive: true });
+                }
+
+                const archiveFileName = `backup_${safeIdentifier}_${lastModDate}.json`;
+                const archivePath = path.join(archiveDir, archiveFileName);
+                
+                fs.copyFileSync(filePath, archivePath);
+                console.log(`[Backup] Archived '${fileName}' to '${archivePath}'`);
+
+                // Retention policy: Keep the last N daily backups
+                const allArchivedFiles = fs.readdirSync(archiveDir);
+                const userArchives = allArchivedFiles
+                    .filter(f => f.startsWith(`backup_${safeIdentifier}_`) && f.endsWith('.json'))
+                    .sort();
+
+                if (userArchives.length > DAILY_BACKUP_RETENTION) {
+                    const filesToDelete = userArchives.slice(0, userArchives.length - DAILY_BACKUP_RETENTION);
+                    filesToDelete.forEach(fileToDelete => {
+                        fs.unlinkSync(path.join(archiveDir, fileToDelete));
+                        console.log(`[Backup] Rotated out old backup: ${fileToDelete} from archive.`);
+                    });
+                }
+            }
+        }
+    } catch (backupErr) {
+        console.error(`[Backup] Daily archival process failed: ${backupErr.message}. The main backup will still proceed.`);
+    }
+
     const writeStream = fs.createWriteStream(filePath);
-
     console.log(`[Backup] Receiving stream for: ${identifier} -> ${fileName}`);
-
     req.pipe(writeStream);
 
     writeStream.on('finish', () => {
@@ -252,16 +330,15 @@ app.post('/api/backup', (req, res) => {
             const stats = fs.statSync(filePath);
             const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
             
-            // Save metadata to map the clean filename back to the original display name
-            const meta = loadMetadata();
+            const meta = loadMetadata(appDir);
             meta[fileName] = {
-                displayName: identifier, // "Đình"
+                displayName: identifier,
                 originalId: req.query.userId,
                 updatedAt: Date.now()
             };
-            saveMetadata(meta);
+            saveMetadata(meta, appDir);
 
-            console.log(`[Backup] Saved ${sizeMB} MB for ${identifier}`);
+            console.log(`[Backup] Saved ${sizeMB} MB for ${identifier} in app '${appName}'`);
             res.json({ success: true, size: stats.size, timestamp: Date.now() });
         } catch (err) {
             console.error(`[Backup] Stat error: ${err.message}`);
@@ -275,23 +352,32 @@ app.post('/api/backup', (req, res) => {
     });
 });
 
-app.get('/api/backup/:identifier', (req, res) => {
-    const identifier = req.params.identifier;
-    console.log(`[Backup] Request received for restore: ${identifier}`);
-    
-    // Sanitize again to ensure we match the storage convention
-    // If client sends "Dinh" (from list ID), it remains "Dinh".
-    // If client sends "Đình" (from user input?), it becomes "Dinh".
-    const safeIdentifier = sanitizeToAscii(identifier);
-    const fileName = `backup_${safeIdentifier}.json`;
-    const filePath = path.join(BACKUP_DIR, fileName);
 
-    if (!fs.existsSync(filePath)) {
-        console.warn(`[Backup] No file found at ${filePath}`);
-        return res.status(404).json({ error: `No backup found for ${identifier} (file: ${fileName}).` });
+app.get('/api/backup/:identifier', (req, res) => {
+    const appName = req.query.app;
+    if (!appName) {
+        return res.status(400).json({ error: 'app parameter is required' });
+    }
+    
+    const appDir = getAppBackupPath(appName);
+    if (!appDir || !fs.existsSync(appDir)) {
+        return res.status(404).json({ error: `No backups found for app ${appName}.` });
     }
 
-    console.log(`[Backup] Streaming download for: ${fileName}`);
+    const identifier = req.params.identifier;
+    console.log(`[Backup] Request received for restore: ${identifier} in app '${appName}'`);
+    
+    const safeIdentifier = sanitizeToAscii(identifier);
+    const fileName = `backup_${safeIdentifier}.json`;
+    const filePath = path.join(appDir, fileName);
+
+    // MODIFIED: Do not check archive directory.
+    if (!fs.existsSync(filePath)) {
+        console.warn(`[Backup] No backup file found for identifier '${identifier}' in app '${appName}'. Looked for: ${filePath}`);
+        return res.status(404).json({ error: `No backup found for ${identifier}.` });
+    }
+
+    console.log(`[Backup] Streaming download for: ${filePath}`);
 
     const readStream = fs.createReadStream(filePath);
     readStream.on('error', (err) => {
@@ -303,6 +389,7 @@ app.get('/api/backup/:identifier', (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     readStream.pipe(res);
 });
+
 
 // --- Feature 2: TTS System (macOS 'say') ---
 

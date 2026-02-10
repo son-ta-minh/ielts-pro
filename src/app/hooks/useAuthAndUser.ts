@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { User, AppView } from '../types';
 import { getAllUsers, saveUser, seedDatabaseIfEmpty } from '../db';
@@ -22,7 +21,7 @@ export const useAuthAndUser = () => {
         const manualRestoreFlag = localStorage.getItem('vocab_pro_auto_restore');
         
         // Check current DB state
-        let currentUsers = await getAllUsers();
+        let currentUsers = (await getAllUsers()).filter(u => !u.name.toLowerCase().includes('book'));
         
         // --- SMART AUTO-RESTORE LOGIC ---
         // 1. Manual Flag: User clicked "Refresh" in Error Modal.
@@ -50,7 +49,7 @@ export const useAuthAndUser = () => {
                     }
 
                     // Re-fetch users after successful restore to update state
-                    currentUsers = await getAllUsers();
+                    currentUsers = (await getAllUsers()).filter(u => !u.name.toLowerCase().includes('book'));
                     
                     // If we restored successfully, ensure local storage aligns with restored user
                     if (result.updatedUser) {
@@ -77,7 +76,7 @@ export const useAuthAndUser = () => {
         await seedDatabaseIfEmpty();
         
         // Re-fetch one last time to be sure we have the latest state (post-restore or post-seed)
-        const allUsers = await getAllUsers();
+        const allUsers = (await getAllUsers()).filter(u => !u.name.toLowerCase().includes('book'));
         
         let userToLogin: User | null = null;
         

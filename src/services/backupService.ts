@@ -1,4 +1,3 @@
-
 import { generateJsonExport, processJsonImport, ImportResult, _mapToShortKeys, _mapUserToShortKeys } from '../utils/dataHandler';
 import { User, DataScope } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
@@ -37,7 +36,7 @@ export const performAutoBackup = async (userId: string, user: User, force: boole
         
         // Pass username as query param. Server logic prioritizes username for filename if present.
         const usernameParam = user.name ? `&username=${encodeURIComponent(user.name)}` : '';
-        const response = await fetch(`${serverUrl}/api/backup?userId=${encodeURIComponent(userId)}${usernameParam}`, {
+        const response = await fetch(`${serverUrl}/api/backup?userId=${encodeURIComponent(userId)}${usernameParam}&app=vocab`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: payloadString 
@@ -73,7 +72,7 @@ export const fetchServerBackups = async (): Promise<ServerBackupItem[]> => {
     try {
         const config = getConfig();
         const serverUrl = getServerUrl(config);
-        const response = await fetch(`${serverUrl}/api/backups`);
+        const response = await fetch(`${serverUrl}/api/backups?app=vocab`);
         if (response.ok) {
             const data = await response.json();
             return data.backups || [];
@@ -92,7 +91,7 @@ export const restoreFromServer = async (identifier: string): Promise<ImportResul
         // Note: Server URL comes from LocalStorage, so it persists even if DB is lost.
         
         // Use the generic identifier (can be username or userId)
-        const targetUrl = `${serverUrl}/api/backup/${encodeURIComponent(identifier)}?t=${Date.now()}`;
+        const targetUrl = `${serverUrl}/api/backup/${encodeURIComponent(identifier)}?t=${Date.now()}&app=vocab`;
 
         const response = await fetch(targetUrl, {
             method: 'GET',
