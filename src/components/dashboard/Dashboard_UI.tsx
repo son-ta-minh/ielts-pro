@@ -19,7 +19,7 @@ const WordOfTheDay: React.FC<{
   if (!word) {
     return (
         <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col items-center justify-center text-center">
-            <Sparkles size={32} className="text-neutral-300 mb-4"/>
+            <span className="text-3xl mb-3">✨</span>
             <h4 className="font-bold text-neutral-400">Word of the Day</h4>
             <p className="text-xs text-neutral-300">Add words to your library to see one here.</p>
         </div>
@@ -219,34 +219,6 @@ const LibraryHealthPanel: React.FC<{
   onViewLibrary: () => void;
 }> = ({ totalCount, newCount, rawCount, refinedCount, reviewStats, onRefineRaw, onVerifyRefined, onViewLibrary }) => {
   
-  // Debug State for Centering
-  const [offset, setOffset] = useState({ x: 11, y: 13 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0 });
-  const startOffset = useRef({ x: 0, y: 0 });
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX, y: e.clientY };
-    startOffset.current = { ...offset };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
-    e.preventDefault();
-    const dx = e.clientX - dragStart.current.x;
-    const dy = e.clientY - dragStart.current.y;
-    setOffset({ x: startOffset.current.x + dx, y: startOffset.current.y + dy });
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    setIsDragging(false);
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-  };
-
   const chartData = [
     { name: 'New', value: newCount, color: '#3b82f6' }, // blue-500
     { name: 'Learning', value: reviewStats.learned, color: '#06b6d4' }, // cyan-500
@@ -267,7 +239,7 @@ const LibraryHealthPanel: React.FC<{
 
       <div className="flex-grow flex items-start justify-center gap-6 pt-1 pb-4">
         {/* Chart Section */}
-        <div className="h-40 w-40 relative select-none shrink-0">
+        <div className="h-40 w-40 relative select-none shrink-0 flex items-center justify-center">
              <PieChart width={160} height={160}>
                 <Pie
                     data={activeData}
@@ -297,27 +269,12 @@ const LibraryHealthPanel: React.FC<{
                      }}
                 />
             </PieChart>
-             {/* Center Text - Draggable for Calibration */}
-             <div 
-                className="absolute inset-0 flex flex-col items-center justify-center cursor-move z-10"
-                style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                title="Drag to adjust position"
-             >
-                 <span className="text-2xl font-black text-neutral-900 leading-none pointer-events-none">{totalCount}</span>
-                 <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest mt-1 pointer-events-none">Total</span>
-             </div>
              
-             {/* Debug Coordinates display - Hidden if default */}
-             {(offset.x !== 11 || offset.y !== 13) && (
-                 <div className="absolute -bottom-4 left-0 right-0 text-center z-20">
-                     <span className="text-[8px] font-mono bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-500">
-                        x: {Math.round(offset.x)}, y: {Math.round(offset.y)}
-                     </span>
-                 </div>
-             )}
+             {/* Centered Total Label - Robust implementation using absolute positioning and flexbox */}
+             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                 <span className="text-2xl font-black text-neutral-900 leading-none">{totalCount}</span>
+                 <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest mt-1">Total</span>
+             </div>
         </div>
 
         {/* Legend Section */}
@@ -335,8 +292,8 @@ const LibraryHealthPanel: React.FC<{
       </div>
       
       <div className="mt-2 flex flex-col sm:flex-row gap-2">
-        <button onClick={onRefineRaw} disabled={rawCount === 0} className="flex-1 justify-between px-3 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center hover:bg-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:hover:bg-indigo-50 border border-indigo-100 shadow-sm"><div className="flex items-center space-x-1.5"><Wand2 size={12} /><span>REFINE RAW</span></div><span className="px-1.5 py-0.5 bg-indigo-200/50 rounded-md font-black">{rawCount}</span></button>
-        <button onClick={onVerifyRefined} disabled={refinedCount === 0} className="flex-1 justify-between px-3 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center hover:bg-emerald-100 transition-all active:scale-95 disabled:opacity-50 disabled:hover:bg-emerald-50 border border-emerald-100 shadow-sm"><div className="flex items-center space-x-1.5"><ShieldCheck size={12} /><span>VERIFY REFINED</span></div><span className="px-1.5 py-0.5 bg-emerald-200/50 rounded-md font-black">{refinedCount}</span></button>
+        <button onClick={onRefineRaw} disabled={rawCount === 0} className="flex-1 justify-between px-3 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center hover:bg-indigo-100 transition-all active:scale-95 disabled:opacity-50 border border-indigo-100 shadow-sm"><div className="flex items-center space-x-1.5"><Wand2 size={12} /><span>REFINE RAW</span></div><span className="px-1.5 py-0.5 bg-indigo-200/50 rounded-md font-black">{rawCount}</span></button>
+        <button onClick={onVerifyRefined} disabled={refinedCount === 0} className="flex-1 justify-between px-3 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center hover:bg-emerald-100 transition-all active:scale-95 disabled:opacity-50 border border-emerald-100 shadow-sm"><div className="flex items-center space-x-1.5"><ShieldCheck size={12} /><span>VERIFY REFINED</span></div><span className="px-1.5 py-0.5 bg-emerald-200/50 rounded-md font-black">{refinedCount}</span></button>
       </div>
     </div>
   );
@@ -362,7 +319,7 @@ export interface DashboardUIProps {
   onRestore: (mode: 'server' | 'file') => void;
   dayProgress: { learned: number; reviewed: number; learnedWords: VocabularyItem[]; reviewedWords: VocabularyItem[]; };
   dailyGoals: DailyGoalConfig;
-  isWotdComposed?: boolean;
+  isWotdComposed: boolean;
   onComposeWotd?: (word: VocabularyItem) => void;
   onRandomizeWotd?: () => void;
   serverStatus: 'connected' | 'disconnected';
