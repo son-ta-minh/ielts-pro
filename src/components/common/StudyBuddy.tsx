@@ -1,11 +1,12 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { User, AppView } from '../../app/types';
-import { X, MessageSquare, RotateCw, Square, BookOpen, Languages, Book, Volume2, Sparkles, Mic, Waves, MousePointer2 } from 'lucide-react';
-import { getConfig, saveConfig, SystemConfig } from '../../app/settingsManager';
+import { User, AppView, WordQuality } from '../../app/types';
+import { X, MessageSquare, RotateCw, Square, BookOpen, Languages, Book, Volume2, Sparkles, Mic, Waves, MousePointer2, ExternalLink, BookMarked, Loader2, Plus, Binary } from 'lucide-react';
+import { getConfig, saveConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, getIsSpeaking } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
+import * as dataStore from '../../app/dataStore';
+import { createNewWord } from '../../utils/srs';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 300;
@@ -47,171 +48,155 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
     const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
     
-    // Refs
+    const [isCambridgeChecking, setIsCambridgeChecking] = useState(false);
+    const [isCambridgeValid, setIsCambridgeValid] = useState(false);
+    const [isAlreadyInLibrary, setIsAlreadyInLibrary] = useState(false);
+    const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
+    
     const closeTimerRef = useRef<any>(null);
     const autoMessageTimerRef = useRef<any>(null);
     const commandBoxRef = useRef<HTMLDivElement>(null);
+    const checkAbortControllerRef = useRef<AbortController | null>(null);
     
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
-    
-    // Helper to determine avatar properties whether it's a key or a raw URL
-    const getAvatarProps = (avatarStr: string) => {
-        // If it looks like a URL (http, https, data:), assume it's a custom avatar
-        if (avatarStr.startsWith('http') || avatarStr.startsWith('data:')) {
-            return { url: avatarStr, bg: 'bg-white border-2 border-neutral-100' };
-        }
-        // Otherwise try to find it in definitions, or fallback
-        const def = (AVATAR_DEFINITIONS as any)[avatarStr];
-        return def || AVATAR_DEFINITIONS.woman_teacher;
-    };
-    
     const avatarInfo = getAvatarProps(coach.avatar);
+
+    function getAvatarProps(avatarStr: string) {
+        if (avatarStr.startsWith('http') || avatarStr.startsWith('data:')) return { url: avatarStr, bg: 'bg-white border-2 border-neutral-100' };
+        return (AVATAR_DEFINITIONS as any)[avatarStr] || AVATAR_DEFINITIONS.woman_teacher;
+    }
+
+    const checkCambridgeWord = async (word: string) => {
+        if (!word) return;
+        setIsCambridgeValid(false);
+        setIsCambridgeChecking(true);
+        if (checkAbortControllerRef.current) checkAbortControllerRef.current.abort();
+        checkAbortControllerRef.current = new AbortController();
+        try {
+            const serverUrl = getServerUrl(config);
+            const response = await fetch(`${serverUrl}/api/lookup/cambridge?word=${encodeURIComponent(word)}`, {
+                signal: checkAbortControllerRef.current.signal
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setIsCambridgeValid(data.exists);
+            }
+        } catch (e: any) { } finally { setIsCambridgeChecking(false); }
+    };
+
+    const checkLibraryExistence = async (word: string) => {
+        if (!word || !user.id) return;
+        const exists = await dataStore.findWordByText(user.id, word);
+        setIsAlreadyInLibrary(!!exists);
+    };
 
     useEffect(() => {
         const handleConfigUpdate = () => setConfig(getConfig());
         const handleAudioStatus = (e: any) => setIsAudioPlaying(e.detail.isSpeaking);
-        
         const handleContextMenu = (e: MouseEvent) => {
             if (!config.interface.rightClickCommandEnabled) return;
-            
             const selection = window.getSelection();
             const selectedText = selection?.toString().trim();
-            
             if (selectedText) {
                 e.preventDefault();
                 const range = selection!.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
-                
-                // Determine placement based on available space above
-                // Estimate menu height around 120px
-                const MENU_HEIGHT = 120;
-                const placement = rect.top > MENU_HEIGHT ? 'top' : 'bottom';
-
-                setMenuPos({ 
-                    x: rect.left + rect.width / 2, 
-                    y: placement === 'top' ? rect.top : rect.bottom,
-                    placement
-                });
+                const placement = rect.top > 250 ? 'top' : 'bottom';
+                setMenuPos({ x: rect.left + rect.width / 2, y: placement === 'top' ? rect.top : rect.bottom, placement });
                 setMessage(null);
                 setIsOpen(true);
-            } else {
-                setMenuPos(null);
-            }
+                checkLibraryExistence(selectedText);
+                if (selectedText.split(/\s+/).filter(Boolean).length <= 5) checkCambridgeWord(selectedText);
+                else setIsCambridgeValid(false);
+            } else setMenuPos(null);
         };
-
         const handleClickOutside = (e: MouseEvent) => {
-            // Quan trọng: Chỉ đóng menu nếu click thực sự nằm ngoài CommandBox
             if (commandBoxRef.current && !commandBoxRef.current.contains(e.target as Node)) {
-                if (isOpen) {
-                    setIsOpen(false);
-                    setMenuPos(null);
-                }
+                if (isOpen) { setIsOpen(false); setMenuPos(null); }
             }
         };
-
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
         document.addEventListener('contextmenu', handleContextMenu);
         document.addEventListener('mousedown', handleClickOutside);
-
         return () => {
             window.removeEventListener('config-updated', handleConfigUpdate);
             window.removeEventListener('audio-status-changed', handleAudioStatus);
             document.removeEventListener('contextmenu', handleContextMenu);
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [config.interface.rightClickCommandEnabled, isOpen]);
-
-    useEffect(() => {
-        if (isOpen && message && !isAudioPlaying) {
-            autoMessageTimerRef.current = setTimeout(() => {
-                if (!closeTimerRef.current) {
-                    setIsOpen(false);
-                    // Sau khi đóng hộp thoại nói, xóa tin nhắn để lần sau hiện Menu
-                    setTimeout(() => setMessage(null), 300);
-                }
-            }, 4000);
-        }
-        return () => { if (autoMessageTimerRef.current) clearTimeout(autoMessageTimerRef.current); };
-    }, [isOpen, message, isAudioPlaying]);
-
-    useEffect(() => {
-        if (!hasWelcomed && user.id) {
-            const welcomeText = `Chào ${user.name}! Sẵn sàng luyện tập cùng mình chưa?`;
-            setMessage({ text: welcomeText, icon: <Sparkles size={18} className="text-yellow-500" /> });
-            setIsOpen(true);
-            setHasWelcomed(true);
-            if (config.interface.buddyVoiceEnabled) {
-                speak(welcomeText, true, 'vi', coach.viVoice, coach.viAccent);
-            }
-        }
-    }, [hasWelcomed, user.id, user.name, config.interface.buddyVoiceEnabled, coach]);
+    }, [config.interface.rightClickCommandEnabled, isOpen, config.server, user.id]);
 
     const handleReadSelection = (lang: 'en' | 'vi' = 'en') => {
-        const selection = window.getSelection();
-        const selectedText = selection?.toString().trim();
+        const selectedText = window.getSelection()?.toString().trim();
         if (selectedText) {
-            if (selectedText.length > MAX_READ_LENGTH) {
-                showToast("Đoạn văn bản quá dài!", "error");
-                return;
-            }
-            // Clear menu before speaking
-            setIsOpen(false);
-            setMenuPos(null);
+            if (selectedText.length > MAX_READ_LENGTH) return showToast("Đoạn văn bản quá dài!", "error");
+            setIsOpen(false); setMenuPos(null);
             speak(selectedText, false, lang, lang === 'en' ? coach.enVoice : coach.viVoice, lang === 'en' ? coach.enAccent : coach.viAccent);
-        } else {
-            showToast("Bôi đen văn bản để nghe!", "info");
         }
     };
 
     const handleTranslateSelection = async () => {
         const selectedText = window.getSelection()?.toString().trim();
-        if (!selectedText) { showToast("Bôi đen để dịch!", "info"); return; }
-        
-        setIsThinking(true);
-        setIsOpen(false);
-        setMenuPos(null); // Quay lại Coach Mode để hiện loader
-        
+        if (!selectedText) return;
+        setIsThinking(true); setIsOpen(false); setMenuPos(null);
         try {
             const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(selectedText)}&langpair=en|vi`);
             const data = await res.json();
             if (data?.responseData?.translatedText) {
                 const translation = data.responseData.translatedText;
                 setMessage({ text: `**Dịch:** ${translation}`, icon: <Languages size={18} className="text-blue-500" /> });
-                setIsOpen(true);
-                // LUÔN đọc bản dịch vì đây là hành động chủ động của người dùng
-                speak(translation, false, 'vi', coach.viVoice, coach.viAccent);
+                setIsOpen(true); speak(translation, false, 'vi', coach.viVoice, coach.viAccent);
             }
-        } catch (e) { 
-            showToast("Lỗi dịch thuật!", "error"); 
-        } finally { 
-            setIsThinking(false); 
-        }
+        } catch (e) { showToast("Lỗi dịch thuật!", "error"); } finally { setIsThinking(false); }
     };
 
-    const handleDefineSelection = async () => {
+    const handleIpaConversion = async () => {
         const selectedText = window.getSelection()?.toString().trim();
-        if (!selectedText) { showToast("Bôi đen để xem định nghĩa!", "info"); return; }
+        if (!selectedText) return;
         
-        setIsThinking(true);
-        setIsOpen(false);
-        setMenuPos(null); // Quay lại Coach Mode
-        
+        setIsThinking(true); setIsOpen(false); setMenuPos(null);
         try {
-            const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(selectedText)}`);
-            if (!res.ok) throw new Error();
-            const data = await res.json();
-            const meaning = data[0].meanings[0].definitions[0].definition;
-            setMessage({ text: `**${data[0].word}**\n\n"${meaning}"`, icon: <Book size={18} className="text-emerald-500" /> });
-            setIsOpen(true);
-            // LUÔN đọc định nghĩa vì đây là hành động chủ động
-            speak(meaning, false, 'en', coach.enVoice, coach.enAccent);
-        } catch (e) { 
-            showToast("Không tìm thấy định nghĩa!", "error"); 
-        } finally { 
-            setIsThinking(false); 
-        }
+            // 1. Check local library first for an exact match (fast)
+            const cleaned = selectedText.toLowerCase();
+            const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
+            if (existing && existing.ipa) {
+                setMessage({ text: `**IPA (Thư viện):** ${existing.ipa}`, icon: <Binary size={18} className="text-emerald-500" /> });
+                setIsOpen(true);
+                setIsThinking(false);
+                return;
+            }
+
+            // 2. Fallback to Server API
+            const serverUrl = getServerUrl(config);
+            const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(selectedText)}`);
+            if (res.ok) {
+                const data = await res.json();
+                setMessage({ text: `**IPA:** ${data.ipa}`, icon: <Binary size={18} className="text-purple-500" /> });
+                setIsOpen(true);
+            }
+        } catch (e) { showToast("Lỗi Server IPA!", "error"); } finally { setIsThinking(false); }
+    };
+
+    const handleAddToLibrary = async () => {
+        const selectedText = window.getSelection()?.toString().trim();
+        if (!selectedText || isAlreadyInLibrary) return;
+        setIsAddingToLibrary(true);
+        try {
+            const newItem = { ...createNewWord(selectedText, '', '', '', '', ['coach-added'], false, false, false, false, selectedText.includes(' ')), userId: user.id, quality: WordQuality.RAW };
+            await dataStore.saveWord(newItem);
+            showToast(`"${selectedText}" đã thêm!`, 'success');
+            setIsAlreadyInLibrary(true); setIsOpen(false); setMenuPos(null);
+        } catch (e) { showToast("Lỗi thêm từ!", "error"); } finally { setIsAddingToLibrary(false); }
+    };
+
+    const handleCambridgeLookup = () => {
+        const selectedText = window.getSelection()?.toString().trim();
+        if (!selectedText) return;
+        const url = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(selectedText.toLowerCase().replace(/\s+/g, '-'))}`;
+        window.open(url, '_blank');
+        setIsOpen(false); setMenuPos(null);
     };
 
     const handleSpeakSelection = () => {
@@ -224,135 +209,54 @@ export const StudyBuddy: React.FC<Props> = ({ user, stats, currentView, onNaviga
         } else showToast("Bôi đen văn bản để luyện nói!", "info");
     };
 
-    const onMouseEnter = () => {
-        if (menuPos) return; // Nếu đang mở bằng chuột phải, bỏ qua hover
-        if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-        if (!isThinking) {
-            if (!message) {
-                setIsOpen(true);
-            } else {
-                setIsOpen(true);
-            }
-        }
-    };
-
-    const onMouseLeave = () => {
-        if (menuPos) return; // Nếu đang mở bằng chuột phải, bỏ qua hover out
-        closeTimerRef.current = setTimeout(() => {
-            if (!message) setIsOpen(false);
-        }, 300);
-    };
-
-    const toggleRightClickFeature = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        const nextConfig = { ...config, interface: { ...config.interface, rightClickCommandEnabled: !config.interface.rightClickCommandEnabled } };
-        saveConfig(nextConfig);
-        showToast(nextConfig.interface.rightClickCommandEnabled ? "Right-click commands enabled" : "Right-click commands disabled", "info");
-    };
-
     const CommandBox = () => (
-        <div ref={commandBoxRef} className="bg-white/90 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[130px] animate-in fade-in zoom-in-95 duration-200">
-            <div className="grid grid-cols-6 gap-1">
-                <button type="button" onClick={handleTranslateSelection} className="col-span-2 aspect-square bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center transition-all hover:bg-indigo-100 active:scale-90 border border-indigo-100/50 shadow-sm" title="Dịch Tiếng Việt">
-                    <Languages size={15}/>
-                </button>
-                <button type="button" onClick={handleDefineSelection} className="col-span-2 aspect-square bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center transition-all hover:bg-emerald-100 active:scale-90 border border-emerald-100/50 shadow-sm" title="Định nghĩa">
-                    <Book size={15}/>
-                </button>
-                <button type="button" onClick={handleSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center transition-all hover:bg-amber-100 active:scale-90 border border-amber-100/50 shadow-sm" title="Luyện nói (Mimic)">
-                    <Mic size={15} />
-                </button>
-                <button type="button" onClick={() => handleReadSelection('en')} className="col-span-3 aspect-[3/2] bg-neutral-100 text-neutral-500 rounded-2xl flex items-center justify-center transition-all hover:bg-neutral-200 active:scale-95 border border-neutral-200/50" title="Nghe Tiếng Anh">
-                    <BookOpen size={15} fill="currentColor"/>
-                </button>
-                <button type="button" onClick={() => handleReadSelection('vi')} className="col-span-3 aspect-[3/2] bg-rose-50 text-rose-400 rounded-2xl flex items-center justify-center transition-all hover:bg-rose-100 active:scale-95 border border-rose-100/50" title="Nghe Tiếng Việt">
-                    <Volume2 size={15} />
-                </button>
+        <div ref={commandBoxRef} className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200">
+            <div className="grid grid-cols-3 gap-1">
+                <button type="button" onClick={handleTranslateSelection} className="aspect-square bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm" title="Dịch"><Languages size={15}/></button>
+                <button type="button" onClick={handleAddToLibrary} disabled={isAlreadyInLibrary || isAddingToLibrary} className={`aspect-square rounded-2xl flex items-center justify-center transition-all shadow-sm ${isAlreadyInLibrary ? 'bg-neutral-100 text-neutral-400' : 'bg-green-50 text-green-600 hover:bg-green-100'}`} title="Thêm">{isAddingToLibrary ? <Loader2 size={14} className="animate-spin"/> : <Plus size={15}/></button>
+                <button type="button" onClick={handleIpaConversion} className="aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="IPA"><Binary size={15}/></button>
+                
+                <button type="button" onClick={handleSpeakSelection} className="aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-90 shadow-sm" title="Mimic"><Mic size={15}/></button>
+                <button type="button" onClick={handleCambridgeLookup} disabled={isCambridgeChecking || !isCambridgeValid} className={`aspect-square rounded-2xl flex items-center justify-center transition-all shadow-sm ${isCambridgeValid ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`} title="Cambridge">{isCambridgeChecking ? <Loader2 size={14} className="animate-spin"/> : <Book size={15}/></button>
+                <div className="flex flex-col gap-1">
+                    <button type="button" onClick={() => handleReadSelection('en')} className="aspect-square bg-neutral-100 text-neutral-500 rounded-2xl flex items-center justify-center hover:bg-neutral-200 transition-all active:scale-95 shadow-sm" title="Nghe EN"><BookOpen size={15} fill="currentColor"/></button>
+                </div>
+                
+                <button type="button" onClick={() => handleReadSelection('vi')} className="aspect-square bg-rose-50 text-rose-400 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Nghe VI"><Volume2 size={15} /></button>
             </div>
         </div>
     );
 
     return (
         <>
-            {/* FLOATING MENU (Chuột phải) */}
             {isOpen && menuPos && (
-                <div 
-                    className="fixed z-[2147483647] pointer-events-auto"
-                    style={{ 
-                        left: `${menuPos.x}px`, 
-                        top: `${menuPos.y}px`, 
-                        transform: menuPos.placement === 'top' 
-                            ? 'translate(-50%, -100%) translateY(-10px)' 
-                            : 'translate(-50%, 0) translateY(10px)' 
-                    }}
-                >
+                <div className="fixed z-[2147483647]" style={{ left: `${menuPos.x}px`, top: `${menuPos.y}px`, transform: menuPos.placement === 'top' ? 'translate(-50%, -100%) translateY(-10px)' : 'translate(-50%, 0) translateY(10px)' }}>
                     <CommandBox />
-                    {/* Tooltip Arrow */}
-                    <div className={`absolute left-1/2 -translate-x-1/2 w-3 h-3 bg-white rotate-45 ${
-                        menuPos.placement === 'top'
-                            ? '-bottom-1 border-r border-b border-neutral-200'
-                            : '-top-1 border-l border-t border-neutral-200'
-                    }`} />
                 </div>
             )}
-
             <div className="fixed bottom-0 left-6 z-[2147483646] flex flex-col items-start pointer-events-none">
-                <div 
-                    className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" 
-                    onMouseEnter={onMouseEnter}
-                    onMouseLeave={onMouseLeave}
-                >
+                <div className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" onMouseEnter={() => setIsOpen(true)} onMouseLeave={() => setTimeout(() => setIsOpen(false), 300)}>
                     <div className="relative">
                         {isOpen && !menuPos && (
-                            <div className="absolute bottom-16 left-0 z-50 pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-200 pb-2">
+                            <div className="absolute bottom-16 left-0 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
                                 {message ? (
                                     <div className="bg-white p-5 rounded-[2.5rem] shadow-2xl border border-neutral-200 w-72 relative">
-                                        <button onClick={() => { setIsOpen(false); setMessage(null); }} className="absolute top-4 right-4 p-1 text-neutral-300 hover:text-neutral-900 rounded-full transition-colors"><X size={14}/></button>
+                                        <button onClick={() => setMessage(null)} className="absolute top-4 right-4 text-neutral-300 hover:text-neutral-900"><X size={14}/></button>
                                         <div className="flex items-start gap-3">
-                                            <div className="shrink-0 mt-1">{message.icon || <MessageSquare size={18} className="text-neutral-400"/>}</div>
-                                            <div className="text-xs font-medium text-neutral-700 leading-relaxed [&_strong]:font-black [&_strong]:text-neutral-900 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: message.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                                            <div className="shrink-0 mt-1">{message.icon || <MessageSquare size={18} />}</div>
+                                            <div className="text-xs font-medium text-neutral-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: message.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
                                         </div>
                                     </div>
-                                ) : (
-                                    <CommandBox />
-                                )}
+                                ) : <CommandBox />}
                             </div>
                         )}
-
-                        <button 
-                            type="button" 
-                            onClick={() => isAudioPlaying && stopSpeaking()} 
-                            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform active:scale-90 shadow-2xl relative z-10 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white shadow-indigo-500/20' : 'hover:scale-110 mb-1'}`}
-                        >
-                            {isThinking ? (
-                                <div className="text-neutral-400 animate-spin"><RotateCw size={20} /></div>
-                            ) : (
-                                <div className="relative w-10 h-10 flex items-center justify-center pointer-events-none">
-                                    <img src={avatarInfo.url} className={`w-full h-full object-contain ${isAudioPlaying ? 'scale-110' : ''}`} alt="Coach" />
-                                    {isAudioPlaying && (
-                                        <div className="absolute inset-0 bg-neutral-900/60 rounded-xl flex items-center justify-center animate-in fade-in duration-200">
-                                            <Square size={16} fill="white" className="text-white" />
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                        <button onClick={() => isAudioPlaying && stopSpeaking()} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-10 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}>
+                            {isThinking ? <Loader2 size={20} className="animate-spin text-neutral-400"/> : <img src={avatarInfo.url} className={`w-10 h-10 object-contain ${isAudioPlaying ? 'scale-110' : ''}`} alt="Coach" />}
                         </button>
                     </div>
-
-                    {/* RIGHT CLICK TOGGLE (Bên dưới coach - Bé xíu) */}
-                    <button 
-                        onClick={toggleRightClickFeature}
-                        className={`w-5 h-5 rounded-md flex items-center justify-center transition-all duration-300 transform shadow-sm hover:scale-110 active:scale-90 opacity-0 group-hover:opacity-100 ${config.interface.rightClickCommandEnabled ? 'bg-indigo-600 text-white shadow-indigo-500/30' : 'bg-white text-neutral-400 border border-neutral-100'}`}
-                        title={config.interface.rightClickCommandEnabled ? "Disable Right-Click Commands" : "Enable Right-Click Commands"}
-                    >
-                        <MousePointer2 size={10} fill={config.interface.rightClickCommandEnabled ? "currentColor" : "none"} />
-                    </button>
                 </div>
             </div>
-
-            {mimicTarget && (
-                <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />
-            )}
+            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
         </>
     );
 };

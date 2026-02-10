@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as dataStore from '../../app/dataStore';
 import { speak, startRecording, stopRecording } from '../../utils/audio';
@@ -9,6 +8,7 @@ import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { analyzeSpeechLocally, AnalysisResult } from '../../utils/speechAnalysis';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../common/ConfirmationModal';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 export interface TargetPhrase {
     id: string; 
@@ -58,6 +58,11 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
     const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null);
     const [userAudioMimeType, setUserAudioMimeType] = useState<string>('audio/webm');
     const [matchStatus, setMatchStatus] = useState<'match' | 'close' | 'miss' | null>(null);
+
+    // IPA State
+    const [ipa, setIpa] = useState<string | null>(null);
+    const [showIpa, setShowIpa] = useState(false);
+    const [isIpaLoading, setIsIpaLoading] = useState(false);
 
     // Analysis State (Local)
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -175,6 +180,47 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
 
     useEffect(() => { stopFnRef.current = stopRecordingSession; }, [stopRecordingSession]);
 
+    const handleFetchIpa = useCallback(async () => {
+        if (!target) return;
+        if (ipa && showIpa) {
+            setShowIpa(false);
+            return;
+        }
+        if (ipa && !showIpa) {
+            setShowIpa(true);
+            return;
+        }
+
+        setIsIpaLoading(true);
+        try {
+            // 1. Check Library first from cached store (reliable and fast)
+            const cleaned = target.text.trim().toLowerCase();
+            const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
+            if (existing && existing.ipa) {
+                setIpa(existing.ipa);
+                setShowIpa(true);
+                setIsIpaLoading(false);
+                return;
+            } else {
+                // 2. Fallback to Server API
+                const config = getConfig();
+                const serverUrl = getServerUrl(config);
+                const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(target.text)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setIpa(data.ipa);
+                    setShowIpa(true);
+                } else {
+                    showToast("IPA server unavailable", "error");
+                }
+            }
+        } catch (e) {
+            showToast("Failed to fetch IPA", "error");
+        } finally {
+            setIsIpaLoading(false);
+        }
+    }, [target, ipa, showIpa, showToast]);
+
     useEffect(() => {
         if (isRecording) stopRecordingSession(true); 
         setIsRevealed(false);
@@ -183,6 +229,8 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
         setUserAudioUrl(null);
         setMatchStatus(null);
         setLocalAnalysis(null);
+        setIpa(null);
+        setShowIpa(false);
         if (userAudioPlayer.current) {
             userAudioPlayer.current.pause();
             userAudioPlayer.current = null;
@@ -318,6 +366,12 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
                 editingItem={editingItem}
                 onCloseModal={() => setIsModalOpen(false)}
                 onSaveItem={handleSaveFromModal}
+
+                // IPA Props
+                ipa={ipa}
+                showIpa={showIpa}
+                isIpaLoading={isIpaLoading}
+                onToggleIpa={handleFetchIpa}
             />
             
             <ConfirmationModal 

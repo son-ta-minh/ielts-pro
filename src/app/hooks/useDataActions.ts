@@ -62,14 +62,27 @@ export const useDataActions = (props: UseDataActionsProps) => {
     const handleRestoreSuccess = async (result: ImportResult, preservedConfigJson: string | null, serverMtime?: number) => {
         dataStore.cancelPendingBackup();
         
+        // Lấy config vừa được processJsonImport ghi vào LocalStorage (chứa settings từ bản backup)
+        const restoredConfig = getConfig();
+
         if (preservedConfigJson) {
-            localStorage.setItem('vocab_pro_system_config', preservedConfigJson);
-            window.dispatchEvent(new Event('config-updated'));
+            try {
+                const oldActiveConfig = JSON.parse(preservedConfigJson);
+                // CHỈ giữ lại phần 'server' để không bị mất kết nối tới server hiện tại
+                // Các phần khác (audioCoach, srs, interface...) sẽ dùng từ bản backup
+                const finalConfig = {
+                    ...restoredConfig,
+                    server: oldActiveConfig.server 
+                };
+                localStorage.setItem('vocab_pro_system_config', JSON.stringify(finalConfig));
+                window.dispatchEvent(new Event('config-updated'));
+            } catch (e) {
+                console.error("[Restore] Failed to merge config", e);
+            }
         }
 
         sessionStorage.setItem('vocab_pro_just_restored', 'true');
         
-        // CRITICAL: Set local modified time to match the server's time
         const syncTime = serverMtime || result.backupTimestamp || Date.now();
         localStorage.setItem('vocab_pro_last_backup_timestamp', String(syncTime));
         localStorage.setItem('vocab_pro_local_last_modified', String(syncTime));
@@ -80,22 +93,14 @@ export const useDataActions = (props: UseDataActionsProps) => {
         if (result.updatedUser) {
             localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
             localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
-            // Refresh app user state
             await onUpdateUser(result.updatedUser);
         }
         
         showToast('Restore successful!', 'success', 2000);
-        
-        // Refresh global stats to reflect new data without a page reload
         refreshGlobalStats();
-        
-        // Dispatch completion event to UI controllers immediately to clear any previous states
         window.dispatchEvent(new Event('vocab-pro-restore-complete'));
-        
-        // Final UI refresh notification
         window.dispatchEvent(new Event('vocab-pro-force-ui-reload'));
 
-        // Delay clearing the restoration flag to swallow trailing datastore update events from the import process
         setTimeout(() => {
             (window as any).isRestoring = false;
         }, 1000);
@@ -105,7 +110,6 @@ export const useDataActions = (props: UseDataActionsProps) => {
         const currentActiveConfig = getConfig();
         const preservedConfigJson = JSON.stringify(currentActiveConfig);
 
-        // Set global flag to prevent backup triggers during restoration
         (window as any).isRestoring = true;
         dataStore.cancelPendingBackup();
 
@@ -116,10 +120,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 return;
             }
 
-            // FRESH INSTALL SIMULATION: Wipe entire database and local storage before applying server data
             await dataStore.wipeAllLocalData();
             
-            // Immediately restore server connection config so the following restore call can work
             if (preservedConfigJson) {
                 localStorage.setItem('vocab_pro_system_config', preservedConfigJson);
                 window.dispatchEvent(new Event('config-updated'));
@@ -161,7 +163,6 @@ export const useDataActions = (props: UseDataActionsProps) => {
                     planning: true
                 };
 
-                // Set flag for local restore as well
                 (window as any).isRestoring = true;
                 
                 const tempId = currentUser ? currentUser.id : 'temp-restore';
@@ -169,7 +170,6 @@ export const useDataActions = (props: UseDataActionsProps) => {
     
                 if (result.type === 'success') {
                     await handleRestoreSuccess(result, preservedConfigJson);
-                    // Local file restores still trigger reload for absolute safety as they aren't part of the "fresh server install" flow
                     setTimeout(() => window.location.reload(), 1000);
                 } else {
                     showToast(`Restore failed: ${result.message}`, 'error', 5000);

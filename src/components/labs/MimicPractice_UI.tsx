@@ -1,6 +1,5 @@
-
 import React, { useRef, useEffect, useState } from 'react';
-import { Mic, Square, Play, Ear, Eye, EyeOff, ArrowRight, CheckCircle2, Volume2, Waves, Eraser, X, List, Sparkles, Plus, Edit2, Trash2, Save, Info, Shuffle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Mic, Square, Play, Ear, Eye, EyeOff, ArrowRight, CheckCircle2, Volume2, Waves, Eraser, X, List, Sparkles, Plus, Edit2, Trash2, Save, Info, Shuffle, ChevronLeft, ChevronRight, Binary, Loader2 } from 'lucide-react';
 import { TargetPhrase } from './MimicPractice';
 import { AnalysisResult, CharDiff } from '../../utils/speechAnalysis';
 import { speak } from '../../utils/audio';
@@ -110,6 +109,12 @@ export interface MimicPracticeUIProps {
     editingItem: TargetPhrase | null;
     onCloseModal: () => void;
     onSaveItem: (text: string) => void;
+
+    // IPA Props
+    ipa: string | null;
+    showIpa: boolean;
+    isIpaLoading: boolean;
+    onToggleIpa: () => void;
 }
 
 export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
@@ -117,7 +122,8 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
     userAudioUrl, onToggleRecord, onPlayTarget, onPlayUser, onToggleReveal, onNext, onClearTranscript, isEmpty, onClose,
     pagedItems, page, pageSize, totalPages, onPageChange, onPageSizeChange, onSelect, currentAbsoluteIndex,
     autoSpeak, onToggleAutoSpeak, isGlobalMode,
-    localAnalysis, onAddItem, onEditItem, onDeleteItem, onRandomize, isModalOpen, editingItem, onCloseModal, onSaveItem
+    localAnalysis, onAddItem, onEditItem, onDeleteItem, onRandomize, isModalOpen, editingItem, onCloseModal, onSaveItem,
+    ipa, showIpa, isIpaLoading, onToggleIpa
 }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -198,9 +204,9 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                 <div className="flex-1 h-full flex flex-col relative overflow-y-auto">
                     {onClose && <button onClick={onClose} className="absolute top-6 right-6 p-2 text-neutral-400 hover:text-neutral-900 rounded-full z-50"><X size={24} /></button>}
                     
-                    <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-10 animate-in fade-in">
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-8 animate-in fade-in">
                         <div className="relative w-full max-w-2xl">
-                            <div className={`p-8 md:p-12 rounded-[2.5rem] border-2 text-center transition-all duration-300 min-h-[220px] flex flex-col items-center justify-center relative bg-white border-neutral-200 shadow-xl shadow-neutral-100`}>
+                            <div className={`p-8 md:p-12 rounded-[2.5rem] border-2 text-center transition-all duration-300 min-h-[260px] flex flex-col items-center justify-center relative bg-white border-neutral-200 shadow-xl shadow-neutral-100`}>
                                 {isGlobalMode && (
                                     <div className="absolute top-6 left-6 px-3 py-1 bg-neutral-50 rounded-lg text-[10px] font-black uppercase tracking-widest text-neutral-400 border border-neutral-100">
                                         Pronunciation Practice
@@ -208,38 +214,47 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                                 )}
                                 <button onClick={onToggleReveal} className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-indigo-500">{isRevealed ? <EyeOff size={24} /> : <Eye size={24} />}</button>
                                 
-                                <div className="relative px-4 w-full flex flex-wrap justify-center gap-x-3 gap-y-2">
-                                    {targetText?.split(/\s+/).map((word, wIdx) => {
-                                        const analysis = localAnalysis?.words[wIdx];
-                                        const isWordMissing = analysis?.status === 'missing';
-                                        
-                                        return (
-                                            <span 
-                                                key={wIdx} 
-                                                onClick={() => speak(word)}
-                                                className={`text-4xl md:text-5xl font-black cursor-pointer hover:underline decoration-neutral-200 transition-all flex ${isRevealed || localAnalysis ? 'opacity-100' : 'text-transparent blur-lg select-none'}`}
-                                            >
-                                                {analysis?.chars ? (
-                                                    analysis.chars.map((c: CharDiff, cIdx: number) => (
-                                                        <span 
-                                                            key={cIdx} 
-                                                            className={
-                                                                c.status === 'correct' ? 'text-emerald-500' : 
-                                                                c.status === 'wrong' ? 'text-rose-500' : 
-                                                                'text-rose-300'
-                                                            }
-                                                        >
-                                                            {c.char}
+                                <div className="relative px-4 w-full flex flex-col items-center gap-4">
+                                    <div className="flex flex-wrap justify-center gap-x-3 gap-y-2">
+                                        {targetText?.split(/\s+/).map((word, wIdx) => {
+                                            const analysis = localAnalysis?.words[wIdx];
+                                            const isWordMissing = analysis?.status === 'missing';
+                                            
+                                            return (
+                                                <span 
+                                                    key={wIdx} 
+                                                    onClick={() => speak(word)}
+                                                    className={`text-4xl md:text-5xl font-black cursor-pointer hover:underline decoration-neutral-200 transition-all flex ${isRevealed || localAnalysis ? 'opacity-100' : 'text-transparent blur-lg select-none'}`}
+                                                >
+                                                    {analysis?.chars ? (
+                                                        analysis.chars.map((c: CharDiff, cIdx: number) => (
+                                                            <span 
+                                                                key={cIdx} 
+                                                                className={
+                                                                    c.status === 'correct' ? 'text-emerald-500' : 
+                                                                    c.status === 'wrong' ? 'text-rose-500' : 
+                                                                    'text-rose-300'
+                                                                }
+                                                            >
+                                                                {c.char}
+                                                            </span>
+                                                        ))
+                                                    ) : (
+                                                        <span className={isWordMissing ? 'text-neutral-300' : 'text-neutral-900'}>
+                                                            {word}
                                                         </span>
-                                                    ))
-                                                ) : (
-                                                    <span className={isWordMissing ? 'text-neutral-300' : 'text-neutral-900'}>
-                                                        {word}
-                                                    </span>
-                                                )}
-                                            </span>
-                                        );
-                                    })}
+                                                    )}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {showIpa && ipa && (
+                                        <div className="px-6 py-2 bg-neutral-50 border border-neutral-100 rounded-2xl text-xl font-mono font-medium text-neutral-500 animate-in slide-in-from-top-2 duration-500">
+                                            {ipa}
+                                        </div>
+                                    )}
+
                                     {!isRevealed && !localAnalysis && (
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                             <span className="text-neutral-200 text-sm font-bold uppercase tracking-widest animate-pulse">Speak to reveal result</span>
@@ -248,7 +263,7 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                                 </div>
 
                                 {localAnalysis && (
-                                    <div className="mt-8 flex flex-col items-center gap-1 animate-in slide-in-from-top-2">
+                                    <div className="mt-6 flex flex-col items-center gap-1 animate-in slide-in-from-top-2">
                                         <div className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Pronunciation Accuracy</div>
                                         <div className={`text-5xl font-black ${localAnalysis.score > 80 ? 'text-emerald-500' : localAnalysis.score > 50 ? 'text-amber-500' : 'text-rose-500'}`}>
                                             {localAnalysis.score}%
@@ -274,10 +289,20 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                             )}
                         </div>
 
-                        <div className="flex items-center gap-8">
+                        <div className="flex items-center gap-6">
                             <button onClick={onPlayTarget} className="p-6 rounded-3xl bg-white border border-neutral-200 text-neutral-600 hover:text-indigo-600 shadow-sm transition-all active:scale-95"><Volume2 size={32} /></button>
+                            
+                            <button 
+                                onClick={onToggleIpa} 
+                                disabled={isIpaLoading}
+                                className={`p-6 rounded-3xl border transition-all shadow-sm ${showIpa ? 'bg-indigo-600 text-white shadow-lg scale-105' : 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600'}`}
+                                title="Show Phonetic (IPA)"
+                            >
+                                {isIpaLoading ? <Loader2 size={32} className="animate-spin" /> : <Binary size={32} />}
+                            </button>
+
                             <button onClick={onToggleRecord} className={`w-32 h-32 rounded-full flex items-center justify-center shadow-2xl transition-all transform ${isRecording ? 'bg-rose-500 text-white scale-110 ring-12 ring-rose-100' : 'bg-white border-4 border-neutral-100 text-neutral-900 hover:border-neutral-200 hover:scale-105'}`}>{isRecording ? <Square size={40} fill="currentColor" /> : <Mic size={40} />}</button>
-                            <button onClick={onPlayUser} disabled={!userAudioUrl || isRecording} className={`p-6 rounded-3xl border transition-all shadow-sm ${userAudioUrl && !isRecording ? 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600' : 'bg-neutral-50 border-neutral-100 text-neutral-300 cursor-not-allowed'}`}><Play size={28} fill={userAudioUrl && !isRecording ? "currentColor" : "none"} /></button>
+                            <button onClick={onPlayUser} disabled={!userAudioUrl || isRecording} className={`p-6 rounded-3xl border transition-all shadow-sm ${userAudioUrl && !isRecording ? 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600' : 'bg-neutral-50 border-neutral-100 text-neutral-300 cursor-not-allowed'}`}><Play size={32} fill={userAudioUrl && !isRecording ? "currentColor" : "none"} /></button>
                         </div>
 
                         <button onClick={onNext} className={`px-12 py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest flex items-center gap-3 transition-all shadow-xl bg-neutral-900 text-white hover:bg-neutral-800 active:scale-95`}><span>Next Phrase</span><ArrowRight size={18} /></button>
