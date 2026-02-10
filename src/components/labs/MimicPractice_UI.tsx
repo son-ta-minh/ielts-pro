@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Mic, Square, Play, Ear, Eye, EyeOff, ArrowRight, CheckCircle2, Volume2, Waves, Eraser, X, List, Sparkles, Plus, Edit2, Trash2, Save, Info, Shuffle, ChevronLeft, ChevronRight, Binary, Loader2 } from 'lucide-react';
+import { Mic, Square, Play, Ear, Eye, EyeOff, ArrowRight, CheckCircle2, Volume2, Waves, Eraser, X, List, Sparkles, Plus, Edit2, Trash2, Save, Info, Shuffle, ChevronLeft, ChevronRight, AudioLines, Loader2 } from 'lucide-react';
 import { TargetPhrase } from './MimicPractice';
 import { AnalysisResult, CharDiff } from '../../utils/speechAnalysis';
 import { speak } from '../../utils/audio';
@@ -202,7 +202,7 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                 </div>
 
                 <div className="flex-1 h-full flex flex-col relative overflow-y-auto">
-                    {onClose && <button onClick={onClose} className="absolute top-6 right-6 p-2 text-neutral-400 hover:text-neutral-900 rounded-full z-50"><X size={24} /></button>}
+                    {onClose && <button onClick={onClose} className="absolute top-6 right-6 p-2 text-neutral-400 hover:bg-neutral-100 rounded-full z-50"><X size={24} /></button>}
                     
                     <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-8 animate-in fade-in">
                         <div className="relative w-full max-w-2xl">
@@ -298,7 +298,7 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                                 className={`p-6 rounded-3xl border transition-all shadow-sm ${showIpa ? 'bg-indigo-600 text-white shadow-lg scale-105' : 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600'}`}
                                 title="Show Phonetic (IPA)"
                             >
-                                {isIpaLoading ? <Loader2 size={32} className="animate-spin" /> : <Binary size={32} />}
+                                {isIpaLoading ? <Loader2 size={32} className="animate-spin" /> : <AudioLines size={32} />}
                             </button>
 
                             <button onClick={onToggleRecord} className={`w-32 h-32 rounded-full flex items-center justify-center shadow-2xl transition-all transform ${isRecording ? 'bg-rose-500 text-white scale-110 ring-12 ring-rose-100' : 'bg-white border-4 border-neutral-100 text-neutral-900 hover:border-neutral-200 hover:scale-105'}`}>{isRecording ? <Square size={40} fill="currentColor" /> : <Mic size={40} />}</button>

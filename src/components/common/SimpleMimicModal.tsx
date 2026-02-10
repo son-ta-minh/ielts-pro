@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Volume2, Mic, Waves, ListPlus, Play, Binary, Loader2 } from 'lucide-react';
+import { X, Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2 } from 'lucide-react';
 import { speak, stopRecording, startRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { analyzeSpeechLocally, AnalysisResult, CharDiff } from '../../utils/speechAnalysis';
@@ -244,12 +244,12 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose }) => {
                         className={`p-4 rounded-2xl transition-all ${showIpa ? 'bg-indigo-600 text-white shadow-md' : 'bg-neutral-100 text-neutral-600 hover:text-indigo-600'}`} 
                         title="Show Phonetic (IPA)"
                     >
-                        {isIpaLoading ? <Loader2 size={24} className="animate-spin" /> : <Binary size={24} />}
+                        {isIpaLoading ? <Loader2 size={24} className="animate-spin" /> : <AudioLines size={24} />}
                     </button>
 
                     <button 
                         onClick={handleToggleRecord} 
-                        className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-95 ${isRecording ? 'bg-rose-600 text-white scale-110 shadow-rose-500/50 ring-8 ring-rose-500/10' : 'bg-white border-4 border-neutral-100 text-neutral-900 hover:scale-105'}`}
+                        className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all transform active:scale-105 ${isRecording ? 'bg-rose-600 text-white scale-110 shadow-rose-500/50 ring-8 ring-rose-500/10' : 'bg-white border-4 border-neutral-100 text-neutral-900 hover:scale-105'}`}
                         title="Record"
                     >
                         {isRecording ? (
