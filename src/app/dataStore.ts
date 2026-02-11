@@ -1,3 +1,4 @@
+
 import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
@@ -16,7 +17,7 @@ let _bookWordMap = new Map<string, Set<string>>(); // Map bookId -> Set of word 
 let _currentUserId: string | null = null; // Track user ID for backups
 
 let _statsCache: any = {
-    reviewCounts: { total: 0, due: 0, n: 0, learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 },
+    reviewCounts: { total: 0, due: 0, new: 0, learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 },
     dashboardStats: { categories: { 'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 }, 'pronun': { total: 0, learned: 0 } }, refinedCount: 0, rawCount: 0 },
     dayProgress: { learned: 0, reviewed: 0, learnedWords: [], reviewedWords: [] }
 };
@@ -153,7 +154,7 @@ function _recalculateStats(userId: string) {
     });
 
     _statsCache = {
-        reviewCounts: { total, due, n: newCount, learned: calculatedLearningCount, mastered: masteredCount, statusForgot, statusHard, statusEasy, statusLearned },
+        reviewCounts: { total, due, new: newCount, learned: calculatedLearningCount, mastered: masteredCount, statusForgot, statusHard, statusEasy, statusLearned },
         dashboardStats: { categories, refinedCount, rawCount },
         dayProgress: { learned: todayLearnedWords.length, reviewed: todayReviewedWords.length, learnedWords: todayLearnedWords, reviewedWords: todayReviewedWords }
     };
