@@ -16,7 +16,11 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
   const styleInstruction = isListeningMode 
     ? `STYLE: NATURAL SPOKEN AUDIO SCRIPT
        - Structure the content as a natural spoken narrative or conversation.
-       - **EVERY SENTENCE** must be wrapped in either ${explanationAudioTag}text[/] (for explanations) or [Audio-EN]text[/] (for examples/terms).
+       - **EVERY SENTENCE** must be wrapped in audio tags.
+       - **AUDIO STRATEGY (CRITICAL)**: 
+         1. **NO MIXED LANGUAGES**: Do NOT put English words inside ${explanationAudioTag} tags. Split them out into [Audio-EN] tags.
+            - ❌ Bad: ${explanationAudioTag}Từ hello nghĩa là xin chào[/]
+            - ✅ Good: ${explanationAudioTag}Từ[/] [Audio-EN]hello[/] ${explanationAudioTag}nghĩa là xin chào[/]
        - No Markdown headers (###).
        - Use specific visual cues for the speaker (e.g. [Pause], [Excited]).`
     : `STYLE: COMPACT RICH ARTICLE (READING)
@@ -33,8 +37,7 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
          4. Use **[Formula: Part | Part]** for grammar patterns. 
             - Format: "[Formula: If | S | V(past), S | would | V(base)]".
          5. Use **Emojis** in headers and key points to make it engaging for ${targetAudience}.
-       - **EXAMPLES**: Use Markdown Blockquotes (>) for examples to make them stand out visually.
-       - **AUDIO STRATEGY**: Wrap the ${language} EXPLANATIONS in ${explanationAudioTag}text[/] tags. Do NOT put audio tags on the English examples.`;
+       - **EXAMPLES**: Use Markdown Blockquotes (>) for examples to make them stand out visually.`;
 
   return `You are an expert IELTS coach named '${coachName}'. 
   
@@ -67,7 +70,7 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
   - Material: English.
 
   TAGGING RULES:
-  - **"tags" MUST be selected ONLY from this list**: ["grammar", "pattern", "speaking", "listening", "reading", "writing", "general", "comparison", "vocabulary"].
+  - **"tags" MUST be selected ONLY from this list**: ["Grammar", "Pattern", "Speaking", "Listening", "Reading", "Writing", "General", "Comparison", "Vocabulary"].
   - **QUANTITY**: Return EXACTLY ONE tag. Choose the most primary skill only.
 
   CRITICAL OUTPUT RULES:

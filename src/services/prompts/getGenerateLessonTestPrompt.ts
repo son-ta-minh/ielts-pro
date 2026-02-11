@@ -22,7 +22,7 @@ export function getGenerateLessonTestPrompt(lessonTitle: string, lessonContent: 
   STRUCTURE STRATEGY:
   Analyze the content and tags.
 
-  **CASE A: VOCABULARY LESSON** (e.g. tags include "vocabulary", "vocab", or content is a list of words/phrases)
+  **CASE A: VOCABULARY LESSON** (e.g. tags include "Vocabulary", "Vocab", or content is a list of words/phrases)
   If this is primarily a vocabulary lesson, follow this structure:
   1. **Section 1: Vocabulary Selection (3-5 items)**: Use [Select: Correct | Wrong 1 | Wrong 2] to test the nuance of collocations or specific words from the lesson.
   2. **Section 2: Meaning Matching (2-4 items)**: Use [Multi: Correct | Option 2 | Option 3] to match a term to its definition.

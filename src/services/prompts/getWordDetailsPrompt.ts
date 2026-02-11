@@ -1,3 +1,4 @@
+
 export function getWordDetailsPrompt(words: string[], nativeLanguage: string = 'Vietnamese'): string {
     const wordList = words.map(w => `"${w}"`).join(', ');
 
@@ -48,7 +49,7 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - is_col: True if it's a Collocation.
     - is_phr: True if it's a fixed Standard Phrase/Expression.
     - is_irr: True if it's an Irregular verb (single words only).
-    - tags: 3-5 IELTS topic tags.
+    - tags: 3-5 IELTS topic tags (Capitalize first letter).
 
     EXAMPLES:
     - Input "cut the road" -> hw: "cut the road", m: "mở đường", is_phr: true, fam: null, col: [].
@@ -71,7 +72,7 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
       "is_id": false, "is_pv": false, "is_col": false, "is_phr": true, "is_irr": false,
       "v2": null, "v3": null,
       "is_pas": false, "is_pron": false,
-      "tags": ["topic"],
+      "tags": ["Topic"],
       "fam": null
     }]`;
 }

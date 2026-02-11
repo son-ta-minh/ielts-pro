@@ -38,8 +38,7 @@ export function getLessonPrompt(params: LessonPromptParams): string {
             - Format: "Question? [HIDDEN: Answer]"
          4. Use **[Formula: Part | Part]** for grammar patterns. Format: "[Formula: If | S | V(past)]".
          5. Use **Emojis** to engage the ${params.targetAudience} audience.
-       - **EXAMPLES**: Use Markdown Blockquotes (>) for examples.
-       - **AUDIO STRATEGY**: Wrap the ${explanationLang} EXPLANATIONS in ${explanationAudioTag}text[/] tags. Do NOT put audio tags on the English examples.`;
+       - **EXAMPLES**: Use Markdown Blockquotes (>) for examples.`;
       
       contentRules = `
       PEDAGOGICAL FLOW:
@@ -67,7 +66,11 @@ export function getLessonPrompt(params: LessonPromptParams): string {
     - **Context Focus**: For every term, explain 'When' and 'Why'.
     - **Individual Examples**: Provide an example sentence for every phrase mentioned.
     - **Language**: All coaching in ${explanationLang}.
-    - **Audio Tags**: Wrap EVERY sentence in either ${explanationAudioTag}text[/] (for explanations) or [Audio-EN]text[/] (for examples/terms).`;
+    - **Audio Strategy (CRITICAL)**: 
+      1. Wrap EVERY sentence in audio tags. 
+      2. **NO MIXED LANGUAGES**: Do NOT put English words inside ${explanationAudioTag} tags. Split them out into [Audio-EN] tags.
+         - ❌ Bad: ${explanationAudioTag}Từ hello nghĩa là xin chào[/]
+         - ✅ Good: ${explanationAudioTag}Từ[/] [Audio-EN]hello[/] ${explanationAudioTag}nghĩa là xin chào[/]`;
   } else {
     // Refine Reading (Default)
     systemTask = `REFINE the lesson to focus on Contextual Nuance and Visual Clarity.`;
@@ -77,7 +80,6 @@ export function getLessonPrompt(params: LessonPromptParams): string {
     - **COMPACT FORMAT**: Minimize vertical space. **NO double newlines (\n\n)**. **NO horizontal rules (---)**.
     - **Rich Formatting**: Incorporate Markdown Tables ONLY for Comparisons/Matrices. ❌ **PROHIBITED**: Do NOT use tables for simple word lists without contrast. Use **[HIDDEN: ...]** ONLY for Q&A reveals (Question outside, Answer inside).
     - **Nuance Mapping**: Explain the difference between similar paraphrases or collocations.
-    - **Audio Strategy**: Wrap ${explanationLang} explanations in ${explanationAudioTag}text[/]. No audio tags on English examples.
     - **REMOVE QUIZZES**: Strictly remove any [Quiz:], [Select:], or [Multi:] tags. This content is for reading only.`;
     
     contentRules = `
@@ -106,7 +108,7 @@ export function getLessonPrompt(params: LessonPromptParams): string {
   1. NO generic introductions.
   2. MANDATORY: All coaching text in ${explanationLang}.
   3. **NO QUIZZES**: Absolutely NO interactive tags ([Quiz], [Select], [Multi]). Provide pure educational content.
-  4. **TAGS**: Select tags ONLY from: ["grammar", "pattern", "speaking", "listening", "reading", "writing", "general", "comparison", "vocabulary"].
+  4. **TAGS**: Select tags ONLY from: ["Grammar", "Pattern", "Speaking", "Listening", "Reading", "Writing", "General", "Comparison", "Vocabulary"].
   5. **QUANTITY**: Return EXACTLY ONE tag. Choose the most primary skill only.
 
   CRITICAL OUTPUT RULES:

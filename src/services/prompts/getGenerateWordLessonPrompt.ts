@@ -20,7 +20,11 @@ export function getGenerateWordLessonPrompt(word: VocabularyItem, prefs: LessonP
   const styleInstruction = isListeningMode 
     ? `STYLE: NATURAL SPOKEN AUDIO SCRIPT
        - Structure the content as a natural spoken narrative or conversation.
-       - **EVERY SENTENCE** must be wrapped in either ${explanationAudioTag}text[/] (for explanations) or [Audio-EN]text[/] (for examples/terms).
+       - **EVERY SENTENCE** must be wrapped in audio tags.
+       - **AUDIO STRATEGY (CRITICAL)**: 
+         1. **NO MIXED LANGUAGES**: Do NOT put English words inside ${explanationAudioTag} tags. Split them out into [Audio-EN] tags.
+            - ❌ Bad: ${explanationAudioTag}Từ hello nghĩa là xin chào[/]
+            - ✅ Good: ${explanationAudioTag}Từ[/] [Audio-EN]hello[/] ${explanationAudioTag}nghĩa là xin chào[/]
        - No Markdown headers (###). Use transitional phrases instead.`
     : `STYLE: COMPACT RICH TEXTBOOK (READING)
        - **COMPACT FORMAT**: Minimize vertical space. **NO double newlines (\n\n)**. **NO horizontal rules (---)**.
@@ -34,9 +38,7 @@ export function getGenerateWordLessonPrompt(word: VocabularyItem, prefs: LessonP
          4. Use **[Formula: Part | Part]** for grammar patterns. 
             - Format: "[Formula: Subject | Verb | Object]".
          5. Use **Emojis** liberally to make sections distinct.
-       - **VISUALS**: Use Blockquotes (>) for ALL example sentences. Never use nested bullets.
-       - **AUDIO**: Wrap the ${language} EXPLANATIONS/TEACHING in ${explanationAudioTag}text[/] tags. 
-       - **NO AUDIO ON EXAMPLES**: Leave English examples as plain text (or bold) within the blockquote.`;
+       - **VISUALS**: Use Blockquotes (>) for ALL example sentences. Never use nested bullets.`;
 
   return `You are expert IELTS Coach '${coachName}'.
   
@@ -61,7 +63,7 @@ export function getGenerateWordLessonPrompt(word: VocabularyItem, prefs: LessonP
   1. **NO SIMPLE LISTS**: Do not just list the data. Teach it with context and nuance.
   2. **EXAMPLE MANDATE**: Every key term MUST have an example sentence.
   3. **NO QUIZZES**: Do NOT generate [Select:], [Quiz:], or [Multi:] tags. This content is for explanation only.
-  4. **TAGS**: Select tags ONLY from: ["grammar", "pattern", "speaking", "listening", "reading", "writing", "general", "comparison", "vocabulary"].
+  4. **TAGS**: Select tags ONLY from: ["Grammar", "Pattern", "Speaking", "Listening", "Reading", "writing", "General", "Comparison", "Vocabulary"].
   5. **QUANTITY**: Return EXACTLY ONE tag. Choose the most primary skill only.
 
   CRITICAL OUTPUT RULES:
@@ -76,7 +78,7 @@ export function getGenerateWordLessonPrompt(word: VocabularyItem, prefs: LessonP
     "title": "Mastering: ${word.word}",
     "description": "string (Strategic usage overview)",
     "content": "string (Markdown formatted with \\n for newlines)",
-    "tags": ["vocabulary"]
+    "tags": ["Vocabulary"]
   }
   \`\`\``;
 }
