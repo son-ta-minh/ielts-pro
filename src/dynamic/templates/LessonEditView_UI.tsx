@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ArrowLeft, Save, Loader2, Eye, PenLine, Sparkles, BookOpen, Tag, Headphones, BookText } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Eye, PenLine, Sparkles, BookOpen, Tag, Headphones, BookText, ClipboardList } from 'lucide-react';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { speak } from '../../utils/audio';
 
@@ -17,26 +17,32 @@ interface Props {
   setContent: (c: string) => void;
   listeningContent: string;
   setListeningContent: (c: string) => void;
+  testContent: string;
+  setTestContent: (c: string) => void;
   isSaving: boolean;
   onSave: () => void;
   onPractice: () => void;
   onCancel: () => void;
-  onOpenAiRefine: () => void;
+  onOpenAiRefine: (format?: 'reading' | 'listening' | 'test') => void;
 }
 
 export const LessonEditViewUI: React.FC<Props> = (props) => {
     const { 
         title, setTitle, description, setDescription, tagsInput, setTagsInput, 
-        content, setContent, listeningContent, setListeningContent,
+        content, setContent, listeningContent, setListeningContent, testContent, setTestContent,
         isSaving, onSave, onPractice, onCancel, onOpenAiRefine 
     } = props;
     
-    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING'>('READING');
+    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING' | 'TEST'>('READING');
     const [isPreview, setIsPreview] = useState(false);
 
     const previewHtml = useMemo(() => {
-        return parseMarkdown(activeTab === 'READING' ? content : listeningContent);
-    }, [content, listeningContent, activeTab]);
+        let raw = "";
+        if (activeTab === 'READING') raw = content;
+        else if (activeTab === 'LISTENING') raw = listeningContent;
+        else raw = testContent;
+        return parseMarkdown(raw);
+    }, [content, listeningContent, testContent, activeTab]);
 
     // Attach speaker utility to window for HTML event handlers in preview
     useEffect(() => {
@@ -61,10 +67,6 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
             <button onClick={onPractice} disabled={isSaving} className="px-5 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center space-x-2 active:scale-95 uppercase tracking-widest shadow-sm">
                 <BookOpen size={14}/>
                 <span>Read Mode</span>
-            </button>
-            <button onClick={onOpenAiRefine} className="px-5 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center space-x-2 transition-all hover:bg-neutral-50 active:scale-95 uppercase tracking-widest shadow-sm">
-                <Sparkles size={14} className="text-amber-500"/>
-                <span>AI Refine</span>
             </button>
             <button onClick={onSave} disabled={isSaving} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center space-x-2 transition-all active:scale-95 hover:bg-neutral-800 disabled:opacity-50 uppercase tracking-widest shadow-sm">
                 {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -108,13 +110,25 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
                         onClick={() => { setActiveTab('LISTENING'); setIsPreview(false); }}
                         className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'LISTENING' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
                     >
-                        <Headphones size={12} className="inline mr-1"/> Listening Script
+                        <Headphones size={12} className="inline mr-1"/> Audio Script
+                    </button>
+                    <button 
+                        onClick={() => { setActiveTab('TEST'); setIsPreview(false); }}
+                        className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'TEST' ? 'bg-white text-emerald-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                    >
+                        <ClipboardList size={12} className="inline mr-1"/> Test
                     </button>
                 </div>
-                <button onClick={() => setIsPreview(!isPreview)} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm">
-                    {isPreview ? <PenLine size={12}/> : <Eye size={12}/>}
-                    <span>{isPreview ? 'Edit' : 'Preview'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => onOpenAiRefine(activeTab === 'READING' ? 'reading' : activeTab === 'LISTENING' ? 'listening' : 'test')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all text-[10px] font-black uppercase text-indigo-600 shadow-sm">
+                        <Sparkles size={12}/>
+                        <span>Generate {activeTab === 'LISTENING' ? 'Audio Script' : activeTab}</span>
+                    </button>
+                    <button onClick={() => setIsPreview(!isPreview)} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm">
+                        {isPreview ? <PenLine size={12}/> : <Eye size={12}/>}
+                        <span>{isPreview ? 'Edit' : 'Preview'}</span>
+                    </button>
+                </div>
             </div>
             
             <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[500px] relative overflow-hidden">
@@ -125,10 +139,14 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
                     />
                 ) : (
                     <textarea 
-                        value={activeTab === 'READING' ? content : listeningContent} 
-                        onChange={(e) => activeTab === 'READING' ? setContent(e.target.value) : setListeningContent(e.target.value)} 
+                        value={activeTab === 'READING' ? content : activeTab === 'LISTENING' ? listeningContent : testContent} 
+                        onChange={(e) => {
+                            if (activeTab === 'READING') setContent(e.target.value);
+                            else if (activeTab === 'LISTENING') setListeningContent(e.target.value);
+                            else setTestContent(e.target.value);
+                        }} 
                         className="absolute inset-0 w-full h-full p-6 resize-none focus:outline-none text-sm leading-relaxed font-medium text-neutral-900 bg-white font-mono"
-                        placeholder={activeTab === 'READING' ? "# Lesson Heading\n\nWrite reading content..." : "[Audio-EN]Hello, welcome to this podcast...[/]"}
+                        placeholder={`Write ${activeTab.toLowerCase()} content here...`}
                         spellCheck={false}
                     />
                 )}

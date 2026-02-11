@@ -1,13 +1,10 @@
 
 export interface LessonPromptParams {
-  // Common
   language: 'English' | 'Vietnamese';
   targetAudience: 'Kid' | 'Adult';
   tone: 'friendly_elementary' | 'professional_professor';
   coachName: string;
   task: 'create_reading' | 'refine_reading' | 'convert_to_listening';
-  
-  // Data
   topic?: string;
   currentLesson?: { title: string; description: string; content: string; listeningContent?: string };
   userRequest?: string;
@@ -15,74 +12,116 @@ export interface LessonPromptParams {
 }
 
 export function getLessonPrompt(params: LessonPromptParams): string {
-  const { topic, currentLesson, userRequest, language, targetAudience, tone, coachName, task } = params;
+  const { currentLesson, userRequest, language, tone, coachName, task, topic } = params;
   
   const isVietnamese = language === 'Vietnamese';
   const explanationLang = isVietnamese ? 'Vietnamese' : 'English';
-  const audioTag = isVietnamese ? 'Audio-VN' : 'Audio-EN';
+  const explanationAudioTag = isVietnamese ? '[Audio-VN]' : '[Audio-EN]';
 
   let systemTask = "";
   let formattingInstructions = "";
   let contextBlock = "";
+  let contentRules = "";
 
-  if (task === 'convert_to_listening') {
-    systemTask = `TRANSFORM the provided Reading Lesson into a high-quality, focused LISTENING SCRIPT (Podcast style).`;
-    contextBlock = `
-    READING CONTENT TO CONVERT:
-    Title: ${currentLesson?.title}
-    Content: ${currentLesson?.content}
-    `;
+  if (task === 'create_reading') {
+      systemTask = `Create an immersive, high-impact lesson for a ${params.targetAudience} on: "${topic}".`;
+      
+      formattingInstructions = `
+       STYLE: COMPACT RICH ARTICLE (READING)
+       - **COMPACT FORMAT**: Minimize vertical space. **NO double newlines (\n\n)**. **NO horizontal rules (---)**. Keep the layout dense.
+       - Use Markdown Headers (###) to separate sections.
+       - **RICH ELEMENTS**: 
+         1. **TABLES**: Use strictly for **Comparative Matrices** or **System Maps** at the end. ❌ **PROHIBITED**: Do NOT use tables to enumerate words without contrast or explanation per cell. Use bullet points for lists.
+         2. Use **[Tip: ...]** blocks for "Did you know?" or "Examiner Tip".
+         3. Use **[HIDDEN: ...]** tags ONLY for **Interactive Q&A**. 
+            - **RULE**: The QUESTION must be visible OUTSIDE the tag. Only the ANSWER is inside.
+            - Format: "Question? [HIDDEN: Answer]"
+         4. Use **[Formula: Part | Part]** for grammar patterns. Format: "[Formula: If | S | V(past)]".
+         5. Use **Emojis** to engage the ${params.targetAudience} audience.
+       - **EXAMPLES**: Use Markdown Blockquotes (>) for examples.
+       - **AUDIO STRATEGY**: Wrap the ${explanationLang} EXPLANATIONS in ${explanationAudioTag}text[/] tags. Do NOT put audio tags on the English examples.`;
+      
+      contentRules = `
+      PEDAGOGICAL FLOW:
+      1. **TEACHING**: Teach concepts clearly with nuance and examples.
+      2. **CONSOLIDATION**: End with a summary or comparison table.
+      
+      CRITICAL FORMATTING RULES:
+      1. **NO META LABELS**: DO NOT use labels like "Nuance:", "Scenario Change:", "Context:", "Meaning:", "Definition:".
+      2. **NATURAL WRITING**: Weave the nuance and context *into* the sentence naturally.
+      3. **HEADERS**: Use standard Markdown headers (###) for the specific content topics.
+
+      STRICT TEACHING RULES:
+      1. **EXPLAIN EVERY ITEM**: For every vocabulary item, collocation, or idiom:
+         - You MUST explain the **Nuance** (Why this word? What does it imply that others don't?).
+         - You MUST provide a natural **Example Sentence**.
+      2. **COMPARE PARAPHRASES**: Do not just list synonyms. Explain the **Scenario Change**. 
+      3. **COACHING FLOW**: Structure the lesson as a guided walkthrough.
+      `;
+
+  } else if (task === 'convert_to_listening') {
+    systemTask = `TRANSFORM the provided Reading Lesson into a high-quality NATURAL AUDIO SCRIPT.`;
+    contextBlock = `SOURCE: ${currentLesson?.title}\n${currentLesson?.content}`;
     formattingInstructions = `
-    FORMATTING STYLE: LISTENING ONLY (PODCAST SCRIPT)
-    - **No Meta-Talk**: Skip explaining what an idiom or collocation is. Focus 100% on usage.
-    - **Language of Instruction**: Explain everything in ${explanationLang}. 
-    - **Tagging**: Inside [${audioTag}], you MUST translate all linguistic terms to ${explanationLang}.
-    - **Strict Tag Splitting**: [${audioTag}]Meaning of[/] [Audio-EN]word[/] [${audioTag}]is...[/]
-    `;
-  } else if (task === 'refine_reading') {
-    systemTask = `Refine the provided Reading Lesson. Fix ambiguous quizzes.`;
-    contextBlock = `
-    CURRENT CONTENT:
-    Title: ${currentLesson?.title}
-    Body: ${currentLesson?.content}
-    USER REQUEST: "${userRequest || 'Make it sharper and remove redundant meta-explanation.'}"
-    `;
-    formattingInstructions = `
-    FORMATTING STYLE: READING & INTERACTIVE
-    - **Fix Quizzes**: If there are [Quiz: ...] tags where the answer isn't 100% unique (like a fixed preposition), you MUST CONVERT them to [Select: Correct | Distractor 1 | Distractor 2] to ensure the user knows exactly what is expected.
-    - **Explanation Language**: Strictly use ${explanationLang} for all instructional text.
-    - **Tagging**: Apply strict tag splitting.
-    `;
+    - **Narrative Style**: Convert bullet points into natural spoken sentences.
+    - **Context Focus**: For every term, explain 'When' and 'Why'.
+    - **Individual Examples**: Provide an example sentence for every phrase mentioned.
+    - **Language**: All coaching in ${explanationLang}.
+    - **Audio Tags**: Wrap EVERY sentence in either ${explanationAudioTag}text[/] (for explanations) or [Audio-EN]text[/] (for examples/terms).`;
   } else {
-    systemTask = `Create a sharp, focused Reading Lesson in ${explanationLang} for a ${targetAudience} on: "${topic}".`;
-    contextBlock = `USER REQUEST: "${userRequest || 'Create a targeted lesson.'}"`;
+    // Refine Reading (Default)
+    systemTask = `REFINE the lesson to focus on Contextual Nuance and Visual Clarity.`;
+    contextBlock = `CURRENT: ${currentLesson?.title}\n${currentLesson?.content}\nREQUEST: "${userRequest || 'Improve layout and examples.'}"`;
     formattingInstructions = `
-    FORMATTING STYLE: READING & INTERACTIVE
-    - **Rule**: Prefer [Select: ...] over [Quiz: ...] unless the answer is a fixed single word.
-    - **Language**: Instructions and explanations MUST be in ${explanationLang}.
+    - **Teach, Don't List**: Convert any bulleted lists of words into guided explanations.
+    - **COMPACT FORMAT**: Minimize vertical space. **NO double newlines (\n\n)**. **NO horizontal rules (---)**.
+    - **Rich Formatting**: Incorporate Markdown Tables ONLY for Comparisons/Matrices. ❌ **PROHIBITED**: Do NOT use tables for simple word lists without contrast. Use **[HIDDEN: ...]** ONLY for Q&A reveals (Question outside, Answer inside).
+    - **Nuance Mapping**: Explain the difference between similar paraphrases or collocations.
+    - **Audio Strategy**: Wrap ${explanationLang} explanations in ${explanationAudioTag}text[/]. No audio tags on English examples.
+    - **REMOVE QUIZZES**: Strictly remove any [Quiz:], [Select:], or [Multi:] tags. This content is for reading only.`;
+    
+    contentRules = `
+    PEDAGOGICAL FLOW:
+    1. **TEACHING**: Ensure concepts are explained separately first with nuance and examples.
+    2. **SUMMARY**: Ensure the lesson ends with a structural summary. Use a table if applicable.
+    
+    CRITICAL FORMATTING RULES:
+    1. **NO META LABELS**: DO NOT use labels like "Nuance:", "Scenario Change:", "Context:", "Meaning:".
+    2. **NATURAL WRITING**: Weave the nuance and context *into* the sentence naturally.
+    3. **HEADERS**: Use standard Markdown headers (###).
     `;
   }
 
-  return `You are an expert IELTS coach.
-  ROLE: You are '${coachName}', acting as a ${tone === 'friendly_elementary' ? 'friendly teacher' : 'professional professor'}.
+  return `You are expert IELTS coach '${coachName}', acting as a ${tone === 'friendly_elementary' ? 'friendly mentor' : 'professor'}.
     
   TASK: ${systemTask}
 
   ${contextBlock}
 
+  ${contentRules}
+
   ${formattingInstructions}
 
   STRICT CONTENT RULES:
-  1. DO NOT explain definitions of linguistic terms (e.g., "what an idiom is").
-  2. QUIZ CLARITY: Use [Select: ...] for any blank that could have multiple synonyms. Provide clear distractors.
-  3. MANDATORY: All explanations, feedback, and meta-text MUST be in ${explanationLang}.
-  4. Use Markdown with [Audio-VN] (for Vietnamese explanation parts) and [Audio-EN] (for English examples/words) tags correctly.
+  1. NO generic introductions.
+  2. MANDATORY: All coaching text in ${explanationLang}.
+  3. **NO QUIZZES**: Absolutely NO interactive tags ([Quiz], [Select], [Multi]). Provide pure educational content.
+  4. **TAGS**: Select tags ONLY from: ["grammar", "pattern", "speaking", "listening", "reading", "writing", "general", "comparison", "vocabulary"].
+  5. **QUANTITY**: Return EXACTLY ONE tag. Choose the most primary skill only.
 
-  Return a strict JSON object:
+  CRITICAL OUTPUT RULES:
+  1. **MARKDOWN CODE BLOCK**: You MUST wrap your entire JSON response in a markdown code block (e.g. \`\`\`json { ... } \`\`\`).
+  2. **VALID JSON**: The content inside the code block must be valid, parsable JSON.
+  3. **NO RAW NEWLINES IN STRINGS**: Inside the "content" string, you MUST use literal '\\n' for line breaks. Do NOT use actual newline characters.
+  4. **ESCAPE CHARACTERS**: Properly escape all double quotes and backslashes within strings.
+
+  OUTPUT TEMPLATE:
+  \`\`\`json
   {
     "title": "string",
     "description": "string",
     "content": "string",
     "tags": ["string"]
-  }`;
+  }
+  \`\`\``;
 }

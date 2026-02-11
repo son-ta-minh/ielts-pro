@@ -47,7 +47,7 @@ const UniversalAiModal: React.FC<Props> = ({
 
   // Lesson Common State (For Gen & Refine & Audio)
   const [lessonTopic, setLessonTopic] = useState('');
-  const [lessonAudience, setLessonAudience] = useState('');
+  const [lessonAudience, setLessonAudience] = useState<'Kid' | 'Adult'>('Adult');
   const [lessonLang, setLessonLang] = useState<'English'|'Vietnamese'>('English');
   const [lessonTone, setLessonTone] = useState<'friendly_elementary'|'professional_professor'>('friendly_elementary');
 
@@ -194,16 +194,27 @@ const UniversalAiModal: React.FC<Props> = ({
   // --- RENDER CUSTOM INPUT SECTIONS ---
 
   const renderLessonCommonPrefs = () => (
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-1">
             <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Globe size={10}/> Language</label>
             <select 
                 value={lessonLang}
                 onChange={(e) => setLessonLang(e.target.value as any)}
-                className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none appearance-none cursor-pointer"
+                className="w-full px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none appearance-none cursor-pointer"
             >
                 <option value="English">English</option>
                 <option value="Vietnamese">Vietnamese</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+             <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Target size={10}/> Audience</label>
+             <select 
+                value={lessonAudience}
+                onChange={(e) => setLessonAudience(e.target.value as any)}
+                className="w-full px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none appearance-none cursor-pointer"
+            >
+                <option value="Adult">Adult</option>
+                <option value="Kid">Kid</option>
             </select>
           </div>
           <div className="space-y-1">
@@ -211,10 +222,10 @@ const UniversalAiModal: React.FC<Props> = ({
              <select 
                 value={lessonTone}
                 onChange={(e) => setLessonTone(e.target.value as any)}
-                className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none appearance-none cursor-pointer"
+                className="w-full px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none appearance-none cursor-pointer"
             >
-                <option value="friendly_elementary">Friendly Teacher</option>
-                <option value="professional_professor">Professional Prof.</option>
+                <option value="friendly_elementary">Friendly</option>
+                <option value="professional_professor">Professional</option>
             </select>
           </div>
       </div>
@@ -254,7 +265,7 @@ const UniversalAiModal: React.FC<Props> = ({
                             value={unitRequestInput}
                             onChange={(e) => setUnitRequestInput(e.target.value)}
                             disabled={isProcessing || isSuccess}
-                            placeholder={type === 'GENERATE_AUDIO_SCRIPT' ? 'e.g., "Summarize the key takeaways for a short podcast."' : 'e.g., "Add more advanced vocabulary and examples."'}
+                            placeholder={type === 'GENERATE_AUDIO_SCRIPT' ? 'e.g., "Focus on the definition of key terms"' : 'e.g., "Add more advanced vocabulary and examples."'}
                             className="w-full h-24 p-4 bg-neutral-50/50 border border-neutral-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-none transition-all focus:bg-white disabled:opacity-50"
                         />
                    </div>
@@ -271,21 +282,10 @@ const UniversalAiModal: React.FC<Props> = ({
                                 className="w-full px-4 py-2 bg-neutral-50/50 border border-neutral-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-neutral-900 outline-none"
                             />
                         </div>
-                        {type !== 'GENERATE_WORD_LESSON' && (
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><UserIcon size={10}/> Target Audience</label>
-                                <input 
-                                    value={lessonAudience} 
-                                    onChange={(e) => setLessonAudience(e.target.value)} 
-                                    placeholder="e.g. IELTS Beginners, Primary Students" 
-                                    className="w-full px-4 py-2 bg-neutral-50/50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
-                                />
-                            </div>
-                        )}
                     </>
                 )}
 
-                {/* 2. Common Prefs for all Lessons (Language/Persona) */}
+                {/* 2. Common Prefs for all Lessons (Language/Persona/Audience) */}
                 {isLessonRelated && renderLessonCommonPrefs()}
 
                 {/* 3. Non-Lesson Types */}

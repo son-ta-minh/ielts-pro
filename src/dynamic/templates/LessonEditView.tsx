@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Lesson, User } from '../../app/types';
 import { LessonEditViewUI } from './LessonEditView_UI';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
-import { getLessonPrompt } from '../../services/promptService';
+import { getLessonPrompt, getGenerateLessonTestPrompt } from '../../services/promptService';
 import { useToast } from '../../contexts/ToastContext';
 import { getConfig } from '../../app/settingsManager';
 
@@ -22,9 +22,10 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   const [tagsInput, setTagsInput] = useState((lesson.tags || []).join(', '));
   const [content, setContent] = useState(lesson.content);
   const [listeningContent, setListeningContent] = useState(lesson.listeningContent || '');
+  const [testContent, setTestContent] = useState(lesson.testContent || '');
   
   const [isSaving, setIsSaving] = useState(false);
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiModalMode, setAiModalMode] = useState<{ format: 'reading' | 'listening' | 'test' } | null>(null);
   
   const { showToast } = useToast();
   
@@ -58,6 +59,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
       tags: finalTags,
       content,
       listeningContent,
+      testContent,
       updatedAt: Date.now(),
     };
   };
@@ -74,41 +76,63 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
     onPractice(updatedLesson);
   };
 
-  const handleGenerateRefinePrompt = (inputs: { request: string, language: string, tone: string, format?: 'reading' | 'listening' }) => {
+  const handleGenerateRefinePrompt = (inputs: any) => {
     const config = getConfig();
     const activeType = config.audioCoach.activeCoach;
     const coachName = config.audioCoach.coaches[activeType].name;
     
+    // Determine format from state or input
+    const format = aiModalMode?.format || inputs.format;
+    
+    if (format === 'test') {
+        const currentTags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+        return getGenerateLessonTestPrompt(title, content, inputs.request, currentTags);
+    }
+
     return getLessonPrompt({
-      task: inputs.format === 'listening' ? 'convert_to_listening' : 'refine_reading',
+      task: format === 'listening' ? 'convert_to_listening' : 'refine_reading',
       currentLesson: { title, description, content },
       userRequest: inputs.request,
       language: (inputs.language as any) || user.lessonPreferences?.language || 'English',
       targetAudience: user.lessonPreferences?.targetAudience || 'Adult',
       tone: (inputs.tone as any) || user.lessonPreferences?.tone || 'professional_professor',
       coachName,
-      format: inputs.format || 'reading'
+      format: format || 'reading'
     });
   };
 
   const handleAiResult = (data: any) => {
-    const result = data.result || data;
+    const { result } = data;
+    const cleanResult = result || data;
+    const format = aiModalMode?.format;
     
-    // Check if result returned listening content or refined reading
-    if (result.content.includes('[Audio-')) {
-        setListeningContent(result.content);
-        showToast("Listening script updated!", "success");
+    if (format === 'listening') {
+        if (cleanResult.content) {
+            setListeningContent(cleanResult.content);
+            showToast("Listening script updated!", "success");
+        } else {
+            showToast("Failed to generate listening content.", "error");
+        }
+    } else if (format === 'test') {
+        if (cleanResult.content) {
+            setTestContent(cleanResult.content);
+            showToast("Practice test generated!", "success");
+        } else {
+            showToast("Failed to generate test.", "error");
+        }
     } else {
-        setTitle(result.title);
-        setDescription(result.description);
-        setContent(result.content);
-        if (!tagsInput.trim() && result.tags && result.tags.length > 0) {
-            setTagsInput(result.tags.join(', '));
+        // Reading Refinement (Default)
+        if (cleanResult.title) setTitle(cleanResult.title);
+        if (cleanResult.description) setDescription(cleanResult.description);
+        if (cleanResult.content) setContent(cleanResult.content);
+        
+        if (!tagsInput.trim() && cleanResult.tags && cleanResult.tags.length > 0) {
+            setTagsInput(cleanResult.tags.join(', '));
         }
         showToast("Lesson content refined!", "success");
     }
 
-    setIsAiModalOpen(false);
+    setAiModalMode(null);
   };
 
   return (
@@ -126,19 +150,22 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         setContent={setContent}
         listeningContent={listeningContent}
         setListeningContent={setListeningContent}
+        testContent={testContent}
+        setTestContent={setTestContent}
         isSaving={isSaving}
         onSave={handleSave}
         onPractice={handlePractice}
         onCancel={onCancel}
-        onOpenAiRefine={() => setIsAiModalOpen(true)}
+        onOpenAiRefine={(format) => setAiModalMode({ format: format || 'reading' })}
       />
-      {isAiModalOpen && (
+      {aiModalMode && (
         <UniversalAiModal
-          isOpen={isAiModalOpen}
-          onClose={() => setIsAiModalOpen(false)}
+          isOpen={!!aiModalMode}
+          onClose={() => setAiModalMode(null)}
           type="REFINE_UNIT"
-          title="Refine Lesson"
-          description="AI will format your notes or generate a Listening Podcast script."
+          title={`Generate ${aiModalMode.format}`}
+          description={`AI will create the ${aiModalMode.format} component for this lesson.`}
+          initialData={{ ...user.lessonPreferences, format: aiModalMode.format }}
           onGeneratePrompt={handleGenerateRefinePrompt}
           onJsonReceived={handleAiResult}
           actionLabel="Apply Changes"

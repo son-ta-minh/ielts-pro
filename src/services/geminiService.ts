@@ -99,12 +99,56 @@ function safeJsonParse(text: string | undefined, defaultValue: any): any {
   if (!text) return defaultValue;
   const cleaned = cleanJsonResponse(text);
   if (!cleaned) return defaultValue;
+
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    const fixedText = cleaned.replace(/,\s*([}\]])/g, "$1");
-    try { return JSON.parse(fixedText); } 
-    catch (e2) { return defaultValue; }
+    // Strategy 1: Mixed Quote Fix (Smart Structure / Standard Content)
+    // If we detect smart quotes, assume they are structural.
+    // 1. Escape ALL existing standard quotes (assuming they are content).
+    // 2. Replace Smart Quotes with Standard Quotes (restoring structure).
+    if (/[\u201C\u201D]/.test(cleaned)) {
+         const mixedFixed = cleaned
+            .replace(/"/g, '\\"') // Escape content quotes
+            .replace(/[\u201C\u201D]/g, '"'); // Normalize structural quotes
+         try {
+             return JSON.parse(mixedFixed);
+         } catch (eMixed) {
+             // Fall through
+         }
+    }
+
+    // Strategy 2: Simple Smart Quote Replacement
+    // Works if the entire JSON uses smart quotes consistently or if no internal quotes exist.
+    const simpleSmartFixed = cleaned.replace(/[\u201C\u201D]/g, '"');
+    try {
+        return JSON.parse(simpleSmartFixed);
+    } catch (eSimple) {
+        // Fall through
+    }
+
+    // Strategy 3: Trailing Commas + Simple Smart Quotes
+    // Removing trailing commas before closing braces/brackets
+    const trailingCommaFixed = simpleSmartFixed.replace(/,\s*([}\]])/g, "$1");
+    try { 
+        return JSON.parse(trailingCommaFixed); 
+    } 
+    catch (eTrailing) {
+         // Strategy 4: Trailing Commas + Mixed Quotes
+         // Apply mixed quote fix logic, then remove trailing commas
+         if (/[\u201C\u201D]/.test(cleaned)) {
+             const mixedAndTrailing = cleaned
+                .replace(/"/g, '\\"')
+                .replace(/[\u201C\u201D]/g, '"')
+                .replace(/,\s*([}\]])/g, "$1");
+             try {
+                 return JSON.parse(mixedAndTrailing);
+             } catch(e4) {}
+         }
+
+         console.error("JSON Parse Failed:", e);
+         return defaultValue; 
+    }
   }
 }
 

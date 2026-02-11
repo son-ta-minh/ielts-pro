@@ -5,43 +5,84 @@ export interface LessonGenerationParams {
   targetAudience: 'Kid' | 'Adult';
   tone: 'friendly_elementary' | 'professional_professor';
   coachName: string;
+  format?: 'reading' | 'listening';
 }
 
 export function getGenerateLessonPrompt(params: LessonGenerationParams): string {
-  const { topic, language, targetAudience, tone, coachName } = params;
+  const { topic, language, targetAudience, tone, coachName, format } = params;
+  const isListeningMode = format === 'listening';
+  const explanationAudioTag = language === 'Vietnamese' ? '[Audio-VN]' : '[Audio-EN]';
 
-  return `You are an expert educational content creator.
-  ROLE: You are '${coachName}'.
+  const styleInstruction = isListeningMode 
+    ? `STYLE: NATURAL SPOKEN AUDIO SCRIPT
+       - Structure the content as a natural spoken narrative or conversation.
+       - **EVERY SENTENCE** must be wrapped in either ${explanationAudioTag}text[/] (for explanations) or [Audio-EN]text[/] (for examples/terms).
+       - No Markdown headers (###).
+       - Use specific visual cues for the speaker (e.g. [Pause], [Excited]).`
+    : `STYLE: COMPACT RICH ARTICLE (READING)
+       - **COMPACT FORMAT**: Minimize vertical space. **NO double newlines (\n\n)**. **NO horizontal rules (---)**. Keep the layout dense.
+       - Use Markdown Headers (###) for specific topics/sections.
+       - **VISUAL STRUCTURE**: Do NOT use nested bullet points for examples.
+       - **RICH ELEMENTS**: 
+         1. **TABLES**: STRICTLY for **Comparative Matrices** (e.g. Pros vs Cons, Tense vs Usage) or **System Maps** at the end where every column adds dimension. 
+            - ❌ **PROHIBITED**: Do NOT use tables to enumerate words without contrast or explanation per cell (e.g. | word1 | word2 | word3 |). Use bullet points for lists.
+         2. Use **[Tip: ...]** blocks for quick insights or "Did you know" facts.
+         3. Use **[HIDDEN: ...]** tags ONLY for **Interactive Q&A**. 
+            - **RULE**: The QUESTION must be visible OUTSIDE the tag. Only the ANSWER is inside.
+            - Format: "Question here? [HIDDEN: Answer here]"
+         4. Use **[Formula: Part | Part]** for grammar patterns. 
+            - Format: "[Formula: If | S | V(past), S | would | V(base)]".
+         5. Use **Emojis** in headers and key points to make it engaging for ${targetAudience}.
+       - **EXAMPLES**: Use Markdown Blockquotes (>) for examples to make them stand out visually.
+       - **AUDIO STRATEGY**: Wrap the ${language} EXPLANATIONS in ${explanationAudioTag}text[/] tags. Do NOT put audio tags on the English examples.`;
 
-  STRICT CONTENT RULES:
-  1. **NO LINGUISTIC THEORY**: Don't define what idioms/collocations are. Explain the specific phrase "${topic}" only.
-  2. **NO ENGLISH IN VN TAGS**: Every English word MUST be in [Audio-EN]. Break [Audio-VN] tags to accommodate this.
-     Example: [Audio-VN]Cụm từ[/] [Audio-EN]from the horse's mouth[/] [Audio-VN]nghĩa là...[/]
-  3. **TRANSLATE TERMS**: Use "thành ngữ", "ví dụ", "cụm từ" instead of "idiom", "example", "collocation" inside Vietnamese blocks.
-  4. **NO EMPTY/PUNCTUATION TAGS**: Absolutely no tags like [Audio-VN].[/].
-  5. **NO IPA**: Do not include phonetic symbols in audio tags.
+  return `You are an expert IELTS coach named '${coachName}'. 
+  
+  TASK: Create an immersive, high-impact lesson for a ${targetAudience} on: "${topic}".
 
-  COMPACT LAYOUT RULES:
-  - **NO HORIZONTAL LINES**: Do not use "---" or any thematic breaks.
-  - **MINIMAL SPACING**: Use single newlines for standard separation. Use double newlines (\n\n) ONLY between major sections. NEVER use triple newlines.
-  - **AUDIO TAG INTEGRITY**: Ensure the text inside [Audio-XX]...[/] does NOT contain actual line breaks.
+  PEDAGOGICAL FLOW:
+  1. **TEACHING**: Teach concepts clearly with nuance and examples.
+  2. **CONSOLIDATION**: End with a summary using a **Comparison Matrix (Table)** or a clear **Pattern Blueprint**.
+  
+  CRITICAL FORMATTING RULES:
+  1. **NO META LABELS**: DO NOT use labels like "Nuance:", "Scenario Change:", "Context:", "Meaning:", "Definition:", or "Phase 1".
+  2. **NATURAL WRITING**: Weave the nuance and context *into* the sentence. 
+     - ❌ Bad: "Nuance: Used for formal events."
+     - ✅ Good: "This phrase is specifically reserved for formal events..."
+  3. **HEADERS**: Use standard Markdown headers (###) for the specific content topics.
 
-  INTERACTIVE QUIZ RULES:
-  - **PRIORITIZE SELECTION**: Use [Select: Correct | Distractor 1 | Distractor 2] for context-based blanks.
-  - **USE MULTI-CHOICE**: Use [Multi: Correct | Distractor 1 | Distractor 2] for choosing between meanings or synonyms.
-  - **AVOID AMBIGUOUS FILL-INS**: Only use [Quiz: answer] if the answer is 100% unique and obvious (e.g., a fixed preposition). If multiple synonyms could fit, you MUST use [Select: ...].
-  - **GOOD DISTRACTORS**: For [Select], use distractors that make sense grammatically but are slightly off in meaning or collocation nuance.
+  STRICT TEACHING RULES:
+  1. **EXPLAIN EVERY ITEM**: For every vocabulary item, collocation, or idiom:
+     - You MUST explain *why* we use it (nuance) directly in the explanation sentence.
+     - You MUST provide a natural **Example Sentence**.
+  2. **COMPARE PARAPHRASES**: Do not just list synonyms. Explain the difference in scenario directly.
+  3. **COACHING FLOW**: Structure the lesson as a guided walkthrough.
+  4. **NO LINGUISTIC DEFINITIONS**: Skip "What is a collocation". Focus 100% on the materials for "${topic}".
+  5. **PURE TEACHING CONTENT**: This output is for the "Reading" tab only. **DO NOT GENERATE QUIZZES**. Do not use [Quiz:], [Select:], [Multi:].
+  
+  ${styleInstruction}
 
-  LANGUAGE RULES:
-  - CORE MATERIAL: English.
-  - EXPLANATIONS: ${language}.
+  LANGUAGE:
+  - Explanations: ${language}.
+  - Material: English.
 
-  TASK: Create a focused lesson for a ${targetAudience} on topic: "${topic}".
+  TAGGING RULES:
+  - **"tags" MUST be selected ONLY from this list**: ["grammar", "pattern", "speaking", "listening", "reading", "writing", "general", "comparison", "vocabulary"].
+  - **QUANTITY**: Return EXACTLY ONE tag. Choose the most primary skill only.
 
-  OUTPUT: Return a single JSON object:
+  CRITICAL OUTPUT RULES:
+  1. **MARKDOWN CODE BLOCK**: You MUST wrap your entire JSON response in a markdown code block (e.g. \`\`\`json { ... } \`\`\`).
+  2. **VALID JSON**: The content inside the code block must be valid, parsable JSON.
+  3. **NO RAW NEWLINES IN STRINGS**: Inside the "content" string, you MUST use literal '\\n' for line breaks. Do NOT use actual newline characters.
+  4. **ESCAPE CHARACTERS**: Properly escape all double quotes and backslashes within strings.
+
+  OUTPUT TEMPLATE:
+  \`\`\`json
   {
     "title": "string",
     "description": "string",
-    "content": "string (Markdown with interactive tags and Audio tags. Apply strict tag splitting and term translation.)"
-  }`;
+    "content": "string (Markdown formatted with \\n for newlines)",
+    "tags": ["string"]
+  }
+  \`\`\``;
 }

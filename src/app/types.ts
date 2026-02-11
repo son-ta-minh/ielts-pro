@@ -353,6 +353,7 @@ export interface Lesson {
   description: string;
   content: string; // Stored as HTML.
   listeningContent?: string; // Stored as Markdown (Listening version - Podcast style)
+  testContent?: string; // Stored as Markdown (Interactive Practice Test)
   
   path?: string;
   tags?: string[];

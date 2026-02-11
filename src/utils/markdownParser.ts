@@ -1,12 +1,14 @@
 
+
 /**
- * Markdown Parser cực nhẹ hỗ trợ các thẻ tùy chỉnh:
- * [Audio-VN]văn bản[/] -> Nút loa + văn bản (inline)
- * [HIDDEN: văn bản] -> Nút bấm reveal (inline replacement)
+ * Lightweight Markdown Parser supporting custom tags:
+ * [Audio-VN]text[/] -> Speaker button + text (inline)
+ * [HIDDEN: text] -> Reveal button (inline replacement)
  * [Quiz: answer] -> Input field checking against 'answer'
  * [Multi: Correct | Option 2 | Option 3] -> Multiple Choice Buttons (Inline buttons)
  * [Select: Correct | Option 2 | Option 3] -> Dropdown Selection (Locked after check)
- * [Nội dung tip] -> Box thông tin màu xanh có icon bóng đèn
+ * [Formula: Part | Part] -> Amber box with badges
+ * [Tip content] -> Blue info box with lightbulb icon
  */
 
 if (typeof window !== 'undefined') {
@@ -153,7 +155,7 @@ const parseTable = (lines: string[]): { html: string; consumed: number } | null 
 };
 
 /**
- * Xử lý [HIDDEN: nội dung] thành nút bấm inline thay thế chính nó khi click
+ * Process [HIDDEN: content] into inline reveal buttons
  */
 const processSpoilers = (text: string): string => {
     return text.replace(/\[HIDDEN:\s*(.*?)\]/gi, (_, content) => {
@@ -170,7 +172,7 @@ const processSpoilers = (text: string): string => {
 };
 
 /**
- * Xử lý [Quiz: answer]
+ * Process [Quiz: answer]
  */
 const processQuiz = (text: string): string => {
     // Regex updated with 'i' flag for case-insensitivity (matches Quiz and QUIZ)
@@ -183,7 +185,7 @@ const processQuiz = (text: string): string => {
 };
 
 /**
- * Xử lý [Select: Correct | Option | Option]
+ * Process [Select: Correct | Option | Option]
  */
 const processDropdown = (text: string): string => {
     return text.replace(/\[Select:\s*(.*?)\]/gi, (_, content) => {
@@ -215,7 +217,7 @@ const processDropdown = (text: string): string => {
 };
 
 /**
- * Xử lý [Multi: Correct | Option | Option]
+ * Process [Multi: Correct | Option | Option]
  */
 const processMultiChoice = (text: string): string => {
     return text.replace(/\[Multi:\s*(.*?)\]/gi, (_, content) => {
@@ -243,21 +245,46 @@ const processMultiChoice = (text: string): string => {
 };
 
 /**
- * Xử lý thẻ [Audio-XX]...[/] 
+ * Process [Formula: part1 | part2 | part3]
+ */
+const processFormula = (text: string): string => {
+    return text.replace(/\[Formula:?\s*(.*?)\]/gi, (_, content) => {
+        const parts = content.split('|').map((s: string) => s.trim());
+        
+        let html = `<div class="flex flex-wrap items-center gap-2 p-3 my-3 bg-amber-50 border-l-4 border-amber-400 rounded-r-xl shadow-sm">`;
+        html += `<span class="text-[10px] font-black text-amber-500 uppercase tracking-widest mr-1 select-none">Formula</span>`;
+        
+        parts.forEach(part => {
+             if (/^[+,.]+$/.test(part)) {
+                 html += `<span class="font-bold text-amber-700">${part}</span>`;
+             } else {
+                 html += `<span class="px-2 py-1 bg-white border border-amber-200 rounded-lg text-amber-900 font-mono text-sm font-bold shadow-sm">${part}</span>`;
+             }
+        });
+
+        html += `</div>`;
+        return html;
+    });
+};
+
+/**
+ * Process [Audio-XX]...[/] tags
  */
 const processAudioBlocks = (text: string): string => {
-    const audioRegex = /\[Audio-(VN|EN)\]([\s\S]*?)\[\/\]/g;
+    // Regex updated to support standard closing tag [/] AND verbose closing tag [/Audio-VN]
+    const audioRegex = /\[Audio-(VN|EN)\]([\s\S]*?)\[\/(?:Audio-(?:VN|EN))?\]/gi;
     
     return text.replace(audioRegex, (_, lang, content) => {
-        // Làm sạch text để đọc TTS (loại bỏ markdown, spoiler, emoji)
+        // Clean text for TTS reading (remove markdown, spoiler, emoji)
         const speechText = content
             .replace(/\[HIDDEN:.*?\]/gi, '') 
             .replace(/\[Quiz:.*?\]/gi, '') // remove quiz answer from speech
             .replace(/\[Select:.*?\]/gi, '') // remove dropdown
             .replace(/\[Multi:.*?\]/gi, '') // remove multi quiz
+            .replace(/\[Formula:.*?\]/gi, '') // remove formulas
             .replace(/[#*`_~[\]()]/g, '') 
             .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '') 
-            .replace(/\n/g, ' ') // FIX: Thay thế newline bằng space để không làm gãy thuộc tính onclick của HTML
+            .replace(/\n/g, ' ') // FIX: Replace newline with space to prevent breaking onclick HTML attribute
             .trim()
             .replace(/'/g, "\\'"); 
 
@@ -270,11 +297,12 @@ const processAudioBlocks = (text: string): string => {
 export const parseMarkdown = (text: string): string => {
     if (!text) return '';
 
-    // 1. Xử lý Audio và Spoilers trước (vì chúng có thể nằm inline)
+    // 1. Process Audio and Spoilers first (as they can be inline)
     let processed = processAudioBlocks(text);
     processed = processQuiz(processed);
     processed = processDropdown(processed); // New: Select
     processed = processMultiChoice(processed); // Process Multi before table to safely replace pipes
+    processed = processFormula(processed); // Process Formula
     processed = processSpoilers(processed);
     
     const lines = processed.split('\n');
@@ -333,8 +361,8 @@ export const parseMarkdown = (text: string): string => {
             continue;
         }
 
-        // Xử lý [Tip Block] - Loại trừ các thẻ Audio, HIDDEN, Quiz, Select, Multi (dạng inline)
-        const tipMatch = lineTrim.match(/^\[(?!(HIDDEN:|Quiz:|Select:|QUIZ:|Multi:|Audio-|(\/\])))(.*)\]$/);
+        // Process [Tip Block] - Exclude Audio, HIDDEN, Quiz, Select, Multi tags (inline forms)
+        const tipMatch = lineTrim.match(/^\[(?!(HIDDEN:|Quiz:|Select:|QUIZ:|Multi:|Formula:|Audio-|(\/\])))(.*)\]$/);
         if (tipMatch) {
             closeLists(0);
             const lightbulbSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5 text-sky-500"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>`;
@@ -353,10 +381,10 @@ export const parseMarkdown = (text: string): string => {
         const indentMatch = lineRaw.match(/^(\s*)/);
         const indent = indentMatch ? indentMatch[0].length : 0;
         
-        // Regex cho Unordered list
+        // Regex for Unordered list
         const ulMatch = lineRaw.match(/^\s*[-*]\s+(.*)/);
         
-        // Regex cho Ordered list: Captures the NUMBER specifically
+        // Regex for Ordered list: Captures the NUMBER specifically
         const olMatch = lineRaw.match(/^\s*(\d+)\.\s+(.*)/);
 
         if (ulMatch || olMatch) {
@@ -398,7 +426,7 @@ export const parseMarkdown = (text: string): string => {
     return output.join('')
         .replace(/!\[(.*?)\]\((.*?)\)/g, '<img alt="$1" src="$2" class="max-w-full h-auto rounded-lg my-4 shadow-md border border-neutral-200" />')
         .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-indigo-600 font-bold hover:underline">$1</a>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-black text-neutral-900">${1}</strong>')
-        .replace(/\*(.*?)\*/g, '<span class="italic font-normal text-inherit">${1}</span>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-black text-neutral-900">$1</strong>')
+        .replace(/\*(.*?)\*/g, '<span class="italic font-normal text-inherit">$1</span>')
         .replace(/`([^`]+)`/g, '<code class="bg-neutral-100 text-pink-600 px-1.5 py-0.5 rounded text-xs font-mono font-bold border border-neutral-200">$1</code>');
 };
