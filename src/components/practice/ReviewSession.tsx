@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { VocabularyItem, ReviewGrade, ReviewMode, SessionType, User } from '../../app/types';
-import { updateSRS, calculateMasteryScore } from '../../utils/srs';
+import { updateSRS, calculateMasteryScore, getLogicalKnowledgeUnits } from '../../utils/srs';
 import { ReviewSessionUI } from './ReviewSession_UI';
 import { getStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
@@ -130,6 +130,35 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       setIsTesting(true);
   };
 
+  /**
+   * Helper to merge test results. 
+   * CRITICAL: If a specific test key failed, we invalidate ALL keys related to that knowledge unit 
+   * to ensure the Mastery Score drops immediately.
+   */
+  const applyTestResults = (word: VocabularyItem, results: Record<string, boolean>) => {
+      const currentResults = { ...(word.lastTestResults || {}) };
+      // Get logical units (e.g., 'colloc:heavy rain' maps to ['COLLOCATION_QUIZ...', 'COLLOCATION_MULTI...'])
+      const knowledgeUnits = getLogicalKnowledgeUnits(word);
+
+      Object.entries(results).forEach(([key, success]) => {
+          // Always update the specific key outcome
+          currentResults[key] = success;
+
+          if (success === false) {
+              // If failed, find the unit this key belongs to
+              const unit = knowledgeUnits.find(u => u.testKeys.includes(key));
+              if (unit) {
+                  // Invalidate ALL keys for that unit. 
+                  // This ensures that failing a "Fill" test overrides a previous "Multiple Choice" pass.
+                  unit.testKeys.forEach(relatedKey => {
+                      currentResults[relatedKey] = false;
+                  });
+              }
+          }
+      });
+      return currentResults;
+  };
+
   const handleTestComplete = async (grade: ReviewGrade, testResults?: Record<string, boolean>, stopSession = false, counts?: { correct: number, tested: number }) => {
     setIsTesting(false);
     if (!currentWord) return;
@@ -155,7 +184,9 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         
         const updated = updateSRS(wordWithUpdatedFlags, autoGrade);
 
-        if (testResults) updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
+        if (testResults) {
+            updated.lastTestResults = applyTestResults(updated, testResults);
+        }
         updated.masteryScore = calculateMasteryScore(updated);
 
         setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
@@ -171,7 +202,9 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
 
       const updated = updateSRS(wordWithUpdatedFlags, grade);
 
-      if (testResults) updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
+      if (testResults) {
+          updated.lastTestResults = applyTestResults(updated, testResults);
+      }
       updated.masteryScore = calculateMasteryScore(updated);
       
       setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
@@ -184,7 +217,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     } else {
       const updated: VocabularyItem = { ...wordWithUpdatedFlags };
       if (testResults) {
-        updated.lastTestResults = { ...(updated.lastTestResults || {}), ...testResults };
+        updated.lastTestResults = applyTestResults(updated, testResults);
       }
       updated.masteryScore = calculateMasteryScore(updated);
       await onUpdate(updated);

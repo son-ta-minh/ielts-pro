@@ -141,13 +141,9 @@ function _recalculateStats(userId: string) {
 
     activeWords.forEach(w => {
         if (w.lastReview && w.lastReview >= todayTimestamp && w.lastReviewSessionType !== 'boss_battle') {
-            if (w.lastGrade === ReviewGrade.FORGOT) {
-                todayReviewedWords.push(w);
-            }
-            else if (w.consecutiveCorrect === 1 && w.lastGrade !== ReviewGrade.HARD) {
+            if (w.lastGrade === ReviewGrade.LEARNED) {
                 todayLearnedWords.push(w);
-            } 
-            else {
+            } else {
                 todayReviewedWords.push(w);
             }
         }

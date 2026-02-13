@@ -471,7 +471,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     >
       {() => (
         <>
-          {pagedResources.map((item) => {
+          {(pagedResources as ResourceItem[]).map((item) => {
             const onRead = () => { setActiveLesson(item.data as Lesson); setViewMode('read_lesson'); };
             const onEdit = () => { setActiveLesson(item.data as Lesson); setViewMode('edit_lesson'); };
             const onDelete = () => setLessonToDelete(item.data as Lesson);
