@@ -1,8 +1,9 @@
 
 import React from 'react';
-import { AlertCircle, CheckCircle2, ChevronDown, User, Bot, Database, Settings2, AlertTriangle, LayoutTemplate, Target, BookText, GraduationCap, Activity, Server } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, User, Bot, Database, Settings2, AlertTriangle, LayoutTemplate, Target, BookText, GraduationCap, Activity, Server, Radio } from 'lucide-react';
 import { ProfileSettings } from './ProfileSettings';
 import { AudioCoachSettings } from './AudioCoachSettings';
+import { AudioServerSettings } from './AudioServerSettings';
 import { DataSettings } from './DataSettings';
 import { SrsSettings } from './SrsSettings';
 import { GoalSettings } from './GoalSettings';
@@ -11,7 +12,7 @@ import { ServerSettings } from './ServerSettings';
 import { SystemConfig, DailyGoalConfig } from '../../app/settingsManager';
 import { DataScope } from '../../app/types';
 
-export type SettingView = 'PROFILE' | 'INTERFACE' | 'SERVER' | 'AUDIO_COACH' | 'DATA' | 'LEARNING' | 'DANGER';
+export type SettingView = 'PROFILE' | 'INTERFACE' | 'SERVER' | 'AUDIO_COACH' | 'AUDIO_SERVER' | 'DATA' | 'LEARNING' | 'DANGER';
 
 interface SettingsViewUIProps {
     // State
@@ -77,6 +78,7 @@ const navItems = [
     { id: 'INTERFACE', label: 'Interface Defaults', icon: LayoutTemplate },
     { id: 'SERVER', label: 'Server & Connection', icon: Server },
     { id: 'AUDIO_COACH', label: 'Audio Coach', icon: Bot },
+    { id: 'AUDIO_SERVER', label: 'Audio Server', icon: Radio },
     { id: 'LEARNING', label: 'Learning', icon: GraduationCap },
     { id: 'DATA', label: 'Data Management', icon: Database },
     { id: 'DANGER', label: 'Danger Zone', icon: AlertTriangle, color: 'text-red-500' }
@@ -95,6 +97,7 @@ export const SettingsViewUI: React.FC<SettingsViewUIProps> = (props) => {
             case 'PROFILE': return <ProfileSettings profileData={props.profileData} onProfileChange={props.onProfileChange} onAvatarChange={props.onAvatarChange} onSaveProfile={props.onSaveProfile} />;
             case 'SERVER': return <ServerSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />;
             case 'AUDIO_COACH': return <AudioCoachSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />;
+            case 'AUDIO_SERVER': return <AudioServerSettings />;
             case 'DATA': return (
                 <div className="space-y-6">
                     <DataSettings jsonInputRef={props.jsonInputRef} dataScope={props.dataScope} onDataScopeChange={props.onDataScopeChange} onJSONImport={props.onJSONImport} onJSONExport={props.onJSONExport} isNormalizing={props.isNormalizing} onOpenNormalizeModal={props.onOpenNormalizeModal} junkTags={props.junkTags} onJunkTagsChange={props.onJunkTagsChange} normalizeOptions={props.normalizeOptions} onNormalizeOptionsChange={props.onNormalizeOptionsChange} />

@@ -368,10 +368,12 @@ export interface Lesson {
 export interface ListeningItem {
   id: string;
   userId: string;
+  title?: string; // Optional title for the card/essay
   text: string; // Text with {curly braces} for highlighting
   note?: string;
   path?: string;
   tags?: string[];
+  audioLinks?: string[]; // Array of URLs to audio files (from Audio Server)
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
@@ -441,6 +443,7 @@ export interface FreeTalkItem {
   focusColor?: FocusColor;
   isFocused?: boolean;
   bestScore?: number; // Overall accuracy score
+  sentenceScores?: Record<number, number>; // Map of sentence index to score
 }
 
 export interface WordBookItem {

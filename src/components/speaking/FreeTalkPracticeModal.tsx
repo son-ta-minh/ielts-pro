@@ -65,7 +65,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
                     text: text,
                     sourceWord: item.title,
                     type: 'Free Talk',
-                    lastScore: undefined
+                    lastScore: item.sentenceScores?.[idx] // Restore from saved
                 }));
 
             setQueue(phrases);
@@ -100,6 +100,35 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
         setShowIpa(false);
     };
 
+    const saveProgress = async (currentQueue: TargetPhrase[]) => {
+        if (!item) return;
+        
+        const sentenceScores: Record<number, number> = {};
+        const scores: number[] = [];
+
+        // Build the sentenceScores map from the current queue which holds all session data
+        currentQueue.forEach((p, idx) => {
+            if (p.lastScore !== undefined) {
+                sentenceScores[idx] = p.lastScore;
+                scores.push(p.lastScore);
+            }
+        });
+
+        let averageScore = item.bestScore || 0;
+        if (scores.length > 0) {
+            const totalScore = scores.reduce((acc, curr) => acc + curr, 0);
+            averageScore = Math.round(totalScore / scores.length);
+        }
+        
+        // Save to DB immediately with sentence scores map
+        await dataStore.saveFreeTalkItem({
+            ...item,
+            bestScore: averageScore,
+            sentenceScores,
+            updatedAt: Date.now()
+        });
+    };
+
     // --- Actions ---
 
     const handleToggleRecord = async () => {
@@ -118,8 +147,12 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
                 const analysis = analyzeSpeechLocally(target.text, fullTranscript);
                 setLocalAnalysis(analysis);
                 
-                // Update score in queue
-                setQueue(prev => prev.map((p, idx) => idx === currentIndex ? { ...p, lastScore: analysis.score } : p));
+                // Update score in queue immediately
+                const updatedQueue = queue.map((p, idx) => idx === currentIndex ? { ...p, lastScore: analysis.score } : p);
+                setQueue(updatedQueue);
+                
+                // Save progress to DB immediately
+                await saveProgress(updatedQueue);
                 
             } catch (e) {
                 console.error(e);
@@ -189,25 +222,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
         setPage(0);
     };
     
-    const handleCloseAndSave = async () => {
-        if (item) {
-            // Calculate overall score based on practiced items
-            const practicedItems = queue.filter(q => q.lastScore !== undefined);
-            if (practicedItems.length > 0) {
-                const totalScore = practicedItems.reduce((acc, curr) => acc + (curr.lastScore || 0), 0);
-                const averageScore = Math.round(totalScore / practicedItems.length);
-                
-                // Save to DB
-                await dataStore.saveFreeTalkItem({
-                    ...item,
-                    bestScore: averageScore,
-                    updatedAt: Date.now()
-                });
-            }
-        }
-        onClose();
-    };
-
     // --- Render ---
 
     if (!isOpen || !item) return null;
@@ -251,7 +265,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
                     onToggleReveal={() => setIsRevealed(!isRevealed)}
                     onNext={handleNext}
                     onClearTranscript={() => setFullTranscript('')}
-                    onClose={handleCloseAndSave}
+                    onClose={onClose}
                     
                     // Pagination & List
                     pagedItems={pagedItems}

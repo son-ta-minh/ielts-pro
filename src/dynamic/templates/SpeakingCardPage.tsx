@@ -99,8 +99,8 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   const [bookToMove, setBookToMove] = useState<SpeakingBook | null>(null);
   const [bookToDelete, setBookToDelete] = useState<SpeakingBook | null>(null);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     const [cards, conversations, freeTalks, books] = await Promise.all([ 
         db.getNativeSpeakItemsByUserId(user.id), 
         db.getConversationItemsByUserId(user.id),
@@ -114,7 +114,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
     ];
     setItems(combined.sort((a, b) => b.data.createdAt - a.data.createdAt));
     setSpeakingBooks(books.sort((a, b) => b.createdAt - a.createdAt));
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => { loadData(); }, [user.id]);
@@ -393,9 +393,9 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
     {isAiModalOpen && <UniversalAiModal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} type="REFINE_UNIT" title="Refine Expression" description="Enter instructions for AI refinement." initialData={{}} onGeneratePrompt={(i) => getRefineNativeSpeakPrompt(itemToRefine?.standard || '', i.request)} onJsonReceived={(d) => { if (d.answers) { setEditingItem(prev => ({ ...prev || { id: '', userId: user.id, createdAt: 0, updatedAt: 0, standard: '', answers: [], tags: [], note: '' }, standard: d.standard, answers: d.answers })); setIsAiModalOpen(false); showToast("Refined!", "success"); } }} actionLabel="Apply" />}
     {isConversationAiModalOpen && <UniversalAiModal isOpen={isConversationAiModalOpen} onClose={() => setIsConversationAiModalOpen(false)} type="GENERATE_UNIT" title="AI Conversation Creator" description="Enter a topic to generate a dialogue." initialData={{}} onGeneratePrompt={(i) => getGenerateConversationPrompt(i.request)} onJsonReceived={handleConversationAiResult} actionLabel="Generate" closeOnSuccess={true} />}
     
-    <SpeakingPracticeModal isOpen={!!practiceModalItem} onClose={() => setPracticeModalItem(null)} item={practiceModalItem} />
-    <ConversationPracticeModal isOpen={!!practiceConversation} onClose={() => setPracticeConversation(null)} item={practiceConversation} />
-    <FreeTalkPracticeModal isOpen={!!practiceFreeTalk} onClose={() => setPracticeFreeTalk(null)} item={practiceFreeTalk} />
+    <SpeakingPracticeModal isOpen={!!practiceModalItem} onClose={() => { setPracticeModalItem(null); loadData(true); }} item={practiceModalItem} />
+    <ConversationPracticeModal isOpen={!!practiceConversation} onClose={() => { setPracticeConversation(null); loadData(true); }} item={practiceConversation} />
+    <FreeTalkPracticeModal isOpen={!!practiceFreeTalk} onClose={() => { setPracticeFreeTalk(null); loadData(true); }} item={practiceFreeTalk} />
     </>
   );
 };

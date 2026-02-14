@@ -155,11 +155,11 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
         </div>
       )}
 
-      <div className={`flex-grow flex flex-col ${compact ? 'p-4' : 'p-6'}`}>
+      <div className={`flex-1 flex flex-col ${compact ? 'p-4' : 'p-6'}`}>
         
         {/* ZONE A: Header (Badges & Tags) */}
         {(displayBadges.length > 0 || tags.length > 0) && (
-            <div className="flex flex-wrap items-center gap-2 mb-3 relative z-10">
+            <div className="flex flex-wrap items-center gap-2 mb-3 relative z-10 shrink-0">
                 {displayBadges.map((b, i) => (
                 <span key={i} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${b.colorClass}`}>
                     {b.icon && <b.icon size={10} />}
@@ -180,7 +180,7 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
         )}
 
         {/* ZONE B: Title */}
-        <div className="mb-2 relative z-10">
+        <div className="mb-2 relative z-10 shrink-0">
             {typeof title === 'string' ? (
                  <h3 className="font-black text-lg text-neutral-900 tracking-tight leading-tight truncate" title={title}>
                     {title}
@@ -190,14 +190,14 @@ export const UniversalCard: React.FC<UniversalCardProps> = ({
             )}
         </div>
 
-        {/* ZONE C: Body Content (Description or Interactive) */}
-        <div className="flex-1 text-sm text-neutral-500 font-medium leading-relaxed relative z-10">
+        {/* ZONE C: Body Content - FLEX GROW TO PUSH FOOTER */}
+        <div className="flex-1 text-sm text-neutral-500 font-medium leading-relaxed relative z-10 min-h-0">
            {children}
         </div>
         
-        {/* ZONE D: Footer */}
+        {/* ZONE D: Footer - ANCHORED BOTTOM via mt-auto in parent flex column if body doesn't fill */}
         {footer && (
-            <div className="mt-4 pt-3 border-t border-neutral-100 relative z-10">
+            <div className="mt-auto pt-4 border-t border-neutral-100 relative z-10 shrink-0">
                 {footer}
             </div>
         )}

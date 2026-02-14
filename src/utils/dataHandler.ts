@@ -50,7 +50,8 @@ const keyMap: { [key: string]: string } = {
     accentCode: 'ac',
     sex: 'sx',
     title: 'tl',
-    content: 'ct'
+    content: 'ct',
+    sentenceScores: 'ss'
 };
 
 const reverseKeyMap: { [key: string]: string } = Object.fromEntries(Object.entries(keyMap).map(([k, v]) => [v, k]));

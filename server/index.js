@@ -1,3 +1,4 @@
+
 /**
  * Unified Vocab Pro Server
  * Features:
@@ -6,6 +7,7 @@
  * 3. HTTPS Support (Auto-detects certificates)
  * 4. Dynamic Configuration
  * 5. IPA Mode 2: Cambridge Dictionary Scraping (US Accent)
+ * 6. Audio Server (Mapping & Streaming & Browsing)
  */
 
 const express = require('express');
@@ -18,6 +20,7 @@ const { exec, execSync } = require('child_process');
 const minimist = require('minimist');
 const os = require('os');
 const cheerio = require('cheerio');
+const multer = require('multer');
 
 // --- Stability Fix: Force CWD ---
 try {
@@ -74,11 +77,43 @@ function getInitialBackupPath() {
 
 let BACKUP_DIR = getInitialBackupPath();
 
+// --- Audio Mappings File Location Update ---
+// Migrate old file if it exists and new one doesn't
+const OLD_MAPPINGS_FILE = path.join(__dirname, 'audio_mappings.json');
+const AUDIO_MAPPINGS_FILE = path.join(BACKUP_DIR, 'audio_mappings.json');
+
+try {
+    if (fs.existsSync(OLD_MAPPINGS_FILE) && !fs.existsSync(AUDIO_MAPPINGS_FILE)) {
+        console.log("[Audio] Migrating mappings file to Backup Directory...");
+        fs.copyFileSync(OLD_MAPPINGS_FILE, AUDIO_MAPPINGS_FILE);
+    }
+} catch (e) {
+    console.warn("[Audio] Migration warning:", e.message);
+}
+
 // Ensure directories exist
 [AUDIO_DIR, CERT_DIR].forEach(dir => {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+// --- Audio Mappings State ---
+let audioMappings = {};
+try {
+    if (fs.existsSync(AUDIO_MAPPINGS_FILE)) {
+        audioMappings = JSON.parse(fs.readFileSync(AUDIO_MAPPINGS_FILE, 'utf8'));
+    }
+} catch (e) {
+    console.error("[Audio] Failed to load mappings:", e);
+}
+
+function saveAudioMappings() {
+    try {
+        fs.writeFileSync(AUDIO_MAPPINGS_FILE, JSON.stringify(audioMappings, null, 2));
+    } catch (e) {
+        console.error("[Audio] Failed to save mappings:", e);
+    }
+}
 
 const app = express();
 
@@ -95,8 +130,10 @@ app.use(cors({ origin: true, credentials: false }));
 app.options('*', cors({ origin: true, credentials: false }));
 
 app.use((req, res, next) => {
-    if (req.path === '/api/backup' && req.method === 'POST') {
-        next(); // Skip parsing for backup stream
+    // Skip parsing for backup stream OR audio upload stream
+    if ((req.path === '/api/backup' && req.method === 'POST') || 
+        (req.path === '/api/audio/upload' && req.method === 'POST')) {
+        next(); 
     } else {
         express.json()(req, res, next);
     }
@@ -109,6 +146,34 @@ app.use((req, res, next) => {
         console.log(`[${req.method}] ${req.path} ${res.statusCode} ${duration}ms`);
     });
     next();
+});
+
+// --- Upload Config (Multer) ---
+const upload = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            const mapName = req.body.mapName;
+            if (!mapName || !audioMappings[mapName]) {
+                return cb(new Error('Invalid map name'), null);
+            }
+            const targetDir = audioMappings[mapName];
+            // Ensure directory exists (though mapping creation should handle this, safety check)
+            if (!fs.existsSync(targetDir)) {
+                try {
+                    fs.mkdirSync(targetDir, { recursive: true });
+                } catch (e) {
+                    return cb(e, null);
+                }
+            }
+            cb(null, targetDir);
+        },
+        filename: (req, file, cb) => {
+            // Use provided filename or sanitize original
+            const name = req.body.filename || file.originalname;
+            // Sanitize filename
+            cb(null, name.replace(/[^a-zA-Z0-9.\-_]/g, '_'));
+        }
+    })
 });
 
 // --- Helper Functions ---
@@ -244,7 +309,6 @@ function wordToIPA(word) {
 
   const cmu = CMU[clean];
   if (cmu) {
-    console.log(`[IPA DEBUG] Word: "${word}", CMU: "${cmu}"`);
     return cmuToIPA(cmu);
   }
 
@@ -329,14 +393,11 @@ async function getCambridgeIPA(word) {
         }
 
         let usIpa = null;
-        const ipaElements = $(".ipa");
-        console.log(`[IPA DEBUG] Word: "${cleanWord}", Total .ipa elements: ${ipaElements.length}`);
 
         // Strategy 1: Iterate .pron-info (Standard structure)
         $(".pron-info").each((i, el) => {
             const label = $(el).find(".region").text().toLowerCase();
             const ipaText = $(el).find(".ipa").first().text();
-            console.log(`[IPA DEBUG] pron-info[${i}] label: "${label}", text: "${ipaText}"`);
             if (label.includes("us") && !usIpa) {
                 usIpa = ipaText;
             }
@@ -344,7 +405,6 @@ async function getCambridgeIPA(word) {
 
         // Strategy 2: Fallback to direct .us element or parent region check
         if (!usIpa) {
-            console.log(`[IPA DEBUG] Strategy 1 failed for "${cleanWord}", trying Strategy 2...`);
             $(".us .ipa").each((i, el) => {
                 const text = $(el).text();
                 if (text && !usIpa) usIpa = text;
@@ -406,7 +466,8 @@ app.get('/api/health', (req, res) => {
         status: 'ok', 
         backupDir: BACKUP_DIR,
         dictSize: Object.keys(CMU).length,
-        ttsEngine: process.platform === 'darwin' ? 'macOS-Say' : 'none'
+        ttsEngine: process.platform === 'darwin' ? 'macOS-Say' : 'none',
+        audioMappingsCount: Object.keys(audioMappings).length
     });
 });
 
@@ -802,6 +863,143 @@ app.get('/api/lookup/cambridge', (req, res) => {
     checkReq.end();
 });
 
+// --- Feature 6: Audio Server API (New) ---
+
+// 1. Get Mappings
+app.get('/api/audio/mappings', (req, res) => {
+    res.json(audioMappings);
+});
+
+// 2. Add/Update Mapping
+app.post('/api/audio/mappings', (req, res) => {
+    const { name, path: folderPath } = req.body;
+    if (!name || !folderPath) return res.status(400).json({ error: 'Name and path required' });
+    
+    // Resolve home directory tilde
+    let resolvedPath = folderPath;
+    if (resolvedPath.startsWith('~')) {
+        resolvedPath = path.join(os.homedir(), resolvedPath.slice(1));
+    }
+    
+    if (!fs.existsSync(resolvedPath)) {
+        try {
+            fs.mkdirSync(resolvedPath, { recursive: true });
+        } catch (e) {
+            return res.status(400).json({ error: `Path does not exist and cannot be created: ${e.message}` });
+        }
+    }
+
+    audioMappings[name] = resolvedPath;
+    saveAudioMappings();
+    res.json({ success: true, mappings: audioMappings });
+});
+
+// 3. Delete Mapping
+app.delete('/api/audio/mappings/:name', (req, res) => {
+    const { name } = req.params;
+    if (audioMappings[name]) {
+        delete audioMappings[name];
+        saveAudioMappings();
+    }
+    res.json({ success: true, mappings: audioMappings });
+});
+
+// 4. Stream Audio
+app.get('/api/audio/stream/:mapName/*', (req, res) => {
+    const { mapName } = req.params;
+    const filePathRel = req.params[0]; // Captures the rest of the path after mapName
+    
+    const rootDir = audioMappings[mapName];
+    if (!rootDir) return res.status(404).send('Mapping not found');
+
+    const fullPath = path.join(rootDir, filePathRel);
+    
+    // Security check to prevent directory traversal out of rootDir
+    if (!fullPath.startsWith(rootDir)) {
+        return res.status(403).send('Access denied');
+    }
+
+    if (fs.existsSync(fullPath)) {
+        res.sendFile(fullPath);
+    } else {
+        res.status(404).send('File not found');
+    }
+});
+
+// 4.1 List Files in Mapping (Updated for Subfolders)
+app.get('/api/audio/files/:mapName', (req, res) => {
+    const { mapName } = req.params;
+    const subPath = req.query.path || ''; // Relative path from root of mapping
+    const rootDir = audioMappings[mapName];
+    
+    if (!rootDir || !fs.existsSync(rootDir)) {
+        return res.status(404).json({ error: 'Mapping path not found' });
+    }
+
+    // Sanitize subPath to prevent directory traversal
+    const safeSubPath = subPath.replace(/\.\./g, '');
+    const targetDir = path.join(rootDir, safeSubPath);
+
+    if (!targetDir.startsWith(rootDir)) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (!fs.existsSync(targetDir)) {
+        return res.status(404).json({ error: 'Directory not found' });
+    }
+
+    try {
+        const dirents = fs.readdirSync(targetDir, { withFileTypes: true });
+        const audioExtensions = ['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac'];
+        
+        const items = dirents.map(dirent => {
+            return {
+                name: dirent.name,
+                type: dirent.isDirectory() ? 'directory' : 'file'
+            };
+        }).filter(item => {
+            if (item.name.startsWith('.')) return false; // Skip hidden files
+            if (item.type === 'directory') return true;
+            const ext = path.extname(item.name).toLowerCase();
+            return audioExtensions.includes(ext);
+        });
+
+        // Sort: Directories first, then files
+        items.sort((a, b) => {
+            if (a.type === b.type) return a.name.localeCompare(b.name);
+            return a.type === 'directory' ? -1 : 1;
+        });
+
+        res.json({ items, currentPath: safeSubPath });
+    } catch (e) {
+        console.error(`[Audio] Failed to read dir ${targetDir}:`, e);
+        res.status(500).json({ error: 'Failed to read directory' });
+    }
+});
+
+// 5. Upload Audio
+app.post('/api/audio/upload', upload.single('audio'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+    res.json({ success: true, path: req.file.path, filename: req.file.filename });
+});
+
+// --- Global Error Handler ---
+app.use((err, req, res, next) => {
+    console.error(`[Error] ${req.method} ${req.path}: ${err.message}`);
+    if (res.headersSent) {
+        return next(err);
+    }
+    
+    // Handle Multer/Custom errors gracefully
+    if (err.message === 'Invalid map name') {
+        return res.status(400).json({ error: 'Invalid or missing map name. Please ensure mapName is sent before the file.' });
+    }
+    
+    res.status(500).json({ error: err.message });
+});
+
 // --- Server Startup ---
 
 function loadHttpsCertificates() {
@@ -841,6 +1039,7 @@ function loadHttpsCertificates() {
         console.log(`[INFO] Protocol: ${protocol.toUpperCase()}`);
         console.log(`[INFO] Address:  ${protocol}://localhost:${PORT}`);
         console.log(`[INFO] Storage:  ${BACKUP_DIR}`);
+        console.log(`[INFO] Audio:    ${Object.keys(audioMappings).length} mappings loaded`);
         console.log(`[INFO] TTS:      ${Object.keys(voiceIndex).length} voices loaded`);
         if (protocol === 'http') {
             console.log(`[TIP]  To enable HTTPS, generate certs in ${CERT_DIR}`);

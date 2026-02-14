@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, ListeningItem, FocusColor, ListeningBook } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Ear, Plus, Edit3, Trash2, Volume2, Save, X, Info, Tag, Shuffle, FolderTree, Target, LayoutList, FolderPlus, Book, Move, Pen, Library, ArrowLeft } from 'lucide-react';
+import { Ear, Plus, Edit3, Trash2, Volume2, Save, X, Info, Tag, Shuffle, FolderTree, Target, LayoutList, FolderPlus, Book, Move, Pen, Library, ArrowLeft, Music, FileAudio, Folder, ChevronRight, CornerLeftUp, Loader2, Play, Pause, Square, SkipBack, SkipForward, Eye, EyeOff, Highlighter, RotateCw, Eraser } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
-import { speak } from '../../utils/audio';
+import { speak, stopSpeaking } from '../../utils/audio';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { UniversalCard } from '../../components/common/UniversalCard';
@@ -18,6 +19,7 @@ import { UniversalBook } from '../../components/common/UniversalBook';
 import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
 import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 interface Props {
   user: User;
@@ -25,14 +27,19 @@ interface Props {
 
 const VIEW_SETTINGS_KEY = 'vocab_pro_listening_view';
 
-// --- Highlighted Text Renderer ---
+// --- Highlighted Text Renderer (Static) ---
 const HighlightedText: React.FC<{ text: string }> = ({ text }) => {
+    // Splits by curly braces, capturing the content inside
     const parts = text.split(/({.*?})/g);
     return (
-        <span>
+        <span className="leading-relaxed">
             {parts.map((part, i) => {
                 if (part.startsWith('{') && part.endsWith('}')) {
-                    return <span key={i} className="bg-red-100 text-red-700 px-1 rounded-md font-bold mx-0.5 border border-red-200">{part.slice(1, -1)}</span>;
+                    return (
+                        <span key={i} className="inline-block bg-red-100 text-red-700 px-1.5 py-0.5 rounded-md font-bold mx-0.5 border border-red-200 text-[0.9em] align-baseline">
+                            {part.slice(1, -1)}
+                        </span>
+                    );
                 }
                 return <span key={i}>{part}</span>;
             })}
@@ -40,24 +47,606 @@ const HighlightedText: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
+// --- Interactive Transcript Engine ---
+interface InteractiveTranscriptProps {
+    rawText: string;
+    onUpdate: (newRawText: string) => void;
+    readOnly?: boolean;
+}
+
+const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, onUpdate, readOnly = false }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [pendingAction, setPendingAction] = useState<{ type: 'add' | 'remove', start: number, end: number } | null>(null);
+
+    // 1. Parse raw text into segments (Normal | Highlight)
+    const segments = useMemo(() => {
+        const segs: { text: string; isHighlight: boolean; start: number; end: number }[] = [];
+        const regex = /({.*?})/g;
+        let match;
+        let lastIndex = 0;
+
+        while ((match = regex.exec(rawText)) !== null) {
+            if (match.index > lastIndex) {
+                segs.push({
+                    text: rawText.slice(lastIndex, match.index),
+                    isHighlight: false,
+                    start: lastIndex,
+                    end: match.index
+                });
+            }
+            segs.push({
+                text: match[0],
+                isHighlight: true,
+                start: match.index,
+                end: regex.lastIndex
+            });
+            lastIndex = regex.lastIndex;
+        }
+        if (lastIndex < rawText.length) {
+            segs.push({
+                text: rawText.slice(lastIndex),
+                isHighlight: false,
+                start: lastIndex,
+                end: rawText.length
+            });
+        }
+        return segs;
+    }, [rawText]);
+
+    const handleSelectionCheck = () => {
+        if (readOnly) return;
+        const selection = window.getSelection();
+        
+        // Helper to find which segment index a node belongs to
+        const getSegmentIndex = (node: Node | null): number | null => {
+            if (!node) return null;
+            // Traverse up to find the span with data-index
+            let el = (node.nodeType === 3 ? node.parentElement : node) as HTMLElement;
+            while (el && el !== containerRef.current && !el.hasAttribute('data-index')) {
+                el = el.parentElement as HTMLElement;
+            }
+            if (el && el.hasAttribute('data-index')) {
+                return parseInt(el.getAttribute('data-index')!, 10);
+            }
+            return null;
+        };
+
+        if (!selection || !selection.anchorNode || !selection.focusNode) {
+            setPendingAction(null);
+            return;
+        }
+        
+        // Case A: Unhighlight (Cursor inside highlighted segment)
+        // Even if collapsed (just clicked), we show the option to unhighlight
+        const anchorIdx = getSegmentIndex(selection.anchorNode);
+        if (anchorIdx !== null) {
+            const segment = segments[anchorIdx];
+            if (segment.isHighlight) {
+                setPendingAction({ type: 'remove', start: segment.start, end: segment.end });
+                return;
+            }
+        }
+        
+        // Case B: Highlight (Selection inside plain text segment)
+        if (!selection.isCollapsed) {
+            const focusIdx = getSegmentIndex(selection.focusNode);
+            // Only allow single-segment highlighting for simplicity
+            if (anchorIdx !== null && anchorIdx === focusIdx) {
+                const segment = segments[anchorIdx];
+                if (!segment.isHighlight) {
+                    // Range offsets are relative to the text node.
+                    // Assuming segment renders as a single span, usually containing one text node.
+                    const textNode = selection.anchorNode;
+                    if (textNode && textNode.nodeType === 3) { // Text node
+                        const start = Math.min(selection.anchorOffset, selection.focusOffset);
+                        const end = Math.max(selection.anchorOffset, selection.focusOffset);
+                        
+                        // Absolute positions relative to raw text start
+                        const absStart = segment.start + start;
+                        const absEnd = segment.start + end;
+                        
+                        const selectedText = selection.toString();
+                        if (selectedText) {
+                            setPendingAction({ type: 'add', start: absStart, end: absEnd });
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        setPendingAction(null);
+    };
+
+    const handleApplyAction = () => {
+        if (!pendingAction) return;
+        
+        if (pendingAction.type === 'remove') {
+            // Remove braces: {content} -> content
+            const before = rawText.slice(0, pendingAction.start);
+            const content = rawText.slice(pendingAction.start + 1, pendingAction.end - 1);
+            const after = rawText.slice(pendingAction.end);
+            onUpdate(before + content + after);
+        } else {
+            // Add braces: content -> {content}
+            const before = rawText.slice(0, pendingAction.start);
+            const content = rawText.slice(pendingAction.start, pendingAction.end);
+            const after = rawText.slice(pendingAction.end);
+            onUpdate(`${before}{${content}}${after}`);
+        }
+        
+        setPendingAction(null);
+        window.getSelection()?.removeAllRanges();
+    };
+
+    return (
+        <div className="relative h-full flex flex-col">
+            <div className="absolute top-2 left-2 z-20 h-8">
+                 <button 
+                    onClick={(e) => { e.preventDefault(); handleApplyAction(); }}
+                    disabled={!pendingAction}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg transition-all transform duration-200 ${
+                        pendingAction 
+                            ? 'translate-y-0 opacity-100 pointer-events-auto' 
+                            : '-translate-y-2 opacity-0 pointer-events-none'
+                    } ${
+                        pendingAction?.type === 'remove' 
+                            ? 'bg-white text-rose-600 border border-rose-100 hover:bg-rose-50' 
+                            : 'bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800'
+                    }`}
+                 >
+                    {pendingAction?.type === 'remove' ? <Eraser size={12}/> : <Highlighter size={12}/>}
+                    <span>{pendingAction?.type === 'remove' ? 'Unhighlight' : 'Highlight'}</span>
+                 </button>
+            </div>
+            
+            <div 
+                ref={containerRef}
+                className="text-lg font-medium text-neutral-800 leading-relaxed whitespace-pre-wrap pt-12 pb-4 px-4 select-text cursor-text font-mono"
+                onMouseUp={handleSelectionCheck}
+                onKeyUp={handleSelectionCheck}
+            >
+                {segments.map((seg, i) => (
+                    <span 
+                        key={`${i}-${seg.start}`} 
+                        data-index={i}
+                        className={seg.isHighlight 
+                            ? "bg-red-100 text-red-700 px-1 rounded-md font-bold mx-0.5 border border-red-200 cursor-pointer hover:bg-red-200 hover:border-red-300 transition-colors" 
+                            : ""
+                        }
+                    >
+                        {seg.isHighlight ? seg.text.slice(1, -1) : seg.text}
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// --- Audio File Selector Modal ---
+interface AudioFileSelectorProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSelect: (url: string, filename: string) => void;
+}
+
+const AudioFileSelector: React.FC<AudioFileSelectorProps> = ({ isOpen, onClose, onSelect }) => {
+    const config = getConfig();
+    const serverUrl = getServerUrl(config);
+    const { showToast } = useToast();
+
+    const [mappings, setMappings] = useState<Record<string, string>>({});
+    const [currentMap, setCurrentMap] = useState<string | null>(null);
+    const [currentPath, setCurrentPath] = useState('');
+    const [fileList, setFileList] = useState<{name: string, type: 'file' | 'directory'}[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (isOpen) {
+            fetchMappings();
+            setCurrentMap(null);
+            setCurrentPath('');
+            setFileList([]);
+        }
+    }, [isOpen]);
+
+    const fetchMappings = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`${serverUrl}/api/audio/mappings`);
+            if (res.ok) {
+                setMappings(await res.json());
+            } else {
+                showToast("Failed to connect to audio server", "error");
+            }
+        } catch (e) {
+            showToast("Audio server unreachable", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchFiles = async (mapName: string, path: string = '') => {
+        setLoading(true);
+        try {
+            const encodedPath = encodeURIComponent(path);
+            const res = await fetch(`${serverUrl}/api/audio/files/${mapName}?path=${encodedPath}`);
+            if (res.ok) {
+                const data = await res.json();
+                let items = [];
+                if (Array.isArray(data.items)) items = data.items;
+                else if (Array.isArray(data.files)) items = data.files.map((f: string) => ({ name: f, type: 'file' }));
+                
+                setFileList(items);
+                setCurrentPath(data.currentPath || '');
+            } else {
+                showToast("Failed to load files", "error");
+            }
+        } catch (e) {
+            showToast("Connection error", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSelectMap = (mapName: string) => {
+        setCurrentMap(mapName);
+        fetchFiles(mapName, '');
+    };
+
+    const handleNavigate = (folderName: string) => {
+        if (!currentMap) return;
+        const newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+        fetchFiles(currentMap, newPath);
+    };
+
+    const handleUp = () => {
+        if (!currentMap) return;
+        if (!currentPath) {
+            setCurrentMap(null);
+            setFileList([]);
+        } else {
+            const parts = currentPath.split('/');
+            parts.pop();
+            const newPath = parts.join('/');
+            fetchFiles(currentMap, newPath);
+        }
+    };
+
+    const handleFileClick = (filename: string) => {
+        if (!currentMap) return;
+        const pathPart = currentPath ? `${currentPath}/${filename}` : filename;
+        const url = `${serverUrl}/api/audio/stream/${currentMap}/${pathPart}`;
+        onSelect(url, filename);
+        onClose();
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[80vh]">
+                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-center">
+                    <h3 className="text-xl font-black text-neutral-900 flex items-center gap-2"><Music size={20}/> Select Audio</h3>
+                    <button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
+                </header>
+                
+                <div className="p-4 bg-neutral-50 border-b border-neutral-100 flex items-center gap-2 overflow-hidden">
+                     {currentMap && (
+                        <button onClick={handleUp} className="p-1.5 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-100 transition-colors">
+                            <CornerLeftUp size={14} />
+                        </button>
+                     )}
+                     <div className="flex-1 truncate text-xs font-mono font-medium text-neutral-600">
+                        {currentMap ? `/${currentMap}/${currentPath}` : 'Root'}
+                     </div>
+                </div>
+
+                <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                    {loading ? (
+                        <div className="flex justify-center py-10"><Loader2 size={24} className="animate-spin text-neutral-300"/></div>
+                    ) : !currentMap ? (
+                        <div className="space-y-1">
+                            <p className="text-[10px] font-black uppercase text-neutral-400 tracking-widest px-2 mb-2">Mapped Folders</p>
+                            {Object.keys(mappings).map(mapName => (
+                                <button key={mapName} onClick={() => handleSelectMap(mapName)} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-neutral-50 transition-colors text-left group">
+                                    <Folder size={18} className="text-indigo-400 group-hover:text-indigo-600" />
+                                    <span className="text-sm font-bold text-neutral-700">{mapName}</span>
+                                    <ChevronRight size={14} className="ml-auto text-neutral-300" />
+                                </button>
+                            ))}
+                            {Object.keys(mappings).length === 0 && <p className="text-center text-xs text-neutral-400 py-4">No mappings found. Configure in Settings.</p>}
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            {fileList.map((item, idx) => (
+                                <button 
+                                    key={`${item.name}-${idx}`} 
+                                    onClick={() => item.type === 'directory' ? handleNavigate(item.name) : handleFileClick(item.name)}
+                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-neutral-50 transition-colors text-left group"
+                                >
+                                    {item.type === 'directory' ? <Folder size={18} className="text-indigo-400" /> : <FileAudio size={18} className="text-emerald-500" />}
+                                    <span className="text-xs font-medium text-neutral-700 truncate flex-1">{item.name}</span>
+                                    {item.type === 'directory' && <ChevronRight size={14} className="text-neutral-300" />}
+                                </button>
+                            ))}
+                            {fileList.length === 0 && <p className="text-center text-xs text-neutral-400 py-4">Empty folder.</p>}
+                        </div>
+                    )}
+                </main>
+            </div>
+        </div>
+    );
+};
+
+// --- Listening Practice Modal ---
+interface ListeningPracticeProps {
+    isOpen: boolean;
+    onClose: () => void;
+    item: ListeningItem;
+    onUpdate: (updatedItem: ListeningItem) => void;
+}
+
+const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onClose, item, onUpdate }) => {
+    const audioLinks = item.audioLinks || [];
+    const [currentIdx, setCurrentIdx] = useState<number>(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [duration, setDuration] = useState(0);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [editableText, setEditableText] = useState(item.text);
+    const [isEditMode, setIsEditMode] = useState(false); // Can toggle to raw textarea for bulk edits
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // Audio Cleanup on Unmount
+    useEffect(() => {
+        return () => {
+            stopAudio();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen) {
+            stopAudio();
+            setCurrentIdx(0);
+        } else {
+            setEditableText(item.text); // Sync with current item state on open
+            loadTrack(0, false); 
+        }
+    }, [isOpen, item]);
+
+    const handleTextUpdate = (newText: string) => {
+        setEditableText(newText);
+        // Persist to parent immediately
+        onUpdate({ ...item, text: newText });
+    };
+
+    const stopAudio = () => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
+        stopSpeaking(); // Stop TTS if any
+        setIsPlaying(false);
+        setCurrentTime(0);
+        setDuration(0);
+    };
+
+    const loadTrack = (index: number, autoPlay: boolean) => {
+        stopAudio();
+        setCurrentIdx(index);
+        
+        if (audioLinks.length > 0 && audioLinks[index]) {
+            const url = audioLinks[index];
+            const audio = new Audio(url);
+            audioRef.current = audio;
+            
+            audio.addEventListener('loadedmetadata', () => {
+                setDuration(audio.duration);
+            });
+            
+            audio.addEventListener('timeupdate', () => {
+                setCurrentTime(audio.currentTime);
+            });
+            
+            audio.addEventListener('ended', () => {
+                setIsPlaying(false);
+                if (index < audioLinks.length - 1) {
+                    loadTrack(index + 1, true);
+                } else {
+                     setCurrentTime(0);
+                }
+            });
+
+            audio.addEventListener('error', () => {
+                setIsPlaying(false);
+            });
+
+            if (autoPlay) {
+                audio.play().catch(console.error);
+                setIsPlaying(true);
+            }
+        }
+    };
+
+    const togglePlay = () => {
+        if (audioLinks.length > 0) {
+            if (audioRef.current) {
+                if (isPlaying) {
+                    audioRef.current.pause();
+                    setIsPlaying(false);
+                } else {
+                    audioRef.current.play().catch(console.error);
+                    setIsPlaying(true);
+                }
+            } else {
+                loadTrack(currentIdx, true);
+            }
+        } else {
+            // TTS Fallback
+            if (isPlaying) {
+                stopSpeaking();
+                setIsPlaying(false);
+            } else {
+                const cleanText = item.text.replace(/[{}]/g, '');
+                speak(cleanText);
+                setIsPlaying(true);
+                const estimatedTime = (cleanText.length / 10) * 1000;
+                setTimeout(() => setIsPlaying(false), estimatedTime);
+            }
+        }
+    };
+    
+    const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const time = Number(e.target.value);
+        setCurrentTime(time);
+        if (audioRef.current) {
+            audioRef.current.currentTime = time;
+        }
+    };
+
+    const handlePrev = () => {
+        if (currentIdx > 0) loadTrack(currentIdx - 1, true);
+    };
+
+    const handleNext = () => {
+        if (currentIdx < audioLinks.length - 1) loadTrack(currentIdx + 1, true);
+    };
+    
+    const handleClose = () => {
+        stopAudio();
+        onClose();
+    };
+
+    if (!isOpen) return null;
+
+    const currentFilename = audioLinks.length > 0 
+        ? decodeURIComponent(audioLinks[currentIdx].split('/').pop() || `Track ${currentIdx + 1}`) 
+        : 'System Voice (TTS)';
+
+    const formatTime = (t: number) => {
+        const min = Math.floor(t / 60);
+        const sec = Math.floor(t % 60);
+        return `${min}:${sec.toString().padStart(2, '0')}`;
+    };
+
+    return (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+             <div className="bg-white w-full max-w-7xl rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col h-[90vh] overflow-hidden">
+                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-center bg-white z-10 shrink-0">
+                    <div>
+                        <h3 className="text-xl font-black text-neutral-900 flex items-center gap-2"><Ear size={20}/> Listening Practice</h3>
+                        <p className="text-xs text-neutral-500 font-bold mt-1 max-w-[250px] truncate">{item.title || item.note || 'Practice Session'}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                         <div className="bg-neutral-100 p-1 rounded-xl flex items-center">
+                            <button onClick={() => setIsEditMode(false)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${!isEditMode ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500'}`}>Read</button>
+                            <button onClick={() => setIsEditMode(true)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${isEditMode ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500'}`}>Edit Raw</button>
+                         </div>
+                        <button onClick={handleClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
+                    </div>
+                </header>
+
+                <div className="flex-1 flex flex-col overflow-hidden relative bg-neutral-50/50">
+                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative">
+                        {isEditMode ? (
+                            <textarea 
+                                value={editableText} 
+                                onChange={e => handleTextUpdate(e.target.value)} 
+                                className="w-full h-full p-6 bg-white border border-neutral-200 rounded-2xl resize-none outline-none text-lg font-medium leading-relaxed font-mono text-neutral-700 shadow-sm"
+                                placeholder="Paste transcript here..."
+                            />
+                        ) : (
+                            <div className="h-full flex flex-col bg-white border border-neutral-200 rounded-2xl shadow-sm p-8 overflow-y-auto">
+                                <InteractiveTranscript rawText={editableText} onUpdate={handleTextUpdate} />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Compact Audio Controls Footer */}
+                <div className="px-6 py-3 bg-white border-t border-neutral-100 shrink-0 flex items-center gap-4">
+                    {/* Track Info */}
+                    <div className="w-48 shrink-0">
+                        <h4 className="text-xs font-bold text-neutral-900 truncate">{currentFilename}</h4>
+                        {audioLinks.length > 1 && (
+                            <p className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Track {currentIdx + 1}/{audioLinks.length}</p>
+                        )}
+                    </div>
+
+                    {/* Controls & Progress */}
+                    <div className="flex-1 flex items-center gap-3">
+                         <button 
+                            onClick={handlePrev} 
+                            disabled={currentIdx === 0} 
+                            className="p-2 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-colors"
+                        >
+                            <SkipBack size={18} fill="currentColor" />
+                        </button>
+                        
+                         <button 
+                            onClick={togglePlay} 
+                            className="w-10 h-10 bg-neutral-900 text-white rounded-full flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all"
+                         >
+                             {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+                         </button>
+
+                         <button 
+                            onClick={handleNext} 
+                            disabled={currentIdx === audioLinks.length - 1} 
+                            className="p-2 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-colors"
+                        >
+                            <SkipForward size={18} fill="currentColor" />
+                        </button>
+
+                        <div className="flex-1 flex items-center gap-3 ml-2">
+                            <span className="text-[10px] font-mono font-bold text-neutral-400 w-8 text-right">{formatTime(currentTime)}</span>
+                            <div className="flex-1 h-1.5 bg-neutral-100 rounded-full relative group cursor-pointer">
+                                {audioLinks.length > 0 && (
+                                    <input 
+                                        type="range" 
+                                        min="0" 
+                                        max={duration || 100} 
+                                        value={currentTime}
+                                        onChange={handleSeek}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                    />
+                                )}
+                                <div className="absolute top-0 left-0 h-full bg-neutral-900 rounded-full transition-all" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}></div>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-neutral-400 w-8 text-left">{formatTime(duration)}</span>
+                        </div>
+                    </div>
+                </div>
+             </div>
+        </div>
+    );
+};
+
 // --- Add/Edit Modal ---
 interface AddEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (text: string, note?: string, path?: string, tags?: string[]) => void;
+  onSave: (title: string, text: string, note?: string, path?: string, tags?: string[], audioLinks?: string[]) => void;
   initialData?: ListeningItem | null;
 }
 
 const AddEditModal: React.FC<AddEditModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
+  const [title, setTitle] = useState('');
   const [text, setText] = useState('');
   const [note, setNote] = useState('');
   const [path, setPath] = useState('/');
   const [tagsInput, setTagsInput] = useState('');
+  const [audioLinks, setAudioLinks] = useState<string[]>([]);
+  
+  const [isAudioSelectorOpen, setIsAudioSelectorOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
+      setTitle(initialData?.title || '');
       setText(initialData?.text || '');
       setNote(initialData?.note || '');
+      setAudioLinks(initialData?.audioLinks || []);
+      
       if (initialData?.path === undefined) {
         const legacyTags = initialData?.tags || [];
         const pathFromTags = legacyTags.find(t => t.startsWith('/'));
@@ -75,69 +664,80 @@ const AddEditModal: React.FC<AddEditModalProps> = ({ isOpen, onClose, onSave, in
     e.preventDefault();
     if (text.trim()) {
       const finalTags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
-      onSave(text.trim(), note.trim(), path.trim(), finalTags);
+      onSave(title.trim(), text.trim(), note.trim(), path.trim(), finalTags, audioLinks);
     }
   };
+  
+  const handleAddAudio = (url: string) => {
+      setAudioLinks(prev => [...prev, url]);
+  };
 
-  const handleWrapSelection = () => {
-    const textarea = document.getElementById('listening-text-input') as HTMLTextAreaElement;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = text.substring(start, end);
-
-    if (selectedText) {
-        const newText = text.substring(0, start) + `{${selectedText}}` + text.substring(end);
-        setText(newText);
-    }
+  const handleRemoveAudio = (index: number) => {
+      setAudioLinks(prev => prev.filter((_, i) => i !== index));
   };
 
   if (!isOpen) return null;
 
   return (
+    <>
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <form onSubmit={handleSubmit} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col">
+      <form onSubmit={handleSubmit} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[90vh]">
         <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
           <div>
-            <h3 className="text-xl font-black text-neutral-900">{initialData ? 'Edit Phrase' : 'New Phrase'}</h3>
-            <p className="text-sm text-neutral-500">Add text you find hard to hear.</p>
+            <h3 className="text-xl font-black text-neutral-900">{initialData ? 'Edit Listening Card' : 'New Listening Card'}</h3>
+            <p className="text-sm text-neutral-500">Add text script and attach audio.</p>
           </div>
           <button type="button" onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
         </header>
-        <main className="p-8 space-y-6">
+        <main className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+          <div className="space-y-2">
+             <label className="block text-xs font-bold text-neutral-500">Title</label>
+             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Unit 1 Podcast" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-bold text-lg focus:ring-2 focus:ring-neutral-900 outline-none" />
+          </div>
+
           <div className="space-y-2">
             <label className="block text-xs font-bold text-neutral-500">
-                Text content 
-                <span className="font-normal text-[10px] ml-2 text-neutral-400">(Select text & click Highlight)</span>
+                Script / Transcript 
             </label>
             <div className="relative">
                 <textarea 
-                    id="listening-text-input"
                     value={text} 
                     onChange={e => setText(e.target.value)} 
-                    placeholder="e.g. I {wanna} go to the store." 
-                    rows={4} 
+                    placeholder="Paste full transcript here..." 
+                    rows={6} 
                     className="w-full p-4 bg-neutral-50 border border-neutral-200 rounded-xl font-medium resize-none focus:ring-2 focus:ring-neutral-900 outline-none text-sm leading-relaxed" 
                     required 
-                    autoFocus
                 />
-                <button 
-                    type="button" 
-                    onClick={handleWrapSelection}
-                    className="absolute bottom-3 right-3 px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-red-200 transition-colors"
-                >
-                    Highlight Selection
-                </button>
             </div>
-            <p className="text-[10px] text-neutral-400 italic">Tip: Use <strong>{`{curly braces}`}</strong> to mark the difficult parts.</p>
+            <p className="text-[10px] text-neutral-400 italic">You can highlight key phrases in Practice mode.</p>
           </div>
+          
+          <div className="space-y-2">
+               <div className="flex justify-between items-center">
+                   <label className="block text-xs font-bold text-neutral-500">Attached Audio</label>
+                   <button type="button" onClick={() => setIsAudioSelectorOpen(true)} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors"><Plus size={12}/> From Server</button>
+               </div>
+               
+               <div className="space-y-2">
+                   {audioLinks.length === 0 && <p className="text-[10px] text-neutral-400 italic px-2">No audio files attached.</p>}
+                   {audioLinks.map((link, idx) => (
+                       <div key={idx} className="flex items-center justify-between p-2 bg-neutral-50 rounded-lg border border-neutral-200">
+                           <div className="flex items-center gap-2 overflow-hidden">
+                               <FileAudio size={14} className="text-emerald-500 shrink-0" />
+                               <span className="text-xs font-mono text-neutral-600 truncate">{decodeURIComponent(link.split('/').pop() || 'file')}</span>
+                           </div>
+                           <button type="button" onClick={() => handleRemoveAudio(idx)} className="p-1 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-full"><X size={14}/></button>
+                       </div>
+                   ))}
+               </div>
+          </div>
+
           <div className="space-y-1">
             <label className="block text-xs font-bold text-neutral-500">Note (Optional)</label>
             <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Fast speech, linking sounds..." className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium text-sm" />
           </div>
           <div className="space-y-1">
-             <label className="block text-xs font-bold text-neutral-500">Tags (Keywords)</label>
+             <label className="block text-xs font-bold text-neutral-500">Tags</label>
              <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="linking, elision..." className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium text-sm" />
           </div>
         </main>
@@ -146,6 +746,8 @@ const AddEditModal: React.FC<AddEditModalProps> = ({ isOpen, onClose, onSave, in
         </footer>
       </form>
     </div>
+    <AudioFileSelector isOpen={isAudioSelectorOpen} onClose={() => setIsAudioSelectorOpen(false)} onSelect={handleAddAudio} />
+    </>
   );
 };
 
@@ -176,6 +778,9 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
   // Pagination
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(12);
+  
+  // Practice State
+  const [practiceItem, setPracticeItem] = useState<ListeningItem | null>(null);
 
   // Shelf Logic Hook
   const { 
@@ -186,7 +791,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       renameShelf, 
       removeShelf, 
       nextShelf, 
-      prevShelf,
+      prevShelf, 
       selectShelf
   } = useShelfLogic(listeningBooks, 'listening_books_shelves');
 
@@ -273,21 +878,23 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
     loadData();
   };
 
-  const handleSave = async (text: string, note?: string, path?: string, tags?: string[]) => {
+  const handleSave = async (title: string, text: string, note?: string, path?: string, tags?: string[], audioLinks?: string[]) => {
     try {
       const now = Date.now();
       if (editingItem) {
-        const updated = { ...editingItem, text, note, path, tags, updatedAt: now };
+        const updated = { ...editingItem, title, text, note, path, tags, audioLinks, updatedAt: now };
         await dataStore.saveListeningItem(updated);
         showToast("Item updated!", "success");
       } else {
         const newItem: ListeningItem = {
           id: `lst-${now}-${Math.random()}`,
           userId: user.id,
+          title,
           text,
           note,
           path,
           tags,
+          audioLinks,
           createdAt: now,
           updatedAt: now
         };
@@ -301,9 +908,14 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
     }
   };
 
-  const handlePlay = (text: string) => {
-      const cleanText = text.replace(/[{}]/g, '');
-      speak(cleanText);
+  const handleUpdatePracticeItem = async (updatedItem: ListeningItem) => {
+    await dataStore.saveListeningItem(updatedItem);
+    setPracticeItem(updatedItem); // Keep modal in sync
+    loadData(); // Refresh list background
+  };
+
+  const handlePlay = (item: ListeningItem) => {
+      setPracticeItem(item);
   };
 
   const handleRandomize = () => {
@@ -401,7 +1013,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
           if (!item) return null;
           return {
               id: item.id,
-              title: item.text,
+              title: item.title || item.text,
               subtitle: item.note || 'Listening Practice',
               data: item,
               focusColor: item.focusColor,
@@ -413,7 +1025,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
   const availableGenericItems: GenericBookItem[] = useMemo(() => {
       return items.map(item => ({
           id: item.id,
-          title: item.text,
+          title: item.title || item.text,
           subtitle: `${item.text.length} characters`,
           data: item
       }));
@@ -450,6 +1062,22 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       setActiveBook(book);
       setViewMode('BOOK_DETAIL');
   };
+  
+  // --- Render Card Title Logic ---
+  const renderCardTitle = (item: ListeningItem) => {
+      if (item.title) {
+          return <div className="font-black text-lg text-neutral-900 leading-tight">{item.title}</div>;
+      }
+      
+      const words = item.text.split(/\s+/);
+      const truncated = words.length > 15 ? words.slice(0, 15).join(' ') + '...' : item.text;
+      
+      return (
+          <div className="font-medium text-lg text-neutral-700 leading-tight">
+              <HighlightedText text={truncated} />
+          </div>
+      );
+  };
 
   // --- Views ---
 
@@ -462,7 +1090,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
           onUpdateBook={handleUpdateBook}
           onAddItem={handleAddItemsToBook}
           onRemoveItem={handleRemoveItemFromBook}
-          onOpenItem={(gItem) => handlePlay((gItem.data as ListeningItem).text)}
+          onOpenItem={(gItem) => handlePlay(gItem.data as ListeningItem)}
           onEditItem={(gItem) => handleEdit(gItem.data as ListeningItem)}
           onFocusChange={handleFocusChangeGeneric}
           onToggleFocus={handleToggleFocusGeneric}
@@ -670,21 +1298,32 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
           {pagedItems.map(item => (
             <UniversalCard
                 key={item.id}
-                title={<HighlightedText text={item.text} />}
+                title={renderCardTitle(item)}
                 badge={viewSettings.showType ? { label: 'Listening', colorClass: 'bg-red-50 text-red-600 border-red-100', icon: Ear } : undefined}
                 tags={item.tags}
                 compact={viewSettings.compact}
-                onClick={() => handlePlay(item.text)}
+                onClick={() => handlePlay(item)}
                 focusColor={item.focusColor}
                 onFocusChange={(c) => handleFocusChange(item, c)}
                 isFocused={item.isFocused}
                 onToggleFocus={() => handleToggleFocus(item)}
                 isCompleted={item.focusColor === 'green'}
+                footer={
+                     <div className="flex justify-between items-center mt-2">
+                        <div className="flex items-center gap-2">
+                             {item.audioLinks && item.audioLinks.length > 0 && (
+                                 <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full w-fit uppercase tracking-wider border border-emerald-100">
+                                     <Music size={10} /> {item.audioLinks.length} Tracks
+                                 </div>
+                             )}
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); handlePlay(item); }} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 active:scale-95" title="Practice">
+                            <Play size={12} fill="currentColor"/> <span>Practice</span>
+                        </button>
+                     </div>
+                }
                 actions={
                     <>
-                        <button onClick={(e) => { e.stopPropagation(); handlePlay(item.text); }} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Play">
-                            <Volume2 size={14}/>
-                        </button>
                         <button onClick={(e) => { e.stopPropagation(); handleEdit(item); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit">
                             <Edit3 size={14}/>
                         </button>
@@ -695,7 +1334,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                 }
             >
                 {viewSettings.showNote && item.note && (
-                    <div className="flex items-center gap-2 text-xs text-neutral-500 font-medium bg-neutral-50 px-2 py-1 rounded-lg w-fit">
+                    <div className="flex items-center gap-2 text-xs text-neutral-500 font-medium bg-neutral-50 px-2 py-1 rounded-lg w-fit mb-2">
                         <Info size={12}/> {item.note}
                     </div>
                 )}
@@ -712,6 +1351,15 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
         initialData={editingItem} 
     />
     
+    {practiceItem && (
+        <ListeningPracticeModal 
+            isOpen={!!practiceItem} 
+            onClose={() => setPracticeItem(null)} 
+            item={practiceItem} 
+            onUpdate={handleUpdatePracticeItem}
+        />
+    )}
+
     <ConfirmationModal 
         isOpen={!!itemToDelete}
         title="Delete Phrase?"
