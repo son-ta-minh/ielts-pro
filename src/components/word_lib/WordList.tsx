@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
@@ -9,6 +10,9 @@ import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter, 
 import { stringToWordArray } from '../../utils/text';
 import { TagTreeNode } from '../common/TagBrowser';
 import { getStoredJSON } from '../../utils/storage';
+import { lookupWordsInGlobalLibrary } from '../../services/backupService';
+import { calculateComplexity, calculateMasteryScore } from '../../utils/srs';
+import { calculateGameEligibility } from '../../utils/gameEligibility';
 
 interface Props {
   user: User;
@@ -189,7 +193,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
         currentFilters.register, 
         currentFilters.source, 
         selectedTag, 
-        currentFilters.composition,
+        currentFilters.composition, 
         currentFilters.book,
         currentFilters.specificBookId
       );
@@ -235,26 +239,75 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
     const needsPronunciationFocus = types.has('pronun');
     const isPassive = types.has('archive');
 
+    // 1. Pre-fetch from Server Library for Quick Add
+    let serverMap = new Map<string, VocabularyItem>();
+    try {
+        const serverItems = await lookupWordsInGlobalLibrary(wordsToProcess);
+        serverItems.forEach(item => {
+            serverMap.set(item.word.toLowerCase().trim(), item);
+        });
+    } catch (e) {
+        console.warn("Server lookup failed in WordList:", e);
+    }
+
     for (const word of wordsToProcess) {
       const existing = await dataStore.findWordByText(userId, word);
       
       if (existing) {
         const updatedItem = { ...existing };
-        updatedItem.isIdiom = isIdiom;
-        updatedItem.isPhrasalVerb = isPhrasalVerb;
-        updatedItem.isCollocation = isCollocation;
-        updatedItem.isStandardPhrase = isStandardPhrase;
-        updatedItem.needsPronunciationFocus = needsPronunciationFocus;
-        updatedItem.isPassive = isPassive;
+        updatedItem.isIdiom = isIdiom || existing.isIdiom;
+        updatedItem.isPhrasalVerb = isPhrasalVerb || existing.isPhrasalVerb;
+        updatedItem.isCollocation = isCollocation || existing.isCollocation;
+        updatedItem.isStandardPhrase = isStandardPhrase || existing.isStandardPhrase;
+        updatedItem.needsPronunciationFocus = needsPronunciationFocus || existing.needsPronunciationFocus;
+        updatedItem.isPassive = isPassive; // Override passive status if explicitly adding to archive or not
         updatedItem.updatedAt = Date.now();
         newItems.push(updatedItem); 
       } else {
-        const newItem = createNewWord(
-            word, '', '', '', '', [], 
-            isIdiom, needsPronunciationFocus, isPhrasalVerb, 
-            isCollocation, isStandardPhrase, isPassive
-        );
-        newItem.userId = userId;
+        const key = word.toLowerCase().trim();
+        let newItem: VocabularyItem;
+
+        if (serverMap.has(key)) {
+             // Use Server Data for a REFINED start
+             const serverItem = serverMap.get(key)!;
+             newItem = {
+                 ...serverItem,
+                 id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+                 userId: userId,
+                 createdAt: Date.now(),
+                 updatedAt: Date.now(),
+                 quality: WordQuality.REFINED,
+                 source: 'refine',
+                 // Reset SRS
+                 nextReview: Date.now(),
+                 interval: 0,
+                 easeFactor: 2.5,
+                 consecutiveCorrect: 0,
+                 forgotCount: 0,
+                 lastReview: undefined,
+                 lastGrade: undefined,
+                 lastTestResults: {},
+                 // Apply local flags on top
+                 isIdiom: isIdiom || serverItem.isIdiom,
+                 isPhrasalVerb: isPhrasalVerb || serverItem.isPhrasalVerb,
+                 isCollocation: isCollocation || serverItem.isCollocation,
+                 isStandardPhrase: isStandardPhrase || serverItem.isStandardPhrase,
+                 needsPronunciationFocus: needsPronunciationFocus || serverItem.needsPronunciationFocus,
+                 isPassive: isPassive
+             };
+             // Recalc stats
+             newItem.complexity = calculateComplexity(newItem);
+             newItem.masteryScore = calculateMasteryScore(newItem);
+             newItem.gameEligibility = calculateGameEligibility(newItem);
+        } else {
+            // Manual Creation (RAW)
+            newItem = createNewWord(
+                word, '', '', '', '', [], 
+                isIdiom, needsPronunciationFocus, isPhrasalVerb, 
+                isCollocation, isStandardPhrase, isPassive
+            );
+            newItem.userId = userId;
+        }
         newItems.push(newItem);
       }
     }

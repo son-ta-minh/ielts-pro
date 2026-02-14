@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { generateWordDetails } from '../../services/geminiService';
 import { createNewWord } from '../../utils/srs';
@@ -8,6 +9,9 @@ import { AddWordUI } from './AddWord_UI';
 import { useToast } from '../../contexts/ToastContext';
 import { getConfig } from '../../app/settingsManager';
 import { stringToWordArray } from '../../utils/text';
+import { lookupWordsInGlobalLibrary } from '../../services/backupService';
+import { calculateComplexity, calculateMasteryScore } from '../../utils/srs';
+import { calculateGameEligibility } from '../../utils/gameEligibility';
 
 interface Props {
   onWordsAdded: () => void;
@@ -118,8 +122,8 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
         const wordsForAi: string[] = [];
         const skippedWordsForSummary: { word: string, status: 'linked' }[] = [];
         const idsToLinkToUnit: string[] = [];
-
-        // Pre-flight check for duplicates
+        
+        // 1. Check Duplicates in Local DB
         for (const word of wordsToProcess) {
             const existingItem = await findWordByText(userId, word);
             if (existingItem) {
@@ -129,13 +133,31 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
                 wordsForAi.push(word);
             }
         }
+        
+        // 2. Check Server for Refined Data
+        const serverFoundMap = new Map<string, VocabularyItem>();
+        if (wordsForAi.length > 0) {
+             try {
+                // Query server library
+                const serverItems = await lookupWordsInGlobalLibrary(wordsForAi);
+                serverItems.forEach(item => {
+                    serverFoundMap.set(item.word.toLowerCase().trim(), item);
+                });
+             } catch (e) {
+                 console.warn("Server lookup failed, falling back to local/AI.");
+             }
+        }
 
+        // 3. Filter out words already found on server from AI request
+        const wordsNeedAi = wordsForAi.filter(w => !serverFoundMap.has(w.toLowerCase().trim()));
+
+        // 4. Call AI for remaining words (if requested)
         let aiMap = new Map<string, any>();
-        if (withAI && wordsForAi.length > 0) {
-            const rawResults = await generateWordDetails(wordsForAi, nativeLanguage);
+        if (withAI && wordsNeedAi.length > 0) {
+            const rawResults = await generateWordDetails(wordsNeedAi, nativeLanguage);
             rawResults.forEach(r => {
                 const normalized = normalizeAiResponse(r);
-                const key = (normalized.original || normalized.word || '').toLowerCase();
+                const key = (normalized.headword || normalized.word || '').toLowerCase().trim();
                 if (key && !aiMap.has(key)) aiMap.set(key, normalized);
             });
         }
@@ -143,20 +165,54 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
         const newItemsToCreate: VocabularyItem[] = [];
         const processedHeadwords = new Set<string>();
 
-        // Process only the new words
+        // Process all new words
         for (const originalWord of wordsForAi) {
-            const aiDetails = aiMap.get(originalWord.toLowerCase());
-            const headword = (aiDetails?.headword || originalWord).trim();
-            
-            if (!headword || processedHeadwords.has(headword.toLowerCase())) continue;
+            const key = originalWord.toLowerCase().trim();
+            let headword = originalWord;
+            let newItem: VocabularyItem;
 
-            const existingItem = await findWordByText(userId, headword);
+            // Strategy Priority: Server > AI > Manual
+            if (serverFoundMap.has(key)) {
+                // --- CASE A: Found on Server ---
+                const serverItem = serverFoundMap.get(key)!;
+                headword = serverItem.word;
+                
+                // Clone server item but reset user-specific fields
+                newItem = {
+                    ...serverItem,
+                    id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+                    userId: userId,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    quality: WordQuality.REFINED, // Mark as Refined so user can verify
+                    source: 'refine',
+                    
+                    // Reset SRS progress
+                    nextReview: Date.now(),
+                    interval: 0,
+                    easeFactor: 2.5,
+                    consecutiveCorrect: 0,
+                    forgotCount: 0,
+                    lastReview: undefined,
+                    lastGrade: undefined,
+                    lastTestResults: {}, // Reset test history
+                    
+                    // Keep logic flags
+                    isPassive: isArchived
+                };
+                
+                // Recalc logic stats for this user
+                newItem.complexity = calculateComplexity(newItem);
+                newItem.masteryScore = calculateMasteryScore(newItem);
+                newItem.gameEligibility = calculateGameEligibility(newItem);
 
-            if (existingItem) {
-                // This case handles when AI suggests a headword that already exists.
-                idsToLinkToUnit.push(existingItem.id);
-                skippedWordsForSummary.push({ word: originalWord, status: 'linked' });
             } else {
+                // --- CASE B: AI or Manual ---
+                const aiDetails = aiMap.get(key);
+                // Use AI headword if available, otherwise original input
+                headword = (aiDetails?.headword || originalWord).trim();
+                
+                // If using AI, ignore adverbs in word family for cleaner learning
                 if (aiDetails?.wordFamily?.advs) {
                     aiDetails.wordFamily.advs = aiDetails.wordFamily.advs.map((adv: WordFamilyMember) => ({ ...adv, isIgnored: true }));
                 }
@@ -168,24 +224,19 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
                     prepositions = parsePrepositionPatterns(aiDetails.prepositionString);
                 }
 
-                // Determine final flags based on User Selection OR AI detection
-                // If user selected 'vocab' (auto/default), trust AI. 
-                // If user selected a specific type, override AI/default.
+                // Determine final flags based on User Selection + AI suggestion
                 const isIdiom = wordType === 'idiom' || (wordType === 'vocab' && !!aiDetails?.isIdiom);
                 const isPhrasalVerb = wordType === 'phrasal' || (wordType === 'vocab' && !!aiDetails?.isPhrasalVerb);
                 const isCollocation = wordType === 'collocation' || (wordType === 'vocab' && !!aiDetails?.isCollocation);
                 const isStandardPhrase = wordType === 'phrase' || (wordType === 'vocab' && !!aiDetails?.isStandardPhrase);
-                
-                // If the input was spaced and no specific type was found/selected, treat as phrase if it looks like one? 
-                // Keeping it simple: rely on AI or explicit user selection.
 
-                const newItem = {
+                newItem = {
                     ...createNewWord(
                         headword, 
                         aiDetails?.ipa || '', 
                         aiDetails?.meaningVi || '', 
                         aiDetails?.example || '', 
-                        '', 
+                        '', // Note
                         aiDetails?.tags || [], 
                         isIdiom, 
                         !!aiDetails?.needsPronunciationFocus, 
@@ -206,9 +257,20 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
                     idiomsList: aiDetails?.idiomsList,
                     paraphrases: aiDetails?.paraphrases,
                     userId,
-                    quality: withAI ? WordQuality.REFINED : WordQuality.RAW // Override quality from createNewWord
+                    quality: (withAI && aiDetails) ? WordQuality.REFINED : WordQuality.RAW
                 };
-                
+            }
+            
+            // Prevent double adding if input has "run" and "running" which map to same headword
+            if (processedHeadwords.has(headword.toLowerCase())) continue;
+
+            // Final duplication check (in case AI/Server headword differs from input and exists in local DB)
+            const existingItem = await findWordByText(userId, headword);
+            if (existingItem) {
+                idsToLinkToUnit.push(existingItem.id);
+                skippedWordsForSummary.push({ word: originalWord, status: 'linked' });
+            } else {
+                // Post-processing for text lists if object arrays missing
                 if (!newItem.collocationsArray && newItem.collocations) {
                     newItem.collocationsArray = newItem.collocations.split('\n').map(t => ({ text: t.trim(), isIgnored: false })).filter(c => c.text);
                 }
@@ -260,7 +322,7 @@ const AddWord: React.FC<Props> = ({ onWordsAdded, userId, isArchived = false, na
         setInputWords('');
         setUnitInput('');
         setSelectedUnitForUpdate(null);
-        setWordType('vocab'); // Reset type to default
+        setWordType('vocab'); 
 
     } catch (e: any) {
         console.error(e);

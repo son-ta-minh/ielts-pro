@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
 import { X, MessageSquare, BookOpen, Languages, Book, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Info, AudioLines } from 'lucide-react';
@@ -6,7 +8,9 @@ import { speak, stopSpeaking, getIsSpeaking } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
-import { createNewWord } from '../../utils/srs';
+import { createNewWord, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
+import { lookupWordsInGlobalLibrary } from '../../services/backupService';
+import { calculateGameEligibility } from '../../utils/gameEligibility';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 300;
@@ -236,11 +240,54 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
         if (!selectedText || isAlreadyInLibrary) return;
         setIsAddingToLibrary(true);
         try {
-            const newItem = { 
-                ...createNewWord(selectedText, '', '', '', '', ['coach-added'], false, false, false, false, selectedText.includes(' ')), 
-                userId: user.id, 
-                quality: WordQuality.RAW 
-            };
+            // Check Server First
+            let newItem: VocabularyItem;
+            let serverItem: VocabularyItem | null = null;
+            
+            try {
+                const results = await lookupWordsInGlobalLibrary([selectedText]);
+                if (results.length > 0) {
+                    serverItem = results[0];
+                }
+            } catch (e) {
+                console.warn("Server lookup failed in StudyBuddy");
+            }
+
+            if (serverItem) {
+                // Populate from server if found
+                newItem = {
+                     ...serverItem,
+                     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+                     userId: user.id,
+                     createdAt: Date.now(),
+                     updatedAt: Date.now(),
+                     quality: WordQuality.REFINED,
+                     source: 'refine',
+                     // Reset SRS state
+                     nextReview: Date.now(),
+                     interval: 0,
+                     easeFactor: 2.5,
+                     consecutiveCorrect: 0,
+                     forgotCount: 0,
+                     lastReview: undefined,
+                     lastGrade: undefined,
+                     lastTestResults: {},
+                     // Add coach tag
+                     tags: [...(serverItem.tags || []), 'coach-added']
+                };
+                 // Recalc logic stats
+                 newItem.complexity = calculateComplexity(newItem);
+                 newItem.masteryScore = calculateMasteryScore(newItem);
+                 newItem.gameEligibility = calculateGameEligibility(newItem);
+            } else {
+                // Manual creation fallback
+                newItem = { 
+                    ...createNewWord(selectedText, '', '', '', '', ['coach-added'], false, false, false, false, selectedText.includes(' ')), 
+                    userId: user.id, 
+                    quality: WordQuality.RAW 
+                };
+            }
+
             await dataStore.saveWord(newItem);
             showToast(`"${selectedText}" added!`, 'success');
             setIsAlreadyInLibrary(true);

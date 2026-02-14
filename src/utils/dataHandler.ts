@@ -1,4 +1,5 @@
 
+
 /**
  * Data transformation and mapping for Import/Export.
  * Uses short keys to reduce JSON size for storage and transfer.
@@ -251,7 +252,7 @@ function _mapFamilyToLong(fam: any): any {
     return mappedFam;
 }
 
-function _mapToLongKeys(item: any): any {
+export function _mapToLongKeys(item: any): any {
     const longItem: any = {};
     for (const shortKey in item) {
         if (!Object.prototype.hasOwnProperty.call(item, shortKey)) continue;

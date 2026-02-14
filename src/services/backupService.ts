@@ -1,9 +1,10 @@
 
 import { generateJsonExport, processJsonImport, ImportResult, _mapToShortKeys, _mapUserToShortKeys } from '../utils/dataHandler';
-import { User, DataScope } from '../app/types';
+import { User, DataScope, VocabularyItem } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
 import * as dataStore from '../app/dataStore';
 import * as db from '../app/db';
+import { _mapToLongKeys } from '../utils/dataHandler';
 
 // Scope for auto backup - usually everything
 const FULL_SCOPE: DataScope = {
@@ -121,6 +122,59 @@ export const restoreFromServer = async (identifier: string): Promise<ImportResul
         return null;
     }
 };
+
+/**
+ * Triggers the server to re-scan all backup files and rebuild the global dictionary.
+ * Useful when User B wants to fetch data just uploaded by User A.
+ */
+export const refreshServerLibrary = async (): Promise<boolean> => {
+    try {
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+        
+        const response = await fetch(`${serverUrl}/api/library/reload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        return response.ok;
+    } catch (e) {
+        console.warn("[Backup] Failed to refresh server library:", e);
+        return false;
+    }
+};
+
+/**
+ * Queries the Global Server Library for refined definitions.
+ * @param words Array of words to look up
+ * @returns Array of found VocabularyItem objects (with short keys expanded)
+ */
+export const lookupWordsInGlobalLibrary = async (words: string[]): Promise<VocabularyItem[]> => {
+    try {
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+        
+        const response = await fetch(`${serverUrl}/api/library/lookup`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ words })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            // Data comes back as short-key objects (stored in server memory). 
+            // We need to expand them back to VocabularyItem using _mapToLongKeys
+            if (Array.isArray(data.found)) {
+                return data.found.map((item: any) => _mapToLongKeys(item) as VocabularyItem);
+            }
+        }
+        return [];
+    } catch (e) {
+        console.warn("[Backup] Library lookup failed:", e);
+        return [];
+    }
+};
+
 
 async function getFullExportData(userId: string, user: User) {
      const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
