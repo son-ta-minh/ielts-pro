@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { User, VocabularyItem, AppView, WordQuality } from '../types';
 import * as db from '../db';
@@ -61,7 +62,7 @@ export const useDataFetching = ({ currentUser, view, onUpdateUser }: UseDataFetc
     
         const progress = currentUser.adventure;
         if (progress) {
-            const wordsById = new Map(allUserWords.map(w => [w.id, w]));
+            const wordsByText = new Map(allUserWords.map(w => [w.word.toLowerCase(), w]));
             let updatedProgress = { ...progress };
             let masteryUnlocked = false;
             let dailyStarAwarded = false;
@@ -87,17 +88,17 @@ export const useDataFetching = ({ currentUser, view, onUpdateUser }: UseDataFetc
                     };
     
                     if (currentStars < 3) {
-                        if (currentStars < 1 && segment.basicWords.length > 0 && segment.basicWords.every(w => wordsById.get(w.toLowerCase())?.consecutiveCorrect ?? 0 > 0)) {
+                        if (currentStars < 1 && segment.basicWords.length > 0 && segment.basicWords.every(w => (wordsByText.get(w.toLowerCase())?.consecutiveCorrect ?? 0) > 0)) {
                             awardStar(1, `🌟 1-Star Mastery for "${segment.title}"! (+1 Key Fragment)`);
                             currentStars = 1; 
                         }
     
-                        if (currentStars === 1 && segment.intermediateWords.length > 0 && segment.intermediateWords.every(w => wordsById.get(w.toLowerCase())?.consecutiveCorrect ?? 0 > 0)) {
+                        if (currentStars === 1 && segment.intermediateWords.length > 0 && segment.intermediateWords.every(w => (wordsByText.get(w.toLowerCase())?.consecutiveCorrect ?? 0) > 0)) {
                             awardStar(2, `🌟🌟 2-Star Mastery for "${segment.title}"! (+1 Key Fragment)`);
                             currentStars = 2;
                         }
     
-                        if (currentStars === 2 && segment.advancedWords.length > 0 && segment.advancedWords.every(w => wordsById.get(w.toLowerCase())?.consecutiveCorrect ?? 0 > 0)) {
+                        if (currentStars === 2 && segment.advancedWords.length > 0 && segment.advancedWords.every(w => (wordsByText.get(w.toLowerCase())?.consecutiveCorrect ?? 0) > 0)) {
                             awardStar(3, `🌟🌟🌟 Boss unlocked for "${segment.title}"! (+1 Key Fragment)`);
                         }
                     }

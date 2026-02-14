@@ -1,5 +1,5 @@
 
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -17,6 +17,7 @@ const LESSON_STORE = 'lessons';
 const LISTENING_STORE = 'listening_items';
 const NATIVE_SPEAK_STORE = 'native_speak_items';
 const CONVERSATION_STORE = 'conversation_items';
+const FREE_TALK_STORE = 'free_talk_items'; // New Store
 const COMPOSITIONS_STORE = 'compositions';
 const WORDBOOK_STORE = 'word_books';
 const READING_BOOK_STORE = 'reading_books';
@@ -26,7 +27,7 @@ const SPEAKING_BOOK_STORE = 'speaking_books';
 const WRITING_BOOK_STORE = 'writing_books';
 const PLANNING_STORE = 'planning_goals';
 
-const DB_VERSION = 25; // Bumped version to clean up old stores
+const DB_VERSION = 26; // Bumped version
 
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -264,6 +265,13 @@ const openDB = (): Promise<IDBDatabase> => {
                 convStore.createIndex('userId', 'userId', { unique: false });
             }
         }
+        
+        if (event.oldVersion < 26) {
+             if (!db.objectStoreNames.contains(FREE_TALK_STORE)) {
+                 const ftStore = db.createObjectStore(FREE_TALK_STORE, { keyPath: 'id' });
+                 ftStore.createIndex('userId', 'userId', { unique: false });
+             }
+        }
 
         // Cleanup deprecated stores if they exist
         if (db.objectStoreNames.contains('comparison_groups')) {
@@ -310,7 +318,7 @@ export const clearVocabularyOnly = async (): Promise<void> => {
   return withRetry(async () => {
       const db = await openDB();
       return new Promise((resolve, reject) => {
-        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
+        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, FREE_TALK_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
         // Note: comparison_groups and calendar_events omitted as they are removed
         const tx = db.transaction(stores, 'readwrite');
         stores.forEach(s => {
@@ -781,6 +789,13 @@ export const getConversationItemsByUserId = async (userId: string): Promise<Conv
 export const deleteConversationItem = async (id: string): Promise<void> => { await crudTemplate(CONVERSATION_STORE, tx => tx.objectStore(CONVERSATION_STORE).delete(id)); };
 export const bulkSaveConversationItems = async (items: ConversationItem[]): Promise<void> => { await crudTemplate(CONVERSATION_STORE, tx => { const store = tx.objectStore(CONVERSATION_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteConversationItems = async (ids: string[]): Promise<void> => { await crudTemplate(CONVERSATION_STORE, tx => { const store = tx.objectStore(CONVERSATION_STORE); ids.forEach(id => store.delete(id)); }); };
+
+// --- Free Talk Feature ---
+export const saveFreeTalkItem = async (item: FreeTalkItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(FREE_TALK_STORE, tx => tx.objectStore(FREE_TALK_STORE).put(item)); };
+export const getFreeTalkItemsByUserId = async (userId: string): Promise<FreeTalkItem[]> => await crudTemplate(FREE_TALK_STORE, tx => tx.objectStore(FREE_TALK_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
+export const deleteFreeTalkItem = async (id: string): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => tx.objectStore(FREE_TALK_STORE).delete(id)); };
+export const bulkSaveFreeTalkItems = async (items: FreeTalkItem[]): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => { const store = tx.objectStore(FREE_TALK_STORE); items.forEach(i => store.put(i)); }); };
+export const bulkDeleteFreeTalkItems = async (ids: string[]): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => { const store = tx.objectStore(FREE_TALK_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- Writing Feature ---
 export const saveWritingLog = async (log: WritingLog): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).put(log)); };

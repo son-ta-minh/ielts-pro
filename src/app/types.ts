@@ -425,6 +425,19 @@ export interface ConversationItem {
     isFocused?: boolean;
 }
 
+export interface FreeTalkItem {
+  id: string;
+  userId: string;
+  title: string;
+  content: string; // The full paragraph text
+  path?: string;
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
+  focusColor?: FocusColor;
+  isFocused?: boolean;
+}
+
 export interface WordBookItem {
   word: string;
   definition: string;
