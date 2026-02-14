@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, NativeSpeakItem, VocabularyItem, FocusColor, SpeakingBook, ConversationItem, FreeTalkItem, AppView } from '../../app/types';
 import * as db from '../../app/db';
@@ -42,6 +41,15 @@ type SpeakingItem =
   | { type: 'card'; data: NativeSpeakItem }
   | { type: 'conversation'; data: ConversationItem }
   | { type: 'free_talk'; data: FreeTalkItem };
+
+const ScoreBadge: React.FC<{ score?: number }> = ({ score }) => {
+    if (score === undefined) return null;
+    return (
+        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${score >= 80 ? 'bg-green-50 text-green-700 border-green-200' : score >= 50 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+            {score}%
+        </span>
+    );
+};
 
 export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   const [items, setItems] = useState<SpeakingItem[]>([]);
@@ -307,13 +315,14 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                             </div>
                         }
                     >
-                        <div className="space-y-2 mt-2">
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{(item.data as NativeSpeakItem).answers.length} variations</div>
-                            <div className="flex justify-end">
-                                <button onClick={(e) => { e.stopPropagation(); setPracticeModalItem(item.data as NativeSpeakItem); }} className="flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-lg active:scale-95">
-                                    <Play size={14} fill="currentColor"/> Practice
-                                </button>
+                        <div className="flex justify-between items-center mt-2">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{(item.data as NativeSpeakItem).answers.length} variations</span>
+                                <ScoreBadge score={(item.data as NativeSpeakItem).bestScore} />
                             </div>
+                            <button onClick={(e) => { e.stopPropagation(); setPracticeModalItem(item.data as NativeSpeakItem); }} className="flex items-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-teal-600 transition-all shadow-teal-200 active:scale-95">
+                                <Play size={14} fill="currentColor"/> Practice
+                            </button>
                         </div>
                     </UniversalCard>
                  );
@@ -333,7 +342,10 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                         actions={<><button onClick={(e) => { e.stopPropagation(); handleEditItem(item); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit"><Edit3 size={14}/></button><button onClick={(e) => { e.stopPropagation(); setItemToDelete({ id: item.data.id, type: 'conversation' }); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete"><Trash2 size={14}/></button></>} 
                     >
                         <div className="flex justify-between items-center mt-2">
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{(item.data as ConversationItem).sentences.length} lines</div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{(item.data as ConversationItem).sentences.length} lines</span>
+                                <ScoreBadge score={(item.data as ConversationItem).bestScore} />
+                            </div>
                             <button onClick={(e) => { e.stopPropagation(); setPracticeConversation(item.data as ConversationItem); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-indigo-200 active:scale-95"><Play size={14}/> Practice</button>
                         </div>
                     </UniversalCard>
@@ -360,11 +372,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                         <div className="flex justify-between items-center mt-2">
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{sentenceCount} Sentences</span>
-                                {bestScore !== undefined && (
-                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${bestScore >= 80 ? 'bg-green-50 text-green-700 border-green-200' : bestScore >= 50 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                        {bestScore}%
-                                    </span>
-                                )}
+                                <ScoreBadge score={bestScore} />
                             </div>
                             <button onClick={(e) => { e.stopPropagation(); setPracticeFreeTalk(item.data as FreeTalkItem); }} className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-cyan-600 transition-all shadow-cyan-200 active:scale-95"><Play size={14}/> Practice</button>
                         </div>
@@ -391,5 +399,3 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
     </>
   );
 };
-
-export default SpeakingCardPage;

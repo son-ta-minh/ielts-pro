@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { NativeSpeakItem } from '../../app/types';
 import { X, Volume2, Mic, Eye, EyeOff, Info } from 'lucide-react';
 import { speak } from '../../utils/audio';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
+import * as dataStore from '../../app/dataStore';
 
 const PatternRenderer: React.FC<{ text: string }> = ({ text }) => {
     const parts = text.split(/({.*?}|\[.*?\]|<.*?>)/g);
@@ -40,6 +41,7 @@ interface Props {
 export const SpeakingPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }) => {
     const [revealed, setRevealed] = useState<Set<number>>(new Set());
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
+    const sessionScores = useRef<number[]>([]);
 
     if (!isOpen || !item) return null;
 
@@ -55,6 +57,23 @@ export const SpeakingPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
         const cleanText = sentence.replace(/{|}/g, '');
         setMimicTarget(cleanText);
     };
+    
+    const handleSaveScore = (score: number) => {
+        sessionScores.current.push(score);
+    };
+    
+    const handleClose = async () => {
+        if (sessionScores.current.length > 0) {
+            const avg = Math.round(sessionScores.current.reduce((a, b) => a + b, 0) / sessionScores.current.length);
+            await dataStore.saveNativeSpeakItem({
+                ...item,
+                bestScore: avg,
+                updatedAt: Date.now()
+            });
+        }
+        onClose();
+        sessionScores.current = [];
+    };
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -64,7 +83,7 @@ export const SpeakingPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
                         <h3 className="text-xl font-black text-neutral-900">{item.standard}</h3>
                         <p className="text-xs text-neutral-500 font-bold mt-1">Native Expressions Practice</p>
                     </div>
-                    <button type="button" onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={24}/></button>
+                    <button type="button" onClick={handleClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"><X size={24}/></button>
                 </header>
                 <main className="flex-1 overflow-y-auto p-8 space-y-4 custom-scrollbar bg-neutral-50/30">
                     {item.answers.map((ans, idx) => (
@@ -88,10 +107,10 @@ export const SpeakingPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
                     ))}
                 </main>
                 <footer className="px-8 py-4 border-t border-neutral-100 bg-white rounded-b-[2.5rem] flex justify-end">
-                    <button onClick={onClose} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-md">Done</button>
+                    <button onClick={handleClose} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-md">Done</button>
                 </footer>
             </div>
-            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
+            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} onSaveScore={handleSaveScore} />}
         </div>
     );
 };

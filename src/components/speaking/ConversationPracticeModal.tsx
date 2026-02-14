@@ -5,9 +5,11 @@ import { speak, stopSpeaking, startRecording, stopRecording } from '../../utils/
 import { X, UserCircle, Headphones, Play, Pause, Users, MessageSquare, Mic, Square as SquareIcon, Languages, Target as TargetIcon, LayoutGrid, ChevronsLeft, ChevronLeft, ChevronRight, Loader2, Ear, Download, Sparkles, Info, Volume2 } from 'lucide-react';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
+import { analyzeSpeechLocally } from '../../utils/speechAnalysis';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../common/ConfirmationModal';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
+import * as dataStore from '../../app/dataStore';
 
 // --- Helper: WAV Encoder for combining audio ---
 function bufferToWav(abuffer: AudioBuffer) {
@@ -81,6 +83,9 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
     const [isListeningForStt, setIsListeningForStt] = useState(false);
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
     
+    // Score tracking
+    const sessionScores = useRef<number[]>([]);
+    
     // Preview Full Audio State
     const [isPreviewing, setIsPreviewing] = useState(false);
 
@@ -101,13 +106,25 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
     };
 
     // Clear all audio caches when modal closes to save RAM
-    const handleClose = () => {
+    const handleClose = async () => {
         stopAllAudio();
         recognitionManager.current.stop();
+        
+        // Save score if practiced
+        if (item && sessionScores.current.length > 0) {
+            const avg = Math.round(sessionScores.current.reduce((a, b) => a + b, 0) / sessionScores.current.length);
+            await dataStore.saveConversationItem({
+                ...item,
+                bestScore: avg,
+                updatedAt: Date.now()
+            });
+        }
+        
         // Clear caches
         setAiAudioCache({});
         setUserRecordings({});
         setUserAudioUrl(null);
+        sessionScores.current = [];
         onClose();
     };
 
@@ -263,6 +280,7 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
         setIsUserTurn(false);
         setCurrentIndex(0);
         setUserRecordings({}); 
+        sessionScores.current = [];
         // We keep AI cache as that is expensive/slow to re-fetch
         
         setActingAs(role);
@@ -349,6 +367,11 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
     const handleConfirmUserTurn = () => {
         if (userAudioUrl) {
             setUserRecordings(prev => ({ ...prev, [currentIndex]: { base64: userAudioUrl, mime: userAudioMime } }));
+            // Analyze and score
+            if (activeSentence) {
+                const result = analyzeSpeechLocally(activeSentence.text, userTranscript);
+                sessionScores.current.push(result.score);
+            }
         }
         
         setIsUserTurn(false);
@@ -540,6 +563,10 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
     const visibleSentences = isFocusMode 
         ? [sentences[currentIndex]] 
         : sentences;
+
+    const handleSaveScore = (score: number) => {
+        sessionScores.current.push(score);
+    };
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -785,7 +812,7 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
                     </div>
                 </footer>
             </div>
-            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
+            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} onSaveScore={handleSaveScore} />}
             
             <ConfirmationModal
                  isOpen={!!roleChangeCandidate}

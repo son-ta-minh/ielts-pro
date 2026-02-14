@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2 } from 'lucide-react';
 import { speak, stopRecording, startRecording } from '../../utils/audio';
@@ -13,9 +14,10 @@ const SILENCE_TIMEOUT = 3000;
 interface Props {
     target: string;
     onClose: () => void;
+    onSaveScore?: (score: number) => void;
 }
 
-export const SimpleMimicModal: React.FC<Props> = ({ target, onClose }) => {
+export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore }) => {
     const [isRecording, setIsRecording] = useState(false);
     const isRecordingRef = useRef(false);
     const [transcript, setTranscript] = useState('');
@@ -81,8 +83,12 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose }) => {
         }
         setIsRecording(false);
         isRecordingRef.current = false;
-        setAnalysis(analyzeSpeechLocally(target, currentTranscript));
-    }, [target]);
+        const result = analyzeSpeechLocally(target, currentTranscript);
+        setAnalysis(result);
+        if (onSaveScore) {
+            onSaveScore(result.score);
+        }
+    }, [target, onSaveScore]);
 
     const resetActivity = useCallback(() => {
         lastActivityRef.current = Date.now();

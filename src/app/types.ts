@@ -1,4 +1,5 @@
 
+export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LISTENING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT';
 
 export enum ReviewGrade {
   FORGOT = 'FORGOT',
@@ -31,7 +32,7 @@ export enum ParaphraseMode {
   LESS_ACADEMIC = 'LESS_ACADEMIC'
 }
 
-export type WordTypeOption = 'vocab' | 'idiom' | 'phrasal' | 'collocation' | 'phrase' | 'pronun' | 'preposition' | 'archive';
+export type WordTypeOption = 'vocab' | 'idiom' | 'phrasal' | 'collocation' | 'phrase' | 'pronun' | 'preposition' | 'archive' | 'duplicate';
 
 export type SessionType = 'due' | 'new' | 'custom' | 'new_study' | 'random_test' | 'boss_battle' | null;
 
@@ -396,6 +397,7 @@ export interface NativeSpeakItem {
     updatedAt: number;
     focusColor?: FocusColor;
     isFocused?: boolean;
+    bestScore?: number;
 }
 
 export interface ConversationSpeaker {
@@ -424,6 +426,7 @@ export interface ConversationItem {
     updatedAt: number;
     focusColor?: FocusColor;
     isFocused?: boolean;
+    bestScore?: number;
 }
 
 export interface FreeTalkItem {
@@ -578,7 +581,5 @@ export interface PlanningGoal {
   focusColor?: FocusColor;
   isFocused?: boolean;
 }
-
-export type AppView = 'AUTH' | 'DASHBOARD' | 'REVIEW' | 'BROWSE' | 'UNIT_LIBRARY' | 'DISCOVER' | 'SETTINGS' | 'SPEAKING' | 'WRITING' | 'IRREGULAR_VERBS' | 'MIMIC' | 'LESSON' | 'LISTENING' | 'NATIVE_SPEAK' | 'EXPERIMENT' | 'WORDBOOK' | 'PLANNING';
 
 export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'COLLO_CONNECT' | 'IPA_SORTER' | 'MEANING_MATCH' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'WORD_TRANSFORMER' | 'IDIOM_CONNECT' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER';

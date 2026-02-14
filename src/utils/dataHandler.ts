@@ -53,7 +53,7 @@ const keyMap: { [key: string]: string } = {
     content: 'ct'
 };
 
-const reverseKeyMap = Object.fromEntries(Object.entries(keyMap).map(([k, v]) => [v, k]));
+const reverseKeyMap: { [key: string]: string } = Object.fromEntries(Object.entries(keyMap).map(([k, v]) => [v, k]));
 
 const userKeyMap: { [key: string]: string } = {
     name: 'n', avatar: 'av', lastLogin: 'll', role: 'r', currentLevel: 'cl',
@@ -64,7 +64,7 @@ const userKeyMap: { [key: string]: string } = {
     currentNodeIndex: 'cni', energy: 'e', energyShards: 'es', map: 'm'
 };
 
-const reverseUserKeyMap = Object.fromEntries(Object.entries(userKeyMap).map(([k, v]) => [v, k]));
+const reverseUserKeyMap: { [key: string]: string } = Object.fromEntries(Object.entries(userKeyMap).map(([k, v]) => [v, k]));
 
 const gameEligibilityMap: { [key: string]: string } = {
     'COLLO_CONNECT': 'cc', 'MEANING_MATCH': 'mm', 'IPA_SORTER': 'is',
@@ -72,7 +72,7 @@ const gameEligibilityMap: { [key: string]: string } = {
     'IDIOM_CONNECT': 'ic', 'PARAPHRASE_CONTEXT': 'pc'
 };
 
-const reverseGameEligibilityMap = Object.fromEntries(Object.entries(gameEligibilityMap).map(([k, v]) => [v, k]));
+const reverseGameEligibilityMap: { [key: string]: string } = Object.fromEntries(Object.entries(gameEligibilityMap).map(([k, v]) => [v, k]));
 
 const testResultKeyMap: { [key: string]: string } = {
     'SPELLING': 'sp', 'IPA_QUIZ': 'iq', 'PREPOSITION_QUIZ': 'pq',
@@ -86,7 +86,7 @@ const testResultKeyMap: { [key: string]: string } = {
     'WORD_FAMILY_ADVS': 'wf_d',
 };
 
-const reverseTestResultKeyMap = Object.fromEntries(Object.entries(testResultKeyMap).map(([k, v]) => [v, k]));
+const reverseTestResultKeyMap: { [key: string]: string } = Object.fromEntries(Object.entries(testResultKeyMap).map(([k, v]) => [v, k]));
 
 const paraphraseToneMap: { [key: string]: string } = {
     'intensified': 'int',
@@ -97,7 +97,7 @@ const paraphraseToneMap: { [key: string]: string } = {
     'idiomatic': 'idm',
 };
 
-const reverseParaphraseToneMap = Object.fromEntries(Object.entries(paraphraseToneMap).map(([k, v]) => [v, k]));
+const reverseParaphraseToneMap: { [key: string]: string } = Object.fromEntries(Object.entries(paraphraseToneMap).map(([k, v]) => [v, k]));
 
 const FULL_SCOPE: DataScope = {
     user: true, vocabulary: true, lesson: true, reading: true, writing: true, 
@@ -275,7 +275,7 @@ function _mapToLongKeys(item: any): any {
             }
             longItem[longKey] = longResults;
         } else if (longKey === 'gameEligibility' && Array.isArray(value)) {
-            longItem[longKey] = value.map(ge => reverseGameEligibilityMap[ge] || ge);
+            longItem[longKey] = value.map((ge: string) => reverseGameEligibilityMap[ge] || ge);
         } else {
             longItem[longKey] = value;
         }
