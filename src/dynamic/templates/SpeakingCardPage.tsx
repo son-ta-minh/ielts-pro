@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, NativeSpeakItem, VocabularyItem, FocusColor, SpeakingBook, ConversationItem, FreeTalkItem, AppView } from '../../app/types';
 import * as db from '../../app/db';
@@ -338,6 +339,10 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                     </UniversalCard>
                   );
               } else {
+                  // Calculate metadata for display
+                  const sentenceCount = (item.data as FreeTalkItem).content.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g)?.length || 0;
+                  const bestScore = (item.data as FreeTalkItem).bestScore;
+                  
                   return (
                     <UniversalCard 
                         key={item.data.id} 
@@ -353,7 +358,14 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                         actions={<><button onClick={(e) => { e.stopPropagation(); handleEditItem(item); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit"><Edit3 size={14}/></button><button onClick={(e) => { e.stopPropagation(); setItemToDelete({ id: item.data.id, type: 'free_talk' }); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete"><Trash2 size={14}/></button></>} 
                     >
                         <div className="flex justify-between items-center mt-2">
-                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Paragraph</div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{sentenceCount} Sentences</span>
+                                {bestScore !== undefined && (
+                                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${bestScore >= 80 ? 'bg-green-50 text-green-700 border-green-200' : bestScore >= 50 ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                        {bestScore}%
+                                    </span>
+                                )}
+                            </div>
                             <button onClick={(e) => { e.stopPropagation(); setPracticeFreeTalk(item.data as FreeTalkItem); }} className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-cyan-600 transition-all shadow-cyan-200 active:scale-95"><Play size={14}/> Practice</button>
                         </div>
                     </UniversalCard>

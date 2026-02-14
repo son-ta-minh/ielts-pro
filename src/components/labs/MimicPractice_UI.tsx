@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { Mic, Square, Play, Ear, Eye, EyeOff, ArrowRight, CheckCircle2, Volume2, Waves, Eraser, X, List, Sparkles, Plus, Edit2, Trash2, Save, Info, Shuffle, ChevronLeft, ChevronRight, AudioLines, Loader2 } from 'lucide-react';
 import { TargetPhrase } from './MimicPractice';
@@ -96,6 +97,9 @@ export interface MimicPracticeUIProps {
     
     autoSpeak: boolean;
     onToggleAutoSpeak: () => void;
+    autoReveal: boolean;
+    onToggleAutoReveal: () => void;
+
     isGlobalMode: boolean;
     isAnalyzing: boolean;
     onAnalyze: () => void;
@@ -121,7 +125,8 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
     targetText, sourceWord, isRecording, isRevealed, userTranscript,
     userAudioUrl, onToggleRecord, onPlayTarget, onPlayUser, onToggleReveal, onNext, onClearTranscript, isEmpty, onClose,
     pagedItems, page, pageSize, totalPages, onPageChange, onPageSizeChange, onSelect, currentAbsoluteIndex,
-    autoSpeak, onToggleAutoSpeak, isGlobalMode,
+    autoSpeak, onToggleAutoSpeak, autoReveal, onToggleAutoReveal,
+    isGlobalMode,
     localAnalysis, onAddItem, onEditItem, onDeleteItem, onRandomize, isModalOpen, editingItem, onCloseModal, onSaveItem,
     ipa, showIpa, isIpaLoading, onToggleIpa
 }) => {
@@ -151,6 +156,9 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-neutral-500"><List size={18}/><span className="text-xs font-black uppercase tracking-widest">Queue</span></div>
                             <div className="flex items-center gap-1">
+                                <button onClick={onToggleAutoReveal} className={`p-2 rounded-lg border transition-all shadow-sm ${autoReveal ? 'bg-sky-100 border-sky-200 text-sky-600' : 'bg-white border-neutral-200 text-neutral-400 hover:text-neutral-600'}`} title={`Auto Reveal Text: ${autoReveal ? 'ON' : 'OFF'}`}>
+                                    {autoReveal ? <Eye size={14} /> : <EyeOff size={14} />}
+                                </button>
                                 <button onClick={onToggleAutoSpeak} className={`p-2 rounded-lg border transition-all shadow-sm ${autoSpeak ? 'bg-amber-100 border-amber-200 text-amber-600' : 'bg-white border-neutral-200 text-neutral-400 hover:text-neutral-600'}`} title={`Auto Speak: ${autoSpeak ? 'ON' : 'OFF'}`}>
                                     <Sparkles size={14} fill={autoSpeak ? "currentColor" : "none"} />
                                 </button>
@@ -202,20 +210,20 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                 </div>
 
                 <div className="flex-1 h-full flex flex-col relative overflow-y-auto">
-                    {onClose && <button onClick={onClose} className="absolute top-6 right-6 p-2 text-neutral-400 hover:bg-neutral-100 rounded-full z-50"><X size={24} /></button>}
+                    {onClose && <button onClick={onClose} className="absolute top-4 right-4 p-2 text-neutral-400 hover:bg-neutral-100 rounded-full z-50"><X size={20} /></button>}
                     
-                    <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-8 animate-in fade-in">
+                    <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-6 animate-in fade-in">
                         <div className="relative w-full max-w-2xl">
-                            <div className={`p-8 md:p-12 rounded-[2.5rem] border-2 text-center transition-all duration-300 min-h-[260px] flex flex-col items-center justify-center relative bg-white border-neutral-200 shadow-xl shadow-neutral-100`}>
+                            <div className={`p-6 md:p-8 rounded-[2rem] border-2 text-center transition-all duration-300 min-h-[180px] flex flex-col items-center justify-center relative bg-white border-neutral-200 shadow-xl shadow-neutral-100`}>
                                 {isGlobalMode && (
                                     <div className="absolute top-6 left-6 px-3 py-1 bg-neutral-50 rounded-lg text-[10px] font-black uppercase tracking-widest text-neutral-400 border border-neutral-100">
                                         Pronunciation Practice
                                     </div>
                                 )}
-                                <button onClick={onToggleReveal} className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-indigo-500">{isRevealed ? <EyeOff size={24} /> : <Eye size={24} />}</button>
+                                <button onClick={onToggleReveal} className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-indigo-500">{isRevealed ? <EyeOff size={20} /> : <Eye size={20} />}</button>
                                 
                                 <div className="relative px-4 w-full flex flex-col items-center gap-4">
-                                    <div className="flex flex-wrap justify-center gap-x-3 gap-y-2">
+                                    <div className="flex flex-wrap justify-center gap-x-1.5 gap-y-1">
                                         {targetText?.split(/\s+/).map((word, wIdx) => {
                                             const analysis = localAnalysis?.words[wIdx];
                                             const isWordMissing = analysis?.status === 'missing';
@@ -224,14 +232,14 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                                                 <span 
                                                     key={wIdx} 
                                                     onClick={() => speak(word)}
-                                                    className={`text-4xl md:text-5xl font-black cursor-pointer hover:underline decoration-neutral-200 transition-all flex ${isRevealed || localAnalysis ? 'opacity-100' : 'text-transparent blur-lg select-none'}`}
+                                                    className={`text-xl md:text-2xl font-bold cursor-pointer hover:underline decoration-neutral-200 transition-all flex leading-normal ${isRevealed || localAnalysis ? 'opacity-100' : 'text-transparent blur-md select-none'}`}
                                                 >
                                                     {analysis?.chars ? (
                                                         analysis.chars.map((c: CharDiff, cIdx: number) => (
                                                             <span 
                                                                 key={cIdx} 
                                                                 className={
-                                                                    c.status === 'correct' ? 'text-emerald-500' : 
+                                                                    c.status === 'correct' ? 'text-emerald-600' : 
                                                                     c.status === 'wrong' ? 'text-rose-500' : 
                                                                     'text-rose-300'
                                                                 }
@@ -240,7 +248,7 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                                                             </span>
                                                         ))
                                                     ) : (
-                                                        <span className={isWordMissing ? 'text-neutral-300' : 'text-neutral-900'}>
+                                                        <span className={isWordMissing ? 'text-neutral-300' : 'text-neutral-800'}>
                                                             {word}
                                                         </span>
                                                     )}
@@ -250,22 +258,22 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                                     </div>
 
                                     {showIpa && ipa && (
-                                        <div className="px-6 py-2 bg-neutral-50 border border-neutral-100 rounded-2xl text-xl font-mono font-medium text-neutral-500 animate-in slide-in-from-top-2 duration-500">
+                                        <div className="px-4 py-1.5 bg-neutral-50 border border-neutral-100 rounded-xl text-lg font-mono font-medium text-neutral-500 animate-in slide-in-from-top-2 duration-500">
                                             {ipa}
                                         </div>
                                     )}
 
                                     {!isRevealed && !localAnalysis && (
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <span className="text-neutral-200 text-sm font-bold uppercase tracking-widest animate-pulse">Speak to reveal result</span>
+                                            <span className="text-neutral-200 text-xs font-bold uppercase tracking-widest animate-pulse">Speak to reveal result</span>
                                         </div>
                                     )}
                                 </div>
 
                                 {localAnalysis && (
-                                    <div className="mt-6 flex flex-col items-center gap-1 animate-in slide-in-from-top-2">
-                                        <div className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Pronunciation Accuracy</div>
-                                        <div className={`text-5xl font-black ${localAnalysis.score > 80 ? 'text-emerald-500' : localAnalysis.score > 50 ? 'text-amber-500' : 'text-rose-500'}`}>
+                                    <div className="mt-4 flex flex-col items-center gap-1 animate-in slide-in-from-top-2">
+                                        <div className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Accuracy</div>
+                                        <div className={`text-4xl font-black ${localAnalysis.score > 80 ? 'text-emerald-500' : localAnalysis.score > 50 ? 'text-amber-500' : 'text-rose-500'}`}>
                                             {localAnalysis.score}%
                                         </div>
                                     </div>
@@ -273,51 +281,47 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                             </div>
                         </div>
 
-                        <div className="min-h-24 flex flex-col items-center justify-center w-full max-w-xl text-center">
+                        <div className="min-h-16 flex flex-col items-center justify-center w-full max-w-xl text-center">
                             {isRecording ? (
-                                <div className="flex items-center gap-3 text-rose-500 animate-pulse">
-                                    <Waves size={32} />
-                                    <span className="font-black text-base uppercase tracking-widest">Listening...</span>
+                                <div className="flex items-center gap-2 text-rose-500 animate-pulse">
+                                    <Waves size={24} />
+                                    <span className="font-black text-sm uppercase tracking-widest">Listening...</span>
                                 </div>
-                            ) : !userTranscript && <p className="text-neutral-300 text-sm font-medium">Tap the microphone and read the phrase aloud</p>}
+                            ) : !userTranscript && <p className="text-neutral-300 text-xs font-medium">Tap the microphone and read the phrase aloud</p>}
                             
                             {userTranscript && !isRecording && (
                                 <div className="space-y-1 animate-in fade-in">
                                     <p className="text-neutral-400 text-[10px] font-black uppercase tracking-widest">What we heard</p>
-                                    <p className="text-xl font-medium italic text-neutral-600">"{userTranscript}"</p>
+                                    <p className="text-lg font-medium italic text-neutral-600 line-clamp-2">"{userTranscript}"</p>
                                 </div>
                             )}
                         </div>
 
                         <div className="flex items-center gap-6">
-                            <button onClick={onPlayTarget} className="p-6 rounded-3xl bg-white border border-neutral-200 text-neutral-600 hover:text-indigo-600 shadow-sm transition-all active:scale-95"><Volume2 size={32} /></button>
+                            <button onClick={onPlayTarget} className="p-4 rounded-2xl bg-white border border-neutral-200 text-neutral-600 hover:text-indigo-600 shadow-sm transition-all active:scale-95"><Volume2 size={24} /></button>
                             
                             <button 
                                 onClick={onToggleIpa} 
                                 disabled={isIpaLoading}
-                                className={`p-6 rounded-3xl border transition-all shadow-sm ${showIpa ? 'bg-indigo-600 text-white shadow-lg scale-105' : 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600'}`}
+                                className={`p-4 rounded-2xl border transition-all shadow-sm ${showIpa ? 'bg-indigo-600 text-white shadow-lg scale-105' : 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600'}`}
                                 title="Show Phonetic (IPA)"
                             >
-                                {isIpaLoading ? <Loader2 size={32} className="animate-spin" /> : <AudioLines size={32} />}
+                                {isIpaLoading ? <Loader2 size={24} className="animate-spin" /> : <AudioLines size={24} />}
                             </button>
 
-                            <button onClick={onToggleRecord} className={`w-32 h-32 rounded-full flex items-center justify-center shadow-2xl transition-all transform ${isRecording ? 'bg-rose-500 text-white scale-110 ring-12 ring-rose-100' : 'bg-white border-4 border-neutral-100 text-neutral-900 hover:border-neutral-200 hover:scale-105'}`}>{isRecording ? <Square size={40} fill="currentColor" /> : <Mic size={40} />}</button>
-                            <button onClick={onPlayUser} disabled={!userAudioUrl || isRecording} className={`p-6 rounded-3xl border transition-all shadow-sm ${userAudioUrl && !isRecording ? 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600' : 'bg-neutral-50 border-neutral-100 text-neutral-300 cursor-not-allowed'}`}><Play size={32} fill={userAudioUrl && !isRecording ? "currentColor" : "none"} /></button>
+                            <button onClick={onToggleRecord} className={`w-24 h-24 rounded-full flex items-center justify-center shadow-xl transition-all transform ${isRecording ? 'bg-rose-500 text-white scale-110 ring-8 ring-rose-100' : 'bg-white border-4 border-neutral-100 text-neutral-900 hover:border-neutral-200 hover:scale-105'}`}>{isRecording ? <Square size={32} fill="currentColor" /> : <Mic size={32} />}</button>
+                            <button onClick={onPlayUser} disabled={!userAudioUrl || isRecording} className={`p-4 rounded-2xl border transition-all shadow-sm ${userAudioUrl && !isRecording ? 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600' : 'bg-neutral-50 border-neutral-100 text-neutral-300 cursor-not-allowed'}`}><Play size={24} fill={userAudioUrl && !isRecording ? "currentColor" : "none"} /></button>
                         </div>
 
-                        <button onClick={onNext} className={`px-12 py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest flex items-center gap-3 transition-all shadow-xl bg-neutral-900 text-white hover:bg-neutral-800 active:scale-95`}><span>Next Phrase</span><ArrowRight size={18} /></button>
+                        <button onClick={onNext} className={`px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-lg bg-neutral-900 text-white hover:bg-neutral-800 active:scale-95`}><span>Next Phrase</span><ArrowRight size={16} /></button>
                     </div>
 
-                    <div className="px-10 pb-8">
-                        <div className="p-5 bg-indigo-50 border border-indigo-100 rounded-[2rem] flex items-start gap-4">
-                            <div className="p-2 bg-indigo-500 text-white rounded-xl shadow-sm"><Info size={20} /></div>
-                            <div className="text-[11px] text-indigo-700 leading-relaxed font-medium">
-                                <b className="text-xs uppercase tracking-wider block mb-1">Visual Feedback Guide:</b>
-                                <span className="text-emerald-600 font-black">GREEN</span>: Your sound was detected correctly.
-                                <br/>
-                                <span className="text-rose-500 font-black">RED</span>: These characters represent sounds that were missing or significantly mispronounced.
-                                <br/>
-                                <span className="text-neutral-400 font-black">GRAY</span>: The word was not detected in your speech.
+                    <div className="px-8 pb-6">
+                        <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-start gap-3">
+                            <div className="p-1.5 bg-indigo-500 text-white rounded-lg shadow-sm"><Info size={16} /></div>
+                            <div className="text-[10px] text-indigo-700 leading-relaxed font-medium">
+                                <b className="text-[10px] uppercase tracking-wider block mb-0.5">Visual Feedback Guide:</b>
+                                <span className="text-emerald-600 font-black">GREEN</span>: Correct. <span className="text-rose-500 font-black">RED</span>: Mispronounced. <span className="text-neutral-400 font-black">GRAY</span>: Missing.
                             </div>
                         </div>
                     </div>

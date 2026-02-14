@@ -1,4 +1,5 @@
 
+
 export enum ReviewGrade {
   FORGOT = 'FORGOT',
   HARD = 'HARD',
@@ -436,6 +437,7 @@ export interface FreeTalkItem {
   updatedAt: number;
   focusColor?: FocusColor;
   isFocused?: boolean;
+  bestScore?: number; // Overall accuracy score
 }
 
 export interface WordBookItem {

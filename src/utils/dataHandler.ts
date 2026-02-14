@@ -4,8 +4,8 @@
  * Uses short keys to reduce JSON size for storage and transfer.
  */
 
-import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem } from '../app/types';
-import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getPlanningGoalsByUserId, bulkSavePlanningGoals, getConversationItemsByUserId, bulkSaveConversationItems } from '../app/db';
+import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem, FreeTalkItem } from '../app/types';
+import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getPlanningGoalsByUserId, bulkSavePlanningGoals, getConversationItemsByUserId, bulkSaveConversationItems, getFreeTalkItemsByUserId, bulkSaveFreeTalkItems } from '../app/db';
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
@@ -40,7 +40,7 @@ const keyMap: { [key: string]: string } = {
     adjs: 'j',        // in WordFamily
     advs: 'd',        // in WordFamily
     
-    // Native Speak & Conversation
+    // Native Speak & Conversation & Free Talk
     standard: 'std',  // in NativeSpeakItem
     answers: 'ans',   // in NativeSpeakItem
     speakers: 'spks',
@@ -48,7 +48,9 @@ const keyMap: { [key: string]: string } = {
     speakerName: 'sn',
     voiceName: 'vn',
     accentCode: 'ac',
-    sex: 'sx'
+    sex: 'sx',
+    title: 'tl',
+    content: 'ct'
 };
 
 const reverseKeyMap = Object.fromEntries(Object.entries(keyMap).map(([k, v]) => [v, k]));
@@ -346,12 +348,13 @@ export const processJsonImport = async (
                 const incomingListeningItems: ListeningItem[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.listeningItems;
                 
                 const incomingNativeSpeakItemsRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.nativeSpeakItems || rawJson.nsi);
-                
                 const incomingNativeSpeakItems = incomingNativeSpeakItemsRaw ? incomingNativeSpeakItemsRaw.map(_mapToLongKeys) : undefined;
                 
                 const incomingConversationItemsRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.conversationItems || rawJson.ci);
-                
                 const incomingConversationItems = incomingConversationItemsRaw ? incomingConversationItemsRaw.map(_mapToLongKeys) : undefined;
+
+                const incomingFreeTalkItemsRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.freeTalkItems || rawJson.fti);
+                const incomingFreeTalkItems = incomingFreeTalkItemsRaw ? incomingFreeTalkItemsRaw.map(_mapToLongKeys) : undefined;
 
                 const incomingCompositions: Composition[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.compositions;
                 const incomingMimicQueue: any[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.mimicQueue;
@@ -366,7 +369,6 @@ export const processJsonImport = async (
                 let incomingUser: User | undefined;
                 if (incomingUserRaw) {
                     const isUserShort = 'n' in incomingUserRaw || 'av' in incomingUserRaw;
-                    // FIX: Use _mapUserToLongKeys when keys are short (e.g. 'n', 'av') to restore proper User object.
                     incomingUser = isUserShort ? _mapUserToLongKeys(incomingUserRaw) : incomingUserRaw;
                 }
                 
@@ -423,6 +425,9 @@ export const processJsonImport = async (
                     if (incomingConversationItems) {
                         await bulkSaveConversationItems(incomingConversationItems.map(c => ({ ...c, userId: importedUserId })));
                     }
+                    if (incomingFreeTalkItems) {
+                        await bulkSaveFreeTalkItems(incomingFreeTalkItems.map(f => ({ ...f, userId: importedUserId })));
+                    }
                 }
 
                 // --- WRITING ---
@@ -478,7 +483,7 @@ export const processJsonImport = async (
 export const generateJsonExport = async (userId: string, currentUser: User, scopeInput: any = FULL_SCOPE) => {
     const scope = (scopeInput && typeof scopeInput === 'object' && typeof scopeInput.vocabulary === 'boolean') ? scopeInput : FULL_SCOPE;
 
-    const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
+    const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
         scope.vocabulary ? getAllWordsForExport(userId) : [],
         scope.reading ? getUnitsByUserId(userId) : [],
         scope.reading ? getReadingBooksByUserId(userId) : [],
@@ -487,6 +492,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         scope.speaking ? getAllSpeakingLogsForExport(userId) : [],
         scope.speaking ? getNativeSpeakItemsByUserId(userId) : [],
         scope.speaking ? getConversationItemsByUserId(userId) : [],
+        scope.speaking ? getFreeTalkItemsByUserId(userId) : [],
         scope.writing ? getAllWritingTopicsForExport(userId) : [],
         scope.writing ? getAllWritingLogsForExport(userId) : [],
         scope.writing ? getCompositionsByUserId(userId) : [],
@@ -508,7 +514,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
      return {
         v: 8,
         ca: new Date().toISOString(),
-        user: _mapUserToShortKeys(currentUser), // Corrected to currentUser
+        user: _mapUserToShortKeys(currentUser),
         vocab: wordsData.map(w => _mapToShortKeys(w)),
         u: unitsData,
         pl: logsData,
@@ -521,6 +527,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         listeningItems: listeningItemsData,
         nativeSpeakItems: nativeSpeakItemsDataRaw.map(w => _mapToShortKeys(w)),
         conversationItems: conversationItemsDataRaw.map(w => _mapToShortKeys(w)),
+        freeTalkItems: freeTalkItemsDataRaw.map(w => _mapToShortKeys(w)),
         compositions: compositionsData,
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
         wordBooks: wordBooksDataRaw.map(b => _mapToShortKeys(b)),

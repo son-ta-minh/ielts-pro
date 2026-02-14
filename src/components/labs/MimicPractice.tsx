@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as dataStore from '../../app/dataStore';
 import { speak, startRecording, stopRecording } from '../../utils/audio';
@@ -41,12 +42,18 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
     const [itemToDelete, setItemToDelete] = useState<TargetPhrase | null>(null);
 
     const [autoSpeak, setAutoSpeak] = useState(() => getStoredJSON('vocab_pro_mimic_autospeak', false));
+    const [autoReveal, setAutoReveal] = useState(() => getStoredJSON('vocab_pro_mimic_autoreveal', true));
+    
     const autoSpeakRef = useRef(autoSpeak);
 
     useEffect(() => {
         setStoredJSON('vocab_pro_mimic_autospeak', autoSpeak);
         autoSpeakRef.current = autoSpeak;
     }, [autoSpeak]);
+
+    useEffect(() => {
+        setStoredJSON('vocab_pro_mimic_autoreveal', autoReveal);
+    }, [autoReveal]);
     
     // Get the actual item based on current index in the FULL queue
     const target = queue[currentIndex] || null;
@@ -223,7 +230,7 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
 
     useEffect(() => {
         if (isRecording) stopRecordingSession(true); 
-        setIsRevealed(false);
+        setIsRevealed(autoReveal); // Use preference
         setFullTranscript('');
         setTranscriptOffset(0);
         setUserAudioUrl(null);
@@ -239,7 +246,7 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
             const timer = setTimeout(() => speak(target.text), 500);
             return () => clearTimeout(timer);
         }
-    }, [target?.id]);
+    }, [target?.id, autoReveal]); // Added autoReveal to dependency to react to toggle if needed, though usually on next item
 
     useEffect(() => {
         return () => {
@@ -349,6 +356,9 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
                 
                 autoSpeak={autoSpeak}
                 onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
+                autoReveal={autoReveal}
+                onToggleAutoReveal={() => setAutoReveal(!autoReveal)}
+
                 isGlobalMode={!scopedWord}
                 isAnalyzing={isAnalyzing}
                 onAnalyze={() => {}} 

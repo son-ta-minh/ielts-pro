@@ -37,7 +37,7 @@ export const AddEditFreeTalkModal: React.FC<Props> = ({ isOpen, onClose, onSave,
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <form onSubmit={handleSubmit} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[90vh]">
+      <form onSubmit={handleSubmit} className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col h-[85vh]">
         <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
           <div>
             <h3 className="text-xl font-black text-neutral-900">{initialData ? 'Edit Free Talk' : 'New Free Talk'}</h3>
@@ -45,15 +45,15 @@ export const AddEditFreeTalkModal: React.FC<Props> = ({ isOpen, onClose, onSave,
           </div>
           <button type="button" onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
         </header>
-        <main className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+        <main className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
           <div className="space-y-1">
             <label className="block text-xs font-bold text-neutral-500">Title / Topic</label>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g., My Hometown" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium focus:ring-2 focus:ring-neutral-900 outline-none" required />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 flex flex-col flex-1 h-full">
             <label className="block text-xs font-bold text-neutral-500 flex items-center gap-1"><FileText size={12}/> Speech Content</label>
-            <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Enter the full paragraph you want to practice..." rows={6} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-none leading-relaxed" required />
-            <p className="text-[10px] text-neutral-400 italic text-right">The app will split this into sentences for practice.</p>
+            <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Enter the full paragraph you want to practice..." className="w-full h-64 flex-1 p-4 bg-neutral-50 border border-neutral-200 rounded-xl font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-none leading-relaxed" required />
+            <p className="text-[10px] text-neutral-400 italic text-right mt-1">The app will split this into sentences for practice.</p>
           </div>
           <div className="space-y-1">
              <label className="block text-xs font-bold text-neutral-500 flex items-center gap-1"><Tag size={12}/> Tags</label>

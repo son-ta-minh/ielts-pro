@@ -1,3 +1,4 @@
+
 import { generateJsonExport, processJsonImport, ImportResult, _mapToShortKeys, _mapUserToShortKeys } from '../utils/dataHandler';
 import { User, DataScope } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
@@ -122,7 +123,7 @@ export const restoreFromServer = async (identifier: string): Promise<ImportResul
 };
 
 async function getFullExportData(userId: string, user: User) {
-     const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
+     const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
         db.getAllWordsForExport(userId),
         db.getUnitsByUserId(userId),
         db.getReadingBooksByUserId(userId),
@@ -131,6 +132,7 @@ async function getFullExportData(userId: string, user: User) {
         db.getAllSpeakingLogsForExport(userId),
         db.getNativeSpeakItemsByUserId(userId),
         db.getConversationItemsByUserId(userId),
+        db.getFreeTalkItemsByUserId(userId),
         db.getAllWritingTopicsForExport(userId),
         db.getAllWritingLogsForExport(userId),
         db.getCompositionsByUserId(userId),
@@ -165,6 +167,7 @@ async function getFullExportData(userId: string, user: User) {
         listeningItems: listeningItemsData,
         nativeSpeakItems: nativeSpeakItemsDataRaw.map(w => _mapToShortKeys(w)),
         conversationItems: conversationItemsDataRaw.map(w => _mapToShortKeys(w)),
+        freeTalkItems: freeTalkItemsDataRaw.map(w => _mapToShortKeys(w)),
         compositions: compositionsData,
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
         wordBooks: wordBooksDataRaw.map(b => _mapToShortKeys(b)),
