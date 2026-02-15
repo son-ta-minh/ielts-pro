@@ -11,8 +11,8 @@ import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
 
 const keyMap: { [key: string]: string } = {
-    // VocabularyItem top-level
-    userId: 'uid', word: 'w', ipa: 'i', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'nt', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', needsPronunciationFocus: 'is_pron', isExampleLocked: 'is_exl', isPassive: 'is_pas', quality: 'q', source: 's', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', lastGrade: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
+    // VocabularyItem top-level - 'ipa' removed, 'ipaUs' uses 'i_us'
+    userId: 'uid', word: 'w', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'nt', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', needsPronunciationFocus: 'is_pron', isExampleLocked: 'is_exl', isPassive: 'is_pas', quality: 'q', source: 's', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', lastGrade: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
     masteryScore: 'ms',
     complexity: 'cx',
 
@@ -152,6 +152,9 @@ export function _mapToShortKeys(item: any): any {
     for (const key in item) {
         if (!Object.prototype.hasOwnProperty.call(item, key)) continue;
         
+        // Skip deprecated fields explicitly (including 'ipa')
+        if (key === 'tags' || key === 'v2' || key === 'v3' || key === 'ipa') continue;
+
         const value = (item as any)[key];
         const shortKey = keyMap[key] || key;
 
@@ -234,6 +237,14 @@ function _mapNestedArrayToLong(arr: any[] | undefined, outerLongKey: string): an
         for (const sKey in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, sKey)) {
                 const newLongKey = reverseKeyMap[sKey] || sKey;
+
+                // CLEANUP: Remove IPA fields from Word Family Members during import
+                if (['nouns', 'verbs', 'adjs', 'advs'].includes(outerLongKey)) {
+                    if (newLongKey === 'ipa' || newLongKey === 'ipaUs' || newLongKey === 'ipaUk') {
+                        continue; // Skip this field
+                    }
+                }
+                
                 mapped[newLongKey] = obj[sKey];
             }
         }
@@ -257,6 +268,26 @@ export function _mapToLongKeys(item: any): any {
 
         const value = item[shortKey];
         const longKey = reverseKeyMap[shortKey] || shortKey;
+
+        // CLEANUP: Skip deprecated fields at the root level during import (Short Key path)
+        if (longKey === 'tags' || longKey === 'v2' || longKey === 'v3') {
+            continue;
+        }
+
+        // Special handling for legacy 'i' (ipa) short key mapping
+        // If we encounter 'i', we map it to 'ipaUs' IF 'ipaUs' isn't already set/mapped from 'i_us'.
+        // Since loop order isn't guaranteed, we handle this logic in the cleanImportedItem phase
+        // OR we map 'i' to 'ipaUs' here if we treat 'i' as legacy US IPA.
+        // However, keyMap has ipa:'i' removed. So reverseKeyMap won't map 'i' to 'ipa'.
+        // We need to manually handle 'i' -> 'ipaUs' migration here.
+        if (shortKey === 'i' && !longItem.ipaUs) {
+             longItem.ipaUs = value;
+             continue;
+        }
+        if (longKey === 'ipa') { // If explicit long key 'ipa' exists
+             if (!longItem.ipaUs) longItem.ipaUs = value;
+             continue;
+        }
 
         if (['collocationsArray', 'idiomsList', 'prepositions', 'paraphrases', 'words', 'speakers', 'sentences', 'answers'].includes(longKey)) {
             longItem[longKey] = _mapNestedArrayToLong(value, longKey);
@@ -306,6 +337,43 @@ function _mapUserToLongKeys(shortUser: any): User {
     return longUser as User;
 }
 
+// Cleanup function for long-format JSON import
+function cleanImportedItem(item: any): any {
+    if (!item) return item;
+    const cleaned = { ...item };
+    
+    // MIGRATION: 'ipa' -> 'ipaUs'
+    if (cleaned.ipa && !cleaned.ipaUs) {
+        cleaned.ipaUs = cleaned.ipa;
+    }
+    
+    // Remove obsolete root fields
+    delete cleaned.v2;
+    delete cleaned.v3;
+    delete cleaned.tags;
+    delete cleaned.ipa; // Remove legacy ipa field
+    
+    // Remove obsolete family member fields
+    if (cleaned.wordFamily) {
+         const cleanFamilyMembers = (members: any[]) => {
+             if (!Array.isArray(members)) return members;
+             return members.map(m => {
+                 const cm = { ...m };
+                 delete cm.ipa;
+                 delete cm.ipaUs;
+                 delete cm.ipaUk;
+                 return cm;
+             });
+         };
+         
+         if (cleaned.wordFamily.nouns) cleaned.wordFamily.nouns = cleanFamilyMembers(cleaned.wordFamily.nouns);
+         if (cleaned.wordFamily.verbs) cleaned.wordFamily.verbs = cleanFamilyMembers(cleaned.wordFamily.verbs);
+         if (cleaned.wordFamily.adjs) cleaned.wordFamily.adjs = cleanFamilyMembers(cleaned.wordFamily.adjs);
+         if (cleaned.wordFamily.advs) cleaned.wordFamily.advs = cleanFamilyMembers(cleaned.wordFamily.advs);
+    }
+    return cleaned;
+}
+
 export interface ImportResult {
     type: 'success' | 'error';
     message: string;
@@ -332,9 +400,13 @@ export const processJsonImport = async (
 
                 const incomingItemsRaw: any[] = Array.isArray(rawJson) ? rawJson : (rawJson.vocabulary || rawJson.vocab || []);
                 const isShortKeyFormat = incomingItemsRaw.length > 0 && (incomingItemsRaw[0].uid || !incomingItemsRaw[0].userId);
-                const incomingItems: Partial<VocabularyItem>[] = isShortKeyFormat 
+                
+                let incomingItems: Partial<VocabularyItem>[] = isShortKeyFormat 
                     ? incomingItemsRaw.map(_mapToLongKeys) 
                     : incomingItemsRaw;
+
+                // Apply rigorous cleanup to ALL incoming vocab items to ensure v2, v3, tags, and family IPA are gone
+                incomingItems = incomingItems.map(cleanImportedItem);
 
                 const incomingUnits: Unit[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.units || rawJson.u);
                 const incomingLogs: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.paraphraseLogs || rawJson.pl);
@@ -514,7 +586,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
      return {
         v: 8,
         ca: new Date().toISOString(),
-        user: _mapUserToShortKeys(currentUser),
+        user: _mapUserToShortKeys(currentUser), // Consistent shortening using the specific user mapper
         vocab: wordsData.map(w => _mapToShortKeys(w)),
         u: unitsData,
         pl: logsData,

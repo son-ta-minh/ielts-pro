@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
@@ -62,7 +63,7 @@ export const IpaSorter: React.FC<Props> = ({ words, onComplete, onExit }) => {
             return regex.test(ipa);
         };
 
-        const validWords = words.filter(w => w.ipa && w.ipa.length > 2);
+        const validWords = words.filter(w => w.ipaUs && w.ipaUs.length > 2);
         if (validWords.length < 5) {
             alert("Not enough words with IPA found (need at least 5).");
             onExit();
@@ -71,8 +72,8 @@ export const IpaSorter: React.FC<Props> = ({ words, onComplete, onExit }) => {
 
         const viableContrasts = [];
         for (const contrast of MINIMAL_PAIR_CONTRASTS) {
-            const count1 = validWords.filter(w => hasPhoneme(w.ipa, contrast.sym1)).length;
-            const count2 = validWords.filter(w => hasPhoneme(w.ipa, contrast.sym2)).length;
+            const count1 = validWords.filter(w => hasPhoneme(w.ipaUs!, contrast.sym1)).length;
+            const count2 = validWords.filter(w => hasPhoneme(w.ipaUs!, contrast.sym2)).length;
             if (count1 >= 2 && count2 >= 2 && count1 + count2 >= 5) {
                 viableContrasts.push(contrast);
             }
@@ -94,8 +95,8 @@ export const IpaSorter: React.FC<Props> = ({ words, onComplete, onExit }) => {
         const shuffledWords = [...validWords].sort(() => Math.random() - 0.5);
 
         for (const w of shuffledWords) {
-            const has1 = hasPhoneme(w.ipa, contrast.sym1);
-            const has2 = hasPhoneme(w.ipa, contrast.sym2);
+            const has1 = hasPhoneme(w.ipaUs!, contrast.sym1);
+            const has2 = hasPhoneme(w.ipaUs!, contrast.sym2);
             if (has1 || has2) {
                 let targetSymbol = '';
                 if (has1 && has2) targetSymbol = Math.random() > 0.5 ? contrast.sym1 : contrast.sym2;
@@ -113,13 +114,13 @@ export const IpaSorter: React.FC<Props> = ({ words, onComplete, onExit }) => {
                 else if (targetSymbol === 'e') regex = new RegExp(`${escaped}(?!ɪ)`, 'g');
                 else regex = new RegExp(escaped, 'g');
 
-                let maskedIpa = w.ipa.replace(regex, '___');
+                let maskedIpa = w.ipaUs!.replace(regex, '___');
 
-                if (maskedIpa === w.ipa) {
-                    maskedIpa = w.ipa.split(targetSymbol).join('___');
+                if (maskedIpa === w.ipaUs) {
+                    maskedIpa = w.ipaUs!.split(targetSymbol).join('___');
                 }
 
-                queue.push({ id: w.id, word: w.word, ipa: w.ipa, maskedIpa, targetSymbol });
+                queue.push({ id: w.id, word: w.word, ipa: w.ipaUs!, maskedIpa, targetSymbol });
             }
             if (queue.length >= 15) break;
         }

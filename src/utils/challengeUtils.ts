@@ -21,8 +21,8 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
         list.push({ type: 'MEANING_QUIZ', title: 'Meaning Multi Choice', options: [], answer: word.meaningVi, word });
     }
 
-    if (word.ipaMistakes && word.ipaMistakes.length > 0) {
-      list.push({ type: 'IPA_QUIZ', title: 'IPA Multi Choice', options: shuffleArray([word.ipa, ...word.ipaMistakes]), answer: word.ipa, word });
+    if (word.ipaMistakes && word.ipaMistakes.length > 0 && word.ipaUs) {
+      list.push({ type: 'IPA_QUIZ', title: 'IPA Multi Choice', options: shuffleArray([word.ipaUs, ...word.ipaMistakes]), answer: word.ipaUs, word });
     }
 
     if (word.collocationsArray && word.collocationsArray.length > 0) {

@@ -199,10 +199,6 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                         <div className="space-y-2">
                             <div className="space-y-1">
                                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Primary IPA / US</label>
-                                <input type="text" value={formData.ipa} onChange={(e) => setFormData('ipa', e.target.value)} placeholder="/.../" className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">IPA US (Optional)</label>
                                 <input type="text" value={formData.ipaUs || ''} onChange={(e) => setFormData('ipaUs', e.target.value)} placeholder="/.../" className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
                             </div>
                             <div className="space-y-1">

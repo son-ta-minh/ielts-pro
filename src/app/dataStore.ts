@@ -236,6 +236,21 @@ export async function init(userId: string) {
         const wordsToMigrate: VocabularyItem[] = [];
         for (const word of words) {
             let changed = false;
+            
+            // MIGRATION: 'ipa' -> 'ipaUs'
+            // Check if 'ipa' exists on the object (ignoring type check for migration purpose)
+            const legacyIpa = (word as any).ipa;
+            if (legacyIpa && !word.ipaUs) {
+                word.ipaUs = legacyIpa;
+                delete (word as any).ipa;
+                changed = true;
+            }
+            if (legacyIpa && word.ipaUs) {
+                // Just remove legacy property if duplicate
+                delete (word as any).ipa;
+                changed = true;
+            }
+
             const currentComplexity = calculateComplexity(word);
             const currentMastery = calculateMasteryScore(word);
             const currentGameEligibility = calculateGameEligibility(word);

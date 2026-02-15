@@ -137,7 +137,6 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
                     // we can just take its properties, preserving user ID and ID.
                     const updated = {
                         ...rawItem,
-                        ipa: foundItem.ipa,
                         ipaUs: foundItem.ipaUs,
                         ipaUk: foundItem.ipaUk,
                         meaningVi: foundItem.meaningVi,

@@ -208,9 +208,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
         try {
             const cleaned = selectedText.toLowerCase();
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
-            if (existing && existing.ipa) {
+            if (existing && existing.ipaUs) {
                 setMessage({ 
-                    text: `**IPA:** ${existing.ipa}`, 
+                    text: `**IPA:** ${existing.ipaUs}`,
                     icon: <Binary size={18} className="text-emerald-500" /> 
                 });
                 setIsOpen(true);

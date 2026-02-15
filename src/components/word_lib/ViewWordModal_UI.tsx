@@ -459,7 +459,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                     <div className="flex justify-between items-end w-full gap-4">
                         {/* Bottom Left: IPA, Register */}
                         <div className="flex items-center gap-3 flex-wrap">
-                            <p className={`text-sm font-mono font-medium ${isIpaFailed ? 'text-red-500' : 'text-neutral-500'}`}>{word.ipa || '/?/'}</p>
+                            <p className={`text-sm font-mono font-medium ${isIpaFailed ? 'text-red-500' : 'text-neutral-500'}`}>{word.ipaUs || '/?/'}</p>
                             
                             {word.pronSim && word.pronSim !== 'same' && (
                                 <>

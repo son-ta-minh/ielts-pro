@@ -147,7 +147,7 @@ export interface VocabularyItem {
   id: string;
   userId: string; 
   word: string; 
-  ipa: string;
+  // ipa field removed, use ipaUs instead
   ipaUs?: string;
   ipaUk?: string;
   pronSim?: 'same' | 'near' | 'different';

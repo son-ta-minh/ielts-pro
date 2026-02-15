@@ -203,8 +203,8 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
             // 1. Check Library first from cached store (reliable and fast)
             const cleaned = target.text.trim().toLowerCase();
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
-            if (existing && existing.ipa) {
-                setIpa(existing.ipa);
+            if (existing && existing.ipaUs) {
+                setIpa(existing.ipaUs);
                 setShowIpa(true);
                 setIsIpaLoading(false);
                 return;

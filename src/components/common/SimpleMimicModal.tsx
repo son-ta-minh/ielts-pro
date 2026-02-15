@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2 } from 'lucide-react';
 import { speak, stopRecording, startRecording } from '../../utils/audio';
@@ -46,8 +47,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             // 1. Check Library first from cached store (reliable and fast)
             const cleaned = target.trim().toLowerCase();
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
-            if (existing && existing.ipa) {
-                setIpa(existing.ipa);
+            if (existing && existing.ipaUs) {
+                setIpa(existing.ipaUs);
                 setShowIpa(true);
                 setIsIpaLoading(false);
                 return;

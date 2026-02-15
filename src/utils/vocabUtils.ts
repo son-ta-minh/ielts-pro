@@ -106,10 +106,10 @@ export const normalizeAiResponse = (shortData: any): any => {
     return {
         original: shortData.og || shortData.original,
         headword: shortData.hw || shortData.headword,
-        ipa: shortData.ipa || shortData.ipa_us,
-        ipaUs: shortData.ipa_us,
-        ipaUk: shortData.ipa_uk,
-        pronSim: shortData.pron_sim,
+        // Map any available IPA source to ipaUs, prioritizing ipa_us
+        ipaUs: shortData.ipa_us || shortData.ipa || shortData.i,
+        ipaUk: shortData.ipa_uk || shortData.i_uk,
+        pronSim: shortData.pron_sim || shortData.pronSim,
         ipaMistakes: shortData.ipa_m || shortData.ipaMistakes,
         meaningVi: shortData.m || shortData.meaningVi,
         register: shortData.reg || shortData.register,
@@ -217,9 +217,10 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
 
     const updatedItem: VocabularyItem = { ...baseItem };
     
-    updatedItem.ipa = aiResult.ipa ?? baseItem.ipa;
+    // Merge IPA fields
     updatedItem.ipaUs = aiResult.ipaUs ?? baseItem.ipaUs;
     updatedItem.ipaUk = aiResult.ipaUk ?? baseItem.ipaUk;
+    
     updatedItem.pronSim = aiResult.pronSim ?? baseItem.pronSim;
     updatedItem.ipaMistakes = aiResult.ipaMistakes ?? baseItem.ipaMistakes;
     updatedItem.meaningVi = aiResult.meaningVi ?? baseItem.meaningVi;

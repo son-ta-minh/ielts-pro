@@ -50,13 +50,25 @@ export const useDataActions = (props: UseDataActionsProps) => {
             planning: true
         };
         
-        await generateJsonExport(currentUser.id, currentUser, fullScope);
+        const exportData = await generateJsonExport(currentUser.id, currentUser, fullScope);
+
+        // Generate download
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `vocab-pro-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
         
         const now = Date.now();
         localStorage.setItem('vocab_pro_last_backup_timestamp', String(now));
         localStorage.setItem('vocab_pro_local_last_modified', String(now));
         refreshBackupTime();
         sessionStorage.removeItem('vocab_pro_just_restored');
+        showToast('Backup file downloaded.', 'success');
     };
     
     const handleRestoreSuccess = async (result: ImportResult, preservedConfigJson: string | null, serverMtime?: number) => {

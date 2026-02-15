@@ -128,14 +128,14 @@ export function getRemainingTime(nextReview: number): { label: string; urgency: 
 }
 
 export function createNewWord(
-  word: string, ipa: string, meaningVi: string, example: string, note: string, groups: string[],
+  word: string, ipaUs: string, meaningVi: string, example: string, note: string, groups: string[],
   isIdiom = false, needsPronunciationFocus = false, isPhrasalVerb = false,
   isCollocation = false, isStandardPhrase = false, isPassive = false, source: WordSource = 'manual'
 ): VocabularyItem {
   const now = Date.now();
   const newItem: VocabularyItem = {
     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-    userId: '', word: word.trim(), ipa: ipa.trim(), meaningVi: meaningVi.trim(), example: example.trim(), note, groups,
+    userId: '', word: word.trim(), ipaUs: ipaUs.trim(), meaningVi: meaningVi.trim(), example: example.trim(), note, groups,
     isIdiom, isPhrasalVerb, isCollocation, isStandardPhrase, needsPronunciationFocus, isPassive,
     register: 'raw', quality: WordQuality.RAW, source, isExampleLocked: false,
     createdAt: now, updatedAt: now, nextReview: now, interval: 0, easeFactor: 2.5, consecutiveCorrect: 0, forgotCount: 0,
@@ -164,14 +164,14 @@ export function getLogicalKnowledgeUnits(word: VocabularyItem): KnowledgeUnit[] 
 
     // 2. Pronunciation (Speaking)
     // Always relevant unless explicitly marked otherwise, but checking IPA or flag is a good proxy.
-    if (word.ipa || word.needsPronunciationFocus) {
+    if (word.ipaUs || word.needsPronunciationFocus) {
         units.push({ key: 'pronunciation', testKeys: ['PRONUNCIATION'] });
     }
 
     // 3. IPA Recognition (Listening/Reading)
     // Only if IPA is present AND mistakes are defined (distractors available).
     // If no mistakes are defined, the IPA Quiz cannot be generated, so it shouldn't count against mastery.
-    if (word.ipa && word.ipa.trim() && word.ipaMistakes && word.ipaMistakes.length > 0) {
+    if (word.ipaUs && word.ipaUs.trim() && word.ipaMistakes && word.ipaMistakes.length > 0) {
         units.push({ key: 'ipa_recognition', testKeys: ['IPA_QUIZ'] });
     }
 

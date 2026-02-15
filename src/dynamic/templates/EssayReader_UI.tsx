@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Type, Underline, Minus, Plus, BookText, Link, Unlink, HelpCircle, ChevronDown, CheckCircle2, X } from 'lucide-react';
 import { VocabularyItem } from '../../app/types';
@@ -186,7 +187,7 @@ const PracticeInput: React.FC<{
             {showHint && wordObj && (
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 animate-in fade-in zoom-in-95">
                     <div className="bg-neutral-900 text-white rounded-xl shadow-xl px-4 py-2 flex flex-col items-center gap-1 min-w-[120px]">
-                        <span className="text-[10px] font-black uppercase text-amber-400 tracking-widest">{wordObj.ipa || '/?/'}</span>
+                        <span className="text-[10px] font-black uppercase text-amber-400 tracking-widest">{wordObj.ipaUs || '/?/'}</span>
                         <span className="text-xs font-bold leading-tight text-center">{wordObj.meaningVi}</span>
                         <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-900 rotate-45"></div>
                     </div>

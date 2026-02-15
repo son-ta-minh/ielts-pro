@@ -1,3 +1,4 @@
+
 import { VocabularyItem, WordQuality } from '../app/types';
 
 /**
@@ -64,7 +65,7 @@ export const calculateGameEligibility = (item: VocabularyItem): string[] => {
     }
 
     // IPA_SORTER: Needs valid IPA and pass phonetic cluster checks
-    if (item.ipa && checkIpaEligibility(item.ipa)) {
+    if (item.ipaUs && checkIpaEligibility(item.ipaUs)) {
         eligible.push('IPA_SORTER');
     }
 
