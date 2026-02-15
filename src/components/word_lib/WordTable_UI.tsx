@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ArrowDownAZ, ListFilter, Copy, ShieldCheck, ShieldX, Ghost, Zap, GitCommit, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, Sparkles, PenLine, BookMarked, BookPlus } from 'lucide-react';
+import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ArrowDownAZ, ListFilter, Copy, ShieldCheck, ShieldX, Ghost, Zap, GitCommit, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, Sparkles, PenLine, BookMarked, BookPlus, Replace } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, WordQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -277,6 +277,8 @@ export interface WordTableUIProps {
   onConfirmAddToBook: (bookId: string) => void;
   // New prop for Pronunciation Queue
   onAddToPronunciation: () => void;
+  // New prop for Bulk Paraphrase
+  onOpenParaModal?: () => void;
 }
 
 export const WordTableUI: React.FC<WordTableUIProps> = ({
@@ -294,7 +296,8 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
   selectedTypes, toggleType, onOpenWordBook,
   onOpenAddToBookModal, isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook,
-  onAddToPronunciation
+  onAddToPronunciation,
+  onOpenParaModal
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const totalPages = Math.ceil(total / pageSize);
@@ -365,11 +368,11 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
         </div>
         {isTagBrowserOpen && tagTree && onSelectTag && (
             <TagBrowser 
-                tagTree={tagTree}
-                selectedTag={selectedTag || null}
-                onSelectTag={onSelectTag}
-                title="Group Browser"
-                icon={<FolderTree size={16} />}
+                tagTree={tagTree} 
+                selectedTag={selectedTag || null} 
+                onSelectTag={onSelectTag} 
+                title="Group Browser" 
+                icon={<FolderTree size={16} />} 
             />
         )}
         {isFilterMenuOpen && (
@@ -504,10 +507,10 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
         )}
       </div>
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-full max-w-4xl px-4 animate-in slide-in-from-bottom-8">
-          <div className="bg-neutral-900 text-white rounded-[2rem] p-4 shadow-2xl flex items-center justify-between border border-neutral-800">
-            <div className="flex items-center space-x-4 pl-2"><button onClick={() => setSelectedIds(new Set())} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button><div><div className="text-sm font-black">{selectedIds.size} selected</div></div></div>
-            <div className="flex items-center space-x-2">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-full max-w-5xl px-4 animate-in slide-in-from-bottom-8">
+          <div className="bg-neutral-900 text-white rounded-[2rem] p-4 shadow-2xl flex items-center justify-between border border-neutral-800 overflow-x-auto no-scrollbar">
+            <div className="flex items-center space-x-4 pl-2 shrink-0"><button onClick={() => setSelectedIds(new Set())} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button><div><div className="text-sm font-black">{selectedIds.size} selected</div></div></div>
+            <div className="flex items-center space-x-2 ml-4">
               {onOpenBulkDeleteModal && (<button onClick={onOpenBulkDeleteModal} className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${context === 'unit' ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-500' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'}`}>{context === 'unit' ? <Unlink size={14} /> : <Trash2 size={14} />}<span>{context === 'unit' ? 'Unlink' : 'Delete'}</span></button>)}
               {context === 'unit' && onOpenBulkHardDeleteModal && selectedRawWordsCount > 0 && (
                   <button 
@@ -518,11 +521,12 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                   </button>
               )}
               <button onClick={() => onBulkVerify(selectedIds)} className="px-4 py-3 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><ShieldCheck size={14} /> <span>Verify</span></button>
-              {selectedWordsMissingHintsCount > 0 && ( <button onClick={onOpenHintModal} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors" title="Generate hints for collocations and idioms"><Zap size={14} /> <span>Refine Hints ({selectedWordsMissingHintsCount})</span></button> )}
-              <button onClick={() => { setIsAiModalOpen(true); }} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>Refine</span></button>
-              <button onClick={onOpenAddToBookModal} className="px-4 py-3 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><BookPlus size={14} /> <span>Add to Book</span></button>
-              <button onClick={onAddToPronunciation} className="px-4 py-3 bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Mic size={14} /> <span>Pronunciation</span></button>
-              <button onClick={() => onPractice(selectedIds)} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black flex items-center space-x-2"><Play size={14} fill="currentColor"/> <span>Practice</span></button>
+              {selectedWordsMissingHintsCount > 0 && ( <button onClick={onOpenHintModal} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors" title="Generate hints for collocations and idioms"><Zap size={14} /> <span>Hints ({selectedWordsMissingHintsCount})</span></button> )}
+              <button onClick={() => { setIsAiModalOpen(true); }} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>Details</span></button>
+              <button onClick={onOpenParaModal} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors" title="Overwrites existing variations"><Replace size={14} /> <span>Paraphrase</span></button>
+              <button onClick={onOpenAddToBookModal} className="px-4 py-3 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><BookPlus size={14} /> <span>Book</span></button>
+              <button onClick={onAddToPronunciation} className="px-4 py-3 bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Mic size={14} /> <span>Speech</span></button>
+              <button onClick={() => onPractice(selectedIds)} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-xs flex items-center space-x-2 shadow-lg shadow-blue-500/20 active:scale-95"><Play size={14} fill="currentColor"/> <span>Practice</span></button>
             </div>
           </div>
         </div>

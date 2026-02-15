@@ -146,12 +146,12 @@ const Sidebar: React.FC<AppLayoutProps & {
                     className={`p-2 rounded-xl transition-all active:scale-90 border animate-in fade-in relative ${hasUnsavedChanges && !nextAutoBackupTime ? 'bg-orange-50 border-orange-200 shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'bg-neutral-50 border-neutral-100 hover:bg-neutral-100'}`} 
                     title={syncTooltip}
                 >
-                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-3 h-3 object-contain" />
+                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-6 h-6 object-contain" />
                     {hasUnsavedChanges && (
                         <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-50' : 'bg-orange-500 animate-ping'}`}></span>
                     )}
                     {hasUnsavedChanges && (
-                         <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-500' : 'bg-orange-500'}`}></span>
+                         <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-50' : 'bg-orange-500'}`}></span>
                     )}
                  </button>
              )}
@@ -486,7 +486,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
         isProcessing={false}
         onConfirm={confirmEndSession}
         onClose={cancelEndSession}
-        icon={<AlertTriangle size={40} className="text-orange-500" />}
+        icon={<AlertTriangle size={40} className="text-orange-50" />}
         confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200"
       />
       

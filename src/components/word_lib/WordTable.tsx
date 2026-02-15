@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem } from '../../app/types';
+import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem, ParaphraseOption } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
-import { getWordDetailsPrompt, getHintsPrompt } from '../../services/promptService';
+import { getWordDetailsPrompt, getHintsPrompt, getBulkParaphrasePrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter, CompositionFilter, BookFilter } from './WordTable_UI';
 import { normalizeAiResponse, mergeAiResultIntoWord } from '../../utils/vocabUtils';
@@ -136,6 +136,7 @@ const WordTable: React.FC<Props> = ({
   const [isBulkHardDeleteModalOpen, setIsBulkHardDeleteModalOpen] = useState(false);
   
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isParaModalOpen, setIsParaModalOpen] = useState(false);
   const [isHintModalOpen, setIsHintModalOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info', message: string} | null>(null);
   
@@ -443,8 +444,26 @@ const WordTable: React.FC<Props> = ({
     setIsAiModalOpen(false);
   };
 
+  const handleParaAiResult = async (results: any[]) => {
+    if (!Array.isArray(results)) throw new Error('Response must be an array.');
+    const originalWordsMap = new Map<string, VocabularyItem>(selectedWordsToRefine.map(w => [w.word.toLowerCase(), w]));
+    const itemsToSave: VocabularyItem[] = [];
+    for (const result of results) {
+        const originalWord = originalWordsMap.get(result.og?.toLowerCase());
+        if (!originalWord) continue;
+        const newParaphrases: ParaphraseOption[] = (result.para || []).map((p: any) => ({ word: p.w, tone: p.t, context: p.c, isIgnored: false }));
+        itemsToSave.push({ ...originalWord, paraphrases: newParaphrases, updatedAt: Date.now() });
+    }
+    if (itemsToSave.length > 0) {
+        await dataStore.bulkSaveWords(itemsToSave);
+        setNotification({ type: 'success', message: `Refined paraphrases for ${itemsToSave.length} words.` });
+        setSelectedIds(new Set());
+    }
+    setIsParaModalOpen(false);
+  };
+
   const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(stringToWordArray(inputs.words), user.nativeLanguage || 'Vietnamese');
-  
+  const handleGenerateParaPrompt = (inputs: { words: string }) => getBulkParaphrasePrompt(selectedWordsToRefine);
   const handleGenerateHintPrompt = (inputs: any) => getHintsPrompt(selectedWordsMissingHints);
 
   const handleHintAiResult = async (results: any[]) => {
@@ -588,7 +607,8 @@ const WordTable: React.FC<Props> = ({
     wordBooks: availableBooks,
     onConfirmAddToBook: handleConfirmAddToBook,
     // New prop for Pronunciation Queue
-    onAddToPronunciation: handleAddToPronunciation
+    onAddToPronunciation: handleAddToPronunciation,
+    onOpenParaModal: () => setIsParaModalOpen(true)
   };
 
   return (
@@ -604,7 +624,7 @@ const WordTable: React.FC<Props> = ({
         onConfirm={handleConfirmBulkDelete}
         onClose={() => setIsBulkDeleteModalOpen(false)}
         confirmButtonClass={context === 'unit' ? "bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" : "bg-red-600 text-white hover:bg-red-700 shadow-red-200"}
-        icon={context === 'unit' ? <Unlink size={40} className="text-orange-500"/> : <Trash2 size={40} className="text-red-500"/>}
+        icon={context === 'unit' ? <Unlink size={40} className="text-orange-50"/> : <Trash2 size={40} className="text-red-500"/>}
       />}
       {onBulkHardDelete && (
         <ConfirmationModal 
@@ -646,6 +666,20 @@ const WordTable: React.FC<Props> = ({
             onGeneratePrompt={handleGenerateRefinePrompt} 
             onJsonReceived={handleAiRefinementResult} 
             actionLabel="Apply to All"
+        />
+      )}
+      {isParaModalOpen && selectedWordsToRefine.length > 0 && (
+        <UniversalAiModal 
+            isOpen={isParaModalOpen} 
+            onClose={() => setIsParaModalOpen(false)} 
+            type="REFINE_WORDS" 
+            title="Refine Paraphrases"
+            description={`Generating fresh paraphrases for ${selectedWordsToRefine.length} selected word(s). This will OVERWRITE existing data.`}
+            initialData={{ words: selectedWordsToRefine.map(w => w.word).join('; ') }} 
+            user={user}
+            onGeneratePrompt={handleGenerateParaPrompt} 
+            onJsonReceived={handleParaAiResult} 
+            actionLabel="Overwrite Paraphrases"
         />
       )}
     </>
