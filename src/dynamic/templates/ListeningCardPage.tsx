@@ -4,7 +4,7 @@ import { User, ListeningItem, FocusColor, ListeningBook } from '../../app/types'
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Ear, Plus, Edit3, Trash2, Volume2, Save, X, Info, Tag, Shuffle, FolderTree, Target, LayoutList, FolderPlus, Book, Move, Pen, Library, ArrowLeft, Music, FileAudio, Folder, ChevronRight, CornerLeftUp, Loader2, Play, Pause, Square, SkipBack, SkipForward, Eye, EyeOff, Highlighter, RotateCw, Eraser } from 'lucide-react';
+import { Ear, Plus, Edit3, Trash2, Volume2, Save, X, Info, Tag, Shuffle, FolderTree, Target, LayoutList, FolderPlus, Book, Move, Pen, Library, ArrowLeft, Music, FileAudio, Folder, ChevronRight, CornerLeftUp, Loader2, Play, Pause, Square, SkipBack, SkipForward, Eye, EyeOff, Highlighter, RotateCw, Eraser, FileText, Lock } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { speak, stopSpeaking } from '../../utils/audio';
@@ -20,6 +20,7 @@ import { UniversalShelf } from '../../components/common/UniversalShelf';
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
 import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
+import { FileSelector } from '../../components/common/FileSelector';
 
 interface Props {
   user: User;
@@ -181,28 +182,29 @@ const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, 
 
     return (
         <div className="relative h-full flex flex-col">
-            <div className="absolute top-2 left-2 z-20 h-8">
+            {/* Sticky Action Button - Floats over text */}
+            <div className="sticky top-4 z-50 h-0 flex justify-center pointer-events-none overflow-visible">
                  <button 
                     onClick={(e) => { e.preventDefault(); handleApplyAction(); }}
                     disabled={!pendingAction}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg transition-all transform duration-200 ${
+                    className={`pointer-events-auto flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-black shadow-xl transition-all transform duration-200 border-2 border-white ring-1 ring-black/5 ${
                         pendingAction 
-                            ? 'translate-y-0 opacity-100 pointer-events-auto' 
-                            : '-translate-y-2 opacity-0 pointer-events-none'
+                            ? 'translate-y-0 opacity-100 scale-100' 
+                            : '-translate-y-4 opacity-0 scale-95 pointer-events-none'
                     } ${
                         pendingAction?.type === 'remove' 
-                            ? 'bg-white text-rose-600 border border-rose-100 hover:bg-rose-50' 
-                            : 'bg-neutral-900 text-white border border-neutral-800 hover:bg-neutral-800'
+                            ? 'bg-white text-rose-600 shadow-rose-100' 
+                            : 'bg-neutral-900 text-white shadow-neutral-200'
                     }`}
                  >
-                    {pendingAction?.type === 'remove' ? <Eraser size={12}/> : <Highlighter size={12}/>}
+                    {pendingAction?.type === 'remove' ? <Eraser size={14}/> : <Highlighter size={14}/>}
                     <span>{pendingAction?.type === 'remove' ? 'Unhighlight' : 'Highlight'}</span>
                  </button>
             </div>
             
             <div 
                 ref={containerRef}
-                className="text-lg font-medium text-neutral-800 leading-relaxed whitespace-pre-wrap pt-12 pb-4 px-4 select-text cursor-text font-mono"
+                className="text-lg font-medium text-neutral-800 leading-relaxed whitespace-pre-wrap px-6 pb-20 pt-6 select-text cursor-text font-mono"
                 onMouseUp={handleSelectionCheck}
                 onKeyUp={handleSelectionCheck}
             >
@@ -218,162 +220,6 @@ const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, 
                         {seg.isHighlight ? seg.text.slice(1, -1) : seg.text}
                     </span>
                 ))}
-            </div>
-        </div>
-    );
-};
-
-// --- Audio File Selector Modal ---
-interface AudioFileSelectorProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onSelect: (url: string, filename: string) => void;
-}
-
-const AudioFileSelector: React.FC<AudioFileSelectorProps> = ({ isOpen, onClose, onSelect }) => {
-    const config = getConfig();
-    const serverUrl = getServerUrl(config);
-    const { showToast } = useToast();
-
-    const [mappings, setMappings] = useState<Record<string, string>>({});
-    const [currentMap, setCurrentMap] = useState<string | null>(null);
-    const [currentPath, setCurrentPath] = useState('');
-    const [fileList, setFileList] = useState<{name: string, type: 'file' | 'directory'}[]>([]);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        if (isOpen) {
-            fetchMappings();
-            setCurrentMap(null);
-            setCurrentPath('');
-            setFileList([]);
-        }
-    }, [isOpen]);
-
-    const fetchMappings = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch(`${serverUrl}/api/audio/mappings`);
-            if (res.ok) {
-                setMappings(await res.json());
-            } else {
-                showToast("Failed to connect to audio server", "error");
-            }
-        } catch (e) {
-            showToast("Audio server unreachable", "error");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchFiles = async (mapName: string, path: string = '') => {
-        setLoading(true);
-        try {
-            const encodedPath = encodeURIComponent(path);
-            const res = await fetch(`${serverUrl}/api/audio/files/${mapName}?path=${encodedPath}`);
-            if (res.ok) {
-                const data = await res.json();
-                let items = [];
-                if (Array.isArray(data.items)) items = data.items;
-                else if (Array.isArray(data.files)) items = data.files.map((f: string) => ({ name: f, type: 'file' }));
-                
-                setFileList(items);
-                setCurrentPath(data.currentPath || '');
-            } else {
-                showToast("Failed to load files", "error");
-            }
-        } catch (e) {
-            showToast("Connection error", "error");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSelectMap = (mapName: string) => {
-        setCurrentMap(mapName);
-        fetchFiles(mapName, '');
-    };
-
-    const handleNavigate = (folderName: string) => {
-        if (!currentMap) return;
-        const newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
-        fetchFiles(currentMap, newPath);
-    };
-
-    const handleUp = () => {
-        if (!currentMap) return;
-        if (!currentPath) {
-            setCurrentMap(null);
-            setFileList([]);
-        } else {
-            const parts = currentPath.split('/');
-            parts.pop();
-            const newPath = parts.join('/');
-            fetchFiles(currentMap, newPath);
-        }
-    };
-
-    const handleFileClick = (filename: string) => {
-        if (!currentMap) return;
-        const pathPart = currentPath ? `${currentPath}/${filename}` : filename;
-        const url = `${serverUrl}/api/audio/stream/${currentMap}/${pathPart}`;
-        onSelect(url, filename);
-        onClose();
-    };
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[80vh]">
-                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-center">
-                    <h3 className="text-xl font-black text-neutral-900 flex items-center gap-2"><Music size={20}/> Select Audio</h3>
-                    <button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
-                </header>
-                
-                <div className="p-4 bg-neutral-50 border-b border-neutral-100 flex items-center gap-2 overflow-hidden">
-                     {currentMap && (
-                        <button onClick={handleUp} className="p-1.5 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-100 transition-colors">
-                            <CornerLeftUp size={14} />
-                        </button>
-                     )}
-                     <div className="flex-1 truncate text-xs font-mono font-medium text-neutral-600">
-                        {currentMap ? `/${currentMap}/${currentPath}` : 'Root'}
-                     </div>
-                </div>
-
-                <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                    {loading ? (
-                        <div className="flex justify-center py-10"><Loader2 size={24} className="animate-spin text-neutral-300"/></div>
-                    ) : !currentMap ? (
-                        <div className="space-y-1">
-                            <p className="text-[10px] font-black uppercase text-neutral-400 tracking-widest px-2 mb-2">Mapped Folders</p>
-                            {Object.keys(mappings).map(mapName => (
-                                <button key={mapName} onClick={() => handleSelectMap(mapName)} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-neutral-50 transition-colors text-left group">
-                                    <Folder size={18} className="text-indigo-400 group-hover:text-indigo-600" />
-                                    <span className="text-sm font-bold text-neutral-700">{mapName}</span>
-                                    <ChevronRight size={14} className="ml-auto text-neutral-300" />
-                                </button>
-                            ))}
-                            {Object.keys(mappings).length === 0 && <p className="text-center text-xs text-neutral-400 py-4">No mappings found. Configure in Settings.</p>}
-                        </div>
-                    ) : (
-                        <div className="space-y-1">
-                            {fileList.map((item, idx) => (
-                                <button 
-                                    key={`${item.name}-${idx}`} 
-                                    onClick={() => item.type === 'directory' ? handleNavigate(item.name) : handleFileClick(item.name)}
-                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-neutral-50 transition-colors text-left group"
-                                >
-                                    {item.type === 'directory' ? <Folder size={18} className="text-indigo-400" /> : <FileAudio size={18} className="text-emerald-500" />}
-                                    <span className="text-xs font-medium text-neutral-700 truncate flex-1">{item.name}</span>
-                                    {item.type === 'directory' && <ChevronRight size={14} className="text-neutral-300" />}
-                                </button>
-                            ))}
-                            {fileList.length === 0 && <p className="text-center text-xs text-neutral-400 py-4">Empty folder.</p>}
-                        </div>
-                    )}
-                </main>
             </div>
         </div>
     );
@@ -639,6 +485,8 @@ const AddEditModal: React.FC<AddEditModalProps> = ({ isOpen, onClose, onSave, in
   const [audioLinks, setAudioLinks] = useState<string[]>([]);
   
   const [isAudioSelectorOpen, setIsAudioSelectorOpen] = useState(false);
+  const [transcriptToApply, setTranscriptToApply] = useState<string | null>(null);
+  const [isTranscriptConfirmOpen, setIsTranscriptConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -668,8 +516,27 @@ const AddEditModal: React.FC<AddEditModalProps> = ({ isOpen, onClose, onSave, in
     }
   };
   
-  const handleAddAudio = (url: string) => {
+  // Updated handler to accept object from FileSelector
+  const handleAddAudio = (fileData: any) => {
+      const { url, transcript } = fileData;
       setAudioLinks(prev => [...prev, url]);
+      
+      if (transcript) {
+          if (!text.trim()) {
+              setText(transcript);
+          } else {
+              setTranscriptToApply(transcript);
+              setIsTranscriptConfirmOpen(true);
+          }
+      }
+  };
+
+  const handleConfirmTranscript = () => {
+      if (transcriptToApply) {
+          setText(transcriptToApply);
+      }
+      setTranscriptToApply(null);
+      setIsTranscriptConfirmOpen(false);
   };
 
   const handleRemoveAudio = (index: number) => {
@@ -746,7 +613,26 @@ const AddEditModal: React.FC<AddEditModalProps> = ({ isOpen, onClose, onSave, in
         </footer>
       </form>
     </div>
-    <AudioFileSelector isOpen={isAudioSelectorOpen} onClose={() => setIsAudioSelectorOpen(false)} onSelect={handleAddAudio} />
+    
+    <FileSelector 
+        isOpen={isAudioSelectorOpen} 
+        onClose={() => setIsAudioSelectorOpen(false)} 
+        onSelect={handleAddAudio}
+        type="audio"
+        title="Select Audio" 
+    />
+    
+    <ConfirmationModal 
+        isOpen={isTranscriptConfirmOpen}
+        title="Replace Script?"
+        message="This audio file comes with a linked transcript. Do you want to replace your current text content with it?"
+        confirmText="Replace"
+        isProcessing={false}
+        onConfirm={handleConfirmTranscript}
+        onClose={() => setIsTranscriptConfirmOpen(false)}
+        icon={<FileText size={40} className="text-indigo-500"/>}
+        confirmButtonClass="bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200"
+    />
     </>
   );
 };
@@ -808,6 +694,9 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
   const [itemToDelete, setItemToDelete] = useState<ListeningItem | null>(null);
   const [bookToDelete, setBookToDelete] = useState<ListeningBook | null>(null);
   
+  // Scripted Audio Creator
+  const [isScriptedSelectorOpen, setIsScriptedSelectorOpen] = useState(false);
+
   const { showToast } = useToast();
 
   const loadData = async () => {
@@ -906,6 +795,42 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
     } catch (e: any) {
       showToast("Failed to save item.", "error");
     }
+  };
+  
+  // Fixed signature to accept object
+  const handleCreateFromScriptedAudio = async (data: { url: string, filename: string, transcript?: string, transcriptTitle?: string, map?: string, path?: string }) => {
+      const { url, filename, transcript, transcriptTitle, map, path } = data;
+      
+      if (!transcript) {
+          showToast("No transcript found for selected file.", "error");
+          return;
+      }
+      
+      const mapName = map || 'Unknown';
+      const folderPath = path ? `/${path}` : '';
+      const displayTitle = transcriptTitle ? `${mapName}${folderPath} - ${transcriptTitle}` : filename;
+      
+      const now = Date.now();
+      const newItem: ListeningItem = {
+          id: `lst-scripted-${now}-${Math.random()}`,
+          userId: user.id,
+          title: displayTitle,
+          text: transcript,
+          note: `Imported from ${mapName}${folderPath}`,
+          path: folderPath || '/',
+          tags: ['scripted-audio'],
+          audioLinks: [url],
+          createdAt: now,
+          updatedAt: now
+      };
+      
+      try {
+          await dataStore.saveListeningItem(newItem);
+          showToast("Scripted Audio Card Created!", "success");
+          loadData();
+      } catch (e) {
+          showToast("Failed to create card.", "error");
+      }
   };
 
   const handleUpdatePracticeItem = async (updatedItem: ListeningItem) => {
@@ -1267,7 +1192,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                                 <div className="flex gap-1">
                                     <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
                                     <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
-                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-50 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
                                 </div>
                             </div>
                         </>
@@ -1280,7 +1205,10 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                 />
             }
             browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }}
-            addActions={[{ label: 'Add Phrase', icon: Plus, onClick: handleNew }]}
+            addActions={[
+                { label: 'Add Scripted Audio', icon: FileAudio, onClick: () => setIsScriptedSelectorOpen(true) },
+                { label: 'Add Phrase', icon: Plus, onClick: handleNew }
+            ]}
             extraActions={
                  <>
                     <button onClick={handleRandomize} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button>
@@ -1359,7 +1287,15 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
             onUpdate={handleUpdatePracticeItem}
         />
     )}
-
+    
+    <FileSelector 
+        isOpen={isScriptedSelectorOpen}
+        onClose={() => setIsScriptedSelectorOpen(false)}
+        onSelect={handleCreateFromScriptedAudio}
+        type="audio"
+        title="Select Audio" 
+    />
+    
     <ConfirmationModal 
         isOpen={!!itemToDelete}
         title="Delete Phrase?"

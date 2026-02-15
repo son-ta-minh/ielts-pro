@@ -4,14 +4,14 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { settings, AUDIO_MAPPINGS_FILE } = require('../config');
+const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
 
 router.get('/health', (req, res) => {
     // Check mappings count dynamically
     let mappingsCount = 0;
     try {
-        if (fs.existsSync(AUDIO_MAPPINGS_FILE())) {
-            const data = JSON.parse(fs.readFileSync(AUDIO_MAPPINGS_FILE(), 'utf8'));
+        if (fs.existsSync(FOLDER_MAPPINGS_FILE())) {
+            const data = JSON.parse(fs.readFileSync(FOLDER_MAPPINGS_FILE(), 'utf8'));
             mappingsCount = Object.keys(data).length;
         }
     } catch (e) {}
@@ -19,10 +19,6 @@ router.get('/health', (req, res) => {
     // Check dict size
     let dictSize = 0;
     if (fs.existsSync(settings.DICT_PATH)) {
-        // Rough estimate or read if needed. 
-        // For performance in health check, just checking existence is often enough, 
-        // but to match original we can read it or rely on memory if we export CMU.
-        // Let's keep it simple for health check.
         dictSize = 'Loaded in Memory'; 
     }
 

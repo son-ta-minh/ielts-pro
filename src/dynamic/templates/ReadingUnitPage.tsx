@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Unit, VocabularyItem, ReadingBook, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
-import { Edit3, Trash2, BookOpen, Plus, Sparkles, Library, FolderTree, Tag, Target, FolderPlus, Pen, Move, Book, ArrowLeft } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Plus, Sparkles, Library, FolderTree, Tag, Target, FolderPlus, Pen, Move, Book, ArrowLeft, Download } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import ReadingStudyView from './ReadingStudyView';
@@ -20,6 +21,7 @@ import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components
 import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
 import { useShelfLogic } from '../../app/hooks/useShelfLogic';
 import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
+import { FileSelector } from '../../components/common/FileSelector';
 
 interface Props {
   user: User;
@@ -44,6 +46,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null);
   const [bookToDelete, setBookToDelete] = useState<ReadingBook | null>(null);
   const [showRefineAiModal, setShowRefineAiModal] = useState(false);
+  const [showFileSelector, setShowFileSelector] = useState(false);
   
   // List View Filter State
   const [page, setPage] = useState(0);
@@ -214,6 +217,32 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
     await loadData();
     setActiveUnit(newUnit);
     setViewMode('EDIT');
+  };
+
+  const handleImportFromServer = async (fileData: any) => {
+      // fileData contains { title, essay, words, description } from server
+      const newUnit: Unit = { 
+          id: generateId(), 
+          userId: user.id, 
+          name: fileData.title || "Imported Unit", 
+          description: fileData.description || "Imported from server.",
+          wordIds: [], 
+          customVocabString: fileData.words || '',
+          essay: fileData.essay || '',
+          createdAt: Date.now(), 
+          updatedAt: Date.now(),
+          path: '/' // Could try to use mapName as path if passed, but simpler to default
+      };
+      
+      try {
+          await db.saveUnit(newUnit);
+          showToast(`Imported "${newUnit.name}" successfully!`, 'success');
+          await loadData();
+          setActiveUnit(newUnit);
+          setViewMode('EDIT');
+      } catch (e) {
+          showToast("Failed to save imported unit.", "error");
+      }
   };
 
   const handleDeleteUnit = async () => {
@@ -427,7 +456,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
           <ConfirmationModal
             isOpen={!!bookToDelete}
             title="Delete Book?"
-            message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Units inside will not be deleted.</>}
+            message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Items inside will not be deleted.</>}
             confirmText="Delete"
             isProcessing={false}
             onConfirm={handleDeleteBook}
@@ -511,6 +540,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                 browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); setIsGroupBrowserOpen(false); } }}
                 addActions={[
                     { label: 'AI Unit', icon: Sparkles, onClick: () => setShowRefineAiModal(true) },
+                    { label: 'Add from Server', icon: Download, onClick: () => setShowFileSelector(true) },
                     { label: 'New Unit', icon: Plus, onClick: handleCreateEmptyUnit }
                 ]}
                 extraActions={
@@ -594,6 +624,14 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
             closeOnSuccess={true} 
         />
       )}
+      
+      <FileSelector 
+          isOpen={showFileSelector}
+          onClose={() => setShowFileSelector(false)}
+          onSelect={handleImportFromServer}
+          type="reading"
+          title="Import Reading from Server"
+      />
     </>
   );
 };

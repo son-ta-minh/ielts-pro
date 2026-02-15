@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Lesson, VocabularyItem, SessionType, AppView, FocusColor, LessonBook } from '../../app/types';
 import * as db from '../../app/db';
@@ -135,7 +136,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     });
   }, [resources, selectedTag, typeFilter, focusFilter, colorFilter]);
   
-  const pagedResources = useMemo(() => {
+  const pagedResources: ResourceItem[] = useMemo(() => {
       const start = page * pageSize;
       return filteredResources.slice(start, start + pageSize);
   }, [filteredResources, page, pageSize]);
@@ -357,7 +358,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       
       const avItems = resources.map(i => ({ id: i.data.id, title: (i.data as Lesson).title, subtitle: (i.data as Lesson).description, data: i.data } as GenericBookItem));
 
-      return <GenericBookDetail book={activeBook} items={gItems} availableItems={avItems} onBack={() => { setActiveBook(null); setViewMode('shelf'); loadData(); }} onUpdateBook={handleUpdateBook} onAddItem={async (ids) => { const nb = { ...activeBook, itemIds: Array.from(new Set([...activeBook.itemIds, ...ids])) }; await dataStore.saveLessonBook(nb); setActiveBook(nb); }} onRemoveItem={async (id) => { const nb = { ...activeBook, itemIds: activeBook.itemIds.filter(x => x !== id) }; await dataStore.saveLessonBook(nb); setActiveBook(nb); }} onOpenItem={(g) => { setActiveLesson(g.data); setViewMode('read_lesson'); }} onEditItem={(g) => { setActiveLesson(g.data); setViewMode('edit_lesson'); }} onFocusChange={(g, c) => handleFocusChange({ type: 'ESSAY', data: g.data, date: 0 }, c)} onToggleFocus={(g) => handleToggleFocus({ type: 'ESSAY', data: g.data, date: 0 })} itemIcon={<BookOpen size={16}/>} />;
+      return <GenericBookDetail book={activeBook} items={gItems} availableItems={avItems} onBack={() => { setActiveBook(null); setViewMode('shelf'); loadData(); }} onUpdateBook={handleUpdateBook} onAddItem={async (ids) => { const nb = { ...activeBook, itemIds: Array.from(new Set([...activeBook.itemIds, ...ids])) }; await dataStore.saveLessonBook(nb); setActiveBook(nb); }} onRemoveItem={async (id) => { const nb = { ...activeBook, itemIds: activeBook.itemIds.filter(x => x !== id) }; await dataStore.saveLessonBook(nb); setActiveBook(nb); }} onOpenItem={(g) => { setActiveLesson(g.data); setViewMode('read_lesson'); }} onEditItem={(g) => { setActiveLesson(g.data); setViewMode('edit_lesson'); }} onFocusChange={(g, c) => handleFocusChange({ type: 'ESSAY', data: g.data, date: 0 } as ResourceItem, c)} onToggleFocus={(g) => handleToggleFocus({ type: 'ESSAY', data: g.data, date: 0 } as ResourceItem)} itemIcon={<BookOpen size={16}/>} />;
   }
 
   if (viewMode === 'shelf') {
@@ -433,7 +434,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                                 <div className="flex gap-1">
                                     <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
                                     <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
-                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-50 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
                                 </div>
                             </div>
                         </>
@@ -471,7 +472,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     >
       {() => (
         <>
-          {(pagedResources as ResourceItem[]).map((item) => {
+          {pagedResources.map((item) => {
             const onRead = () => { setActiveLesson(item.data as Lesson); setViewMode('read_lesson'); };
             const onEdit = () => { setActiveLesson(item.data as Lesson); setViewMode('edit_lesson'); };
             const onDelete = () => setLessonToDelete(item.data as Lesson);

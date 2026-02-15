@@ -3,7 +3,6 @@ import React from 'react';
 import { AlertCircle, CheckCircle2, ChevronDown, User, Bot, Database, Settings2, AlertTriangle, LayoutTemplate, Target, BookText, GraduationCap, Activity, Server, Radio } from 'lucide-react';
 import { ProfileSettings } from './ProfileSettings';
 import { AudioCoachSettings } from './AudioCoachSettings';
-import { AudioServerSettings } from './AudioServerSettings';
 import { DataSettings } from './DataSettings';
 import { SrsSettings } from './SrsSettings';
 import { GoalSettings } from './GoalSettings';
@@ -12,7 +11,7 @@ import { ServerSettings } from './ServerSettings';
 import { SystemConfig, DailyGoalConfig } from '../../app/settingsManager';
 import { DataScope } from '../../app/types';
 
-export type SettingView = 'PROFILE' | 'INTERFACE' | 'SERVER' | 'AUDIO_COACH' | 'AUDIO_SERVER' | 'DATA' | 'LEARNING' | 'DANGER';
+export type SettingView = 'PROFILE' | 'INTERFACE' | 'SERVER' | 'AUDIO_COACH' | 'DATA' | 'LEARNING' | 'DANGER';
 
 interface SettingsViewUIProps {
     // State
@@ -78,7 +77,6 @@ const navItems = [
     { id: 'INTERFACE', label: 'Interface Defaults', icon: LayoutTemplate },
     { id: 'SERVER', label: 'Server & Connection', icon: Server },
     { id: 'AUDIO_COACH', label: 'Audio Coach', icon: Bot },
-    { id: 'AUDIO_SERVER', label: 'Audio Server', icon: Radio },
     { id: 'LEARNING', label: 'Learning', icon: GraduationCap },
     { id: 'DATA', label: 'Data Management', icon: Database },
     { id: 'DANGER', label: 'Danger Zone', icon: AlertTriangle, color: 'text-red-500' }
@@ -97,7 +95,6 @@ export const SettingsViewUI: React.FC<SettingsViewUIProps> = (props) => {
             case 'PROFILE': return <ProfileSettings profileData={props.profileData} onProfileChange={props.onProfileChange} onAvatarChange={props.onAvatarChange} onSaveProfile={props.onSaveProfile} />;
             case 'SERVER': return <ServerSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />;
             case 'AUDIO_COACH': return <AudioCoachSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />;
-            case 'AUDIO_SERVER': return <AudioServerSettings />;
             case 'DATA': return (
                 <div className="space-y-6">
                     <DataSettings jsonInputRef={props.jsonInputRef} dataScope={props.dataScope} onDataScopeChange={props.onDataScopeChange} onJSONImport={props.onJSONImport} onJSONExport={props.onJSONExport} isNormalizing={props.isNormalizing} onOpenNormalizeModal={props.onOpenNormalizeModal} junkTags={props.junkTags} onJunkTagsChange={props.onJunkTagsChange} normalizeOptions={props.normalizeOptions} onNormalizeOptionsChange={props.onNormalizeOptionsChange} />
@@ -168,7 +165,7 @@ export const SettingsViewUI: React.FC<SettingsViewUIProps> = (props) => {
 
     return (
         <div className="max-w-6xl mx-auto space-y-10 pb-20">
-            <header><h2 className="text-3xl font-black text-neutral-900 tracking-tight">Settings</h2><p className="text-neutral-500 mt-2 font-medium">Manage your data and personalize your learning experience.</p></header>
+            <header><h2 className="text-3xl font-black text-neutral-900 tracking-tight">Settings</h2><p className="text-neutral-500 mt-1 font-medium">Manage your data and personalize your learning experience.</p></header>
             {notification && (<div className="fixed top-10 left-1/2 -translate-x-1/2 z-[300] bg-neutral-900 text-white px-6 py-3 rounded-2xl shadow-2xl border border-neutral-800 animate-in slide-in-from-top-4 flex items-center space-x-2"><CheckCircle2 size={18} className="text-green-400" /><span className="text-sm font-bold">{notification}</span></div>)}
             {importStatus && (<div className={`p-6 rounded-[2rem] border-2 animate-in slide-in-from-top-4 ${ importStatus.type === 'success' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700' }`}><div className="flex items-start space-x-4">{importStatus.type === 'success' ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}<div><div className="font-black text-lg">{importStatus.message}</div>{importStatus.detail && <div className="text-sm opacity-80 mt-1 font-medium">{importStatus.detail}</div>}</div></div></div>)}
             

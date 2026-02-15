@@ -6,12 +6,13 @@ import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
 import { ResourceActions } from '../page/ResourceActions';
 import { UniversalCard } from '../../components/common/UniversalCard';
-import { Plus, Edit3, Trash2, Save, X, Circle, CheckCircle2, CircleDashed, GripVertical, ListTodo, Sparkles } from 'lucide-react';
+import { Plus, Edit3, Trash2, Save, X, Circle, CheckCircle2, CircleDashed, GripVertical, ListTodo, Sparkles, Download } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
 import { getGeneratePlanningGoalPrompt } from '../../services/promptService';
 import { generatePlanningGoal } from '../../services/geminiService';
+import { FileSelector } from '../../components/common/FileSelector';
 
 interface Props {
   user: User;
@@ -221,8 +222,9 @@ export const PlanningPage: React.FC<Props> = ({ user }) => {
     const [goalToDelete, setGoalToDelete] = useState<PlanningGoal | null>(null);
     const [draggedId, setDraggedId] = useState<string | null>(null);
     
-    // AI Modal State
+    // AI & Import Modals
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+    const [showFileSelector, setShowFileSelector] = useState(false);
 
     const { showToast } = useToast();
 
@@ -299,6 +301,36 @@ export const PlanningPage: React.FC<Props> = ({ user }) => {
             showToast("Invalid AI response.", "error");
         }
     };
+    
+    const handleImportFromServer = async (fileData: any) => {
+        const now = Date.now();
+        // fileData contains { title, description, todos } from server
+        // Map server todos to local format with new IDs
+        const newTodos: PlanningTodo[] = (fileData.todos || []).map((t: any) => ({
+            id: `todo-imp-${now}-${Math.random()}`,
+            text: t.text || t,
+            status: 'NEW' as PlanningStatus
+        }));
+
+        const newGoal: PlanningGoal = {
+            id: `goal-imp-${now}-${Math.random()}`,
+            userId: user.id,
+            title: fileData.title || "Imported Goal",
+            description: fileData.description || "Imported from server.",
+            todos: newTodos,
+            createdAt: now,
+            updatedAt: now,
+            order: 0
+        };
+
+        try {
+            await dataStore.savePlanningGoal(newGoal);
+            showToast(`Imported "${newGoal.title}" successfully!`, 'success');
+            await loadData();
+        } catch (e) {
+            showToast("Failed to save imported goal.", "error");
+        }
+    };
 
     const handleGeneratePrompt = (inputs: { request: string }) => {
         return getGeneratePlanningGoalPrompt(inputs.request);
@@ -357,7 +389,8 @@ export const PlanningPage: React.FC<Props> = ({ user }) => {
                     <ResourceActions
                         addActions={[
                             { label: 'New (AI)', icon: Sparkles, onClick: () => setIsAiModalOpen(true) },
-                            { label: 'New (Manual)', icon: Plus, onClick: () => { setEditingGoal(null); setIsModalOpen(true); } }
+                            { label: 'New (Manual)', icon: Plus, onClick: () => { setEditingGoal(null); setIsModalOpen(true); } },
+                            { label: 'Add from Server', icon: Download, onClick: () => setShowFileSelector(true) }
                         ]}
                     />
                 }
@@ -457,6 +490,14 @@ export const PlanningPage: React.FC<Props> = ({ user }) => {
                     closeOnSuccess={true} 
                 />
             )}
+            
+            <FileSelector 
+                isOpen={showFileSelector}
+                onClose={() => setShowFileSelector(false)}
+                onSelect={handleImportFromServer}
+                type="planning"
+                title="Import Goal from Server"
+            />
         </>
     );
 };

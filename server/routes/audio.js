@@ -5,24 +5,49 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const multer = require('multer');
-const { settings, AUDIO_MAPPINGS_FILE } = require('../config');
+const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
 
-// Audio Mappings State
-let audioMappings = {};
+// Folder Mappings State
+let folderMappings = {};
 try {
-    if (fs.existsSync(AUDIO_MAPPINGS_FILE())) {
-        audioMappings = JSON.parse(fs.readFileSync(AUDIO_MAPPINGS_FILE(), 'utf8'));
+    if (fs.existsSync(FOLDER_MAPPINGS_FILE())) {
+        folderMappings = JSON.parse(fs.readFileSync(FOLDER_MAPPINGS_FILE(), 'utf8'));
     }
 } catch (e) {
     console.error("[Audio] Failed to load mappings:", e);
 }
 
-function saveAudioMappings() {
+function saveMappings() {
     try {
-        fs.writeFileSync(AUDIO_MAPPINGS_FILE(), JSON.stringify(audioMappings, null, 2));
+        fs.writeFileSync(FOLDER_MAPPINGS_FILE(), JSON.stringify(folderMappings, null, 2));
     } catch (e) {
         console.error("[Audio] Failed to save mappings:", e);
     }
+}
+
+// Helper: Normalize transcript text
+function normalizeTranscript(text) {
+    if (!text) return "";
+    
+    const lines = text.split(/\r?\n/);
+    if (lines.length <= 1) return text;
+
+    return lines.reduce((acc, line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return acc;
+        
+        if (!acc) return trimmed;
+
+        const lastChar = acc.slice(-1);
+        const isSentenceEnd = /[.!?"]/.test(lastChar);
+        const startsWithLower = /^[a-z]/.test(trimmed);
+
+        if (!isSentenceEnd || startsWithLower) {
+            return acc + " " + trimmed;
+        } else {
+            return acc + "\n" + trimmed;
+        }
+    }, "");
 }
 
 // Multer Config
@@ -30,10 +55,10 @@ const upload = multer({
     storage: multer.diskStorage({
         destination: (req, file, cb) => {
             const mapName = req.body.mapName;
-            if (!mapName || !audioMappings[mapName]) {
+            if (!mapName || !folderMappings[mapName]) {
                 return cb(new Error('Invalid map name'), null);
             }
-            const targetDir = audioMappings[mapName];
+            const targetDir = folderMappings[mapName];
             if (!fs.existsSync(targetDir)) {
                 try {
                     fs.mkdirSync(targetDir, { recursive: true });
@@ -53,7 +78,7 @@ const upload = multer({
 // Routes
 
 router.get('/audio/mappings', (req, res) => {
-    res.json(audioMappings);
+    res.json(folderMappings);
 });
 
 router.post('/audio/mappings', (req, res) => {
@@ -73,30 +98,29 @@ router.post('/audio/mappings', (req, res) => {
         }
     }
 
-    audioMappings[name] = resolvedPath;
-    saveAudioMappings();
-    res.json({ success: true, mappings: audioMappings });
+    folderMappings[name] = resolvedPath;
+    saveMappings();
+    res.json({ success: true, mappings: folderMappings });
 });
 
 router.delete('/audio/mappings/:name', (req, res) => {
     const { name } = req.params;
-    if (audioMappings[name]) {
-        delete audioMappings[name];
-        saveAudioMappings();
+    if (folderMappings[name]) {
+        delete folderMappings[name];
+        saveMappings();
     }
-    res.json({ success: true, mappings: audioMappings });
+    res.json({ success: true, mappings: folderMappings });
 });
 
 router.get('/audio/stream/:mapName/*', (req, res) => {
     const { mapName } = req.params;
     const filePathRel = req.params[0]; 
     
-    const rootDir = audioMappings[mapName];
+    const rootDir = folderMappings[mapName];
     if (!rootDir) return res.status(404).send('Mapping not found');
 
     const fullPath = path.join(rootDir, filePathRel);
     
-    // Security check
     if (!fullPath.startsWith(rootDir)) {
         return res.status(403).send('Access denied');
     }
@@ -111,7 +135,7 @@ router.get('/audio/stream/:mapName/*', (req, res) => {
 router.get('/audio/files/:mapName', (req, res) => {
     const { mapName } = req.params;
     const subPath = req.query.path || '';
-    const rootDir = audioMappings[mapName];
+    const rootDir = folderMappings[mapName];
     
     if (!rootDir || !fs.existsSync(rootDir)) {
         return res.status(404).json({ error: 'Mapping path not found' });
@@ -128,15 +152,59 @@ router.get('/audio/files/:mapName', (req, res) => {
         return res.status(404).json({ error: 'Directory not found' });
     }
 
+    // Transcript Logic
+    let transcripts = [];
+    const transcriptRawPath = path.join(targetDir, 'transcript.json');
+    const transcriptRefinePath = path.join(targetDir, 'transcript_refine.json');
+
+    if (fs.existsSync(transcriptRefinePath)) {
+        try {
+            const content = fs.readFileSync(transcriptRefinePath, 'utf8');
+            transcripts = JSON.parse(content);
+            if (!Array.isArray(transcripts)) transcripts = [];
+        } catch (e) {}
+    } 
+    else if (fs.existsSync(transcriptRawPath)) {
+        try {
+            const content = fs.readFileSync(transcriptRawPath, 'utf8');
+            const rawTranscripts = JSON.parse(content);
+            if (Array.isArray(rawTranscripts)) {
+                transcripts = rawTranscripts.map(item => ({
+                    ...item,
+                    content: normalizeTranscript(item.content)
+                }));
+                try {
+                    fs.writeFileSync(transcriptRefinePath, JSON.stringify(transcripts, null, 2), 'utf8');
+                } catch (writeErr) {}
+            }
+        } catch (e) {}
+    }
+
     try {
         const dirents = fs.readdirSync(targetDir, { withFileTypes: true });
         const audioExtensions = ['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac'];
         
         const items = dirents.map(dirent => {
-            return {
+            const item = {
                 name: dirent.name,
                 type: dirent.isDirectory() ? 'directory' : 'file'
             };
+
+            if (item.type === 'file' && transcripts.length > 0) {
+                const cleanName = dirent.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const match = transcripts.find(t => {
+                    if (!t.title) return false;
+                    const cleanTitle = t.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    return cleanName.includes(cleanTitle);
+                });
+
+                if (match && match.content) {
+                    item.transcript = match.content;
+                    item.transcriptTitle = match.title; 
+                }
+            }
+
+            return item;
         }).filter(item => {
             if (item.name.startsWith('.')) return false;
             if (item.type === 'directory') return true;
