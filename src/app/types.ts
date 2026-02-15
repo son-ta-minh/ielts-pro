@@ -32,7 +32,7 @@ export enum ParaphraseMode {
   LESS_ACADEMIC = 'LESS_ACADEMIC'
 }
 
-export type WordTypeOption = 'vocab' | 'idiom' | 'phrasal' | 'collocation' | 'phrase' | 'pronun' | 'preposition' | 'archive' | 'duplicate';
+export type WordTypeOption = 'vocab' | 'idiom' | 'phrasal' | 'collocation' | 'phrase' | 'archive' | 'duplicate';
 
 export type SessionType = 'due' | 'new' | 'custom' | 'new_study' | 'random_test' | 'boss_battle' | null;
 
@@ -51,7 +51,6 @@ export interface DataScope {
 
 export interface WordFamilyMember {
   word: string;
-  // ipa removed to save tokens
   ipaUs?: string;
   ipaUk?: string;
   pronSim?: 'same' | 'near' | 'different';
@@ -147,7 +146,6 @@ export interface VocabularyItem {
   id: string;
   userId: string; 
   word: string; 
-  // ipa field removed, use ipaUs instead
   ipaUs?: string;
   ipaUk?: string;
   pronSim?: 'same' | 'near' | 'different';
@@ -162,8 +160,7 @@ export interface VocabularyItem {
   idiomsList?: CollocationDetail[];
 
   note: string;
-  // tags removed to save tokens
-  groups?: string[]; // User-defined groups
+  groups?: string[]; 
   createdAt: number;
   updatedAt: number;
   
@@ -181,16 +178,14 @@ export interface VocabularyItem {
   isExclamatory?: boolean;
   isImperative?: boolean;
   isIrregular?: boolean; 
-  v2?: string; // Past simple for irregular verbs
-  v3?: string; // Past participle for irregular verbs
-  needsPronunciationFocus?: boolean;
+  v2?: string; 
+  v3?: string; 
   isExampleLocked?: boolean;
   isPassive?: boolean;
+  // Added needsPronunciationFocus property
+  needsPronunciationFocus?: boolean;
 
-  // Word Quality Tracking
   quality: WordQuality;
-
-  // Word Source Tracking
   source?: WordSource;
 
   nextReview: number; 
@@ -207,8 +202,13 @@ export interface VocabularyItem {
   lastTestResults?: Record<string, boolean>;
   lastXpEarnedTime?: number;
 
-  /** Pre-calculated eligibility for Discover arcade games */
   gameEligibility?: string[];
+
+  // NEW: Embedded Lesson Data
+  lesson?: {
+    essay?: string;
+    test?: string;
+  };
 }
 
 export interface Unit {
@@ -236,13 +236,13 @@ export interface SpeakingTopic {
   id: string;
   userId: string;
   name: string;
-  label?: string; // e.g. "Part 1", "Free Talk"
-  description: string; // Context
-  questions: string[]; // Context/Questions
-  sampleAnswers?: string[]; // Format: "Tone: Answer"
+  label?: string; 
+  description: string; 
+  questions: string[]; 
+  sampleAnswers?: string[]; 
   path?: string;
   tags?: string[];
-  note?: string; // User Note
+  note?: string; 
   part2?: { cueCard: string, points: string[] };
   part3?: string[];
   createdAt: number;
@@ -266,19 +266,18 @@ export interface WritingTopic {
   isFocused?: boolean;
 }
 
-// New Composition Type
 export type CompositionLabel = 'IELTS Task 1' | 'IELTS Task 2' | 'Professional' | 'Academic' | 'Informal' | 'Free Write';
 
 export interface Composition {
   id: string;
   userId: string;
   title?: string;
-  label: CompositionLabel; // Legacy: Kept for compatibility
+  label: CompositionLabel; 
   path?: string;
   tags?: string[];
   content: string;
-  linkedWordIds: string[]; // IDs of VocabularyItems used
-  aiFeedback?: string; // HTML feedback
+  linkedWordIds: string[]; 
+  aiFeedback?: string; 
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
@@ -331,9 +330,9 @@ export interface WritingLog {
 export interface IrregularVerb {
   id: string;
   userId: string;
-  v1: string; // Base form
-  v2: string; // Past simple
-  v3: string; // Past participle
+  v1: string; 
+  v2: string; 
+  v3: string; 
   createdAt: number;
   updatedAt: number;
   lastTestResult?: 'pass' | 'fail';
@@ -346,16 +345,16 @@ export type LessonType = 'essay' | 'word';
 export interface Lesson {
   id: string;
   userId: string;
-  type?: LessonType; // 'essay' by default if undefined
+  type?: LessonType; 
   
-  topic1: string; // Deprecated in V2 UI, kept for data legacy
-  topic2: string; // Deprecated in V2 UI, kept for data legacy
+  topic1: string; 
+  topic2: string; 
   
   title: string;
   description: string;
-  content: string; // Stored as HTML.
-  listeningContent?: string; // Stored as Markdown (Listening version - Podcast style)
-  testContent?: string; // Stored as Markdown (Interactive Practice Test)
+  content: string; 
+  listeningContent?: string; 
+  testContent?: string; 
   
   path?: string;
   tags?: string[];
@@ -368,12 +367,12 @@ export interface Lesson {
 export interface ListeningItem {
   id: string;
   userId: string;
-  title?: string; // Optional title for the card/essay
-  text: string; // Text with {curly braces} for highlighting
+  title?: string; 
+  text: string; 
   note?: string;
   path?: string;
   tags?: string[];
-  audioLinks?: string[]; // Array of URLs to audio files (from Audio Server)
+  audioLinks?: string[]; 
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
@@ -390,11 +389,11 @@ export interface NativeSpeakAnswer {
 export interface NativeSpeakItem {
     id: string;
     userId: string;
-    standard: string; // The "Question" or "Context"
+    standard: string; 
     answers: NativeSpeakAnswer[];
     path?: string;
     tags: string[];
-    note?: string; // User note for context/usage explanation
+    note?: string; 
     createdAt: number;
     updatedAt: number;
     focusColor?: FocusColor;
@@ -412,7 +411,7 @@ export interface ConversationSpeaker {
 export interface ConversationSentence {
     speakerName: string;
     text: string;
-    icon?: string; // Emoji representing emotion
+    icon?: string; 
 }
 
 export interface ConversationItem {
@@ -435,15 +434,15 @@ export interface FreeTalkItem {
   id: string;
   userId: string;
   title: string;
-  content: string; // The full paragraph text
+  content: string; 
   path?: string;
   tags: string[];
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
   isFocused?: boolean;
-  bestScore?: number; // Overall accuracy score
-  sentenceScores?: Record<number, number>; // Map of sentence index to score
+  bestScore?: number; 
+  sentenceScores?: Record<number, number>; 
 }
 
 export interface WordBookItem {
@@ -455,7 +454,7 @@ export interface WordBook {
   id: string;
   userId: string;
   topic: string;
-  icon: string; // Emoji
+  icon: string; 
   words: WordBookItem[];
   createdAt: number;
   updatedAt: number;
@@ -468,17 +467,15 @@ export interface WordBook {
   iconLeft?: number;
 }
 
-// Reading Book (Collection of Units)
 export interface ReadingBook {
   id: string;
   userId: string;
-  title: string; // Format: "Shelf: Name"
+  title: string; 
   icon?: string;
   color?: string;
-  unitIds: string[]; // List of IDs of Units in this book
+  unitIds: string[]; 
   createdAt: number;
   updatedAt: number;
-  // Visual props
   titleColor?: string;
   titleSize?: number;
   titleTop?: number;
@@ -487,17 +484,15 @@ export interface ReadingBook {
   iconLeft?: number;
 }
 
-// Lesson Book (Collection of Lessons)
 export interface LessonBook {
   id: string;
   userId: string;
-  title: string; // Format: "Shelf: Name"
+  title: string; 
   icon?: string;
   color?: string;
-  itemIds: string[]; // List of IDs of Lessons
+  itemIds: string[]; 
   createdAt: number;
   updatedAt: number;
-  // Visual props
   titleColor?: string;
   titleSize?: number;
   titleTop?: number;
@@ -506,17 +501,15 @@ export interface LessonBook {
   iconLeft?: number;
 }
 
-// Listening Book (Collection of Listening Items)
 export interface ListeningBook {
   id: string;
   userId: string;
-  title: string; // Format: "Shelf: Name"
+  title: string; 
   icon?: string;
   color?: string;
-  itemIds: string[]; // List of IDs of ListeningItems
+  itemIds: string[]; 
   createdAt: number;
   updatedAt: number;
-  // Visual props
   titleColor?: string;
   titleSize?: number;
   titleTop?: number;
@@ -525,17 +518,15 @@ export interface ListeningBook {
   iconLeft?: number;
 }
 
-// Speaking Book (Collection of Speaking Topics & NativeSpeakItems)
 export interface SpeakingBook {
   id: string;
   userId: string;
-  title: string; // Format: "Shelf: Name"
+  title: string; 
   icon?: string;
   color?: string;
-  itemIds: string[]; // List of IDs of SpeakingTopics, NativeSpeakItems or ConversationItems
+  itemIds: string[]; 
   createdAt: number;
   updatedAt: number;
-  // Visual props
   titleColor?: string;
   titleSize?: number;
   titleTop?: number;
@@ -544,17 +535,15 @@ export interface SpeakingBook {
   iconLeft?: number;
 }
 
-// Writing Book (Collection of Writing Topics & Compositions)
 export interface WritingBook {
   id: string;
   userId: string;
-  title: string; // Format: "Shelf: Name"
+  title: string; 
   icon?: string;
   color?: string;
-  itemIds: string[]; // List of IDs of WritingTopics or Compositions
+  itemIds: string[]; 
   createdAt: number;
   updatedAt: number;
-  // Visual props
   titleColor?: string;
   titleSize?: number;
   titleTop?: number;
@@ -563,7 +552,6 @@ export interface WritingBook {
   iconLeft?: number;
 }
 
-// Planning Feature
 export type PlanningStatus = 'NEW' | 'IN_PROGRESS' | 'CLOSED';
 
 export interface PlanningTodo {
@@ -580,7 +568,7 @@ export interface PlanningGoal {
   todos: PlanningTodo[];
   createdAt: number;
   updatedAt: number;
-  order?: number; // New field for drag and drop sorting
+  order?: number; 
   focusColor?: FocusColor;
   isFocused?: boolean;
 }

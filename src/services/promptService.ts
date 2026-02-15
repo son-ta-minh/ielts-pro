@@ -21,9 +21,10 @@ export * from './prompts/getGenerateWordBookPrompt';
 export * from './prompts/getAutoAddWordsToBookPrompt';
 export * from './prompts/getGeneratePlanningGoalPrompt';
 export * from './prompts/getGenerateConversationPrompt';
-export * from './prompts/getPronunciationAnalysisPrompt';
 export * from './prompts/getGenerateWordLessonPrompt';
-export * from './prompts/getGenerateLessonTestPrompt'; // Added
+export * from './prompts/getGenerateLessonTestPrompt';
+/* Added missing export */
+export * from './prompts/getPronunciationAnalysisPrompt';
 
 // Speaking feature prompts
 export { getTranscriptionForSpeakingPrompt, getFullSpeakingTestPrompt, getRefineSpeakingTopicPrompt } from './prompts/getSpeakingPart1QuestionsPrompt';

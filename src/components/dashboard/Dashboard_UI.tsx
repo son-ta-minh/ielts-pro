@@ -1,69 +1,82 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
-  Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive
+  Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo
 } from 'lucide-react';
 import { AppView, VocabularyItem } from '../../app/types';
 import { DailyGoalConfig } from '../../app/settingsManager';
 import { DayProgress } from './DayProgress';
 import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 
-// New component for Word of the Day
-const WordOfTheDay: React.FC<{ 
-    word: VocabularyItem | null; 
-    onView: () => void;
-    isComposed?: boolean;
-    onCompose?: (word: VocabularyItem) => void;
-    onRandomize?: () => void;
-}> = ({ word, onView, isComposed, onCompose, onRandomize }) => {
-  if (!word) {
-    return (
-        <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col items-center justify-center text-center">
-            <span className="text-3xl mb-3">✨</span>
-            <h4 className="font-bold text-neutral-400">Word of the Day</h4>
-            <p className="text-xs text-neutral-300">Add words to your library to see one here.</p>
-        </div>
-    );
-  }
+// New component for Goal Completion
+const GoalCompletionPanel: React.FC<{ 
+    totalTasks: number; 
+    completedTasks: number;
+    onNavigate: () => void;
+    onAction?: (action: string) => void;
+}> = ({ totalTasks, completedTasks, onNavigate, onAction }) => {
+  const hasGoals = totalTasks > 0;
+  const progressPercent = hasGoals ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
-    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm group transition-all hover:border-neutral-300 hover:shadow-md flex flex-col gap-2">
+    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm group transition-all hover:border-neutral-300 hover:shadow-md flex flex-col gap-4">
       <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
-              <div className="p-1 bg-amber-50 rounded-full"><Sparkles size={10} className="text-amber-500 fill-amber-500" /></div>
-              <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Word of the Day</h3>
+              <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600"><ListTodo size={14} /></div>
+              <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Study Plan Progress</h3>
           </div>
           
-          <div className="flex items-center gap-1">
-              {onCompose && (
-                  <button 
-                      onClick={(e) => { e.stopPropagation(); onCompose(word); }}
-                      className={`p-1.5 rounded-lg transition-colors ${isComposed ? 'text-green-500 bg-green-50' : 'text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100'}`}
-                      title={isComposed ? "Already composed" : "Compose"}
-                  >
-                      {isComposed ? <CheckCircle2 size={14}/> : <PenLine size={14}/>}
-                  </button>
-              )}
-              <button 
-                  onClick={onView} 
-                  className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
-                  title="Details"
-              >
-                  <Eye size={14}/>
-              </button>
-              {onRandomize && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onRandomize(); }}
-                    className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
-                    title="Randomize"
-                  >
-                      <Shuffle size={14} />
-                  </button>
-              )}
-          </div>
+          <button 
+              onClick={onNavigate} 
+              className="p-1.5 text-neutral-300 hover:text-neutral-900 transition-colors"
+              title="View Plan Board"
+          >
+              <ChevronRight size={18}/>
+          </button>
       </div>
       
-      <h4 className="text-3xl font-black text-neutral-900 tracking-tight">{word.word}</h4>
+      {!hasGoals ? (
+        <div className="space-y-4">
+            <div className="space-y-1">
+                <h4 className="text-lg font-black text-neutral-900 leading-tight">No goals set yet</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+                <button 
+                    onClick={() => onAction?.('PLAN_AI')}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-50 transition-all active:scale-95"
+                >
+                    <Sparkles size={14} className="text-amber-500" />
+                    <span>AI Planner</span>
+                </button>
+                <button 
+                    onClick={() => onAction?.('PLAN_IMPORT')}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-50 transition-all active:scale-95"
+                >
+                    <Download size={14} className="text-indigo-500" />
+                    <span>Import</span>
+                </button>
+            </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+            <div className="flex justify-between items-end">
+                <div>
+                    <span className="text-3xl font-black text-neutral-900 tracking-tighter">{completedTasks}</span>
+                    <span className="text-lg font-bold text-neutral-300 ml-1">/ {totalTasks}</span>
+                </div>
+                <div className={`px-2 py-0.5 rounded-md text-[10px] font-black ${progressPercent === 100 ? 'bg-green-100 text-green-700' : 'bg-indigo-50 text-indigo-700'}`}>
+                    {progressPercent}% Complete
+                </div>
+            </div>
+            
+            <div className="h-2 w-full bg-neutral-100 rounded-full overflow-hidden">
+                <div 
+                    className={`h-full transition-all duration-1000 ease-out ${progressPercent === 100 ? 'bg-green-500' : 'bg-indigo-500'}`} 
+                    style={{ width: `${progressPercent}%` }}
+                />
+            </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -308,8 +321,7 @@ export interface DashboardUIProps {
   rawCount: number;
   refinedCount: number;
   reviewStats: { learned: number; mastered: number; statusForgot: number; statusHard: number; statusEasy: number; statusLearned: number; };
-  wotd: VocabularyItem | null;
-  onViewWotd: (word: VocabularyItem) => void;
+  goalStats: { totalTasks: number; completedTasks: number; };
   setView: (view: AppView) => void;
   onNavigateToWordList: (filter: string) => void;
   onStartDueReview: () => void;
@@ -319,10 +331,8 @@ export interface DashboardUIProps {
   onRestore: (mode: 'server' | 'file') => void;
   dayProgress: { learned: number; reviewed: number; learnedWords: VocabularyItem[]; reviewedWords: VocabularyItem[]; };
   dailyGoals: DailyGoalConfig;
-  isWotdComposed: boolean;
-  onComposeWotd?: (word: VocabularyItem) => void;
-  onRandomizeWotd?: () => void;
   serverStatus: 'connected' | 'disconnected';
+  onAction?: (action: string) => void;
 }
 
 const getFormattedBuildDate = () => {
@@ -358,8 +368,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   rawCount,
   refinedCount,
   reviewStats,
-  wotd,
-  onViewWotd,
+  goalStats,
   setView,
   onNavigateToWordList,
   onStartDueReview,
@@ -369,10 +378,8 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   onRestore,
   dayProgress,
   dailyGoals,
-  isWotdComposed,
-  onComposeWotd,
-  onRandomizeWotd,
-  serverStatus
+  serverStatus,
+  onAction
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
 
@@ -448,12 +455,11 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                   <button onClick={onStartDueReview} disabled={dueCount === 0} className="flex-1 justify-between px-4 py-3 bg-orange-500 text-white rounded-xl font-black text-xs flex items-center hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-orange-500/10"><div className="flex items-center space-x-2"><RotateCw size={12} /><span>REVIEW DUE</span></div><span className="px-2 py-0.5 bg-white/20 rounded-md text-white font-black">{dueCount}</span></button>
               </div>
           </div>
-          <WordOfTheDay 
-              word={wotd} 
-              onView={() => wotd && onViewWotd(wotd)} 
-              isComposed={isWotdComposed}
-              onCompose={onComposeWotd}
-              onRandomize={onRandomizeWotd}
+          <GoalCompletionPanel 
+              totalTasks={goalStats.totalTasks}
+              completedTasks={goalStats.completedTasks}
+              onNavigate={() => setView('PLANNING')}
+              onAction={onAction}
           />
         </div>
       </div>
@@ -465,7 +471,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
         maxReview={dailyGoals.max_review_per_day}
         learnedWords={dayProgress.learnedWords}
         reviewedWords={dayProgress.reviewedWords}
-        onViewWord={onViewWotd}
+        onViewWord={() => {}} // Not used as Wotd is removed
       />
     </div>
   );

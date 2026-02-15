@@ -1,16 +1,17 @@
-
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
-import { X, MessageSquare, BookOpen, Languages, Book, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Info, AudioLines } from 'lucide-react';
+import { User, AppView, WordQuality, VocabularyItem, Lesson } from '../../app/types';
+import { X, MessageSquare, BookOpen, Languages, Book, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Info, AudioLines, Square, GraduationCap } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, getIsSpeaking } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
+import * as db from '../../app/db';
 import { createNewWord, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
+import UniversalAiModal from './UniversalAiModal';
+import { getGenerateWordLessonEssayPrompt } from '../../services/promptService';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 300;
@@ -20,8 +21,8 @@ interface Props {
     stats: { due: number; new: number; total: number; };
     currentView: AppView;
     lastBackupTime: number | null;
-    onNavigate: (view: string) => void;
-    onViewWord?: (word: VocabularyItem) => void;
+    onNavigate: (view: string, params?: any) => void;
+    onViewWord?: (word: VocabularyItem, tab?: string) => void;
     isAnyModalOpen?: boolean;
 }
 
@@ -57,7 +58,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
     const [isCambridgeValid, setIsCambridgeValid] = useState(false);
     const [isAlreadyInLibrary, setIsAlreadyInLibrary] = useState(false);
     const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
-    
+
     const commandBoxRef = useRef<HTMLDivElement>(null);
     const checkAbortControllerRef = useRef<AbortController | null>(null);
     
@@ -88,7 +89,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
                 setIsCambridgeValid(data.exists);
             }
         } catch (e: any) {
-            // Abort or network error
         } finally {
             setIsCambridgeChecking(false);
         }
@@ -103,7 +103,15 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
     useEffect(() => {
         const handleConfigUpdate = () => setConfig(getConfig());
         const handleAudioStatus = (e: any) => setIsAudioPlaying(e.detail.isSpeaking);
-        
+        window.addEventListener('config-updated', handleConfigUpdate);
+        window.addEventListener('audio-status-changed', handleAudioStatus);
+        return () => {
+            window.removeEventListener('config-updated', handleConfigUpdate);
+            window.removeEventListener('audio-status-changed', handleAudioStatus);
+        };
+    }, []);
+
+    useEffect(() => {
         const handleContextMenu = (e: MouseEvent) => {
             if (!config.interface.rightClickCommandEnabled) return;
             const selection = window.getSelection();
@@ -142,28 +150,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
             }
         };
 
-        window.addEventListener('config-updated', handleConfigUpdate);
-        window.addEventListener('audio-status-changed', handleAudioStatus);
         document.addEventListener('contextmenu', handleContextMenu);
         document.addEventListener('mousedown', handleClickOutside);
-
         return () => {
-            window.removeEventListener('config-updated', handleConfigUpdate);
-            window.removeEventListener('audio-status-changed', handleAudioStatus);
             document.removeEventListener('contextmenu', handleContextMenu);
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [config.interface.rightClickCommandEnabled, isOpen, config.server, user.id]);
-
-    const handleReadSelection = (lang: 'en' | 'vi' = 'en') => {
-        const selectedText = window.getSelection()?.toString().trim();
-        if (selectedText) {
-            if (selectedText.length > MAX_READ_LENGTH) {
-                return showToast("Text is too long to read!", "error");
-            }
-            speak(selectedText, false, lang, lang === 'en' ? coach.enVoice : coach.viVoice, lang === 'en' ? coach.enAccent : coach.viAccent);
-        }
-    };
 
     const handleTranslateSelection = async () => {
         const selectedText = window.getSelection()?.toString().trim();
@@ -193,15 +186,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
     const handleReadAndIpa = async () => {
         const selectedText = window.getSelection()?.toString().trim();
         if (!selectedText) return;
-
-        // 1. Read
         if (selectedText.length > MAX_READ_LENGTH) {
             showToast("Text is too long to read!", "error");
         } else {
             speak(selectedText, false, 'en', coach.enVoice, coach.enAccent);
         }
-
-        // 2. Fetch & Show IPA
         setIsThinking(true);
         setIsOpen(false);
         setMenuPos(null);
@@ -209,27 +198,19 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
             const cleaned = selectedText.toLowerCase();
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
             if (existing && existing.ipaUs) {
-                setMessage({ 
-                    text: `**IPA:** ${existing.ipaUs}`,
-                    icon: <Binary size={18} className="text-emerald-500" /> 
-                });
+                setMessage({ text: `**IPA:** ${existing.ipaUs}`, icon: <Binary size={18} className="text-emerald-500" /> });
                 setIsOpen(true);
                 setIsThinking(false);
                 return;
             }
-
             const serverUrl = getServerUrl(config);
             const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(selectedText)}&mode=2`);
             if (res.ok) {
                 const data = await res.json();
-                setMessage({ 
-                    text: `**IPA:** ${data.ipa}`, 
-                    icon: <Binary size={18} className="text-purple-500" /> 
-                });
+                setMessage({ text: `**IPA:** ${data.ipa}`, icon: <Binary size={18} className="text-purple-500" /> });
                 setIsOpen(true);
             }
         } catch (e) {
-            // Silence error or show toast
         } finally {
             setIsThinking(false);
         }
@@ -240,21 +221,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
         if (!selectedText || isAlreadyInLibrary) return;
         setIsAddingToLibrary(true);
         try {
-            // Check Server First
             let newItem: VocabularyItem;
             let serverItem: VocabularyItem | null = null;
-            
             try {
                 const results = await lookupWordsInGlobalLibrary([selectedText]);
-                if (results.length > 0) {
-                    serverItem = results[0];
-                }
-            } catch (e) {
-                console.warn("Server lookup failed in StudyBuddy");
-            }
+                if (results.length > 0) serverItem = results[0];
+            } catch (e) {}
 
             if (serverItem) {
-                // Populate from server if found
                 newItem = {
                      ...serverItem,
                      id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
@@ -263,7 +237,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
                      updatedAt: Date.now(),
                      quality: WordQuality.REFINED,
                      source: 'refine',
-                     // Reset SRS state
                      nextReview: Date.now(),
                      interval: 0,
                      easeFactor: 2.5,
@@ -272,22 +245,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
                      lastReview: undefined,
                      lastGrade: undefined,
                      lastTestResults: {},
-                     // Add coach group
                      groups: [...(serverItem.groups || []), 'coach-added']
                 };
-                 // Recalc logic stats
                  newItem.complexity = calculateComplexity(newItem);
                  newItem.masteryScore = calculateMasteryScore(newItem);
                  newItem.gameEligibility = calculateGameEligibility(newItem);
             } else {
-                // Manual creation fallback
                 newItem = { 
                     ...createNewWord(selectedText, '', '', '', '', ['coach-added'], false, false, false, false, selectedText.includes(' ')), 
                     userId: user.id, 
                     quality: WordQuality.RAW 
                 };
             }
-
             await dataStore.saveWord(newItem);
             showToast(`"${selectedText}" added!`, 'success');
             setIsAlreadyInLibrary(true);
@@ -337,76 +306,27 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
     };
 
     const CommandBox = () => (
-        <div 
-            ref={commandBoxRef} 
-            className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[200px] animate-in fade-in zoom-in-95 duration-200"
-        >
-            <div className="grid grid-cols-3 gap-1">
-                <button 
-                    type="button" 
-                    onClick={handleTranslateSelection} 
-                    className="aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" 
-                    title="Tiếng Việt"
-                >
-                    VI
-                </button>
-                
+        <div ref={commandBoxRef} className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200">
+            {/* Using a 6-column grid allows us to have col-span-2 buttons that are perfectly equal in width */}
+            <div className="grid grid-cols-6 gap-1">
+                {/* TOP ROW (3 buttons, 2 columns each) */}
+                <button type="button" onClick={handleTranslateSelection} className="col-span-2 aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" title="Tiếng Việt">VI</button>
                 {!isAlreadyInLibrary ? (
-                    <button 
-                        type="button" 
-                        onClick={handleAddToLibrary} 
-                        disabled={isAddingToLibrary} 
-                        className="aspect-square bg-green-50 text-green-600 rounded-2xl flex items-center justify-center hover:bg-green-100 transition-all active:scale-90 shadow-sm" 
-                        title="Add to Library"
-                    >
-                        {isAddingToLibrary ? <Loader2 size={14} className="animate-spin"/> : <Plus size={15}/>}
-                    </button>
+                    <button type="button" onClick={handleAddToLibrary} disabled={isAddingToLibrary} className="col-span-2 aspect-square bg-green-50 text-green-600 rounded-2xl flex items-center justify-center hover:bg-green-100 transition-all active:scale-90 shadow-sm" title="Add to Library">{isAddingToLibrary ? <Loader2 size={14} className="animate-spin"/> : <Plus size={15}/>}</button>
                 ) : (
-                    <button 
-                        type="button" 
-                        onClick={handleViewWord} 
-                        disabled={isAnyModalOpen} 
-                        className="aspect-square bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center hover:bg-sky-100 transition-all active:scale-90 shadow-sm" 
-                        title="View Word Details"
-                    >
-                        <Eye size={15}/>
-                    </button>
+                    <button type="button" onClick={handleViewWord} disabled={isAnyModalOpen} className="col-span-2 aspect-square bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center hover:bg-sky-100 transition-all active:scale-90 shadow-sm" title="View Word Details"><Eye size={15}/></button>
                 )}
-                
-                <button 
-                    type="button" 
-                    onClick={handleReadAndIpa} 
-                    className="aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" 
-                    title="Read & Phonetics (EN)"
-                >
-                    <Volume2 size={15}/>
-                </button>
-                
-                <button 
-                    type="button" 
-                    onClick={handleSpeakSelection} 
-                    className="aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" 
-                    title="Mimic Practice"
-                >
-                    <Mic size={15}/>
-                </button>
+                <button type="button" onClick={handleReadAndIpa} className="col-span-2 aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="Read & Phonetics (EN)"><Volume2 size={15}/></button>
 
-                <button 
-                    type="button" 
-                    onClick={handleCambridgeLookup} 
-                    disabled={isCambridgeChecking || !isCambridgeValid} 
-                    className={`aspect-square rounded-2xl flex items-center justify-center transition-all shadow-sm ${isCambridgeValid ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`} 
-                    title="Cambridge Lookup"
-                >
-                    {isCambridgeChecking ? <Loader2 size={14} className="animate-spin"/> : <Search size={15}/>}
-                </button>
-                
-                <div className="aspect-square"></div> {/* Empty Slot for balance */}
+                {/* BOTTOM ROW (2 buttons centered, 1-col offset on each side) */}
+                <div className="col-span-1" />
+                <button type="button" onClick={handleSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
+                <button type="button" onClick={handleCambridgeLookup} disabled={isCambridgeChecking || !isCambridgeValid} className={`col-span-2 aspect-square rounded-2xl flex items-center justify-center transition-all shadow-sm ${isCambridgeValid ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`} title="Cambridge Lookup">{isCambridgeChecking ? <Loader2 size={14} className="animate-spin"/> : <Search size={15}/>}</button>
+                <div className="col-span-1" />
             </div>
         </div>
     );
 
-    // Using new RegExp to avoid lexer conflict with forward slashes in JSX
     const formatBoldText = (text: string) => {
         const boldRegex = new RegExp('\\*\\*(.*?)\\*\\*', 'g');
         return text.replace(boldRegex, '<strong>$1</strong>');
@@ -415,67 +335,36 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
     return (
         <>
             {isOpen && menuPos && (
-                <div 
-                    className="fixed z-[2147483647]" 
-                    style={{ 
-                        left: `${menuPos.x}px`, 
-                        top: `${menuPos.y}px`, 
-                        transform: menuPos.placement === 'top' ? 'translate(-50%, -100%) translateY(-10px)' : 'translate(-50%, 0) translateY(10px)' 
-                    }}
-                >
-                    <CommandBox />
-                </div>
+                <div className="fixed z-[2147483647]" style={{ left: `${menuPos.x}px`, top: `${menuPos.y}px`, transform: menuPos.placement === 'top' ? 'translate(-50%, -100%) translateY(-10px)' : 'translate(-50%, 0) translateY(10px)' }}><CommandBox /></div>
             )}
             <div className="fixed bottom-0 left-6 z-[2147483646] flex flex-col items-start pointer-events-none">
-                <div 
-                    className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" 
-                    onMouseEnter={() => setIsOpen(true)} 
-                    onMouseLeave={() => setTimeout(() => setIsOpen(false), 300)}
-                >
+                <div className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" onMouseEnter={() => setIsOpen(true)} onMouseLeave={() => setTimeout(() => setIsOpen(false), 300)}>
                     <div className="relative">
                         {isOpen && !menuPos && (
                             <div className="absolute bottom-16 left-0 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
                                 {message ? (
                                     <div className="bg-white p-5 rounded-[2.5rem] shadow-2xl border border-neutral-200 w-72 relative">
-                                        <button onClick={() => setMessage(null)} className="absolute top-4 right-4 text-neutral-300 hover:text-neutral-900">
-                                            <X size={14}/>
-                                        </button>
+                                        <button onClick={() => setMessage(null)} className="absolute top-4 right-4 text-neutral-300 hover:text-neutral-900"><X size={14}/></button>
                                         <div className="flex items-start gap-3">
-                                            <div className="shrink-0 mt-1">
-                                                {message.icon || <MessageSquare size={18} />}
-                                            </div>
-                                            <div 
-                                                className="text-xs font-medium text-neutral-700 leading-relaxed" 
-                                                dangerouslySetInnerHTML={{ __html: formatBoldText(message.text) }} 
-                                            />
+                                            <div className="shrink-0 mt-1">{message.icon || <MessageSquare size={18} />}</div>
+                                            <div className="text-xs font-medium text-neutral-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatBoldText(message.text) }} />
                                         </div>
                                     </div>
                                 ) : <CommandBox />}
                             </div>
                         )}
-                        <button 
-                            onClick={() => isAudioPlaying && stopSpeaking()} 
-                            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-10 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}
-                        >
-                            {isThinking ? (
-                                <Loader2 size={20} className="animate-spin text-neutral-400"/>
-                            ) : (
-                                <img 
-                                    src={avatarInfo.url} 
-                                    className={`w-10 h-10 object-contain ${isAudioPlaying ? 'scale-110' : ''}`} 
-                                    alt="Coach" 
-                                />
+                        <button onClick={(e) => { if (isAudioPlaying) { e.stopPropagation(); stopSpeaking(); } }} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-10 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}>
+                            {isThinking ? <Loader2 size={20} className="animate-spin text-neutral-400"/> : (
+                                <>
+                                    <img src={avatarInfo.url} className={`w-10 h-10 object-contain ${isAudioPlaying ? 'opacity-30 scale-90 blur-[1px]' : ''}`} alt="Coach" />
+                                    {isAudioPlaying && <div className="absolute inset-0 flex items-center justify-center text-indigo-600 animate-in fade-in zoom-in duration-200"><Square size={24} fill="currentColor" /></div>}
+                                </>
                             )}
                         </button>
                     </div>
                 </div>
             </div>
-            {mimicTarget && (
-                <SimpleMimicModal 
-                    target={mimicTarget} 
-                    onClose={() => setMimicTarget(null)} 
-                />
-            )}
+            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
         </>
     );
 };

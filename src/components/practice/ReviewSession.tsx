@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { VocabularyItem, ReviewGrade, ReviewMode, SessionType, User } from '../../app/types';
 import { updateSRS, calculateMasteryScore, getLogicalKnowledgeUnits } from '../../utils/srs';
@@ -164,15 +163,6 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     if (!currentWord) return;
 
     let wordWithUpdatedFlags = { ...currentWord };
-    if (testResults) {
-        const pronunciationTestFailed = testResults['PRONUNCIATION'] === false;
-        const ipaTestFailed = testResults['IPA_QUIZ'] === false;
-
-        if ((pronunciationTestFailed || ipaTestFailed) && !wordWithUpdatedFlags.needsPronunciationFocus) {
-            wordWithUpdatedFlags.needsPronunciationFocus = true;
-            showToast(`"${wordWithUpdatedFlags.word}" marked for pronunciation focus.`, 'info');
-        }
-    }
 
     if (isQuickReviewMode && counts) {
         const wrong = counts.tested - counts.correct;

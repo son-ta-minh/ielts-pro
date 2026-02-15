@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Music, FileText, Folder, ChevronRight, CornerLeftUp, X, Loader2, Lock, Globe, Server, Tag, Search, ListTodo } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
@@ -396,8 +395,14 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                                                     )}
                                                 </div>
                                             ) : (
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center justify-between gap-2">
                                                     <span className="text-xs font-medium text-neutral-700 truncate">{item.name}</span>
+                                                    {type === 'audio' && item.transcript && (
+                                                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 shrink-0 animate-in fade-in">
+                                                            <FileText size={10} />
+                                                            <span className="text-[8px] font-black uppercase tracking-tighter">Transcript</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

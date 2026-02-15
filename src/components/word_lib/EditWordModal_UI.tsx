@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Save, Sparkles, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, Tag as TagIcon, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, Loader2 } from 'lucide-react';
+import { X, Save, Sparkles, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, Tag as TagIcon, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, Loader2, BookText, ClipboardList } from 'lucide-react';
 import { VocabularyItem, WordFamily, WordFamilyMember, ReviewGrade, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
 
 const StatusDropdown: React.FC<{
@@ -49,8 +48,8 @@ export interface EditWordModalUIProps {
   onClose: () => void;
   onSwitchToView: () => void;
   formData: any; 
-  setFormData: (field: keyof VocabularyItem | 'groupsString' | 'studiedStatus' | 'prepositionsList', value: any) => void;
-  setFlag: (flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'needsPronunciationFocus' | 'isPassive') => void;
+  setFormData: (field: keyof VocabularyItem | 'groupsString' | 'studiedStatus' | 'prepositionsList' | 'essayEdit' | 'testEdit', value: any) => void;
+  setFlag: (flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive') => void;
   familyHandler: (type: keyof WordFamily) => { update: (index: number, field: 'word', value: string) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: () => void; };
   prepList: { update: (index: number, changes: object) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: (newItem: object) => void; };
   collocList: { update: (index: number, changes: object) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: (newItem: object) => void; };
@@ -67,9 +66,8 @@ export interface EditWordModalUIProps {
   hasSuggestions: boolean;
 }
 
-type Tab = 'MAIN' | 'DETAILS' | 'CONNECTIONS';
+type Tab = 'MAIN' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
 
-// A generic component for list-based editors (Collocations, Idioms, Word Family members)
 const ListEditorSection: React.FC<{
     title: string;
     items: { text: string; d?: string; isIgnored?: boolean }[];
@@ -116,7 +114,8 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
   const TABS: { id: Tab, label: string, icon: React.ElementType }[] = [
     { id: 'MAIN', label: 'Main', icon: Book },
     { id: 'DETAILS', label: 'Details', icon: Info },
-    { id: 'CONNECTIONS', label: 'Connections', icon: LinkIcon }
+    { id: 'CONNECTIONS', label: 'Links', icon: LinkIcon },
+    { id: 'USAGE', label: 'Usage & Test', icon: BookText }
   ];
 
   const qualityOptions = [
@@ -235,10 +234,9 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                     <div className="space-y-6 animate-in fade-in duration-300">
                         <div className="space-y-2">
                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Flags</label>
-                           <div className="flex flex-wrap gap-2 p-3 bg-white border border-neutral-200 rounded-2xl">{[{ id: 'isIdiom', label: 'Idiom', icon: Quote }, { id: 'isCollocation', label: 'Colloc.', icon: Combine }, { id: 'isStandardPhrase', label: 'Phrase', icon: MessageSquare }, { id: 'isPhrasalVerb', label: 'Phrasal', icon: Layers }, { id: 'isIrregular', label: 'Irregular', icon: RotateCw }, { id: 'needsPronunciationFocus', label: 'Pronunciation', icon: Mic }, { id: 'isPassive', label: 'Archive', icon: formData.isPassive ? Archive : Trash2 }].map(btn => (<button key={btn.id} type="button" onClick={() => setFlag(btn.id as any)} className={`flex items-center space-x-1.5 py-1.5 px-3 rounded-lg border transition-all font-bold text-[9px] uppercase tracking-wider ${formData[btn.id] ? 'bg-neutral-900 border-neutral-900 text-white shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-300'}`}><btn.icon size={10} /><span>{btn.label}</span></button>))}</div>
+                           <div className="flex flex-wrap gap-2 p-3 bg-white border border-neutral-200 rounded-2xl">{[{ id: 'isIdiom', label: 'Idiom', icon: Quote }, { id: 'isCollocation', label: 'Colloc.', icon: Combine }, { id: 'isStandardPhrase', label: 'Phrase', icon: MessageSquare }, { id: 'isPhrasalVerb', label: 'Phrasal', icon: Layers }, { id: 'isIrregular', label: 'Irregular', icon: RotateCw }, { id: 'isPassive', label: 'Archive', icon: formData.isPassive ? Archive : Trash2 }].map(btn => (<button key={btn.id} type="button" onClick={() => setFlag(btn.id as any)} className={`flex items-center space-x-1.5 py-1.5 px-3 rounded-lg border transition-all font-bold text-[9px] uppercase tracking-wider ${formData[btn.id] ? 'bg-neutral-900 border-neutral-900 text-white shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-300'}`}><btn.icon size={10} /><span>{btn.label}</span></button>))}</div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                           {/* Tags removed from UI */}
                            <div className="space-y-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center"><Users2 size={10} className="mr-1"/>User Groups</label><input type="text" value={formData.groupsString} onChange={(e) => setFormData('groupsString', e.target.value)} placeholder="bird_species, env_academic..." className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm focus:ring-1 focus:ring-neutral-900 outline-none"/></div>
                            <div className="md:col-span-2 space-y-1">
                                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Register</label>
@@ -284,7 +282,6 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                         />
                         
                         <div className="space-y-2"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Word Family</label><div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* FIX: Use a type-safe onUpdate handler for word family sections. IPA removed. */}
                             <ListEditorSection title="Nouns" items={(formData.wordFamily?.nouns || []).map((m: any) => ({ text: m.word, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text') { familyHandler('nouns').update(i, 'word', v); } }} onToggleIgnore={familyHandler('nouns').toggleIgnore} onRemove={familyHandler('nouns').remove} onAdd={familyHandler('nouns').add} placeholders={{ text: "Noun form..." }} />
                             <ListEditorSection title="Verbs" items={(formData.wordFamily?.verbs || []).map((m: any) => ({ text: m.word, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text') { familyHandler('verbs').update(i, 'word', v); } }} onToggleIgnore={familyHandler('verbs').toggleIgnore} onRemove={familyHandler('verbs').remove} onAdd={familyHandler('verbs').add} placeholders={{ text: "Verb form..." }} />
                             <ListEditorSection title="Adjectives" items={(formData.wordFamily?.adjs || []).map((m: any) => ({ text: m.word, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text') { familyHandler('adjs').update(i, 'word', v); } }} onToggleIgnore={familyHandler('adjs').toggleIgnore} onRemove={familyHandler('adjs').remove} onAdd={familyHandler('adjs').add} placeholders={{ text: "Adjective form..." }} />
@@ -333,6 +330,40 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {activeTab === 'USAGE' && (
+                  <div className="space-y-6 animate-in fade-in duration-300 h-full flex flex-col">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center px-1">
+                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2">
+                          <BookText size={12}/> Usage Guide (Markdown)
+                        </label>
+                      </div>
+                      <textarea 
+                        value={formData.essayEdit} 
+                        onChange={e => setFormData('essayEdit', e.target.value)} 
+                        rows={12}
+                        className="w-full p-4 bg-white border border-neutral-200 rounded-2xl font-mono text-xs leading-relaxed focus:ring-2 focus:ring-neutral-900 outline-none resize-y"
+                        placeholder="Enter the Usage Guide Markdown content here..."
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center px-1">
+                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2">
+                          <ClipboardList size={12}/> Practice Test (Markdown)
+                        </label>
+                      </div>
+                      <textarea 
+                        value={formData.testEdit} 
+                        onChange={e => setFormData('testEdit', e.target.value)} 
+                        rows={12}
+                        className="w-full p-4 bg-white border border-neutral-200 rounded-2xl font-mono text-xs leading-relaxed focus:ring-2 focus:ring-neutral-900 outline-none resize-y"
+                        placeholder="Enter the Practice Test Markdown content here..."
+                      />
+                    </div>
+                  </div>
                 )}
             </div>
         </div>

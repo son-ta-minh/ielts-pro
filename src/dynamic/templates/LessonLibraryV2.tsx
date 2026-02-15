@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Lesson, VocabularyItem, SessionType, AppView, FocusColor, LessonBook } from '../../app/types';
 import * as db from '../../app/db';
@@ -14,7 +13,7 @@ import { UniversalCard } from '../../components/common/UniversalCard';
 import LessonEditView from './LessonEditView';
 import LessonPracticeView from './LessonPracticeView';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
-import { getLessonPrompt, getGenerateWordLessonPrompt } from '../../services/promptService';
+import { getLessonPrompt } from '../../services/promptService';
 import { ResourceActions, AddAction } from '../page/ResourceActions';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { ResourceConfig } from '../types';
@@ -32,6 +31,8 @@ interface Props {
   onNavigate: (view: AppView) => void;
   onUpdateUser: (user: User) => Promise<void>;
   onExit?: () => void;
+  initialLessonId?: string | null;
+  onConsumeLessonId?: () => void;
 }
 
 type ResourceItem = 
@@ -40,7 +41,7 @@ type ResourceItem =
 const lessonConfig: ResourceConfig = { filterSchema: [], viewSchema: [] };
 const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
 
-export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavigate, onUpdateUser }) => {
+export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavigate, onUpdateUser, initialLessonId, onConsumeLessonId }) => {
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [lessonBooks, setLessonBooks] = useState<LessonBook[]>([]);
   const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
@@ -68,9 +69,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [bookToDelete, setBookToDelete] = useState<LessonBook | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-  const [isWordLessonAiModalOpen, setIsWordLessonAiModalOpen] = useState(false);
-  const [isWordSelectorOpen, setIsWordSelectorOpen] = useState(false);
-  const [selectedWordForLesson, setSelectedWordForLesson] = useState<VocabularyItem | null>(null);
   
   const { 
       currentShelfName, 
@@ -110,6 +108,17 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   }, [user.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
+  
+  useEffect(() => {
+      if (initialLessonId && resources.length > 0) {
+          const target = resources.find(r => r.data.id === initialLessonId);
+          if (target) {
+              setActiveLesson(target.data as Lesson);
+              setViewMode('read_lesson');
+              onConsumeLessonId?.();
+          }
+      }
+  }, [initialLessonId, resources, onConsumeLessonId]);
   
   useEffect(() => { setPage(0); }, [selectedTag, typeFilter, focusFilter, colorFilter, pageSize]);
 
@@ -236,7 +245,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     await dataStore.saveLesson(newLesson);
     showToast("Lesson created with AI!", "success");
     setIsAiModalOpen(false);
-    setIsWordLessonAiModalOpen(false);
     setActiveLesson(newLesson);
     setViewMode('read_lesson');
     loadData();
@@ -291,7 +299,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
 
   const addActions: AddAction[] = [
       { label: 'Topic Lesson (AI)', icon: Sparkles, onClick: () => setIsAiModalOpen(true) },
-      { label: 'Word Lesson (AI)', icon: BookOpen, onClick: () => setIsWordSelectorOpen(true) },
       { label: 'New Lesson (Manual)', icon: Plus, onClick: handleNewLesson },
   ];
 
@@ -299,7 +306,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       const config = getConfig();
       const activeType = config.audioCoach.activeCoach;
       const coachName = config.audioCoach.coaches[activeType].name;
-      // Fix: Add missing 'task' property as required by LessonPromptParams.
       return getLessonPrompt({
           topic: inputs.topic,
           language: inputs.language,
@@ -311,38 +317,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       });
   };
 
-  const handleGenerateWordLessonPromptWithCoach = (inputs: any) => {
-    if (!selectedWordForLesson) return '';
-    const config = getConfig();
-    const activeType = config.audioCoach.activeCoach;
-    const coachName = config.audioCoach.coaches[activeType].name;
-    
-    // FIX: Pass 'format' from inputs to getGenerateWordLessonPrompt
-    return getGenerateWordLessonPrompt(
-      selectedWordForLesson, 
-      {
-        language: inputs.language,
-        targetAudience: inputs.targetAudience,
-        tone: inputs.tone,
-        format: inputs.format 
-      } as any, 
-      coachName
-    );
-  };
-
-  const handleWordSelectedForLesson = (selected: string[]) => {
-    if (selected.length === 0) return;
-    const wordText = selected[0];
-    const wordObj = allWords.find(w => w.word.toLowerCase() === wordText.toLowerCase());
-    if (wordObj) {
-      setSelectedWordForLesson(wordObj);
-      setIsWordSelectorOpen(false);
-      setIsWordLessonAiModalOpen(true);
-    }
-  };
-
   if (viewMode === 'read_lesson' && activeLesson) {
-      // Fix: Pass onUpdate to sync state when Audio Script is added
       return <LessonPracticeView user={user} lesson={activeLesson} onComplete={() => setViewMode(activeBook ? 'book_detail' : 'list')} onEdit={() => setViewMode('edit_lesson')} onUpdate={(updated) => setActiveLesson(updated)} />;
   }
   if (viewMode === 'edit_lesson' && activeLesson) {
@@ -374,7 +349,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                       <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Lesson Shelf</h2>
                       <p className="text-neutral-500 mt-1 font-medium">Browse your lesson collections.</p>
                  </div>
-                 <ShelfSearchBar shelves={allShelves} books={lessonBooks} onNavigateShelf={handleNavigateShelf} onNavigateBook={handleNavigateBook} />
+                 <ShelfSearchBar { ...{ shelves: allShelves, books: lessonBooks, onNavigateShelf: handleNavigateShelf, onNavigateBook: handleNavigateBook } } />
                  <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
                      <FolderPlus size={14}/> Add Shelf
                  </button>
@@ -411,53 +386,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       }
       minorSkills={ <button onClick={() => onNavigate('IRREGULAR_VERBS')} className="flex items-center gap-2 px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors"><FileClock size={16} /><span className="hidden sm:inline">Irregular Verbs</span></button> }
       pagination={{ page, totalPages: Math.ceil(filteredResources.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredResources.length }}
-      actions={
-        <ResourceActions
-            viewMenu={
-                <ViewMenu 
-                    isOpen={isViewMenuOpen}
-                    setIsOpen={setIsViewMenuOpen}
-                    hasActiveFilters={hasActiveFilters}
-                    filterOptions={[
-                        { label: 'All', value: 'ALL', isActive: typeFilter === 'ALL', onClick: () => setTypeFilter('ALL') },
-                        { label: 'Lesson', value: 'ESSAY', isActive: typeFilter === 'ESSAY', onClick: () => setTypeFilter('ESSAY') },
-                    ]}
-                    customSection={
-                        <>
-                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
-                                <Target size={10}/> Focus & Status
-                            </div>
-                            <div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2">
-                                <button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
-                                    {focusFilter === 'focused' ? 'Focused Only' : 'All Items'}
-                                </button>
-                                <div className="flex gap-1">
-                                    <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
-                                    <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
-                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
-                                </div>
-                            </div>
-                        </>
-                    }
-                    viewOptions={[
-                        { label: 'Show Description', checked: viewSettings.showDesc, onChange: () => setViewSettings(v => ({...v, showDesc: !v.showDesc})) },
-                        { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) },
-                    ]}
-                />
-            }
-            browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }}
-            addActions={addActions}
-            extraActions={
-                <>
-                    <button onClick={handleRandomize} disabled={resources.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button>
-                    <button onClick={() => setViewMode('shelf')} className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs flex items-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-200" title="Bookshelf Mode">
-                        <Library size={16} />
-                        <span>Bookshelf</span>
-                    </button>
-                </>
-            }
-        />
-      }
       aboveGrid={
         <>
             {isTagBrowserOpen && <TagBrowser items={resources} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}
@@ -518,30 +446,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         actionLabel="Create Lesson" 
         closeOnSuccess={true} 
     />
-
-    <UniversalAiModal 
-        isOpen={isWordLessonAiModalOpen} 
-        onClose={() => setIsWordLessonAiModalOpen(false)} 
-        type="GENERATE_WORD_LESSON" 
-        title={`AI Word Lesson: ${selectedWordForLesson?.word}`} 
-        description="Creating a deep-dive lesson based on your library data." 
-        initialData={user.lessonPreferences} 
-        onGeneratePrompt={handleGenerateWordLessonPromptWithCoach} 
-        onJsonReceived={handleGenerateLesson} 
-        actionLabel="Create Word Lesson" 
-        closeOnSuccess={true} 
-    />
-
-    {isWordSelectorOpen && (
-      <WordSelectorModal 
-          isOpen={isWordSelectorOpen}
-          onClose={() => setIsWordSelectorOpen(false)}
-          onSelect={handleWordSelectedForLesson}
-          allWords={allWords}
-          wordsToExclude={new Set()}
-          loading={loading}
-      />
-    )}
     </>
   );
 };

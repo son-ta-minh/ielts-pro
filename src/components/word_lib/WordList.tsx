@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
@@ -236,7 +235,6 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
     const isCollocation = types.has('collocation');
     const isStandardPhrase = types.has('phrase');
 
-    const needsPronunciationFocus = types.has('pronun');
     const isPassive = types.has('archive');
 
     // 1. Pre-fetch from Server Library for Quick Add
@@ -259,7 +257,6 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
         updatedItem.isPhrasalVerb = isPhrasalVerb || existing.isPhrasalVerb;
         updatedItem.isCollocation = isCollocation || existing.isCollocation;
         updatedItem.isStandardPhrase = isStandardPhrase || existing.isStandardPhrase;
-        updatedItem.needsPronunciationFocus = needsPronunciationFocus || existing.needsPronunciationFocus;
         updatedItem.isPassive = isPassive; // Override passive status if explicitly adding to archive or not
         updatedItem.updatedAt = Date.now();
         newItems.push(updatedItem); 
@@ -292,7 +289,6 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
                  isPhrasalVerb: isPhrasalVerb || serverItem.isPhrasalVerb,
                  isCollocation: isCollocation || serverItem.isCollocation,
                  isStandardPhrase: isStandardPhrase || serverItem.isStandardPhrase,
-                 needsPronunciationFocus: needsPronunciationFocus || serverItem.needsPronunciationFocus,
                  isPassive: isPassive
              };
              // Recalc stats
@@ -304,7 +300,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
             // Updated signature: groups is passed instead of tags
             newItem = createNewWord(
                 word, '', '', '', '', [], 
-                isIdiom, needsPronunciationFocus, isPhrasalVerb, 
+                isIdiom, isPhrasalVerb, 
                 isCollocation, isStandardPhrase, isPassive
             );
             newItem.userId = userId;
@@ -320,6 +316,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
       onStartSession(items);
   };
 
+  // FIX: handleBulkDelete updated to accept Set<string> to match WordTable prop expectation
   const handleBulkDelete = async (ids: Set<string>) => {
     await onBulkDelete(Array.from(ids));
   };

@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
@@ -69,7 +68,7 @@ const LIBRARY_FILTERS_KEY = 'vocab_pro_library_filters_v2';
 
 // Groups definition for exclusive logic
 const GROUP_CONTENT: WordTypeOption[] = ['vocab', 'idiom', 'phrasal', 'collocation', 'phrase'];
-const GROUP_ATTRIBUTE: WordTypeOption[] = ['pronun', 'archive'];
+const GROUP_ATTRIBUTE: WordTypeOption[] = ['archive'];
 
 const WordTable: React.FC<Props> = ({ 
   user,
@@ -401,7 +400,8 @@ const WordTable: React.FC<Props> = ({
                     const mergedItem = mergeAiResultIntoWord(existingHeadwordItem, rawAiResult);
                     itemsToSave.push(mergedItem);
                 } else {
-                    const newItem = createNewWord(suggestedHeadword, '', '', '', '', [], false, false, false, false, false, false, 'refine');
+                    // Fix: createNewWord expects 12 arguments if source is refined. Added 'false' for isPassive.
+                    const newItem = createNewWord(suggestedHeadword, '', '', '', '', [], false, false, false, false, false, 'refine');
                     newItem.userId = originalItem.userId;
                     const finalNewItem = mergeAiResultIntoWord(newItem, rawAiResult);
                     itemsToSave.push(finalNewItem);

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, IrregularVerb, VocabularyItem, WordQuality } from '../../../app/types';
 import * as db from '../../../app/db';
@@ -293,8 +292,7 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
         const newItem = createNewWord(verb.v1, '', '', '', '', ['irregular-verb']);
         newItem.userId = user.id;
         newItem.isIrregular = true;
-        newItem.v2 = verb.v2;
-        newItem.v3 = verb.v3;
+        // Fix: Removed assignments of v2 and v3 as they do not exist on VocabularyItem type
         newWords.push(newItem);
       }
     }

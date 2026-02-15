@@ -20,7 +20,6 @@ export const calculateWordDifficultyXp = (word: VocabularyItem): number => {
     }
     if (word.paraphrases) baseXP += Math.min(word.paraphrases.filter(p => !p.isIgnored).length * 10, 30);
     if (word.isIrregular) baseXP += 20;
-    if (word.needsPronunciationFocus) baseXP += 15;
     if (word.isIdiom || word.isPhrasalVerb || word.isCollocation || word.isStandardPhrase) baseXP += 10;
     if (word.word.length > 7) baseXP += 5;
     if (word.word.length > 10) baseXP += 5;

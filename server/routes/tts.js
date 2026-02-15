@@ -97,7 +97,7 @@ router.post('/select-voice', (req, res) => {
 });
 
 router.post('/speak', async (req, res) => {
-    const { text, voice } = req.body;
+    const { text, voice, language } = req.body;
     if (!text) return res.status(400).json({ error: "text_required" });
 
     let voiceToUse = selectedVoice;
@@ -106,10 +106,13 @@ router.post('/speak', async (req, res) => {
         else return res.status(404).json({ error: "voice_not_found" });
     }
 
-    const cleanText = text.replace(/"/g, '\\"');
+    // Ensure text is NFC normalized (composed) for macOS 'say' command, especially for Vietnamese
+    const cleanText = text.normalize('NFC').replace(/"/g, '\\"');
+    
     const outFile = path.join(settings.AUDIO_DIR, `tts_${Date.now()}.aiff`);
     
-    const cmd = voiceToUse
+    // Construct command: omit -v only if no specific voice is selected (System Default)
+    const cmd = (voiceToUse)
         ? `say -v "${voiceToUse}" "${cleanText}" -o "${outFile}"`
         : `say "${cleanText}" -o "${outFile}"`;
 

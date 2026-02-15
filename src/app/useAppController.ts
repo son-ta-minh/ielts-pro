@@ -53,6 +53,14 @@ export const useAppController = () => {
     // New state to pass a word to Writing Practice
     const [writingContextWord, setWritingContextWord] = useState<VocabularyItem | null>(null);
     
+    // Targeted Lesson State
+    const [targetLessonId, setTargetLessonId] = useState<string | null>(null);
+    const consumeTargetLessonId = useCallback(() => setTargetLessonId(null), []);
+
+    // Planning Action State
+    const [planningAction, setPlanningAction] = useState<'AI' | 'IMPORT' | null>(null);
+    const consumePlanningAction = useCallback(() => setPlanningAction(null), []);
+
     // --- Auto Restore Logic State ---
     const [autoRestoreCandidates, setAutoRestoreCandidates] = useState<ServerBackupItem[]>([]);
     const [isAutoRestoreOpen, setIsAutoRestoreOpen] = useState(false);
@@ -385,7 +393,7 @@ export const useAppController = () => {
             return;
         }
 
-        // CẬP NHẬT: Khi chủ động chuyển user, cho phép quét lại nếu cần
+        // CẬP NHẬT: Khi đổi user thủ công, cho phép quét lại nếu cần
         sessionStorage.removeItem('vocab_pro_suppress_auto_restore');
         hasCheckedAutoRestore.current = false;
 
@@ -692,6 +700,33 @@ export const useAppController = () => {
     const consumeWritingContext = () => {
         setWritingContextWord(null);
     };
+
+    const handleSpecialAction = (action: string, params?: any) => {
+        switch(action) {
+            case 'REVIEW':
+                startDueReviewSession();
+                break;
+            case 'BROWSE': 
+                startNewLearnSession();
+                break;
+            case 'LESSON':
+                if (params && params.lessonId) {
+                    setTargetLessonId(params.lessonId);
+                }
+                setView('LESSON');
+                break;
+            case 'PLAN_AI':
+                setPlanningAction('AI');
+                setView('PLANNING');
+                break;
+            case 'PLAN_IMPORT':
+                setPlanningAction('IMPORT');
+                setView('PLANNING');
+                break;
+            default:
+               setView(action as AppView);
+        }
+    };
     
     // --- Returned Controller Object ---
     return {
@@ -735,6 +770,12 @@ export const useAppController = () => {
         writingContextWord,
         handleComposeWithWord,
         consumeWritingContext,
+        targetLessonId,
+        setTargetLessonId,
+        consumeTargetLessonId,
+        planningAction,
+        setPlanningAction,
+        consumePlanningAction,
         serverStatus, 
         hasUnsavedChanges, 
         nextAutoBackupTime, 
@@ -757,6 +798,8 @@ export const useAppController = () => {
         setSyncPrompt,
         isSyncing,
         handleSyncPush,
-        handleSyncRestore
+        handleSyncRestore,
+        // Exported handleSpecialAction to resolve type error in AppLayout.tsx
+        handleSpecialAction
     };
 };

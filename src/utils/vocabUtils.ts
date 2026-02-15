@@ -1,4 +1,3 @@
-
 import { VocabularyItem, WordFamilyMember, PrepositionPattern, ParaphraseOption, CollocationDetail, WordQuality } from '../app/types';
 import { calculateGameEligibility } from './gameEligibility';
 import { calculateComplexity, calculateMasteryScore } from './srs';
@@ -9,7 +8,7 @@ import { calculateComplexity, calculateMasteryScore } from './srs';
 export const normalizeAiResponse = (shortData: any): any => {
     if (!shortData) return null;
 
-    // Helper to map family members - IPA REMOVED
+    // Helper to map family members
     const mapFam = (list: any[]) => {
         if (!Array.isArray(list)) return [];
         return list
@@ -20,7 +19,6 @@ export const normalizeAiResponse = (shortData: any): any => {
                 if (x && (x.w || x.word)) {
                     return { 
                         word: x.w || x.word, 
-                        // IPA removed from family members
                         isIgnored: x.g ?? x.isIgnored
                     };
                 }
@@ -37,7 +35,7 @@ export const normalizeAiResponse = (shortData: any): any => {
         isIgnored: x.g ?? x.isIgnored ?? false
     })) || [];
 
-    // Helper to map prepositions (Robust mapping)
+    // Helper to map prepositions
     const mapPrep = (list: any[]) => {
         if (!Array.isArray(list)) return [];
         return list.map((x: any) => {
@@ -56,10 +54,8 @@ export const normalizeAiResponse = (shortData: any): any => {
             if (typeof item === 'string') {
                 return { text: item, isIgnored: false };
             }
-            // Support both 'text' (AI prompt format) and 'x' (internal short key)
             const text = item.text || item.x;
             if (text) {
-                // Support both 'd' (AI/internal short) and 'ds' (internal short alias if any, though d is standard)
                 const desc = item.d || item.ds;
                 return { 
                     text: text, 
@@ -79,9 +75,6 @@ export const normalizeAiResponse = (shortData: any): any => {
     else if (Array.isArray(shortData.prep)) {
         normalizedPrepsArray = mapPrep(shortData.prep);
     } 
-    else if (Array.isArray(shortData.prepositions)) {
-        normalizedPrepsArray = mapPrep(shortData.prepositions);
-    }
 
     const rawCollocs = shortData.col || shortData.collocations;
     let collocationsArray: CollocationDetail[] | undefined;
@@ -96,21 +89,35 @@ export const normalizeAiResponse = (shortData: any): any => {
         collocationsString = rawCollocs;
     }
 
-    // Idioms mapping (reuses col logic structure)
     const rawIdioms = shortData.idm || shortData.idioms;
     let idiomsList: CollocationDetail[] | undefined;
     if (Array.isArray(rawIdioms)) {
         idiomsList = mapColloc(rawIdioms);
     }
 
+    const headword = shortData.hw || shortData.headword;
+    const pronSim = shortData.pron_sim || shortData.pronSim || shortData.ps;
+    const ipaUs = shortData.ipa_us || shortData.ipaUs || shortData.ipa || shortData.i;
+    
+    // Handle optimized "type" string mapping to booleans
+    const type = shortData.type;
+    const typeFlags = {
+        isIdiom: type === 'idiom',
+        isPhrasalVerb: type === 'phrasal_verb',
+        isCollocation: type === 'collocation',
+        isStandardPhrase: type === 'phrase',
+        isIrregular: type === 'irregular_verb'
+    };
+
     return {
-        original: shortData.og || shortData.original,
-        headword: shortData.hw || shortData.headword,
-        // Map any available IPA source to ipaUs, prioritizing ipa_us
-        ipaUs: shortData.ipa_us || shortData.ipa || shortData.i,
-        ipaUk: shortData.ipa_uk || shortData.i_uk,
-        pronSim: shortData.pron_sim || shortData.pronSim,
-        ipaMistakes: shortData.ipa_m || shortData.ipaMistakes,
+        original: shortData.og || shortData.original || headword, // Default to headword if og omitted
+        headword: headword,
+        ipaUs: ipaUs,
+        // If ipa_uk omitted and pronSim is 'same', clone from ipaUs
+        ipaUk: shortData.ipa_uk || shortData.ipaUk || (pronSim === 'same' ? ipaUs : undefined),
+        pronSim: pronSim,
+        ipaMistakes: shortData.ipa_m || shortData.ipaMistakes || shortData.im,
+        
         meaningVi: shortData.m || shortData.meaningVi,
         register: shortData.reg || shortData.register,
         example: shortData.ex || shortData.example,
@@ -119,28 +126,147 @@ export const normalizeAiResponse = (shortData: any): any => {
         idioms: idiomsList ? idiomsList.map(i => i.text).join('\n') : undefined,
         idiomsList: idiomsList,
         
-        prepositionString: typeof shortData.prep === 'string' ? shortData.prep : (typeof shortData.preposition === 'string' ? shortData.preposition : undefined),
+        prepositionString: typeof shortData.prep === 'string' ? shortData.prep : undefined,
         prepositionsArray: normalizedPrepsArray,
 
-        isIdiom: shortData.is_id ?? shortData.isIdiom,
-        isPhrasalVerb: shortData.is_pv ?? shortData.isPhrasalVerb,
-        isCollocation: shortData.is_col ?? shortData.isCollocation,
-        isStandardPhrase: shortData.is_phr ?? shortData.isStandardPhrase,
-        isIrregular: shortData.is_irr ?? shortData.isIrregular,
-        isPassive: shortData.is_pas ?? shortData.isPassive,
-        needsPronunciationFocus: shortData.is_pron ?? shortData.needsPronunciationFocus,
+        // Use new type classification if available, else fallback to individual is_ flags
+        isIdiom: type ? typeFlags.isIdiom : (shortData.is_id ?? shortData.isIdiom),
+        isPhrasalVerb: type ? typeFlags.isPhrasalVerb : (shortData.is_pv ?? shortData.isPhrasalVerb),
+        isCollocation: type ? typeFlags.isCollocation : (shortData.is_col ?? shortData.isCollocation),
+        isStandardPhrase: type ? typeFlags.isStandardPhrase : (shortData.is_phr ?? shortData.isStandardPhrase),
+        isIrregular: type ? typeFlags.isIrregular : (shortData.is_irr ?? shortData.isIrregular),
         
-        // Tags removed from parsing
-        // tags: shortData.tags, 
-
+        isPassive: shortData.is_pas ?? shortData.isPassive,
+        
         paraphrases: mapPara(shortData.para || shortData.paraphrases),
         wordFamily: shortData.fam ? {
-            nouns: mapFam(shortData.fam.n || shortData.fam.nouns),
-            verbs: mapFam(shortData.fam.v || shortData.fam.verbs),
-            adjs: mapFam(shortData.fam.j || shortData.fam.adjs),
-            advs: mapFam(shortData.fam.adv || shortData.fam.advs)
+            nouns: mapFam(shortData.fam.n || shortData.fam.ns || []),
+            verbs: mapFam(shortData.fam.v || []),
+            adjs: mapFam(shortData.fam.j || []),
+            advs: mapFam(shortData.fam.adv || shortData.fam.d || [])
         } : (shortData.wordFamily || undefined)
     };
+};
+
+/**
+ * Merges AI-generated details into an existing VocabularyItem.
+ */
+export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any): VocabularyItem => {
+    const aiResult = normalizeAiResponse(rawAiResult);
+    if (!aiResult) return baseItem;
+
+    const updatedItem: VocabularyItem = { ...baseItem };
+    
+    // Merge IPA fields
+    updatedItem.ipaUs = aiResult.ipaUs ?? baseItem.ipaUs;
+    updatedItem.ipaUk = aiResult.ipaUk ?? baseItem.ipaUk;
+    updatedItem.pronSim = aiResult.pronSim ?? baseItem.pronSim;
+    updatedItem.ipaMistakes = aiResult.ipaMistakes ?? baseItem.ipaMistakes;
+    
+    updatedItem.meaningVi = aiResult.meaningVi ?? baseItem.meaningVi;
+    updatedItem.register = aiResult.register ?? baseItem.register;
+    
+    // Collocations
+    const existingCollocs: CollocationDetail[] = baseItem.collocationsArray || 
+        (baseItem.collocations ? baseItem.collocations.split('\n').map(t => ({ text: t.trim(), isIgnored: false })).filter(c => c.text) : []);
+    
+    let mergedCollocs: CollocationDetail[] = [...existingCollocs];
+
+    if (aiResult.collocationsArray) {
+        aiResult.collocationsArray.forEach((newColloc: CollocationDetail) => {
+            const existingIndex = mergedCollocs.findIndex(ec => ec.text.toLowerCase() === newColloc.text.toLowerCase());
+            if (existingIndex !== -1) {
+                if (newColloc.d && !mergedCollocs[existingIndex].d) {
+                    mergedCollocs[existingIndex].d = newColloc.d;
+                }
+                if (newColloc.isIgnored) mergedCollocs[existingIndex].isIgnored = true;
+            } else {
+                mergedCollocs.push({ text: newColloc.text, d: newColloc.d, isIgnored: newColloc.isIgnored || false });
+            }
+        });
+    }
+
+    updatedItem.collocationsArray = mergedCollocs;
+    updatedItem.collocations = mergedCollocs.map(c => c.text).join('\n');
+
+    // Idioms
+    const existingIdioms: CollocationDetail[] = baseItem.idiomsList || 
+        (baseItem.idioms ? baseItem.idioms.split('\n').map(t => ({ text: t.trim(), isIgnored: false })).filter(c => c.text) : []);
+    
+    let mergedIdioms: CollocationDetail[] = [...existingIdioms];
+    if (aiResult.idiomsList) {
+         aiResult.idiomsList.forEach((newIdiom: CollocationDetail) => {
+            const existingIndex = mergedIdioms.findIndex(ec => ec.text.toLowerCase() === newIdiom.text.toLowerCase());
+            if (existingIndex !== -1) {
+                if (newIdiom.d && !mergedIdioms[existingIndex].d) {
+                    mergedIdioms[existingIndex].d = newIdiom.d;
+                }
+                 if (newIdiom.isIgnored) mergedIdioms[existingIndex].isIgnored = true;
+            } else {
+                mergedIdioms.push({ text: newIdiom.text, d: newIdiom.d, isIgnored: newIdiom.isIgnored || false });
+            }
+        });
+    }
+
+    updatedItem.idiomsList = mergedIdioms;
+    updatedItem.idioms = mergedIdioms.map(c => c.text).join('\n');
+
+    // Prepositions
+    let finalPrepositions = baseItem.prepositions || [];
+    if (aiResult.prepositionsArray && Array.isArray(aiResult.prepositionsArray) && aiResult.prepositionsArray.length > 0) {
+        const newPreps = aiResult.prepositionsArray as PrepositionPattern[];
+        const merged = [...finalPrepositions];
+        newPreps.forEach(np => {
+            if (np.prep) {
+                const exists = merged.some(ep => ep.prep.toLowerCase() === np.prep.toLowerCase() && ep.usage.toLowerCase() === np.usage.toLowerCase());
+                if (!exists) merged.push({ ...np, isIgnored: np.isIgnored || false });
+            }
+        });
+        finalPrepositions = merged;
+    } 
+    updatedItem.prepositions = finalPrepositions.length > 0 ? finalPrepositions : undefined;
+
+    // Word Family
+    if (aiResult.wordFamily) {
+        updatedItem.wordFamily = aiResult.wordFamily;
+    }
+
+    // Paraphrases
+    if (aiResult.paraphrases && Array.isArray(aiResult.paraphrases)) {
+        const existingPara = baseItem.paraphrases || [];
+        const newPara = aiResult.paraphrases as ParaphraseOption[];
+        const combined = [...existingPara];
+        newPara.forEach(np => {
+            if (!combined.some(cp => cp.word.toLowerCase() === np.word.toLowerCase())) {
+                combined.push(np);
+            }
+        });
+        updatedItem.paraphrases = combined;
+    }
+    
+    if (aiResult.example) {
+        let finalExample = baseItem.example || '';
+        if (!finalExample.toLowerCase().includes(aiResult.example.toLowerCase())) {
+            finalExample = finalExample.trim() ? `${finalExample}\n${aiResult.example}` : aiResult.example;
+        }
+        updatedItem.example = finalExample;
+    }
+
+    updatedItem.isIdiom = aiResult.isIdiom !== undefined ? !!aiResult.isIdiom : baseItem.isIdiom;
+    updatedItem.isPhrasalVerb = aiResult.isPhrasalVerb !== undefined ? !!aiResult.isPhrasalVerb : baseItem.isPhrasalVerb;
+    updatedItem.isCollocation = aiResult.isCollocation !== undefined ? !!aiResult.isCollocation : baseItem.isCollocation;
+    updatedItem.isStandardPhrase = aiResult.isStandardPhrase !== undefined ? !!aiResult.isStandardPhrase : baseItem.isStandardPhrase;
+    updatedItem.isIrregular = aiResult.isIrregular !== undefined ? !!aiResult.isIrregular : baseItem.isIrregular;
+    updatedItem.isPassive = aiResult.isPassive !== undefined ? !!aiResult.isPassive : baseItem.isPassive;
+    
+    updatedItem.quality = WordQuality.REFINED;
+    
+    updatedItem.complexity = calculateComplexity(updatedItem);
+    updatedItem.masteryScore = calculateMasteryScore(updatedItem);
+    updatedItem.gameEligibility = calculateGameEligibility(updatedItem);
+    updatedItem.updatedAt = Date.now();
+    
+    return updatedItem;
 };
 
 /**
@@ -206,188 +332,4 @@ export const parsePrepositionPatterns = (prepositionStr: string | null | undefin
     });
     
     return results.length > 0 ? results : undefined;
-};
-
-/**
- * Merges AI-generated details into an existing VocabularyItem.
- */
-export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any): VocabularyItem => {
-    const aiResult = normalizeAiResponse(rawAiResult);
-    if (!aiResult) return baseItem;
-
-    const updatedItem: VocabularyItem = { ...baseItem };
-    
-    // Merge IPA fields
-    updatedItem.ipaUs = aiResult.ipaUs ?? baseItem.ipaUs;
-    updatedItem.ipaUk = aiResult.ipaUk ?? baseItem.ipaUk;
-    
-    updatedItem.pronSim = aiResult.pronSim ?? baseItem.pronSim;
-    updatedItem.ipaMistakes = aiResult.ipaMistakes ?? baseItem.ipaMistakes;
-    updatedItem.meaningVi = aiResult.meaningVi ?? baseItem.meaningVi;
-    updatedItem.register = aiResult.register ?? baseItem.register;
-    
-    const mergeStringArray = (currentList: CollocationDetail[] | undefined, incoming: any, legacyString?: string) => {
-        const existing = currentList || 
-            (legacyString ? legacyString.split('\n').map(t => ({ text: t.trim(), isIgnored: false })).filter(c => c.text) : []);
-        
-        let merged = [...existing];
-        let newTexts: string[] = [];
-        
-        if (Array.isArray(incoming)) {
-            newTexts = incoming.filter((c: any) => typeof c === 'string' && c.trim());
-        } else if (typeof incoming === 'string') {
-            newTexts = incoming.split(/\n|;/).map((c: string) => c.trim()).filter(Boolean);
-        }
-
-        if (newTexts.length > 0) {
-            newTexts.forEach((newText: string) => {
-                const exists = merged.some(ec => ec.text.toLowerCase() === newText.toLowerCase());
-                if (!exists) {
-                    merged.push({ text: newText, isIgnored: false });
-                }
-            });
-        }
-        return merged;
-    };
-
-    // Collocations
-    const existingCollocs: CollocationDetail[] = baseItem.collocationsArray || 
-        (baseItem.collocations ? baseItem.collocations.split('\n').map(t => ({ text: t.trim(), isIgnored: false })).filter(c => c.text) : []);
-    
-    let mergedCollocs: CollocationDetail[] = [...existingCollocs];
-
-    if (aiResult.collocationsArray) {
-        aiResult.collocationsArray.forEach((newColloc: CollocationDetail) => {
-            const existingIndex = mergedCollocs.findIndex(ec => ec.text.toLowerCase() === newColloc.text.toLowerCase());
-            if (existingIndex !== -1) {
-                if (newColloc.d && !mergedCollocs[existingIndex].d) {
-                    mergedCollocs[existingIndex].d = newColloc.d;
-                }
-                // Preserve local isIgnored state unless specifically overwritten by a true value in AI result (unlikely but safe)
-                if (newColloc.isIgnored) mergedCollocs[existingIndex].isIgnored = true;
-            } else {
-                mergedCollocs.push({ text: newColloc.text, d: newColloc.d, isIgnored: newColloc.isIgnored || false });
-            }
-        });
-    } else if (aiResult.collocations) { // fallback for string-only
-        const newTexts = aiResult.collocations.split(/\n|;/).map((c: string) => c.trim()).filter(Boolean);
-        newTexts.forEach((newText: string) => {
-            if (!mergedCollocs.some(ec => ec.text.toLowerCase() === newText.toLowerCase())) {
-                mergedCollocs.push({ text: newText, isIgnored: false });
-            }
-        });
-    }
-
-    updatedItem.collocationsArray = mergedCollocs;
-    updatedItem.collocations = mergedCollocs.map(c => c.text).join('\n');
-
-    // Idioms
-    // Logic for idioms is simpler in old code, let's align it with robust object handling
-    const existingIdioms: CollocationDetail[] = baseItem.idiomsList || 
-        (baseItem.idioms ? baseItem.idioms.split('\n').map(t => ({ text: t.trim(), isIgnored: false })).filter(c => c.text) : []);
-    
-    let mergedIdioms: CollocationDetail[] = [...existingIdioms];
-    if (aiResult.idiomsList) {
-         aiResult.idiomsList.forEach((newIdiom: CollocationDetail) => {
-            const existingIndex = mergedIdioms.findIndex(ec => ec.text.toLowerCase() === newIdiom.text.toLowerCase());
-            if (existingIndex !== -1) {
-                if (newIdiom.d && !mergedIdioms[existingIndex].d) {
-                    mergedIdioms[existingIndex].d = newIdiom.d;
-                }
-                 if (newIdiom.isIgnored) mergedIdioms[existingIndex].isIgnored = true;
-            } else {
-                mergedIdioms.push({ text: newIdiom.text, d: newIdiom.d, isIgnored: newIdiom.isIgnored || false });
-            }
-        });
-    } else if (aiResult.idioms) {
-        const newTexts = aiResult.idioms.split(/\n|;/).map((c: string) => c.trim()).filter(Boolean);
-        newTexts.forEach((newText: string) => {
-             if (!mergedIdioms.some(ec => ec.text.toLowerCase() === newText.toLowerCase())) {
-                mergedIdioms.push({ text: newText, isIgnored: false });
-            }
-        });
-    }
-
-    updatedItem.idiomsList = mergedIdioms;
-    updatedItem.idioms = mergedIdioms.map(c => c.text).join('\n');
-
-    // Prepositions
-    let finalPrepositions = baseItem.prepositions || [];
-    
-    if (aiResult.prepositionsArray && Array.isArray(aiResult.prepositionsArray) && aiResult.prepositionsArray.length > 0) {
-        const newPreps = aiResult.prepositionsArray as PrepositionPattern[];
-        const merged = [...finalPrepositions];
-        newPreps.forEach(np => {
-            if (np.prep) {
-                const exists = merged.some(ep => ep.prep.toLowerCase() === np.prep.toLowerCase() && ep.usage.toLowerCase() === np.usage.toLowerCase());
-                if (!exists) merged.push({ ...np, isIgnored: np.isIgnored || false });
-            }
-        });
-        finalPrepositions = merged;
-    } 
-    else if (aiResult.prepositionString && typeof aiResult.prepositionString === 'string') {
-        const newPreps = parsePrepositionPatterns(aiResult.prepositionString);
-        if (newPreps) {
-            const merged = [...finalPrepositions];
-            newPreps.forEach(np => {
-                const exists = merged.some(ep => ep.prep === np.prep && ep.usage === np.usage);
-                if (!exists) merged.push(np);
-            });
-            finalPrepositions = merged;
-        }
-    }
-    updatedItem.prepositions = finalPrepositions.length > 0 ? finalPrepositions : undefined;
-
-    // Word Family
-    if (aiResult.wordFamily) {
-        if (aiResult.wordFamily.advs) {
-            aiResult.wordFamily.advs = aiResult.wordFamily.advs.map((adv: WordFamilyMember) => ({
-                ...adv,
-                isIgnored: adv.isIgnored !== undefined ? adv.isIgnored : true, // Default to ignored if not specified
-            }));
-        }
-        updatedItem.wordFamily = aiResult.wordFamily;
-    } else {
-        updatedItem.wordFamily = baseItem.wordFamily;
-    }
-
-    // Paraphrases
-    if (aiResult.paraphrases && Array.isArray(aiResult.paraphrases)) {
-        const existingPara = baseItem.paraphrases || [];
-        const newPara = aiResult.paraphrases as ParaphraseOption[];
-        const combined = [...existingPara];
-        
-        newPara.forEach(np => {
-            if (!combined.some(cp => cp.word.toLowerCase() === np.word.toLowerCase())) {
-                combined.push(np);
-            }
-        });
-        updatedItem.paraphrases = combined;
-    }
-    
-    let finalExample = baseItem.example || '';
-    if (aiResult.example && !finalExample.toLowerCase().includes(aiResult.example.toLowerCase())) {
-        finalExample = finalExample.trim() ? `${finalExample}\n${aiResult.example}` : aiResult.example;
-    }
-    updatedItem.example = finalExample;
-
-    // Tags removed from AI result merging since we deleted the field
-
-    updatedItem.isIdiom = aiResult.isIdiom !== undefined ? !!aiResult.isIdiom : baseItem.isIdiom;
-    updatedItem.isPhrasalVerb = aiResult.isPhrasalVerb !== undefined ? !!aiResult.isPhrasalVerb : baseItem.isPhrasalVerb;
-    updatedItem.isCollocation = aiResult.isCollocation !== undefined ? !!aiResult.isCollocation : baseItem.isCollocation;
-    updatedItem.isStandardPhrase = aiResult.isStandardPhrase !== undefined ? !!aiResult.isStandardPhrase : baseItem.isStandardPhrase;
-    updatedItem.isIrregular = aiResult.isIrregular !== undefined ? !!aiResult.isIrregular : baseItem.isIrregular;
-    updatedItem.isPassive = aiResult.isPassive !== undefined ? !!aiResult.isPassive : baseItem.isPassive;
-    
-    updatedItem.quality = WordQuality.REFINED;
-    updatedItem.needsPronunciationFocus = aiResult.needsPronunciationFocus ?? baseItem.needsPronunciationFocus;
-    
-    // RECALCULATE CRITICAL METRICS
-    updatedItem.complexity = calculateComplexity(updatedItem);
-    updatedItem.masteryScore = calculateMasteryScore(updatedItem);
-    updatedItem.gameEligibility = calculateGameEligibility(updatedItem);
-    updatedItem.updatedAt = Date.now();
-    
-    return updatedItem;
 };

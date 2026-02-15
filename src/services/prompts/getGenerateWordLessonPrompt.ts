@@ -1,11 +1,7 @@
-
 import { VocabularyItem, LessonPreferences } from '../../app/types';
 
-export function getGenerateWordLessonPrompt(word: VocabularyItem, prefs: LessonPreferences, coachName: string): string {
+export function getGenerateWordLessonEssayPrompt(word: VocabularyItem, prefs: LessonPreferences, coachName?: string): string {
   const language = prefs.language || 'English';
-  const format = (prefs as any).format || 'reading';
-  const isListeningMode = format === 'listening';
-  const explanationAudioTag = language === 'Vietnamese' ? '[Audio-VN]' : '[Audio-EN]';
 
   const wordDetails = {
     word: word.word,
@@ -17,68 +13,77 @@ export function getGenerateWordLessonPrompt(word: VocabularyItem, prefs: LessonP
     prepositions: word.prepositions?.filter(p => !p.isIgnored)
   };
 
-  const styleInstruction = isListeningMode 
-    ? `STYLE: NATURAL SPOKEN AUDIO SCRIPT
-       - Structure the content as a natural spoken narrative or conversation.
-       - **EVERY SENTENCE** must be wrapped in audio tags.
-       - **AUDIO STRATEGY (CRITICAL)**: 
-         1. **NO MIXED LANGUAGES**: Do NOT put English words inside ${explanationAudioTag} tags. Split them out into [Audio-EN] tags.
-            - ❌ Bad: ${explanationAudioTag}Từ hello nghĩa là xin chào[/]
-            - ✅ Good: ${explanationAudioTag}Từ[/] [Audio-EN]hello[/] ${explanationAudioTag}nghĩa là xin chào[/]
-       - No Markdown headers (###). Use transitional phrases instead.`
-    : `STYLE: COMPACT RICH TEXTBOOK (READING)
-       - **COMPACT FORMAT**: Minimize vertical space. **NO double newlines (\n\n)**. **NO horizontal rules (---)**.
-       - Structure the content with Markdown Headers (###) for sections.
-       - **RICH ELEMENTS**: 
-         1. **TABLES**: Use Markdown Tables strictly for **comparing data** (e.g. Columns: Phrase | Nuance | Context) or **System Maps**. ❌ **PROHIBITED**: Do NOT use tables to enumerate words without contrast or explanation per cell.
-         2. Use **[Tip: ...]** blocks for pronunciation tips or common mistakes.
-         3. Use **[HIDDEN: ...]** tags ONLY for **Interactive Q&A**. 
-            - **RULE**: The QUESTION must be visible OUTSIDE the tag. Only the ANSWER is inside.
-            - Format: "Question? [HIDDEN: Answer]"
-         4. Use **[Formula: Part | Part]** for grammar patterns. 
-            - Format: "[Formula: Subject | Verb | Object]".
-         5. Use **Emojis** liberally to make sections distinct.
-       - **VISUALS**: Use Blockquotes (>) for ALL example sentences. Never use nested bullets.`;
-
-  return `You are expert IELTS Coach '${coachName}'.
+  return `You are an expert IELTS coach${coachName ? ` named '${coachName}'` : ''}. 
   
-  TASK: Generate a high-quality ${isListeningMode ? 'AUDIO SCRIPT' : 'READING'} lesson for the word: "${word.word}".
+  TASK: Generate a highly structured "Usage Guide" for the word: "${word.word}".
   
   DATA: ${JSON.stringify(wordDetails)}
 
-  PEDAGOGICAL FLOW:
-  1. **TEACHING**: Teach the word's family, collocations, and nuances.
-  2. **SUMMARY**: End with a **System Map** or **Comparison Matrix** (Table) to summarize the word's ecosystem (e.g., Collocation types vs Tones).
+  INSTRUCTIONS:
+  1. Create 5 distinct sections, each containing a Markdown Table:
+     - **Prepositions**
+     - **Word Family**
+     - **Collocations**
+     - **Variations (Paraphrases)**
+     - **Idioms**
   
-  CRITICAL FORMATTING RULES:
-  1. **NO META LABELS**: DO NOT use labels like "Nuance:", "Scenario Change:", "Context:", "Meaning:", "Definition:", or "Phase 1".
-  2. **NATURAL WRITING**: Weave the nuance and context *into* the sentence. 
-     - ❌ Bad: "Nuance: Used for formal events."
-     - ✅ Good: "This phrase is specifically reserved for formal events..."
-  3. **HEADERS**: Use standard Markdown headers (###) for content topics.
+  2. Each table MUST have exactly these 3 columns:
+     - **Word**: The specific form, collocation, or phrase.
+     - **Context**: A brief explanation of *when* or *how* to use it (nuance, tone, or grammatical rule).
+     - **Examples**: EXACTLY one high-quality, natural example sentence using that specific item.
 
-  ${styleInstruction}
+  3. CONSTRAINTS:
+     - Use ONLY Markdown tables for the usage data.
+     - You MUST provide at least 1 example for every single item listed in the tables.
+     - Keep the "Context" column concise (max 15 words).
+     - If no data exists for a category (e.g., no idioms), you may skip that section or note it as "No common idioms".
+     - All instructional text and headers should be in ${language}. All material/examples in English.
 
-  STRICT RULES:
-  1. **NO SIMPLE LISTS**: Do not just list the data. Teach it with context and nuance.
-  2. **EXAMPLE MANDATE**: Every key term MUST have an example sentence.
-  3. **NO QUIZZES**: Do NOT generate [Select:], [Quiz:], or [Multi:] tags. This content is for explanation only.
-  4. **TAGS**: Select tags ONLY from: ["Grammar", "Pattern", "Speaking", "Listening", "Reading", "writing", "General", "Comparison", "Vocabulary"].
-  5. **QUANTITY**: Return EXACTLY ONE tag. Choose the most primary skill only.
-
-  CRITICAL OUTPUT RULES:
-  1. **MARKDOWN CODE BLOCK**: You MUST wrap your entire JSON response in a markdown code block (e.g. \`\`\`json { ... } \`\`\`).
-  2. **VALID JSON**: The content inside the code block must be valid, parsable JSON.
-  3. **NO RAW NEWLINES IN STRINGS**: Inside the "content" string, you MUST use literal '\\n' for line breaks. Do NOT use actual newline characters.
-  4. **ESCAPE CHARACTERS**: Properly escape all double quotes and backslashes within strings.
-
-  OUTPUT TEMPLATE:
-  \`\`\`json
+  Return a JSON object:
   {
-    "title": "Mastering: ${word.word}",
-    "description": "string (Strategic usage overview)",
-    "content": "string (Markdown formatted with \\n for newlines)",
-    "tags": ["Vocabulary"]
+    "content": "string (Markdown formatted with headers and tables, use \\n for newlines)"
+  }`;
+}
+
+export function getGenerateWordLessonTestPrompt(word: VocabularyItem, prefs: LessonPreferences, coachName?: string): string {
+    const language = prefs.language || 'English';
+    const wordDetails = {
+      word: word.word,
+      meaning: word.meaningVi,
+      collocations: word.collocationsArray?.filter(c => !c.isIgnored).map(c => ({ text: c.text, hint: c.d })),
+      idioms: word.idiomsList?.filter(i => !i.isIgnored).map(i => ({ text: i.text, hint: i.d })),
+      paraphrases: word.paraphrases?.filter(p => !p.isIgnored).map(p => ({ word: p.word, tone: p.tone, context: p.context }))
+    };
+
+    return `You are an expert IELTS examiner${coachName ? ` working with coach '${coachName}'` : ''}. Design an interactive PRACTICE TEST for: "${word.word}".
+    
+    DATA: ${JSON.stringify(wordDetails)}
+
+    AVAILABLE TAGS:
+    - [Select: Correct | Wrong 1 | Wrong 2] (Dropdown)
+    - [Multi: Correct | Option 2 | Option 3] (Multiple Choice Buttons)
+    - [Quiz: Answer] (Fill-in)
+
+    TASK:
+    Generate 5-8 questions covering:
+    1. Nuanced collocation choice.
+    2. Meaning selection.
+    3. Sentence completion with correct word forms.
+    4. Synonym selection for specific contexts.
+
+    LANGUAGE: Instructions in ${language}, questions in English.
+
+    Return a JSON object:
+    {
+      "content": "string (Markdown with interactive tags)"
+    }`;
+}
+
+/* Added unified function expected by templates */
+export function getGenerateWordLessonPrompt(word: VocabularyItem, prefs: any, coachName: string): string {
+  const format = prefs.format || 'reading';
+  if (format === 'test') {
+      return getGenerateWordLessonTestPrompt(word, prefs, coachName);
   }
-  \`\`\``;
+  return getGenerateWordLessonEssayPrompt(word, prefs, coachName);
 }

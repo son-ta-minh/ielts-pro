@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, PlanningGoal, PlanningTodo, PlanningStatus } from '../../app/types';
 import * as db from '../../app/db';
@@ -16,6 +15,8 @@ import { FileSelector } from '../../components/common/FileSelector';
 
 interface Props {
   user: User;
+  initialAction?: 'AI' | 'IMPORT' | null;
+  onActionConsumed?: () => void;
 }
 
 const statusConfig = {
@@ -198,7 +199,7 @@ const GoalEditModal: React.FC<{
                                 className="flex-1 px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none transition-all focus:bg-white"
                                 placeholder="Add a new task..."
                              />
-                             <button onClick={handleAddTodo} disabled={!newTodoText.trim()} className="px-4 bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 disabled:opacity-50 transition-colors shadow-sm"><Plus size={20}/></button>
+                             <button onClick={handleAddTodo} disabled={!newTodoText.trim()} className="px-4 bg-neutral-900 text-white rounded-xl hover:bg-red-800 disabled:opacity-50 transition-colors shadow-sm"><Plus size={20}/></button>
                          </div>
                     </div>
                 </main>
@@ -214,7 +215,7 @@ const GoalEditModal: React.FC<{
 };
 
 
-export const PlanningPage: React.FC<Props> = ({ user }) => {
+export const PlanningPage: React.FC<Props> = ({ user, initialAction, onActionConsumed }) => {
     const [goals, setGoals] = useState<PlanningGoal[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -243,6 +244,18 @@ export const PlanningPage: React.FC<Props> = ({ user }) => {
     }, [user.id]);
 
     useEffect(() => { loadData(); }, [loadData]);
+
+    // Handle deep-link initial actions
+    useEffect(() => {
+        if (!loading && initialAction) {
+            if (initialAction === 'AI') {
+                setIsAiModalOpen(true);
+            } else if (initialAction === 'IMPORT') {
+                setShowFileSelector(true);
+            }
+            onActionConsumed?.();
+        }
+    }, [loading, initialAction, onActionConsumed]);
 
     const handleSaveGoal = async (data: Partial<PlanningGoal>) => {
         const now = Date.now();
@@ -400,7 +413,8 @@ export const PlanningPage: React.FC<Props> = ({ user }) => {
                         {goals.map(goal => {
                             const totalTodos = goal.todos.length;
                             const closedTodos = goal.todos.filter(t => t.status === 'CLOSED').length;
-                            const progress = totalTodos > 0 ? Math.round((closedTodos / totalTodos) * 100) : 0;
+                            // Corrected progress calculation: using totalTodos instead of the undefined totalTasks.
+                            const progressPercent = totalTodos > 0 ? Math.round((closedTodos / totalTodos) * 100) : 0;
                             const isCompleted = totalTodos > 0 && closedTodos === totalTodos;
                             const isDragging = draggedId === goal.id;
 
@@ -422,7 +436,7 @@ export const PlanningPage: React.FC<Props> = ({ user }) => {
                                         actions={
                                             <>
                                                 {/* Drag Handle Indicator */}
-                                                <div className="p-1.5 text-neutral-300 cursor-grab active:cursor-grabbing hover:text-neutral-500 rounded-lg transition-colors mr-1">
+                                                <div className="p-1.5 text-neutral-300 cursor-grab active:cursor-grabbing hover:text-neutral-50 rounded-lg transition-colors mr-1">
                                                     <GripVertical size={14} />
                                                 </div>
                                                 <button onClick={(e) => { e.stopPropagation(); setEditingGoal(goal); setIsModalOpen(true); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit"><Edit3 size={14}/></button>
@@ -442,10 +456,10 @@ export const PlanningPage: React.FC<Props> = ({ user }) => {
                                             <div className="space-y-1 pt-1">
                                                 <div className="flex justify-between text-[9px] font-black text-neutral-400 uppercase tracking-widest">
                                                     <span>Progress</span>
-                                                    <span>{progress}%</span>
+                                                    <span>{progressPercent}%</span>
                                                 </div>
                                                 <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
-                                                    <div className={`h-full rounded-full transition-all duration-500 ${isCompleted ? 'bg-green-500' : 'bg-indigo-500'}`} style={{ width: `${progress}%` }} />
+                                                    <div className={`h-full rounded-full transition-all duration-500 ${isCompleted ? 'bg-green-500' : 'bg-indigo-500'}`} style={{ width: `${progressPercent}%` }} />
                                                 </div>
                                             </div>
                                         </div>

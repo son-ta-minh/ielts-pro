@@ -45,13 +45,14 @@ interface AppLayoutProps {
 const navItems = [
   { id: 'DASHBOARD', view: 'DASHBOARD', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Mobile%20Phone.png", label: 'Dashboard' },
   { id: 'BROWSE', view: 'BROWSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png", label: 'Library' },
-  { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Lesson' },
   { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },
+  { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Lesson' },
   { id: 'LISTENING', view: 'LISTENING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Headphone.png", label: 'Listening' },
   { id: 'SPEAKING', view: 'SPEAKING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png", label: 'Speaking' },
   { id: 'WRITING', view: 'WRITING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png", label: 'Writing' }
 ] as const;
 
+// Fix: Corrected multiple declarations of Sidebar component. Only one declaration should exist.
 const Sidebar: React.FC<AppLayoutProps & { 
     onNavigate: (view: AppView, action?: () => void) => void;
     onLogoutRequest: () => void;
@@ -145,7 +146,7 @@ const Sidebar: React.FC<AppLayoutProps & {
                     className={`p-2 rounded-xl transition-all active:scale-90 border animate-in fade-in relative ${hasUnsavedChanges && !nextAutoBackupTime ? 'bg-orange-50 border-orange-200 shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'bg-neutral-50 border-neutral-100 hover:bg-neutral-100'}`} 
                     title={syncTooltip}
                 >
-                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-6 h-6 object-contain" />
+                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-3 h-3 object-contain" />
                     {hasUnsavedChanges && (
                         <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-50' : 'bg-orange-500 animate-ping'}`}></span>
                     )}
@@ -250,7 +251,9 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     autoRestoreCandidates,
     handleNewUserSetup,
     handleLocalRestoreSetup,
-    handleSwitchUser
+    handleSwitchUser,
+    planningAction,
+    consumePlanningAction
   } = controller;
 
   if (!currentUser) return null;
@@ -281,13 +284,18 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
           isWotdComposed={isWotdComposed}
           onComposeWotd={handleComposeWithWord}
           onRandomizeWotd={randomizeWotd}
-          serverStatus={serverStatus} 
+          serverStatus={serverStatus}
+          onAction={(action) => {
+              if (action === 'PLAN_AI' || action === 'PLAN_IMPORT') {
+                   controller.handleSpecialAction(action);
+              }
+          }}
         />
       );
     case 'WORDBOOK':
       return <WordBookPage user={currentUser} />;
     case 'PLANNING':
-        return <PlanningPage user={currentUser} />;
+        return <PlanningPage user={currentUser} initialAction={planningAction} onActionConsumed={consumePlanningAction} />;
     case 'REVIEW':
       return sessionWords && sessionType ? (
         <ReviewSession
@@ -323,6 +331,8 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
             onExit={() => setView('DASHBOARD')} 
             onNavigate={setView}
             onUpdateUser={handleUpdateUser} 
+            initialLessonId={controller.targetLessonId}
+            onConsumeLessonId={controller.consumeTargetLessonId}
         />;
     case 'UNIT_LIBRARY':
         return <ReadingUnitPage user={currentUser} onStartSession={(words) => startSession(words, 'new_study')} onUpdateUser={handleUpdateUser} />;
@@ -371,13 +381,27 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
     }
   };
 
-  const handleSpecialAction = (action: string) => {
+  const handleSpecialAction = (action: string, params?: any) => {
       switch(action) {
           case 'REVIEW':
               startDueReviewSession();
               break;
           case 'BROWSE': 
               startNewLearnSession();
+              break;
+          case 'LESSON':
+              if (params && params.lessonId) {
+                  controller.setTargetLessonId(params.lessonId);
+              }
+              handleNavigation('LESSON');
+              break;
+          case 'PLAN_AI':
+              controller.setPlanningAction('AI');
+              handleNavigation('PLANNING');
+              break;
+          case 'PLAN_IMPORT':
+              controller.setPlanningAction('IMPORT');
+              handleNavigation('PLANNING');
               break;
           default:
              handleNavigation(action as AppView);

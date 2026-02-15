@@ -1,4 +1,3 @@
-
 import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
@@ -18,7 +17,7 @@ let _currentUserId: string | null = null; // Track user ID for backups
 
 let _statsCache: any = {
     reviewCounts: { total: 0, due: 0, new: 0, learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 },
-    dashboardStats: { categories: { 'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 }, 'pronun': { total: 0, learned: 0 } }, refinedCount: 0, rawCount: 0 },
+    dashboardStats: { categories: { 'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 } }, refinedCount: 0, rawCount: 0 },
     dayProgress: { learned: 0, reviewed: 0, learnedWords: [], reviewedWords: [] }
 };
 
@@ -118,7 +117,7 @@ function _recalculateStats(userId: string) {
     const rawCount = activeWords.filter(w => w.quality === WordQuality.RAW).length;
 
     const categories: Record<string, { total: number; learned: number }> = {
-      'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 }, 'pronun': { total: 0, learned: 0 }
+      'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 }
     };
 
     activeWords.forEach(w => {
@@ -128,7 +127,6 @@ function _recalculateStats(userId: string) {
         if (w.isPhrasalVerb) inc('phrasal');
         if (w.isCollocation) inc('colloc');
         if (w.isStandardPhrase) inc('phrase');
-        if (w.needsPronunciationFocus) inc('pronun');
         if (w.prepositions && w.prepositions.length > 0 && !w.isPhrasalVerb) inc('preposition');
         if (!w.isIdiom && !w.isPhrasalVerb && !w.isCollocation && !w.isStandardPhrase) inc('vocab');
     });
@@ -248,6 +246,12 @@ export async function init(userId: string) {
             if (legacyIpa && word.ipaUs) {
                 // Just remove legacy property if duplicate
                 delete (word as any).ipa;
+                changed = true;
+            }
+
+            // REMOVAL: needsPronunciationFocus
+            if ((word as any).needsPronunciationFocus !== undefined) {
+                delete (word as any).needsPronunciationFocus;
                 changed = true;
             }
 

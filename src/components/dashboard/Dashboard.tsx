@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppView, User, VocabularyItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
+import * as db from '../../app/db';
 import { DashboardUI, DashboardUIProps } from './Dashboard_UI';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 // Removed ConfirmationModal import as it is no longer used for restore
@@ -34,20 +34,39 @@ interface Props {
   // Actions passed from controller to handle actual backup logic
   onLocalBackup: () => void;
   onServerBackup?: () => Promise<void>;
+  onAction?: (action: string) => void;
 }
 
 const Dashboard: React.FC<Props> = ({ 
     userId, totalCount, user, xpToNextLevel, wotd, onViewWotd, serverStatus, 
     restoreFromServerAction, triggerLocalRestore,
     onLocalBackup, onServerBackup,
+    onAction,
     ...restProps 
 }) => {
   const [rawCount, setRawCount] = useState(0);
   const [refinedCount, setRefinedCount] = useState(0);
   const [dayProgress, setDayProgress] = useState({ learned: 0, reviewed: 0, learnedWords: [], reviewedWords: [] });
   const [reviewStats, setReviewStats] = useState({ learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 });
+  const [goalStats, setGoalStats] = useState({ totalTasks: 0, completedTasks: 0 });
+  
   const dailyGoals = getConfig().dailyGoals;
   
+  const fetchGoalStats = async () => {
+    try {
+      const goals = await db.getPlanningGoalsByUserId(userId);
+      let total = 0;
+      let completed = 0;
+      goals.forEach(g => {
+        total += (g.todos?.length || 0);
+        completed += (g.todos?.filter(t => t.status === 'CLOSED').length || 0);
+      });
+      setGoalStats({ totalTasks: total, completedTasks: completed });
+    } catch (e) {
+      console.warn("Failed to fetch goal stats", e);
+    }
+  };
+
   useEffect(() => {
     const fetchDashboardStats = async () => {
       const stats = dataStore.getStats();
@@ -74,12 +93,20 @@ const Dashboard: React.FC<Props> = ({
         });
       }
     };
-    if (userId) fetchDashboardStats();
+    if (userId) {
+      fetchDashboardStats();
+      fetchGoalStats();
+    }
 
     // Listen for updates from the data store
-    window.addEventListener('datastore-updated', fetchDashboardStats);
+    const handleUpdate = () => {
+      fetchDashboardStats();
+      fetchGoalStats();
+    };
+
+    window.addEventListener('datastore-updated', handleUpdate);
     return () => {
-      window.removeEventListener('datastore-updated', fetchDashboardStats);
+      window.removeEventListener('datastore-updated', handleUpdate);
     };
   }, [userId, totalCount]);
   
@@ -113,8 +140,7 @@ const Dashboard: React.FC<Props> = ({
     rawCount,
     refinedCount,
     reviewStats,
-    wotd,
-    onViewWotd,
+    goalStats,
     setView: restProps.setView,
     onNavigateToWordList: restProps.onNavigateToWordList,
     onStartDueReview: restProps.onStartDueReview,
@@ -124,10 +150,8 @@ const Dashboard: React.FC<Props> = ({
     onRestore: handleRestoreClick,
     dayProgress,
     dailyGoals,
-    isWotdComposed: restProps.isWotdComposed,
-    onComposeWotd: restProps.onComposeWotd,
-    onRandomizeWotd: restProps.onRandomizeWotd,
     serverStatus,
+    onAction: onAction
   };
   
   return (

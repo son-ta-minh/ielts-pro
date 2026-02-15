@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useReducer } from 'react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, PrepositionPattern, User } from '../../app/types';
 import { updateSRS, resetProgress, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
@@ -15,12 +14,14 @@ type FormState = VocabularyItem & {
     groupsString: string;
     studiedStatus: ReviewGrade | 'NEW';
     prepositionsList: PrepositionPattern[];
+    essayEdit?: string;
+    testEdit?: string;
 };
 
 type FormAction =
     | { type: 'REINITIALIZE', payload: VocabularyItem }
     | { type: 'SET_FIELD', payload: { field: keyof FormState, value: any } }
-    | { type: 'SET_FLAG', payload: { flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'needsPronunciationFocus' | 'isPassive' } }
+    | { type: 'SET_FLAG', payload: { flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' } }
     | { type: 'SET_LIST_ITEM', payload: { list: 'wordFamily' | 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases', data: any } }
     | { type: 'APPLY_AI_MERGE', payload: any };
 
@@ -38,6 +39,8 @@ function formReducer(state: FormState, action: FormAction): FormState {
                 prepositionsList: word.prepositions || [],
                 wordFamily: word.wordFamily || { nouns: [], verbs: [], adjs: [], advs: [] },
                 paraphrases: word.paraphrases || [],
+                essayEdit: word.lesson?.essay || '',
+                testEdit: word.lesson?.test || '',
             };
         case 'SET_FIELD':
             return { ...state, [action.payload.field]: action.payload.value };
@@ -135,7 +138,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
 
   const handleSubmit = (e?: React.FormEvent) => {
     if(e) e.preventDefault();
-    const { groupsString, studiedStatus, collocationsArray, idiomsList, prepositionsList, ...rest } = formData;
+    const { groupsString, studiedStatus, collocationsArray, idiomsList, prepositionsList, essayEdit, testEdit, ...rest } = formData;
     
     let finalFamily = rest.wordFamily;
     if (finalFamily) {
@@ -152,12 +155,14 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         collocations: collocationsArray.filter(c => c.text.trim()).map(c => c.text).join('\n'),
         idiomsList: idiomsList.filter(c => c.text.trim()),
         idioms: idiomsList.filter(c => c.text.trim()).map(c => c.text).join('\n'),
-        // tags removed
+        lesson: {
+          essay: essayEdit,
+          test: testEdit
+        },
         groups: groupsString.split(',').map(g => g.trim()).filter(Boolean),
         updatedAt: Date.now() 
     };
     
-    // --- SANITIZE lastTestResults ---
     const finalResults = { ...(updatedWord.lastTestResults || {}) };
     const validCollocs = new Set((updatedWord.collocationsArray || []).filter(c => !c.isIgnored).map(c => c.text.toLowerCase()));
     const validIdioms = new Set((updatedWord.idiomsList || []).filter(i => !i.isIgnored).map(i => i.text.toLowerCase()));
@@ -187,7 +192,6 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         if (shouldDelete) delete finalResults[key];
     }
     updatedWord.lastTestResults = finalResults;
-    // --- END SANITIZATION ---
 
     const originalStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
 
@@ -198,7 +202,6 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
             updatedWord = updateSRS(updatedWord, studiedStatus as ReviewGrade);
         }
     } else {
-        // Even if status didn't change, recalculate because content might have changed
         updatedWord.complexity = calculateComplexity(updatedWord);
         updatedWord.masteryScore = calculateMasteryScore(updatedWord);
         updatedWord.gameEligibility = calculateGameEligibility(updatedWord);
@@ -222,7 +225,6 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
       const currentFamily = formData.wordFamily || { nouns: [], verbs: [], adjs: [], advs: [] };
       const updateFamily = (newFamilyMembers: Partial<typeof currentFamily>) => dispatch({ type: 'SET_LIST_ITEM', payload: { list: 'wordFamily', data: { ...currentFamily, ...newFamilyMembers } } });
       return {
-          // ipa field removed from update signature
           update: (index: number, field: 'word', value: string) => { const members = [...(currentFamily[type] || [])]; members[index] = { ...members[index], [field]: value }; updateFamily({ [type]: members }); },
           toggleIgnore: (index: number) => { const members = [...(currentFamily[type] || [])]; members[index] = { ...members[index], isIgnored: !members[index].isIgnored }; updateFamily({ [type]: members }); },
           remove: (index: number) => { updateFamily({ [type]: (currentFamily[type] || []).filter((_, i) => i !== index) }); },

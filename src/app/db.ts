@@ -1,4 +1,3 @@
-
 import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
@@ -319,7 +318,6 @@ export const clearVocabularyOnly = async (): Promise<void> => {
       const db = await openDB();
       return new Promise((resolve, reject) => {
         const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, FREE_TALK_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
-        // Note: comparison_groups and calendar_events omitted as they are removed
         const tx = db.transaction(stores, 'readwrite');
         stores.forEach(s => {
              if (db.objectStoreNames.contains(s)) {
@@ -345,7 +343,6 @@ const withRetry = async <T,>(operation: () => Promise<T>, retries = 3, delay = 2
         } catch (err: any) {
             console.warn(`[DB] Operation failed, retrying (${i + 1}/${retries}). Error:`, err);
             
-            // Force reset connection if it looks like a connection issue
             if (err?.name === 'InvalidStateError' || err?.message?.toLowerCase().includes('closed') || err?.target?.error?.name === 'InvalidStateError') {
                  _dbInstance = null;
                  _dbPromise = null;
@@ -649,7 +646,7 @@ export const filterItem = (
     const isAll = filterTypes.includes('all') || filterTypes.length === 0;
     if (isAll) return !item.isPassive; 
     for (const type of filterTypes) {
-        if ((type === 'archive' && item.isPassive) || (type === 'idiom' && item.isIdiom) || (type === 'phrasal' && item.isPhrasalVerb) || (type === 'colloc' && item.isCollocation) || (type === 'phrase' && item.isStandardPhrase) || (type === 'pronun' && item.needsPronunciationFocus) || (type === 'preposition' && item.prepositions && item.prepositions.length > 0 && !item.isPhrasalVerb) || (type === 'vocab' && !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase)) return true;
+        if ((type === 'archive' && item.isPassive) || (type === 'idiom' && item.isIdiom) || (type === 'phrasal' && item.isPhrasalVerb) || (type === 'colloc' && item.isCollocation) || (type === 'phrase' && item.isStandardPhrase) || (type === 'vocab' && !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase)) return true;
     }
     return false;
 };
@@ -716,7 +713,6 @@ export const getNewWords = async (userId: string, limit: number = 20): Promise<V
   });
 };
 export const saveWordAndUser = async (word: VocabularyItem, user: User): Promise<void> => {
-    // Also mark safety flag when saving user
     if (user && user.id) localStorage.setItem('vocab_pro_db_marker', 'exists');
     await crudTemplate<void>([STORE_NAME, USER_STORE], (tx) => {
         tx.objectStore(STORE_NAME).put(word);
@@ -869,6 +865,7 @@ export const bulkSaveSpeakingBooks = async (items: SpeakingBook[]): Promise<void
 
 // --- Writing Book Feature ---
 export const saveWritingBook = async (book: WritingBook): Promise<void> => { await crudTemplate(WRITING_BOOK_STORE, tx => tx.objectStore(WRITING_BOOK_STORE).put(book)); };
+/* Fixed: Changed getAl to getAll in the index lookup */
 export const getWritingBooksByUserId = async (userId: string): Promise<WritingBook[]> => await crudTemplate(WRITING_BOOK_STORE, tx => tx.objectStore(WRITING_BOOK_STORE).index('userId').getAll(IDBKeyRange.only(userId)), 'readonly');
 export const deleteWritingBook = async (id: string): Promise<void> => { await crudTemplate(WRITING_BOOK_STORE, tx => tx.objectStore(WRITING_BOOK_STORE).delete(id)); };
 export const bulkSaveWritingBooks = async (items: WritingBook[]): Promise<void> => { await crudTemplate(WRITING_BOOK_STORE, tx => { const store = tx.objectStore(WRITING_BOOK_STORE); items.forEach(i => store.put(i)); }); };

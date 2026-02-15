@@ -1,13 +1,14 @@
-
 import React, { useState, useEffect } from 'react';
 import { VocabularyItem, Unit, ReviewGrade } from '../../app/types';
 import { findWordByText, saveWord, getUnitsContainingWord, getAllWords } from '../../app/dataStore';
 import { ViewWordModalUI } from './ViewWordModal_UI';
-import { createNewWord, updateSRS, calculateMasteryScore } from '../../utils/srs';
+import { createNewWord, calculateMasteryScore } from '../../utils/srs';
 import TestModal from '../practice/TestModal';
-import { calculateWordDifficultyXp } from '../../app/useAppController';
+/* Fix: Import UniversalAiModal which was missing */
+import UniversalAiModal from '../common/UniversalAiModal';
 import { getConfig } from '../../app/settingsManager';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
+import { getGenerateWordLessonEssayPrompt, getGenerateWordLessonTestPrompt } from '../../services/promptService';
 
 interface Props {
   word: VocabularyItem;
@@ -17,9 +18,11 @@ interface Props {
   onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => Promise<number>;
   onUpdate: (word: VocabularyItem) => void;
   isViewOnly?: boolean;
+  /* Fix: Type corrected from 'ESSAY' to 'USAGE' */
+  initialTab?: 'OVERVIEW' | 'USAGE' | 'TEST';
 }
 
-const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEditRequest, onUpdate, onGainXp, isViewOnly = false }) => {
+const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEditRequest, onUpdate, onGainXp, isViewOnly = false, initialTab = 'OVERVIEW' }) => {
   const [currentWord, setCurrentWord] = useState(word);
   const [linkedUnits, setLinkedUnits] = useState<Unit[]>([]);
   const [relatedWords, setRelatedWords] = useState<Record<string, VocabularyItem[]>>({});
@@ -120,18 +123,12 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   };
   
   const handleChallengeComplete = async (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => {
-    const updated = { ...currentWord }; // Start with a copy
-    
-    // "Test It" from the library is a mastery check, not a formal review, so we don't call updateSRS.
-    // We only update the test results and mastery score.
+    const updated = { ...currentWord }; 
     if (results) {
         updated.lastTestResults = { ...(updated.lastTestResults || {}), ...results };
     }
     updated.masteryScore = calculateMasteryScore(updated);
-
-    // Use onUpdate to save the word state, which is the standard path.
     await onUpdate(updated);
-    
     setIsChallenging(false);
     setCurrentWord(updated); 
   };
@@ -139,6 +136,41 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   const handleLocalUpdate = (updatedWord: VocabularyItem) => {
       onUpdate(updatedWord);
       setCurrentWord(updatedWord);
+  };
+
+  // --- AI Lesson Creation Logic ---
+  const [aiModalMode, setAiModalMode] = useState<'ESSAY' | 'TEST' | null>(null);
+
+  const handleOpenAiModal = (mode: 'ESSAY' | 'TEST') => {
+      setAiModalMode(mode);
+  };
+
+  const handleGeneratePrompt = (inputs: any) => {
+      /* Retrieve coach name for prompts */
+      const config = getConfig();
+      const activeType = config.audioCoach.activeCoach;
+      const coachName = config.audioCoach.coaches[activeType].name;
+      
+      if (aiModalMode === 'ESSAY') {
+          return getGenerateWordLessonEssayPrompt(currentWord, inputs, coachName);
+      } else {
+          return getGenerateWordLessonTestPrompt(currentWord, inputs, coachName);
+      }
+  };
+
+  const handleJsonReceived = (data: any) => {
+      const { result } = data;
+      const cleanResult = result || data;
+      const updated = { ...currentWord, lesson: { ...(currentWord.lesson || {}) } };
+
+      if (aiModalMode === 'ESSAY') {
+          updated.lesson!.essay = cleanResult.content;
+      } else {
+          updated.lesson!.test = cleanResult.content;
+      }
+      
+      handleLocalUpdate(updated);
+      setAiModalMode(null);
   };
 
   const config = getConfig();
@@ -166,7 +198,28 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       existingVariants={existingVariants}
       appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}
+      initialTab={initialTab}
+      onGenerateLesson={handleOpenAiModal}
     />
+
+    {aiModalMode && (
+        <div className="z-[2000]">
+             {/* Fix: Removed spacer hack that used invalid zIndex prop */}
+             <div className="relative z-[500]">
+                <UniversalAiModal 
+                    isOpen={!!aiModalMode} 
+                    onClose={() => setAiModalMode(null)} 
+                    type="GENERATE_WORD_LESSON"
+                    title={aiModalMode === 'ESSAY' ? `Generate Usage Guide: ${currentWord.word}` : `Generate Practice Test: ${currentWord.word}`}
+                    description={aiModalMode === 'ESSAY' ? "AI will create a structured usage guide with tables and examples." : "AI will design an interactive test for this word."}
+                    initialData={{}}
+                    onGeneratePrompt={handleGeneratePrompt}
+                    onJsonReceived={handleJsonReceived}
+                    closeOnSuccess={true}
+                />
+             </div>
+        </div>
+    )}
     </>
   );
 };
