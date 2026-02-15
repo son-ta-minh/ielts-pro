@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Save, Sparkles, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, Tag as TagIcon, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, Loader2 } from 'lucide-react';
 import { VocabularyItem, WordFamily, WordFamilyMember, ReviewGrade, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
@@ -48,9 +49,9 @@ export interface EditWordModalUIProps {
   onClose: () => void;
   onSwitchToView: () => void;
   formData: any; 
-  setFormData: (field: keyof VocabularyItem | 'tagsString' | 'groupsString' | 'v2v3' | 'studiedStatus' | 'prepositionsList', value: any) => void;
+  setFormData: (field: keyof VocabularyItem | 'groupsString' | 'studiedStatus' | 'prepositionsList', value: any) => void;
   setFlag: (flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'needsPronunciationFocus' | 'isPassive') => void;
-  familyHandler: (type: keyof WordFamily) => { update: (index: number, field: 'word' | 'ipa', value: string) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: () => void; };
+  familyHandler: (type: keyof WordFamily) => { update: (index: number, field: 'word', value: string) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: () => void; };
   prepList: { update: (index: number, changes: object) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: (newItem: object) => void; };
   collocList: { update: (index: number, changes: object) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: (newItem: object) => void; };
   idiomList: { update: (index: number, changes: object) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: (newItem: object) => void; };
@@ -71,15 +72,14 @@ type Tab = 'MAIN' | 'DETAILS' | 'CONNECTIONS';
 // A generic component for list-based editors (Collocations, Idioms, Word Family members)
 const ListEditorSection: React.FC<{
     title: string;
-    items: { text: string; ipa?: string; d?: string; isIgnored?: boolean }[];
-    onUpdate: (index: number, field: 'text' | 'ipa' | 'd', value: string) => void;
+    items: { text: string; d?: string; isIgnored?: boolean }[];
+    onUpdate: (index: number, field: 'text' | 'd', value: string) => void;
     onToggleIgnore: (index: number) => void;
     onRemove: (index: number) => void;
     onAdd: () => void;
-    placeholders: { text: string; ipa?: string; d?: string };
-    showIpa?: boolean;
+    placeholders: { text: string; d?: string };
     showDescription?: boolean;
-}> = ({ title, items, onUpdate, onToggleIgnore, onRemove, onAdd, placeholders, showIpa = false, showDescription = false }) => (
+}> = ({ title, items, onUpdate, onToggleIgnore, onRemove, onAdd, placeholders, showDescription = false }) => (
     <div className="space-y-2">
         <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{title}</label>
         <div className="space-y-2 p-3 bg-neutral-50 border border-neutral-200 rounded-2xl">
@@ -88,7 +88,6 @@ const ListEditorSection: React.FC<{
                     <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2">
                             <input type="text" value={item.text} onChange={e => onUpdate(index, 'text', e.target.value)} placeholder={placeholders.text} className="flex-1 px-3 py-2 bg-neutral-50/50 border border-neutral-200 rounded-lg text-xs font-bold focus:bg-white focus:ring-1 focus:ring-neutral-900 outline-none"/>
-                            {showIpa && <input type="text" value={item.ipa || ''} onChange={e => onUpdate(index, 'ipa', e.target.value)} placeholder={placeholders.ipa} className="w-28 px-3 py-2 bg-neutral-50/50 border border-neutral-200 rounded-lg text-xs font-mono focus:bg-white focus:ring-1 focus:ring-neutral-900 outline-none"/>}
                         </div>
                         {showDescription && (
                             <input type="text" value={item.d || ''} onChange={e => onUpdate(index, 'd', e.target.value)} placeholder={placeholders.d} className="w-full px-3 py-1 bg-neutral-50/50 border border-transparent rounded-lg text-[10px] font-medium text-neutral-500 focus:bg-white focus:ring-1 focus:ring-neutral-900 focus:border-neutral-200 outline-none" />
@@ -243,8 +242,7 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                            <div className="flex flex-wrap gap-2 p-3 bg-white border border-neutral-200 rounded-2xl">{[{ id: 'isIdiom', label: 'Idiom', icon: Quote }, { id: 'isCollocation', label: 'Colloc.', icon: Combine }, { id: 'isStandardPhrase', label: 'Phrase', icon: MessageSquare }, { id: 'isPhrasalVerb', label: 'Phrasal', icon: Layers }, { id: 'isIrregular', label: 'Irregular', icon: RotateCw }, { id: 'needsPronunciationFocus', label: 'Pronunciation', icon: Mic }, { id: 'isPassive', label: 'Archive', icon: formData.isPassive ? Archive : Trash2 }].map(btn => (<button key={btn.id} type="button" onClick={() => setFlag(btn.id as any)} className={`flex items-center space-x-1.5 py-1.5 px-3 rounded-lg border transition-all font-bold text-[9px] uppercase tracking-wider ${formData[btn.id] ? 'bg-neutral-900 border-neutral-900 text-white shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-300'}`}><btn.icon size={10} /><span>{btn.label}</span></button>))}</div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                           {formData.isIrregular && (<div className="space-y-1"><label className="text-[10px] font-black text-orange-500 uppercase tracking-widest px-1">Irregular Forms (V2, V3)</label><input type="text" value={formData.v2v3} onChange={(e) => setFormData('v2v3', e.target.value)} className="w-full px-4 py-3 bg-orange-50 border border-orange-200 rounded-xl text-sm text-orange-900 focus:ring-1 focus:ring-orange-500 outline-none"/></div>)}
-                           <div className="space-y-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center"><TagIcon size={10} className="mr-1"/>System Tags</label><input type="text" value={formData.tagsString} onChange={(e) => setFormData('tagsString', e.target.value)} placeholder="tag1, tag2..." className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm focus:ring-1 focus:ring-neutral-900 outline-none"/></div>
+                           {/* Tags removed from UI */}
                            <div className="space-y-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center"><Users2 size={10} className="mr-1"/>User Groups</label><input type="text" value={formData.groupsString} onChange={(e) => setFormData('groupsString', e.target.value)} placeholder="bird_species, env_academic..." className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm focus:ring-1 focus:ring-neutral-900 outline-none"/></div>
                            <div className="md:col-span-2 space-y-1">
                                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Register</label>
@@ -290,11 +288,11 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                         />
                         
                         <div className="space-y-2"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Word Family</label><div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* FIX: Use a type-safe onUpdate handler for word family sections. */}
-                            <ListEditorSection title="Nouns" items={(formData.wordFamily?.nouns || []).map((m: any) => ({ text: m.word, ipa: m.ipa, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text' || f === 'ipa') { familyHandler('nouns').update(i, f === 'text' ? 'word' : f, v); } }} onToggleIgnore={familyHandler('nouns').toggleIgnore} onRemove={familyHandler('nouns').remove} onAdd={familyHandler('nouns').add} placeholders={{ text: "Noun form...", ipa: "/ipa/" }} showIpa />
-                            <ListEditorSection title="Verbs" items={(formData.wordFamily?.verbs || []).map((m: any) => ({ text: m.word, ipa: m.ipa, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text' || f === 'ipa') { familyHandler('verbs').update(i, f === 'text' ? 'word' : f, v); } }} onToggleIgnore={familyHandler('verbs').toggleIgnore} onRemove={familyHandler('verbs').remove} onAdd={familyHandler('verbs').add} placeholders={{ text: "Verb form...", ipa: "/ipa/" }} showIpa />
-                            <ListEditorSection title="Adjectives" items={(formData.wordFamily?.adjs || []).map((m: any) => ({ text: m.word, ipa: m.ipa, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text' || f === 'ipa') { familyHandler('adjs').update(i, f === 'text' ? 'word' : f, v); } }} onToggleIgnore={familyHandler('adjs').toggleIgnore} onRemove={familyHandler('adjs').remove} onAdd={familyHandler('adjs').add} placeholders={{ text: "Adjective form...", ipa: "/ipa/" }} showIpa />
-                            <ListEditorSection title="Adverbs" items={(formData.wordFamily?.advs || []).map((m: any) => ({ text: m.word, ipa: m.ipa, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text' || f === 'ipa') { familyHandler('advs').update(i, f === 'text' ? 'word' : f, v); } }} onToggleIgnore={familyHandler('advs').toggleIgnore} onRemove={familyHandler('advs').remove} onAdd={familyHandler('advs').add} placeholders={{ text: "Adverb form...", ipa: "/ipa/" }} showIpa />
+                            {/* FIX: Use a type-safe onUpdate handler for word family sections. IPA removed. */}
+                            <ListEditorSection title="Nouns" items={(formData.wordFamily?.nouns || []).map((m: any) => ({ text: m.word, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text') { familyHandler('nouns').update(i, 'word', v); } }} onToggleIgnore={familyHandler('nouns').toggleIgnore} onRemove={familyHandler('nouns').remove} onAdd={familyHandler('nouns').add} placeholders={{ text: "Noun form..." }} />
+                            <ListEditorSection title="Verbs" items={(formData.wordFamily?.verbs || []).map((m: any) => ({ text: m.word, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text') { familyHandler('verbs').update(i, 'word', v); } }} onToggleIgnore={familyHandler('verbs').toggleIgnore} onRemove={familyHandler('verbs').remove} onAdd={familyHandler('verbs').add} placeholders={{ text: "Verb form..." }} />
+                            <ListEditorSection title="Adjectives" items={(formData.wordFamily?.adjs || []).map((m: any) => ({ text: m.word, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text') { familyHandler('adjs').update(i, 'word', v); } }} onToggleIgnore={familyHandler('adjs').toggleIgnore} onRemove={familyHandler('adjs').remove} onAdd={familyHandler('adjs').add} placeholders={{ text: "Adjective form..." }} />
+                            <ListEditorSection title="Adverbs" items={(formData.wordFamily?.advs || []).map((m: any) => ({ text: m.word, isIgnored: m.isIgnored }))} onUpdate={(i, f, v) => { if (f === 'text') { familyHandler('advs').update(i, 'word', v); } }} onToggleIgnore={familyHandler('advs').toggleIgnore} onRemove={familyHandler('advs').remove} onAdd={familyHandler('advs').add} placeholders={{ text: "Adverb form..." }} />
                         </div></div>
                         
                         <div className="space-y-2">

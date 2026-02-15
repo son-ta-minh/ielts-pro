@@ -10,6 +10,8 @@ const globalReadingLibrary = new Map();
 // In-memory store: Map<goal_title, PlanningGoal> (Keyed by Title to prevent duplicates)
 const globalPlanningLibrary = new Map();
 
+console.log("[LibraryManager] Loading version with Strict Data Cleaning...");
+
 // Helper to recursively find json files
 function findBackupFiles(dir, fileList = []) {
     if (!fs.existsSync(dir)) return fileList;
@@ -35,6 +37,78 @@ function findBackupFiles(dir, fileList = []) {
     return fileList;
 }
 
+// --- Data Cleaning Helpers (Strict Allowlist + Key Normalization) ---
+
+function cleanVocab(item) {
+    // Construct a new object using ONLY safe fields.
+    // Handles both Long keys (from App) and Short keys (from Backup JSON).
+    return {
+        id: item.id,
+        word: item.word || item.w,
+        ipa: item.ipa || item.i,
+        ipaUs: item.ipaUs || item.i_us,
+        ipaUk: item.ipaUk || item.i_uk,
+        pronSim: item.pronSim || item.ps,
+        ipaMistakes: item.ipaMistakes || item.im,
+        meaningVi: item.meaningVi || item.m,
+        example: item.example || item.ex,
+        
+        // Arrays/Complex Objects (Keep structure, Frontend mapper handles internal short keys)
+        collocationsArray: item.collocationsArray || item.col,
+        idiomsList: item.idiomsList || item.idm,
+        prepositions: item.prepositions || item.prp,
+        paraphrases: item.paraphrases || item.prph,
+        wordFamily: item.wordFamily || item.fam,
+        
+        tags: item.tags || item.tg,
+        register: item.register || item.reg,
+        
+        // Booleans
+        isIdiom: !!(item.isIdiom || item.is_id),
+        isPhrasalVerb: !!(item.isPhrasalVerb || item.is_pv),
+        isCollocation: !!(item.isCollocation || item.is_col),
+        isStandardPhrase: !!(item.isStandardPhrase || item.is_phr),
+        isIrregular: !!(item.isIrregular || item.is_irr),
+        needsPronunciationFocus: !!(item.needsPronunciationFocus || item.is_pron),
+        
+        // Force quality to VERIFIED for master library to prevent re-refining
+        // or preserve existing if it's 'REFINED'
+        quality: (item.quality || item.q) === 'RAW' ? 'REFINED' : (item.quality || item.q || 'VERIFIED')
+    };
+}
+
+function cleanUnit(item) {
+    return {
+        id: item.id,
+        name: item.name || item.n,
+        description: item.description || item.d || '',
+        essay: item.essay || item.e || '',
+        customVocabString: item.customVocabString || item.cvs || '',
+        tags: item.tags || item.t || [],
+        comprehensionQuestions: item.comprehensionQuestions || []
+        // Removed: userId, isLearned, focusColor, isFocused
+    };
+}
+
+function cleanPlan(item) {
+    const rawTodos = item.todos || item.td || [];
+    const cleanTodos = Array.isArray(rawTodos) ? rawTodos.map(t => ({
+        id: t.id,
+        text: t.text,
+        status: 'NEW' // Reset status for master template
+    })) : [];
+
+    return {
+        id: item.id,
+        title: item.title || item.t,
+        description: item.description || item.d || '',
+        todos: cleanTodos
+        // Removed: userId, focusColor, isFocused, order
+    };
+}
+
+// -----------------------------
+
 function loadGlobalLibrary() {
     console.log("[Library] --- Initializing Global Library & Reading & Planning ---");
     const start = Date.now();
@@ -56,9 +130,10 @@ function loadGlobalLibrary() {
             const masterData = JSON.parse(rawMaster);
             if (Array.isArray(masterData)) {
                 masterData.forEach(item => {
-                    const wordText = item.word || item.w;
-                    if (wordText) {
-                        globalLibrary.set(wordText.toLowerCase().trim(), item);
+                    // Re-clean just in case file was manually edited dirty
+                    const cleanItem = cleanVocab(item);
+                    if (cleanItem.word) {
+                        globalLibrary.set(cleanItem.word.toLowerCase().trim(), cleanItem);
                     }
                 });
                 console.log(`[Library] Loaded ${masterData.length} words from existing Master File.`);
@@ -75,10 +150,9 @@ function loadGlobalLibrary() {
             const readingData = JSON.parse(rawReading);
             if (Array.isArray(readingData)) {
                 readingData.forEach(item => {
-                    const name = item.name || item.n;
-                    if (name) {
-                        // Key by Name to prevent duplicates
-                        globalReadingLibrary.set(name.trim(), item);
+                    const cleanItem = cleanUnit(item);
+                    if (cleanItem.name) {
+                        globalReadingLibrary.set(cleanItem.name.trim(), cleanItem);
                     }
                 });
                 console.log(`[Library] Loaded ${readingData.length} units from existing Master Reading File.`);
@@ -95,9 +169,9 @@ function loadGlobalLibrary() {
             const planningData = JSON.parse(rawPlanning);
             if (Array.isArray(planningData)) {
                 planningData.forEach(item => {
-                    const title = item.title || item.t;
-                    if (title) {
-                        globalPlanningLibrary.set(title.trim(), item);
+                    const cleanItem = cleanPlan(item);
+                    if (cleanItem.title) {
+                        globalPlanningLibrary.set(cleanItem.title.trim(), cleanItem);
                     }
                 });
                 console.log(`[Library] Loaded ${planningData.length} plans from existing Master Planning File.`);
@@ -138,13 +212,15 @@ function loadGlobalLibrary() {
                         const wordText = item.word || item.w;
                         const quality = item.quality || item.q;
 
+                        // Only merge good quality items
                         const isGoodQuality = 
                             quality === 'VERIFIED' || quality === 'REFINED' || 
                             quality === 'v' || quality === 'r';
 
                         if (wordText && isGoodQuality) {
                             const key = wordText.toLowerCase().trim();
-                            globalLibrary.set(key, item);
+                            // CLEAN IMMEDIATELY BEFORE STORAGE
+                            globalLibrary.set(key, cleanVocab(item));
                         }
                     });
                 }
@@ -159,18 +235,17 @@ function loadGlobalLibrary() {
 
                 if (Array.isArray(units)) {
                     units.forEach(unit => {
-                        if (unit.id && (unit.name || unit.n) && (unit.essay || unit.e)) {
-                            const cleanUnit = {
-                                id: unit.id,
-                                name: unit.name || unit.n,
-                                description: unit.description || unit.d || '',
-                                essay: unit.essay || unit.e || '',
-                                customVocabString: unit.customVocabString || unit.cvs || '',
-                                tags: unit.tags || unit.t || []
-                            };
-
-                            globalReadingLibrary.set(cleanUnit.name.trim(), cleanUnit);
-                            unitCount++;
+                        const unitName = unit.name || unit.n;
+                        if (unit.id && unitName) {
+                            // Validate content
+                            const essay = unit.essay || unit.e || '';
+                            const vocab = unit.customVocabString || unit.cvs || '';
+                            
+                            if (essay.length > 50 || vocab.length > 10) {
+                                // CLEAN IMMEDIATELY
+                                globalReadingLibrary.set(unitName.trim(), cleanUnit(unit));
+                                unitCount++;
+                            }
                         }
                     });
                 }
@@ -187,13 +262,8 @@ function loadGlobalLibrary() {
                     goals.forEach(goal => {
                         const title = goal.title || goal.t;
                         if (goal.id && title) {
-                            const cleanGoal = {
-                                id: goal.id,
-                                title: title,
-                                description: goal.description || goal.d || '',
-                                todos: goal.todos || goal.td || []
-                            };
-                            globalPlanningLibrary.set(title.trim(), cleanGoal);
+                            // CLEAN IMMEDIATELY
+                            globalPlanningLibrary.set(title.trim(), cleanPlan(goal));
                             planCount++;
                         }
                     });

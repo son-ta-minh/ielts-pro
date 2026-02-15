@@ -128,14 +128,14 @@ export function getRemainingTime(nextReview: number): { label: string; urgency: 
 }
 
 export function createNewWord(
-  word: string, ipa: string, meaningVi: string, example: string, note: string, tags: string[],
+  word: string, ipa: string, meaningVi: string, example: string, note: string, groups: string[],
   isIdiom = false, needsPronunciationFocus = false, isPhrasalVerb = false,
   isCollocation = false, isStandardPhrase = false, isPassive = false, source: WordSource = 'manual'
 ): VocabularyItem {
   const now = Date.now();
   const newItem: VocabularyItem = {
     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-    userId: '', word: word.trim(), ipa: ipa.trim(), meaningVi: meaningVi.trim(), example: example.trim(), note, tags,
+    userId: '', word: word.trim(), ipa: ipa.trim(), meaningVi: meaningVi.trim(), example: example.trim(), note, groups,
     isIdiom, isPhrasalVerb, isCollocation, isStandardPhrase, needsPronunciationFocus, isPassive,
     register: 'raw', quality: WordQuality.RAW, source, isExampleLocked: false,
     createdAt: now, updatedAt: now, nextReview: now, interval: 0, easeFactor: 2.5, consecutiveCorrect: 0, forgotCount: 0,

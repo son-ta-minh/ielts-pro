@@ -328,9 +328,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                         <button onClick={(e) => { e.stopPropagation(); speak(member.word); }} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
                         {isFailed && <AlertCircle size={10} className="text-red-500 fill-red-100 shrink-0" />}
                       </div>
-                      <span className={`text-[8px] font-mono ${isFailed ? 'text-red-400' : 'text-neutral-400'}`}>{member.ipa}</span>
+                      {/* IPA display removed from family members */}
                     </div>
-                    <button type="button" disabled={addingVariant === member.word || isExisting} onClick={() => onAddVariantToLibrary(member, 'family')} className={`p-1 rounded-md transition-all ${ isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100' }`} >{addingVariant === member.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}</button>
+                    <button type="button" disabled={addingVariant === member.word || isExisting} onClick={() => onAddVariantToLibrary({ word: member.word, ipa: '' }, 'family')} className={`p-1 rounded-md transition-all ${ isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100' }`} >{addingVariant === member.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}</button>
                   </div>
                 );
               })}
@@ -349,7 +349,8 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
     const isIpaFailed = viewSettings.highlightFailed && (word.lastTestResults?.['IPA_QUIZ'] === false || word.lastTestResults?.['PRONUNCIATION'] === false);
     
     const flagCount = [word.isIdiom, word.isCollocation, word.isPhrasalVerb, word.isIrregular].filter(Boolean).length;
-    const tagCount = (word.tags?.length || 0) + flagCount;
+    // Tag count only counts flags now as tags property is removed from data
+    const tagCount = flagCount;
     const groupCount = (word.groups?.length || 0);
 
     const displayAccent = appliedAccent || 'US';
@@ -564,8 +565,8 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                         {!viewSettings.isLearnView && (
                             <>
                                 <div className="pt-8 space-y-4 md:col-span-4">
-                                    <CollapsibleSection title="Tags & Flags" count={tagCount} icon={<TagIcon size={12} className="text-neutral-400"/>}>
-                                        <div className="flex flex-wrap gap-1.5">{word.isIdiom && <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 text-[9px] font-black border border-amber-100">Idiom</span>}{word.isCollocation && <span className="px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 text-[9px] font-black border border-indigo-100">Colloc.</span>}{word.isPhrasalVerb && <span className="px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-[9px] font-black border border-blue-100">Phrasal</span>}{word.isIrregular && <span className="px-2 py-1 rounded-md bg-orange-50 text-orange-700 text-[9px] font-black border border-orange-100">Irreg.</span>}{word.tags && word.tags.length > 0 && (word.tags.map(t => <span key={t} className="px-2 py-1 rounded-md bg-neutral-100 text-neutral-600 text-[9px] font-bold border border-neutral-200">#{t}</span>))}</div>
+                                    <CollapsibleSection title="Flags" count={flagCount} icon={<TagIcon size={12} className="text-neutral-400"/>}>
+                                        <div className="flex flex-wrap gap-1.5">{word.isIdiom && <span className="px-2 py-1 rounded-md bg-amber-50 text-amber-700 text-[9px] font-black border border-amber-100">Idiom</span>}{word.isCollocation && <span className="px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 text-[9px] font-black border border-indigo-100">Colloc.</span>}{word.isPhrasalVerb && <span className="px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-[9px] font-black border border-blue-100">Phrasal</span>}{word.isIrregular && <span className="px-2 py-1 rounded-md bg-orange-50 text-orange-700 text-[9px] font-black border border-orange-100">Irreg.</span>}</div>
                                     </CollapsibleSection>
 
                                     <CollapsibleSection title="User Groups" count={groupCount} icon={<Users2 size={12} className="text-neutral-400"/>}>
@@ -577,39 +578,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ word, onClose,
                                     </CollapsibleSection>
                                     
                                     <div className="space-y-2 pt-2 border-t border-neutral-100">
-                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">Related by Tag</label>
-                                        {Object.keys(relatedWords).length > 0 ? (
-                                            <div className="space-y-2">
-                                                {Object.keys(relatedWords).map((tag) => {
-                                                    const words = relatedWords[tag];
-                                                    const isExpanded = expandedTags.has(tag);
-                                                    return (
-                                                        <div key={tag} className="bg-neutral-50 border border-neutral-100 rounded-xl p-2 transition-all">
-                                                            <button onClick={() => toggleTagExpansion(tag)} className="w-full flex items-center justify-between text-left">
-                                                                <div className="flex items-center gap-2">
-                                                                    <p className="text-[9px] font-bold text-neutral-500 uppercase">#{tag}</p>
-                                                                    <span className="text-[9px] font-bold text-neutral-400">({words.length})</span>
-                                                                </div>
-                                                                {isExpanded ? <ChevronDown size={14} className="text-neutral-400"/> : <ChevronRight size={14} className="text-neutral-400"/>}
-                                                            </button>
-                                                            {isExpanded && (
-                                                                <div className="pt-2 mt-2 border-t border-neutral-200 animate-in fade-in zoom-in-95">
-                                                                    <div className="flex flex-wrap gap-1.5">
-                                                                        {words.slice(0, 20).map(w => (<button key={w.id} onClick={() => onNavigateToWord(w)} className="px-2 py-1 bg-white border border-neutral-200 rounded-md text-xs font-bold text-neutral-700 hover:bg-neutral-100 hover:border-neutral-300 transition-colors">{w.word}</button>))}
-                                                                        {words.length > 20 && (
-                                                                            <span className="px-2 py-1 text-xs font-bold text-neutral-400">...and {words.length - 20} more</span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : <span className="text-[10px] text-neutral-300 italic px-1">No related words found.</span>}
-                                    </div>
-
-                                    <div className="space-y-2 pt-2">
                                         <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">Related by Group</label>
                                         {Object.keys(relatedByGroup).length > 0 ? (
                                             <div className="space-y-2">

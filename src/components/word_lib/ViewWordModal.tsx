@@ -78,15 +78,15 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
 
       const allWordsInStore = getAllWords();
       const relatedData: Record<string, VocabularyItem[]> = {};
-      const tagsToProcess = (currentWord.tags || []).filter(tag => tag.toLowerCase() !== 'ielts');
-      tagsToProcess.forEach(tag => {
-          const wordsForTag = allWordsInStore.filter(w => 
+      const groupsToProcess = (currentWord.groups || []).filter(g => g.toLowerCase() !== 'ielts');
+      groupsToProcess.forEach(group => {
+          const wordsForGroup = allWordsInStore.filter(w => 
               w.userId === currentWord.userId && 
               w.id !== currentWord.id && 
-              w.tags?.includes(tag)
+              w.groups?.includes(group)
           );
-          if (wordsForTag.length > 0) {
-              relatedData[tag] = wordsForTag;
+          if (wordsForGroup.length > 0) {
+              relatedData[group] = wordsForGroup;
           }
       });
       setRelatedWords(relatedData);
@@ -112,8 +112,8 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     setAddingVariant(variant.word);
     try {
       const note = `From ${sourceType} of "${currentWord.word}"`;
-      const tags = [...(currentWord.tags || []), `word-${sourceType}`];
-      const newItem = { ...createNewWord(variant.word, variant.ipa || '', `Added from ${sourceType}`, '', note, tags), userId: currentWord.userId };
+      const groups = [...(currentWord.groups || []), `word-${sourceType}`];
+      const newItem = { ...createNewWord(variant.word, variant.ipa || '', `Added from ${sourceType}`, '', note, groups), userId: currentWord.userId };
       await saveWord(newItem);
       setExistingVariants(prev => new Set(prev).add(variant.word.toLowerCase()));
     } finally { setAddingVariant(null); }

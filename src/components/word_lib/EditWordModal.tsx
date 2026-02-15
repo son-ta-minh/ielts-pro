@@ -12,9 +12,7 @@ import LearningSuggestionModal from '../common/LearningSuggestionModal';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 
 type FormState = VocabularyItem & {
-    tagsString: string;
     groupsString: string;
-    v2v3: string;
     studiedStatus: ReviewGrade | 'NEW';
     prepositionsList: PrepositionPattern[];
 };
@@ -33,9 +31,7 @@ function formReducer(state: FormState, action: FormAction): FormState {
             return {
                 ...word,
                 register: word.register || 'raw',
-                tagsString: word.tags?.join(', ') || '',
                 groupsString: word.groups?.join(', ') || '',
-                v2v3: [word.v2, word.v3].filter(Boolean).join(', '),
                 studiedStatus: word.lastReview ? (word.lastGrade || 'NEW') : 'NEW',
                 collocationsArray: word.collocationsArray || (word.collocations ? word.collocations.split('\n').map(t => ({text: t.trim(), isIgnored: false})) : []),
                 idiomsList: word.idiomsList || (word.idioms ? word.idioms.split('\n').map(t => ({text: t.trim(), isIgnored: false})) : []),
@@ -65,8 +61,6 @@ function formReducer(state: FormState, action: FormAction): FormState {
                 ...state,
                 ...merged,
                 register: merged.register,
-                tagsString: merged.tags?.join(', ') || '',
-                v2v3: [merged.v2, merged.v3].filter(Boolean).join(', '),
                 prepositionsList: merged.prepositions || [],
             };
         default:
@@ -141,7 +135,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
 
   const handleSubmit = (e?: React.FormEvent) => {
     if(e) e.preventDefault();
-    const { tagsString, groupsString, v2v3, studiedStatus, collocationsArray, idiomsList, prepositionsList, ...rest } = formData;
+    const { groupsString, studiedStatus, collocationsArray, idiomsList, prepositionsList, ...rest } = formData;
     
     let finalFamily = rest.wordFamily;
     if (finalFamily) {
@@ -150,18 +144,15 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         finalFamily = hasData ? cleanedFamily : undefined;
     }
     
-    const vParts = v2v3.split(/[,\s]+/).filter(Boolean);
-    
     let updatedWord: VocabularyItem = { 
         ...rest, 
-        v2: vParts[0] || '', v3: vParts[1] || '', 
         wordFamily: finalFamily, 
         prepositions: prepositionsList.filter(p => p.prep.trim()).length > 0 ? prepositionsList.filter(p => p.prep.trim()) : undefined,
         collocationsArray: collocationsArray.filter(c => c.text.trim()),
         collocations: collocationsArray.filter(c => c.text.trim()).map(c => c.text).join('\n'),
         idiomsList: idiomsList.filter(c => c.text.trim()),
         idioms: idiomsList.filter(c => c.text.trim()).map(c => c.text).join('\n'),
-        tags: tagsString.split(',').map(t => t.trim()).filter(Boolean), 
+        // tags removed
         groups: groupsString.split(',').map(g => g.trim()).filter(Boolean),
         updatedAt: Date.now() 
     };
@@ -231,10 +222,11 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
       const currentFamily = formData.wordFamily || { nouns: [], verbs: [], adjs: [], advs: [] };
       const updateFamily = (newFamilyMembers: Partial<typeof currentFamily>) => dispatch({ type: 'SET_LIST_ITEM', payload: { list: 'wordFamily', data: { ...currentFamily, ...newFamilyMembers } } });
       return {
-          update: (index: number, field: 'word' | 'ipa', value: string) => { const members = [...(currentFamily[type] || [])]; members[index] = { ...members[index], [field]: value }; updateFamily({ [type]: members }); },
+          // ipa field removed from update signature
+          update: (index: number, field: 'word', value: string) => { const members = [...(currentFamily[type] || [])]; members[index] = { ...members[index], [field]: value }; updateFamily({ [type]: members }); },
           toggleIgnore: (index: number) => { const members = [...(currentFamily[type] || [])]; members[index] = { ...members[index], isIgnored: !members[index].isIgnored }; updateFamily({ [type]: members }); },
           remove: (index: number) => { updateFamily({ [type]: (currentFamily[type] || []).filter((_, i) => i !== index) }); },
-          add: () => { const newMember = { word: '', ipa: '', isIgnored: type === 'advs' }; updateFamily({ [type]: [...(currentFamily[type] || []), newMember] }); }
+          add: () => { const newMember = { word: '', isIgnored: type === 'advs' }; updateFamily({ [type]: [...(currentFamily[type] || []), newMember] }); }
       };
   };
 

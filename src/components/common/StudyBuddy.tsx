@@ -272,8 +272,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
                      lastReview: undefined,
                      lastGrade: undefined,
                      lastTestResults: {},
-                     // Add coach tag
-                     tags: [...(serverItem.tags || []), 'coach-added']
+                     // Add coach group
+                     groups: [...(serverItem.groups || []), 'coach-added']
                 };
                  // Recalc logic stats
                  newItem.complexity = calculateComplexity(newItem);

@@ -41,7 +41,7 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
         - "casual": An informal or conversational equivalent.
         - "idiomatic": A related idiom or figurative phrase.
         - 'c' = short context where the paraphrase would be used.
-    - fam: Word family. ONLY for single-word headwords. 'n'=nouns, 'v'=verbs, 'j'=adjectives, 'adv'=adverbs. Format: [{"w": "word", "i": "/ipa/"}].
+    - fam: Word family. ONLY for single-word headwords. 'n'=nouns, 'v'=verbs, 'j'=adjectives, 'adv'=adverbs. Format: [{"w": "word"}]. DO NOT include IPA.
     - is_pas: True if vulgar/slang.
     - is_pron: True if it's a pronunciation trap.
     - is_id: True if it's an Idiom.
@@ -49,12 +49,11 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - is_col: True if it's a Collocation.
     - is_phr: True if it's a fixed Standard Phrase/Expression.
     - is_irr: True if it's an Irregular verb (single words only).
-    - tags: 3-5 IELTS topic tags (Capitalize first letter).
 
     EXAMPLES:
     - Input "cut the road" -> hw: "cut the road", m: "mở đường", is_phr: true, fam: null, col: [].
     - Input "better late than never" -> hw: "better late than never", is_id: true, fam: null, col: [].
-    - Input "implications" -> hw: "implication", m: "hệ quả", fam: { n: [{"w": "implication", "i": "/ˌɪmplɪˈkeɪʃən/"}], v: [{"w": "imply", "i": "/ɪmˈplaɪ/"}] }.
+    - Input "implications" -> hw: "implication", m: "hệ quả", fam: { n: [{"w": "implication"}], v: [{"w": "imply"}] }.
 
     Response Example (Strict JSON Array):
     [{
@@ -70,9 +69,7 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
       "prep": [], 
       "para": [{ "w": "synonym", "t": "academic", "c": "context" }],
       "is_id": false, "is_pv": false, "is_col": false, "is_phr": true, "is_irr": false,
-      "v2": null, "v3": null,
       "is_pas": false, "is_pron": false,
-      "tags": ["Topic"],
       "fam": null
     }]`;
 }

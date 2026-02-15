@@ -301,6 +301,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
              newItem.gameEligibility = calculateGameEligibility(newItem);
         } else {
             // Manual Creation (RAW)
+            // Updated signature: groups is passed instead of tags
             newItem = createNewWord(
                 word, '', '', '', '', [], 
                 isIdiom, needsPronunciationFocus, isPhrasalVerb, 
@@ -340,15 +341,26 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
           onPageChange={setPage}
           onPageSizeChange={setPageSize}
           onSearch={setCurrentQuery}
-          onFilterChange={setCurrentFilters}
+          onFilterChange={(f) => {
+             setCurrentFilters({ 
+                 types: f.types, 
+                 refined: f.refined, 
+                 status: f.status, 
+                 register: f.register,
+                 source: f.source,
+                 composition: f.composition,
+                 book: f.book,
+                 specificBookId: f.specificBookId
+             });
+             setPage(0);
+          }}
           onAddWords={handleAddWords}
           onViewWord={setViewingWord}
           onEditWord={setEditingWord}
           onDelete={async (w) => { await onDelete(w.id); }}
-          // FIX: Corrected typo from onBoldDelete to onBulkDelete
-          onBulkDelete={handleBulkDelete}
+          onBulkDelete={onBulkDelete ? handleBulkDelete : undefined}
           onPractice={handlePractice}
-          settingsKey="ielts_pro_library_view_settings"
+          settingsKey="vocab_pro_word_table_settings"
           context="library"
           initialFilter={initialFilter}
           forceExpandAdd={forceExpandAdd}
@@ -357,24 +369,27 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
           tagTree={tagTree}
           selectedTag={selectedTag}
           onSelectTag={handleSelectTag}
-          onOpenWordBook={() => onNavigate?.('WORDBOOK')}
+          onOpenWordBook={() => onNavigate && onNavigate('WORDBOOK')}
       />
       {viewingWord && (
           <ViewWordModal 
             word={viewingWord} 
             onClose={() => setViewingWord(null)} 
             onNavigateToWord={setViewingWord} 
+            onEditRequest={(w) => { setViewingWord(null); setEditingWord(w); }} 
             onUpdate={onUpdate} 
-            onGainXp={async () => 0} 
-            isViewOnly={false} 
-            onEditRequest={(word) => { setViewingWord(null); setEditingWord(word); }}
+            onGainXp={async () => 0}
+          /> 
+      )}
+      {editingWord && (
+          <EditWordModal 
+            user={user} 
+            word={editingWord} 
+            onSave={handleSaveEdit} 
+            onClose={() => setEditingWord(null)} 
+            onSwitchToView={(w) => { setEditingWord(null); setViewingWord(w); }} 
           />
       )}
-      {/* 
-        Fix: Use setViewingWord instead of setGlobalViewWord because setGlobalViewWord is not 
-        available in WordList. WordList manages its own viewing state.
-      */}
-      {editingWord && <EditWordModal user={user} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setViewingWord(word); }}/>}
     </>
   );
 };

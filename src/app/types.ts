@@ -51,7 +51,7 @@ export interface DataScope {
 
 export interface WordFamilyMember {
   word: string;
-  ipa: string;
+  // ipa removed to save tokens
   ipaUs?: string;
   ipaUk?: string;
   pronSim?: 'same' | 'near' | 'different';
@@ -147,8 +147,6 @@ export interface VocabularyItem {
   id: string;
   userId: string; 
   word: string; 
-  v2?: string;  
-  v3?: string;  
   ipa: string;
   ipaUs?: string;
   ipaUk?: string;
@@ -164,7 +162,7 @@ export interface VocabularyItem {
   idiomsList?: CollocationDetail[];
 
   note: string;
-  tags: string[];
+  // tags removed to save tokens
   groups?: string[]; // User-defined groups
   createdAt: number;
   updatedAt: number;
@@ -183,6 +181,8 @@ export interface VocabularyItem {
   isExclamatory?: boolean;
   isImperative?: boolean;
   isIrregular?: boolean; 
+  v2?: string; // Past simple for irregular verbs
+  v3?: string; // Past participle for irregular verbs
   needsPronunciationFocus?: boolean;
   isExampleLocked?: boolean;
   isPassive?: boolean;

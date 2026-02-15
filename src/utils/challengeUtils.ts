@@ -193,31 +193,7 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
         }
     }
     
-    const formsToTest: HeteronymForm[] = [];
-    const foundIpas = new Set<string>();
-
-    if (word.wordFamily) {
-        (['nouns', 'verbs', 'adjs', 'advs'] as const).forEach(posKey => {
-            (word.wordFamily?.[posKey] || []).forEach(member => {
-                if (member.word.toLowerCase() === word.word.toLowerCase() && member.ipa) {
-                    if (!foundIpas.has(member.ipa)) {
-                        formsToTest.push({ pos: posKey.slice(0, -1), ipa: member.ipa });
-                        foundIpas.add(member.ipa);
-                    }
-                }
-            });
-        });
-    }
-
-    if (formsToTest.length >= 2) {
-        list.push({
-            type: 'HETERONYM_QUIZ',
-            title: 'Heteronym Match',
-            word,
-            forms: formsToTest,
-            ipaOptions: shuffleArray(formsToTest.map(f => f.ipa))
-        });
-    }
+    // HETERONYM_QUIZ removed because WordFamilyMember does not contain IPA info anymore.
 
     if (word.paraphrases && word.paraphrases.length > 0) {
         word.paraphrases.filter(p => !p.isIgnored).forEach(para => {

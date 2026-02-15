@@ -1,5 +1,4 @@
 
-
 /**
  * Data transformation and mapping for Import/Export.
  * Uses short keys to reduce JSON size for storage and transfer.
@@ -14,7 +13,6 @@ import { generateMap, BOSSES } from '../data/adventure_map';
 const keyMap: { [key: string]: string } = {
     // VocabularyItem top-level
     userId: 'uid', word: 'w', ipa: 'i', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'nt', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', needsPronunciationFocus: 'is_pron', isExampleLocked: 'is_exl', isPassive: 'is_pas', quality: 'q', source: 's', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', lastGrade: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
-    v2: 'v2', v3: 'v3',
     masteryScore: 'ms',
     complexity: 'cx',
 

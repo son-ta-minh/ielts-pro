@@ -1,3 +1,4 @@
+
 import { VocabularyItem, WordFamilyMember, PrepositionPattern, ParaphraseOption, CollocationDetail, WordQuality } from '../app/types';
 import { calculateGameEligibility } from './gameEligibility';
 import { calculateComplexity, calculateMasteryScore } from './srs';
@@ -8,18 +9,18 @@ import { calculateComplexity, calculateMasteryScore } from './srs';
 export const normalizeAiResponse = (shortData: any): any => {
     if (!shortData) return null;
 
-    // Helper to map family members
+    // Helper to map family members - IPA REMOVED
     const mapFam = (list: any[]) => {
         if (!Array.isArray(list)) return [];
         return list
             .map((x: any): WordFamilyMember | null => {
                 if (typeof x === 'string') {
-                    return { word: x, ipa: '' };
+                    return { word: x };
                 }
                 if (x && (x.w || x.word)) {
                     return { 
                         word: x.w || x.word, 
-                        ipa: x.i || x.ipa || x.i_us || '',
+                        // IPA removed from family members
                         isIgnored: x.g ?? x.isIgnored
                     };
                 }
@@ -129,9 +130,8 @@ export const normalizeAiResponse = (shortData: any): any => {
         isPassive: shortData.is_pas ?? shortData.isPassive,
         needsPronunciationFocus: shortData.is_pron ?? shortData.needsPronunciationFocus,
         
-        v2: shortData.v2,
-        v3: shortData.v3,
-        tags: shortData.tags,
+        // Tags removed from parsing
+        // tags: shortData.tags, 
 
         paraphrases: mapPara(shortData.para || shortData.paraphrases),
         wordFamily: shortData.fam ? {
@@ -370,9 +370,7 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
     }
     updatedItem.example = finalExample;
 
-    const newTags = new Set((baseItem.tags || []).map(t => t.toLowerCase()));
-    (aiResult.tags || []).forEach((t: string) => newTags.add(t.toLowerCase()));
-    updatedItem.tags = Array.from(newTags);
+    // Tags removed from AI result merging since we deleted the field
 
     updatedItem.isIdiom = aiResult.isIdiom !== undefined ? !!aiResult.isIdiom : baseItem.isIdiom;
     updatedItem.isPhrasalVerb = aiResult.isPhrasalVerb !== undefined ? !!aiResult.isPhrasalVerb : baseItem.isPhrasalVerb;
@@ -382,8 +380,6 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
     updatedItem.isPassive = aiResult.isPassive !== undefined ? !!aiResult.isPassive : baseItem.isPassive;
     
     updatedItem.quality = WordQuality.REFINED;
-    updatedItem.v2 = aiResult.v2 ?? baseItem.v2;
-    updatedItem.v3 = aiResult.v3 ?? baseItem.v3;
     updatedItem.needsPronunciationFocus = aiResult.needsPronunciationFocus ?? baseItem.needsPronunciationFocus;
     
     // RECALCULATE CRITICAL METRICS
