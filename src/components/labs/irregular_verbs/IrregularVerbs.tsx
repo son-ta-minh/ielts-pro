@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, IrregularVerb, VocabularyItem, WordQuality } from '../../../app/types';
 import * as db from '../../../app/db';
@@ -371,14 +372,19 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
     setIsPracticeSetupOpen(true);
   };
 
-  const handleStartPractice = (mode: 'headword' | 'random' | 'quick' | 'quick_forgot' | 'quick_all') => {
+  const handleStartPractice = (mode: 'headword' | 'random' | 'quick' | 'quick_forgot' | 'quick_all', filterUnlearned?: boolean) => {
     // FIX: Simplify basePracticeVerbs logic as practiceScope is now always IrregularVerb[] or 'all'.
     const basePracticeVerbs = practiceScope === 'all' 
       ? verbs 
       : practiceScope;
       
-    let finalPracticeVerbs: IrregularVerb[] = [];
+    let finalPracticeVerbs: IrregularVerb[] = basePracticeVerbs;
     let finalMode: 'headword' | 'random' | 'quick' = 'headword';
+
+    // Apply Filter if requested (for headword/random modes)
+    if (filterUnlearned) {
+        finalPracticeVerbs = finalPracticeVerbs.filter(v => v.lastTestResult !== 'pass');
+    }
 
     if (mode === 'quick_forgot') {
         finalPracticeVerbs = basePracticeVerbs.filter(v => v.lastTestResult === 'fail');
@@ -390,12 +396,12 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
         finalPracticeVerbs = basePracticeVerbs;
         finalMode = 'quick';
     } else {
-        finalPracticeVerbs = basePracticeVerbs;
+        // Use filtered verbs for standard modes
         finalMode = mode;
     }
       
     if (finalPracticeVerbs.length === 0) {
-        const message = mode === 'quick_forgot' ? "No forgotten verbs in this selection." : "No verbs available for this practice session.";
+        const message = mode === 'quick_forgot' ? "No forgotten verbs in this selection." : filterUnlearned ? "No unlearned verbs in this selection." : "No verbs available for this practice session.";
         showToast(message, "info");
         return;
     }

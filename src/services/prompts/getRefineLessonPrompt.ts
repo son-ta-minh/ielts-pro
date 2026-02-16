@@ -1,3 +1,4 @@
+
 export interface LessonPromptParams {
   language: 'English' | 'Vietnamese';
   targetAudience: 'Kid' | 'Adult';
@@ -91,6 +92,7 @@ export function getLessonPrompt(params: LessonPromptParams): string {
   CRITICAL OUTPUT RULES:
   1. **MARKDOWN CODE BLOCK**: Wrap entire JSON response in \`\`\`json ... \`\`\`.
   2. **NO RAW NEWLINES**: Use literal '\\n' for line breaks.
+  3. **TABLES**: Use \`<br>\` for line breaks inside table cells.
 
   OUTPUT TEMPLATE:
   \`\`\`json

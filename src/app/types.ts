@@ -1,3 +1,4 @@
+
 export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LISTENING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT';
 
 export enum ReviewGrade {
@@ -449,6 +450,15 @@ export interface ConversationItem {
     bestScore?: number;
 }
 
+export interface UserRecording {
+    id: string;
+    url: string; // The URL to stream/play (might be base64 for quick access or server stream url)
+    mapName: string; // Folder mapping name on server
+    filename: string; // Actual filename on server
+    timestamp: number;
+    duration?: number;
+}
+
 export interface FreeTalkItem {
   id: string;
   userId: string;
@@ -456,6 +466,8 @@ export interface FreeTalkItem {
   content: string; 
   path?: string;
   tags: string[];
+  audioLinks?: string[]; // Reference audio files
+  userRecordings?: UserRecording[]; // User practice recordings
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;

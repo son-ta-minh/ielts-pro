@@ -1,3 +1,4 @@
+
 import { VocabularyItem, LessonPreferences } from '../../app/types';
 
 export function getGenerateWordLessonEssayPrompt(word: VocabularyItem, prefs: LessonPreferences, coachName?: string): string {
@@ -34,6 +35,7 @@ export function getGenerateWordLessonEssayPrompt(word: VocabularyItem, prefs: Le
 
   3. CONSTRAINTS:
      - Use ONLY Markdown tables for the usage data.
+     - For line breaks WITHIN a table cell, use \`<br>\`. Do NOT use \`\\n\` or \`\\\\n\` inside table rows.
      - You MUST provide at least 1 example for every single item listed in the tables.
      - Keep the "Context" column concise (max 15 words).
      - If no data exists for a category (e.g., no idioms), you may skip that section or note it as "No common idioms".

@@ -38,6 +38,7 @@ const getFormattedBuildDate = () => {
 export interface StudyStats {
     vocab: { new: number, due: number };
     lessons: {
+        general: { completed: number, total: number };
         irregular: { completed: number, total: number };
         grammar: { completed: number, total: number };
         comparison: { completed: number, total: number };
@@ -143,8 +144,8 @@ const StudyNowPanel: React.FC<{
     const speakingCompleted = stats ? (stats.speaking.freeTalk.completed + stats.speaking.native.completed + stats.speaking.conversation.completed) : 0;
     const speakingTotal = stats ? (stats.speaking.freeTalk.total + stats.speaking.native.total + stats.speaking.conversation.total) : 0;
 
-    const lessonsCompleted = stats ? (stats.lessons.comparison.completed + stats.lessons.scale.completed) : 0;
-    const lessonsTotal = stats ? (stats.lessons.comparison.total + stats.lessons.scale.total) : 0;
+    const lessonsCompleted = stats ? stats.lessons.general.completed : 0;
+    const lessonsTotal = stats ? stats.lessons.general.total : 0;
 
     const getProg = (comp: number, tot: number) => tot > 0 ? Math.round((comp / tot) * 100) : 0;
 

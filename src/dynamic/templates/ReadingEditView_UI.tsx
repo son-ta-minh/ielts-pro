@@ -47,15 +47,13 @@ export interface ReadingEditViewUIProps {
     setEditEssay: (essay: string) => void;
     editComprehensionQuestions: { question: string; answer: string; }[];
     setEditComprehensionQuestions: React.Dispatch<React.SetStateAction<{ question: string; answer: string; }[]>>;
-    isLearned: boolean;
-    setIsLearned: (learned: boolean) => void;
     isSaving: boolean;
     handleSaveUnitChanges: () => void;
     handleGenerateUnitRefinePrompt: (inputs: { request: string; }) => string;
     handleApplyRefinement: (refined: any) => void;
 }
 
-export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ user, allWords, allLibraryTags, onCancel, editName, setEditName, editDesc, setEditDesc, editPath, setEditPath, editTags, setEditTags, editWords, setEditWords, editEssay, setEditEssay, editComprehensionQuestions, setEditComprehensionQuestions, isLearned, setIsLearned, isSaving, handleSaveUnitChanges, handleGenerateUnitRefinePrompt, handleApplyRefinement }) => {
+export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ user, allWords, allLibraryTags, onCancel, editName, setEditName, editDesc, setEditDesc, editPath, setEditPath, editTags, setEditTags, editWords, setEditWords, editEssay, setEditEssay, editComprehensionQuestions, setEditComprehensionQuestions, isSaving, handleSaveUnitChanges, handleGenerateUnitRefinePrompt, handleApplyRefinement }) => {
   const [isPassagePreview, setIsPassagePreview] = useState(false);
   const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
   const [showRefineAiModal, setShowRefineAiModal] = useState(false);
@@ -168,10 +166,6 @@ export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ user, allW
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="space-y-1"><button onClick={onCancel} className="flex items-center space-x-2 text-xs font-bold text-neutral-400 hover:text-neutral-900 transition-colors uppercase tracking-wider"><ArrowLeft size={14} /><span>Back</span></button><h2 className="text-3xl font-black text-neutral-900 tracking-tight">Edit Unit</h2></div>
             <div className="flex items-center gap-2">
-                <button onClick={() => setIsLearned(!isLearned)} className={`px-5 py-2.5 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest transition-all ${isLearned ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'}`}>
-                    {isLearned ? <CheckCircle2 size={14}/> : <Circle size={14}/>}
-                    <span>{isLearned ? 'Completed' : 'Mark Complete'}</span>
-                </button>
                 <button onClick={() => setShowRefineAiModal(true)} className="px-5 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest hover:bg-neutral-50 transition-all"><Sparkles size={14} className="text-amber-500"/><span>AI Refine</span></button>
                 <button onClick={handleSaveUnitChanges} disabled={isSaving} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-black text-[10px] flex items-center space-x-2 transition-all active:scale-95 hover:bg-neutral-800 disabled:opacity-50 uppercase tracking-widest shadow-lg shadow-neutral-900/10">{isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}<span>Save Changes</span></button>
             </div>

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Unit, VocabularyItem, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
+import * as dataStore from '../../app/dataStore';
 import { Edit3, Trash2, BookOpen, Plus, Sparkles, FolderTree, Tag, Target, Download, Search } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
@@ -121,7 +122,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
         essay: "",
         path: '/'
     };
-    await db.saveUnit(newUnit);
+    await dataStore.saveUnit(newUnit);
     await loadData();
     setActiveUnit(newUnit);
     setViewMode('EDIT');
@@ -143,7 +144,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       };
       
       try {
-          await db.saveUnit(newUnit);
+          await dataStore.saveUnit(newUnit);
           showToast(`Imported "${newUnit.name}" successfully!`, 'success');
           await loadData();
           setActiveUnit(newUnit);
@@ -165,13 +166,13 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       const newData = { ...unit, focusColor: color || undefined, updatedAt: Date.now() };
       if (!color) delete newData.focusColor;
       setUnits(prev => prev.map(u => u.id === unit.id ? newData : u));
-      await db.saveUnit(newData);
+      await dataStore.saveUnit(newData);
   };
   
   const handleToggleFocus = async (unit: Unit) => {
       const newData = { ...unit, isFocused: !unit.isFocused, updatedAt: Date.now() };
       setUnits(prev => prev.map(u => u.id === unit.id ? newData : u));
-      await db.saveUnit(newData);
+      await dataStore.saveUnit(newData);
   };
   
   // --- Render Views ---
@@ -269,7 +270,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                         onFocusChange={(c) => handleFocusChange(unit, c)}
                         isFocused={unit.isFocused}
                         onToggleFocus={() => handleToggleFocus(unit)}
-                        isCompleted={unit.isLearned}
+                        isCompleted={unit.focusColor === 'green'}
                         actions={
                             <>
                                 <button onClick={(e) => { e.stopPropagation(); setActiveUnit(unit); setViewMode('READ'); }} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Read"><BookOpen size={14}/></button>
@@ -319,7 +320,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                     updatedAt: Date.now(),
                     path: '/'
                 };
-                await db.saveUnit(newUnit);
+                await dataStore.saveUnit(newUnit);
                 await loadData();
                 setActiveUnit(newUnit);
                 setViewMode('EDIT');
@@ -339,5 +340,3 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
     </>
   );
 };
-
-export default ReadingUnitPage;

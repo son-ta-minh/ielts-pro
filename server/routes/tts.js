@@ -106,15 +106,25 @@ router.post('/speak', async (req, res) => {
         else return res.status(404).json({ error: "voice_not_found" });
     }
 
-    // Ensure text is NFC normalized (composed) for macOS 'say' command, especially for Vietnamese
-    const cleanText = text.normalize('NFC').replace(/"/g, '\\"');
+    // Ensure text is NFC normalized
+    const cleanText = text.normalize('NFC');
     
-    const outFile = path.join(settings.AUDIO_DIR, `tts_${Date.now()}.aiff`);
+    const timestamp = Date.now();
+    const outFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.aiff`);
+    const txtFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.txt`);
+
+    // Write to a temporary text file to handle special characters/hyphens safely
+    try {
+        fs.writeFileSync(txtFile, cleanText);
+    } catch (e) {
+        console.error("[TTS] Failed to write temp text file:", e.message);
+        return res.status(500).json({ error: "tts_prep_failed" });
+    }
     
-    // Construct command: omit -v only if no specific voice is selected (System Default)
+    // Use -f to read from file
     const cmd = (voiceToUse)
-        ? `say -v "${voiceToUse}" "${cleanText}" -o "${outFile}"`
-        : `say "${cleanText}" -o "${outFile}"`;
+        ? `say -v "${voiceToUse}" -f "${txtFile}" -o "${outFile}"`
+        : `say -f "${txtFile}" -o "${outFile}"`;
 
     try {
         await runCommand(cmd);
@@ -129,12 +139,16 @@ router.post('/speak', async (req, res) => {
         stream.pipe(res);
         
         stream.on('close', () => {
-            fs.unlink(outFile, (err) => {
-                if (err) console.error("Failed to delete temp audio:", err);
-            });
+            // Cleanup both files
+            fs.unlink(outFile, (err) => { if (err) console.error("Failed to delete temp audio:", err); });
+            fs.unlink(txtFile, (err) => { if (err) console.error("Failed to delete temp text:", err); });
         });
     } catch (err) {
         console.error("[TTS] Generation failed:", err.message);
+        // Attempt cleanup on error
+        try { if (fs.existsSync(outFile)) fs.unlinkSync(outFile); } catch(e) {}
+        try { if (fs.existsSync(txtFile)) fs.unlinkSync(txtFile); } catch(e) {}
+        
         res.status(500).json({ error: "tts_generation_failed" });
     }
 });

@@ -215,28 +215,6 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
     }
   };
   
-  const handleToggleLearnedStatus = async () => {
-    const wasLearned = unit.isLearned;
-    const updatedUnit = { ...unit, isLearned: !unit.isLearned, updatedAt: Date.now() };
-    
-    if (!wasLearned && user.adventure) {
-        const newProgress = { ...user.adventure, keyFragments: (user.adventure.keyFragments || 0) + 1 };
-        let assembledKey = false;
-        while (newProgress.keyFragments >= 3) { newProgress.keyFragments -= 3; newProgress.keys = (newProgress.keys || 0) + 1; assembledKey = true; }
-        const updatedUser = { ...user, adventure: newProgress };
-        
-        await dataStore.saveUnit(updatedUnit);
-        await onUpdateUser(updatedUser);
-        
-        showToast('Essay Complete! +1 Key Fragment 🎉', 'success');
-        if (assembledKey) { showToast("✨ Key Fragments assembled into a Magic Key!", "success", 4000); }
-    } else {
-        await dataStore.saveUnit(updatedUnit);
-    }
-    // Explicitly notify data change to refresh UI
-    onDataChange();
-  };
-
   const handleExportUnit = async () => {
     try {
         await exportUnitsToJson([unit], user.id);
@@ -277,7 +255,6 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
       onHardDelete={handleHardDeleteWord}
       onBulkHardDelete={handleBulkHardDeleteRawWords}
       handleSaveWordUpdate={handleSaveWordUpdate}
-      handleToggleLearnedStatus={handleToggleLearnedStatus}
       onWordAction={handleEssayWordAction}
       onUpdateUser={onUpdateUser}
       handleExportUnit={handleExportUnit}

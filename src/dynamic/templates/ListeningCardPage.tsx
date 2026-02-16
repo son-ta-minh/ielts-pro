@@ -4,7 +4,7 @@ import { User, ListeningItem, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Music, Ear, Plus, Edit3, Trash2, Volume2, Save, X, Info, Tag, Shuffle, Target, FileAudio, Play, Pause, Square, SkipBack, SkipForward, Eye, EyeOff, Highlighter, Eraser, FileText } from 'lucide-react';
+import { Music, Ear, Plus, Edit3, Trash2, Volume2, Save, X, Info, Tag, Shuffle, Target, FileAudio, Play, Pause, Square, SkipBack, SkipForward, Eye, EyeOff, Highlighter, Eraser, FileText, ScanLine } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { speak, stopSpeaking } from '../../utils/audio';
@@ -21,20 +21,35 @@ interface Props {
 
 const VIEW_SETTINGS_KEY = 'vocab_pro_listening_view';
 
-// --- Highlighted Text Renderer (Static) ---
-const HighlightedText: React.FC<{ text: string }> = ({ text }) => {
-    // Splits by curly braces, capturing the content inside
-    const parts = text.split(/({.*?})/g);
+// --- Highlighted Text Renderer (Recursive) ---
+const HighlightedText: React.FC<{ text: string; showDash?: boolean }> = ({ text, showDash = true }) => {
+    // Regex matches either {content} OR [content]
+    // We use a non-greedy match .*? to handle multiple distinct tags on the same line
+    const parts = text.split(/({.*?}|\[.*?\])/g);
+
     return (
         <span className="leading-relaxed">
             {parts.map((part, i) => {
+                // Case 1: Highlight { ... }
                 if (part.startsWith('{') && part.endsWith('}')) {
                     return (
-                        <span key={i} className="inline-block bg-red-100 text-red-700 px-1.5 py-0.5 rounded-md font-bold mx-0.5 border border-red-200 text-[0.9em] align-baseline">
+                        <span key={i} className="text-red-600 font-bold mx-0.5">
                             {part.slice(1, -1)}
                         </span>
                     );
                 }
+                // Case 2: Audio Mark [ ... ]
+                if (part.startsWith('[') && part.endsWith(']')) {
+                    // We remove the brackets and recursively render the content
+                    // This ensures that if there is a {highlight} inside the [audio], it renders correctly
+                    // Because the parent (this span) has the border-b, the inner red text will sit on top of that line
+                    return (
+                        <span key={i} className={`${showDash ? 'border-b-2 border-dashed border-indigo-400' : ''} text-indigo-900 font-medium mx-0.5 pb-0.5 transition-colors hover:bg-indigo-50/50`}>
+                            <HighlightedText text={part.slice(1, -1)} showDash={showDash} />
+                        </span>
+                    );
+                }
+                // Case 3: Normal Text
                 return <span key={i}>{part}</span>;
             })}
         </span>
@@ -46,16 +61,28 @@ interface InteractiveTranscriptProps {
     rawText: string;
     onUpdate: (newRawText: string) => void;
     readOnly?: boolean;
+    showDash?: boolean;
 }
 
-const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, onUpdate, readOnly = false }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [pendingAction, setPendingAction] = useState<{ type: 'add' | 'remove', start: number, end: number } | null>(null);
+type SegmentType = 'text' | 'highlight' | 'audio';
 
-    // 1. Parse raw text into segments (Normal | Highlight)
+interface TranscriptSegment {
+    text: string;
+    type: SegmentType;
+    start: number;
+    end: number;
+}
+
+const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, onUpdate, readOnly = false, showDash = true }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [selectionState, setSelectionState] = useState<{ start: number, end: number, currentType: SegmentType } | null>(null);
+
+    // 1. Parse raw text into segments (Normal | Highlight {} | Audio [])
+    // Note: This flat segmentation is used for click-detection and simple rendering logic in the editor.
+    // The visual recursive rendering is handled by <HighlightedText /> inside the segments.
     const segments = useMemo(() => {
-        const segs: { text: string; isHighlight: boolean; start: number; end: number }[] = [];
-        const regex = /({.*?})/g;
+        const segs: TranscriptSegment[] = [];
+        const regex = /({.*?}|\[.*?\])/g;
         let match;
         let lastIndex = 0;
 
@@ -63,14 +90,19 @@ const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, 
             if (match.index > lastIndex) {
                 segs.push({
                     text: rawText.slice(lastIndex, match.index),
-                    isHighlight: false,
+                    type: 'text',
                     start: lastIndex,
                     end: match.index
                 });
             }
+            
+            let type: SegmentType = 'text';
+            if (match[0].startsWith('{')) type = 'highlight';
+            else if (match[0].startsWith('[')) type = 'audio';
+
             segs.push({
                 text: match[0],
-                isHighlight: true,
+                type,
                 start: match.index,
                 end: regex.lastIndex
             });
@@ -79,7 +111,7 @@ const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, 
         if (lastIndex < rawText.length) {
             segs.push({
                 text: rawText.slice(lastIndex),
-                isHighlight: false,
+                type: 'text',
                 start: lastIndex,
                 end: rawText.length
             });
@@ -105,94 +137,127 @@ const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, 
             return null;
         };
 
-        if (!selection || !selection.anchorNode || !selection.focusNode) {
-            setPendingAction(null);
-            return;
-        }
-        
-        // Case A: Unhighlight (Cursor inside highlighted segment)
-        // Even if collapsed (just clicked), we show the option to unhighlight
-        const anchorIdx = getSegmentIndex(selection.anchorNode);
-        if (anchorIdx !== null) {
-            const segment = segments[anchorIdx];
-            if (segment.isHighlight) {
-                setPendingAction({ type: 'remove', start: segment.start, end: segment.end });
-                return;
-            }
-        }
-        
-        // Case B: Highlight (Selection inside plain text segment)
-        if (!selection.isCollapsed) {
-            const focusIdx = getSegmentIndex(selection.focusNode);
-            // Only allow single-segment highlighting for simplicity
-            if (anchorIdx !== null && anchorIdx === focusIdx) {
-                const segment = segments[anchorIdx];
-                if (!segment.isHighlight) {
-                    // Range offsets are relative to the text node.
-                    // Assuming segment renders as a single span, usually containing one text node.
-                    const textNode = selection.anchorNode;
-                    if (textNode && textNode.nodeType === 3) { // Text node
-                        const start = Math.min(selection.anchorOffset, selection.focusOffset);
-                        const end = Math.max(selection.anchorOffset, selection.focusOffset);
-                        
-                        // Absolute positions relative to raw text start
-                        const absStart = segment.start + start;
-                        const absEnd = segment.start + end;
-                        
-                        const selectedText = selection.toString();
-                        if (selectedText) {
-                            setPendingAction({ type: 'add', start: absStart, end: absEnd });
-                            return;
-                        }
+        if (!selection || !selection.anchorNode || !selection.focusNode || selection.isCollapsed) {
+            // Also handle single-click inside existing tag for removal
+            if (selection && selection.isCollapsed && selection.anchorNode) {
+                const idx = getSegmentIndex(selection.anchorNode);
+                if (idx !== null) {
+                    const seg = segments[idx];
+                    if (seg.type !== 'text') {
+                         setSelectionState({ start: seg.start, end: seg.end, currentType: seg.type });
+                         return;
                     }
                 }
             }
+            setSelectionState(null);
+            return;
+        }
+        
+        const anchorIdx = getSegmentIndex(selection.anchorNode);
+        const focusIdx = getSegmentIndex(selection.focusNode);
+
+        if (anchorIdx === null || focusIdx === null) {
+            setSelectionState(null);
+            return;
         }
 
-        setPendingAction(null);
+        // Helper to get absolute index in rawText from a DOM node and offset
+        const getAbsoluteIndex = (node: Node, offset: number, segIdx: number) => {
+            const seg = segments[segIdx];
+            // If it's a special segment (wrapped in {} or []), the DOM text content matches seg.text.slice(1, -1).
+            // So offset 0 in DOM means index 1 inside the raw segment string.
+            // seg.start is the index of the opening brace/bracket.
+            const wrapperOffset = seg.type !== 'text' ? 1 : 0;
+            return seg.start + offset + wrapperOffset;
+        };
+
+        let start = getAbsoluteIndex(selection.anchorNode, selection.anchorOffset, anchorIdx);
+        let end = getAbsoluteIndex(selection.focusNode, selection.focusOffset, focusIdx);
+
+        if (start > end) {
+            [start, end] = [end, start];
+        }
+
+        // Case A: Selection is exactly inside a single special segment -> Edit/Remove mode
+        if (anchorIdx === focusIdx && segments[anchorIdx].type !== 'text') {
+             // If they select text inside a highlight, we effectively select the highlight wrapper for removal context
+             const seg = segments[anchorIdx];
+             setSelectionState({ start: seg.start, end: seg.end, currentType: seg.type });
+             return;
+        }
+
+        // Case B: Selection spans one or more segments -> Add mode ('text' type context)
+        // We allow wrapping mixed content (e.g. "Hello {world}") with []
+        if (start !== end) {
+            setSelectionState({ start, end, currentType: 'text' });
+        } else {
+            setSelectionState(null);
+        }
     };
 
-    const handleApplyAction = () => {
-        if (!pendingAction) return;
+    const handleApplyAction = (action: 'highlight' | 'audio' | 'clear') => {
+        if (!selectionState) return;
         
-        if (pendingAction.type === 'remove') {
-            // Remove braces: {content} -> content
-            const before = rawText.slice(0, pendingAction.start);
-            const content = rawText.slice(pendingAction.start + 1, pendingAction.end - 1);
-            const after = rawText.slice(pendingAction.end);
+        const { start, end, currentType } = selectionState;
+        
+        if (action === 'clear') {
+            // Remove braces/brackets
+            const before = rawText.slice(0, start);
+            const content = rawText.slice(start + 1, end - 1);
+            const after = rawText.slice(end);
             onUpdate(before + content + after);
         } else {
-            // Add braces: content -> {content}
-            const before = rawText.slice(0, pendingAction.start);
-            const content = rawText.slice(pendingAction.start, pendingAction.end);
-            const after = rawText.slice(pendingAction.end);
-            onUpdate(`${before}{${content}}${after}`);
+            // Add braces or brackets
+            const before = rawText.slice(0, start);
+            const content = rawText.slice(start, end);
+            const after = rawText.slice(end);
+            const wrapper = action === 'highlight' ? ['{', '}'] : ['[', ']'];
+            onUpdate(`${before}${wrapper[0]}${content}${wrapper[1]}${after}`);
         }
         
-        setPendingAction(null);
+        setSelectionState(null);
         window.getSelection()?.removeAllRanges();
+    };
+
+    const handlePlayAudio = (e: React.MouseEvent, text: string) => {
+        e.stopPropagation();
+        const content = text.slice(1, -1); // Remove []
+        // Strip inner highlights for TTS
+        const cleanContent = content.replace(/[{}]/g, ''); 
+        speak(cleanContent);
     };
 
     return (
         <div className="relative h-full flex flex-col">
             {/* Sticky Action Button - Floats over text */}
-            <div className="sticky top-4 z-50 h-0 flex justify-center pointer-events-none overflow-visible">
-                 <button 
-                    onClick={(e) => { e.preventDefault(); handleApplyAction(); }}
-                    disabled={!pendingAction}
-                    className={`pointer-events-auto flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-black shadow-xl transition-all transform duration-200 border-2 border-white ring-1 ring-black/5 ${
-                        pendingAction 
-                            ? 'translate-y-0 opacity-100 scale-100' 
-                            : '-translate-y-4 opacity-0 scale-95 pointer-events-none'
-                    } ${
-                        pendingAction?.type === 'remove' 
-                            ? 'bg-white text-rose-600 shadow-rose-100' 
-                            : 'bg-neutral-900 text-white shadow-neutral-200'
-                    }`}
-                 >
-                    {pendingAction?.type === 'remove' ? <Eraser size={14}/> : <Highlighter size={14}/>}
-                    <span>{pendingAction?.type === 'remove' ? 'Unhighlight' : 'Highlight'}</span>
-                 </button>
+            <div className="sticky top-4 z-50 h-0 flex justify-center pointer-events-none overflow-visible gap-2">
+                 {selectionState?.currentType === 'text' && (
+                     <>
+                        <button 
+                            onClick={(e) => { e.preventDefault(); handleApplyAction('highlight'); }}
+                            className="pointer-events-auto flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-black shadow-xl transition-all transform duration-200 border-2 border-white ring-1 ring-black/5 bg-neutral-900 text-white shadow-neutral-200 hover:scale-105 active:scale-95"
+                        >
+                            <Highlighter size={14}/>
+                            <span>Highlight</span>
+                        </button>
+                        <button 
+                            onClick={(e) => { e.preventDefault(); handleApplyAction('audio'); }}
+                            className="pointer-events-auto flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-black shadow-xl transition-all transform duration-200 border-2 border-white ring-1 ring-black/5 bg-indigo-600 text-white shadow-indigo-200 hover:scale-105 active:scale-95"
+                        >
+                            <Volume2 size={14}/>
+                            <span>Mark Audio</span>
+                        </button>
+                     </>
+                 )}
+                 {selectionState?.currentType !== 'text' && (
+                     <button 
+                        onClick={(e) => { e.preventDefault(); handleApplyAction('clear'); }}
+                        className={`pointer-events-auto flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-black shadow-xl transition-all transform duration-200 border-2 border-white ring-1 ring-black/5 bg-white text-rose-600 shadow-rose-100 hover:bg-rose-50 ${selectionState ? 'translate-y-0 opacity-100 scale-100' : '-translate-y-4 opacity-0 scale-95 pointer-events-none'}`}
+                     >
+                        <Eraser size={14}/>
+                        <span>{selectionState?.currentType === 'highlight' ? 'Unhighlight' : 'Unmark Audio'}</span>
+                     </button>
+                 )}
             </div>
             
             <div 
@@ -201,18 +266,38 @@ const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, 
                 onMouseUp={handleSelectionCheck}
                 onKeyUp={handleSelectionCheck}
             >
-                {segments.map((seg, i) => (
-                    <span 
-                        key={`${i}-${seg.start}`} 
-                        data-index={i}
-                        className={seg.isHighlight 
-                            ? "bg-red-100 text-red-700 px-1 rounded-md font-bold mx-0.5 border border-red-200 cursor-pointer hover:bg-red-200 hover:border-red-300 transition-colors" 
-                            : ""
-                        }
-                    >
-                        {seg.isHighlight ? seg.text.slice(1, -1) : seg.text}
-                    </span>
-                ))}
+                {segments.map((seg, i) => {
+                    if (seg.type === 'highlight') {
+                        return (
+                            <span 
+                                key={`${i}-${seg.start}`} 
+                                data-index={i}
+                                className="text-red-600 font-bold cursor-pointer hover:bg-red-50 transition-colors rounded mx-0.5"
+                            >
+                                {seg.text.slice(1, -1)}
+                            </span>
+                        );
+                    }
+                    if (seg.type === 'audio') {
+                        return (
+                            <span 
+                                key={`${i}-${seg.start}`} 
+                                data-index={i}
+                                onClick={(e) => handlePlayAudio(e, seg.text)}
+                                className={`${showDash ? 'border-b-2 border-dashed border-indigo-400' : ''} text-indigo-900 cursor-pointer hover:bg-indigo-50 transition-colors mx-0.5`}
+                                title="Click to listen"
+                            >
+                                {/* Render internal content recursively so nested highlights appear visually */}
+                                <HighlightedText text={seg.text.slice(1, -1)} showDash={showDash} />
+                            </span>
+                        );
+                    }
+                    return (
+                        <span key={`${i}-${seg.start}`} data-index={i}>
+                            {seg.text}
+                        </span>
+                    );
+                })}
             </div>
         </div>
     );
@@ -224,9 +309,11 @@ interface ListeningPracticeProps {
     onClose: () => void;
     item: ListeningItem;
     onUpdate: (updatedItem: ListeningItem) => void;
+    showDash: boolean;
+    onToggleDash: () => void;
 }
 
-const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onClose, item, onUpdate }) => {
+const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onClose, item, onUpdate, showDash, onToggleDash }) => {
     const audioLinks = item.audioLinks || [];
     const [currentIdx, setCurrentIdx] = useState<number>(0);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -326,7 +413,7 @@ const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onCl
                 stopSpeaking();
                 setIsPlaying(false);
             } else {
-                const cleanText = item.text.replace(/[{}]/g, '');
+                const cleanText = item.text.replace(/[{}]/g, '').replace(/\[|\]/g, ''); // Remove highlights and audio markers
                 speak(cleanText);
                 setIsPlaying(true);
                 const estimatedTime = (cleanText.length / 10) * 1000;
@@ -378,6 +465,10 @@ const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onCl
                     </div>
                     <div className="flex items-center gap-3">
                          <div className="bg-neutral-100 p-1 rounded-xl flex items-center">
+                            <button onClick={onToggleDash} className={`p-2 rounded-lg transition-all ${showDash ? 'bg-white shadow-sm text-indigo-600' : 'text-neutral-400 hover:text-neutral-600'}`} title="Toggle Audio Marks">
+                                <ScanLine size={16} />
+                            </button>
+                            <div className="w-px h-4 bg-neutral-200 mx-1"></div>
                             <button onClick={() => setIsEditMode(false)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${!isEditMode ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500'}`}>Read</button>
                             <button onClick={() => setIsEditMode(true)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${isEditMode ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500'}`}>Edit Raw</button>
                          </div>
@@ -396,7 +487,7 @@ const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onCl
                             />
                         ) : (
                             <div className="h-full flex flex-col bg-white border border-neutral-200 rounded-2xl shadow-sm p-8 overflow-y-auto">
-                                <InteractiveTranscript rawText={editableText} onUpdate={handleTextUpdate} />
+                                <InteractiveTranscript rawText={editableText} onUpdate={handleTextUpdate} showDash={showDash} />
                             </div>
                         )}
                     </div>
@@ -638,7 +729,8 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
   const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, {
       showNote: true,
       compact: false,
-      showType: true
+      showType: true,
+      showDash: false // CHANGED DEFAULT TO FALSE
   }));
 
   // Filtering
@@ -834,6 +926,10 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       setItems(prev => prev.map(i => i.id === item.id ? updated : i));
       await dataStore.saveListeningItem(updated);
   };
+  
+  const handleToggleDash = () => {
+      setViewSettings(v => ({...v, showDash: !v.showDash}));
+  };
 
   // --- Render Card Title Logic ---
   const renderCardTitle = (item: ListeningItem) => {
@@ -846,7 +942,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       
       return (
           <div className="font-medium text-lg text-neutral-700 leading-tight">
-              <HighlightedText text={truncated} />
+              <HighlightedText text={truncated} showDash={viewSettings.showDash} />
           </div>
       );
   };
@@ -907,6 +1003,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                     viewOptions={[
                         { label: 'Show Notes', checked: viewSettings.showNote, onChange: () => setViewSettings(v => ({...v, showNote: !v.showNote})) },
                         { label: 'Show Card Type', checked: viewSettings.showType, onChange: () => setViewSettings(v => ({...v, showType: !v.showType})) },
+                        { label: 'Show Dash Lines', checked: viewSettings.showDash, onChange: handleToggleDash },
                         { label: 'Compact Mode', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) },
                     ]}
                 />
@@ -939,20 +1036,6 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                 isFocused={item.isFocused}
                 onToggleFocus={() => handleToggleFocus(item)}
                 isCompleted={item.focusColor === 'green'}
-                footer={
-                     <div className="flex justify-between items-center mt-2">
-                        <div className="flex items-center gap-2">
-                             {item.audioLinks && item.audioLinks.length > 0 && (
-                                 <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full w-fit uppercase tracking-wider border border-emerald-100">
-                                     <Music size={10} /> {item.audioLinks.length} Tracks
-                                 </div>
-                             )}
-                        </div>
-                        <button onClick={(e) => { e.stopPropagation(); handlePlay(item); }} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 active:scale-95" title="Practice">
-                            <Play size={12} fill="currentColor"/> <span>Practice</span>
-                        </button>
-                     </div>
-                }
                 actions={
                     <>
                         <button onClick={(e) => { e.stopPropagation(); handleEdit(item); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit">
@@ -964,11 +1047,16 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                     </>
                 }
             >
-                {viewSettings.showNote && item.note && (
-                    <div className="flex items-center gap-2 text-xs text-neutral-500 font-medium bg-neutral-50 px-2 py-1 rounded-lg w-fit mb-2">
-                        <Info size={12}/> {item.note}
-                    </div>
-                )}
+                <div className="flex flex-col gap-2 h-full justify-between">
+                     {viewSettings.showNote && item.note && (
+                        <div className="flex items-center gap-2 text-xs text-neutral-500 font-medium bg-neutral-50 px-2 py-1 rounded-lg w-fit">
+                            <Info size={12}/> {item.note}
+                        </div>
+                    )}
+                     <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full w-fit uppercase tracking-wider border border-emerald-100 self-start">
+                         <Music size={10} /> {item.audioLinks ? item.audioLinks.length : 0} Tracks
+                     </div>
+                </div>
             </UniversalCard>
           ))}
         </>
@@ -988,6 +1076,8 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
             onClose={() => setPracticeItem(null)} 
             item={practiceItem} 
             onUpdate={handleUpdatePracticeItem}
+            showDash={viewSettings.showDash}
+            onToggleDash={handleToggleDash}
         />
     )}
     

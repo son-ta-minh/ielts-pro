@@ -1,7 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { NativeSpeakItem, NativeSpeakAnswer } from '../../app/types';
-import { X, Plus, Trash2, Save, Tag } from 'lucide-react';
+import { X, Plus, Trash2, Save, Tag, Sparkles } from 'lucide-react';
+import UniversalAiModal from '../common/UniversalAiModal';
+import { getRefineNativeSpeakPrompt } from '../../services/promptService';
+import { useToast } from '../../contexts/ToastContext';
 
 interface Props {
   isOpen: boolean;
@@ -15,6 +18,9 @@ export const AddEditNativeSpeakModal: React.FC<Props> = ({ isOpen, onClose, onSa
   const [tagsInput, setTagsInput] = useState('');
   const [note, setNote] = useState('');
   const [answers, setAnswers] = useState<NativeSpeakAnswer[]>([]);
+  
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (isOpen) {
@@ -30,10 +36,26 @@ export const AddEditNativeSpeakModal: React.FC<Props> = ({ isOpen, onClose, onSa
     if (!standard.trim()) return;
     onSave({ standard: standard.trim(), tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean), note: note.trim(), answers });
   };
+  
+  const handleAiReceived = (data: any) => {
+      const resultData = data.result || data;
+      if (resultData.answers && Array.isArray(resultData.answers)) {
+          // Append new answers to existing ones
+          setAnswers(prev => [...prev, ...resultData.answers]);
+          if (resultData.standard && !standard) {
+              setStandard(resultData.standard);
+          }
+          showToast(`Added ${resultData.answers.length} new expressions!`, "success");
+          setIsAiModalOpen(false);
+      } else {
+          showToast("AI response format invalid.", "error");
+      }
+  };
 
   if (!isOpen) return null;
 
   return (
+    <>
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
       <form onSubmit={handleSubmit} className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col max-h-[90vh]">
         <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
@@ -41,7 +63,10 @@ export const AddEditNativeSpeakModal: React.FC<Props> = ({ isOpen, onClose, onSa
             <h3 className="text-xl font-black text-neutral-900">{initialData ? 'Edit Expression' : 'New Expression'}</h3>
             <p className="text-sm text-neutral-500">Define context and generate expressions.</p>
           </div>
-          <button type="button" onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setIsAiModalOpen(true)} className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors" title="Refine/Expand with AI"><Sparkles size={18} /></button>
+            <button type="button" onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
+          </div>
         </header>
         <main className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
           <div className="space-y-1">
@@ -66,9 +91,10 @@ export const AddEditNativeSpeakModal: React.FC<Props> = ({ isOpen, onClose, onSa
                              <option value="semi-academic">Semi-Academic</option>
                              <option value="academic">Academic</option>
                          </select>
-                         <input value={ans.anchor} onChange={e => { const n = [...answers]; n[idx].anchor = e.target.value; setAnswers(n); }} placeholder="Anchor phrase" className="flex-1 px-2 py-1 bg-white border border-neutral-200 rounded-lg text-xs font-bold outline-none" />
+                         <input value={ans.anchor} onChange={e => { const n = [...answers]; n[idx].anchor = e.target.value; setAnswers(n); }} placeholder="Situation / Context (e.g. Refusing politey)" className="flex-1 px-2 py-1 bg-white border border-neutral-200 rounded-lg text-xs font-bold outline-none" />
                      </div>
                      <textarea value={ans.sentence} onChange={e => { const n = [...answers]; n[idx].sentence = e.target.value; setAnswers(n); }} placeholder="Example sentence with {curly braces}" className="w-full p-2 bg-white border border-neutral-200 rounded-lg text-xs font-medium resize-none outline-none" rows={2} />
+                     <input value={ans.note || ''} onChange={e => { const n = [...answers]; n[idx].note = e.target.value; setAnswers(n); }} placeholder="Note (optional)" className="w-full px-2 py-1 bg-white border border-neutral-200 rounded-lg text-[10px] font-medium text-neutral-500 outline-none" />
                  </div>
              ))}
           </div>
@@ -78,5 +104,20 @@ export const AddEditNativeSpeakModal: React.FC<Props> = ({ isOpen, onClose, onSa
         </footer>
       </form>
     </div>
+    
+    {isAiModalOpen && (
+        <UniversalAiModal
+            isOpen={isAiModalOpen}
+            onClose={() => setIsAiModalOpen(false)}
+            type="REFINE_UNIT"
+            title="Expand Expressions"
+            description="Generate additional variations (duplicates are excluded)."
+            initialData={{}}
+            onGeneratePrompt={(i) => getRefineNativeSpeakPrompt(standard, i.request, answers)}
+            onJsonReceived={handleAiReceived}
+            actionLabel="Generate"
+        />
+    )}
+    </>
   );
 };

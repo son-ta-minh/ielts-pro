@@ -1,5 +1,6 @@
 
 
+
 /**
  * Lightweight Markdown Parser supporting custom tags:
  * [Audio-VN]text[/] -> Speaker button + text (inline)
@@ -297,8 +298,12 @@ const processAudioBlocks = (text: string): string => {
 export const parseMarkdown = (text: string): string => {
     if (!text) return '';
 
+    // Normalize literal "\n" strings to actual newlines to support both formats
+    // This handles cases where the AI outputs a string literal '\n' instead of a newline char
+    const normalized = text.replace(/\\n/g, '\n');
+
     // 1. Process Audio and Spoilers first (as they can be inline)
-    let processed = processAudioBlocks(text);
+    let processed = processAudioBlocks(normalized);
     processed = processQuiz(processed);
     processed = processDropdown(processed); // New: Select
     processed = processMultiChoice(processed); // Process Multi before table to safely replace pipes

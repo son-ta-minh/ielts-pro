@@ -9,7 +9,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { TagBrowser } from '../../components/common/TagBrowser';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
-import { getRefineNativeSpeakPrompt, getGenerateConversationPrompt } from '../../services/promptService';
+import { getGenerateConversationPrompt } from '../../services/promptService';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { UniversalCard } from '../../components/common/UniversalCard';
@@ -75,9 +75,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   const [itemToDelete, setItemToDelete] = useState<{ id: string, type: 'card' | 'conversation' | 'free_talk' } | null>(null);
   
   // AI Modals
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isConversationAiModalOpen, setIsConversationAiModalOpen] = useState(false);
-  const [itemToRefine, setItemToRefine] = useState<Partial<NativeSpeakItem> | null>(null);
   
   // Practice Modals State
   const [practiceModalItem, setPracticeModalItem] = useState<NativeSpeakItem | null>(null);
@@ -135,7 +133,10 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
     });
   }, [items, selectedTag, focusFilter, colorFilter, viewSettings.resourceType, searchQuery]);
   
-  const pagedItems = useMemo(() => { const start = page * pageSize; return filteredItems.slice(start, start + pageSize); }, [filteredItems, page, pageSize]);
+  const pagedItems = useMemo(() => {
+      const start = page * pageSize;
+      return filteredItems.slice(start, start + pageSize);
+  }, [filteredItems, page, pageSize]);
 
   // --- Handlers ---
 
@@ -221,7 +222,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
     query={searchQuery}
     onQueryChange={setSearchQuery}
     searchPlaceholder="Search phrases, conversations..."
-    config={{}} isLoading={loading} isEmpty={filteredItems.length === 0} emptyMessage="No items found." activeFilters={{}} onFilterChange={() => {}} pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }} aboveGrid={<>{isTagBrowserOpen && <TagBrowser items={items.map(i => i.data)} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}</>} actions={<ResourceActions viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} hasActiveFilters={hasActiveFilters} filterOptions={[{ label: 'All', value: 'ALL', isActive: viewSettings.resourceType === 'ALL', onClick: () => handleSettingChange('resourceType', 'ALL') }, { label: 'Card', value: 'CARD', isActive: viewSettings.resourceType === 'CARD', onClick: () => handleSettingChange('resourceType', 'CARD') }, { label: 'Conv.', value: 'CONVERSATION', isActive: viewSettings.resourceType === 'CONVERSATION', onClick: () => handleSettingChange('resourceType', 'CONVERSATION') }, { label: 'Free Talk', value: 'FREE_TALK', isActive: viewSettings.resourceType === 'FREE_TALK', onClick: () => handleSettingChange('resourceType', 'FREE_TALK') }]} customSection={<><div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2"><Target size={10}/> Focus & Status</div><div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2"><button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>{focusFilter === 'focused' ? 'Focused Only' : 'All Items'}</button><div className="flex gap-1"><button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} /></div></div></>} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]} />} browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }} addActions={[{ label: 'New Card', icon: Plus, onClick: () => { setEditingItem(null); setIsModalOpen(true); } }, { label: 'New Conversation', icon: MessageSquare, onClick: () => { setEditingConversation(null); setIsConversationModalOpen(true); } }, { label: 'New Free Talk', icon: MessageCircle, onClick: () => { setEditingFreeTalk(null); setIsFreeTalkModalOpen(true); } }]} extraActions={<><button onClick={handleRandomize} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button></>} />}>
+    config={{}} isLoading={loading} isEmpty={filteredItems.length === 0} emptyMessage="No items found." activeFilters={{}} onFilterChange={() => {}} pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }} aboveGrid={<>{isTagBrowserOpen && <TagBrowser items={items.map(i => i.data)} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}</>} actions={<ResourceActions viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} hasActiveFilters={hasActiveFilters} filterOptions={[{ label: 'All', value: 'ALL', isActive: viewSettings.resourceType === 'ALL', onClick: () => handleSettingChange('resourceType', 'ALL') }, { label: 'Card', value: 'CARD', isActive: viewSettings.resourceType === 'CARD', onClick: () => handleSettingChange('resourceType', 'CARD') }, { label: 'Conv.', value: 'CONVERSATION', isActive: viewSettings.resourceType === 'CONVERSATION', onClick: () => handleSettingChange('resourceType', 'CONVERSATION') }, { label: 'Free Talk', value: 'FREE_TALK', isActive: viewSettings.resourceType === 'FREE_TALK', onClick: () => handleSettingChange('resourceType', 'FREE_TALK') }]} customSection={<><div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2"><Target size={10}/> Focus & Status</div><div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2"><button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>{focusFilter === 'focused' ? 'Focused Only' : 'All Items'}</button><div className="flex gap-1"><button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} /></div></div></>} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]} />} browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }} addActions={[{ label: 'New Native Expression', icon: Plus, onClick: () => { setEditingItem(null); setIsModalOpen(true); } }, { label: 'New Conversation', icon: MessageSquare, onClick: () => { setEditingConversation(null); setIsConversationModalOpen(true); } }, { label: 'New Free Talk', icon: MessageCircle, onClick: () => { setEditingFreeTalk(null); setIsFreeTalkModalOpen(true); } }]} extraActions={<><button onClick={handleRandomize} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button></>} />}>
       {() => (
         <>
           {(pagedItems as SpeakingItem[]).map((item) => {
@@ -251,9 +252,6 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                                 <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{(item.data as NativeSpeakItem).answers.length} variations</span>
                                 <ScoreBadge score={(item.data as NativeSpeakItem).bestScore} />
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setPracticeModalItem(item.data as NativeSpeakItem); }} className="flex items-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-teal-600 transition-all shadow-teal-200 active:scale-95">
-                                <Play size={14} fill="currentColor"/> Practice
-                            </button>
                         </div>
                     </UniversalCard>
                  );
@@ -277,7 +275,6 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                                 <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{(item.data as ConversationItem).sentences.length} lines</span>
                                 <ScoreBadge score={(item.data as ConversationItem).bestScore} />
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setPracticeConversation(item.data as ConversationItem); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-indigo-200 active:scale-95"><Play size={14}/> Practice</button>
                         </div>
                     </UniversalCard>
                   );
@@ -305,7 +302,6 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                                 <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{sentenceCount} Sentences</span>
                                 <ScoreBadge score={bestScore} />
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setPracticeFreeTalk(item.data as FreeTalkItem); }} className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-cyan-600 transition-all shadow-cyan-200 active:scale-95"><Play size={14}/> Practice</button>
                         </div>
                     </UniversalCard>
                   );
@@ -321,7 +317,6 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
 
     <ConfirmationModal isOpen={!!itemToDelete} title="Delete Item?" message="This action cannot be undone." confirmText="Delete" isProcessing={false} onConfirm={handleConfirmDelete} onClose={() => setItemToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
     
-    {isAiModalOpen && <UniversalAiModal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} type="REFINE_UNIT" title="Refine Expression" description="Enter instructions for AI refinement." initialData={{}} onGeneratePrompt={(i) => getRefineNativeSpeakPrompt(itemToRefine?.standard || '', i.request)} onJsonReceived={(d) => { if (d.answers) { setEditingItem(prev => ({ ...prev || { id: '', userId: user.id, createdAt: 0, updatedAt: 0, standard: '', answers: [], tags: [], note: '' }, standard: d.standard, answers: d.answers })); setIsAiModalOpen(false); showToast("Refined!", "success"); } }} actionLabel="Apply" />}
     {isConversationAiModalOpen && <UniversalAiModal isOpen={isConversationAiModalOpen} onClose={() => setIsConversationAiModalOpen(false)} type="GENERATE_UNIT" title="AI Conversation Creator" description="Enter a topic to generate a dialogue." initialData={{}} onGeneratePrompt={(i) => getGenerateConversationPrompt(i.request)} onJsonReceived={handleConversationAiResult} actionLabel="Generate" closeOnSuccess={true} />}
     
     <SpeakingPracticeModal isOpen={!!practiceModalItem} onClose={() => { setPracticeModalItem(null); loadData(true); }} item={practiceModalItem} />
@@ -330,3 +325,5 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
     </>
   );
 };
+
+export default SpeakingCardPage;

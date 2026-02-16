@@ -1,3 +1,4 @@
+
 export interface LessonGenerationParams {
   topic: string;
   language: 'English' | 'Vietnamese';
@@ -72,7 +73,8 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
 
   CRITICAL OUTPUT RULES:
   1. **MARKDOWN CODE BLOCK**: Wrap JSON in \`\`\`json ... \`\`\`.
-  2. **NO RAW NEWLINES IN STRINGS**: Use literal '\\n' for line breaks.
+  2. **NO RAW NEWLINES**: Use \`\\n\` (double backslash n) for line breaks in strings.
+  3. **TABLES**: Use \`<br>\` for line breaks inside table cells. Do NOT use \`\\n\` or newlines inside table rows.
 
   OUTPUT TEMPLATE:
   \`\`\`json

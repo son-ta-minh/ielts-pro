@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
@@ -23,7 +24,6 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
   const [editWords, setEditWords] = useState('');
   const [editEssay, setEditEssay] = useState(unit.essay || '');
   const [editComprehensionQuestions, setEditComprehensionQuestions] = useState<{ question: string; answer: string; }[]>([]);
-  const [isLearned, setIsLearned] = useState(unit.isLearned || false);
   const [isSaving, setIsSaving] = useState(false);
   
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
@@ -46,7 +46,6 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
     
     setEditEssay(unit.essay || '');
     setEditComprehensionQuestions(unit.comprehensionQuestions || []);
-    setIsLearned(unit.isLearned || false);
     if (unit.customVocabString) {
         setEditWords(unit.customVocabString);
     } else {
@@ -94,7 +93,8 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
             path: editPath,
             tags: finalTags, 
             comprehensionQuestions: finalQuestions, 
-            isLearned: isLearned, 
+            // Preserve existing learned status or default to false, as UI control is removed
+            isLearned: unit.isLearned || false, 
             updatedAt: Date.now() 
         };
         await dataStore.saveUnit(updatedUnit);
@@ -132,8 +132,6 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
       setEditEssay={setEditEssay}
       editComprehensionQuestions={editComprehensionQuestions}
       setEditComprehensionQuestions={setEditComprehensionQuestions}
-      isLearned={isLearned}
-      setIsLearned={setIsLearned}
       isSaving={isSaving}
       handleSaveUnitChanges={handleSaveUnitChanges}
       handleGenerateUnitRefinePrompt={handleGenerateUnitRefinePrompt}

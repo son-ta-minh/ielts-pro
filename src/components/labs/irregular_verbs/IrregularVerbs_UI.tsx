@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { IrregularVerb, VocabularyItem } from '../../../app/types';
-import { FileClock, Plus, Edit3, Trash2, Loader2, Save, X, Eye, Library, Wand2, CheckSquare, Square, Info, Play, BrainCircuit, Dices, Search, ChevronLeft, ChevronRight, Sparkles, Check, Zap, RefreshCw } from 'lucide-react';
+import { FileClock, Plus, Edit3, Trash2, Loader2, Save, X, Eye, Library, Wand2, CheckSquare, Square, Info, Play, BrainCircuit, Dices, Search, ChevronLeft, ChevronRight, Sparkles, Check, Zap, RefreshCw, BarChart, CheckCircle, XCircle } from 'lucide-react';
 import ConfirmationModal from '../../common/ConfirmationModal';
 
 interface AddEditVerbModalProps {
@@ -77,15 +77,19 @@ const AddEditVerbModal: React.FC<AddEditVerbModalProps> = ({ isOpen, onClose, on
 interface PracticeSetupModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onStart: (mode: 'headword' | 'random' | 'quick_forgot' | 'quick_all') => void;
+    onStart: (mode: 'headword' | 'random' | 'quick_forgot' | 'quick_all', filterUnlearned?: boolean) => void;
     verbs: IrregularVerb[];
 }
 
 const PracticeSetupModal: React.FC<PracticeSetupModalProps> = ({ isOpen, onClose, onStart, verbs }) => {
+    const [filterUnlearned, setFilterUnlearned] = useState(false);
+    
     if (!isOpen) return null;
 
-    const hasForgotVerbs = useMemo(() => verbs.some(v => v.lastTestResult === 'fail'), [verbs]);
+    const hasForgotVerbs = verbs.some(v => v.lastTestResult === 'fail');
     const count = verbs.length;
+    const learnedCount = verbs.filter(v => v.lastTestResult === 'pass').length;
+    const unlearnedCount = count - learnedCount;
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -97,18 +101,39 @@ const PracticeSetupModal: React.FC<PracticeSetupModalProps> = ({ isOpen, onClose
                     </div>
                     <button type="button" onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
                 </header>
-                <main className="p-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button onClick={() => onStart('headword')} className="p-6 bg-neutral-50 border-2 border-neutral-200 rounded-2xl text-left hover:border-neutral-900 hover:bg-white hover:shadow-lg transition-all group">
-                        <BrainCircuit size={24} className="text-neutral-500 group-hover:text-neutral-900 mb-2"/>
-                        <h4 className="font-bold">Test from V1</h4>
-                        <p className="text-xs text-neutral-500">Recall V2 and V3 from the base form.</p>
-                    </button>
-                    <button onClick={() => onStart('random')} className="p-6 bg-neutral-50 border-2 border-neutral-200 rounded-2xl text-left hover:border-neutral-900 hover:bg-white hover:shadow-lg transition-all group">
-                        <Dices size={24} className="text-neutral-500 group-hover:text-neutral-900 mb-2"/>
-                        <h4 className="font-bold">Test Random Form</h4>
-                        <p className="text-xs text-neutral-500">Recall the other two forms from a random V1, V2, or V3.</p>
-                    </button>
-                    <div className="md:col-span-2 p-6 bg-neutral-50 border-2 border-neutral-200 rounded-2xl text-left space-y-4">
+                <main className="p-8 flex flex-col gap-6">
+                    {/* Toggle Filter */}
+                    <div className="flex flex-col gap-2">
+                         <div className="flex bg-neutral-100 p-1 rounded-xl">
+                            <button 
+                                onClick={() => setFilterUnlearned(false)}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${!filterUnlearned ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                            >
+                                All ({count})
+                            </button>
+                            <button 
+                                onClick={() => setFilterUnlearned(true)}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${filterUnlearned ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                            >
+                                Not Learned ({unlearnedCount})
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button onClick={() => onStart('headword', filterUnlearned)} className="p-6 bg-neutral-50 border-2 border-neutral-200 rounded-2xl text-left hover:border-neutral-900 hover:bg-white hover:shadow-lg transition-all group">
+                            <BrainCircuit size={24} className="text-neutral-500 group-hover:text-neutral-900 mb-2"/>
+                            <h4 className="font-bold">Test from V1</h4>
+                            <p className="text-xs text-neutral-500">Recall V2 and V3 from the base form.</p>
+                        </button>
+                        <button onClick={() => onStart('random', filterUnlearned)} className="p-6 bg-neutral-50 border-2 border-neutral-200 rounded-2xl text-left hover:border-neutral-900 hover:bg-white hover:shadow-lg transition-all group">
+                            <Dices size={24} className="text-neutral-500 group-hover:text-neutral-900 mb-2"/>
+                            <h4 className="font-bold">Test Random Form</h4>
+                            <p className="text-xs text-neutral-500">Recall forms from a random V1/V2/V3.</p>
+                        </button>
+                    </div>
+
+                    <div className="p-6 bg-neutral-50 border-2 border-neutral-200 rounded-2xl text-left space-y-4">
                         <div className="flex items-center gap-2">
                             <Zap size={24} className="text-neutral-500"/>
                             <div>
@@ -163,7 +188,7 @@ interface IrregularVerbsUIProps {
   onPracticeAll: () => void;
   isPracticeSetupOpen: boolean;
   onClosePracticeSetup: () => void;
-  onStartPractice: (mode: 'headword' | 'random' | 'quick' | 'quick_forgot' | 'quick_all') => void;
+  onStartPractice: (mode: 'headword' | 'random' | 'quick' | 'quick_forgot' | 'quick_all', filterUnlearned?: boolean) => void;
   isAddPanelOpen: boolean;
   addInput: string;
   onAddInputChange: (value: string) => void;
@@ -278,7 +303,6 @@ export const IrregularVerbsUI: React.FC<IrregularVerbsUIProps> = (props) => {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-neutral-50/50">
-                {/* FIX: Replaced 'pagedVerbs' with 'verbs' */}
                 <th className="p-4 w-12"><button onClick={() => setSelectedIds(selectedIds.size === verbs.length && verbs.length > 0 ? new Set() : new Set(verbs.map(v => v.id)))} className="text-neutral-300 hover:text-neutral-900">{selectedIds.size === verbs.length && verbs.length > 0 ? <CheckSquare size={18} className="text-neutral-900" /> : <Square size={18} />}</button></th>
                 <th className="p-3 text-left text-[10px] font-black uppercase tracking-wider text-neutral-400">V1 (Base)</th>
                 <th className="p-3 text-left text-[10px] font-black uppercase tracking-wider text-neutral-400">V2 (Past Simple)</th>
@@ -287,7 +311,6 @@ export const IrregularVerbsUI: React.FC<IrregularVerbsUIProps> = (props) => {
               </tr>
             </thead>
             <tbody>
-              {/* FIX: Replaced 'pagedVerbs' with 'verbs' */}
               {verbs.map(verb => {
                 const isSelected = selectedIds.has(verb.id);
                 const isInLibrary = libraryWords.has(verb.v1.toLowerCase());

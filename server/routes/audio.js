@@ -112,6 +112,36 @@ router.delete('/audio/mappings/:name', (req, res) => {
     res.json({ success: true, mappings: folderMappings });
 });
 
+router.delete('/audio/file', (req, res) => {
+    const { mapName, filename } = req.query;
+    
+    if (!mapName || !filename) {
+        return res.status(400).json({ error: 'mapName and filename are required' });
+    }
+
+    const rootDir = folderMappings[mapName];
+    if (!rootDir) return res.status(404).json({ error: 'Mapping not found' });
+
+    // Basic security check to prevent directory traversal
+    const safeFilename = filename.replace(/^(\.\.(\/|\\|$))+/, '');
+    const fullPath = path.join(rootDir, safeFilename);
+    
+    if (!fullPath.startsWith(rootDir)) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (fs.existsSync(fullPath)) {
+        try {
+            fs.unlinkSync(fullPath);
+            res.json({ success: true });
+        } catch (e) {
+            res.status(500).json({ error: `Failed to delete file: ${e.message}` });
+        }
+    } else {
+        res.status(404).json({ error: 'File not found' });
+    }
+});
+
 router.get('/audio/stream/:mapName/*', (req, res) => {
     const { mapName } = req.params;
     const filePathRel = req.params[0]; 
@@ -182,7 +212,7 @@ router.get('/audio/files/:mapName', (req, res) => {
 
     try {
         const dirents = fs.readdirSync(targetDir, { withFileTypes: true });
-        const audioExtensions = ['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac'];
+        const audioExtensions = ['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac', '.webm'];
         
         const items = dirents.map(dirent => {
             const item = {

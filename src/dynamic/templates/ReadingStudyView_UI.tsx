@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen, Tag, HelpCircle, X, Check, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
@@ -125,7 +124,6 @@ export interface ReadingStudyViewUIProps {
     onHardDelete: (word: VocabularyItem) => Promise<void>;
     onBulkHardDelete: (ids: Set<string>) => Promise<void>;
     handleSaveWordUpdate: (word: VocabularyItem) => Promise<void>;
-    handleToggleLearnedStatus: () => Promise<void>;
     onWordAction: (text: string, action: 'add' | 'remove') => void;
     onUpdateUser: (user: User) => Promise<void>;
     handleExportUnit: () => void;
@@ -139,7 +137,7 @@ export interface ReadingStudyViewUIProps {
 }
 
 export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => {
-  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, handleToggleLearnedStatus, onWordAction, handleExportUnit, isComprehensionModalOpen, onOpenComprehensionModal, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange } = props;
+  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, handleExportUnit, isComprehensionModalOpen, onOpenComprehensionModal, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange } = props;
   
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
@@ -182,10 +180,6 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
         <div className="px-2 space-y-3">
             <div className="flex items-center gap-4">
               <h3 className="text-xl font-bold text-neutral-900 tracking-tight">{unit.name}</h3>
-              <button onClick={handleToggleLearnedStatus} className="flex items-center gap-2 text-xs font-bold text-neutral-500 hover:text-neutral-900 transition-colors">
-                  {unit.isLearned ? <CheckCircle2 size={16} className="text-green-500"/> : <Circle size={16} className="text-neutral-300"/>}
-                  <span className="whitespace-nowrap">{unit.isLearned ? 'Completed' : 'Mark as Completed'}</span>
-              </button>
             </div>
             <p className="text-xs text-neutral-500 font-medium">{unit.description || 'Description is empty'}</p>
             {unit.tags && unit.tags.length > 0 && (
