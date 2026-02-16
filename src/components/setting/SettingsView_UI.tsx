@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { CheckCircle2, ChevronDown, User, Bot, Settings2, AlertTriangle, LayoutTemplate, GraduationCap, Server } from 'lucide-react';
+import { CheckCircle2, ChevronDown, User, Bot, AlertTriangle, LayoutTemplate, GraduationCap, Server } from 'lucide-react';
 import { ProfileSettings } from './ProfileSettings';
 import { AudioCoachSettings } from './AudioCoachSettings';
 import { SrsSettings } from './SrsSettings';

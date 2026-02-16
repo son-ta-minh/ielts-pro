@@ -1,12 +1,71 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
-  Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo
+  Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText
 } from 'lucide-react';
-import { AppView, VocabularyItem } from '../../app/types';
+import { AppView, VocabularyItem, User } from '../../app/types';
 import { DailyGoalConfig } from '../../app/settingsManager';
 import { DayProgress } from './DayProgress';
 import { PieChart, Pie, Cell, Tooltip } from 'recharts';
+
+// Placeholder for build date
+const getFormattedBuildDate = () => {
+    // Vite injects this at build time. It will be undefined in dev mode.
+    const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
+    if (!buildTimestamp) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const day = now.getDate().toString().padStart(2, '0');
+        return `v${year}${month}${day}_dev`;
+    }
+    try {
+        const d = new Date(buildTimestamp);
+        const year = d.getFullYear();
+        const month = (d.getMonth() + 1).toString().padStart(2, '0');
+        const day = d.getDate().toString().padStart(2, '0');
+        const hours = d.getHours().toString().padStart(2, '0');
+        const minutes = d.getMinutes().toString().padStart(2, '0');
+        return `v${year}${month}${day}_${hours}${minutes}`;
+    } catch (e) {
+        return 'v_error';
+    }
+};
+
+const QuickToolsPanel: React.FC<{ onAction?: (action: string) => void }> = ({ onAction }) => (
+    <div className="grid grid-cols-3 gap-4">
+        <button 
+            onClick={() => onAction?.('IRREGULAR_VERBS')} 
+            className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-neutral-200 rounded-3xl shadow-sm hover:shadow-md hover:border-orange-200 hover:bg-orange-50/50 transition-all group active:scale-95"
+        >
+            <div className="p-3 bg-orange-100 text-orange-600 rounded-2xl group-hover:scale-110 transition-transform">
+                <FileClock size={20} />
+            </div>
+            <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest group-hover:text-orange-700">Irregular Verbs</span>
+        </button>
+
+        <button 
+            onClick={() => onAction?.('MIMIC')} 
+            className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-neutral-200 rounded-3xl shadow-sm hover:shadow-md hover:border-purple-200 hover:bg-purple-50/50 transition-all group active:scale-95"
+        >
+            <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:scale-110 transition-transform">
+                <Mic size={20} />
+            </div>
+            <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest group-hover:text-purple-700">Pronunciation</span>
+        </button>
+
+        <button 
+            onClick={() => onAction?.('LESSON_GRAMMAR')} 
+            className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-neutral-200 rounded-3xl shadow-sm hover:shadow-md hover:border-blue-200 hover:bg-blue-50/50 transition-all group active:scale-95"
+        >
+            <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
+                <BookText size={20} />
+            </div>
+            <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest group-hover:text-blue-700">Grammar</span>
+        </button>
+    </div>
+);
 
 // New component for Goal Completion
 const GoalCompletionPanel: React.FC<{ 
@@ -315,74 +374,43 @@ const LibraryHealthPanel: React.FC<{
 
 // Define props for the UI component
 export interface DashboardUIProps {
+  user: User;
+  onNavigate: (view: string) => void;
   totalCount: number;
-  dueCount: number;
   newCount: number;
+  dueCount: number;
+  learnedCount: number;
   rawCount: number;
   refinedCount: number;
-  reviewStats: { learned: number; mastered: number; statusForgot: number; statusHard: number; statusEasy: number; statusLearned: number; };
-  goalStats: { totalTasks: number; completedTasks: number; };
-  setView: (view: AppView) => void;
-  onNavigateToWordList: (filter: string) => void;
-  onStartDueReview: () => void;
-  onStartNewLearn: () => void;
+  reviewStats: any;
+  wotd: VocabularyItem | null;
+  isWotdComposed: boolean;
+  onRandomizeWotd: () => void;
+  onComposeWotd: () => void;
   lastBackupTime: number | null;
   onBackup: (mode: 'server' | 'file') => void;
   onRestore: (mode: 'server' | 'file') => void;
-  dayProgress: { learned: number; reviewed: number; learnedWords: VocabularyItem[]; reviewedWords: VocabularyItem[]; };
-  dailyGoals: DailyGoalConfig;
   serverStatus: 'connected' | 'disconnected';
-  onAction?: (action: string) => void;
+  onAction: (action: string, params?: any) => void;
+  onStartNewLearn: () => void;
+  onStartDueReview: () => void;
+  dayProgress: any;
+  dailyGoals: DailyGoalConfig;
+  onNavigateToWordList: (filter: string) => void;
+  goalStats: { totalTasks: number; completedTasks: number; };
 }
-
-const getFormattedBuildDate = () => {
-    // Vite injects this at build time. It will be undefined in dev mode.
-    const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
-    if (!buildTimestamp) {
-        // Fallback for dev environment
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const day = now.getDate().toString().padStart(2, '0');
-        return `v${year}${month}${day}_dev`;
-    }
-    try {
-        const d = new Date(buildTimestamp);
-        const year = d.getFullYear();
-        const month = (d.getMonth() + 1).toString().padStart(2, '0');
-        const day = d.getDate().toString().padStart(2, '0');
-        const hours = d.getHours().toString().padStart(2, '0');
-        const minutes = d.getMinutes().toString().padStart(2, '0');
-        return `v${year}${month}${day}_${hours}${minutes}`;
-    } catch (e) {
-        // Fallback in case of parsing error
-        return 'v_error';
-    }
-};
 
 // The pure UI component
 export const DashboardUI: React.FC<DashboardUIProps> = ({
-  totalCount,
-  dueCount,
-  newCount,
-  rawCount,
-  refinedCount,
-  reviewStats,
-  goalStats,
-  setView,
-  onNavigateToWordList,
-  onStartDueReview,
-  onStartNewLearn,
-  lastBackupTime,
-  onBackup,
-  onRestore,
-  dayProgress,
-  dailyGoals,
-  serverStatus,
-  onAction
+  user, onNavigate, totalCount, newCount, dueCount, learnedCount, rawCount, refinedCount, reviewStats,
+  wotd, isWotdComposed, onRandomizeWotd, onComposeWotd, lastBackupTime, onBackup, onRestore,
+  serverStatus, onAction, onStartNewLearn, onStartDueReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
-
+  
+  // Mock data for missing props from helper functions
+  const setView = onNavigate;
+  
   return (
     <div className="space-y-10 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-6">
@@ -406,7 +434,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                             <div className="relative group/tooltip">
                                 <HelpCircle size={12} className="cursor-help opacity-70 hover:opacity-100" />
                                 <div className="absolute left-0 top-full mt-2 w-56 p-3 bg-neutral-900 text-white text-[10px] leading-relaxed font-medium rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-neutral-700">
-                                    Disconnected with Vocab Server. Server backup and high-quality voices are unavailable.
+                                    Disconnected from Vocab Server. Server backup and high-quality voices are unavailable.
                                     <div className="absolute -top-1 left-3 w-2 h-2 bg-neutral-900 rotate-45 border-l border-t border-neutral-700"></div>
                                 </div>
                             </div>
@@ -463,6 +491,8 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
           />
         </div>
       </div>
+
+      <QuickToolsPanel onAction={onAction} />
 
       <DayProgress
         learnedToday={dayProgress.learned}

@@ -1,4 +1,3 @@
-
 /**
  * Data transformation and mapping for Import/Export.
  * Uses short keys to reduce JSON size for storage and transfer.
@@ -12,7 +11,7 @@ import { generateMap, BOSSES } from '../data/adventure_map';
 
 const keyMap: { [key: string]: string } = {
     // VocabularyItem top-level - 'ipa' removed, 'ipaUs' uses 'i_us'
-    userId: 'uid', word: 'w', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'nt', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', needsPronunciationFocus: 'is_pron', isExampleLocked: 'is_exl', isPassive: 'is_pas', quality: 'q', source: 's', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', lastGrade: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
+    userId: 'uid', word: 'w', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'nt', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', isExampleLocked: 'is_exl', isPassive: 'is_pas', quality: 'q', source: 's', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', lastGrade: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
     masteryScore: 'ms',
     complexity: 'cx',
 
@@ -117,7 +116,8 @@ function _mapNestedArrayToShort(arr: any[] | undefined, outerKey: string): any[]
                 [keyMap.tone]: paraphraseToneMap[p.tone] || p.tone,
                 [keyMap.context]: p.context,
             };
-            if (p.isIgnored !== undefined) shortP[keyMap.isIgnored] = p.isIgnored;
+            // Only export true booleans to save space
+            if (p.isIgnored === true) shortP[keyMap.isIgnored] = true;
             return shortP;
         });
     }
@@ -127,7 +127,10 @@ function _mapNestedArrayToShort(arr: any[] | undefined, outerKey: string): any[]
         const mapped: any = {};
         for (const subKey in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, subKey)) {
-                mapped[keyMap[subKey] || subKey] = obj[subKey];
+                const val = obj[subKey];
+                // Only export true booleans or non-boolean values
+                if (val === false) continue;
+                mapped[keyMap[subKey] || subKey] = val;
             }
         }
         return mapped;
@@ -152,10 +155,14 @@ export function _mapToShortKeys(item: any): any {
     for (const key in item) {
         if (!Object.prototype.hasOwnProperty.call(item, key)) continue;
         
-        // Skip deprecated fields explicitly (including 'ipa')
-        if (key === 'tags' || key === 'v2' || key === 'v3' || key === 'ipa') continue;
+        // Skip deprecated fields explicitly
+        if (key === 'tags' || key === 'v2' || key === 'v3' || key === 'ipa' || key === 'needsPronunciationFocus') continue;
 
         const value = (item as any)[key];
+        
+        // MINIMAL: Omit false booleans
+        if (value === false) continue;
+        
         const shortKey = keyMap[key] || key;
 
         if (['collocationsArray', 'idiomsList', 'prepositions', 'paraphrases', 'words', 'speakers', 'sentences', 'answers'].includes(key)) {
@@ -227,6 +234,7 @@ function _mapNestedArrayToLong(arr: any[] | undefined, outerLongKey: string): an
                 context: p[keyMap.context],
             };
             if (p[keyMap.isIgnored] !== undefined) longP.isIgnored = p[keyMap.isIgnored];
+            else longP.isIgnored = false; // Default for missing
             return longP as ParaphraseOption;
         });
     }
@@ -270,21 +278,16 @@ export function _mapToLongKeys(item: any): any {
         const longKey = reverseKeyMap[shortKey] || shortKey;
 
         // CLEANUP: Skip deprecated fields at the root level during import (Short Key path)
-        if (longKey === 'tags' || longKey === 'v2' || longKey === 'v3') {
+        if (longKey === 'tags' || longKey === 'v2' || longKey === 'v3' || longKey === 'needsPronunciationFocus') {
             continue;
         }
 
         // Special handling for legacy 'i' (ipa) short key mapping
-        // If we encounter 'i', we map it to 'ipaUs' IF 'ipaUs' isn't already set/mapped from 'i_us'.
-        // Since loop order isn't guaranteed, we handle this logic in the cleanImportedItem phase
-        // OR we map 'i' to 'ipaUs' here if we treat 'i' as legacy US IPA.
-        // However, keyMap has ipa:'i' removed. So reverseKeyMap won't map 'i' to 'ipa'.
-        // We need to manually handle 'i' -> 'ipaUs' migration here.
         if (shortKey === 'i' && !longItem.ipaUs) {
              longItem.ipaUs = value;
              continue;
         }
-        if (longKey === 'ipa') { // If explicit long key 'ipa' exists
+        if (longKey === 'ipa') { 
              if (!longItem.ipaUs) longItem.ipaUs = value;
              continue;
         }
@@ -351,8 +354,17 @@ function cleanImportedItem(item: any): any {
     delete cleaned.v2;
     delete cleaned.v3;
     delete cleaned.tags;
-    delete cleaned.ipa; // Remove legacy ipa field
+    delete cleaned.ipa; 
+    delete cleaned.needsPronunciationFocus;
     
+    // Default booleans if missing
+    if (cleaned.isIdiom === undefined) cleaned.isIdiom = false;
+    if (cleaned.isPhrasalVerb === undefined) cleaned.isPhrasalVerb = false;
+    if (cleaned.isCollocation === undefined) cleaned.isCollocation = false;
+    if (cleaned.isStandardPhrase === undefined) cleaned.isStandardPhrase = false;
+    if (cleaned.isIrregular === undefined) cleaned.isIrregular = false;
+    if (cleaned.isPassive === undefined) cleaned.isPassive = false;
+
     // Remove obsolete family member fields
     if (cleaned.wordFamily) {
          const cleanFamilyMembers = (members: any[]) => {
@@ -414,7 +426,6 @@ export const processJsonImport = async (
                 const incomingSpeakingLogs: SpeakingLog[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.speakingLogs || rawJson.sl);
                 const incomingWritingTopics: WritingTopic[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.writingTopics || rawJson.wt);
                 const incomingWritingLogs: WritingLog[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.writingLogs || rawJson.wl);
-                // Comparison Groups removed
                 const incomingIrregularVerbs: IrregularVerb[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.irregularVerbs || rawJson.iv);
                 const incomingLessons: Lesson[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.lessons;
                 const incomingListeningItems: ListeningItem[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.listeningItems;
@@ -432,7 +443,6 @@ export const processJsonImport = async (
                 const incomingMimicQueue: any[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.mimicQueue;
                 const incomingWordBooksRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.wordBooks || rawJson.wb);
                 const incomingWordBooks = incomingWordBooksRaw ? incomingWordBooksRaw.map(_mapToLongKeys) : undefined;
-                // Calendar Events removed
                 const incomingReadingShelves = Array.isArray(rawJson) ? undefined : (rawJson.readingShelves || rawJson.rs);
                 const incomingReadingBooks: ReadingBook[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.readingBooks || rawJson.rb);
                 const incomingPlanningGoals: PlanningGoal[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.planningGoals || rawJson.pg);
@@ -511,7 +521,6 @@ export const processJsonImport = async (
 
                 // --- LESSON ---
                 if (scope.lesson) {
-                    // Comparison Groups removed
                     if (incomingIrregularVerbs) await bulkSaveIrregularVerbs(incomingIrregularVerbs.map(v => ({...v, userId: importedUserId})));
                     if (incomingLessons) await bulkSaveLessons(incomingLessons.map(l => ({...l, userId: importedUserId})));
                 }
@@ -520,7 +529,6 @@ export const processJsonImport = async (
                 if (scope.listening && incomingListeningItems) await bulkSaveListeningItems(incomingListeningItems.map(l => ({...l, userId: importedUserId})));
                 if (scope.mimic && incomingMimicQueue) localStorage.setItem('vocab_pro_mimic_practice_queue', JSON.stringify(incomingMimicQueue));
                 if (scope.wordBook && incomingWordBooks) await bulkSaveWordBooks(incomingWordBooks.map(b => ({ ...b, userId: importedUserId })));
-                // Calendar Events removed
                 if (scope.planning && incomingPlanningGoals) await bulkSavePlanningGoals(incomingPlanningGoals.map(g => ({...g, userId: importedUserId})));
 
                 let updatedUser: User | undefined = undefined;
@@ -568,12 +576,10 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         scope.writing ? getAllWritingTopicsForExport(userId) : [],
         scope.writing ? getAllWritingLogsForExport(userId) : [],
         scope.writing ? getCompositionsByUserId(userId) : [],
-        // comparisonGroups removed
         scope.lesson ? getIrregularVerbsByUserId(userId) : [],
         scope.lesson ? getLessonsByUserId(userId) : [],
         scope.listening ? getListeningItemsByUserId(userId) : [],
         scope.wordBook ? getWordBooksByUserId(userId) : [],
-        // calendarEvents removed
         scope.planning ? getPlanningGoalsByUserId(userId) : []
     ]);
 
@@ -586,7 +592,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
      return {
         v: 8,
         ca: new Date().toISOString(),
-        user: _mapUserToShortKeys(currentUser), // Consistent shortening using the specific user mapper
+        user: _mapUserToShortKeys(currentUser), 
         vocab: wordsData.map(w => _mapToShortKeys(w)),
         u: unitsData,
         pl: logsData,
@@ -603,7 +609,6 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         compositions: compositionsData,
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
         wordBooks: wordBooksDataRaw.map(b => _mapToShortKeys(b)),
-        // ce (calendar events) removed
         readingBooks: readingBooksData,
         pg: planningGoalsData,
         adv: {

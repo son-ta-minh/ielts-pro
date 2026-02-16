@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, Lesson, VocabularyItem, SessionType, AppView, FocusColor, LessonBook } from '../../app/types';
+import { User, Lesson, VocabularyItem, SessionType, AppView, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, FileClock, Target, Library, FolderPlus, Pen, Move, Book, Sparkles, FolderTree, ArrowLeft, LayoutGrid } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, FileClock, Target, Sparkles, Zap, Split, FileDiff, Scale, BookText, Search, LayoutGrid } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { TagBrowser } from '../../components/common/TagBrowser';
@@ -17,13 +18,6 @@ import { getLessonPrompt } from '../../services/promptService';
 import { ResourceActions, AddAction } from '../page/ResourceActions';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { ResourceConfig } from '../types';
-import { UniversalShelf } from '../../components/common/UniversalShelf';
-import { UniversalBook } from '../../components/common/UniversalBook';
-import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components/wordbook/ShelfModals';
-import { GenericBookDetail, GenericBookItem } from '../../components/common/GenericBookDetail';
-import { useShelfLogic } from '../../app/hooks/useShelfLogic';
-import { ShelfSearchBar } from '../../components/common/ShelfSearchBar';
-import WordSelectorModal from '../../components/discover/games/adventure/WordSelectorModal';
 
 interface Props {
   user: User;
@@ -33,26 +27,30 @@ interface Props {
   onExit?: () => void;
   initialLessonId?: string | null;
   onConsumeLessonId?: () => void;
+  initialTag?: string | null;
+  onConsumeTag?: () => void;
 }
 
 type ResourceItem = 
-  | { type: 'ESSAY'; data: Lesson; path?: string; tags?: string[]; date: number };
+  | { type: 'ESSAY'; data: Lesson; path?: string; tags?: string[]; date: number }
+  | { type: 'INTENSITY'; data: Lesson; path?: string; tags?: string[]; date: number }
+  | { type: 'COMPARISON'; data: Lesson; path?: string; tags?: string[]; date: number };
 
 const lessonConfig: ResourceConfig = { filterSchema: [], viewSchema: [] };
 const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
 
-export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavigate, onUpdateUser, initialLessonId, onConsumeLessonId }) => {
+export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavigate, onUpdateUser, initialLessonId, onConsumeLessonId, initialTag, onConsumeTag }) => {
   const [resources, setResources] = useState<ResourceItem[]>([]);
-  const [lessonBooks, setLessonBooks] = useState<LessonBook[]>([]);
   const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Filter & View
+  // Filter & View State
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'ESSAY'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'ESSAY' | 'INTENSITY' | 'COMPARISON'>('ALL');
   const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
   const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
@@ -61,31 +59,13 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(12);
   
-  const [viewMode, setViewMode] = useState<'list' | 'shelf' | 'edit_lesson' | 'read_lesson' | 'book_detail'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'edit_lesson' | 'read_lesson'>('list');
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
-  const [activeBook, setActiveBook] = useState<LessonBook | null>(null);
 
   const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
-  const [bookToDelete, setBookToDelete] = useState<LessonBook | null>(null);
 
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   
-  const { 
-      currentShelfName, 
-      booksOnCurrentShelf, 
-      allShelves,
-      addShelf, 
-      renameShelf, 
-      removeShelf, 
-      nextShelf, 
-      prevShelf, 
-      selectShelf
-  } = useShelfLogic(lessonBooks, 'lesson_books_shelves');
-
-  const [isAddShelfModalOpen, setIsAddShelfModalOpen] = useState(false);
-  const [isRenameShelfModalOpen, setIsRenameShelfModalOpen] = useState(false);
-  const [bookToMove, setBookToMove] = useState<LessonBook | null>(null);
-
   const { showToast } = useToast();
 
   useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
@@ -93,16 +73,19 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [userLessons, userBooks, allWordsData] = await Promise.all([ 
+      const [userLessons, allWordsData] = await Promise.all([ 
           db.getLessonsByUserId(user.id), 
-          db.getLessonBooksByUserId(user.id),
           dataStore.getAllWords()
       ]);
       const combined: ResourceItem[] = [
-          ...userLessons.map(l => ({ type: 'ESSAY' as const, data: l, path: l.path, tags: l.tags, date: l.createdAt })),
+          ...userLessons.map(l => {
+              let type: ResourceItem['type'] = 'ESSAY';
+              if (l.type === 'intensity') type = 'INTENSITY';
+              if (l.type === 'comparison') type = 'COMPARISON';
+              return { type, data: l, path: l.path, tags: l.tags, date: l.createdAt };
+          }),
       ];
       setResources(combined.sort((a, b) => b.date - a.date));
-      setLessonBooks(userBooks.sort((a, b) => b.createdAt - a.createdAt));
       setAllWords(allWordsData);
     } finally { setLoading(false); }
   }, [user.id]);
@@ -119,15 +102,50 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
           }
       }
   }, [initialLessonId, resources, onConsumeLessonId]);
+
+  // Handle Deep Linking to Tag
+  useEffect(() => {
+      if (initialTag) {
+          setSelectedTag(initialTag);
+          onConsumeTag?.();
+      }
+  }, [initialTag, onConsumeTag]);
   
-  useEffect(() => { setPage(0); }, [selectedTag, typeFilter, focusFilter, colorFilter, pageSize]);
+  useEffect(() => { setPage(0); }, [selectedTag, searchQuery, typeFilter, focusFilter, colorFilter, pageSize]);
+
+  const resetFilters = useCallback(() => {
+    setSelectedTag(null);
+    setTypeFilter('ALL');
+    setFocusFilter('all');
+    setColorFilter('all');
+  }, []);
+
+  const handleQueryChange = (val: string) => {
+    setSearchQuery(val);
+    if (val.trim()) {
+        resetFilters();
+    }
+  };
 
   const hasActiveFilters = useMemo(() => {
     return typeFilter !== 'ALL' || focusFilter !== 'all' || colorFilter !== 'all';
   }, [typeFilter, focusFilter, colorFilter]);
 
   const filteredResources = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return resources.filter(res => {
+      // 1. Text Search Logic (searches Title, Description, Keywords, and Tags)
+      if (q) {
+        const titleMatch = (res.data.title || '').toLowerCase().includes(q);
+        const descMatch = (res.data.description || '').toLowerCase().includes(q);
+        const keywordMatch = (res.data.searchKeywords || []).some(kw => (kw || '').toLowerCase().includes(q));
+        const tagMatch = (res.data.tags || []).some(t => (t || '').toLowerCase().includes(q));
+        
+        if (!titleMatch && !descMatch && !keywordMatch && !tagMatch) return false;
+        return true;
+      }
+
+      // 2. Standard Filters (only if no search query)
       if (typeFilter !== 'ALL' && res.type !== typeFilter) return false;
       if (focusFilter === 'focused' && !res.data.isFocused) return false;
       if (colorFilter !== 'all' && res.data.focusColor !== colorFilter) return false;
@@ -143,92 +161,39 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       }
       return true;
     });
-  }, [resources, selectedTag, typeFilter, focusFilter, colorFilter]);
+  }, [resources, selectedTag, searchQuery, typeFilter, focusFilter, colorFilter]);
   
   const pagedResources: ResourceItem[] = useMemo(() => {
       const start = page * pageSize;
       return filteredResources.slice(start, start + pageSize);
   }, [filteredResources, page, pageSize]);
 
-  const handleRenameShelfAction = (newName: string) => {
-      const success = renameShelf(newName, async (oldS, newS) => {
-          setLoading(true);
-          const booksToUpdate = lessonBooks.filter(b => {
-               const parts = b.title.split(':');
-               const shelf = parts.length > 1 ? parts[0].trim() : 'General';
-               return shelf === oldS;
-          });
-
-          await Promise.all(booksToUpdate.map(b => {
-               const parts = b.title.split(':');
-               const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
-               const newFullTitle = `${newS}: ${bookTitle}`;
-               return dataStore.saveLessonBook({ ...b, title: newFullTitle, updatedAt: Date.now() });
-          }));
-          await loadData();
-      });
-      if (success) setIsRenameShelfModalOpen(false);
-  };
-
-  const handleCreateEmptyBook = async () => {
-    const newBook: LessonBook = {
-        id: `lb-${Date.now()}`,
-        userId: user.id,
-        title: `${currentShelfName}: New Book`,
-        itemIds: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        color: '#1a237e',
-        icon: '📘'
-    };
-    await dataStore.saveLessonBook(newBook);
-    await loadData();
-    setActiveBook(newBook);
-    setViewMode('book_detail');
-    showToast("New book created.", "success");
-  };
-
-  const handleUpdateBook = async (updated: Partial<LessonBook>) => {
-      if (!activeBook) return;
-      const newBook = { ...activeBook, ...updated, updatedAt: Date.now() };
-      setLessonBooks(prev => prev.map(b => b.id === newBook.id ? newBook : b));
-      setActiveBook(newBook);
-      await dataStore.saveLessonBook(newBook);
-  };
-
-  const handleDeleteBook = async () => {
-      if (!bookToDelete) return;
-      await dataStore.deleteLessonBook(bookToDelete.id);
-      showToast('Book deleted.', 'success');
-      setBookToDelete(null);
-      await loadData();
-  };
-
-  const handleConfirmMoveBook = async (targetShelf: string) => {
-      if (!bookToMove) return;
-      const parts = bookToMove.title.split(':');
-      const bookTitle = parts.length > 1 ? parts.slice(1).join(':').trim() : parts[0];
-      const newTitle = `${targetShelf}: ${bookTitle}`;
-      
-      const updatedBook = { ...bookToMove, title: newTitle, updatedAt: Date.now() };
-      await dataStore.saveLessonBook(updatedBook);
-      setBookToMove(null);
-      await loadData();
-      showToast(`Moved to "${targetShelf}".`, 'success');
-  };
-
   const handleDeleteLesson = async () => { if (!lessonToDelete) return; await dataStore.deleteLesson(lessonToDelete.id); showToast('Lesson deleted.', 'success'); setLessonToDelete(null); loadData(); };
   
   const handleSaveLesson = async (lesson: Lesson) => { 
       await dataStore.saveLesson(lesson); 
       showToast('Lesson saved!', 'success'); 
-      setViewMode(activeBook ? 'book_detail' : 'list'); 
+      setViewMode('list'); 
       setActiveLesson(null); 
       loadData(); 
   };
   
-  const handleNewLesson = () => {
-    const newLesson: Lesson = { id: `lesson-${Date.now()}`, userId: user.id, topic1: '', topic2: '', title: `New Lesson`, description: '', content: '', tags: [], createdAt: Date.now(), updatedAt: Date.now() };
+  const handleNewLesson = (type: Lesson['type'] = 'essay') => {
+    const newLesson: Lesson = { 
+        id: `lesson-${Date.now()}`, 
+        userId: user.id, 
+        topic1: 'General', 
+        topic2: 'General', 
+        type,
+        title: type === 'intensity' ? 'New Intensity Scale' : type === 'comparison' ? 'New Comparison Lab' : `New Lesson`, 
+        description: '', 
+        content: '', 
+        tags: [], 
+        intensityRows: type === 'intensity' ? [{ softened: [], neutral: [], intensified: [] }] : undefined,
+        comparisonRows: type === 'comparison' ? [{ word: '', nuance: '', example: '' }] : undefined,
+        createdAt: Date.now(), 
+        updatedAt: Date.now() 
+    };
     setActiveLesson(newLesson);
     setViewMode('edit_lesson');
   };
@@ -240,7 +205,8 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     const newLesson: Lesson = {
         id: `lesson-ai-${Date.now()}`, userId: user.id, title: result.title, description: result.description, content: result.content,
         tags: result.tags || [],
-        createdAt: Date.now(), updatedAt: Date.now(), topic1: '', topic2: ''
+        searchKeywords: result.searchKeywords || [],
+        createdAt: Date.now(), updatedAt: Date.now(), topic1: 'General', topic2: 'General'
     };
     await dataStore.saveLesson(newLesson);
     showToast("Lesson created with AI!", "success");
@@ -278,28 +244,15 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   };
 
   const handleRandomize = () => {
-      if (filteredResources.length === 0) {
-          showToast("No items to randomize.", "info");
-          return;
-      }
-      const randomItem = filteredResources[Math.floor(Math.random() * filteredResources.length)];
-      setActiveLesson(randomItem.data as Lesson);
-      setViewMode('read_lesson');
-  };
-
-  const handleNavigateShelf = (name: string) => {
-    selectShelf(name);
-    setViewMode('shelf');
-  };
-
-  const handleNavigateBook = (book: LessonBook) => {
-    setActiveBook(book);
-    setViewMode('book_detail');
+    setResources(prev => [...prev].sort(() => Math.random() - 0.5));
+    showToast("Deck shuffled!", "success");
   };
 
   const addActions: AddAction[] = [
       { label: 'Topic Lesson (AI)', icon: Sparkles, onClick: () => setIsAiModalOpen(true) },
-      { label: 'New Lesson (Manual)', icon: Plus, onClick: handleNewLesson },
+      { label: 'Intensity Scale', icon: Zap, onClick: () => handleNewLesson('intensity') },
+      { label: 'Comparison Lab', icon: Split, onClick: () => handleNewLesson('comparison') },
+      { label: 'New Lesson (Manual)', icon: Plus, onClick: () => handleNewLesson('essay') },
   ];
 
   const handleGeneratePromptWithCoach = (inputs: any) => {
@@ -318,57 +271,60 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   };
 
   if (viewMode === 'read_lesson' && activeLesson) {
-      return <LessonPracticeView user={user} lesson={activeLesson} onComplete={() => setViewMode(activeBook ? 'book_detail' : 'list')} onEdit={() => setViewMode('edit_lesson')} onUpdate={(updated) => setActiveLesson(updated)} />;
+      return <LessonPracticeView user={user} lesson={activeLesson} onComplete={() => setViewMode('list')} onEdit={() => setViewMode('edit_lesson')} onUpdate={(updated) => setActiveLesson(updated)} />;
   }
   if (viewMode === 'edit_lesson' && activeLesson) {
-      return <LessonEditView lesson={activeLesson} user={user} onSave={handleSaveLesson} onPractice={(l) => { setActiveLesson(l); setViewMode('read_lesson'); }} onCancel={() => setViewMode(activeBook ? 'book_detail' : 'list')} />;
+      return <LessonEditView lesson={activeLesson} user={user} onSave={handleSaveLesson} onPractice={(l) => { setActiveLesson(l); setViewMode('read_lesson'); }} onCancel={() => setViewMode('list')} />;
   }
   
-  if (viewMode === 'book_detail' && activeBook) {
-      const itemsMap = new Map(resources.map(i => [i.data.id, i]));
-      const gItems = activeBook.itemIds.map(id => {
-          const item = itemsMap.get(id); if (!item) return null;
-          return { id, title: (item.data as Lesson).title, subtitle: (item.data as Lesson).description, data: item.data, focusColor: item.data.focusColor, isFocused: item.data.isFocused } as GenericBookItem;
-      }).filter((item): item is GenericBookItem => item !== null);
-      
-      const avItems = resources.map(i => ({ id: i.data.id, title: (i.data as Lesson).title, subtitle: (i.data as Lesson).description, data: i.data } as GenericBookItem));
-
-      return <GenericBookDetail book={activeBook} items={gItems} availableItems={avItems} onBack={() => { setActiveBook(null); setViewMode('shelf'); loadData(); }} onUpdateBook={handleUpdateBook} onAddItem={async (ids) => { const nb = { ...activeBook, itemIds: Array.from(new Set([...activeBook.itemIds, ...ids])) }; await dataStore.saveLessonBook(nb); setActiveBook(nb); }} onRemoveItem={async (id) => { const nb = { ...activeBook, itemIds: activeBook.itemIds.filter(x => x !== id) }; await dataStore.saveLessonBook(nb); setActiveBook(nb); }} onOpenItem={(g) => { setActiveLesson(g.data); setViewMode('read_lesson'); }} onEditItem={(g) => { setActiveLesson(g.data); setViewMode('edit_lesson'); }} onFocusChange={(g, c) => handleFocusChange({ type: 'ESSAY', data: g.data, date: 0 } as ResourceItem, c)} onToggleFocus={(g) => handleToggleFocus({ type: 'ESSAY', data: g.data, date: 0 } as ResourceItem)} itemIcon={<BookOpen size={16}/>} />;
-  }
-
-  if (viewMode === 'shelf') {
-    return (
-      <div className="space-y-6 animate-in fade-in duration-300">
-         <div className="flex flex-col gap-4">
-             <button onClick={() => setViewMode('list')} className="w-fit flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors group">
-                  <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-                  <span>Back to Main Library</span>
-             </button>
-             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                 <div className="shrink-0">
-                      <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Lesson Shelf</h2>
-                      <p className="text-neutral-500 mt-1 font-medium">Browse your lesson collections.</p>
-                 </div>
-                 <ShelfSearchBar { ...{ shelves: allShelves, books: lessonBooks, onNavigateShelf: handleNavigateShelf, onNavigateBook: handleNavigateBook } } />
-                 <button onClick={() => setIsAddShelfModalOpen(true)} className="px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-xs flex items-center gap-2 uppercase tracking-widest hover:bg-neutral-50 transition-all shadow-sm">
-                     <FolderPlus size={14}/> Add Shelf
+  // --- Quick Filter Bar Component ---
+  const QuickFilterBar = () => (
+      <div className="flex flex-col gap-4 mb-6">
+        {isTagBrowserOpen && <TagBrowser items={resources.map(r => r.data)} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}
+        
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+             {/* Small Search Box */}
+             <div className="relative w-full sm:w-auto sm:flex-1 max-w-sm">
+                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                 <input 
+                     type="text" 
+                     value={searchQuery} 
+                     onChange={(e) => handleQueryChange(e.target.value)} 
+                     placeholder="Search..." 
+                     className="w-full pl-10 pr-4 py-2.5 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-neutral-900 transition-all shadow-sm"
+                 />
+             </div>
+             
+             {/* Quick Filters */}
+             <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0 no-scrollbar">
+                 <button 
+                    onClick={() => setTypeFilter('ALL')} 
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'ALL' ? 'bg-neutral-900 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-neutral-900'}`}
+                 >
+                    <LayoutGrid size={12} /> All
                  </button>
-             </header>
-         </div>
-        <UniversalShelf label={currentShelfName} onNext={allShelves.length > 1 ? nextShelf : undefined} onPrev={allShelves.length > 1 ? prevShelf : undefined} actions={<div className="flex items-center gap-2"><button onClick={() => setIsRenameShelfModalOpen(true)} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white" title="Rename Shelf"><Pen size={14}/></button><button onClick={removeShelf} disabled={booksOnCurrentShelf.length > 0} className="p-2 bg-white/20 text-white/70 rounded-full hover:bg-white/40 hover:text-white disabled:opacity-30 disabled:hover:bg-white/20" title="Remove Empty Shelf"><Trash2 size={14}/></button></div>} isEmpty={booksOnCurrentShelf.length === 0} emptyAction={<button onClick={handleCreateEmptyBook} className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs uppercase tracking-widest border border-white/20">Create First Book</button>} >
-           {booksOnCurrentShelf.map(book => {
-               const displayTitle = book.title.split(':').pop()?.trim() || book.title;
-               return <UniversalBook key={book.id} id={book.id} title={displayTitle} subTitle={`${book.itemIds.length} Items`} icon={<BookOpen size={24}/>} color={book.color} titleColor={book.titleColor} titleSize={book.titleSize} titleTop={book.titleTop} titleLeft={book.titleLeft} iconTop={book.iconTop} iconLeft={book.iconLeft} onClick={() => { setActiveBook(book); setViewMode('book_detail'); }} actions={<><button onClick={(e) => { e.stopPropagation(); setBookToMove(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-neutral-700 hover:text-white transition-all shadow-sm" title="Move to Shelf"><Move size={16}/></button><button onClick={(e) => { e.stopPropagation(); setBookToDelete(book); }} className="p-1.5 bg-black/30 text-white/60 rounded-full hover:bg-red-600 hover:text-white transition-all shadow-sm" title="Delete"><Trash2 size={16}/></button></>} />;
-           })}
-           <div className="group translate-y-0"><div className="relative w-full aspect-[5/7] rounded-lg bg-neutral-800/50 border-2 border-dashed border-neutral-500/50 transition-all duration-300 group-hover:border-neutral-400 group-hover:bg-neutral-800/80 group-hover:shadow-xl flex flex-col items-stretch justify-center overflow-hidden"><button onClick={handleCreateEmptyBook} className="flex-1 flex flex-col items-center justify-center p-2 text-center text-neutral-400 hover:bg-white/5 transition-colors"><Plus size={32} className="mb-2 text-neutral-500"/><h3 className="font-sans text-xs font-black uppercase tracking-wider">New Book</h3></button></div></div>
-        </UniversalShelf>
-        <ConfirmationModal isOpen={!!bookToDelete} title="Delete Book?" message={<>Are you sure you want to delete <strong>"{bookToDelete?.title.split(':').pop()?.trim()}"</strong>? Items inside will not be deleted.</>} confirmText="Delete" isProcessing={false} onConfirm={async () => { if (bookToDelete) await dataStore.deleteLessonBook(bookToDelete.id); setBookToDelete(null); loadData(); }} onClose={() => setBookToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
-        <MoveBookModal isOpen={!!bookToMove} onClose={() => setBookToMove(null)} onConfirm={handleConfirmMoveBook} shelves={allShelves} currentShelf={bookToMove ? (bookToMove.title.split(':')[0].trim()) : 'General'} bookTitle={bookToMove?.title || ''} />
-        <AddShelfModal isOpen={isAddShelfModalOpen} onClose={() => setIsAddShelfModalOpen(false)} onSave={(name) => { if(addShelf(name)) setIsAddShelfModalOpen(false); }} />
-        <RenameShelfModal isOpen={isRenameShelfModalOpen} onClose={() => setIsRenameShelfModalOpen(false)} onSave={handleRenameShelfAction} initialName={currentShelfName} />
+                 <button 
+                    onClick={() => setTypeFilter('ESSAY')} 
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'ESSAY' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-emerald-600'}`}
+                 >
+                    <BookText size={12} /> Lesson
+                 </button>
+                 <button 
+                    onClick={() => setTypeFilter('INTENSITY')} 
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'INTENSITY' ? 'bg-orange-500 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-orange-500'}`}
+                 >
+                    <Scale size={12} /> Scale
+                 </button>
+                 <button 
+                    onClick={() => setTypeFilter('COMPARISON')} 
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'COMPARISON' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-indigo-600'}`}
+                 >
+                    <FileDiff size={12} /> Diff
+                 </button>
+             </div>
+        </div>
       </div>
-    );
-  }
+  );
 
   return (
     <>
@@ -376,27 +332,55 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       title="Knowledge Library"
       subtitle="Your collection of lessons and comparisons."
       icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png" className="w-8 h-8 object-contain" alt="Lessons" />}
-      centerContent={
-        <ShelfSearchBar 
-            shelves={allShelves} 
-            books={lessonBooks} 
-            onNavigateShelf={handleNavigateShelf} 
-            onNavigateBook={handleNavigateBook} 
-        />
-      }
+      // Removed default search bar and replaced with custom QuickFilterBar in aboveGrid
       minorSkills={ <button onClick={() => onNavigate('IRREGULAR_VERBS')} className="flex items-center gap-2 px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors"><FileClock size={16} /><span className="hidden sm:inline">Irregular Verbs</span></button> }
       pagination={{ page, totalPages: Math.ceil(filteredResources.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredResources.length }}
-      aboveGrid={
-        <>
-            {isTagBrowserOpen && <TagBrowser items={resources} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}
-        </>
-      }
+      aboveGrid={<QuickFilterBar />}
       config={lessonConfig}
       activeFilters={{}}
       onFilterChange={() => {}}
       isLoading={loading}
       isEmpty={filteredResources.length === 0}
       emptyMessage="No items found matching your criteria."
+      actions={
+        <ResourceActions
+            viewMenu={
+                <ViewMenu 
+                    isOpen={isViewMenuOpen}
+                    setIsOpen={setIsViewMenuOpen}
+                    hasActiveFilters={hasActiveFilters}
+                    customSection={
+                        <>
+                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2">
+                                <Target size={10}/> Focus & Status
+                            </div>
+                            <div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2">
+                                <button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                                    {focusFilter === 'focused' ? 'Focused Only' : 'All Items'}
+                                </button>
+                                <div className="flex gap-1">
+                                    <button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} />
+                                    <button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} />
+                                </div>
+                            </div>
+                        </>
+                    }
+                    viewOptions={[
+                        { label: 'Show Description', checked: viewSettings.showDesc, onChange: () => setViewSettings(v => ({...v, showDesc: !v.showDesc})) },
+                        { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }
+                    ]}
+                />
+            }
+            browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }}
+            addActions={addActions}
+            extraActions={
+                <>
+                    <button onClick={handleRandomize} disabled={filteredResources.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Shuffle Deck"><Shuffle size={16} /></button>
+                </>
+            }
+        />
+      }
     >
       {() => (
         <>
@@ -405,11 +389,24 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
             const onEdit = () => { setActiveLesson(item.data as Lesson); setViewMode('edit_lesson'); };
             const onDelete = () => setLessonToDelete(item.data as Lesson);
 
+            const isIntensity = item.type === 'INTENSITY';
+            const isComparison = item.type === 'COMPARISON';
+
+            let badge;
+            if (isIntensity) {
+                badge = { label: 'Scale', colorClass: 'bg-orange-50 text-orange-700 border-orange-100', icon: Scale };
+            } else if (isComparison) {
+                badge = { label: 'Diff', colorClass: 'bg-indigo-50 text-indigo-700 border-indigo-100', icon: FileDiff };
+            } else {
+                badge = { label: 'Lesson', colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: BookText };
+            }
+
             return (
                 <UniversalCard
                     key={`${item.type}-${item.data.id}`}
                     title={<div className="font-black text-lg text-neutral-900 tracking-tight leading-tight truncate">{(item.data as Lesson).title}</div>} 
                     tags={item.data.tags} 
+                    badge={badge}
                     compact={viewSettings.compact}
                     onClick={onRead}
                     focusColor={item.data.focusColor}
@@ -425,7 +422,9 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                         </>
                     }
                 >
-                    {viewSettings.showDesc && ((item.data as Lesson).description && <p className="line-clamp-2">{(item.data as Lesson).description}</p>)}
+                    {viewSettings.showDesc && (item.data as Lesson).description && (
+                        <p className="line-clamp-3 mt-1">{(item.data as Lesson).description}</p>
+                    )}
                 </UniversalCard>
             );
           })}

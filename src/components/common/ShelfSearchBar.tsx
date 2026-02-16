@@ -1,16 +1,32 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Search, ChevronRight } from 'lucide-react';
+import { Search, ChevronRight, BookOpen, NotebookText } from 'lucide-react';
 
 interface Props {
     shelves: string[];
     books: any[];
+    items?: any[]; // Optional array of items (like Lessons) to include in suggestions
     onNavigateShelf: (name: string) => void;
     onNavigateBook: (book: any) => void;
+    onNavigateItem?: (item: any) => void;
     placeholder?: string;
+    // Added value and onChange to support controlled state from parent components
+    value?: string;
+    onChange?: (val: string) => void;
 }
 
-export const ShelfSearchBar: React.FC<Props> = ({ shelves, books, onNavigateShelf, onNavigateBook, placeholder = "Search shelf or book..." }) => {
-    const [searchQuery, setSearchQuery] = useState('');
+export const ShelfSearchBar: React.FC<Props> = ({ 
+    shelves, books, items = [], onNavigateShelf, onNavigateBook, onNavigateItem, placeholder = "Search shelf or book...",
+    value, onChange 
+}) => {
+    // Fix: Support both controlled and uncontrolled state
+    const [internalQuery, setInternalQuery] = useState('');
+    const searchQuery = value !== undefined ? value : internalQuery;
+    
+    const handleQueryChange = (val: string) => {
+        if (onChange) onChange(val);
+        setInternalQuery(val);
+    };
+
     const [showSuggestions, setShowSuggestions] = useState(false);
     const searchRef = useRef<HTMLDivElement>(null);
 
@@ -52,16 +68,38 @@ export const ShelfSearchBar: React.FC<Props> = ({ shelves, books, onNavigateShel
                 };
             });
             
-        return [...shelfMatches, ...bookMatches].slice(0, 10);
-    }, [searchQuery, shelves, books]);
+        const itemMatches = items
+            .filter(i => {
+                const title = (i.title || '').toLowerCase();
+                const desc = (i.description || '').toLowerCase();
+                const keywords = (i.searchKeywords || []).map((kw: string) => (kw || '').toLowerCase());
+                
+                if (title.includes(q)) return true;
+                if (desc.includes(q)) return true;
+                if (keywords.some((kw: string) => kw.includes(q))) return true;
+                
+                return false;
+            })
+            .map(i => ({
+                type: 'item' as const,
+                id: i.id,
+                label: i.title,
+                subLabel: i.description,
+                data: i
+            }));
+            
+        return [...shelfMatches, ...bookMatches, ...itemMatches].slice(0, 15);
+    }, [searchQuery, shelves, books, items]);
 
     const handleSelect = (s: any) => {
         if (s.type === 'shelf') {
             onNavigateShelf(s.id);
-        } else {
+        } else if (s.type === 'book') {
             onNavigateBook(s.data);
+        } else if (s.type === 'item' && onNavigateItem) {
+            onNavigateItem(s.data);
         }
-        setSearchQuery('');
+        handleQueryChange('');
         setShowSuggestions(false);
     };
 
@@ -72,7 +110,7 @@ export const ShelfSearchBar: React.FC<Props> = ({ shelves, books, onNavigateShel
                 <input 
                     type="text" 
                     value={searchQuery}
-                    onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+                    onChange={(e) => { handleQueryChange(e.target.value); setShowSuggestions(true); }}
                     onFocus={() => setShowSuggestions(true)}
                     placeholder={placeholder}
                     className="w-full pl-10 pr-4 py-2.5 bg-white border border-neutral-200 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none transition-all shadow-sm"
@@ -86,13 +124,16 @@ export const ShelfSearchBar: React.FC<Props> = ({ shelves, books, onNavigateShel
                             onClick={() => handleSelect(s)}
                             className="w-full text-left px-4 py-3 hover:bg-neutral-50 transition-colors flex items-center justify-between border-b border-neutral-50 last:border-0"
                         >
-                            <div className="flex flex-col">
-                                <span className="text-xs font-black text-neutral-900">{s.label}</span>
-                                <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">
-                                    {s.type === 'shelf' ? 'Shelf' : `Book • ${s.shelf}`}
+                            <div className="flex flex-col min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                    {s.type === 'item' && <NotebookText size={12} className="text-indigo-400 shrink-0" />}
+                                    <span className="text-xs font-black text-neutral-900 truncate">{s.label}</span>
+                                </div>
+                                <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest truncate">
+                                    {s.type === 'shelf' ? 'Shelf' : s.type === 'book' ? `Book • ${s.shelf}` : (s.subLabel || 'Lesson Item')}
                                 </span>
                             </div>
-                            <ChevronRight size={14} className="text-neutral-300" />
+                            <ChevronRight size={14} className="text-neutral-300 ml-2" />
                         </button>
                     ))}
                 </div>

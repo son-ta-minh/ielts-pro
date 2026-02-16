@@ -1,4 +1,3 @@
-
 export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LISTENING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT';
 
 export enum ReviewGrade {
@@ -176,14 +175,10 @@ export interface VocabularyItem {
   isStandardPhrase?: boolean;
   isInterrogative?: boolean;
   isExclamatory?: boolean;
-  isImperative?: boolean;
+  isImplicitImperative?: boolean;
   isIrregular?: boolean; 
-  v2?: string; 
-  v3?: string; 
   isExampleLocked?: boolean;
   isPassive?: boolean;
-  // Added needsPronunciationFocus property
-  needsPronunciationFocus?: boolean;
 
   quality: WordQuality;
   source?: WordSource;
@@ -203,6 +198,9 @@ export interface VocabularyItem {
   lastXpEarnedTime?: number;
 
   gameEligibility?: string[];
+
+  // NEW: Link to Intensity Lesson
+  intensityLessonId?: string;
 
   // NEW: Embedded Lesson Data
   lesson?: {
@@ -340,7 +338,24 @@ export interface IrregularVerb {
   lastTestIncorrectForms?: ('v1' | 'v2' | 'v3')[];
 }
 
-export type LessonType = 'essay' | 'word';
+export type LessonType = 'essay' | 'word' | 'intensity' | 'comparison';
+
+export interface IntensityItem {
+    word: string;
+    register?: 'academic' | 'casual'; 
+}
+
+export interface IntensityRow {
+    softened: IntensityItem[];
+    neutral: IntensityItem[];
+    intensified: IntensityItem[];
+}
+
+export interface ComparisonRow {
+    word: string;
+    nuance: string;
+    example: string;
+}
 
 export interface Lesson {
   id: string;
@@ -356,6 +371,10 @@ export interface Lesson {
   listeningContent?: string; 
   testContent?: string; 
   
+  intensityRows?: IntensityRow[];
+  comparisonRows?: ComparisonRow[];
+  searchKeywords?: string[];
+
   path?: string;
   tags?: string[];
   createdAt: number;

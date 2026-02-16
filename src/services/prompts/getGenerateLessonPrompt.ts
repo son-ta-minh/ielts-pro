@@ -1,4 +1,3 @@
-
 export interface LessonGenerationParams {
   topic: string;
   language: 'English' | 'Vietnamese';
@@ -19,8 +18,6 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
        - **EVERY SENTENCE** must be wrapped in audio tags.
        - **AUDIO STRATEGY (CRITICAL)**: 
          1. **NO MIXED LANGUAGES**: Do NOT put English words inside ${explanationAudioTag} tags. Split them out into [Audio-EN] tags.
-            - ❌ Bad: ${explanationAudioTag}Từ hello nghĩa là xin chào[/]
-            - ✅ Good: ${explanationAudioTag}Từ[/] [Audio-EN]hello[/] ${explanationAudioTag}nghĩa là xin chào[/]
        - No Markdown headers (###).
        - Use specific visual cues for the speaker (e.g. [Pause], [Excited]).`
     : `STYLE: COMPACT RICH ARTICLE (READING)
@@ -28,40 +25,41 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
        - Use Markdown Headers (###) for specific topics/sections.
        - **VISUAL STRUCTURE**: Do NOT use nested bullet points for examples.
        - **RICH ELEMENTS**: 
-         1. **TABLES**: STRICTLY for **Comparative Matrices** (e.g. Pros vs Cons, Tense vs Usage) or **System Maps** at the end where every column adds dimension. 
-            - ❌ **PROHIBITED**: Do NOT use tables to enumerate words without contrast or explanation per cell (e.g. | word1 | word2 | word3 |). Use bullet points for lists.
-         2. Use **[Tip: ...]** blocks for quick insights or "Did you know" facts.
+         1. **TABLES**: STRICTLY for **Comparative Matrices** (e.g. Pros vs Cons, Tense vs Usage) or **System Maps** at the end.
+         2. Use **[Tip: ...]** blocks for quick insights.
          3. Use **[HIDDEN: ...]** tags ONLY for **Interactive Q&A**. 
-            - **RULE**: The QUESTION must be visible OUTSIDE the tag. Only the ANSWER is inside.
-            - Format: "Question here? [HIDDEN: Answer here]"
          4. Use **[Formula: Part | Part]** for grammar patterns. 
-            - Format: "[Formula: If | S | V(past), S | would | V(base)]".
-         5. Use **Emojis** in headers and key points to make it engaging for ${targetAudience}.
-       - **EXAMPLES**: Use Markdown Blockquotes (>) for examples to make them stand out visually.`;
+         5. Use **Emojis** in headers.
+       - **EXAMPLES**: Use Markdown Blockquotes (>) for examples.`;
 
   return `You are an expert IELTS coach named '${coachName}'. 
   
   TASK: Create an immersive, high-impact lesson for a ${targetAudience} on: "${topic}".
 
+  METADATA RULES (STRICT):
+  1. **title**: Concept-driven, metaphorical title (MAX 5 WORDS). 
+     - Think: "Frozen Heat" (temperature), "Moral Compass" (ethics), "Fading Echoes" (memory). 
+     - AVOID: "Words about...", "Vocabulary for...", "Advanced Verbs".
+  2. **description**: Define the core conceptual boundary (MAX 15 WORDS). 
+     - Sharp and precise. NO fluff ("This lesson covers..."). Focus on usage limits or unique value.
+     - Example: "Distinguishes between physical impact and abstract influence in formal writing contexts."
+  3. **searchKeywords**: Array of strings. 
+     - Include ALL primary vocabulary, synonyms, and related terms.
+     - FOR COMPARISON/INTENSITY: You MUST include every word being compared or placed on the scale.
+
   PEDAGOGICAL FLOW:
   1. **TEACHING**: Teach concepts clearly with nuance and examples.
-  2. **CONSOLIDATION**: End with a summary using a **Comparison Matrix (Table)** or a clear **Pattern Blueprint**.
+  2. **CONSOLIDATION**: End with a summary using a **Comparison Matrix (Table)**.
   
   CRITICAL FORMATTING RULES:
-  1. **NO META LABELS**: DO NOT use labels like "Nuance:", "Scenario Change:", "Context:", "Meaning:", "Definition:", or "Phase 1".
-  2. **NATURAL WRITING**: Weave the nuance and context *into* the sentence. 
-     - ❌ Bad: "Nuance: Used for formal events."
-     - ✅ Good: "This phrase is specifically reserved for formal events..."
-  3. **HEADERS**: Use standard Markdown headers (###) for the specific content topics.
+  1. **NO META LABELS**: DO NOT use labels like "Nuance:", "Meaning:", "Definition:".
+  2. **NATURAL WRITING**: Weave context *into* sentences.
+  3. **HEADERS**: Use standard Markdown headers (###).
 
   STRICT TEACHING RULES:
-  1. **EXPLAIN EVERY ITEM**: For every vocabulary item, collocation, or idiom:
-     - You MUST explain *why* we use it (nuance) directly in the explanation sentence.
-     - You MUST provide a natural **Example Sentence**.
-  2. **COMPARE PARAPHRASES**: Do not just list synonyms. Explain the difference in scenario directly.
-  3. **COACHING FLOW**: Structure the lesson as a guided walkthrough.
-  4. **NO LINGUISTIC DEFINITIONS**: Skip "What is a collocation". Focus 100% on the materials for "${topic}".
-  5. **PURE TEACHING CONTENT**: This output is for the "Reading" tab only. **DO NOT GENERATE QUIZZES**. Do not use [Quiz:], [Select:], [Multi:].
+  1. **EXPLAIN EVERY ITEM**: Explain *why* we use it (nuance) and provide a natural **Example Sentence**.
+  2. **COACHING FLOW**: Walk through materials for "${topic}".
+  3. **NO QUIZZES**: This is for the "Reading" tab only. No [Quiz:], [Select:], [Multi:].
   
   ${styleInstruction}
 
@@ -70,21 +68,19 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
   - Material: English.
 
   TAGGING RULES:
-  - **"tags" MUST be selected ONLY from this list**: ["Grammar", "Pattern", "Speaking", "Listening", "Reading", "Writing", "General", "Comparison", "Vocabulary"].
-  - **QUANTITY**: Return EXACTLY ONE tag. Choose the most primary skill only.
+  - **"tags"**: EXACTLY ONE from: ["Grammar", "Pattern", "Speaking", "Listening", "Reading", "Writing", "General", "Comparison", "Vocabulary"].
 
   CRITICAL OUTPUT RULES:
-  1. **MARKDOWN CODE BLOCK**: You MUST wrap your entire JSON response in a markdown code block (e.g. \`\`\`json { ... } \`\`\`).
-  2. **VALID JSON**: The content inside the code block must be valid, parsable JSON.
-  3. **NO RAW NEWLINES IN STRINGS**: Inside the "content" string, you MUST use literal '\\n' for line breaks. Do NOT use actual newline characters.
-  4. **ESCAPE CHARACTERS**: Properly escape all double quotes and backslashes within strings.
+  1. **MARKDOWN CODE BLOCK**: Wrap JSON in \`\`\`json ... \`\`\`.
+  2. **NO RAW NEWLINES IN STRINGS**: Use literal '\\n' for line breaks.
 
   OUTPUT TEMPLATE:
   \`\`\`json
   {
     "title": "string",
     "description": "string",
-    "content": "string (Markdown formatted with \\n for newlines)",
+    "content": "string",
+    "searchKeywords": ["string"],
     "tags": ["string"]
   }
   \`\`\``;

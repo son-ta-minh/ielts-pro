@@ -263,7 +263,11 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
         );
     };
 
-    const Section = ({ title, icon: Icon, children, className }: { title: string; icon: React.ElementType; children: React.ReactNode; className?: string }) => (
+    /**
+     * Section component for grouping related information in the UI.
+     * Fixed: children prop marked as optional to resolve potential TS resolution issues.
+     */
+    const Section = ({ title, icon: Icon, children, className }: { title: string; icon: React.ElementType; children?: React.ReactNode; className?: string }) => (
         <div className={`space-y-2 ${className || ''}`}><div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-neutral-400 border-b border-neutral-100 pb-1 mb-2"><Icon size={12} /><span>{title}</span></div>{children}</div>
     );
 
@@ -433,7 +437,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         <p className="text-xs text-neutral-400 font-medium">Create an interactive test based on this word's usage.</p>
                                     </div>
                                     {!isViewOnly && (
-                                        <button onClick={() => onGenerateLesson?.('TEST')} className="px-6 py-3 bg-neutral-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-neutral-800 transition-all active:scale-95 shadow-lg"><Sparkles size={16}/> Generate Test</button>
+                                        <button onClick={() => onGenerateLesson?.('TEST')} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-neutral-800 transition-all active:scale-95 shadow-lg"><Sparkles size={16}/> Generate Test</button>
                                     )}
                                 </div>
                             )}

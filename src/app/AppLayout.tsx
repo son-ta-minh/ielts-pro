@@ -1,3 +1,4 @@
+
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
   Plus, LayoutDashboard, List, Settings, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Mic, PenLine, AlertTriangle, BookText, Ear, Zap, Calendar, Gamepad2, BookMarked, Waves, RefreshCw, Save, ListTodo, Users
@@ -12,29 +13,20 @@ import { ServerRestoreModal } from '../components/common/ServerRestoreModal';
 import { ConnectionModal } from '../components/common/ConnectionModal';
 import { SyncPromptModal } from '../components/common/SyncPromptModal';
 
-// Lazy load major views for performance
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
 const ReviewSession = React.lazy(() => import('../components/practice/ReviewSession'));
 const WordList = React.lazy(() => import('../components/word_lib/WordList'));
-// Reading Unit Page
 const ReadingUnitPage = React.lazy(() => import('../dynamic/templates/ReadingUnitPage').then(module => ({ default: module.ReadingUnitPage })));
 const SettingsView = React.lazy(() => import('../components/setting/SettingsView').then(module => ({ default: module.SettingsView })));
 const Discover = React.lazy(() => import('../components/discover/Discover'));
-// Writing
 const WritingStudioPage = React.lazy(() => import('../dynamic/templates/WritingStudioPage').then(module => ({ default: module.WritingStudioPage })));
 const IrregularVerbs = React.lazy(() => import('../components/labs/irregular_verbs/IrregularVerbs'));
 const MimicPractice = React.lazy(() => import('../components/labs/MimicPractice').then(module => ({ default: module.MimicPractice })));
-// Listening
 const ListeningCardPage = React.lazy(() => import('../dynamic/templates/ListeningCardPage').then(module => ({ default: module.ListeningCardPage })));
-// Lessons
 const KnowledgeLibrary = React.lazy(() => import('../dynamic/templates/LessonLibraryV2').then(module => ({ default: module.LessonLibraryV2 })));
-// Planning
 const PlanningPage = React.lazy(() => import('../dynamic/templates/PlanningPage').then(module => ({ default: module.PlanningPage })));
-
-// Native Expressions (formerly NativeSpeak)
 const ExpressionPage = React.lazy(() => import('../dynamic/templates/SpeakingCardPage').then(module => ({ default: module.SpeakingCardPage })));
 const WordBookPage = React.lazy(() => import('../dynamic/templates/WordBookPage').then(module => ({ default: module.WordBookPage })));
-
 
 type AppController = ReturnType<typeof useAppController>;
 
@@ -52,7 +44,6 @@ const navItems = [
   { id: 'WRITING', view: 'WRITING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png", label: 'Writing' }
 ] as const;
 
-// Fix: Corrected multiple declarations of Sidebar component. Only one declaration should exist.
 const Sidebar: React.FC<AppLayoutProps & { 
     onNavigate: (view: AppView, action?: () => void) => void;
     onLogoutRequest: () => void;
@@ -66,38 +57,29 @@ const Sidebar: React.FC<AppLayoutProps & {
 
   const [timeLeft, setTimeLeft] = useState(0);
 
-  // Update timer for sync tooltip with Watchdog
   useEffect(() => {
-    if (!nextAutoBackupTime) {
-      setTimeLeft(0);
-      return;
-    }
+    if (!nextAutoBackupTime) { setTimeLeft(0); return; }
     
     const interval = setInterval(() => {
       const now = Date.now();
       const diff = nextAutoBackupTime - now;
       const remaining = Math.ceil(diff / 1000);
-      
       setTimeLeft(Math.max(0, remaining));
-
-      // Watchdog: If the timer goes past 0s (allowing 2s buffer), force the backup.
-      // This fixes the issue where the backend debounce timer gets throttled or lost.
-      if (remaining <= -2) {
-          if (serverStatus === 'connected') {
-             // triggerServerBackup cleans up the UI state (sets nextAutoBackupTime to null) immediately
-             // and initiates the upload.
-             triggerServerBackup();
+      
+      // Khi đếm ngược về 0 hoặc ít hơn, kích hoạt backup nếu server sẵn sàng
+      if (remaining <= 0) {
+          if (serverStatus === 'connected' && hasUnsavedChanges) {
+              triggerServerBackup();
           }
           clearInterval(interval);
       }
     }, 1000);
-    
-    // Initial call
+
     const initialDiff = nextAutoBackupTime - Date.now();
     setTimeLeft(Math.max(0, Math.ceil(initialDiff / 1000)));
-
+    
     return () => clearInterval(interval);
-  }, [nextAutoBackupTime, serverStatus, triggerServerBackup]);
+  }, [nextAutoBackupTime, serverStatus, triggerServerBackup, hasUnsavedChanges]);
 
   const syncTooltip = nextAutoBackupTime 
     ? `Auto-sync in ${timeLeft}s...` 
@@ -117,47 +99,29 @@ const Sidebar: React.FC<AppLayoutProps & {
                  <div className="text-[10px] text-neutral-400 font-bold truncate">{currentUser.role}</div>
                </div>
              </div>
-             
              <div className="flex items-center gap-1">
-                 <button 
-                    onClick={onSwitchUser} 
-                    className="p-2 rounded-full border-2 border-indigo-100 bg-white text-indigo-500 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm" 
-                    title="Switch User"
-                 >
-                    <Users size={16} />
-                 </button>
+                 <button onClick={onSwitchUser} className="p-2 rounded-full border-2 border-indigo-100 bg-white text-indigo-500 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm" title="Switch User"><Users size={16} /></button>
                  <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-2 text-neutral-400"><X size={24} /></button>
              </div>
            </div>
-           
            <div className="mt-4 flex items-center space-x-2">
-             <button onClick={() => onNavigate('SETTINGS')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Settings">
-                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Gear.png" alt="Settings" className="w-6 h-6 object-contain" />
-             </button>
-             <button onClick={() => onNavigate('PLANNING')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Study Plan">
-                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Spiral%20Calendar.png" alt="Planning" className="w-6 h-6 object-contain" />
-             </button>
-             <button onClick={() => onNavigate('DISCOVER')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Games & Discover">
-                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Activities/Video%20Game.png" alt="Games" className="w-6 h-6 object-contain" />
-             </button>
+             <button onClick={() => onNavigate('SETTINGS')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Settings"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Gear.png" alt="Settings" className="w-6 h-6 object-contain" /></button>
+             <button onClick={() => onNavigate('PLANNING')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Study Plan"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Spiral%20Calendar.png" alt="Planning" className="w-6 h-6 object-contain" /></button>
+             <button onClick={() => onNavigate('DISCOVER')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Games & Discover"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Activities/Video%20Game.png" alt="Games" className="w-6 h-6 object-contain" /></button>
              {serverStatus === 'connected' && (
                  <button 
                     onClick={() => handleBackup()} 
-                    className={`p-2 rounded-xl transition-all active:scale-90 border animate-in fade-in relative ${hasUnsavedChanges && !nextAutoBackupTime ? 'bg-orange-50 border-orange-200 shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'bg-neutral-50 border-neutral-100 hover:bg-neutral-100'}`} 
+                    className={`p-2 rounded-xl transition-all active:scale-90 border animate-in fade-in relative ${hasUnsavedChanges ? 'bg-orange-50 border-orange-200 shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'bg-neutral-50 border-neutral-100 hover:bg-neutral-100'}`} 
                     title={syncTooltip}
                 >
                     <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-6 h-6 object-contain" />
                     {hasUnsavedChanges && (
-                        <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-50' : 'bg-orange-500 animate-ping'}`}></span>
-                    )}
-                    {hasUnsavedChanges && (
-                         <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-50' : 'bg-orange-500'}`}></span>
+                         <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-400' : 'bg-orange-500 animate-pulse'}`}></span>
                     )}
                  </button>
              )}
            </div>
         </div>
-        
         <nav className="flex-1 overflow-y-auto space-y-1">
           {sessionType && view !== 'REVIEW' && (
             <div className="relative group animate-in fade-in duration-300 mb-1">
@@ -170,23 +134,11 @@ const Sidebar: React.FC<AppLayoutProps & {
           {navItems.map((item: any) => {
             const isActive = view === item.view && (item.id !== 'BROWSE' || !forceExpandAdd);
             const isSpeakingActive = item.id === 'SPEAKING' && view === 'SPEAKING';
-            
             return (
               <div key={item.id} className="relative group">
-                <button 
-                  onClick={() => onNavigate(item.view as AppView)} 
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${isActive || isSpeakingActive ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-100'}`}
-                >
+                <button onClick={() => onNavigate(item.view as AppView)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${isActive || isSpeakingActive ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-100'}`}>
                   <div className="flex items-center space-x-3">
-                    {typeof item.icon === 'string' ? (
-                        <img 
-                          src={item.icon} 
-                          className={`w-5 h-5 object-contain transition-all ${isActive || isSpeakingActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`} 
-                          alt={item.label} 
-                        />
-                    ) : (
-                        <item.icon size={20} />
-                    )}
+                    {typeof item.icon === 'string' ? <img src={item.icon} className={`w-5 h-5 object-contain transition-all ${isActive || isSpeakingActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`} alt={item.label} /> : <item.icon size={20} />}
                     <span>{item.label}</span>
                   </div>
                 </button>
@@ -200,329 +152,60 @@ const Sidebar: React.FC<AppLayoutProps & {
 };
 
 const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
-  const {
-    view,
-    currentUser,
-    stats,
-    xpToNextLevel,
-    wotd,
-    setGlobalViewWord,
-    setView,
-    lastBackupTime,
-    handleBackup,
-    restoreFromServerAction, 
-    triggerLocalRestore,
-    triggerLocalBackup,
-    triggerServerBackup,
-    
-    handleNavigateToList,
-    startDueReviewSession,
-    startNewLearnSession,
-    sessionWords,
-    sessionType,
-    sessionFocus,
-    updateWord,
-    bulkUpdateWords,
-    handleSessionComplete,
-    gainExperienceAndLevelUp,
-    recalculateXpAndLevelUp,
-    handleRetrySession,
-    deleteWord,
-    bulkDeleteWords,
-    startSession,
-    initialListFilter,
-    setInitialListFilter,
-    forceExpandAdd,
-    setForceExpandAdd,
-    handleUpdateUser,
-    refreshGlobalStats,
-    handleLibraryReset,
-    apiUsage,
-    xpGained,
-    lastMasteryScoreUpdateTimestamp,
-    isWotdComposed,
-    randomizeWotd,
-    handleComposeWithWord,
-    writingContextWord,
-    consumeWritingContext,
-    serverStatus,
-    isAutoRestoreOpen,
-    setIsAutoRestoreOpen,
-    autoRestoreCandidates,
-    handleNewUserSetup,
-    handleLocalRestoreSetup,
-    handleSwitchUser,
-    planningAction,
-    consumePlanningAction
-  } = controller;
-
+  const { view, currentUser, stats, xpToNextLevel, wotd, setGlobalViewWord, setView, lastBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, triggerLocalBackup, triggerServerBackup, handleNavigateToList, startDueReviewSession, startNewLearnSession, sessionWords, sessionType, sessionFocus, updateWord, bulkUpdateWords, handleSessionComplete, gainExperienceAndLevelUp, recalculateXpAndLevelUp, handleRetrySession, deleteWord, bulkDeleteWords, startSession, initialListFilter, setInitialListFilter, forceExpandAdd, setForceExpandAdd, handleUpdateUser, refreshGlobalStats, handleLibraryReset, apiUsage, xpGained, lastMasteryScoreUpdateTimestamp, isWotdComposed, randomizeWotd, handleComposeWithWord, writingContextWord, consumeWritingContext, serverStatus, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, planningAction, consumePlanningAction } = controller;
   if (!currentUser) return null;
-
   switch (view) {
-    case 'DASHBOARD':
-      return (
-        <Dashboard
-          userId={currentUser.id}
-          user={currentUser}
-          totalCount={stats.total}
-          dueCount={stats.due}
-          newCount={stats.new}
-          xpToNextLevel={xpToNextLevel}
-          wotd={wotd}
-          onViewWotd={setGlobalViewWord}
-          setView={setView}
-          lastBackupTime={lastBackupTime}
-          onBackup={handleBackup} 
-          onRestore={() => {}} 
-          restoreFromServerAction={async () => await restoreFromServerAction()} // Use wrapper
-          triggerLocalRestore={triggerLocalRestore}
-          onLocalBackup={triggerLocalBackup}
-          onServerBackup={triggerServerBackup}
-          onNavigateToWordList={handleNavigateToList}
-          onStartDueReview={startDueReviewSession}
-          onStartNewLearn={startNewLearnSession}
-          isWotdComposed={isWotdComposed}
-          onComposeWotd={handleComposeWithWord}
-          onRandomizeWotd={randomizeWotd}
-          serverStatus={serverStatus}
-          onAction={(action) => {
-              if (action === 'PLAN_AI' || action === 'PLAN_IMPORT') {
-                   controller.handleSpecialAction(action);
-              }
-          }}
-        />
-      );
-    case 'WORDBOOK':
-      return <WordBookPage user={currentUser} />;
-    case 'PLANNING':
-        return <PlanningPage user={currentUser} initialAction={planningAction} onActionConsumed={consumePlanningAction} />;
-    case 'REVIEW':
-      return sessionWords && sessionType ? (
-        <ReviewSession
-          user={currentUser}
-          sessionWords={sessionWords}
-          sessionType={sessionType}
-          sessionFocus={sessionFocus}
-          onUpdate={updateWord}
-          onBulkUpdate={bulkUpdateWords}
-          onComplete={handleSessionComplete}
-          onRetry={handleRetrySession}
-        />
-      ) : null;
-    case 'BROWSE':
-      return (
-        <WordList
-          user={currentUser}
-          onDelete={async (id) => await deleteWord(id)}
-          onBulkDelete={async (ids) => await bulkDeleteWords(ids)}
-          onUpdate={updateWord}
-          onStartSession={(words) => startSession(words, 'custom')}
-          initialFilter={initialListFilter}
-          onInitialFilterApplied={() => setInitialListFilter(null)}
-          forceExpandAdd={forceExpandAdd}
-          onExpandAddConsumed={() => setForceExpandAdd(false)}
-          onNavigate={setView}
-        />
-      );
-    case 'LESSON':
-        return <KnowledgeLibrary 
-            user={currentUser} 
-            onStartSession={(words) => startSession(words, 'custom')} 
-            onExit={() => setView('DASHBOARD')} 
-            onNavigate={setView}
-            onUpdateUser={handleUpdateUser} 
-            initialLessonId={controller.targetLessonId}
-            onConsumeLessonId={controller.consumeTargetLessonId}
-        />;
-    case 'UNIT_LIBRARY':
-        return <ReadingUnitPage user={currentUser} onStartSession={(words) => startSession(words, 'new_study')} onUpdateUser={handleUpdateUser} />;
-    case 'SETTINGS':
-        return <SettingsView user={currentUser} onUpdateUser={handleUpdateUser} onRefresh={refreshGlobalStats} onNuke={handleLibraryReset} apiUsage={apiUsage} />;
-    case 'DISCOVER':
-        return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} onRecalculateXp={recalculateXpAndLevelUp} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} lastMasteryScoreUpdateTimestamp={lastMasteryScoreUpdateTimestamp} onBulkUpdate={bulkUpdateWords} />;
-    case 'SPEAKING':
-        return <ExpressionPage user={currentUser} onNavigate={setView} />;
-    case 'NATIVE_SPEAK':
-        return <ExpressionPage user={currentUser} onNavigate={setView} />;
-    case 'WRITING':
-        return <WritingStudioPage user={currentUser} initialContextWord={writingContextWord} onConsumeContext={consumeWritingContext} />;
-    case 'IRREGULAR_VERBS':
-        return <IrregularVerbs user={currentUser} onGlobalViewWord={setGlobalViewWord} />;
-    case 'MIMIC':
-        return <MimicPractice />;
-    case 'LISTENING':
-        return <ListeningCardPage user={currentUser} />;
-    case 'EXPERIMENT':
-        return <ExpressionPage user={currentUser} onNavigate={setView} />;
-    default:
-      return <div>Unknown view: {view}</div>;
+    case 'DASHBOARD': return <Dashboard userId={currentUser.id} user={currentUser} totalCount={stats.total} dueCount={stats.due} newCount={stats.new} xpToNextLevel={xpToNextLevel} wotd={wotd} onViewWotd={setGlobalViewWord} setView={setView} lastBackupTime={lastBackupTime} onBackup={handleBackup} onRestore={() => {}} restoreFromServerAction={async () => await restoreFromServerAction()} triggerLocalRestore={triggerLocalRestore} onLocalBackup={triggerLocalBackup} onServerBackup={triggerServerBackup} onNavigateToWordList={handleNavigateToList} onStartDueReview={startDueReviewSession} onStartNewLearn={startNewLearnSession} isWotdComposed={isWotdComposed} onComposeWotd={handleComposeWithWord} onRandomizeWotd={randomizeWotd} serverStatus={serverStatus} onAction={(action) => { if (action === 'PLAN_AI' || action === 'PLAN_IMPORT' || action === 'IRREGULAR_VERBS' || action === 'MIMIC' || action === 'LESSON_GRAMMAR') controller.handleSpecialAction(action); }} />;
+    case 'WORDBOOK': return <WordBookPage user={currentUser} />;
+    case 'PLANNING': return <PlanningPage user={currentUser} initialAction={planningAction} onActionConsumed={consumePlanningAction} />;
+    case 'REVIEW': return sessionWords && sessionType ? <ReviewSession user={currentUser} sessionWords={sessionWords} sessionType={sessionType} sessionFocus={sessionFocus} onUpdate={updateWord} onBulkUpdate={bulkUpdateWords} onComplete={handleSessionComplete} onRetry={handleRetrySession} /> : null;
+    case 'BROWSE': return <WordList user={currentUser} onDelete={async (id) => await deleteWord(id)} onBulkDelete={async (ids) => await bulkDeleteWords(ids)} onUpdate={updateWord} onStartSession={(words) => startSession(words, 'custom')} initialFilter={initialListFilter} onInitialFilterApplied={() => setInitialListFilter(null)} forceExpandAdd={forceExpandAdd} onExpandAddConsumed={() => setForceExpandAdd(false)} onNavigate={setView} />;
+    case 'LESSON': return <KnowledgeLibrary user={currentUser} onStartSession={(words) => startSession(words, 'custom')} onExit={() => setView('DASHBOARD')} onNavigate={setView} onUpdateUser={handleUpdateUser} initialLessonId={controller.targetLessonId} onConsumeLessonId={controller.consumeTargetLessonId} initialTag={controller.targetLessonTag} onConsumeTag={controller.consumeTargetLessonTag} />;
+    case 'UNIT_LIBRARY': return <ReadingUnitPage user={currentUser} onStartSession={(words) => startSession(words, 'new_study')} onUpdateUser={handleUpdateUser} />;
+    case 'SETTINGS': return <SettingsView user={currentUser} onUpdateUser={handleUpdateUser} onRefresh={refreshGlobalStats} onNuke={handleLibraryReset} apiUsage={apiUsage} />;
+    case 'DISCOVER': return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} onRecalculateXp={recalculateXpAndLevelUp} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} lastMasteryScoreUpdateTimestamp={lastMasteryScoreUpdateTimestamp} onBulkUpdate={bulkUpdateWords} />;
+    case 'SPEAKING': return <ExpressionPage user={currentUser} onNavigate={setView} />;
+    case 'WRITING': return <WritingStudioPage user={currentUser} initialContextWord={writingContextWord} onConsumeContext={consumeWritingContext} />;
+    case 'IRREGULAR_VERBS': return <IrregularVerbs user={currentUser} onGlobalViewWord={setGlobalViewWord} />;
+    case 'MIMIC': return <MimicPractice />;
+    case 'LISTENING': return <ListeningCardPage user={currentUser} />;
+    default: return <div>Unknown view: {view}</div>;
   }
 };
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { 
-    view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary, currentUser, stats, startDueReviewSession, startNewLearnSession, lastBackupTime, 
-    isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction,
-    handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser,
-    isConnectionModalOpen, setIsConnectionModalOpen, connectionScanStatus, handleScanAndConnect, handleStopScan,
-    syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore
-  } = controller;
+  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary, currentUser, stats, startDueReviewSession, startNewLearnSession, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen, connectionScanStatus, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
-
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
-
   const handleNavigation = (targetView: AppView, action?: () => void) => {
-    if (sessionType && targetView !== 'REVIEW') {
-      setEndSessionModal({isOpen: true, targetView, andThen: action});
-    } else {
-      if(action) { setForceExpandAdd(true); } else { setForceExpandAdd(false); }
-      setView(targetView);
-      setIsSidebarOpen(false);
-    }
+    if (sessionType && targetView !== 'REVIEW') setEndSessionModal({isOpen: true, targetView, andThen: action});
+    else { if(action) setForceExpandAdd(true); else setForceExpandAdd(false); setView(targetView); setIsSidebarOpen(false); }
   };
-
-  const handleSpecialAction = (action: string, params?: any) => {
-      switch(action) {
-          case 'REVIEW':
-              startDueReviewSession();
-              break;
-          case 'BROWSE': 
-              startNewLearnSession();
-              break;
-          case 'LESSON':
-              if (params && params.lessonId) {
-                  controller.setTargetLessonId(params.lessonId);
-              }
-              handleNavigation('LESSON');
-              break;
-          case 'PLAN_AI':
-              controller.setPlanningAction('AI');
-              handleNavigation('PLANNING');
-              break;
-          case 'PLAN_IMPORT':
-              controller.setPlanningAction('IMPORT');
-              handleNavigation('PLANNING');
-              break;
-          default:
-             handleNavigation(action as AppView);
-      }
-  };
-  
-  const handleLogoutRequest = () => {
-    if (sessionType) {
-        setEndSessionModal({ isOpen: true, targetView: null, andThen: handleLogout });
-    } else {
-        handleLogout();
-    }
-  };
-
   const confirmEndSession = () => {
-    if (endSessionModal.targetView) {
-        clearSessionState();
-        setView(endSessionModal.targetView);
-        if (endSessionModal.andThen) {
-            endSessionModal.andThen();
-        } else {
-            setForceExpandAdd(false);
-        }
-        setIsSidebarOpen(false);
-    } else if (endSessionModal.andThen) { 
-        clearSessionState();
-        endSessionModal.andThen();
-    }
+    if (endSessionModal.targetView) { clearSessionState(); setView(endSessionModal.targetView); if (endSessionModal.andThen) endSessionModal.andThen(); else setForceExpandAdd(false); setIsSidebarOpen(false); } 
+    else if (endSessionModal.andThen) { clearSessionState(); endSessionModal.andThen(); }
     setEndSessionModal({isOpen: false, targetView: null, andThen: undefined});
   };
-
-  const cancelEndSession = () => {
-    setEndSessionModal({isOpen: false, targetView: null, andThen: undefined});
-  };
-
-  const handleEditRequest = (word: VocabularyItem) => {
-    setGlobalViewWord(null);
-    setEditingWord(word);
-  };
-
-  const handleSaveEdit = (updated: VocabularyItem) => {
-    updateWord(updated);
-    setEditingWord(null);
-  }
-  
+  const cancelEndSession = () => setEndSessionModal({isOpen: false, targetView: null, andThen: undefined});
+  const handleEditRequest = (word: VocabularyItem) => { setGlobalViewWord(null); setEditingWord(word); };
+  const handleSaveEdit = (updated: VocabularyItem) => { updateWord(updated); setEditingWord(null); };
   const [isRestoring, setIsRestoring] = useState(false);
 
   return (
     <div className="min-h-screen bg-neutral-50 md:flex">
-      <Sidebar controller={controller} onNavigate={handleNavigation} onLogoutRequest={handleLogoutRequest} onSwitchUser={handleSwitchUser} />
+      <Sidebar controller={controller} onNavigate={handleNavigation} onLogoutRequest={handleLogout} onSwitchUser={handleSwitchUser} />
       <div className={`fixed inset-0 bg-black/30 z-40 md:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
-
       <main className="flex-1 p-6 md:p-10 overflow-y-auto relative">
-        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30">
-          <Menu size={24} />
-        </button>
-        <Suspense fallback={<div className="flex justify-center p-20"><Loader2 className="animate-spin text-neutral-300" size={32} /></div>}>
-          <MainContent controller={controller} />
-        </Suspense>
+        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30"><Menu size={24} /></button>
+        <Suspense fallback={<div className="flex justify-center p-20"><Loader2 className="animate-spin text-neutral-300" size={32} /></div>}><MainContent controller={controller} /></Suspense>
       </main>
-      
-      {currentUser && (
-          <StudyBuddy 
-            user={currentUser} 
-            stats={stats} 
-            currentView={view} 
-            lastBackupTime={lastBackupTime} 
-            onNavigate={handleSpecialAction} 
-            onViewWord={setGlobalViewWord}
-            isAnyModalOpen={!!globalViewWord || !!editingWord}
-          />
-      )}
-
+      {currentUser && <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={controller.handleSpecialAction} onViewWord={setGlobalViewWord} isAnyModalOpen={!!globalViewWord || !!editingWord} />}
       {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
       {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
-      
-      <ConfirmationModal
-        isOpen={endSessionModal.isOpen}
-        title="End Current Session?"
-        message="Navigating away will end your current study session. Are you sure you want to continue?"
-        confirmText="End Session"
-        isProcessing={false}
-        onConfirm={confirmEndSession}
-        onClose={cancelEndSession}
-        icon={<AlertTriangle size={40} className="text-orange-50" />}
-        confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200"
-      />
-      
-      <ServerRestoreModal 
-          isOpen={isAutoRestoreOpen} 
-          onClose={() => setIsAutoRestoreOpen(false)} 
-          backups={autoRestoreCandidates} 
-          onRestore={(id) => { setIsRestoring(true); restoreFromServerAction(id).finally(() => setIsRestoring(false)); }} 
-          isRestoring={isRestoring}
-          title="User Selection"
-          description="We found existing profiles on the server. Select yours to restore."
-          onNewUser={handleNewUserSetup}
-          onLocalRestore={handleLocalRestoreSetup}
-      />
-      
-      <ConnectionModal 
-          isOpen={isConnectionModalOpen}
-          onClose={() => setIsConnectionModalOpen(false)}
-          onRetry={handleScanAndConnect}
-          onStop={handleStopScan}
-          status={connectionScanStatus}
-          scanningUrl={controller.scanningUrl}
-      />
-
-      {syncPrompt && (
-          <SyncPromptModal 
-            isOpen={syncPrompt.isOpen}
-            onClose={() => setSyncPrompt(null)}
-            onPush={handleSyncPush}
-            onRestore={handleSyncRestore}
-            type={syncPrompt.type}
-            localDate={syncPrompt.localDate}
-            serverDate={syncPrompt.serverDate}
-            isProcessing={isSyncing}
-          />
-      )}
+      <ConfirmationModal isOpen={endSessionModal.isOpen} title="End Current Session?" message="Navigating away will end your current study session. Are you sure you want to continue?" confirmText="End Session" isProcessing={false} onConfirm={confirmEndSession} onClose={cancelEndSession} icon={<AlertTriangle size={40} className="text-orange-50" />} confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" />
+      <ServerRestoreModal isOpen={isAutoRestoreOpen} onClose={() => setIsAutoRestoreOpen(false)} backups={autoRestoreCandidates} onRestore={(id) => { setIsRestoring(true); restoreFromServerAction(id).finally(() => setIsRestoring(false)); }} isRestoring={isRestoring} title="User Selection" description="We found existing profiles on the server. Select yours to restore." onNewUser={handleNewUserSetup} onLocalRestore={handleLocalRestoreSetup} />
+      <ConnectionModal isOpen={isConnectionModalOpen} onClose={() => setIsConnectionModalOpen(false)} onRetry={handleScanAndConnect} onStop={handleStopScan} status={connectionScanStatus} scanningUrl={controller.scanningUrl} />
+      {syncPrompt && <SyncPromptModal isOpen={syncPrompt.isOpen} onClose={() => setSyncPrompt(null)} onPush={handleSyncPush} onRestore={handleSyncRestore} type={syncPrompt.type} localDate={syncPrompt.localDate} serverDate={syncPrompt.serverDate} isProcessing={isSyncing} />}
     </div>
   );
 };

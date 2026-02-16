@@ -21,6 +21,7 @@ interface ResourcePageProps {
   // Data State Handlers (Provided by parent)
   query?: string;
   onQueryChange?: (q: string) => void;
+  searchPlaceholder?: string; // Added prop
   activeFilters: Record<string, string>;
   onFilterChange: (key: string, value: string) => void;
 
@@ -50,7 +51,7 @@ export const ResourcePage: React.FC<ResourcePageProps> = (props) => {
   const { 
     title, subtitle, icon, minorSkills, centerContent, actions,
     config,
-    query, onQueryChange, activeFilters, onFilterChange,
+    query, onQueryChange, searchPlaceholder, activeFilters, onFilterChange,
     isLoading, isEmpty, emptyMessage,
     aboveGrid,
     pagination,
@@ -84,6 +85,7 @@ export const ResourcePage: React.FC<ResourcePageProps> = (props) => {
       <FilterBar 
         query={query} 
         onQueryChange={onQueryChange}
+        searchPlaceholder={searchPlaceholder}
         schema={config.filterSchema}
         activeFilters={activeFilters}
         onFilterChange={onFilterChange}

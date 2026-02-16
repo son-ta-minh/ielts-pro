@@ -24,6 +24,8 @@ export * from './prompts/getGenerateWordLessonPrompt';
 export * from './prompts/getGenerateLessonTestPrompt';
 export * from './prompts/getPronunciationAnalysisPrompt';
 export * from './prompts/getBulkParaphrasePrompt';
+export * from './prompts/getIntensityRefinePrompt';
+export * from './prompts/getComparisonRefinePrompt';
 
 // Speaking feature prompts
 export { getTranscriptionForSpeakingPrompt, getFullSpeakingTestPrompt, getRefineSpeakingTopicPrompt } from './prompts/getSpeakingPart1QuestionsPrompt';

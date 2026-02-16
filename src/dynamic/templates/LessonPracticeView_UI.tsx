@@ -1,9 +1,10 @@
-
 import React, { useMemo, useEffect, useState, useRef } from 'react';
 import { Lesson } from '../../app/types';
-import { ArrowLeft, Edit3, Play, Pause, Square, Headphones, Sparkles, Volume2, RefreshCw, Loader2, BookText, ClipboardList, GalleryHorizontalEnd, ScrollText, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+import { ArrowLeft, Edit3, Play, Pause, Square, Headphones, Sparkles, Volume2, RefreshCw, Loader2, BookText, ClipboardList, GalleryHorizontalEnd, ScrollText, ChevronLeft, ChevronRight, Menu, Zap, Split } from 'lucide-react';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { speak, stopSpeaking, prefetchSpeech } from '../../utils/audio';
+import { IntensityTable } from '../../components/common/IntensityTable';
+import { ComparisonTable } from '../../components/common/ComparisonTable';
 
 interface Props {
   lesson: Lesson;
@@ -27,11 +28,8 @@ const splitContentIntoChapters = (markdown: string): Chapter[] => {
     let currentTitle = "Introduction";
     let currentBody: string[] = [];
 
-    // Helper to push
     const pushChapter = () => {
         if (currentBody.length > 0 || (chapters.length === 0 && currentTitle === "Introduction")) {
-            // Only push if there is content, OR if it's the very first empty intro (to avoid totally empty state)
-             // Clean up body
             const bodyText = currentBody.join('\n').trim();
             if (bodyText || chapters.length > 0) {
                  chapters.push({ 
@@ -47,8 +45,6 @@ const splitContentIntoChapters = (markdown: string): Chapter[] => {
         if (headerMatch) {
             pushChapter();
             currentTitle = headerMatch[2].trim();
-            // We include the header in the body so it renders nicely in the view, 
-            // or we can exclude it. Let's include it for context.
             currentBody = [line]; 
         } else {
             currentBody.push(line);
@@ -57,7 +53,6 @@ const splitContentIntoChapters = (markdown: string): Chapter[] => {
     
     pushChapter();
     
-    // If the first chapter is effectively empty and untitled (just whitespace), remove it
     if (chapters.length > 1 && chapters[0].title === "Introduction" && !chapters[0].content.trim()) {
         chapters.shift();
     }
@@ -66,7 +61,7 @@ const splitContentIntoChapters = (markdown: string): Chapter[] => {
 };
 
 export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEdit, onAddSound, onAddTest }) => {
-    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING' | 'TEST'>('READING');
+    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING' | 'TEST' | 'INTENSITY' | 'COMPARISON'>('READING');
     const [viewMode, setViewMode] = useState<'SCROLL' | 'PAGED'>('SCROLL');
     const [currentChapterIdx, setCurrentChapterIdx] = useState(0);
 
@@ -75,13 +70,21 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
     const [isBufferingNext, setIsBufferingNext] = useState(false);
     const [downloadedCount, setDownloadedCount] = useState(0); 
     
-    // Chapter Menu State
     const [isChapterMenuOpen, setIsChapterMenuOpen] = useState(false);
     const chapterMenuRef = useRef<HTMLDivElement>(null);
     
     const stopAudioRef = useRef(false);
     const audioBuffer = useRef<Map<number, Blob>>(new Map());
     const downloadPromises = useRef<Map<number, Promise<Blob | null>>>(new Map());
+
+    // Auto-switch tabs if specialized data exists
+    useEffect(() => {
+        if (lesson.type === 'intensity' && lesson.intensityRows && lesson.intensityRows.length > 0) {
+            setActiveTab('INTENSITY');
+        } else if (lesson.type === 'comparison' && lesson.comparisonRows && lesson.comparisonRows.length > 0) {
+            setActiveTab('COMPARISON');
+        }
+    }, [lesson]);
 
     const rawContent = useMemo(() => {
         if (activeTab === 'READING') return lesson.content || "";
@@ -91,12 +94,10 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
 
     const chapters = useMemo(() => splitContentIntoChapters(rawContent), [rawContent]);
 
-    // Reset chapter on tab switch
     useEffect(() => {
         setCurrentChapterIdx(0);
     }, [activeTab]);
 
-    // Click outside handler for chapter menu
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (chapterMenuRef.current && !chapterMenuRef.current.contains(event.target as Node)) {
@@ -116,7 +117,6 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
         }
     }, [rawContent, viewMode, chapters, currentChapterIdx]);
 
-    // Extract speech blocks for "Listen All"
     const speechBlocks = useMemo(() => {
         if (!lesson.listeningContent) return [];
         const regex = /\[Audio-(VN|EN)\]([\s\S]*?)\[\/\]/gi;
@@ -131,7 +131,6 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
         return blocks;
     }, [lesson.listeningContent]);
 
-    // Function to get or start a download for a specific index
     const getSegmentBlob = (index: number): Promise<Blob | null> => {
         if (audioBuffer.current.has(index)) return Promise.resolve(audioBuffer.current.get(index)!);
         if (downloadPromises.current.has(index)) return downloadPromises.current.get(index)!;
@@ -148,7 +147,6 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
         return promise;
     };
 
-    // Prefetch all in sequence to not overload the network
     const startSequentialPrefetch = async (startIndex: number) => {
         for (let i = startIndex; i < speechBlocks.length; i++) {
             if (stopAudioRef.current) break;
@@ -163,7 +161,6 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
         } else {
             stopAudioRef.current = false;
             setPlaybackState('PLAYING');
-            // Start downloading all in the background
             startSequentialPrefetch(0);
         }
         
@@ -175,7 +172,6 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
             setCurrentSoundIdx(i);
             const block = speechBlocks[i];
             
-            // Wait for the current segment to be ready in the buffer
             let blob = audioBuffer.current.get(i);
             if (!blob) {
                 setIsBufferingNext(true);
@@ -186,7 +182,6 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
             if (stopAudioRef.current) break;
 
             try {
-                // Play the segment
                 await speak(block.text, true, block.lang, undefined, undefined, blob || undefined);
             } catch (e) {
                 console.error("Speech playback error at index", i, e);
@@ -224,9 +219,9 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
     }, []);
 
     const hasListening = speechBlocks.length > 0;
-    const isFullyBuffered = downloadedCount >= speechBlocks.length;
+    const hasIntensity = lesson.intensityRows && lesson.intensityRows.length > 0;
+    const hasComparison = lesson.comparisonRows && lesson.comparisonRows.length > 0;
 
-    // Scroll to top when chapter changes in Paged mode
     useEffect(() => {
         if (viewMode === 'PAGED') {
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -235,15 +230,13 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
 
     return (
         <div className="max-w-4xl mx-auto space-y-6 pb-40 animate-in fade-in duration-300 relative min-h-screen">
-            {/* Header */}
             <header className="flex flex-col gap-4">
                 <div className="flex justify-between items-start">
                      <button onClick={onComplete} className="w-fit flex items-center space-x-2 text-xs font-bold text-neutral-400 hover:text-neutral-900 transition-colors uppercase tracking-wider">
                         <ArrowLeft size={14} /><span>Back to Library</span>
                     </button>
                     
-                    {/* View Mode Toggle */}
-                    {chapters.length > 1 && (
+                    {chapters.length > 1 && activeTab !== 'INTENSITY' && activeTab !== 'COMPARISON' && (
                         <div className="flex bg-neutral-100 p-1 rounded-xl">
                             <button 
                                 onClick={() => setViewMode('SCROLL')}
@@ -267,6 +260,22 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                     <div className="space-y-1">
                         <h2 className="text-3xl font-black text-neutral-900 tracking-tight">{lesson.title}</h2>
                         <div className="flex bg-neutral-100 p-1 rounded-xl gap-1 w-fit mt-2">
+                            {hasIntensity && (
+                                <button 
+                                    onClick={() => setActiveTab('INTENSITY')}
+                                    className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'INTENSITY' ? 'bg-white text-orange-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                >
+                                    <Zap size={12} className="inline mr-1"/> Scale
+                                </button>
+                            )}
+                            {hasComparison && (
+                                <button 
+                                    onClick={() => setActiveTab('COMPARISON')}
+                                    className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'COMPARISON' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                >
+                                    <Split size={12} className="inline mr-1"/> Lab
+                                </button>
+                            )}
                             <button 
                                 onClick={() => setActiveTab('READING')}
                                 className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'READING' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
@@ -300,7 +309,6 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                                         <Play size={20} fill="currentColor"/>
                                     </button>
                                 )}
-                                
                                 {playbackState !== 'IDLE' && (
                                     <button onClick={handleStop} className="p-3 bg-white text-rose-500 rounded-xl hover:bg-rose-50 transition-all">
                                         <Square size={20} fill="currentColor"/>
@@ -308,27 +316,6 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                                 )}
                             </div>
                         )}
-
-                        {activeTab === 'LISTENING' && !hasListening && onAddSound && (
-                             <button 
-                                onClick={onAddSound} 
-                                className="flex items-center gap-2 px-6 py-3 bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-lg active:scale-95"
-                            >
-                                <Sparkles size={16}/>
-                                <span>Add Audio</span>
-                            </button>
-                        )}
-
-                        {activeTab === 'TEST' && !lesson.testContent && onAddTest && (
-                             <button 
-                                onClick={onAddTest} 
-                                className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg active:scale-95"
-                            >
-                                <Sparkles size={16}/>
-                                <span>Add Test</span>
-                            </button>
-                        )}
-
                         <button onClick={onEdit} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-2xl hover:bg-neutral-50 hover:text-neutral-900 transition-all shadow-sm active:scale-95" title="Edit Lesson">
                             <Edit3 size={20} />
                         </button>
@@ -338,16 +325,31 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
 
             {/* Content Area */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm min-h-[400px] relative">
-                 {activeTab === 'TEST' && !lesson.testContent ? (
+                 {activeTab === 'INTENSITY' ? (
+                     <div className="space-y-6 animate-in fade-in duration-500">
+                         <div className="space-y-1 text-center mb-8">
+                            <h3 className="text-xl font-black text-neutral-900">Intensity Scale</h3>
+                            <p className="text-sm text-neutral-500 font-medium">Analyze how word choices change based on emphasis and context.</p>
+                         </div>
+                         <IntensityTable rows={lesson.intensityRows || []} />
+                     </div>
+                 ) : activeTab === 'COMPARISON' ? (
+                      <div className="space-y-6 animate-in fade-in duration-500">
+                         <div className="space-y-1 text-center mb-8">
+                            <h3 className="text-xl font-black text-neutral-900">Comparison Lab</h3>
+                            <p className="text-sm text-neutral-500 font-medium">Deep dive into the nuances of confusing or similar vocabulary.</p>
+                         </div>
+                         <ComparisonTable rows={lesson.comparisonRows || []} />
+                     </div>
+                 ) : activeTab === 'TEST' && !lesson.testContent ? (
                      <div className="h-full flex flex-col items-center justify-center py-20 text-neutral-300">
                          <ClipboardList size={48} className="mb-4 opacity-20" />
-                         <p className="font-bold text-neutral-400">No practice test available for this lesson.</p>
+                         <p className="font-bold text-neutral-400">No practice test available.</p>
                      </div>
                  ) : activeTab === 'LISTENING' && !lesson.listeningContent ? (
                      <div className="h-full flex flex-col items-center justify-center py-20 text-neutral-300">
                          <Headphones size={48} className="mb-4 opacity-20" />
                          <p className="font-bold text-neutral-400">No listening script available.</p>
-                         <p className="text-xs text-neutral-300 mt-2">Click "Add Audio" to generate one.</p>
                      </div>
                  ) : (
                     <div 
@@ -358,7 +360,7 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
             </div>
 
             {/* Paged Navigation Footer */}
-            {viewMode === 'PAGED' && chapters.length > 1 && (
+            {viewMode === 'PAGED' && activeTab !== 'INTENSITY' && activeTab !== 'COMPARISON' && chapters.length > 1 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-xl border border-neutral-200 flex items-center gap-2 animate-in slide-in-from-bottom-4">
                     <button 
                         onClick={() => setCurrentChapterIdx(Math.max(0, currentChapterIdx - 1))}
@@ -367,39 +369,24 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                     >
                         <ChevronLeft size={18} />
                     </button>
-                    
                     <div className="relative px-2" ref={chapterMenuRef}>
-                        <button 
-                            onClick={() => setIsChapterMenuOpen(!isChapterMenuOpen)}
-                            className="flex flex-col items-center hover:bg-neutral-100 rounded-lg px-2 py-1 transition-colors"
-                        >
+                        <button onClick={() => setIsChapterMenuOpen(!isChapterMenuOpen)} className="flex flex-col items-center hover:bg-neutral-100 rounded-lg px-2 py-1 transition-colors">
                             <span className="text-[9px] font-black uppercase text-neutral-400 tracking-widest">Chapter</span>
                             <div className="flex items-center gap-1">
                                 <span className="font-bold text-sm text-neutral-900 max-w-[120px] truncate">{chapters[currentChapterIdx].title}</span>
                                 <Menu size={12} className="text-neutral-400" />
                             </div>
                         </button>
-                        
                         {isChapterMenuOpen && (
                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-56 bg-white rounded-xl shadow-2xl border border-neutral-100 p-1 animate-in fade-in zoom-in-95 origin-bottom">
                                 <div className="max-h-60 overflow-y-auto custom-scrollbar">
                                     {chapters.map((ch, idx) => (
-                                        <button
-                                            key={idx}
-                                            onClick={() => {
-                                                setCurrentChapterIdx(idx);
-                                                setIsChapterMenuOpen(false);
-                                            }}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold truncate ${idx === currentChapterIdx ? 'bg-indigo-50 text-indigo-700' : 'text-neutral-600 hover:bg-neutral-50'}`}
-                                        >
-                                            {ch.title}
-                                        </button>
+                                        <button key={idx} onClick={() => { setCurrentChapterIdx(idx); setIsChapterMenuOpen(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold truncate ${idx === currentChapterIdx ? 'bg-indigo-50 text-indigo-700' : 'text-neutral-600 hover:bg-neutral-50'}`}>{ch.title}</button>
                                     ))}
                                 </div>
                             </div>
                         )}
                     </div>
-
                     <button 
                         onClick={() => setCurrentChapterIdx(Math.min(chapters.length - 1, currentChapterIdx + 1))}
                         disabled={currentChapterIdx === chapters.length - 1}
@@ -407,50 +394,6 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                     >
                         <ChevronRight size={18} />
                     </button>
-                </div>
-            )}
-
-            {/* Float Overlay Controller (Listening) */}
-            {activeTab === 'LISTENING' && playbackState !== 'IDLE' && (
-                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-neutral-900/95 backdrop-blur-md text-white px-8 py-6 rounded-[2.5rem] shadow-2xl flex flex-col md:flex-row items-center gap-8 animate-in slide-in-from-bottom-8 z-50 border border-neutral-800 ring-4 ring-black/10 w-[95%] max-w-4xl">
-                    <div className="flex-1 min-w-0 w-full">
-                        <div className="flex items-center justify-between mb-3 shrink-0">
-                            <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">Narrating {currentSoundIdx + 1} / {speechBlocks.length}</span>
-                                
-                                {isBufferingNext ? (
-                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500/20 rounded-full">
-                                        <Loader2 size={10} className="animate-spin text-amber-400" />
-                                        <span className="text-[8px] font-black uppercase text-amber-400 tracking-wider">Buffering...</span>
-                                    </div>
-                                ) : !isFullyBuffered && (
-                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/10 rounded-full">
-                                        <div className="w-1 h-1 rounded-full bg-emerald-400"></div>
-                                        <span className="text-[8px] font-black uppercase text-emerald-400 tracking-wider">
-                                            Downloaded {downloadedCount}/{speechBlocks.length}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <p className="text-lg font-bold text-neutral-100 leading-relaxed italic line-clamp-2">
-                            "{speechBlocks[currentSoundIdx]?.text || '...'}"
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-5 shrink-0 border-l border-white/10 pl-6 h-full self-stretch md:self-center">
-                        <button onClick={handleStop} className="p-4 text-neutral-400 hover:text-white transition-colors bg-white/5 rounded-full hover:bg-white/10">
-                            <Square size={24} fill="currentColor"/>
-                        </button>
-                        {playbackState === 'PLAYING' ? (
-                            <button onClick={() => { setPlaybackState('PAUSED'); stopSpeaking(); stopAudioRef.current = true; }} className="w-16 h-16 bg-white text-neutral-900 rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
-                                <Pause size={32} fill="currentColor"/>
-                            </button>
-                        ) : (
-                            <button onClick={handlePlayAll} className="w-16 h-16 bg-indigo-500 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
-                                <Play size={32} fill="currentColor"/>
-                            </button>
-                        )}
-                    </div>
                 </div>
             )}
         </div>
