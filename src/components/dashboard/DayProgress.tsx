@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { VocabularyItem } from '../../app/types';
 import { CalendarCheck, ChevronDown, ChevronRight } from 'lucide-react';
@@ -20,8 +21,8 @@ const ProgressBar: React.FC<{ value: number, max: number, label: string }> = ({ 
                 <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{label}</span>
                 <span className="text-xs font-bold text-neutral-500">{value} / {max}</span>
             </div>
-            <div className="h-2 w-full bg-neutral-100 rounded-full overflow-hidden border border-neutral-200/50">
-                <div className="h-full bg-green-500 rounded-full" style={{ width: `${percentage}%` }} />
+            <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden border border-neutral-200/50">
+                <div className="h-full bg-green-500 rounded-full transition-all duration-1000" style={{ width: `${percentage}%` }} />
             </div>
         </div>
     );
@@ -36,57 +37,53 @@ const getScoreBadgeClasses = (score: number | undefined | null): string => {
 };
 
 export const DayProgress: React.FC<Props> = ({ learnedToday, reviewedToday, maxLearn, maxReview, learnedWords, reviewedWords, onViewWord }) => {
-    const [isExpanded, setIsExpanded] = useState(true);
-    
     const allTodayWords = [...learnedWords, ...reviewedWords].sort((a,b) => (b.lastReview || 0) - (a.lastReview || 0));
 
     return (
-        <section className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm">
-            <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                    <h3 className="text-lg font-bold text-neutral-900 flex items-center gap-2"><CalendarCheck size={18} /> Daily Progress</h3>
-                    <p className="text-xs text-neutral-400 font-medium">Your learning and review activity for today.</p>
+        <section className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col h-full">
+            <div className="flex justify-between items-start mb-4">
+                <div className="space-y-0.5">
+                    <h3 className="text-sm font-black text-neutral-900 uppercase tracking-widest flex items-center gap-2">Daily Progress</h3>
+                    <p className="text-[10px] text-neutral-400 font-medium">Activity for today.</p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     <div className="text-center">
-                        <p className="text-2xl font-black text-blue-600">{learnedToday}</p>
-                        <p className="text-[9px] font-bold text-blue-500 uppercase">Learned</p>
+                        <p className="text-xl font-black text-blue-600 leading-none">{learnedToday}</p>
+                        <p className="text-[8px] font-bold text-blue-500 uppercase tracking-wider">New</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-2xl font-black text-orange-600">{reviewedToday}</p>
-                        <p className="text-[9px] font-bold text-orange-500 uppercase">Reviewed</p>
+                        <p className="text-xl font-black text-orange-600 leading-none">{reviewedToday}</p>
+                        <p className="text-[8px] font-bold text-orange-500 uppercase tracking-wider">Rev</p>
                     </div>
                 </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-neutral-100 space-y-4">
-                <div className="flex gap-4">
+            <div className="space-y-3 flex-1">
+                <div className="flex flex-col gap-2">
                     <ProgressBar value={learnedToday} max={maxLearn} label="Learn Goal" />
                     <ProgressBar value={reviewedToday} max={maxReview} label="Review Goal" />
                 </div>
                 
-                {allTodayWords.length > 0 && (
-                    <div>
-                        <button onClick={() => setIsExpanded(!isExpanded)} className="w-full flex justify-between items-center text-left py-2">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Today's Activity ({allTodayWords.length})</h4>
-                            {isExpanded ? <ChevronDown size={16} className="text-neutral-400"/> : <ChevronRight size={16} className="text-neutral-400"/>}
-                        </button>
-                        {isExpanded && (
-                            <div className="mt-2 max-h-40 overflow-y-auto space-y-1 pr-2">
-                                {allTodayWords.map(word => (
-                                    <button 
-                                        key={word.id} 
-                                        onClick={() => onViewWord(word)}
-                                        className="w-full flex items-center gap-2 text-left p-2 rounded-lg hover:bg-neutral-50"
-                                    >
-                                        <div className={`w-2 h-2 rounded-full ${learnedWords.some(lw => lw.id === word.id) ? 'bg-blue-500' : 'bg-orange-500'}`} />
-                                        <span className="text-sm font-bold text-neutral-800 flex-1 truncate">{word.word}</span>
-                                        <span className={`text-xs font-black px-1.5 py-0.5 rounded-md ${getScoreBadgeClasses(word.masteryScore)}`}>{word.masteryScore ?? 0}</span>
-                                        <span className="text-xs text-neutral-400 font-mono">{new Date(word.lastReview!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
+                {allTodayWords.length > 0 ? (
+                    <div className="pt-2 border-t border-neutral-100 flex-1 min-h-0 flex flex-col">
+                        <h4 className="text-[9px] font-black uppercase tracking-widest text-neutral-400 mb-2">Recent Activity ({allTodayWords.length})</h4>
+                        <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar max-h-32">
+                            {allTodayWords.map(word => (
+                                <button 
+                                    key={word.id} 
+                                    onClick={() => onViewWord(word)}
+                                    className="w-full flex items-center gap-2 text-left p-1.5 rounded-lg hover:bg-neutral-50 group"
+                                >
+                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${learnedWords.some(lw => lw.id === word.id) ? 'bg-blue-500' : 'bg-orange-500'}`} />
+                                    <span className="text-xs font-bold text-neutral-700 flex-1 truncate group-hover:text-neutral-900">{word.word}</span>
+                                    <span className={`text-[9px] font-black px-1 py-0.5 rounded ${getScoreBadgeClasses(word.masteryScore)}`}>{word.masteryScore ?? 0}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex-1 flex items-center justify-center text-[10px] text-neutral-300 italic pt-4">
+                        No activity recorded today.
                     </div>
                 )}
             </div>

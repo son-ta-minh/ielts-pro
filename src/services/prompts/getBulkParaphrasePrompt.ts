@@ -10,14 +10,15 @@ export function getBulkParaphrasePrompt(words: VocabularyItem[]): string {
     For EACH item, generate a controlled paraphrase system (max 5 items total). 
     
     RULES:
+    - Do NOT generate 'para' (paraphrase) for orthographic variants (e.g., space vs no space, hyphen vs no hyphen).
     - ONLY generate categories if a natural equivalent exists. 
-    - DO NOT force all tone types.
+    - Try to force all tone types but avoid unnatural versions.
     - Each item MUST be an object: {"w": "word_or_phrase", "t": "tone_type", "c": "recall cue"}.
-    - 't' (tone) MUST be one of: "academic", "casual", "intensified", "synonym", "idiomatic".
+    - 't' (tone) MUST be one of: "academic", "casual", "synonym" (no hypernyms or hyponyms)
     - 'c' (context) = a short (2-5 words) situational recall cue (e.g., "job interview", "arguing with friend").
 
     STRICT JSON OUTPUT FORMAT:
-    Return a single JSON array of objects. Each object represents one word from the input list.
+    Return a single JSON array of objects in codeblock. Each object represents one word from the input list.
     
     [
       {

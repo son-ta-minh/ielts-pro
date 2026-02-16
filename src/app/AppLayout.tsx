@@ -66,11 +66,10 @@ const Sidebar: React.FC<AppLayoutProps & {
       const remaining = Math.ceil(diff / 1000);
       setTimeLeft(Math.max(0, remaining));
       
-      // Khi đếm ngược về 0 hoặc ít hơn, kích hoạt backup nếu server sẵn sàng
+      // When countdown reaches 0, we simply stop the timer.
+      // The DataStore's internal timeout (which set this targetTime) will execute the actual backup.
+      // We do NOT call triggerServerBackup() here to avoid double execution.
       if (remaining <= 0) {
-          if (serverStatus === 'connected' && hasUnsavedChanges) {
-              triggerServerBackup();
-          }
           clearInterval(interval);
       }
     }, 1000);

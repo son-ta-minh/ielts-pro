@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Save, ChevronDown, CheckCircle2, AlertCircle, Info, GraduationCap, School, User as UserIcon, Bot, Play, Volume2, Mic, Edit3, Star } from 'lucide-react';
+import { Save, ChevronDown, CheckCircle2, AlertCircle, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Volume2, Mic, Link, Edit3, Star } from 'lucide-react';
 import { SystemConfig, CoachConfig, getServerUrl, saveConfig } from '../../app/settingsManager';
 import { fetchServerVoices, ServerVoicesResponse, speak, VoiceDefinition, resetAudioProtocolCache } from '../../utils/audio';
 import { AvatarSelectionModal } from '../common/AvatarSelectionModal';
@@ -291,7 +291,7 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
                             type="checkbox" 
                             className="hidden"
                             checked={onlyHighQuality}
-                            onChange={(e) => setOnlyHighQuality(e.target.value)}
+                            onChange={(e) => setOnlyHighQuality(e.target.checked)}
                         />
                         <span className={`text-[10px] font-bold transition-colors ${onlyHighQuality ? 'text-indigo-700' : 'text-neutral-500'}`}>Only High Quality</span>
                     </label>

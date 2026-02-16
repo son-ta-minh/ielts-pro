@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
-  Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText
+  Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, Music, MessageSquare, BookOpen, MessageCircle, Play,
+  Zap, Target, Headphones, Split
 } from 'lucide-react';
 import { AppView, VocabularyItem, User } from '../../app/types';
 import { DailyGoalConfig } from '../../app/settingsManager';
@@ -33,112 +34,288 @@ const getFormattedBuildDate = () => {
     }
 };
 
-const QuickToolsPanel: React.FC<{ onAction?: (action: string) => void }> = ({ onAction }) => (
-    <div className="grid grid-cols-3 gap-4">
-        <button 
-            onClick={() => onAction?.('IRREGULAR_VERBS')} 
-            className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-neutral-200 rounded-3xl shadow-sm hover:shadow-md hover:border-orange-200 hover:bg-orange-50/50 transition-all group active:scale-95"
-        >
-            <div className="p-3 bg-orange-100 text-orange-600 rounded-2xl group-hover:scale-110 transition-transform">
-                <FileClock size={20} />
-            </div>
-            <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest group-hover:text-orange-700">Irregular Verbs</span>
-        </button>
+// --- START NEW STUDY STATS COMPONENT ---
+export interface StudyStats {
+    vocab: { new: number, due: number };
+    lessons: {
+        irregular: { completed: number, total: number };
+        grammar: { completed: number, total: number };
+        comparison: { completed: number, total: number };
+        scale: { completed: number, total: number };
+    };
+    reading: { completed: number, total: number };
+    speaking: {
+        freeTalk: { completed: number, total: number };
+        native: { completed: number, total: number };
+        conversation: { completed: number, total: number };
+        pronunciation: { completed: number, total: number };
+    };
+    listening: { completed: number, total: number };
+    writing: { completed: number, total: number };
+}
 
-        <button 
-            onClick={() => onAction?.('MIMIC')} 
-            className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-neutral-200 rounded-3xl shadow-sm hover:shadow-md hover:border-purple-200 hover:bg-purple-50/50 transition-all group active:scale-95"
-        >
-            <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:scale-110 transition-transform">
-                <Mic size={20} />
-            </div>
-            <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest group-hover:text-purple-700">Pronunciation</span>
-        </button>
-
-        <button 
-            onClick={() => onAction?.('LESSON_GRAMMAR')} 
-            className="flex flex-col items-center justify-center gap-2 p-4 bg-white border border-neutral-200 rounded-3xl shadow-sm hover:shadow-md hover:border-blue-200 hover:bg-blue-50/50 transition-all group active:scale-95"
-        >
-            <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
-                <BookText size={20} />
-            </div>
-            <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest group-hover:text-blue-700">Grammar</span>
-        </button>
-    </div>
-);
-
-// New component for Goal Completion
-const GoalCompletionPanel: React.FC<{ 
-    totalTasks: number; 
-    completedTasks: number;
-    onNavigate: () => void;
-    onAction?: (action: string) => void;
-}> = ({ totalTasks, completedTasks, onNavigate, onAction }) => {
-  const hasGoals = totalTasks > 0;
-  const progressPercent = hasGoals ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  return (
-    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm group transition-all hover:border-neutral-300 hover:shadow-md flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600"><ListTodo size={14} /></div>
-              <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Study Plan Progress</h3>
-          </div>
-          
-          <button 
-              onClick={onNavigate} 
-              className="p-1.5 text-neutral-300 hover:text-neutral-900 transition-colors"
-              title="View Plan Board"
-          >
-              <ChevronRight size={18}/>
-          </button>
-      </div>
-      
-      {!hasGoals ? (
-        <div className="space-y-4">
-            <div className="space-y-1">
-                <h4 className="text-lg font-black text-neutral-900 leading-tight">No goals set yet</h4>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-                <button 
-                    onClick={() => onAction?.('PLAN_AI')}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-50 transition-all active:scale-95"
-                >
-                    <Sparkles size={14} className="text-amber-500" />
-                    <span>AI Planner</span>
-                </button>
-                <button 
-                    onClick={() => onAction?.('PLAN_IMPORT')}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-50 transition-all active:scale-95"
-                >
-                    <Download size={14} className="text-indigo-500" />
-                    <span>Import</span>
-                </button>
-            </div>
+const TinyProgressRing: React.FC<{ percent: number, size?: number, stroke?: number }> = ({ percent, size = 20, stroke = 2.5 }) => {
+    const radius = (size - stroke) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (percent / 100) * circumference;
+    
+    let colorClass = 'text-neutral-300';
+    if (percent >= 80) colorClass = 'text-green-500';
+    else if (percent >= 40) colorClass = 'text-yellow-500';
+    else if (percent > 0) colorClass = 'text-orange-500';
+    
+    return (
+        <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+            <svg className="transform -rotate-90" width={size} height={size}>
+                <circle
+                    className="text-neutral-100 group-hover:text-neutral-800 transition-colors"
+                    stroke="currentColor"
+                    strokeWidth={stroke}
+                    fill="transparent"
+                    r={radius}
+                    cx={size / 2}
+                    cy={size / 2}
+                />
+                <circle
+                    className={`${colorClass} transition-all duration-500 ease-out`}
+                    stroke="currentColor"
+                    strokeWidth={stroke}
+                    strokeLinecap="round"
+                    fill="transparent"
+                    r={radius}
+                    cx={size / 2}
+                    cy={size / 2}
+                    style={{
+                        strokeDasharray: circumference,
+                        strokeDashoffset: offset
+                    }}
+                />
+            </svg>
         </div>
-      ) : (
-        <div className="space-y-4">
-            <div className="flex justify-between items-end">
-                <div>
-                    <span className="text-3xl font-black text-neutral-900 tracking-tighter">{completedTasks}</span>
-                    <span className="text-lg font-bold text-neutral-300 ml-1">/ {totalTasks}</span>
+    );
+};
+
+const NavButton: React.FC<{ 
+    label: string, 
+    subLabel?: React.ReactNode,
+    progress?: number,
+    icon: React.ElementType, 
+    color: string, // text color class
+    bg: string,    // bg color class
+    onClick: () => void,
+    disabled?: boolean
+}> = ({ label, subLabel, progress, icon: Icon, color, bg, onClick, disabled }) => {
+    return (
+        <button 
+            onClick={onClick}
+            disabled={disabled}
+            className="flex items-center gap-3 p-3 rounded-xl border border-neutral-100 bg-white hover:bg-neutral-900 hover:border-neutral-900 hover:shadow-lg transition-all active:scale-95 w-full text-left group disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-neutral-100 disabled:hover:shadow-none"
+        >
+            <div className={`p-2.5 rounded-xl ${bg} ${color} group-hover:scale-110 transition-transform shrink-0`}>
+                <Icon size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="text-xs font-bold text-neutral-700 group-hover:text-white transition-colors">{label}</div>
+                {subLabel && <div className="text-[10px] font-bold text-neutral-400 transition-colors truncate">{subLabel}</div>}
+            </div>
+            {typeof progress === 'number' && (
+                <div className="shrink-0 ml-1">
+                    <TinyProgressRing percent={progress} />
                 </div>
-                <div className={`px-2 py-0.5 rounded-md text-[10px] font-black ${progressPercent === 100 ? 'bg-green-100 text-green-700' : 'bg-indigo-50 text-indigo-700'}`}>
-                    {progressPercent}% Complete
+            )}
+        </button>
+    );
+};
+
+const StudyNowPanel: React.FC<{
+    stats: StudyStats | null;
+    goalStats: { totalTasks: number; completedTasks: number; };
+    isLoading: boolean;
+    onRefresh: () => void;
+    onStartNew: () => void;
+    onStartDue: () => void;
+    onAction: (action: string) => void;
+}> = ({ stats, goalStats, isLoading, onRefresh, onStartNew, onStartDue, onAction }) => {
+
+    const planPercent = goalStats.totalTasks > 0 ? Math.round((goalStats.completedTasks / goalStats.totalTasks) * 100) : 0;
+
+    // Aggregations
+    const speakingCompleted = stats ? (stats.speaking.freeTalk.completed + stats.speaking.native.completed + stats.speaking.conversation.completed) : 0;
+    const speakingTotal = stats ? (stats.speaking.freeTalk.total + stats.speaking.native.total + stats.speaking.conversation.total) : 0;
+
+    const lessonsCompleted = stats ? (stats.lessons.comparison.completed + stats.lessons.scale.completed) : 0;
+    const lessonsTotal = stats ? (stats.lessons.comparison.total + stats.lessons.scale.total) : 0;
+
+    const getProg = (comp: number, tot: number) => tot > 0 ? Math.round((comp / tot) * 100) : 0;
+
+    return (
+        <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-6 relative overflow-hidden">
+            {isLoading && (
+                <div className="absolute top-4 right-4 animate-spin text-neutral-300">
+                    <RotateCw size={16} />
                 </div>
+            )}
+            
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                 <div className="flex items-center gap-3">
+                     <div className="p-2 bg-neutral-900 rounded-xl text-white shadow-md">
+                         <GraduationCap size={20} />
+                     </div>
+                     <div>
+                         <h3 className="text-lg font-black text-neutral-900 tracking-tight">Study Center</h3>
+                         <p className="text-xs font-medium text-neutral-400">Track your mastery across all skills.</p>
+                     </div>
+                 </div>
+                 
+                 <div className="flex items-center gap-3 self-end sm:self-auto">
+                    {goalStats.totalTasks > 0 ? (
+                        <button onClick={() => onAction('PLANNING')} className="flex items-center gap-2 px-3 py-1.5 bg-neutral-50 rounded-lg border border-neutral-100 hover:bg-neutral-100 transition-colors group">
+                            <ListTodo size={14} className="text-neutral-400 group-hover:text-neutral-600"/>
+                            <div className="text-[10px] font-bold text-neutral-500">
+                                Plan: <span className="text-neutral-900">{goalStats.completedTasks}/{goalStats.totalTasks}</span> 
+                                <span className={`ml-1.5 ${planPercent === 100 ? 'text-green-600' : 'text-indigo-600'}`}>({planPercent}%)</span>
+                            </div>
+                        </button>
+                    ) : (
+                        <button onClick={() => onAction('PLANNING')} className="flex items-center gap-2 px-3 py-1.5 bg-neutral-50 rounded-lg border border-neutral-100 hover:bg-neutral-100 transition-colors group">
+                            <ListTodo size={14} className="text-neutral-400 group-hover:text-neutral-600"/>
+                            <span className="text-[10px] font-bold text-neutral-500">No plan. Click to create</span>
+                        </button>
+                    )}
+                     <button onClick={onRefresh} className="p-2 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-all" title="Refresh Stats">
+                         <RotateCw size={16} />
+                     </button>
+                 </div>
             </div>
             
-            <div className="h-2 w-full bg-neutral-100 rounded-full overflow-hidden">
-                <div 
-                    className={`h-full transition-all duration-1000 ease-out ${progressPercent === 100 ? 'bg-green-500' : 'bg-indigo-500'}`} 
-                    style={{ width: `${progressPercent}%` }}
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-8">
+                {/* COLUMN 1: VOCABULARY - Spans 2 cols on tablet, 1 col on desktop */}
+                <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-1">
+                        <div className="flex items-center gap-2 text-neutral-400 px-1">
+                        <BookCopy size={12} />
+                        <span className="font-black uppercase tracking-widest text-[10px]">Vocabulary</span>
+                    </div>
+                    
+                    {/* Buttons: Stacked on mobile/desktop, side-by-side on tablet */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-2">
+                        <NavButton 
+                            label="Learn New" 
+                            subLabel={`${stats ? stats.vocab.new : '-'} words`}
+                            icon={Sparkles} 
+                            color="text-indigo-600" 
+                            bg="bg-indigo-50" 
+                            onClick={onStartNew} 
+                            disabled={!stats || stats.vocab.new === 0}
+                        />
+                        <NavButton 
+                            label="Review" 
+                            subLabel={`${stats ? stats.vocab.due : '-'} words`}
+                            icon={RotateCw} 
+                            color="text-amber-600" 
+                            bg="bg-amber-50" 
+                            onClick={onStartDue} 
+                            disabled={!stats || stats.vocab.due === 0}
+                        />
+                    </div>
+                </div>
+
+                {/* COLUMN 2: SKILLS - 2 Columns Grid */}
+                <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-2">
+                        <div className="flex items-center gap-2 text-neutral-400 px-1">
+                        <Target size={12} />
+                        <span className="font-black uppercase tracking-widest text-[10px]">Skills</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <NavButton 
+                            label="Reading" 
+                            subLabel={stats ? `${stats.reading.completed}/${stats.reading.total}` : '-'}
+                            progress={stats ? getProg(stats.reading.completed, stats.reading.total) : 0}
+                            icon={BookOpen} 
+                            color="text-indigo-600" 
+                            bg="bg-indigo-50" 
+                            onClick={() => onAction('UNIT_LIBRARY')} 
+                        />
+                        <NavButton 
+                            label="Listening" 
+                            subLabel={stats ? `${stats.listening.completed}/${stats.listening.total}` : '-'}
+                            progress={stats ? getProg(stats.listening.completed, stats.listening.total) : 0}
+                            icon={Headphones} 
+                            color="text-sky-600" 
+                            bg="bg-sky-50" 
+                            onClick={() => onAction('LISTENING')} 
+                        />
+                        <NavButton 
+                            label="Writing" 
+                            subLabel={stats ? `${stats.writing.completed}/${stats.writing.total}` : '-'}
+                            progress={stats ? getProg(stats.writing.completed, stats.writing.total) : 0}
+                            icon={PenLine} 
+                            color="text-pink-600" 
+                            bg="bg-pink-50" 
+                            onClick={() => onAction('WRITING')} 
+                        />
+                        <NavButton 
+                            label="Speaking" 
+                            subLabel={stats ? `${speakingCompleted}/${speakingTotal}` : '-'}
+                            progress={stats ? getProg(speakingCompleted, speakingTotal) : 0}
+                            icon={Mic} 
+                            color="text-rose-600" 
+                            bg="bg-rose-50" 
+                            onClick={() => onAction('SPEAKING')} 
+                        />
+                    </div>
+                </div>
+
+                {/* COLUMN 3: DOMAINS - 2 Columns Grid */}
+                <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-2">
+                        <div className="flex items-center gap-2 text-neutral-400 px-1">
+                        <BookText size={12} />
+                        <span className="font-black uppercase tracking-widest text-[10px]">Domains</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <NavButton 
+                            label="Grammar" 
+                            subLabel={stats ? `${stats.lessons.grammar.completed}/${stats.lessons.grammar.total}` : '-'}
+                            progress={stats ? getProg(stats.lessons.grammar.completed, stats.lessons.grammar.total) : 0}
+                            icon={BookText} 
+                            color="text-purple-600" 
+                            bg="bg-purple-50" 
+                            onClick={() => onAction('LESSON_GRAMMAR')} 
+                        />
+                        <NavButton 
+                            label="Irregular" 
+                            subLabel={stats ? `${stats.lessons.irregular.completed}/${stats.lessons.irregular.total}` : '-'}
+                            progress={stats ? getProg(stats.lessons.irregular.completed, stats.lessons.irregular.total) : 0}
+                            icon={FileClock} 
+                            color="text-orange-600" 
+                            bg="bg-orange-50" 
+                            onClick={() => onAction('IRREGULAR_VERBS')} 
+                        />
+                        <NavButton 
+                            label="Pronunciation" 
+                            subLabel={stats ? `${stats.speaking.pronunciation.completed}/${stats.speaking.pronunciation.total}` : '-'}
+                            progress={stats ? getProg(stats.speaking.pronunciation.completed, stats.speaking.pronunciation.total) : 0}
+                            icon={AudioLines} 
+                            color="text-emerald-600" 
+                            bg="bg-emerald-50" 
+                            onClick={() => onAction('MIMIC')} 
+                        />
+                        <NavButton 
+                            label="Lessons" 
+                            subLabel={stats ? `${lessonsCompleted}/${lessonsTotal}` : '-'}
+                            progress={stats ? getProg(lessonsCompleted, lessonsTotal) : 0}
+                            icon={BookOpen} 
+                            color="text-blue-600" 
+                            bg="bg-blue-50" 
+                            onClick={() => onAction('LESSON')} 
+                        />
+                    </div>
+                </div>
             </div>
         </div>
-      )}
-    </div>
-  );
+    );
 };
+
+// --- END NEW COMPONENT ---
 
 const BackupStatus: React.FC<{ 
     lastBackupTime: number | null; 
@@ -398,13 +575,19 @@ export interface DashboardUIProps {
   dailyGoals: DailyGoalConfig;
   onNavigateToWordList: (filter: string) => void;
   goalStats: { totalTasks: number; completedTasks: number; };
+  
+  // New Stats Props
+  studyStats: StudyStats | null;
+  isStatsLoading: boolean;
+  onRefreshStats: () => void;
 }
 
 // The pure UI component
 export const DashboardUI: React.FC<DashboardUIProps> = ({
   user, onNavigate, totalCount, newCount, dueCount, learnedCount, rawCount, refinedCount, reviewStats,
   wotd, isWotdComposed, onRandomizeWotd, onComposeWotd, lastBackupTime, onBackup, onRestore,
-  serverStatus, onAction, onStartNewLearn, onStartDueReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats
+  serverStatus, onAction, onStartNewLearn, onStartDueReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats,
+  studyStats, isStatsLoading, onRefreshStats
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
   
@@ -412,7 +595,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   const setView = onNavigate;
   
   return (
-    <div className="space-y-10 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-6">
         <div>
             <div className="flex items-baseline gap-2">
@@ -461,6 +644,23 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
         </div>
       </header>
 
+      {/* NEW BIG STUDY NOW PANEL */}
+      <StudyNowPanel 
+          stats={studyStats} 
+          goalStats={goalStats}
+          isLoading={isStatsLoading} 
+          onRefresh={onRefreshStats} 
+          onStartNew={onStartNewLearn} 
+          onStartDue={onStartDueReview}
+          onAction={(action) => {
+              if (['IRREGULAR_VERBS', 'MIMIC', 'LESSON_GRAMMAR'].includes(action)) {
+                  onAction(action);
+              } else {
+                  onNavigate(action);
+              }
+          }}
+      />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <LibraryHealthPanel 
           totalCount={totalCount}
@@ -472,37 +672,16 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
           onVerifyRefined={() => onNavigateToWordList('refined')}
           onViewLibrary={() => setView('BROWSE')}
         />
-        <div className="md:col-span-1 flex flex-col gap-6">
-          <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4">
-              <div className="flex items-center gap-2">
-                  <div className="p-1 bg-green-50 rounded-full"><BookCopy size={10} className="text-green-600" /></div>
-                  <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Study Now</h3>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                  <button onClick={onStartNewLearn} disabled={newCount === 0} className="flex-1 justify-between px-4 py-3 bg-blue-500 text-white rounded-xl font-black text-xs flex items-center hover:bg-blue-600 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-blue-500/10"><div className="flex items-center space-x-2"><Lightbulb size={12} /><span>LEARN NEW</span></div><span className="px-2 py-0.5 bg-white/20 rounded-md text-white font-black">{newCount}</span></button>
-                  <button onClick={onStartDueReview} disabled={dueCount === 0} className="flex-1 justify-between px-4 py-3 bg-orange-500 text-white rounded-xl font-black text-xs flex items-center hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-orange-500/10"><div className="flex items-center space-x-2"><RotateCw size={12} /><span>REVIEW DUE</span></div><span className="px-2 py-0.5 bg-white/20 rounded-md text-white font-black">{dueCount}</span></button>
-              </div>
-          </div>
-          <GoalCompletionPanel 
-              totalTasks={goalStats.totalTasks}
-              completedTasks={goalStats.completedTasks}
-              onNavigate={() => setView('PLANNING')}
-              onAction={onAction}
-          />
-        </div>
+        <DayProgress
+            learnedToday={dayProgress.learned}
+            reviewedToday={dayProgress.reviewed}
+            maxLearn={dailyGoals.max_learn_per_day}
+            maxReview={dailyGoals.max_review_per_day}
+            learnedWords={dayProgress.learnedWords}
+            reviewedWords={dayProgress.reviewedWords}
+            onViewWord={() => {}} // Not used as Wotd is removed
+        />
       </div>
-
-      <QuickToolsPanel onAction={onAction} />
-
-      <DayProgress
-        learnedToday={dayProgress.learned}
-        reviewedToday={dayProgress.reviewed}
-        maxLearn={dailyGoals.max_learn_per_day}
-        maxReview={dailyGoals.max_review_per_day}
-        learnedWords={dayProgress.learnedWords}
-        reviewedWords={dayProgress.reviewedWords}
-        onViewWord={() => {}} // Not used as Wotd is removed
-      />
     </div>
   );
 };

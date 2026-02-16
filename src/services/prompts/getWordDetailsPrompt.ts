@@ -18,6 +18,7 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - If the headword (hw) is a PHRASE, PHRASAL VERB, or IDIOM (e.g., "break the ice"):
       - DO NOT generate 'fam' (word family). Return an empty object {} or null.
       - DO NOT generate 'col' (collocations). Return an empty array [].
+    - Do NOT generate 'para' (paraphrase) for orthographic variants (e.g., space vs no space, hyphen vs no hyphen).
 
     RESPONSE OPTIMIZATION:
     - Omit "og" if it is identical to "hw".
@@ -35,10 +36,9 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - ex: A high-quality example sentence using the headword.
     - col: Array of 3-5 collocations. ONLY for single-word headwords. Items: {"text": "phrase", "d": "minimal descriptive cue for recall (5-10 words)"}.
     - idm: Array of 1-3 common idioms containing the headword (only if hw is a single word). Items: {"text": "phrase", "d": "descriptive cue"}.
-    - prep: Array of dependent prepositions. Format: [{"p": "preposition", "c": "short usage example"}].
-    - para: Controlled paraphrase system (max 5 items total). ONLY generate categories if a natural equivalent exists. DO NOT force all tone types.
-        - Each item MUST be an object: {"w": "word_or_phrase", "t": "tone_type", "c": "recall cue"}.
-        - 't' (tone) MUST be one of: "academic", "casual", "intensified", "synonym", "idiomatic".
+    - prep: Array of dependent prepositions. If the headword does NOT take a fixed preposition, return an empty array []. Format: [{"p": "preposition", "c": "short usage example"}].
+    - para: Controlled paraphrase system (max 5 items total). ONLY generate categories if a natural equivalent exists. Try to force all tone types but avoid unnatural versions.        - Each item MUST be an object: {"w": "word_or_phrase", "t": "tone_type", "c": "recall cue"}.
+        - 't' (tone) MUST be one of: "academic", "casual", "synonym" (no hypernyms or hyponyms)
         - 'c' (context) = a short (2-5 words) situational recall cue (e.g., "job interview", "arguing with friend").
     - fam: Word family. ONLY for single-word headwords. 'n'=nouns, 'v'=verbs, 'j'=adjectives, 'adv'=adverbs. Format: [{"w": "word"}].
     - type: The grammatical classification. MUST be one of: "idiom", "phrasal_verb", "collocation", "phrase", "vocabulary", "irregular_verb".

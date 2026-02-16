@@ -333,7 +333,6 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       subtitle="Your collection of lessons and comparisons."
       icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png" className="w-8 h-8 object-contain" alt="Lessons" />}
       // Removed default search bar and replaced with custom QuickFilterBar in aboveGrid
-      minorSkills={ <button onClick={() => onNavigate('IRREGULAR_VERBS')} className="flex items-center gap-2 px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors"><FileClock size={16} /><span className="hidden sm:inline">Irregular Verbs</span></button> }
       pagination={{ page, totalPages: Math.ceil(filteredResources.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredResources.length }}
       aboveGrid={<QuickFilterBar />}
       config={lessonConfig}
