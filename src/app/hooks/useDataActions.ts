@@ -102,6 +102,13 @@ export const useDataActions = (props: UseDataActionsProps) => {
         const config = getConfig();
         saveConfig({ ...config, sync: { ...config.sync, lastSyncTime: syncTime } }, true);
 
+        // CRITICAL FIX: Ensure DataStore reloads from IndexedDB into Memory immediately
+        // This fixes the issue where local restore required a manual refresh
+        const targetUserId = result.updatedUser?.id || currentUser?.id;
+        if (targetUserId) {
+            await dataStore.forceReload(targetUserId);
+        }
+
         if (result.updatedUser) {
             localStorage.setItem('vocab_pro_current_user_id', result.updatedUser.id);
             localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
@@ -110,6 +117,8 @@ export const useDataActions = (props: UseDataActionsProps) => {
         
         showToast('Restore successful!', 'success', 2000);
         refreshGlobalStats();
+        
+        // Use Soft UI Reload (React Key Reset) instead of Hard Browser Reload
         window.dispatchEvent(new Event('vocab-pro-restore-complete'));
         window.dispatchEvent(new Event('vocab-pro-force-ui-reload'));
 
@@ -182,7 +191,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
     
                 if (result.type === 'success') {
                     await handleRestoreSuccess(result, preservedConfigJson);
-                    setTimeout(() => window.location.reload(), 1000);
+                    // Removed window.location.reload() to make it "less expensive" and smoother
                 } else {
                     showToast(`Restore failed: ${result.message}`, 'error', 5000);
                     (window as any).isRestoring = false;

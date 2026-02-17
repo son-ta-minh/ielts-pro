@@ -18,12 +18,12 @@ export enum WordQuality {
 export type FocusColor = 'green' | 'yellow' | 'red';
 
 export enum ReviewMode {
-  STANDARD = 'STANDARD',       // Show Word -> Recall Meaning
-  SPELLING = 'SPELLING',       // Listen/IPA -> Type Word
-  MEANING = 'MEANING',         // Show Meaning -> Recall Word
-  PHONETIC = 'PHONETIC',       // Show IPA -> Recall Word
-  IRREGULAR = 'IRREGULAR',     // V1 -> Type V2 & V3 (Specific for irregular verbs)
-  PREPOSITION = 'PREPOSITION'  // Show example with blank -> Fill preposition
+  STANDARD = 'STANDARD',
+  SPELLING = 'SPELLING',
+  MEANING = 'MEANING',
+  PHONETIC = 'PHONETIC',
+  IRREGULAR = 'IRREGULAR',
+  PREPOSITION = 'PREPOSITION'
 }
 
 export enum ParaphraseMode {
@@ -84,11 +84,11 @@ export interface AdventureProgress {
   energy: number;
   keys: number;
   keyFragments: number;
-  badges: string[]; // For medals/huy hiệu
-  hpPotions?: number; // New: Healing item
-  wisdomFruits?: number; // New: Hint item
+  badges: string[];
+  hpPotions?: number;
+  wisdomFruits?: number;
   lastDailyEnergyAwardDate?: string;
-  dailyEnergyAwarded?: number; // Tracks total energy earned today
+  dailyEnergyAwarded?: number;
   unlockedChapterIds?: string[];
   completedSegmentIds?: string[];
   segmentStars?: Record<string, number>;
@@ -114,7 +114,7 @@ export interface User {
   level: number;
   peakLevel?: number;
   adventure: AdventureProgress;
-  adventureLastDailyStar?: string; // YYYY-MM-DD format
+  adventureLastDailyStar?: string;
   isAdmin?: boolean;
   lessonPreferences?: LessonPreferences;
 }
@@ -137,7 +137,7 @@ export interface ParaphraseOption {
 export interface CollocationDetail {
   text: string;
   isIgnored?: boolean;
-  d?: string; // Descriptive text
+  d?: string;
 }
 
 export type WordSource = 'app' | 'manual' | 'refine';
@@ -152,24 +152,18 @@ export interface VocabularyItem {
   ipaMistakes?: string[];
   meaningVi: string;
   example: string;
-  
   collocations?: string;
   collocationsArray?: CollocationDetail[];
-
   idioms?: string;
   idiomsList?: CollocationDetail[];
-
   note: string;
   groups?: string[]; 
   createdAt: number;
   updatedAt: number;
-  
   wordFamily?: WordFamily;
   prepositions?: PrepositionPattern[];
   paraphrases?: ParaphraseOption[];
-
   register?: 'raw' | 'academic' | 'casual' | 'neutral';
-
   isIdiom?: boolean;
   isPhrasalVerb?: boolean;
   isCollocation?: boolean;
@@ -177,13 +171,12 @@ export interface VocabularyItem {
   isInterrogative?: boolean;
   isExclamatory?: boolean;
   isImplicitImperative?: boolean;
+  isPhrasalPhrasalVerb?: boolean;
   isIrregular?: boolean; 
   isExampleLocked?: boolean;
   isPassive?: boolean;
-
   quality: WordQuality;
   source?: WordSource;
-
   nextReview: number; 
   interval: number; 
   easeFactor: number; 
@@ -192,18 +185,12 @@ export interface VocabularyItem {
   lastGrade?: ReviewGrade;
   lastReviewSessionType?: SessionType;
   forgotCount: number;
-  
   complexity?: number;
   masteryScore?: number;
   lastTestResults?: Record<string, boolean>;
   lastXpEarnedTime?: number;
-
   gameEligibility?: string[];
-
-  // NEW: Link to Intensity Lesson
   intensityLessonId?: string;
-
-  // NEW: Embedded Lesson Data
   lesson?: {
     essay?: string;
     test?: string;
@@ -222,6 +209,7 @@ export interface Unit {
   createdAt: number;
   updatedAt: number;
   essay?: string;
+  image?: string;
   isLearned?: boolean;
   comprehensionQuestions?: {
     question: string;
@@ -257,6 +245,7 @@ export interface WritingTopic {
   description: string;
   task1: string;
   task2: string;
+  image?: string;
   path?: string;
   tags?: string[];
   createdAt: number;
@@ -362,20 +351,17 @@ export interface Lesson {
   id: string;
   userId: string;
   type?: LessonType; 
-  
   topic1: string; 
   topic2: string; 
-  
   title: string;
   description: string;
   content: string; 
   listeningContent?: string; 
   testContent?: string; 
-  
+  image?: string;
   intensityRows?: IntensityRow[];
   comparisonRows?: ComparisonRow[];
   searchKeywords?: string[];
-
   path?: string;
   tags?: string[];
   createdAt: number;
@@ -393,6 +379,7 @@ export interface ListeningItem {
   path?: string;
   tags?: string[];
   audioLinks?: string[]; 
+  image?: string;
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
@@ -414,6 +401,7 @@ export interface NativeSpeakItem {
     path?: string;
     tags: string[];
     note?: string; 
+    image?: string;
     createdAt: number;
     updatedAt: number;
     focusColor?: FocusColor;
@@ -443,6 +431,7 @@ export interface ConversationItem {
     sentences: ConversationSentence[];
     path?: string;
     tags: string[];
+    image?: string;
     createdAt: number;
     updatedAt: number;
     focusColor?: FocusColor;
@@ -452,9 +441,9 @@ export interface ConversationItem {
 
 export interface UserRecording {
     id: string;
-    url: string; // The URL to stream/play (might be base64 for quick access or server stream url)
-    mapName: string; // Folder mapping name on server
-    filename: string; // Actual filename on server
+    url: string; 
+    mapName: string; 
+    filename: string; 
     timestamp: number;
     duration?: number;
 }
@@ -466,8 +455,9 @@ export interface FreeTalkItem {
   content: string; 
   path?: string;
   tags: string[];
-  audioLinks?: string[]; // Reference audio files
-  userRecordings?: UserRecording[]; // User practice recordings
+  audioLinks?: string[]; 
+  image?: string;
+  userRecordings?: UserRecording[]; 
   createdAt: number;
   updatedAt: number;
   focusColor?: FocusColor;
@@ -604,4 +594,4 @@ export interface PlanningGoal {
   isFocused?: boolean;
 }
 
-export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'COLLO_CONNECT' | 'IPA_SORTER' | 'MEANING_MATCH' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'WORD_TRANSFORMER' | 'IDIOM_CONNECT' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER';
+export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'IPA_SORTER' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER' | 'DICTATION';

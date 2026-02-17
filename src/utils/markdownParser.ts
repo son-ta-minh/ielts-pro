@@ -1,6 +1,7 @@
 
 
 
+
 /**
  * Lightweight Markdown Parser supporting custom tags:
  * [Audio-VN]text[/] -> Speaker button + text (inline)
@@ -358,6 +359,11 @@ export const parseMarkdown = (text: string): string => {
             closeLists(0);
             output.push(`<h3 class="text-lg font-bold text-neutral-700 mb-2 mt-4 leading-tight">${lineTrim.substring(4)}</h3>`); 
             continue; 
+        }
+        if (lineTrim.startsWith('#### ')) {
+            closeLists(0);
+            output.push(`<h4 class="text-sm font-bold text-neutral-600 mb-1 mt-3 uppercase tracking-wider">${lineTrim.substring(5)}</h4>`);
+            continue;
         }
 
         if (lineTrim.startsWith('> ')) {

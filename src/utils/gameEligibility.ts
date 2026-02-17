@@ -54,11 +54,6 @@ export const calculateGameEligibility = (item: VocabularyItem): string[] => {
         eligible.push('COLLO_CONNECT');
     }
 
-    // IDIOM_CONNECT: Needs at least one non-ignored idiom
-    if (item.idiomsList && item.idiomsList.some(i => !i.isIgnored)) {
-        eligible.push('IDIOM_CONNECT');
-    }
-
     // MEANING_MATCH: Needs a word and a native definition
     if (item.word && item.meaningVi && item.meaningVi.trim().length > 0) {
         eligible.push('MEANING_MATCH');
@@ -73,27 +68,15 @@ export const calculateGameEligibility = (item: VocabularyItem): string[] => {
     if (item.example && item.example.trim().split(/\s+/).filter(Boolean).length >= 5) {
         eligible.push('SENTENCE_SCRAMBLE');
     }
+    
+    // DICTATION: Needs an example sentence with reasonable length (similar to Scramble but distinct purpose)
+    if (item.example && item.example.trim().split(/\s+/).filter(Boolean).length >= 4) {
+        eligible.push('DICTATION');
+    }
 
     // PREPOSITION_POWER: Needs prepositions AND an example sentence
     if (item.example && item.prepositions && item.prepositions.some(p => !p.isIgnored)) {
         eligible.push('PREPOSITION_POWER');
-    }
-
-    // WORD_TRANSFORMER: Needs a word family with at least 2 unique members AND an example
-    if (item.example && item.wordFamily) {
-        const familyWords = [
-            ...(item.wordFamily.nouns || []),
-            ...(item.wordFamily.verbs || []),
-            ...(item.wordFamily.adjs || []),
-            ...(item.wordFamily.advs || [])
-        ].filter(m => !m.isIgnored).map(m => m.word.toLowerCase());
-        
-        familyWords.push(item.word.toLowerCase());
-        const uniqueCount = new Set(familyWords).size;
-        
-        if (uniqueCount >= 2) {
-            eligible.push('WORD_TRANSFORMER');
-        }
     }
 
     // PARAPHRASE_CONTEXT: Needs at least 2 non-ignored paraphrases with contexts

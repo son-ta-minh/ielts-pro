@@ -1,6 +1,6 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { AppView, User, VocabularyItem } from './types';
+import { AppView, User, VocabularyItem, DiscoverGame } from './types';
 import { useToast } from '../contexts/ToastContext';
 import { useAuthAndUser } from './hooks/useAuthAndUser';
 import { useSession } from './hooks/useSession';
@@ -50,6 +50,10 @@ export const useAppController = () => {
     // NEW: State for deep-linking to a specific tag in Lesson Library
     const [targetLessonTag, setTargetLessonTag] = useState<string | null>(null);
     const consumeTargetLessonTag = useCallback(() => setTargetLessonTag(null), []);
+
+    // NEW: State for deep-linking to specific game
+    const [targetGameMode, setTargetGameMode] = useState<DiscoverGame | null>(null);
+    const consumeTargetGameMode = useCallback(() => setTargetGameMode(null), []);
 
     const [planningAction, setPlanningAction] = useState<'AI' | 'IMPORT' | null>(null);
     const consumePlanningAction = useCallback(() => setPlanningAction(null), []);
@@ -412,6 +416,23 @@ export const useAppController = () => {
             case 'MIMIC': setView('MIMIC'); break; 
             case 'PLAN_AI': setPlanningAction('AI'); setView('PLANNING'); break;
             case 'PLAN_IMPORT': setPlanningAction('IMPORT'); setView('PLANNING'); break;
+            
+            // GAMES (Map them to DISCOVER view)
+            case 'COLLO_CONNECT':
+            case 'DICTATION':
+            case 'SENTENCE_SCRAMBLE':
+            case 'MEANING_MATCH':
+            case 'IPA_SORTER':
+            case 'PREPOSITION_POWER':
+            case 'WORD_TRANSFORMER':
+            case 'PARAPHRASE_CONTEXT':
+            case 'IDIOM_CONNECT':
+            case 'WORD_SCATTER':
+            case 'ADVENTURE':
+                setTargetGameMode(action as DiscoverGame);
+                setView('DISCOVER');
+                break;
+                
             default: setView(action as AppView);
         }
     };
@@ -431,6 +452,7 @@ export const useAppController = () => {
         writingContextWord, handleComposeWithWord, consumeWritingContext,
         targetLessonId, setTargetLessonId, consumeTargetLessonId, 
         targetLessonTag, consumeTargetLessonTag, // Added export
+        targetGameMode, consumeTargetGameMode, // New exports for game linking
         planningAction, setPlanningAction, consumePlanningAction,
         serverStatus, hasUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
         handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen,

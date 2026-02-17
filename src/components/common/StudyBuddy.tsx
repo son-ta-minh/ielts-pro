@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User, AppView, WordQuality, VocabularyItem, Lesson } from '../../app/types';
-import { X, MessageSquare, BookOpen, Languages, Book, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Info, AudioLines, Square, GraduationCap } from 'lucide-react';
+import { X, MessageSquare, BookOpen, Languages, Book, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Info, AudioLines, Square, GraduationCap, ScanLine, Wrench } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, getIsSpeaking } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
@@ -12,6 +13,7 @@ import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import UniversalAiModal from './UniversalAiModal';
 import { getGenerateWordLessonEssayPrompt } from '../../services/promptService';
+import { ToolsModal } from '../tools/ToolsModal';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 300;
@@ -58,6 +60,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
     const [isCambridgeValid, setIsCambridgeValid] = useState(false);
     const [isAlreadyInLibrary, setIsAlreadyInLibrary] = useState(false);
     const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
+    
+    // Tools Modal State
+    const [isToolsModalOpen, setIsToolsModalOpen] = useState(false);
 
     const commandBoxRef = useRef<HTMLDivElement>(null);
     const checkAbortControllerRef = useRef<AbortController | null>(null);
@@ -304,6 +309,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
             showToast("Highlight text to practice!", "info");
         }
     };
+    
+    const handleOpenTools = () => {
+        setIsOpen(false);
+        setMenuPos(null);
+        setIsToolsModalOpen(true);
+    };
 
     const CommandBox = () => (
         <div ref={commandBoxRef} className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200">
@@ -318,11 +329,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
                 )}
                 <button type="button" onClick={handleReadAndIpa} className="col-span-2 aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="Read & Phonetics (EN)"><Volume2 size={15}/></button>
 
-                {/* BOTTOM ROW (2 buttons centered, 1-col offset on each side) */}
-                <div className="col-span-1" />
+                {/* BOTTOM ROW (3 buttons, 2 columns each) */}
                 <button type="button" onClick={handleSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
                 <button type="button" onClick={handleCambridgeLookup} disabled={isCambridgeChecking || !isCambridgeValid} className={`col-span-2 aspect-square rounded-2xl flex items-center justify-center transition-all shadow-sm ${isCambridgeValid ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`} title="Cambridge Lookup">{isCambridgeChecking ? <Loader2 size={14} className="animate-spin"/> : <Search size={15}/>}</button>
-                <div className="col-span-1" />
+                <button type="button" onClick={handleOpenTools} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Coach Tools"><Wrench size={15}/></button>
             </div>
         </div>
     );
@@ -365,6 +375,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
                 </div>
             </div>
             {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
+            <ToolsModal isOpen={isToolsModalOpen} onClose={() => setIsToolsModalOpen(false)} />
         </>
     );
 };

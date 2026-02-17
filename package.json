@@ -1,3 +1,4 @@
+
 {
   "name": "ielts-pro",
   "private": true,
@@ -16,7 +17,8 @@
     "lucide-react": "^0.462.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "recharts": "^2.13.3"
+    "recharts": "^2.13.3",
+    "tesseract.js": "^5.0.5"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

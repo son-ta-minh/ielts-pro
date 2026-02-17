@@ -19,7 +19,8 @@ import {
   getGenerateLessonPrompt,
   LessonGenerationParams,
   getGenerateWordBookPrompt,
-  getGeneratePlanningGoalPrompt
+  getGeneratePlanningGoalPrompt,
+  getImageToTextPrompt
 } from './promptService';
 import { getConfig } from "../app/settingsManager";
 import { getStoredJSON, setStoredJSON } from "../utils/storage";
@@ -619,4 +620,26 @@ export async function generatePlanningGoal(request: string): Promise<{ title: st
       }
   });
   return safeJsonParse(response.text, { title: "New Goal", description: "", todos: [] });
+}
+
+export async function extractTextFromImage(base64Image: string, mimeType: string): Promise<string> {
+    const config = getConfig();
+    const prompt = getImageToTextPrompt();
+    
+    const response = await callAiWithRetry({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+            parts: [
+                {
+                    inlineData: {
+                        mimeType: mimeType,
+                        data: base64Image
+                    }
+                },
+                { text: prompt }
+            ]
+        }
+    });
+    
+    return response.text || "No text detected.";
 }

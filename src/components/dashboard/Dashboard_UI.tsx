@@ -3,16 +3,15 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
   Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, Music, MessageSquare, BookOpen, MessageCircle, Play,
-  Zap, Target, Headphones, Split
+  Zap, Target, Headphones, Split, LayoutDashboard, BarChart3, Keyboard, Move, AtSign, SlidersHorizontal, Quote, BoxSelect, Map, Gamepad2, Puzzle, Brain,
+  CloudUpload, Percent
 } from 'lucide-react';
 import { AppView, VocabularyItem, User } from '../../app/types';
 import { DailyGoalConfig } from '../../app/settingsManager';
 import { DayProgress } from './DayProgress';
 import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 
-// Placeholder for build date
 const getFormattedBuildDate = () => {
-    // Vite injects this at build time. It will be undefined in dev mode.
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
     if (!buildTimestamp) {
         const now = new Date();
@@ -34,7 +33,6 @@ const getFormattedBuildDate = () => {
     }
 };
 
-// --- START NEW STUDY STATS COMPONENT ---
 export interface StudyStats {
     vocab: { new: number, due: number };
     lessons: {
@@ -101,23 +99,28 @@ const NavButton: React.FC<{
     subLabel?: React.ReactNode,
     progress?: number,
     icon: React.ElementType, 
-    color: string, // text color class
-    bg: string,    // bg color class
+    color: string, 
+    bg: string,    
     onClick: () => void,
-    disabled?: boolean
-}> = ({ label, subLabel, progress, icon: Icon, color, bg, onClick, disabled }) => {
+    disabled?: boolean,
+    largeSub?: boolean
+}> = ({ label, subLabel, progress, icon: Icon, color, bg, onClick, disabled, largeSub }) => {
     return (
         <button 
             onClick={onClick}
             disabled={disabled}
-            className="flex items-center gap-3 p-3 rounded-xl border border-neutral-100 bg-white hover:bg-neutral-900 hover:border-neutral-900 hover:shadow-lg transition-all active:scale-95 w-full text-left group disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-neutral-100 disabled:hover:shadow-none"
+            className="flex items-start gap-3 p-4 rounded-[1.5rem] border border-neutral-100 bg-white hover:bg-neutral-900 hover:border-neutral-900 hover:shadow-lg transition-all active:scale-95 w-full text-left group disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-neutral-100 disabled:hover:shadow-none"
         >
-            <div className={`p-2.5 rounded-xl ${bg} ${color} group-hover:scale-110 transition-transform shrink-0`}>
+            <div className={`p-2.5 rounded-xl ${bg} ${color} group-hover:scale-110 transition-transform shrink-0 mt-0.5`}>
                 <Icon size={18} />
             </div>
             <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-neutral-700 group-hover:text-white transition-colors">{label}</div>
-                {subLabel && <div className="text-[10px] font-bold text-neutral-400 transition-colors truncate">{subLabel}</div>}
+                <div className="text-[13px] font-black text-neutral-900 group-hover:text-white transition-colors tracking-tight leading-tight">{label}</div>
+                {subLabel && (
+                    <div className={`font-medium text-neutral-400 group-hover:text-neutral-300 transition-colors mt-1 leading-snug ${largeSub ? 'text-[10px]' : 'text-[10px] truncate'}`}>
+                        {subLabel}
+                    </div>
+                )}
             </div>
             {typeof progress === 'number' && (
                 <div className="shrink-0 ml-1">
@@ -128,26 +131,56 @@ const NavButton: React.FC<{
     );
 };
 
+const MasteryOverviewPanel: React.FC<{ stats: StudyStats | null }> = ({ stats }) => {
+    const getProg = (comp: number, tot: number) => tot > 0 ? Math.round((comp / tot) * 100) : 0;
+    
+    // Aggregate speaking stats
+    const speakingCompleted = stats ? (stats.speaking.freeTalk.completed + stats.speaking.native.completed + stats.speaking.conversation.completed) : 0;
+    const speakingTotal = stats ? (stats.speaking.freeTalk.total + stats.speaking.native.total + stats.speaking.conversation.total) : 0;
+    
+    const StatRow = ({ label, completed, total, icon: Icon, colorClass }: { label: string, completed: number, total: number, icon: any, colorClass: string }) => (
+        <div className="flex items-center justify-between p-2 rounded-xl bg-neutral-50/50 hover:bg-neutral-50 transition-colors border border-transparent hover:border-neutral-100">
+            <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-lg ${colorClass} bg-white shadow-sm`}><Icon size={12} /></div>
+                <span className="text-[10px] font-bold text-neutral-700">{label}</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <span className="text-[9px] font-medium text-neutral-400">{completed}/{total}</span>
+                <TinyProgressRing percent={getProg(completed, total)} size={18} />
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4 h-full justify-center">
+            <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 bg-neutral-900 text-white rounded-lg"><Percent size={14}/></div>
+                <h3 className="text-sm font-black text-neutral-900 uppercase tracking-widest">Mastery Status</h3>
+            </div>
+            
+            {/* 4 Columns for compactness */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatRow label="Reading" completed={stats?.reading.completed || 0} total={stats?.reading.total || 0} icon={BookOpen} colorClass="text-indigo-600" />
+                <StatRow label="Listening" completed={stats?.listening.completed || 0} total={stats?.listening.total || 0} icon={Headphones} colorClass="text-sky-600" />
+                <StatRow label="Writing" completed={stats?.writing.completed || 0} total={stats?.writing.total || 0} icon={PenLine} colorClass="text-pink-600" />
+                <StatRow label="Speaking" completed={speakingCompleted} total={speakingTotal} icon={Mic} colorClass="text-rose-600" />
+                
+                <StatRow label="Grammar" completed={stats?.lessons.grammar.completed || 0} total={stats?.lessons.grammar.total || 0} icon={BookText} colorClass="text-purple-600" />
+                <StatRow label="Verbs" completed={stats?.lessons.irregular.completed || 0} total={stats?.lessons.irregular.total || 0} icon={FileClock} colorClass="text-orange-600" />
+                <StatRow label="Pronunciation" completed={stats?.speaking.pronunciation.completed || 0} total={stats?.speaking.pronunciation.total || 0} icon={AudioLines} colorClass="text-emerald-600" />
+                <StatRow label="Lessons" completed={stats?.lessons.general.completed || 0} total={stats?.lessons.general.total || 0} icon={BookOpen} colorClass="text-blue-600" />
+            </div>
+        </div>
+    );
+};
+
 const StudyNowPanel: React.FC<{
     stats: StudyStats | null;
-    goalStats: { totalTasks: number; completedTasks: number; };
     isLoading: boolean;
-    onRefresh: () => void;
     onStartNew: () => void;
     onStartDue: () => void;
     onAction: (action: string) => void;
-}> = ({ stats, goalStats, isLoading, onRefresh, onStartNew, onStartDue, onAction }) => {
-
-    const planPercent = goalStats.totalTasks > 0 ? Math.round((goalStats.completedTasks / goalStats.totalTasks) * 100) : 0;
-
-    // Aggregations
-    const speakingCompleted = stats ? (stats.speaking.freeTalk.completed + stats.speaking.native.completed + stats.speaking.conversation.completed) : 0;
-    const speakingTotal = stats ? (stats.speaking.freeTalk.total + stats.speaking.native.total + stats.speaking.conversation.total) : 0;
-
-    const lessonsCompleted = stats ? stats.lessons.general.completed : 0;
-    const lessonsTotal = stats ? stats.lessons.general.total : 0;
-
-    const getProg = (comp: number, tot: number) => tot > 0 ? Math.round((comp / tot) * 100) : 0;
+}> = ({ stats, isLoading, onStartNew, onStartDue, onAction }) => {
 
     return (
         <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-6 relative overflow-hidden">
@@ -167,148 +200,43 @@ const StudyNowPanel: React.FC<{
                          <p className="text-xs font-medium text-neutral-400">Track your mastery across all skills.</p>
                      </div>
                  </div>
-                 
-                 <div className="flex items-center gap-3 self-end sm:self-auto">
-                    {goalStats.totalTasks > 0 ? (
-                        <button onClick={() => onAction('PLANNING')} className="flex items-center gap-2 px-3 py-1.5 bg-neutral-50 rounded-lg border border-neutral-100 hover:bg-neutral-100 transition-colors group">
-                            <ListTodo size={14} className="text-neutral-400 group-hover:text-neutral-600"/>
-                            <div className="text-[10px] font-bold text-neutral-500">
-                                Plan: <span className="text-neutral-900">{goalStats.completedTasks}/{goalStats.totalTasks}</span> 
-                                <span className={`ml-1.5 ${planPercent === 100 ? 'text-green-600' : 'text-indigo-600'}`}>({planPercent}%)</span>
-                            </div>
-                        </button>
-                    ) : (
-                        <button onClick={() => onAction('PLANNING')} className="flex items-center gap-2 px-3 py-1.5 bg-neutral-50 rounded-lg border border-neutral-100 hover:bg-neutral-100 transition-colors group">
-                            <ListTodo size={14} className="text-neutral-400 group-hover:text-neutral-600"/>
-                            <span className="text-[10px] font-bold text-neutral-500">No plan. Click to create</span>
-                        </button>
-                    )}
-                     <button onClick={onRefresh} className="p-2 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-all" title="Refresh Stats">
-                         <RotateCw size={16} />
-                     </button>
-                 </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-8">
-                {/* COLUMN 1: VOCABULARY - Spans 2 cols on tablet, 1 col on desktop */}
                 <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-1">
                         <div className="flex items-center gap-2 text-neutral-400 px-1">
                         <BookCopy size={12} />
                         <span className="font-black uppercase tracking-widest text-[10px]">Vocabulary</span>
                     </div>
-                    
-                    {/* Buttons: Stacked on mobile/desktop, side-by-side on tablet */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-2">
-                        <NavButton 
-                            label="Learn New" 
-                            subLabel={`${stats ? stats.vocab.new : '-'} words`}
-                            icon={Sparkles} 
-                            color="text-indigo-600" 
-                            bg="bg-indigo-50" 
-                            onClick={onStartNew} 
-                            disabled={!stats || stats.vocab.new === 0}
-                        />
-                        <NavButton 
-                            label="Review" 
-                            subLabel={`${stats ? stats.vocab.due : '-'} words`}
-                            icon={RotateCw} 
-                            color="text-amber-600" 
-                            bg="bg-amber-50" 
-                            onClick={onStartDue} 
-                            disabled={!stats || stats.vocab.due === 0}
-                        />
+                        <NavButton label="Learn New" subLabel={`${stats ? stats.vocab.new : '-'} words`} icon={Sparkles} color="text-indigo-600" bg="bg-indigo-50" onClick={onStartNew} disabled={!stats || stats.vocab.new === 0} />
+                        <NavButton label="Review" subLabel={`${stats ? stats.vocab.due : '-'} words`} icon={RotateCw} color="text-amber-600" bg="bg-amber-50" onClick={onStartDue} disabled={!stats || stats.vocab.due === 0} />
                     </div>
                 </div>
 
-                {/* COLUMN 2: SKILLS - 2 Columns Grid */}
                 <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-2">
                         <div className="flex items-center gap-2 text-neutral-400 px-1">
                         <Target size={12} />
                         <span className="font-black uppercase tracking-widest text-[10px]">Skills</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                        <NavButton 
-                            label="Reading" 
-                            subLabel={stats ? `${stats.reading.completed}/${stats.reading.total}` : '-'}
-                            progress={stats ? getProg(stats.reading.completed, stats.reading.total) : 0}
-                            icon={BookOpen} 
-                            color="text-indigo-600" 
-                            bg="bg-indigo-50" 
-                            onClick={() => onAction('UNIT_LIBRARY')} 
-                        />
-                        <NavButton 
-                            label="Listening" 
-                            subLabel={stats ? `${stats.listening.completed}/${stats.listening.total}` : '-'}
-                            progress={stats ? getProg(stats.listening.completed, stats.listening.total) : 0}
-                            icon={Headphones} 
-                            color="text-sky-600" 
-                            bg="bg-sky-50" 
-                            onClick={() => onAction('LISTENING')} 
-                        />
-                        <NavButton 
-                            label="Writing" 
-                            subLabel={stats ? `${stats.writing.completed}/${stats.writing.total}` : '-'}
-                            progress={stats ? getProg(stats.writing.completed, stats.writing.total) : 0}
-                            icon={PenLine} 
-                            color="text-pink-600" 
-                            bg="bg-pink-50" 
-                            onClick={() => onAction('WRITING')} 
-                        />
-                        <NavButton 
-                            label="Speaking" 
-                            subLabel={stats ? `${speakingCompleted}/${speakingTotal}` : '-'}
-                            progress={stats ? getProg(speakingCompleted, speakingTotal) : 0}
-                            icon={Mic} 
-                            color="text-rose-600" 
-                            bg="bg-rose-50" 
-                            onClick={() => onAction('SPEAKING')} 
-                        />
+                        <NavButton label="Reading" subLabel="Passages & Vocab" icon={BookOpen} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('UNIT_LIBRARY')} />
+                        <NavButton label="Listening" subLabel="Transcripts" icon={Headphones} color="text-sky-600" bg="bg-sky-50" onClick={() => onAction('LISTENING')} />
+                        <NavButton label="Writing" subLabel="Task 1 & 2" icon={PenLine} color="text-pink-600" bg="bg-pink-50" onClick={() => onAction('WRITING')} />
+                        <NavButton label="Speaking" subLabel="Simulator" icon={Mic} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('SPEAKING')} />
                     </div>
                 </div>
 
-                {/* COLUMN 3: DOMAINS - 2 Columns Grid */}
                 <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-2">
                         <div className="flex items-center gap-2 text-neutral-400 px-1">
                         <BookText size={12} />
                         <span className="font-black uppercase tracking-widest text-[10px]">Domains</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                        <NavButton 
-                            label="Grammar" 
-                            subLabel={stats ? `${stats.lessons.grammar.completed}/${stats.lessons.grammar.total}` : '-'}
-                            progress={stats ? getProg(stats.lessons.grammar.completed, stats.lessons.grammar.total) : 0}
-                            icon={BookText} 
-                            color="text-purple-600" 
-                            bg="bg-purple-50" 
-                            onClick={() => onAction('LESSON_GRAMMAR')} 
-                        />
-                        <NavButton 
-                            label="Irregular" 
-                            subLabel={stats ? `${stats.lessons.irregular.completed}/${stats.lessons.irregular.total}` : '-'}
-                            progress={stats ? getProg(stats.lessons.irregular.completed, stats.lessons.irregular.total) : 0}
-                            icon={FileClock} 
-                            color="text-orange-600" 
-                            bg="bg-orange-50" 
-                            onClick={() => onAction('IRREGULAR_VERBS')} 
-                        />
-                        <NavButton 
-                            label="Pronunciation" 
-                            subLabel={stats ? `${stats.speaking.pronunciation.completed}/${stats.speaking.pronunciation.total}` : '-'}
-                            progress={stats ? getProg(stats.speaking.pronunciation.completed, stats.speaking.pronunciation.total) : 0}
-                            icon={AudioLines} 
-                            color="text-emerald-600" 
-                            bg="bg-emerald-50" 
-                            onClick={() => onAction('MIMIC')} 
-                        />
-                        <NavButton 
-                            label="Lessons" 
-                            subLabel={stats ? `${lessonsCompleted}/${lessonsTotal}` : '-'}
-                            progress={stats ? getProg(lessonsCompleted, lessonsTotal) : 0}
-                            icon={BookOpen} 
-                            color="text-blue-600" 
-                            bg="bg-blue-50" 
-                            onClick={() => onAction('LESSON')} 
-                        />
+                        <NavButton label="Grammar" subLabel="Structure" icon={BookText} color="text-purple-600" bg="bg-purple-50" onClick={() => onAction('LESSON_GRAMMAR')} />
+                        <NavButton label="Irregular Verb" subLabel="V1, V2, V3" icon={FileClock} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('IRREGULAR_VERBS')} />
+                        <NavButton label="Pronunciation" subLabel="Intonation" icon={AudioLines} color="text-emerald-600" bg="bg-emerald-50" onClick={() => onAction('MIMIC')} />
+                        <NavButton label="Lesson" subLabel="General" icon={BookOpen} color="text-blue-600" bg="bg-blue-50" onClick={() => onAction('LESSON')} />
                     </div>
                 </div>
             </div>
@@ -316,7 +244,79 @@ const StudyNowPanel: React.FC<{
     );
 };
 
-// --- END NEW COMPONENT ---
+const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({ onAction }) => {
+    return (
+        <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4">
+             <div className="flex items-center gap-3">
+                 <div className="p-2 bg-fuchsia-50 rounded-xl text-fuchsia-600 shadow-md">
+                     <Gamepad2 size={20} />
+                 </div>
+                 <div>
+                     <h3 className="text-lg font-black text-neutral-900 tracking-tight">Practice Arcade</h3>
+                     <p className="text-xs font-medium text-neutral-400">Targeted drills to refine specific lexical skills.</p>
+                 </div>
+             </div>
+             
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                 <NavButton 
+                    label="Listening & Spelling" 
+                    subLabel="Dictation drills to sharpen auditory accuracy." 
+                    largeSub icon={Keyboard} color="text-cyan-600" bg="bg-cyan-50" onClick={() => onAction('DICTATION')} 
+                 />
+                 <NavButton 
+                    label="Grammar & Syntax" 
+                    subLabel="Unscramble sentences to master word order." 
+                    largeSub icon={Shuffle} color="text-emerald-600" bg="bg-emerald-50" onClick={() => onAction('SENTENCE_SCRAMBLE')} 
+                 />
+                 <NavButton 
+                    label="Phonetic Accuracy" 
+                    subLabel="Refine pronunciation with minimal pairs and IPA." 
+                    largeSub icon={AudioLines} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('IPA_SORTER')} 
+                 />
+                 <NavButton 
+                    label="Dependent Prepositions" 
+                    subLabel="Master verb, noun, and adjective preposition pairings." 
+                    largeSub icon={AtSign} color="text-violet-600" bg="bg-violet-50" onClick={() => onAction('PREPOSITION_POWER')} 
+                 />
+                 <NavButton 
+                    label="Contextual Usage" 
+                    subLabel="Match synonyms and idioms to correct contexts." 
+                    largeSub icon={Puzzle} color="text-sky-600" bg="bg-sky-50" onClick={() => onAction('PARAPHRASE_CONTEXT')} 
+                 />
+                 <NavButton 
+                    label="Rapid Recall" 
+                    subLabel="Speed test: Connect terms with definitions." 
+                    largeSub icon={Brain} color="text-fuchsia-600" bg="bg-fuchsia-50" onClick={() => onAction('WORD_SCATTER')} 
+                 />
+             </div>
+        </div>
+    );
+};
+
+const GoalProgressPanel: React.FC<{
+    goalStats: { totalTasks: number; completedTasks: number; };
+    onAction: (action: string) => void;
+}> = ({ goalStats, onAction }) => {
+    const planPercent = goalStats.totalTasks > 0 ? Math.round((goalStats.completedTasks / goalStats.totalTasks) * 100) : 0;
+    
+    return (
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col justify-center h-full">
+            <div className="flex justify-between items-start mb-2">
+                 <div className="space-y-0.5">
+                    <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Active Plan</h3>
+                    <p className="text-xl font-black text-neutral-900 leading-none">{goalStats.completedTasks} / {goalStats.totalTasks} <span className="text-xs text-neutral-400 font-bold">Tasks</span></p>
+                 </div>
+                 <button onClick={() => onAction('PLANNING')} className="p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg transition-colors -mr-2 -mt-2">
+                     <ListTodo size={18} />
+                 </button>
+            </div>
+            <div className="w-full h-3 bg-neutral-100 rounded-full overflow-hidden mb-2">
+                 <div className={`h-full transition-all duration-1000 ${planPercent === 100 ? 'bg-green-500' : 'bg-indigo-500'}`} style={{ width: `${planPercent}%` }} />
+            </div>
+            <p className="text-[10px] font-bold text-neutral-400 text-right">{planPercent}% Completed</p>
+        </div>
+    );
+};
 
 const BackupStatus: React.FC<{ 
     lastBackupTime: number | null; 
@@ -325,19 +325,14 @@ const BackupStatus: React.FC<{
     serverStatus: 'connected' | 'disconnected';
 }> = ({ lastBackupTime, onBackup, onRestore, serverStatus }) => {
   const [statusText, setStatusText] = useState('');
-  
   const [isBackupMenuOpen, setIsBackupMenuOpen] = useState(false);
   const backupMenuRef = useRef<HTMLDivElement>(null);
-  
   const [isRestoreMenuOpen, setIsRestoreMenuOpen] = useState(false);
   const restoreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const updateStatus = () => {
-      if (!lastBackupTime) {
-        setStatusText("Last backup: Never");
-        return;
-      }
+      if (!lastBackupTime) { setStatusText("Last backup: Never"); return; }
       const diff = Date.now() - lastBackupTime;
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
       const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
@@ -349,17 +344,13 @@ const BackupStatus: React.FC<{
     };
     updateStatus();
     const intervalId = setInterval(updateStatus, 60 * 1000);
-    return () => clearInterval(intervalId);
+    return () => clearTimeout(intervalId);
   }, [lastBackupTime]);
 
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
-          if (backupMenuRef.current && !backupMenuRef.current.contains(event.target as Node)) {
-              setIsBackupMenuOpen(false);
-          }
-          if (restoreMenuRef.current && !restoreMenuRef.current.contains(event.target as Node)) {
-              setIsRestoreMenuOpen(false);
-          }
+          if (backupMenuRef.current && !backupMenuRef.current.contains(event.target as Node)) setIsBackupMenuOpen(false);
+          if (restoreMenuRef.current && !restoreMenuRef.current.contains(event.target as Node)) setIsRestoreMenuOpen(false);
       };
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -372,84 +363,45 @@ const BackupStatus: React.FC<{
         <span className="font-medium text-xs whitespace-nowrap">{statusText}</span>
       </div>
       <div className="flex items-center space-x-2 pl-2">
-        {/* BACKUP BUTTON */}
         {serverStatus === 'connected' ? (
             <div className="relative" ref={backupMenuRef}>
-                <button 
-                    onClick={() => setIsBackupMenuOpen(!isBackupMenuOpen)} 
-                    className={`px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-indigo-100 shadow-sm uppercase tracking-widest ${isBackupMenuOpen ? 'bg-indigo-100' : 'hover:bg-indigo-100'}`}
-                >
-                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-3 h-3 object-contain" />
+                <button onClick={() => setIsBackupMenuOpen(!isBackupMenuOpen)} className={`px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-indigo-100 shadow-sm uppercase tracking-widest ${isBackupMenuOpen ? 'bg-indigo-100' : 'hover:bg-indigo-100'}`}>
+                    <CloudUpload size={14} />
                     <span>Backup</span>
                     <ChevronDown size={12} className={`transition-transform ${isBackupMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isBackupMenuOpen && (
                     <div className="absolute right-0 top-full mt-2 w-36 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
-                        <button 
-                            onClick={() => { onBackup('server'); setIsBackupMenuOpen(false); }}
-                            className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
-                        >
-                            <Cloud size={14} className="text-sky-500" />
-                            To Server
-                        </button>
+                        <button onClick={() => { onBackup('server'); setIsBackupMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><Cloud size={14} className="text-sky-500" /> To Server</button>
                         <div className="h-px bg-neutral-100 mx-2"></div>
-                        <button 
-                            onClick={() => { onBackup('file'); setIsBackupMenuOpen(false); }}
-                            className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
-                        >
-                            <HardDrive size={14} className="text-indigo-500" />
-                            To File
-                        </button>
+                        <button onClick={() => { onBackup('file'); setIsBackupMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><HardDrive size={14} className="text-indigo-500" /> To File</button>
                     </div>
                 )}
             </div>
         ) : (
-            <button 
-                onClick={() => onBackup('file')} 
-                className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center gap-2 hover:bg-indigo-100 transition-all active:scale-95 border border-indigo-100 shadow-sm uppercase tracking-widest"
-            >
-                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-3 h-3 object-contain" />
+            <button onClick={() => onBackup('file')} className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center gap-2 hover:bg-indigo-100 transition-all active:scale-95 border border-indigo-100 shadow-sm uppercase tracking-widest">
+                <CloudUpload size={14} />
                 <span>Backup</span>
             </button>
         )}
-
-        {/* RESTORE BUTTON */}
         {serverStatus === 'connected' ? (
             <div className="relative" ref={restoreMenuRef}>
-                <button 
-                    onClick={() => setIsRestoreMenuOpen(!isRestoreMenuOpen)} 
-                    className={`px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-emerald-100 shadow-sm uppercase tracking-widest ${isRestoreMenuOpen ? 'bg-emerald-100' : 'hover:bg-emerald-100'}`}
-                >
-                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Down%20Arrow.png" alt="Restore" className="w-3 h-3 object-contain" />
+                <button onClick={() => setIsRestoreMenuOpen(!isRestoreMenuOpen)} className={`px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-emerald-100 shadow-sm uppercase tracking-widest ${isRestoreMenuOpen ? 'bg-emerald-100' : 'hover:bg-emerald-100'}`}>
+                    <Download size={14} />
                     <span>Restore</span>
                     <ChevronDown size={12} className={`transition-transform ${isRestoreMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isRestoreMenuOpen && (
                     <div className="absolute right-0 top-full mt-2 w-36 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
-                        <button 
-                            onClick={() => { onRestore('server'); setIsRestoreMenuOpen(false); }}
-                            className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
-                        >
-                            <Cloud size={14} className="text-sky-500" />
-                            From Server
-                        </button>
+                        <button onClick={() => { onRestore('server'); setIsRestoreMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><Cloud size={14} className="text-sky-500" /> From Server</button>
                         <div className="h-px bg-neutral-100 mx-2"></div>
-                        <button 
-                            onClick={() => { onRestore('file'); setIsRestoreMenuOpen(false); }}
-                            className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
-                        >
-                            <FileJson size={14} className="text-amber-500" />
-                            From File
-                        </button>
+                        <button onClick={() => { onRestore('file'); setIsRestoreMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><FileJson size={14} className="text-amber-500" /> From File</button>
                     </div>
                 )}
             </div>
         ) : (
-            <button 
-                onClick={() => onRestore('file')} 
-                className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center gap-2 hover:bg-emerald-100 transition-all active:scale-95 border border-emerald-100 shadow-sm uppercase tracking-widest"
-            >
-                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Down%20Arrow.png" alt="Restore" className="w-3 h-3 object-contain" />
+            <button onClick={() => onRestore('file')} className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center gap-2 hover:bg-emerald-100 transition-all active:scale-95 border border-emerald-100 shadow-sm uppercase tracking-widest">
+                <Download size={14} />
                 <span>Restore</span>
             </button>
         )}
@@ -470,71 +422,39 @@ const LibraryHealthPanel: React.FC<{
 }> = ({ totalCount, newCount, rawCount, refinedCount, reviewStats, onRefineRaw, onVerifyRefined, onViewLibrary }) => {
   
   const chartData = [
-    { name: 'New', value: newCount, color: '#3b82f6' }, // blue-500
-    { name: 'Learning', value: reviewStats.learned, color: '#06b6d4' }, // cyan-500
-    { name: 'Mastered', value: reviewStats.mastered, color: '#a855f7' }, // purple-500
+    { name: 'New', value: newCount, color: '#3b82f6' },
+    { name: 'Learning', value: reviewStats.learned, color: '#06b6d4' },
+    { name: 'Mastered', value: reviewStats.mastered, color: '#a855f7' },
   ];
-
-  // If total is 0, provide placeholder data for empty chart
   const activeData = totalCount > 0 ? chartData : [{ name: 'Empty', value: 1, color: '#f3f4f6' }];
 
   return (
     <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col h-full">
       <div className="flex justify-between items-start mb-1">
         <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Library Health</h3>
-        <button onClick={onViewLibrary} className="group text-neutral-300 hover:text-neutral-900 transition-colors p-1.5 -mr-1.5 -mt-1.5">
-            <ChevronRight size={18} />
-        </button>
+        <button onClick={onViewLibrary} className="group text-neutral-300 hover:text-neutral-900 transition-colors p-1.5 -mr-1.5 -mt-1.5"><ChevronRight size={18} /></button>
       </div>
 
       <div className="flex-grow flex items-start justify-center gap-6 pt-1 pb-4">
-        {/* Chart Section */}
         <div className="h-40 w-40 relative select-none shrink-0 flex items-center justify-center">
              <PieChart width={160} height={160}>
-                <Pie
-                    data={activeData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={70}
-                    paddingAngle={totalCount > 0 ? 5 : 0}
-                    dataKey="value"
-                    stroke="none"
-                    cornerRadius={4}
-                >
-                    {activeData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
+                <Pie data={activeData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={totalCount > 0 ? 5 : 0} dataKey="value" stroke="none" cornerRadius={4}>
+                    {activeData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
                 </Pie>
-                <Tooltip 
-                     content={({ active, payload }) => {
-                         if (active && payload && payload.length) {
-                             return (
-                                 <div className="bg-neutral-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xl">
-                                     {payload[0].name}: {payload[0].value}
-                                 </div>
-                             );
-                         }
+                <Tooltip content={({ active, payload }) => {
+                         if (active && payload && payload.length) return (<div className="bg-neutral-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xl">{payload[0].name}: {payload[0].value}</div>);
                          return null;
-                     }}
-                />
+                }} />
             </PieChart>
-             
-             {/* Centered Total Label - Robust implementation using absolute positioning and flexbox */}
              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
                  <span className="text-2xl font-black text-neutral-900 leading-none">{totalCount}</span>
                  <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest mt-1">Total</span>
              </div>
         </div>
-
-        {/* Legend Section */}
         <div className="flex-1 flex flex-col justify-center gap-3 self-center">
              {chartData.map(item => (
                  <div key={item.name} className="flex items-center justify-between group">
-                     <div className="flex items-center gap-2">
-                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                         <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide">{item.name}</span>
-                     </div>
+                     <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide">{item.name}</span></div>
                      <span className="font-black text-neutral-900 text-xs">{item.value}</span>
                  </div>
              ))}
@@ -549,8 +469,6 @@ const LibraryHealthPanel: React.FC<{
   );
 };
 
-
-// Define props for the UI component
 export interface DashboardUIProps {
   user: User;
   onNavigate: (view: string) => void;
@@ -576,14 +494,11 @@ export interface DashboardUIProps {
   dailyGoals: DailyGoalConfig;
   onNavigateToWordList: (filter: string) => void;
   goalStats: { totalTasks: number; completedTasks: number; };
-  
-  // New Stats Props
   studyStats: StudyStats | null;
   isStatsLoading: boolean;
   onRefreshStats: () => void;
 }
 
-// The pure UI component
 export const DashboardUI: React.FC<DashboardUIProps> = ({
   user, onNavigate, totalCount, newCount, dueCount, learnedCount, rawCount, refinedCount, reviewStats,
   wotd, isWotdComposed, onRandomizeWotd, onComposeWotd, lastBackupTime, onBackup, onRestore,
@@ -591,30 +506,27 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   studyStats, isStatsLoading, onRefreshStats
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
-  
-  // Mock data for missing props from helper functions
-  const setView = onNavigate;
+  const [activeTab, setActiveTab] = useState<'STUDY' | 'INSIGHT'>('STUDY');
   
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-6">
+    <div className="space-y-4 animate-in fade-in duration-500">
+      <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 mb-4">
         <div>
             <div className="flex items-baseline gap-2">
-                <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Vocab Pro</h2>
+                <h2 className="text-3xl font-black text-neutral-900 tracking-tight">IELTS Vocab Pro</h2>
                 <span className="text-[10px] font-bold text-neutral-400 font-mono tracking-tighter bg-neutral-100 px-1.5 py-0.5 rounded-md border border-neutral-200">{version}</span>
             </div>
             <div className="flex items-center gap-3 mt-2">
                  {serverStatus === 'connected' ? (
                     <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
                         <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Server Mode</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Cloud Connected</span>
                     </div>
                  ) : (
                     <div className="flex items-center gap-2 px-1.5 py-1.5 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm pr-1.5">
                         <div className="flex items-center gap-2 px-2">
                             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Standalone</span>
-                            
+                            <span className="text-[10px] font-black uppercase tracking-widest">Offline Mode</span>
                             <div className="relative group/tooltip">
                                 <HelpCircle size={12} className="cursor-help opacity-70 hover:opacity-100" />
                                 <div className="absolute left-0 top-full mt-2 w-56 p-3 bg-neutral-900 text-white text-[10px] leading-relaxed font-medium rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-neutral-700">
@@ -623,18 +535,9 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                                 </div>
                             </div>
                         </div>
-
                         <div className="w-px h-3 bg-red-200"></div>
-
-                        <button 
-                            onClick={() => {
-                                sessionStorage.setItem('vocab_pro_settings_tab', 'SERVER');
-                                setView('SETTINGS');
-                            }}
-                            className="flex items-center gap-1 px-3 py-1 bg-blue-600 border border-blue-700 rounded-full shadow-sm hover:bg-blue-700 transition-all group/btn"
-                        >
-                            <Link size={10} className="text-white"/>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-white">Connect</span>
+                        <button onClick={() => { sessionStorage.setItem('vocab_pro_settings_tab', 'SERVER'); onNavigate('SETTINGS'); }} className="flex items-center gap-1 px-3 py-1 bg-blue-600 border border-blue-700 rounded-full shadow-sm hover:bg-blue-700 transition-all group/btn">
+                            <Link size={10} className="text-white"/><span className="text-[10px] font-black uppercase tracking-widest text-white">Connect</span>
                         </button>
                     </div>
                  )}
@@ -645,44 +548,37 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
         </div>
       </header>
 
-      {/* NEW BIG STUDY NOW PANEL */}
-      <StudyNowPanel 
-          stats={studyStats} 
-          goalStats={goalStats}
-          isLoading={isStatsLoading} 
-          onRefresh={onRefreshStats} 
-          onStartNew={onStartNewLearn} 
-          onStartDue={onStartDueReview}
-          onAction={(action) => {
-              if (['IRREGULAR_VERBS', 'MIMIC', 'LESSON_GRAMMAR'].includes(action)) {
-                  onAction(action);
-              } else {
-                  onNavigate(action);
-              }
-          }}
-      />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <LibraryHealthPanel 
-          totalCount={totalCount}
-          newCount={newCount}
-          rawCount={rawCount}
-          refinedCount={refinedCount}
-          reviewStats={reviewStats}
-          onRefineRaw={() => onNavigateToWordList('raw')}
-          onVerifyRefined={() => onNavigateToWordList('refined')}
-          onViewLibrary={() => setView('BROWSE')}
-        />
-        <DayProgress
-            learnedToday={dayProgress.learned}
-            reviewedToday={dayProgress.reviewed}
-            maxLearn={dailyGoals.max_learn_per_day}
-            maxReview={dailyGoals.max_review_per_day}
-            learnedWords={dayProgress.learnedWords}
-            reviewedWords={dayProgress.reviewedWords}
-            onViewWord={() => {}} // Not used as Wotd is removed
-        />
+      <div className="inline-flex p-1 bg-white border-2 border-neutral-100 rounded-2xl w-fit shadow-sm self-start">
+           <button onClick={() => setActiveTab('STUDY')} className={`w-32 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'STUDY' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><LayoutDashboard size={16} /> Study</button>
+           <button onClick={() => setActiveTab('INSIGHT')} className={`w-32 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'INSIGHT' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BarChart3 size={16} /> Insight</button>
       </div>
+
+      {activeTab === 'STUDY' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <StudyNowPanel stats={studyStats} isLoading={isStatsLoading} onStartNew={onStartNewLearn} onStartDue={onStartDueReview} onAction={(action) => onNavigate(action)} />
+              <PracticeArcadePanel onAction={onAction} />
+          </div>
+      )}
+
+      {activeTab === 'INSIGHT' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {/* Row 1: Mastery (4 cols) + Goal */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                   <div className="lg:col-span-2">
+                       <MasteryOverviewPanel stats={studyStats} /> 
+                   </div>
+                   <div className="lg:col-span-1">
+                       <GoalProgressPanel goalStats={goalStats} onAction={onAction} />
+                   </div>
+              </div>
+
+              {/* Row 2: Library + Day */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <LibraryHealthPanel totalCount={totalCount} newCount={newCount} rawCount={rawCount} refinedCount={refinedCount} reviewStats={reviewStats} onRefineRaw={() => onNavigateToWordList('raw')} onVerifyRefined={() => onNavigateToWordList('refined')} onViewLibrary={() => onNavigate('BROWSE')} />
+                   <DayProgress learnedToday={dayProgress.learned} reviewedToday={dayProgress.reviewed} maxLearn={dailyGoals.max_learn_per_day} maxReview={dailyGoals.max_review_per_day} learnedWords={dayProgress.learnedWords} reviewedWords={dayProgress.reviewedWords} onViewWord={() => {}} />
+              </div>
+          </div>
+      )}
     </div>
   );
 };

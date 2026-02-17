@@ -37,3 +37,10 @@ export { getSpeakingEvaluationFromAudioPrompt, getSpeakingEvaluationFromTextProm
 export * from './prompts/getRefineWritingTopicPrompt';
 export * from './prompts/getFullWritingTestPrompt';
 export * from './prompts/getWritingEvaluationPrompt';
+
+export const getImageToTextPrompt = (): string => {
+    return `Transcribe the text contained in this image exactly as it appears. 
+    - Maintain the original language.
+    - Do not add introductory or concluding remarks. 
+    - If there is no text, return "No text detected."`;
+};

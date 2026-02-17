@@ -1,12 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Server, Save, CheckCircle2, AlertCircle, Loader2, Network, Clock, RefreshCw, Link, Info, ChevronDown, Trash2, Plus, Mic, Upload, Folder } from 'lucide-react';
+import { Server, Save, CheckCircle2, AlertCircle, Loader2, Link, Info, ChevronDown, Trash2, Plus, Network, Folder, RefreshCw } from 'lucide-react';
 import { SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
-import { fetchServerBackups, ServerBackupItem } from '../../services/backupService';
-// import { ServerRestoreModal } from '../common/ServerRestoreModal'; // Unused if removing Server Data section
-import { AudioTrimmer } from '../common/AudioTrimmer';
-import { startRecording, stopRecording } from '../../utils/audio';
 
 const HOST_OPTIONS = ['localhost', 'macm2.local', 'macm4.local'];
 
@@ -20,28 +16,15 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
     const [status, setStatus] = useState<'connected' | 'error' | 'checking'>('checking');
     const [isEditingConnection, setIsEditingConnection] = useState(false);
     
-    // Audio Server - Mappings State
+    // Mappings State (Still managed here as configuration)
     const [mappings, setMappings] = useState<Record<string, string>>({});
     const [newMapName, setNewMapName] = useState('');
     const [newMapPath, setNewMapPath] = useState('');
-    const [isRefreshing, setIsRefreshing] = useState(false);
-
-    // Audio Server - Recorder State
-    const [isRecording, setIsRecording] = useState(false);
-    const [rawBlob, setRawBlob] = useState<Blob | null>(null);
-    const [trimmedBlob, setTrimmedBlob] = useState<Blob | null>(null);
-    
-    // Audio Server - Upload State
-    const [selectedMap, setSelectedMap] = useState('');
-    const [uploadFilename, setUploadFilename] = useState('');
-    const [isUploading, setIsUploading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { showToast } = useToast();
     const fullUrl = getServerUrl(config);
 
     const fetchMappings = async () => {
-        setIsRefreshing(true);
         try {
             const res = await fetch(`${fullUrl}/api/audio/mappings`);
             if (res.ok) {
@@ -49,8 +32,6 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
             }
         } catch (e) {
             console.error("Failed to fetch mappings", e);
-        } finally {
-            setIsRefreshing(false);
         }
     };
 
@@ -61,10 +42,7 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
             if (res.ok) {
                 setStatus('connected');
                 setIsEditingConnection(false); 
-                
-                // --- Fetch Mappings ---
                 fetchMappings();
-
             } else {
                 setStatus('error');
                 setIsEditingConnection(true); 
@@ -94,7 +72,7 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
         updateServerConfig({ useCustomUrl: e.target.checked });
     };
 
-    // --- Audio Server Handlers ---
+    // --- Mappings Handlers ---
 
     const handleAddMapping = async () => {
         if (!newMapName || !newMapPath) return;
@@ -132,74 +110,6 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
         }
     };
 
-    const handleStartRecord = async () => {
-        await startRecording();
-        setIsRecording(true);
-        setRawBlob(null);
-        setTrimmedBlob(null);
-    };
-
-    const handleStopRecord = async () => {
-        const result = await stopRecording();
-        setIsRecording(false);
-        if (result) {
-            // Convert base64 back to blob for trimming
-            const byteCharacters = atob(result.base64);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: result.mimeType });
-            setRawBlob(blob);
-            setTrimmedBlob(blob); // Default trim is full
-        }
-    };
-
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setRawBlob(file);
-            setTrimmedBlob(file);
-            setUploadFilename(file.name);
-        }
-    };
-
-    const handleUploadToServer = async () => {
-        if (!trimmedBlob || !selectedMap || !uploadFilename) {
-            showToast("Please select audio, target folder, and filename.", "error");
-            return;
-        }
-        
-        setIsUploading(true);
-        const formData = new FormData();
-        // IMPORTANT: Append text fields BEFORE the file so Multer can access req.body properties 
-        // inside the storage engine's destination function.
-        formData.append('mapName', selectedMap);
-        formData.append('filename', uploadFilename);
-        formData.append('audio', trimmedBlob, uploadFilename);
-
-        try {
-            const res = await fetch(`${fullUrl}/api/audio/upload`, {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            if (data.success) {
-                showToast("Audio uploaded successfully!", "success");
-                setRawBlob(null);
-                setTrimmedBlob(null);
-                setUploadFilename('');
-            } else {
-                showToast(data.error || "Upload failed", "error");
-            }
-        } catch (e) {
-            showToast("Upload error", "error");
-        } finally {
-            setIsUploading(false);
-        }
-    };
-
     return (
         <section className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col space-y-6 animate-in fade-in duration-300">
             <div className="flex items-start justify-between">
@@ -207,7 +117,7 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                     <div className="p-3 bg-neutral-100 text-neutral-600 rounded-2xl"><Server size={24} /></div>
                     <div>
                         <h3 className="text-xl font-black text-neutral-900">Server & Connection</h3>
-                        <p className="text-xs text-neutral-400">Manage connection and audio mappings.</p>
+                        <p className="text-xs text-neutral-400">Manage connection and directory mappings.</p>
                     </div>
                 </div>
                 <button onClick={onSaveSettings} className="px-5 py-2.5 bg-neutral-900 text-white rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest hover:bg-neutral-800 transition-all"><Save size={14} /><span>Save</span></button>
@@ -297,7 +207,7 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                 {status === 'connected' && (
                     <div className="space-y-5 pt-4 border-t border-neutral-200/50 animate-in fade-in">
                         
-                        {/* Directory Mappings (Moved from AudioServerSettings) */}
+                        {/* Directory Mappings */}
                         <div className="space-y-4">
                              <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest px-1 flex items-center gap-1"><Network size={10}/> Directory Mappings</h4>
                              <div className="bg-white rounded-2xl border border-neutral-200 overflow-hidden">
@@ -320,95 +230,13 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                                     </div>
                                 )}
                                 <div className="p-4 bg-neutral-50 border-t border-neutral-200 flex flex-col md:flex-row gap-3">
-                                    <input value={newMapName} onChange={e => setNewMapName(e.target.value)} placeholder="Logical Name (e.g. 'Cam15')" className="flex-1 px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500" />
-                                    <input value={newMapPath} onChange={e => setNewMapPath(e.target.value)} placeholder="Physical Path (e.g. ~/Music/Cam15)" className="flex-[2] px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-500" />
+                                    <input value={newMapName} onChange={e => setNewMapName(e.target.value)} placeholder="Logical Name (e.g. 'Images')" className="flex-1 px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold outline-none focus:border-indigo-500" />
+                                    <input value={newMapPath} onChange={e => setNewMapPath(e.target.value)} placeholder="Physical Path" className="flex-[2] px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-medium outline-none focus:border-indigo-500" />
                                     <button onClick={handleAddMapping} disabled={!newMapName || !newMapPath} className="px-4 py-2 bg-neutral-900 text-white rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-neutral-800 disabled:opacity-50"><Plus size={14}/> Add</button>
                                 </div>
                             </div>
                         </div>
 
-                         {/* Auto Backup Config */}
-                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Clock size={10}/> Backup Debounce Time</label>
-                            <div className="flex items-center gap-3 p-3 bg-white border border-neutral-200 rounded-xl">
-                                <input 
-                                    type="range" 
-                                    min="5" 
-                                    max="300" 
-                                    step="5"
-                                    value={config.sync.autoBackupInterval} 
-                                    onChange={(e) => onConfigChange('sync', 'autoBackupInterval', parseInt(e.target.value))}
-                                    className="flex-1 h-2 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-neutral-900"
-                                />
-                                <div className="w-16 text-center font-black text-sm text-neutral-900">{config.sync.autoBackupInterval}s</div>
-                            </div>
-                        </div>
-
-                        {/* Audio Tool */}
-                         <div className="space-y-4 pt-4 border-t border-neutral-200/50">
-                            <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest px-1 flex items-center gap-1"><Mic size={10}/> Audio Tool</h4>
-                            
-                            {!rawBlob ? (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <button 
-                                        onClick={isRecording ? handleStopRecord : handleStartRecord}
-                                        className={`p-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-all ${isRecording ? 'bg-red-50 border-red-400 text-red-600 animate-pulse' : 'bg-white border-neutral-200 text-neutral-500 hover:border-indigo-400 hover:text-indigo-600'}`}
-                                    >
-                                        <Mic size={24} />
-                                        <span className="font-bold text-xs">{isRecording ? 'Stop Recording' : 'Record Voice'}</span>
-                                    </button>
-                                    <button 
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="p-6 rounded-2xl border-2 border-dashed bg-white border-neutral-200 text-neutral-500 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-400 hover:text-indigo-600"
-                                    >
-                                        <Upload size={24} />
-                                        <span className="font-bold text-xs">Upload File</span>
-                                        <input type="file" ref={fileInputRef} className="hidden" accept="audio/*" onChange={handleFileUpload} />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <AudioTrimmer 
-                                        audioBlob={rawBlob} 
-                                        onTrim={(blob) => { setTrimmedBlob(blob); showToast("Trimmed!", "success"); }} 
-                                        onCancel={() => { setRawBlob(null); setTrimmedBlob(null); }} 
-                                    />
-                                    
-                                    <div className="p-4 bg-white rounded-2xl border border-neutral-200 space-y-3">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-black uppercase text-neutral-400 px-1">Target Folder</label>
-                                                <select 
-                                                    value={selectedMap} 
-                                                    onChange={e => setSelectedMap(e.target.value)} 
-                                                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-xs font-bold bg-white focus:ring-2 focus:ring-neutral-900 outline-none"
-                                                >
-                                                    <option value="">Select Mapping...</option>
-                                                    {Object.keys(mappings).map(k => <option key={k} value={k}>{k}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-black uppercase text-neutral-400 px-1">Filename</label>
-                                                <input 
-                                                    value={uploadFilename} 
-                                                    onChange={e => setUploadFilename(e.target.value)} 
-                                                    placeholder="track_01.wav"
-                                                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-xs font-bold bg-white focus:ring-2 focus:ring-neutral-900 outline-none"
-                                                />
-                                            </div>
-                                        </div>
-                                        <button 
-                                            onClick={handleUploadToServer} 
-                                            disabled={isUploading || !selectedMap || !uploadFilename}
-                                            className="w-full py-3 bg-neutral-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                                        >
-                                            {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                                            <span>Upload to Server</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
                     </div>
                 )}
             </div>

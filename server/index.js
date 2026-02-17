@@ -39,7 +39,8 @@ app.use((req, res, next) => {
 
 app.use((req, res, next) => {
     if ((req.path === '/api/backup' && req.method === 'POST') || 
-        (req.path === '/api/audio/upload' && req.method === 'POST')) {
+        (req.path === '/api/audio/upload' && req.method === 'POST') ||
+        (req.path === '/api/images/upload' && req.method === 'POST')) {
         next(); 
     } else {
         express.json({ limit: '10mb' })(req, res, next);
@@ -61,6 +62,7 @@ app.use('/api', require('./routes/backup'));
 app.use('/', require('./routes/tts')); // TTS often uses root paths like /speak
 app.use('/api', require('./routes/ipa'));
 app.use('/api', require('./routes/audio'));
+app.use('/api', require('./routes/images')); // New Image Route
 // IMPORTANT: Ensure this line exists to activate the reading routes
 app.use('/api', require('./routes/reading'));
 app.use('/api', require('./routes/planning')); // Registered Planning Route
