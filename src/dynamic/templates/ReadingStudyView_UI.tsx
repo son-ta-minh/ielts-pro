@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen, Tag, HelpCircle, X, Check, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
+import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen, Tag, HelpCircle, X, Check, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
 import EditWordModal from '../../components/word_lib/EditWordModal';
@@ -140,6 +140,9 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
   const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, handleExportUnit, isComprehensionModalOpen, onOpenComprehensionModal, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange } = props;
   
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
+  const [activeTab, setActiveTab] = useState<'ESSAY' | 'VOCAB'>('ESSAY');
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
+
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
 
   // Attach speaker utility for data-only Audio tags
@@ -165,59 +168,124 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
 
   return (
     <>
-      <div className="max-w-4xl mx-auto space-y-6 pb-24 relative animate-in fade-in duration-300">
+      <div className="max-w-5xl mx-auto space-y-5 pb-24 relative animate-in fade-in duration-300">
+        
+        {/* --- HEADER: Back + Global Actions --- */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <button onClick={onBack} className="flex items-center space-x-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors"><ArrowLeft size={16} /><span>Back to Essay Library</span></button>
+            <button onClick={onBack} className="flex items-center space-x-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors"><ArrowLeft size={16} /><span>Back to Library</span></button>
             <div className="flex items-center gap-3">
-                <button onClick={() => setIsPracticeMode(!isPracticeMode)} className={`px-4 py-2 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest border transition-all ${isPracticeMode ? 'bg-amber-100 text-amber-700 border-amber-200 shadow-inner' : 'bg-white text-neutral-600 border-neutral-200'}`}>
-                    <BrainCircuit size={16} /><span>Context Recall</span>
-                </button>
+                {activeTab === 'ESSAY' && (
+                    <button onClick={() => setIsPracticeMode(!isPracticeMode)} className={`px-4 py-2 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest border transition-all ${isPracticeMode ? 'bg-amber-100 text-amber-700 border-amber-200 shadow-inner' : 'bg-white text-neutral-600 border-neutral-200'}`}>
+                        <BrainCircuit size={16} /><span>Context Recall</span>
+                    </button>
+                )}
                 <div className="w-px h-6 bg-neutral-200 mx-1 hidden sm:block"></div>
                 <button onClick={onSwitchToEdit} className="p-2 bg-white text-neutral-600 rounded-xl border border-neutral-200 hover:bg-neutral-100 transition-all active:scale-95" title="Edit Unit"><Edit3 size={16} /></button>
                 <button onClick={() => onStartSession(unitWords)} disabled={unitWords.length === 0} className="px-6 py-2 bg-neutral-900 text-white rounded-xl font-black text-[10px] flex items-center space-x-2 transition-all active:scale-95 hover:bg-neutral-800 disabled:opacity-50 uppercase tracking-widest shadow-sm"><Play size={16} fill="white" /><span>Practice</span></button>
             </div>
         </header>
-        <div className="px-2 space-y-3">
-            <div className="flex items-center gap-4">
-              <h3 className="text-xl font-bold text-neutral-900 tracking-tight">{unit.name}</h3>
-            </div>
-            <p className="text-xs text-neutral-500 font-medium">{unit.description || 'Description is empty'}</p>
-            {unit.tags && unit.tags.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <Tag size={12} className="text-neutral-400" />
-                    {unit.tags.map(tag => (
-                        <span key={tag} className="px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded text-[10px] font-bold border border-neutral-200">{tag.replace(/\//g, ' / ')}</span>
-                    ))}
+
+        {/* --- COLLAPSIBLE METADATA HEADER --- */}
+        <div className="bg-white rounded-[2rem] border border-neutral-200 shadow-sm overflow-hidden transition-all">
+            <button 
+                onClick={() => setIsHeaderExpanded(!isHeaderExpanded)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-neutral-50 transition-colors text-left group"
+            >
+                <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="p-2 bg-neutral-100 rounded-xl text-neutral-600 group-hover:bg-white group-hover:shadow-sm transition-all"><BookOpen size={20} /></div>
+                    <div className="min-w-0">
+                         <h3 className="text-lg font-black text-neutral-900 tracking-tight truncate">{unit.name}</h3>
+                    </div>
+                </div>
+                <div className="p-2 text-neutral-300 group-hover:text-neutral-600 transition-colors">
+                    {isHeaderExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                </div>
+            </button>
+
+            {isHeaderExpanded && (
+                <div className="px-6 pb-6 pt-0 animate-in slide-in-from-top-2 space-y-4">
+                     <p className="text-sm text-neutral-600 font-medium leading-relaxed whitespace-pre-wrap pl-1">{unit.description || 'No description provided.'}</p>
+                     
+                     {unit.tags && unit.tags.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-4">
+                            <Tag size={12} className="text-neutral-400 ml-1" />
+                            {unit.tags.map(tag => (
+                                <span key={tag} className="px-2.5 py-1 bg-neutral-50 text-neutral-600 rounded-lg text-[10px] font-bold border border-neutral-100 uppercase tracking-wide">{tag.replace(/\//g, ' / ')}</span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
-        <div className="rounded-[2rem] border border-neutral-200 shadow-sm min-h-[30vh] max-h-[60vh] flex flex-col relative">
-            {isPracticeMode && <div className="absolute top-4 right-6 z-20 flex items-center gap-2 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full border border-amber-200 animate-in fade-in slide-in-from-top-2"><BrainCircuit size={12} /><span className="text-[10px] font-black uppercase tracking-tighter">Active Context Recall Active</span></div>}
-            <EssayReader className="rounded-[2rem]" text={unit.essay || ''} vocabString={unit.customVocabString} wordsByText={wordsByText} onHoverWord={handleHoverWord} onWordAction={onWordAction} isPracticeMode={isPracticeMode} />
+
+        {/* --- TABS --- */}
+        <div className="flex p-1 bg-neutral-100 rounded-xl w-full sm:w-fit">
+            <button 
+                onClick={() => setActiveTab('ESSAY')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'ESSAY' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+            >
+                <BookText size={14} /> Essay
+            </button>
+            <button 
+                onClick={() => setActiveTab('VOCAB')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'VOCAB' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+            >
+                <LayoutList size={14} /> Vocabulary
+            </button>
         </div>
-        <WordTable 
-            user={user}
-            words={pagedUnitWords} 
-            total={filteredUnitWords.length} 
-            loading={false} 
-            page={unitTablePage} 
-            pageSize={unitTablePageSize} 
-            onPageChange={setUnitTablePage} 
-            onPageSizeChange={setUnitTablePageSize} 
-            onSearch={setUnitTableQuery} 
-            onFilterChange={setUnitTableFilters} 
-            onAddWords={async () => {}} 
-            onViewWord={setViewingWord}
-            onEditWord={setEditingWord}
-            onDelete={async (w) => { await handleRemoveWordFromUnit(w.id); }} 
-            onHardDelete={onHardDelete}
-            onBulkDelete={onBulkDelete}
-            onBulkHardDelete={onBulkHardDelete}
-            onPractice={(ids) => onStartSession(allWords.filter(w => ids.has(w.id)))} 
-            settingsKey="ielts_pro_unit_table_settings" 
-            context="unit" 
-        />
+
+        {/* --- CONTENT AREA --- */}
+        <div className="min-h-[500px]">
+            {activeTab === 'ESSAY' && (
+                <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white overflow-hidden flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {isPracticeMode && (
+                        <div className="absolute top-4 right-6 z-20 flex items-center gap-2 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full border border-amber-200 animate-in fade-in slide-in-from-top-2 shadow-sm">
+                            <BrainCircuit size={12} />
+                            <span className="text-[10px] font-black uppercase tracking-tighter">Active Recall</span>
+                        </div>
+                    )}
+                    <EssayReader 
+                        className="min-h-[60vh]"
+                        text={unit.essay || ''} 
+                        vocabString={unit.customVocabString} 
+                        wordsByText={wordsByText} 
+                        onHoverWord={handleHoverWord} 
+                        onWordAction={onWordAction} 
+                        isPracticeMode={isPracticeMode} 
+                    />
+                </div>
+            )}
+
+            {activeTab === 'VOCAB' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <WordTable 
+                        user={user}
+                        words={pagedUnitWords} 
+                        total={filteredUnitWords.length} 
+                        loading={false} 
+                        page={unitTablePage} 
+                        pageSize={unitTablePageSize} 
+                        onPageChange={setUnitTablePage} 
+                        onPageSizeChange={setUnitTablePageSize} 
+                        onSearch={setUnitTableQuery} 
+                        onFilterChange={setUnitTableFilters} 
+                        onAddWords={async () => {}} 
+                        onViewWord={setViewingWord}
+                        onEditWord={setEditingWord}
+                        onDelete={async (w) => { await handleRemoveWordFromUnit(w.id); }} 
+                        onHardDelete={onHardDelete}
+                        onBulkDelete={onBulkDelete}
+                        onBulkHardDelete={onBulkHardDelete}
+                        onPractice={(ids) => onStartSession(allWords.filter(w => ids.has(w.id)))} 
+                        settingsKey="ielts_pro_unit_table_settings" 
+                        context="unit" 
+                    />
+                </div>
+            )}
+        </div>
+
       </div>
+
       {activeTooltip && (<div className="fixed z-50 pointer-events-none transition-all duration-150 animate-in fade-in zoom-in-95" style={{ top: `${activeTooltip.rect.top - 10}px`, left: `${activeTooltip.rect.left}px`, transform: 'translateY(-100%)' }}><div className="bg-white px-4 py-3 rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] border border-cyan-100 flex flex-col items-start text-left space-y-1 min-w-[140px] relative"><div className="text-sky-600 font-sans text-xs font-bold tracking-wide">{activeTooltip.word.ipaUs || '/?/'}</div><div className="text-sm font-black text-slate-800 leading-none">{activeTooltip.word.meaningVi}</div><div className="absolute top-full left-4 -mt-1 w-3 h-3 bg-white border-r border-b border-cyan-100 rotate-45 transform" /></div></div>)}
       {viewingWord && <ViewWordModal word={viewingWord} onClose={() => setViewingWord(null)} onNavigateToWord={setViewingWord} onUpdate={handleSaveWordUpdate} onEditRequest={(word) => { setViewingWord(null); setEditingWord(word); }} onGainXp={async () => 0} isViewOnly={true} />}
       {editingWord && <EditWordModal user={user} word={editingWord} onSave={handleSaveAndCloseEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setViewingWord(word); }}/>}

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { NativeSpeakItem } from '../../app/types';
-import { X, Volume2, Mic, Eye, EyeOff, Info } from 'lucide-react';
+import { X, Volume2, Mic, Eye, EyeOff, Info, CheckCircle2, XCircle } from 'lucide-react';
 import { speak } from '../../utils/audio';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
@@ -64,6 +64,7 @@ export const SpeakingPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
     
     const handleClose = async () => {
         if (sessionScores.current.length > 0) {
+            // Only update score if specific mimic practice happened here
             const avg = Math.round(sessionScores.current.reduce((a, b) => a + b, 0) / sessionScores.current.length);
             await dataStore.saveNativeSpeakItem({
                 ...item,
@@ -93,6 +94,18 @@ export const SpeakingPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
                                 <div className="flex justify-between items-start">
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2">
+                                            {/* Status Indicator */}
+                                            {ans.lastResult === 'correct' && (
+                                                <div className="bg-green-100 text-green-600 p-1 rounded-full" title="Mastered in Game">
+                                                    <CheckCircle2 size={12} />
+                                                </div>
+                                            )}
+                                            {ans.lastResult === 'incorrect' && (
+                                                <div className="bg-red-100 text-red-600 p-1 rounded-full" title="Needs Practice">
+                                                    <XCircle size={12} />
+                                                </div>
+                                            )}
+                                            
                                             <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${ans.tone === 'academic' ? 'bg-purple-50 text-purple-700 border-purple-100' : ans.tone === 'semi-academic' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-neutral-50 text-neutral-600 border-neutral-100'}`}>{ans.tone}</span>
                                         </div>
                                         {/* Anchor represents the Situation/Context now, so it is always visible as the prompt */}

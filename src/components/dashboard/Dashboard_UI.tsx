@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
   Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, Music, MessageSquare, BookOpen, MessageCircle, Play,
   Zap, Target, Headphones, Split, LayoutDashboard, BarChart3, Keyboard, Move, AtSign, SlidersHorizontal, Quote, BoxSelect, Map, Gamepad2, Puzzle, Brain,
-  CloudUpload, Percent
+  CloudUpload, Percent, MessagesSquare, Scale
 } from 'lucide-react';
 import { AppView, VocabularyItem, User } from '../../app/types';
 import { DailyGoalConfig } from '../../app/settingsManager';
@@ -107,17 +106,17 @@ const NavButton: React.FC<{
 }> = ({ label, subLabel, progress, icon: Icon, color, bg, onClick, disabled, largeSub }) => {
     return (
         <button 
-            onClick={onClick}
+            onClick={onClick} 
             disabled={disabled}
-            className="flex items-start gap-3 p-4 rounded-[1.5rem] border border-neutral-100 bg-white hover:bg-neutral-900 hover:border-neutral-900 hover:shadow-lg transition-all active:scale-95 w-full text-left group disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-neutral-100 disabled:hover:shadow-none"
+            className="flex items-start gap-3 p-3 rounded-2xl border border-neutral-100 bg-white hover:bg-neutral-900 hover:border-neutral-900 hover:shadow-lg transition-all active:scale-95 w-full text-left group disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-neutral-100 disabled:hover:shadow-none"
         >
-            <div className={`p-2.5 rounded-xl ${bg} ${color} group-hover:scale-110 transition-transform shrink-0 mt-0.5`}>
+            <div className={`p-2 rounded-xl ${bg} ${color} group-hover:scale-110 transition-transform shrink-0 mt-0.5`}>
                 <Icon size={18} />
             </div>
             <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-black text-neutral-900 group-hover:text-white transition-colors tracking-tight leading-tight">{label}</div>
+                <div className="text-xs font-black text-neutral-900 group-hover:text-white transition-colors tracking-tight leading-tight">{label}</div>
                 {subLabel && (
-                    <div className={`font-medium text-neutral-400 group-hover:text-neutral-300 transition-colors mt-1 leading-snug ${largeSub ? 'text-[10px]' : 'text-[10px] truncate'}`}>
+                    <div className={`font-medium text-neutral-400 group-hover:text-neutral-300 transition-colors mt-0.5 leading-snug ${largeSub ? 'text-[10px]' : 'text-[10px] truncate'}`}>
                         {subLabel}
                     </div>
                 )}
@@ -183,7 +182,7 @@ const StudyNowPanel: React.FC<{
 }> = ({ stats, isLoading, onStartNew, onStartDue, onAction }) => {
 
     return (
-        <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-6 relative overflow-hidden">
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4 relative overflow-hidden">
             {isLoading && (
                 <div className="absolute top-4 right-4 animate-spin text-neutral-300">
                     <RotateCw size={16} />
@@ -193,17 +192,17 @@ const StudyNowPanel: React.FC<{
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                  <div className="flex items-center gap-3">
                      <div className="p-2 bg-neutral-900 rounded-xl text-white shadow-md">
-                         <GraduationCap size={20} />
+                         <GraduationCap size={18} />
                      </div>
                      <div>
-                         <h3 className="text-lg font-black text-neutral-900 tracking-tight">Study Center</h3>
-                         <p className="text-xs font-medium text-neutral-400">Track your mastery across all skills.</p>
+                         <h3 className="text-base font-black text-neutral-900 tracking-tight">Study Center</h3>
+                         <p className="text-[10px] font-medium text-neutral-400">Track your mastery across all skills.</p>
                      </div>
                  </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-8">
-                <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="flex flex-col gap-2 md:col-span-2 lg:col-span-1">
                         <div className="flex items-center gap-2 text-neutral-400 px-1">
                         <BookCopy size={12} />
                         <span className="font-black uppercase tracking-widest text-[10px]">Vocabulary</span>
@@ -214,7 +213,7 @@ const StudyNowPanel: React.FC<{
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-2">
+                <div className="flex flex-col gap-2 md:col-span-2 lg:col-span-2">
                         <div className="flex items-center gap-2 text-neutral-400 px-1">
                         <Target size={12} />
                         <span className="font-black uppercase tracking-widest text-[10px]">Skills</span>
@@ -227,7 +226,7 @@ const StudyNowPanel: React.FC<{
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-3 md:col-span-2 lg:col-span-2">
+                <div className="flex flex-col gap-2 md:col-span-2 lg:col-span-2">
                         <div className="flex items-center gap-2 text-neutral-400 px-1">
                         <BookText size={12} />
                         <span className="font-black uppercase tracking-widest text-[10px]">Domains</span>
@@ -246,18 +245,18 @@ const StudyNowPanel: React.FC<{
 
 const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({ onAction }) => {
     return (
-        <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4">
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-3">
              <div className="flex items-center gap-3">
                  <div className="p-2 bg-fuchsia-50 rounded-xl text-fuchsia-600 shadow-md">
-                     <Gamepad2 size={20} />
+                     <Gamepad2 size={18} />
                  </div>
                  <div>
-                     <h3 className="text-lg font-black text-neutral-900 tracking-tight">Practice Arcade</h3>
-                     <p className="text-xs font-medium text-neutral-400">Targeted drills to refine specific lexical skills.</p>
+                     <h3 className="text-base font-black text-neutral-900 tracking-tight">Practice Arcade</h3>
+                     <p className="text-[10px] font-medium text-neutral-400">Targeted drills to refine specific lexical skills.</p>
                  </div>
              </div>
              
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                  <NavButton 
                     label="Listening & Spelling" 
                     subLabel="Dictation drills to sharpen auditory accuracy." 
@@ -287,6 +286,21 @@ const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({
                     label="Rapid Recall" 
                     subLabel="Speed test: Connect terms with definitions." 
                     largeSub icon={Brain} color="text-fuchsia-600" bg="bg-fuchsia-50" onClick={() => onAction('WORD_SCATTER')} 
+                 />
+                 <NavButton
+                    label="Natural Expression"
+                    subLabel="Master native phrases and idioms in context."
+                    largeSub icon={MessagesSquare} color="text-amber-600" bg="bg-amber-50" onClick={() => onAction('NATURAL_EXPRESSION')}
+                 />
+                 <NavButton
+                    label="Intensity Scale"
+                    subLabel="Link nuanced words by their scale of intensity."
+                    largeSub icon={Scale} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('INTENSITY_SCALE')}
+                 />
+                 <NavButton
+                    label="Word Contrast"
+                    subLabel="Contrast and identify confusing word pairs."
+                    largeSub icon={Split} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('COMPARISON_LAB')}
                  />
              </div>
         </div>

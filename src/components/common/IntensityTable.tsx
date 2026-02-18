@@ -1,5 +1,6 @@
 import React from 'react';
 import { IntensityRow, IntensityItem } from '../../app/types';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 interface Props {
     rows: IntensityRow[];
@@ -21,11 +22,13 @@ const RegisterBadge: React.FC<{ register?: 'academic' | 'casual' }> = ({ registe
 };
 
 const WordItem: React.FC<{ item: IntensityItem }> = ({ item }) => (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1.5 group/item">
         <span className="font-bold text-neutral-800">
             {item.word}
         </span>
         <RegisterBadge register={item.register} />
+        {item.lastResult === 'correct' && <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />}
+        {item.lastResult === 'incorrect' && <XCircle size={12} className="text-rose-500 shrink-0" />}
     </div>
 );
 

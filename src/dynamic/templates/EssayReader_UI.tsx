@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Type, Underline, Minus, Plus, BookText, Link, Unlink, HelpCircle, ChevronDown, CheckCircle2, X } from 'lucide-react';
 import { VocabularyItem } from '../../app/types';
@@ -367,7 +366,7 @@ export const EssayReaderUI: React.FC<EssayReaderUIProps> = ({
 
     return (
         <div className={`flex flex-col h-full bg-white relative overflow-hidden ${className || ''}`} onMouseUp={handleMouseUp}>
-            <div className="px-6 py-2 border-b border-neutral-100 bg-neutral-50/30 flex justify-between items-center min-h-[52px] sticky top-0 z-10">
+            <div className="px-4 py-1.5 border-b border-neutral-100 bg-neutral-50/30 flex justify-between items-center min-h-[46px] sticky top-0 z-10">
                 <HighlightControls 
                     isUnderlined={isUnderlined} toggleUnderline={() => setIsUnderlined(!isUnderlined)} 
                     highlightColor={highlightColor} setHighlightColor={setHighlightColor} 
@@ -380,7 +379,7 @@ export const EssayReaderUI: React.FC<EssayReaderUIProps> = ({
                     onClearSelection={handleClearSelection}
                 />
             </div>
-            <div className={`p-5 md:p-8 flex-1 overflow-y-auto stable-scrollbar relative ${isPracticeMode ? 'bg-neutral-50/20' : ''}`}>
+            <div className={`px-5 pb-5 pt-3 md:px-8 md:pb-8 md:pt-4 flex-1 overflow-y-auto stable-scrollbar relative ${isPracticeMode ? 'bg-neutral-50/20' : ''}`}>
                 <div 
                     className="text-neutral-800 font-normal whitespace-pre-wrap leading-relaxed transition-all duration-200" 
                     style={{ fontSize: `${fontSize}px`, fontFamily: isSerif ? 'Georgia, serif' : 'Inter, sans-serif' }}

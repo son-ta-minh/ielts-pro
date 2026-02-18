@@ -91,6 +91,7 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
         gamePairs.forEach((pair, pIdx) => {
             let maskedText = pair.fullText;
             let partnerWord = pair.fullText;
+            let isPreFilled = false;
 
             const wordsArr = pair.fullText.split(/\s+/);
             if (wordsArr.length > 1) {
@@ -99,8 +100,10 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
                 partnerWord = wordsArr[targetIdx].replace(/[^a-zA-Z]/g, '');
                 maskedText = wordsArr.map((w, idx) => idx === targetIdx ? '___' : w).join(' ');
             } else {
+                // If it's a single word, do NOT mask it. Just show it.
                 partnerWord = pair.fullText;
-                maskedText = '___';
+                maskedText = pair.fullText;
+                isPreFilled = true;
             }
 
             const otherPartners = sessionPartnerWords.filter((w, i) => i !== pIdx && w.toLowerCase() !== partnerWord.toLowerCase());
@@ -118,7 +121,8 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
             };
 
             newContexts.push({ ...baseCard, id: `ctx-${pair.pairId}`, isLinked: false, isFilled: false, isSelected: false, isDone: false, error: false } as Card);
-            newItems.push({ ...baseCard, id: `itm-${pair.pairId}`, isLinked: false, isFilled: false, isSelected: false, isDone: false, error: false } as Card);
+            // If isPreFilled is true (single word), we mark isFilled as true so the game logic treats it as ready once matched.
+            newItems.push({ ...baseCard, id: `itm-${pair.pairId}`, isLinked: false, isFilled: isPreFilled, isSelected: false, isDone: false, error: false } as Card);
         });
 
         setContexts(newContexts);
@@ -228,10 +232,10 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
         const SourceButton = ({ type: t, label, icon: Icon }: { type: SourceType, label: string, icon: React.ElementType }) => (
             <button
                 onClick={() => setSourceType(t)}
-                className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${sourceType === t ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-300'}`}
+                className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all min-w-[70px] ${sourceType === t ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-300'}`}
             >
-                <Icon size={24} className="mb-2"/>
-                <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
+                <Icon size={20} className="mb-1"/>
+                <span className="text-[9px] font-black uppercase tracking-widest">{label}</span>
             </button>
         );
 
@@ -249,33 +253,26 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
         );
 
         return (
-            <div className="flex flex-col h-full relative p-6 justify-center items-center text-center space-y-8 animate-in fade-in">
-                <div className="space-y-2">
+            <div className="flex flex-col h-full relative p-6 items-center text-center space-y-6 animate-in fade-in overflow-y-auto">
+                <div className="space-y-2 mt-auto">
                     <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Zap size={32} fill="currentColor" />
                     </div>
                     <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Context Match Setup</h2>
-                    <p className="text-neutral-500 font-medium">Link meanings and fill the blanks in any order.</p>
+                    <p className="text-neutral-500 font-medium max-w-sm mx-auto">Link meanings and fill the blanks.</p>
                 </div>
 
-                <div className="w-full max-w-sm space-y-6">
-                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-6">
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* LEFT COLUMN: Source & Size */}
+                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-6 flex flex-col justify-between">
                         <div className="space-y-3">
                             <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Source</span>
-                            <div className="grid grid-cols-2 gap-3">
-                                <SourceButton type="PARAPHRASE" label="Para" icon={Zap} />
-                                <SourceButton type="COLLOCATION" label="Colloc" icon={Split} />
+                            {/* CHANGED TO GRID */}
+                            <div className="grid grid-cols-2 gap-2 w-full">
+                                <SourceButton type="PARAPHRASE" label="Paraphrase" icon={Zap} />
+                                <SourceButton type="COLLOCATION" label="Collocation" icon={Split} />
                                 <SourceButton type="IDIOM" label="Idiom" icon={Quote} />
                                 <SourceButton type="MIX" label="Mix All" icon={Layers} />
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Difficulty</span>
-                            <div className="grid grid-cols-1 gap-2">
-                                <DiffButton level="EASY" label="Easy" desc="Match definitions to phrases. No typing required." />
-                                <DiffButton level="MEDIUM" label="Medium" desc="Match meanings and select the missing word from a dropdown." />
-                                <DiffButton level="HARD" label="Hard" desc="Match meanings and type the missing word from memory." />
                             </div>
                         </div>
 
@@ -291,15 +288,27 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
                             />
                         </div>
                     </div>
+
+                    {/* RIGHT COLUMN: Difficulty */}
+                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-3">
+                        <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Difficulty</span>
+                        <div className="grid grid-cols-1 gap-3">
+                            <DiffButton level="EASY" label="Easy" desc="Match definitions to phrases. No typing required." />
+                            <DiffButton level="MEDIUM" label="Medium" desc="Match meanings and select the missing word from a dropdown." />
+                            <DiffButton level="HARD" label="Hard" desc="Match meanings and type the missing word from memory." />
+                        </div>
+                    </div>
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex gap-4 w-full max-w-md mb-auto">
                     <button onClick={onExit} className="px-10 py-4 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-2xl hover:bg-neutral-50 transition-all active:scale-95">Back</button>
-                    <button onClick={handleStartGame} className="px-12 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl active:scale-95 flex items-center gap-2"><Play size={18} fill="white"/> Start</button>
+                    <button onClick={handleStartGame} className="flex-1 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl active:scale-95 flex justify-center items-center gap-2"><Play size={18} fill="white"/> Start</button>
                 </div>
             </div>
         );
     }
+
+    const progress = (contexts.filter(c => c.isDone).length / contexts.length) * 100;
 
     return (
         <div className="flex flex-col h-full relative p-6">
@@ -308,7 +317,7 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
                 <div className="flex flex-col items-center">
                     <div className="text-neutral-400 font-black text-[10px] uppercase tracking-widest">Context Match • {difficulty}</div>
                     <div className="h-1 w-32 bg-neutral-100 rounded-full mt-1.5 overflow-hidden">
-                        <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${(contexts.filter(c => c.isDone).length / contexts.length) * 100}%` }} />
+                        <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${progress}%` }} />
                     </div>
                 </div>
                 <div className="px-6 py-2 bg-neutral-900 text-white rounded-full font-black text-lg shadow-lg tracking-widest">{score}</div>

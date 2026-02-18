@@ -1,4 +1,3 @@
-
 export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LISTENING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT';
 
 export enum ReviewGrade {
@@ -333,6 +332,7 @@ export type LessonType = 'essay' | 'word' | 'intensity' | 'comparison';
 export interface IntensityItem {
     word: string;
     register?: 'academic' | 'casual'; 
+    lastResult?: 'correct' | 'incorrect';
 }
 
 export interface IntensityRow {
@@ -345,6 +345,7 @@ export interface ComparisonRow {
     word: string;
     nuance: string;
     example: string;
+    lastResult?: 'correct' | 'incorrect';
 }
 
 export interface Lesson {
@@ -391,6 +392,7 @@ export interface NativeSpeakAnswer {
   anchor: string;
   sentence: string;
   note?: string;
+  lastResult?: 'correct' | 'incorrect'; // New field for granular tracking
 }
 
 export interface NativeSpeakItem {
@@ -594,4 +596,4 @@ export interface PlanningGoal {
   isFocused?: boolean;
 }
 
-export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'IPA_SORTER' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER' | 'DICTATION';
+export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'IPA_SORTER' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER' | 'DICTATION' | 'NATURAL_EXPRESSION' | 'INTENSITY_SCALE' | 'COMPARISON_LAB';

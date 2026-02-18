@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, X, Volume2, Play, Check, Shuffle, Brain, Zap, Layers } from 'lucide-react';
+import { ArrowLeft, X, Volume2, Play, Check, Shuffle, Brain, Zap, Layers, ChevronDown } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
 import { speak } from '../../../utils/audio';
 
@@ -29,6 +28,9 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
     const [usedIndices, setUsedIndices] = useState<Set<number>>(new Set());
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     const [score, setScore] = useState(0);
+    
+    // New state for insertion position
+    const [insertionIndex, setInsertionIndex] = useState(0);
 
     const chunkify = (sentence: string, diff: Difficulty): string[] => {
         const wordsArr = sentence.split(/\s+/).filter(Boolean);
@@ -65,8 +67,13 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
         setQueue(newQueue);
         setGameState('PLAYING');
         setScore(0);
+        resetRound();
+    };
+
+    const resetRound = () => {
         setSelectedChunks([]);
         setUsedIndices(new Set());
+        setInsertionIndex(0);
         setIsCorrect(null);
     };
 
@@ -74,23 +81,46 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
 
     const handleChunkClick = (chunk: string, idx: number) => {
         if (isCorrect !== null) return;
-        setSelectedChunks(prev => [...prev, chunk]);
+
+        // Insert at the specific insertion index
+        const newSelected = [...selectedChunks];
+        newSelected.splice(insertionIndex, 0, chunk);
+        
+        setSelectedChunks(newSelected);
         setUsedIndices(prev => new Set(prev).add(idx));
+        
+        // Move cursor to after the inserted word
+        setInsertionIndex(prev => prev + 1);
     };
 
     const handleRemoveChunk = (idxToRemove: number) => {
         if (isCorrect !== null) return;
+        
         const chunkToRemove = selectedChunks[idxToRemove];
         const newSelected = selectedChunks.filter((_, i) => i !== idxToRemove);
         setSelectedChunks(newSelected);
 
+        // Adjust cursor if necessary
+        if (insertionIndex > idxToRemove) {
+            setInsertionIndex(prev => prev - 1);
+        }
+
+        // Find which source index corresponds to this chunk and is currently used
+        // We need to be careful if there are duplicate words/chunks. 
+        // We find the first matching used index in the source list.
         const currentChunks = currentItem.shuffledChunks;
+        
+        // We need to find the correct index to free up.
+        // Simple strategy: Iterate source chunks, find one that matches text AND is in usedIndices.
+        // NOTE: This simple strategy might free the "wrong" identical word if duplicates exist, 
+        // but for this game logic it doesn't matter which identical tile is freed.
+        let freed = false;
         setUsedIndices(prev => {
             const next = new Set(prev);
             for (let i = 0; i < currentChunks.length; i++) {
-                if (currentChunks[i] === chunkToRemove && next.has(i)) {
+                if (currentChunks[i] === chunkToRemove && next.has(i) && !freed) {
                     next.delete(i);
-                    return next;
+                    freed = true; // Only free one instance
                 }
             }
             return next;
@@ -101,8 +131,6 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
         const assembled = selectedChunks.join(' ').toLowerCase().trim();
         const original = currentItem.originalSentence.toLowerCase().trim();
         
-        // Remove trailing punctuation for more lenient matching if necessary, 
-        // but IELTS usually requires exact punctuation for grammar drills.
         if (assembled === original) {
             setIsCorrect(true);
             setScore(s => s + (difficulty === 'HARD' ? 25 : (difficulty === 'MEDIUM' ? 15 : 10)));
@@ -111,9 +139,7 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
                 setQueue(nextQueue);
                 if (nextQueue.length === 0) onComplete(score + (difficulty === 'HARD' ? 25 : 15));
                 else {
-                    setSelectedChunks([]);
-                    setUsedIndices(new Set());
-                    setIsCorrect(null);
+                    resetRound();
                 }
             }, 1000);
         } else {
@@ -128,10 +154,22 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
         setQueue(nextQueue);
         if (nextQueue.length === 0) onComplete(score);
         else {
-            setSelectedChunks([]);
-            setUsedIndices(new Set());
-            setIsCorrect(null);
+            resetRound();
         }
+    };
+
+    // Render a clickable cursor slot
+    const InsertionSlot = ({ index }: { index: number }) => {
+        const isActive = index === insertionIndex;
+        return (
+            <div 
+                onClick={() => setInsertionIndex(index)}
+                className={`h-8 w-2 rounded-full cursor-pointer transition-all duration-200 mx-0.5 flex items-center justify-center ${isActive ? 'bg-indigo-500 scale-110 shadow-sm' : 'bg-transparent hover:bg-neutral-200'}`}
+            >
+                {/* Visual helper for hover */}
+                <div className={`w-1 h-4 rounded-full ${isActive ? 'bg-white/50' : 'bg-transparent'}`}></div>
+            </div>
+        );
     };
 
     if (gameState === 'SETUP') {
@@ -149,7 +187,7 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
         );
 
         return (
-            <div className="flex flex-col h-full relative p-6 justify-center items-center text-center space-y-8 animate-in fade-in">
+            <div className="flex flex-col h-full relative p-6 justify-center items-center text-center space-y-8 animate-in fade-in max-w-5xl mx-auto overflow-y-auto">
                 <div className="space-y-2">
                     <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Shuffle size={32} />
@@ -204,67 +242,82 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
                 <div className="px-6 py-2 bg-neutral-900 text-white rounded-full font-black text-lg shadow-lg tracking-widest">{score}</div>
             </header>
 
-            {currentItem ? (
-                <div className="flex flex-col items-center justify-center flex-1 space-y-8">
-                    <div className="flex flex-col items-center gap-3">
-                        <div className="flex items-center gap-4">
-                             <h3 className="text-2xl font-black text-neutral-900">Build the sentence for: <span className="underline decoration-emerald-300 decoration-2 underline-offset-4">{currentItem.word}</span></h3>
-                             <button 
-                                onClick={() => speak(currentItem.originalSentence)} 
-                                className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all active:scale-90"
-                                title="Hear full sentence"
-                             >
-                                <Volume2 size={24} />
-                             </button>
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+                {currentItem ? (
+                    <div className="min-h-full flex flex-col items-center justify-center space-y-8 pb-10">
+                        <div className="flex flex-col items-center gap-3 text-center">
+                            <div className="flex flex-wrap items-center justify-center gap-4">
+                                <h3 className="text-2xl font-black text-neutral-900">Build the sentence for: <span className="underline decoration-emerald-300 decoration-2 underline-offset-4">{currentItem.word}</span></h3>
+                                <button 
+                                    onClick={() => speak(currentItem.originalSentence)} 
+                                    className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all active:scale-90"
+                                    title="Hear full sentence"
+                                >
+                                    <Volume2 size={24} />
+                                </button>
+                            </div>
+                            <p className="text-neutral-400 text-xs font-bold uppercase tracking-widest">Tap chunks to insert at cursor</p>
                         </div>
-                        <p className="text-neutral-400 text-xs font-bold uppercase tracking-widest">Tap chunks in order</p>
-                    </div>
-                    
-                    <div className={`min-h-[140px] w-full max-w-2xl bg-neutral-50 rounded-[2.5rem] border-2 border-dashed p-8 flex flex-wrap gap-3 items-center justify-center transition-all ${isCorrect === true ? 'border-emerald-400 bg-emerald-50' : isCorrect === false ? 'border-rose-400 bg-rose-50 animate-shake' : 'border-neutral-200'}`}>
-                        {selectedChunks.length === 0 && <span className="text-lg font-bold text-neutral-300 italic opacity-50">Draft your sentence here...</span>}
-                        {selectedChunks.map((chunk, idx) => (
-                            <button 
-                                key={idx} 
-                                onClick={() => handleRemoveChunk(idx)} 
-                                className={`px-5 py-3 rounded-xl text-lg font-bold shadow-sm transition-all active:scale-95 animate-in zoom-in-95 ${isCorrect === true ? 'bg-emerald-600 text-white' : isCorrect === false ? 'bg-rose-600 text-white' : 'bg-white text-neutral-900 border border-neutral-100 hover:border-neutral-300'}`}
-                            >
-                                {chunk} <X size={14} className="inline-block ml-1 opacity-50" />
-                            </button>
-                        ))}
-                    </div>
+                        
+                        {/* Sentence Construction Area */}
+                        <div className={`w-full max-w-3xl bg-neutral-50 rounded-[2.5rem] border-2 border-dashed p-8 transition-all ${isCorrect === true ? 'border-emerald-400 bg-emerald-50' : isCorrect === false ? 'border-rose-400 bg-rose-50 animate-shake' : 'border-neutral-200'}`}>
+                            <div className="flex flex-wrap gap-y-3 items-center justify-center min-h-[60px]">
+                                {selectedChunks.length === 0 && <span className="absolute text-lg font-bold text-neutral-300 italic pointer-events-none">Draft your sentence here...</span>}
+                                
+                                {/* Initial Slot */}
+                                <InsertionSlot index={0} />
 
-                    <div className="w-full max-w-2xl bg-neutral-100 rounded-[2.5rem] p-8 flex flex-wrap gap-3 justify-center">
-                        {currentItem.shuffledChunks.map((chunk, idx) => (
-                            <button 
-                                key={idx} 
-                                onClick={() => handleChunkClick(chunk, idx)} 
-                                disabled={usedIndices.has(idx)} 
-                                className={`px-5 py-3 rounded-xl text-lg font-bold shadow-sm transition-all active:scale-95 ${usedIndices.has(idx) ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed opacity-30' : 'bg-white text-neutral-700 border-2 border-white hover:border-emerald-300 hover:text-neutral-900'}`}
-                            >
-                                {chunk}
-                            </button>
-                        ))}
-                    </div>
-                    
-                    <div className="flex gap-4 pt-4">
-                        <button onClick={handleSkip} className="px-10 py-4 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-2xl hover:bg-neutral-50 transition-all">Skip</button>
-                        <button 
-                            onClick={handleCheck} 
-                            disabled={selectedChunks.length === 0 || isCorrect !== null} 
-                            className="px-12 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl active:scale-95 disabled:opacity-50 flex items-center gap-2"
-                        >
-                            <Check size={18} /> Check
-                        </button>
-                    </div>
-                    
-                    {isCorrect === false && (
-                        <div className="animate-in slide-in-from-top-2 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-center">
-                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Original Sentence</p>
-                            <p className="text-sm font-bold text-emerald-900 italic">"{currentItem.originalSentence}"</p>
+                                {selectedChunks.map((chunk, idx) => (
+                                    <React.Fragment key={`${chunk}-${idx}`}>
+                                        <button 
+                                            onClick={() => handleRemoveChunk(idx)} 
+                                            className={`px-4 py-2 rounded-xl text-lg font-bold shadow-sm transition-all active:scale-95 animate-in zoom-in-95 flex items-center gap-1 group ${isCorrect === true ? 'bg-emerald-600 text-white' : isCorrect === false ? 'bg-rose-600 text-white' : 'bg-white text-neutral-900 border border-neutral-100 hover:border-red-200 hover:text-red-500'}`}
+                                        >
+                                            {chunk} 
+                                        </button>
+                                        <InsertionSlot index={idx + 1} />
+                                    </React.Fragment>
+                                ))}
+                            </div>
                         </div>
-                    )}
-                </div>
-            ) : <div className="text-neutral-300 font-black text-xl flex items-center justify-center h-full">Preparing...</div>}
+
+                        {/* Source Pool */}
+                        <div className="w-full max-w-3xl bg-neutral-100 rounded-[2.5rem] p-8 flex flex-wrap gap-3 justify-center">
+                            {currentItem.shuffledChunks.map((chunk, idx) => (
+                                <button 
+                                    key={idx} 
+                                    onClick={() => handleChunkClick(chunk, idx)} 
+                                    disabled={usedIndices.has(idx)} 
+                                    className={`px-5 py-3 rounded-xl text-lg font-bold shadow-sm transition-all active:scale-95 ${usedIndices.has(idx) ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed opacity-30' : 'bg-white text-neutral-700 border-2 border-white hover:border-emerald-300 hover:text-neutral-900'}`}
+                                >
+                                    {chunk}
+                                </button>
+                            ))}
+                        </div>
+                        
+                        <div className="flex gap-4 pt-4">
+                            <button onClick={handleSkip} className="px-10 py-4 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-2xl hover:bg-neutral-50 transition-all">Skip</button>
+                            <button 
+                                onClick={handleCheck} 
+                                disabled={selectedChunks.length === 0 || isCorrect !== null} 
+                                className="px-12 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                            >
+                                <Check size={18} /> Check
+                            </button>
+                        </div>
+                        
+                        {isCorrect === false && (
+                            <div className="animate-in slide-in-from-top-2 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-center max-w-2xl">
+                                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Original Sentence</p>
+                                <p className="text-sm font-bold text-emerald-900 italic">"{currentItem.originalSentence}"</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="text-neutral-300 font-black text-xl flex items-center justify-center h-full">Preparing...</div>
+                )}
+            </div>
         </div>
     );
 };

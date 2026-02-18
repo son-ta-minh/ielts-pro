@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Play, Check, ChevronRight, Volume2, HelpCircle, Zap, Search, Loader2 } from 'lucide-react';
+import { ArrowLeft, Play, Check, ChevronRight, Zap, Search, Loader2 } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
-import { speak } from '../../../utils/audio';
 
 interface Props {
     words: VocabularyItem[];
@@ -32,7 +31,6 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
     const [userGuess, setUserGuess] = useState('');
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     const [score, setScore] = useState(0);
-    const [showHint, setShowHint] = useState(false);
     
     // Autocomplete state
     const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -92,7 +90,6 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
         setScore(0);
         setUserGuess('');
         setIsCorrect(null);
-        setShowHint(false);
     };
 
     const currentItem = queue[currentIndex];
@@ -119,7 +116,6 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
                     setCurrentIndex(prev => prev + 1);
                     setUserGuess('');
                     setIsCorrect(null);
-                    setShowHint(false);
                 } else {
                     onComplete(score + 15);
                 }
@@ -228,10 +224,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
                     <div className="space-y-4">
                         <div className="flex items-center justify-center gap-3">
                             <span className="px-3 py-1 bg-violet-100 text-violet-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-violet-200">Fill Blank</span>
-                            <h3 className="text-2xl font-black text-neutral-900 tracking-tight">{currentItem.word}</h3>
-                            <button onClick={() => speak(currentItem.word)} className="p-2 text-neutral-400 hover:text-violet-600 transition-colors"><Volume2 size={18}/></button>
                         </div>
-                        {showHint && <p className="text-sm font-bold text-violet-600 animate-in fade-in slide-in-from-top-1">{currentItem.meaning}</p>}
                     </div>
 
                     <div className="text-xl md:text-2xl font-medium text-neutral-700 leading-relaxed min-h-[4rem]">
@@ -282,20 +275,11 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
 
                 <div className="flex gap-4 shrink-0">
                     <button 
-                        onClick={() => setShowHint(!showHint)} 
-                        className="p-4 bg-white border border-neutral-200 text-neutral-400 hover:text-violet-600 hover:border-violet-200 rounded-2xl transition-all shadow-sm"
-                        title="Show meaning"
-                    >
-                        <HelpCircle size={24} />
-                    </button>
-                    
-                    <button 
                         onClick={() => {
                             if (currentIndex < queue.length - 1) {
                                 setCurrentIndex(prev => prev + 1);
                                 setUserGuess('');
                                 setIsCorrect(null);
-                                setShowHint(false);
                             } else {
                                 onComplete(score);
                             }

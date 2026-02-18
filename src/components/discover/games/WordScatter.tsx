@@ -359,7 +359,7 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
                                         onClick={() => handleMatrixCardClick(card)}
                                         disabled={isCorrect}
                                         className={`
-                                            relative aspect-[4/2.5] p-3 rounded-2xl border-2 transition-all duration-300 flex items-center justify-center text-center shadow-sm font-bold text-xs md:text-sm leading-tight
+                                            relative h-16 px-2 rounded-2xl border-2 transition-all duration-300 flex items-center justify-center text-center shadow-sm font-bold text-xs leading-tight
                                             ${isCorrect ? 'bg-emerald-500 border-emerald-500 text-white scale-90 opacity-0 pointer-events-none' : isIncorrect ? 'bg-rose-50 border-rose-500 text-rose-600 animate-shake' : 'bg-white border-neutral-100 text-neutral-700 hover:border-fuchsia-300 hover:text-neutral-900 hover:-translate-y-0.5 active:scale-95'}
                                         `}
                                     >

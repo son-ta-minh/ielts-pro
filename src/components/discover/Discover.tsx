@@ -12,8 +12,12 @@ import { PrepositionPower } from './games/PrepositionPower';
 import { ParaphraseContext } from './games/ParaphraseContext';
 import { WordScatter } from './games/WordScatter';
 import { Dictation } from './games/Dictation';
+import { NaturalExpressionGame } from './games/NaturalExpressionGame';
+import { IntensityScaleGame } from './games/IntensityScaleGame';
+import { ComparisonLabGame } from './games/ComparisonLabGame';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { useToast } from '../../contexts/ToastContext';
+import * as db from '../../app/db';
 
 interface Props {
     user: User;
@@ -106,6 +110,9 @@ const Discover: React.FC<Props> = ({ user, onExit, onGainXp, onRecalculateXp, xp
             case 'PREPOSITION_POWER': return <PrepositionPower {...commonProps} words={getEligibleWords('PREPOSITION_POWER')} />;
             case 'PARAPHRASE_CONTEXT': return <ParaphraseContext {...commonProps} words={getEligibleWordsForContextGame()} />;
             case 'WORD_SCATTER': return <WordScatter {...commonProps} words={getEligibleWords('MEANING_MATCH')} />;
+            case 'NATURAL_EXPRESSION': return <NaturalExpressionGame userId={user.id} {...commonProps} />;
+            case 'INTENSITY_SCALE': return <IntensityScaleGame user={user} {...commonProps} />;
+            case 'COMPARISON_LAB': return <ComparisonLabGame user={user} {...commonProps} />;
             default: return <Adventure user={user} onUpdateUser={onUpdateUser} onStartSession={onStartSession} onExit={onExit} />;
         }
     };

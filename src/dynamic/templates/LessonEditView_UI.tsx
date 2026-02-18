@@ -40,12 +40,12 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
         isSaving, onSave, onPractice, onCancel, onOpenAiRefine 
     } = props;
     
-    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING' | 'TEST' | 'INTENSITY'>('READING');
+    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING' | 'TEST' | 'INTENSITY' | 'COMPARISON'>('READING');
     const [isPreview, setIsPreview] = useState(false);
 
-    // Default to specialized tab if opening an intensity card
     useEffect(() => {
         if (type === 'intensity') setActiveTab('INTENSITY');
+        else if (type === 'comparison') setActiveTab('COMPARISON');
         else setActiveTab('READING');
     }, [type]);
 
@@ -84,6 +84,15 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
         return items.map(i => i.register ? `${i.word} [${i.register}]` : i.word).join('; ');
     };
 
+    // --- Comparison Handlers ---
+    const addComparisonRow = () => setComparisonRows([...comparisonRows, { word: '', nuance: '', example: '' }]);
+    const removeComparisonRow = (idx: number) => setComparisonRows(comparisonRows.filter((_, i) => i !== idx));
+    const updateComparisonRow = (idx: number, field: keyof ComparisonRow, value: string) => {
+        const newRows = [...comparisonRows];
+        newRows[idx] = { ...newRows[idx], [field]: value };
+        setComparisonRows(newRows);
+    };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300 pb-20">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -119,29 +128,36 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
         
         <div className="flex flex-col gap-2">
             <div className="flex justify-between items-center px-1">
-                <div className="flex bg-neutral-100 p-1 rounded-xl gap-1">
+                <div className="flex bg-neutral-100 p-1 rounded-xl gap-1 overflow-x-auto no-scrollbar">
                     {type === 'intensity' && (
-                        <button onClick={() => { setActiveTab('INTENSITY'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'INTENSITY' ? 'bg-white text-orange-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><Zap size={12} className="inline mr-1"/> Intensity</button>
+                        <button onClick={() => { setActiveTab('INTENSITY'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all shrink-0 ${activeTab === 'INTENSITY' ? 'bg-white text-orange-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><Zap size={12} className="inline mr-1"/> Intensity</button>
                     )}
-                    <button onClick={() => { setActiveTab('READING'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'READING' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><BookText size={12} className="inline mr-1"/> Reading</button>
-                    <button onClick={() => { setActiveTab('LISTENING'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'LISTENING' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><Headphones size={12} className="inline mr-1"/> Listening</button>
-                    <button onClick={() => { setActiveTab('TEST'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'TEST' ? 'bg-white text-emerald-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><ClipboardList size={12} className="inline mr-1"/> Test</button>
+                    {type === 'comparison' && (
+                        <button onClick={() => { setActiveTab('COMPARISON'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all shrink-0 ${activeTab === 'COMPARISON' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><Split size={12} className="inline mr-1"/> Contrast</button>
+                    )}
+                    <button onClick={() => { setActiveTab('READING'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all shrink-0 ${activeTab === 'READING' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><BookText size={12} className="inline mr-1"/> Reading</button>
+                    <button onClick={() => { setActiveTab('LISTENING'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all shrink-0 ${activeTab === 'LISTENING' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><Headphones size={12} className="inline mr-1"/> Listening</button>
+                    <button onClick={() => { setActiveTab('TEST'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all shrink-0 ${activeTab === 'TEST' ? 'bg-white text-emerald-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><ClipboardList size={12} className="inline mr-1"/> Test</button>
                 </div>
                 <div className="flex items-center gap-2">
-                    {activeTab === 'INTENSITY' ? (
-                        <button onClick={() => onOpenAiRefine('intensity')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-100 hover:bg-orange-100 transition-all text-[10px] font-black uppercase text-orange-600 shadow-sm"><Sparkles size={12}/><span>AI Refine Table</span></button>
-                    ) : (
-                        <button onClick={() => onOpenAiRefine(activeTab === 'READING' ? 'reading' : activeTab === 'LISTENING' ? 'listening' : 'test')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all text-[10px] font-black uppercase text-indigo-600 shadow-sm"><Sparkles size={12}/><span>AI Generate</span></button>
+                    {activeTab === 'INTENSITY' && (
+                        <button onClick={() => onOpenAiRefine('intensity')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-100 hover:bg-orange-100 transition-all text-[10px] font-black uppercase text-orange-600 shadow-sm"><Sparkles size={12}/><span>AI Refine</span></button>
                     )}
-                    {activeTab !== 'INTENSITY' && (
-                        <button onClick={() => setIsPreview(!isPreview)} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm">{isPreview ? <PenLine size={12}/> : <Eye size={12}/>}<span>{isPreview ? 'Edit' : 'Preview'}</span></button>
+                    {activeTab === 'COMPARISON' && (
+                        <button onClick={() => onOpenAiRefine('comparison')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all text-[10px] font-black uppercase text-indigo-600 shadow-sm"><Sparkles size={12}/><span>AI Refine</span></button>
+                    )}
+                    {(activeTab === 'READING' || activeTab === 'LISTENING' || activeTab === 'TEST') && (
+                        <>
+                            <button onClick={() => onOpenAiRefine(activeTab === 'READING' ? 'reading' : activeTab === 'LISTENING' ? 'listening' : 'test')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all text-[10px] font-black uppercase text-indigo-600 shadow-sm"><Sparkles size={12}/><span>AI Generate</span></button>
+                            <button onClick={() => setIsPreview(!isPreview)} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm">{isPreview ? <PenLine size={12}/> : <Eye size={12}/>}<span>{isPreview ? 'Edit' : 'Preview'}</span></button>
+                        </>
                     )}
                 </div>
             </div>
             
-            <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[500px] relative overflow-hidden">
+            <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[550px] relative overflow-hidden">
                 {activeTab === 'INTENSITY' ? (
-                    <div className="absolute inset-0 p-6 overflow-y-auto space-y-4 bg-neutral-50/30">
+                    <div className="absolute inset-0 p-6 overflow-y-auto space-y-4 bg-neutral-50/30 no-scrollbar">
                         <div className="p-4 bg-white rounded-2xl border border-neutral-200 shadow-sm space-y-2">
                             <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Edit Intensity Rows</h4>
                             <p className="text-[10px] text-neutral-500 italic">Separate multiple words with semicolons. Use [academic] or [casual] tags for register.</p>
@@ -165,6 +181,35 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
                                 </div>
                             ))}
                             <button onClick={addIntensityRow} className="w-full py-4 border-2 border-dashed border-neutral-200 rounded-[2rem] text-neutral-400 font-black text-xs uppercase tracking-widest hover:border-indigo-300 hover:text-indigo-600 transition-all flex items-center justify-center gap-2"><Plus size={16}/> Add Scale Row</button>
+                        </div>
+                    </div>
+                ) : activeTab === 'COMPARISON' ? (
+                    <div className="absolute inset-0 p-6 overflow-y-auto space-y-4 bg-neutral-50/30 no-scrollbar">
+                        <div className="p-4 bg-white rounded-2xl border border-neutral-200 shadow-sm space-y-2">
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Edit Contrast Pairs</h4>
+                            <p className="text-[10px] text-neutral-500 italic">Break down confusing word pairs with clear nuances and examples.</p>
+                        </div>
+                        <div className="space-y-4">
+                            {comparisonRows.map((row, idx) => (
+                                <div key={idx} className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 relative group">
+                                    <button onClick={() => removeComparisonRow(idx)} className="absolute top-4 right-4 p-2 text-neutral-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={18}/></button>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="space-y-1 md:col-span-1">
+                                            <label className="text-[9px] font-black text-indigo-500 uppercase tracking-wider pl-1">Target Word</label>
+                                            <input value={row.word} onChange={e => updateComparisonRow(idx, 'word', e.target.value)} className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-100 rounded-xl text-sm font-black focus:bg-white outline-none" placeholder="e.g. Damage" />
+                                        </div>
+                                        <div className="space-y-1 md:col-span-2">
+                                            <label className="text-[9px] font-black text-neutral-400 uppercase tracking-wider pl-1">Usage & Nuance</label>
+                                            <input value={row.nuance} onChange={e => updateComparisonRow(idx, 'nuance', e.target.value)} className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-100 rounded-xl text-sm font-medium focus:bg-white outline-none italic" placeholder="When and why to use this..." />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-neutral-400 uppercase tracking-wider pl-1">Contextual Example</label>
+                                        <textarea value={row.example} onChange={e => updateComparisonRow(idx, 'example', e.target.value)} rows={2} className="w-full p-4 bg-neutral-50 border border-neutral-100 rounded-2xl text-sm font-bold focus:bg-white outline-none resize-none leading-relaxed" placeholder="Write a clear example sentence..." />
+                                    </div>
+                                </div>
+                            ))}
+                            <button onClick={addComparisonRow} className="w-full py-6 border-2 border-dashed border-neutral-200 rounded-[2.5rem] text-neutral-400 font-black text-xs uppercase tracking-widest hover:border-indigo-300 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 bg-white/50"><Plus size={20}/> Add Comparison Pair</button>
                         </div>
                     </div>
                 ) : isPreview ? (

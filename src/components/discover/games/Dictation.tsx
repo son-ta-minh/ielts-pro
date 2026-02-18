@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-/* Added ArrowRight to imports */
-import { ArrowLeft, ArrowRight, Play, RotateCw, CheckCircle2, XCircle, Keyboard, Mic, Settings2, Server, Book, Loader2, RefreshCw, SkipForward, ChevronDown, ListFilter, Brain, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Play, RotateCw, CheckCircle2, XCircle, Keyboard, Mic, Settings2, Server, Book, Loader2, RefreshCw, SkipForward, ChevronDown, ListFilter, Brain, Zap, Volume2, Check, Ear } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
-import { speak } from '../../../utils/audio';
+import { speak, stopSpeaking, fetchServerVoices, VoiceDefinition } from '../../../utils/audio';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
 import { useToast } from '../../../contexts/ToastContext';
+import { getStoredJSON, setStoredJSON } from '../../../utils/storage';
 
 interface Props {
     words: VocabularyItem[];
@@ -13,26 +12,59 @@ interface Props {
     onExit: () => void;
 }
 
-type Difficulty = 'EASY' | 'MEDIUM' | 'HARD' | 'MIXED';
+type Difficulty = 'EASY' | 'HARD';
 type ContentSource = 'LIBRARY' | 'SERVER';
 
 interface DictationItem {
     id: string;
     originalSentence: string;
-    tokenized: { text: string; isMasked: boolean; choices?: string[] }[];
-    mode: 'EASY' | 'MEDIUM' | 'HARD';
+    tokenized: { text: string; isMasked: boolean; }[];
+    mode: Difficulty;
+    voice?: string; // Specific voice assigned to this item
 }
 
 const normalize = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// Improved Speech Formatting
+// 1. Times (9:30:15) -> "9 30 15" (Read naturally as numbers)
+// 2. Years/4-digits (1995) -> "19 95" (Read as pairs)
+// 3. Other numbers -> "d i g i t s" (Read individually)
+const formatForSpeech = (text: string): string => {
+    return text.replace(/(\d{1,2}:\d{2}(?::\d{2})?)|(\b\d{4}\b)|(\d+)/g, (match, time, year, number) => {
+        if (time) {
+            // Time: Replace colons with spaces
+            return time.replace(/:/g, ' ');
+        }
+        if (year) {
+            // Year: Split into two pairs
+            return `${year.slice(0, 2)} ${year.slice(2)}`;
+        }
+        if (number) {
+            // Other numbers: Space out digits
+            return number.split('').join(' ');
+        }
+        return match;
+    });
+};
 
 export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     // Setup State
     const [gameState, setGameState] = useState<'SETUP' | 'PLAYING' | 'SUMMARY'>('SETUP');
     const [sessionSize, setSessionSize] = useState(10);
-    const [difficulty, setDifficulty] = useState<Difficulty>('MEDIUM');
+    const [difficulty, setDifficulty] = useState<Difficulty>('EASY');
     const [contentSource, setContentSource] = useState<ContentSource>('LIBRARY');
     const [isServerLoading, setIsServerLoading] = useState(false);
     
+    // Voice State
+    const [availableVoices, setAvailableVoices] = useState<VoiceDefinition[]>([]);
+    
+    // Persistent Settings
+    const [selectedVoices, setSelectedVoices] = useState<Set<string>>(() => {
+        const saved = getStoredJSON<string[]>('dictation_selected_voices', ['System']);
+        return new Set(saved);
+    });
+    const [hoverPreview, setHoverPreview] = useState(() => getStoredJSON<boolean>('dictation_hover_preview', true));
+
     // Gameplay State
     const [queue, setQueue] = useState<DictationItem[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -47,6 +79,48 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     // Refs
     const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
     const { showToast } = useToast();
+
+    // Persist settings
+    useEffect(() => {
+        setStoredJSON('dictation_selected_voices', Array.from(selectedVoices));
+    }, [selectedVoices]);
+
+    useEffect(() => {
+        setStoredJSON('dictation_hover_preview', hoverPreview);
+    }, [hoverPreview]);
+
+    // Cleanup audio on unmount & Load Voices
+    useEffect(() => {
+        const loadVoices = async () => {
+            const config = getConfig();
+            const serverUrl = getServerUrl(config);
+            try {
+                const response = await fetchServerVoices(serverUrl);
+                if (response && response.voices) {
+                    // Filter for English voices (System + High Quality only)
+                    const enVoices = response.voices.filter(v => 
+                        v.language === 'en' && 
+                        (v.name.includes('Premium') || v.name.includes('Enhanced'))
+                    );
+                    setAvailableVoices(enVoices);
+                }
+            } catch (e) {
+                console.warn("Could not load server voices", e);
+            }
+        };
+        loadVoices();
+
+        return () => {
+            stopSpeaking();
+        };
+    }, []);
+
+    // Enforce HARD mode for 'SERVER' (Phrase) source
+    useEffect(() => {
+        if (contentSource === 'SERVER') {
+            setDifficulty('HARD');
+        }
+    }, [contentSource]);
 
     // Helper: Fetch random lines from server folder
     const fetchServerData = async (limit: number): Promise<string[]> => {
@@ -69,22 +143,33 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
             let pool: string[] = [];
             await Promise.all(filesToFetch.map(async (file: any) => {
                 try {
-                    const contentRes = await fetch(`${serverUrl}/api/reading/content/${mapName}/${encodeURIComponent(file.name)}`);
+                    const fileName = file.name as string;
+                    const contentRes = await fetch(`${serverUrl}/api/reading/content/${mapName}/${encodeURIComponent(fileName)}`);
                     if (contentRes.ok) {
-                        const data = await contentRes.json();
+                        const data = await contentRes.json() as { essay?: string };
                         const textContent = data.essay || "";
-                        const lines = textContent.split(/\r?\n/).map((l: string) => l.trim()).filter((l: string) => l.length > 0);
-                        pool.push(...lines);
+                        if (textContent) {
+                            const lines = textContent.split(/\r?\n/).map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+                            pool.push(...lines);
+                        }
                     }
                 } catch (e) { console.warn(`Failed to read file ${file.name}`, e); }
             }));
 
             if (pool.length === 0) throw new Error("No valid text lines found.");
             return pool.sort(() => Math.random() - 0.5).slice(0, limit);
-        } catch (e: any) {
-            showToast(e.message || "Server Error", "error");
+        } catch (e: unknown) {
+            const err = e as Error;
+            showToast(err.message || "Server Error", "error");
             return [];
         }
+    };
+
+    const getRandomVoice = (): string | undefined => {
+        const voiceArray = Array.from(selectedVoices);
+        if (voiceArray.length === 0) return undefined;
+        const randomChoice = voiceArray[Math.floor(Math.random() * voiceArray.length)];
+        return randomChoice === 'System' ? undefined : randomChoice;
     };
 
     const startGame = async () => {
@@ -103,45 +188,50 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
             }
             rawData = [...candidates].sort(() => Math.random() - 0.5).slice(0, sessionSize).map(w => w.example.trim());
         }
-
-        // Global distractor pool for Easy mode
-        const allWordsInPool = rawData.join(' ').split(/\s+/).map(w => w.replace(/[^a-zA-Z]/g, '')).filter(w => w.length > 3);
-        const libraryDistractors = words.slice(0, 50).map(w => w.word);
-        const globalDistractors = [...new Set([...allWordsInPool, ...libraryDistractors])];
         
         const newQueue: DictationItem[] = rawData.map((originalSentence, idx) => {
-            const tokens = originalSentence.split(/\s+/);
-            let itemMode = difficulty === 'MIXED' ? (Math.random() > 0.6 ? 'HARD' : (Math.random() > 0.5 ? 'MEDIUM' : 'EASY')) : difficulty;
+            // Normalize spaces in sentence to prevent issues with double spaces
+            const cleanSentence = originalSentence.replace(/\s+/g, ' ').trim();
+            const tokens = cleanSentence.split(' ');
             
-            // Masking logic for Easy/Medium
+            // Masking logic for Easy mode (fill in blanks)
             const maskIndices = new Set<number>();
-            if (itemMode !== 'HARD') {
-                const numToMask = Math.max(1, Math.floor(tokens.length * 0.35));
+            if (difficulty === 'EASY') {
+                // 1. Force Mask Numeric Tokens (e.g., "1990", "50%", "9:30")
+                tokens.forEach((t, i) => {
+                    if (/\d/.test(t)) {
+                        maskIndices.add(i);
+                    }
+                });
+
+                // 2. Randomly mask other words until ~40% covered
+                const targetMaskCount = Math.max(1, Math.floor(tokens.length * 0.4));
                 let attempts = 0;
-                while (maskIndices.size < numToMask && attempts < 100) {
+                while (maskIndices.size < targetMaskCount && attempts < 100) {
                     attempts++;
                     const r = Math.floor(Math.random() * tokens.length);
-                    if (/[a-zA-Z]/.test(tokens[r]) && tokens[r].length > 1) maskIndices.add(r);
+                    // Mask if not already masked and has alphanumeric content
+                    if (!maskIndices.has(r) && /[a-zA-Z0-9]/.test(tokens[r])) {
+                        maskIndices.add(r);
+                    }
                 }
             }
 
             const tokenized = tokens.map((t, i) => {
-                const isMasked = maskIndices.has(i);
-                const cleanText = t.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '');
-                
-                let choices: string[] | undefined;
-                if (isMasked && itemMode === 'EASY') {
-                    const distractors = globalDistractors
-                        .filter(d => normalize(d) !== normalize(cleanText))
-                        .sort(() => Math.random() - 0.5)
-                        .slice(0, 3);
-                    choices = [cleanText, ...distractors].sort(() => Math.random() - 0.5);
-                }
-
-                return { text: t, isMasked, choices };
+                const isMasked = difficulty === 'EASY' && maskIndices.has(i);
+                return { text: t, isMasked };
             });
 
-            return { id: `dict-${idx}-${Date.now()}`, originalSentence, tokenized, mode: itemMode as any };
+            // Assign a random voice from selected pool for this specific item
+            const itemVoice = getRandomVoice();
+
+            return { 
+                id: `dict-${idx}-${Date.now()}`, 
+                originalSentence: cleanSentence, 
+                tokenized, 
+                mode: difficulty,
+                voice: itemVoice 
+            };
         });
 
         setQueue(newQueue);
@@ -152,7 +242,12 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         setHardInput('');
         setIsChecked(false);
         setIsCorrect(false);
-        setTimeout(() => speak(newQueue[0].originalSentence), 600);
+        
+        // Speak first item
+        setTimeout(() => {
+            const firstItem = newQueue[0];
+            speak(formatForSpeech(firstItem.originalSentence), false, 'en', firstItem.voice);
+        }, 600);
     };
 
     const currentItem = queue[currentIndex];
@@ -163,14 +258,19 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         }
     }, [currentIndex, gameState, isChecked]);
 
-    /* Added handlePlayAudio function */
     const handlePlayAudio = () => {
-        if (currentItem) speak(currentItem.originalSentence);
+        if (currentItem) {
+            speak(formatForSpeech(currentItem.originalSentence), false, 'en', currentItem.voice);
+        }
     };
 
-    /* Added handleSkip function */
     const handleSkip = () => {
         handleNext();
+    };
+
+    const handleExit = () => {
+        stopSpeaking();
+        onExit();
     };
 
     const handleCheck = () => {
@@ -191,7 +291,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         setIsCorrect(correct);
         setIsChecked(true);
         if (correct) {
-            const multiplier = currentItem.mode === 'HARD' ? 25 : (currentItem.mode === 'MEDIUM' ? 15 : 10);
+            const multiplier = currentItem.mode === 'HARD' ? 25 : 15;
             setScore(s => s + multiplier);
         }
     };
@@ -203,42 +303,36 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
             setHardInput('');
             setIsChecked(false);
             setIsCorrect(false);
-            setTimeout(() => speak(queue[currentIndex + 1].originalSentence), 500);
+            
+            const nextItem = queue[currentIndex + 1];
+            setTimeout(() => {
+                speak(formatForSpeech(nextItem.originalSentence), false, 'en', nextItem.voice);
+            }, 500);
         } else {
             onComplete(score);
         }
     };
 
+    const toggleVoice = (voiceName: string) => {
+        setSelectedVoices(prev => {
+            const next = new Set(prev);
+            if (next.has(voiceName)) {
+                if (next.size > 1) next.delete(voiceName); // Must allow at least one
+            } else {
+                next.add(voiceName);
+            }
+            return next;
+        });
+    };
+
+    const previewVoice = (voiceName: string) => {
+        if (!hoverPreview) return;
+        stopSpeaking();
+        const voiceId = voiceName === 'System' ? undefined : voiceName;
+        speak("Voice preview.", false, 'en', voiceId);
+    };
+
     const renderEasyMode = () => (
-        <div className="flex flex-wrap gap-x-2 gap-y-4 justify-center items-center leading-relaxed">
-            {currentItem.tokenized.map((token, idx) => {
-                if (!token.isMasked) return <span key={idx} className="text-lg font-medium text-neutral-600">{token.text}</span>;
-                
-                const val = userInputs[idx] || '';
-                const cleanAns = token.text.replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '');
-                const isItemCorrect = isChecked && normalize(val) === normalize(cleanAns);
-
-                return (
-                    <div key={idx} className="relative inline-flex items-center min-w-[80px]">
-                        <select
-                            ref={idx === currentItem.tokenized.findIndex(t => t.isMasked) ? (firstInputRef as any) : null}
-                            value={val}
-                            disabled={isChecked}
-                            onChange={(e) => setUserInputs(prev => ({...prev, [idx]: e.target.value}))}
-                            className={`appearance-none w-full px-3 py-1.5 rounded-lg border-2 text-sm font-bold transition-all outline-none pr-8 ${isChecked ? (isItemCorrect ? 'bg-green-50 border-green-500 text-green-700' : 'bg-red-50 border-red-500 text-red-700') : 'bg-white border-neutral-200 focus:border-indigo-500'}`}
-                        >
-                            <option value="">...</option>
-                            {token.choices?.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-2 text-neutral-400 pointer-events-none" />
-                        {isChecked && !isItemCorrect && <div className="absolute -bottom-5 left-0 text-[10px] font-black text-green-600 uppercase">{cleanAns}</div>}
-                    </div>
-                );
-            })}
-        </div>
-    );
-
-    const renderMediumMode = () => (
         <div className="flex flex-wrap gap-x-2 gap-y-5 justify-center items-center leading-relaxed">
             {currentItem.tokenized.map((token, idx) => {
                 if (!token.isMasked) return <span key={idx} className="text-lg font-medium text-neutral-600">{token.text}</span>;
@@ -256,10 +350,10 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
                             disabled={isChecked}
                             onChange={(e) => setUserInputs(prev => ({...prev, [idx]: e.target.value}))}
                             onKeyDown={e => e.key === 'Enter' && handleCheck()}
-                            className={`w-24 text-center px-2 py-1.5 rounded-lg border-b-2 font-bold text-sm outline-none transition-all ${isChecked ? (isItemCorrect ? 'bg-green-50 border-green-500 text-green-700' : 'bg-red-50 border-red-500 text-red-700') : 'bg-neutral-50 border-neutral-300 focus:bg-white focus:border-indigo-600'}`}
+                            className={`w-28 text-center px-2 py-1.5 rounded-lg border-b-2 font-bold text-sm outline-none transition-all ${isChecked ? (isItemCorrect ? 'bg-green-50 border-green-500 text-green-700' : 'bg-red-50 border-red-500 text-red-700') : 'bg-neutral-50 border-neutral-300 focus:bg-white focus:border-indigo-600'}`}
                             autoComplete="off"
                         />
-                        {isChecked && !isItemCorrect && <div className="absolute -bottom-5 text-[10px] font-black text-green-600 uppercase">{cleanAns}</div>}
+                        {isChecked && !isItemCorrect && <div className="absolute -bottom-5 text-[10px] font-black text-green-600 uppercase whitespace-nowrap">{cleanAns}</div>}
                     </div>
                 );
             })}
@@ -287,56 +381,92 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     );
 
     if (gameState === 'SETUP') {
-        const DiffButton = ({ id, label, icon: Icon, desc }: any) => (
+        const DiffButton = ({ id, label, icon: Icon, desc, disabled }: any) => (
             <button
-                onClick={() => setDifficulty(id)}
-                className={`p-4 rounded-2xl border-2 transition-all text-left flex flex-col gap-2 ${difficulty === id ? 'border-cyan-500 bg-cyan-50 shadow-md' : 'border-neutral-100 bg-white hover:border-neutral-300'}`}
+                onClick={() => !disabled && setDifficulty(id)}
+                disabled={disabled}
+                className={`p-3 rounded-xl border-2 transition-all text-left flex flex-col gap-1 relative ${difficulty === id ? 'border-cyan-500 bg-cyan-50 shadow-md' : 'border-neutral-100 bg-white hover:border-neutral-300'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
                 <div className="flex items-center gap-2">
-                    <div className={`p-1.5 rounded-lg ${difficulty === id ? 'bg-cyan-500 text-white' : 'bg-neutral-100 text-neutral-400'}`}><Icon size={16}/></div>
+                    <div className={`p-1 rounded-lg ${difficulty === id ? 'bg-cyan-500 text-white' : 'bg-neutral-100 text-neutral-400'}`}><Icon size={14}/></div>
                     <span className={`text-xs font-black uppercase tracking-wider ${difficulty === id ? 'text-cyan-700' : 'text-neutral-500'}`}>{label}</span>
                 </div>
-                <p className="text-[10px] font-bold text-neutral-400 leading-tight">{desc}</p>
+                <p className="text-[9px] font-bold text-neutral-400 leading-tight">{desc}</p>
+                {disabled && <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[1px] font-black text-xs text-neutral-400 uppercase tracking-widest">Locked</div>}
             </button>
         );
 
         return (
-            <div className="flex flex-col h-full relative p-6 justify-center items-center text-center space-y-8 animate-in fade-in">
+            <div className="flex flex-col h-full relative p-6 justify-center items-center text-center space-y-6 animate-in fade-in max-w-4xl mx-auto overflow-y-auto">
                 <div className="space-y-2">
-                    <div className="w-16 h-16 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center mx-auto mb-4"><Keyboard size={32} /></div>
-                    <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Dictation Lab</h2>
-                    <p className="text-neutral-500 font-medium max-w-sm">Bridge the gap between hearing and writing.</p>
+                    <div className="w-16 h-16 bg-cyan-100 text-cyan-600 rounded-full flex items-center justify-center mx-auto mb-2"><Keyboard size={32} /></div>
+                    <h2 className="text-2xl font-black text-neutral-900 tracking-tight">Dictation Lab</h2>
+                    <p className="text-xs text-neutral-500 font-medium">Bridge the gap between hearing and writing.</p>
                 </div>
 
-                <div className="w-full max-w-xl grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-6">
-                        <div className="space-y-3">
+                <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm space-y-4">
+                        <div className="space-y-2">
                             <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left">Source</span>
                             <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => setContentSource('LIBRARY')} className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all ${contentSource === 'LIBRARY' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500'}`}><Book size={18} className="mb-1"/><span className="text-[9px] font-black uppercase">Library</span></button>
-                                <button onClick={() => setContentSource('SERVER')} className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all ${contentSource === 'SERVER' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500'}`}><Server size={18} className="mb-1"/><span className="text-[9px] font-black uppercase">Server</span></button>
+                                <button onClick={() => setContentSource('LIBRARY')} className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${contentSource === 'LIBRARY' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500'}`}><Book size={16} className="mb-1"/><span className="text-[9px] font-black uppercase">Sentence</span></button>
+                                <button onClick={() => setContentSource('SERVER')} className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${contentSource === 'SERVER' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500'}`}><Server size={16} className="mb-1"/><span className="text-[9px] font-black uppercase">Phrase</span></button>
                             </div>
                         </div>
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center"><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Session Size</span><span className="text-xl font-black text-cyan-600">{sessionSize}</span></div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center"><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Session Size</span><span className="text-sm font-black text-cyan-600">{sessionSize}</span></div>
                             <input type="range" min="5" max="30" step="5" value={sessionSize} onChange={e => setSessionSize(parseInt(e.target.value))} className="w-full h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-cyan-500" />
                         </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-4">
+                    <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm space-y-2 flex flex-col justify-center">
                         <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Difficulty</span>
                         <div className="grid grid-cols-1 gap-2">
-                            <DiffButton id="EASY" label="Easy" icon={ListFilter} desc="Select from dropdown options." />
-                            <DiffButton id="MEDIUM" label="Medium" icon={Zap} desc="Type in missing words." />
-                            <DiffButton id="HARD" label="Hard" icon={Brain} desc="Transcribe the full sentence." />
+                            <DiffButton id="EASY" label="Easy" icon={Zap} desc="Type in missing words. Numbers are always masked." disabled={contentSource === 'SERVER'} />
+                            <DiffButton id="HARD" label="Hard" icon={Brain} desc="Transcribe the full sentence from scratch." />
                         </div>
                     </div>
                 </div>
 
+                {/* Voice Selection */}
+                <div className="w-full bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm space-y-2">
+                     <div className="flex justify-between items-center px-1">
+                         <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2">
+                             <Volume2 size={12}/> Voice Pool
+                         </span>
+                         <label className="flex items-center gap-2 cursor-pointer group">
+                             <span className="text-[9px] font-bold text-neutral-400 group-hover:text-cyan-600 transition-colors">Hover to hear</span>
+                             <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${hoverPreview ? 'bg-cyan-500' : 'bg-neutral-200'}`} onClick={() => setHoverPreview(!hoverPreview)}>
+                                 <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${hoverPreview ? 'translate-x-4' : 'translate-x-0'}`} />
+                             </div>
+                         </label>
+                     </div>
+                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar p-1">
+                        <button 
+                            onClick={() => toggleVoice('System')}
+                            onMouseEnter={() => previewVoice('System')}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-2 ${selectedVoices.has('System') ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100 hover:border-neutral-200'}`}
+                        >
+                            {selectedVoices.has('System') && <Check size={10}/>} System Default
+                        </button>
+                        {availableVoices.map(v => (
+                            <button 
+                                key={v.name}
+                                onClick={() => toggleVoice(v.name)}
+                                onMouseEnter={() => previewVoice(v.name)}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-2 ${selectedVoices.has(v.name) ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100 hover:border-neutral-200'}`}
+                            >
+                                {selectedVoices.has(v.name) && <Check size={10}/>} {v.name.replace('Microsoft ', '')}
+                            </button>
+                        ))}
+                        {availableVoices.length === 0 && <span className="text-[10px] text-neutral-400 italic">Connect to server for HQ voices.</span>}
+                     </div>
+                </div>
+
                 <div className="flex gap-4">
-                    <button onClick={onExit} className="px-10 py-4 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-2xl hover:bg-neutral-50 transition-all">Back</button>
-                    <button onClick={startGame} disabled={isServerLoading} className="px-12 py-4 bg-cyan-600 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-cyan-700 transition-all shadow-xl active:scale-95 flex items-center gap-2">
-                        {isServerLoading ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} fill="white"/>} Start
+                    <button onClick={handleExit} className="px-8 py-3 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-xl hover:bg-neutral-50 transition-all text-xs">Back</button>
+                    <button onClick={startGame} disabled={isServerLoading} className="px-10 py-3 bg-cyan-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-cyan-700 transition-all shadow-xl active:scale-95 flex items-center gap-2">
+                        {isServerLoading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="white"/>} Start
                     </button>
                 </div>
             </div>
@@ -346,7 +476,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     return (
         <div className="flex flex-col h-full relative p-6 max-w-4xl mx-auto">
             <header className="flex justify-between items-center mb-8 shrink-0">
-                <button onClick={onExit} className="flex items-center gap-2 text-neutral-400 hover:text-neutral-900 transition-colors font-bold text-sm"><ArrowLeft size={18}/> Quit</button>
+                <button onClick={handleExit} className="flex items-center gap-2 text-neutral-400 hover:text-neutral-900 transition-colors font-bold text-sm"><ArrowLeft size={18}/> Quit</button>
                 <div className="flex flex-col items-center">
                     <span className="text-[10px] font-black uppercase text-neutral-300 tracking-widest">Level {currentIndex + 1} of {queue.length} • {currentItem.mode}</span>
                     <div className="h-1 w-32 bg-neutral-100 rounded-full mt-1.5 overflow-hidden">
@@ -357,12 +487,17 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
             </header>
 
             <div className="flex-1 flex flex-col items-center justify-center space-y-12">
-                <button onClick={handlePlayAudio} className="w-28 h-28 bg-cyan-50 text-cyan-600 rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-all group active:scale-95">
+                <button onClick={handlePlayAudio} className="w-28 h-28 bg-cyan-50 text-cyan-600 rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-all group active:scale-95 relative">
                     <Play size={48} className="ml-1.5 fill-cyan-600 group-hover:scale-110 transition-transform" />
+                    {currentItem.voice && (
+                        <div className="absolute -bottom-6 text-[9px] font-bold text-neutral-300 bg-white px-2 py-0.5 rounded-full shadow-sm border border-neutral-100 whitespace-nowrap">
+                            {currentItem.voice}
+                        </div>
+                    )}
                 </button>
 
                 <div className="w-full min-h-[160px] flex items-center justify-center px-4">
-                    {currentItem.mode === 'EASY' ? renderEasyMode() : currentItem.mode === 'MEDIUM' ? renderMediumMode() : renderHardMode()}
+                    {currentItem.mode === 'EASY' ? renderEasyMode() : renderHardMode()}
                 </div>
 
                 <div className="w-full max-w-xs flex gap-3">

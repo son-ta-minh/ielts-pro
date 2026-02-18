@@ -153,18 +153,22 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
     const saveProgress = async (currentQueue: TargetPhrase[]) => {
         if (!item) return;
         const sentenceScores: Record<number, number> = {};
-        const scores: number[] = [];
+        let totalScoreSum = 0;
+        
         currentQueue.forEach((p, idx) => {
+            // Lấy điểm đã lưu, nếu chưa nói (undefined) thì coi là 0
+            const score = p.lastScore || 0;
             if (p.lastScore !== undefined) {
                 sentenceScores[idx] = p.lastScore;
-                scores.push(p.lastScore);
             }
+            totalScoreSum += score;
         });
-        let averageScore = item.bestScore || 0;
-        if (scores.length > 0) {
-            const totalScore = scores.reduce((acc, curr) => acc + curr, 0);
-            averageScore = Math.round(totalScore / scores.length);
-        }
+
+        // Tính trung bình dựa trên TỔNG số câu trong queue thay vì số câu đã trả lời
+        const averageScore = currentQueue.length > 0 
+            ? Math.round(totalScoreSum / currentQueue.length) 
+            : 0;
+
         await dataStore.saveFreeTalkItem({
             ...item,
             bestScore: averageScore,

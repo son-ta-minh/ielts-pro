@@ -218,9 +218,14 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
         };
     }, []);
 
-    const hasListening = speechBlocks.length > 0;
-    const hasIntensity = lesson.intensityRows && lesson.intensityRows.length > 0;
-    const hasComparison = lesson.comparisonRows && lesson.comparisonRows.length > 0;
+    // Tab Availability Logic
+    const hasListening = !!lesson.listeningContent;
+    const hasTest = !!lesson.testContent;
+    const hasIntensity = !!(lesson.intensityRows && lesson.intensityRows.length > 0);
+    const hasComparison = !!(lesson.comparisonRows && lesson.comparisonRows.length > 0);
+    
+    // Always have Reading available
+    const availableTabCount = (hasIntensity ? 1 : 0) + (hasComparison ? 1 : 0) + 1 + (hasListening ? 1 : 0) + (hasTest ? 1 : 0);
 
     useEffect(() => {
         if (viewMode === 'PAGED') {
@@ -259,42 +264,50 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div className="space-y-1">
                         <h2 className="text-3xl font-black text-neutral-900 tracking-tight">{lesson.title}</h2>
-                        <div className="flex bg-neutral-100 p-1 rounded-xl gap-1 w-fit mt-2">
-                            {hasIntensity && (
+                        
+                        {/* Only show tab bar if more than 1 tab is available */}
+                        {availableTabCount > 1 && (
+                            <div className="flex bg-neutral-100 p-1 rounded-xl gap-1 w-fit mt-2">
+                                {hasIntensity && (
+                                    <button 
+                                        onClick={() => setActiveTab('INTENSITY')}
+                                        className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'INTENSITY' ? 'bg-white text-orange-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                    >
+                                        <Zap size={12} className="inline mr-1"/> Scale
+                                    </button>
+                                )}
+                                {hasComparison && (
+                                    <button 
+                                        onClick={() => setActiveTab('COMPARISON')}
+                                        className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'COMPARISON' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                    >
+                                        <Split size={12} className="inline mr-1"/> Contrast
+                                    </button>
+                                )}
                                 <button 
-                                    onClick={() => setActiveTab('INTENSITY')}
-                                    className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'INTENSITY' ? 'bg-white text-orange-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                    onClick={() => setActiveTab('READING')}
+                                    className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'READING' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
                                 >
-                                    <Zap size={12} className="inline mr-1"/> Scale
+                                    <BookText size={12} className="inline mr-1"/> Read
                                 </button>
-                            )}
-                            {hasComparison && (
-                                <button 
-                                    onClick={() => setActiveTab('COMPARISON')}
-                                    className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'COMPARISON' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
-                                >
-                                    <Split size={12} className="inline mr-1"/> Lab
-                                </button>
-                            )}
-                            <button 
-                                onClick={() => setActiveTab('READING')}
-                                className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'READING' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
-                            >
-                                <BookText size={12} className="inline mr-1"/> Read
-                            </button>
-                            <button 
-                                onClick={() => setActiveTab('LISTENING')}
-                                className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'LISTENING' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
-                            >
-                                <Headphones size={12} className="inline mr-1"/> Listen
-                            </button>
-                            <button 
-                                onClick={() => setActiveTab('TEST')}
-                                className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'TEST' ? 'bg-white text-emerald-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
-                            >
-                                <ClipboardList size={12} className="inline mr-1"/> Test
-                            </button>
-                        </div>
+                                {hasListening && (
+                                    <button 
+                                        onClick={() => setActiveTab('LISTENING')}
+                                        className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'LISTENING' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                    >
+                                        <Headphones size={12} className="inline mr-1"/> Listen
+                                    </button>
+                                )}
+                                {hasTest && (
+                                    <button 
+                                        onClick={() => setActiveTab('TEST')}
+                                        className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'TEST' ? 'bg-white text-emerald-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                    >
+                                        <ClipboardList size={12} className="inline mr-1"/> Test
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                     
                     <div className="flex items-center gap-2">
@@ -336,7 +349,7 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                  ) : activeTab === 'COMPARISON' ? (
                       <div className="space-y-6 animate-in fade-in duration-500">
                          <div className="space-y-1 text-center mb-8">
-                            <h3 className="text-xl font-black text-neutral-900">Comparison Lab</h3>
+                            <h3 className="text-xl font-black text-neutral-900">Word Contrast</h3>
                             <p className="text-sm text-neutral-500 font-medium">Deep dive into the nuances of confusing or similar vocabulary.</p>
                          </div>
                          <ComparisonTable rows={lesson.comparisonRows || []} />

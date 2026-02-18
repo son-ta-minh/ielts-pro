@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { AppView, User, VocabularyItem, DiscoverGame } from './types';
 import { useToast } from '../contexts/ToastContext';
@@ -428,6 +427,9 @@ export const useAppController = () => {
             case 'PARAPHRASE_CONTEXT':
             case 'IDIOM_CONNECT':
             case 'WORD_SCATTER':
+            case 'NATURAL_EXPRESSION':
+            case 'INTENSITY_SCALE':
+            case 'COMPARISON_LAB':
             case 'ADVENTURE':
                 setTargetGameMode(action as DiscoverGame);
                 setView('DISCOVER');

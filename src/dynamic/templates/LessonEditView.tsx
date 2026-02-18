@@ -5,6 +5,7 @@ import UniversalAiModal from '../../components/common/UniversalAiModal';
 import { getLessonPrompt, getGenerateLessonTestPrompt, getIntensityRefinePrompt, getComparisonRefinePrompt } from '../../services/promptService';
 import { useToast } from '../../contexts/ToastContext';
 import { getConfig } from '../../app/settingsManager';
+import * as dataStore from '../../app/dataStore';
 
 interface Props {
   lesson: Lesson;
@@ -24,7 +25,6 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   const [testContent, setTestContent] = useState(lesson.testContent || '');
   const [intensityRows, setIntensityRows] = useState<IntensityRow[]>(lesson.intensityRows || []);
   const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>(lesson.comparisonRows || []);
-  // Added state for searchKeywords to ensure they are preserved during edit
   const [searchKeywords, setSearchKeywords] = useState<string[]>(lesson.searchKeywords || []);
   
   const [isSaving, setIsSaving] = useState(false);
@@ -32,10 +32,9 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   
   const { showToast } = useToast();
   
-  // Auto-open AI Modal for new Comparison cards
   useEffect(() => {
-      if (lesson.type === 'comparison' && !lesson.content && lesson.id.startsWith('lesson-')) {
-          setAiModalMode({ format: 'reading' });
+      if (lesson.type === 'comparison' && (!lesson.comparisonRows || lesson.comparisonRows.length === 0) && lesson.id.startsWith('lesson-')) {
+          setAiModalMode({ format: 'comparison' });
       }
   }, []);
 
@@ -44,7 +43,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
       const legacyTags = lesson.tags || [];
       const pathFromTags = legacyTags.find(t => t.startsWith('/'));
       const singleTags = legacyTags.filter(t => !t.startsWith('/'));
-      setPath(pathFromTags || '/');
+      setEditPath(pathFromTags || '/');
       setTagsInput(singleTags.join(', '));
     } else {
       setPath(lesson.path || '/');
@@ -52,14 +51,14 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
     }
   }, [lesson]);
 
+  const setEditPath = (p: string) => setPath(p);
+
   const prepareLessonData = (): Lesson => {
     const finalTags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
     
     let type: Lesson['type'] = lesson.type || 'essay';
-    // If it has intensity rows, it's intensity. 
-    // If it's a comparison card, we keep the type 'comparison' even without rows (since we use Reading table).
     if (intensityRows.length > 0) type = 'intensity';
-    else if (lesson.type === 'comparison') type = 'comparison';
+    else if (comparisonRows.length > 0) type = 'comparison';
 
     return {
       ...lesson,
@@ -72,8 +71,8 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
       listeningContent,
       testContent,
       intensityRows: intensityRows.length > 0 ? intensityRows : undefined,
-      comparisonRows: undefined, // Explicitly remove comparisonRows as we use Reading table for this type now
-      searchKeywords, // Persist searchKeywords
+      comparisonRows: comparisonRows.length > 0 ? comparisonRows : undefined,
+      searchKeywords,
       updatedAt: Date.now(),
     };
   };
@@ -96,20 +95,14 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
     const coachName = config.audioCoach.coaches[activeType].name;
     const format = aiModalMode?.format || inputs.format;
 
-    if (format === 'intensity') {
-        return getIntensityRefinePrompt(intensityRows);
-    }
-    
-    if (format === 'comparison') {
-        return getComparisonRefinePrompt(comparisonRows);
-    }
+    if (format === 'intensity') return getIntensityRefinePrompt(intensityRows);
+    if (format === 'comparison') return getComparisonRefinePrompt(comparisonRows);
 
     if (format === 'test') {
         const currentTags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
         return getGenerateLessonTestPrompt(title, content, inputs.request, currentTags);
     }
 
-    // Determine if we are creating from scratch or refining
     const isCreateTask = !content && (lesson.type === 'comparison' || lesson.type === 'intensity' || !lesson.id.includes('ai'));
 
     return getLessonPrompt({
@@ -119,10 +112,10 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
           description, 
           content,
           type: lesson.type,
-          intensityRows: intensityRows,
-          comparisonRows: comparisonRows
+          intensityRows,
+          comparisonRows
       },
-      topic: inputs.request || inputs.topic || title, // Prioritize request from textarea for topic on creation
+      topic: inputs.request || inputs.topic || title,
       userRequest: inputs.request,
       language: (inputs.language as any) || user.lessonPreferences?.language || 'English',
       targetAudience: user.lessonPreferences?.targetAudience || 'Adult',
@@ -138,13 +131,23 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
     const format = aiModalMode?.format;
 
     if (format === 'intensity') {
-        if (Array.isArray(cleanResult)) {
-            setIntensityRows(cleanResult);
+        // Handle both new Object format and legacy Array format
+        const rows = Array.isArray(cleanResult) ? cleanResult : cleanResult.data;
+        if (cleanResult.title) setTitle(cleanResult.title);
+        if (cleanResult.description) setDescription(cleanResult.description);
+        
+        if (Array.isArray(rows)) {
+            setIntensityRows(rows);
             showToast("Intensity scale refined!", "success");
         }
     } else if (format === 'comparison') {
-        if (Array.isArray(cleanResult)) {
-            setComparisonRows(cleanResult);
+        // Handle both new Object format and legacy Array format
+        const rows = Array.isArray(cleanResult) ? cleanResult : cleanResult.data;
+        if (cleanResult.title) setTitle(cleanResult.title);
+        if (cleanResult.description) setDescription(cleanResult.description);
+
+        if (Array.isArray(rows)) {
+            setComparisonRows(rows);
             showToast("Comparison lab updated!", "success");
         }
     } else if (format === 'listening') {
@@ -174,8 +177,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         listeningContent={listeningContent} setListeningContent={setListeningContent}
         testContent={testContent} setTestContent={setTestContent}
         intensityRows={intensityRows} setIntensityRows={setIntensityRows}
-        comparisonRows={[]} // Comparison card uses Reading table directly now
-        setComparisonRows={() => {}}
+        comparisonRows={comparisonRows} setComparisonRows={setComparisonRows}
         isSaving={isSaving} onSave={handleSave}
         onPractice={handlePractice} onCancel={onCancel}
         onOpenAiRefine={(format) => setAiModalMode({ format: format || 'reading' })}
@@ -184,9 +186,9 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         <UniversalAiModal
           isOpen={!!aiModalMode}
           onClose={() => setAiModalMode(null)}
-          type="REFINE_UNIT" // Always use REFINE_UNIT to get the textarea input
-          title={aiModalMode.format === 'intensity' ? "Refine Intensity Scale" : lesson.type === 'comparison' ? (content ? "Refine Comparison Analysis" : "Generate Comparison Analysis") : (content ? "Refine Lesson" : "Generate Lesson")}
-          description={aiModalMode.format === 'intensity' ? "AI will complete the intensity word scale and suggest new relevant categories." : lesson.type === 'comparison' ? "Enter words like 'Hurt, Pain' to generate a structured comparison table." : `Enter topic or instructions for the AI.`}
+          type="REFINE_UNIT"
+          title={aiModalMode.format === 'intensity' ? "Refine Intensity Scale" : aiModalMode.format === 'comparison' ? "Refine Word Contrast" : (content ? "Refine Lesson" : "Generate Lesson")}
+          description={aiModalMode.format === 'intensity' ? "AI will complete the intensity scale." : aiModalMode.format === 'comparison' ? "AI will complete the comparison pairs with nuances." : `Enter instructions for the AI.`}
           initialData={{ ...user.lessonPreferences, format: aiModalMode.format }}
           onGeneratePrompt={handleGenerateRefinePrompt}
           onJsonReceived={handleAiResult}
