@@ -241,59 +241,57 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
 
     if (gameState === 'SETUP') {
         const CheckboxOption: React.FC<{ label: string; checked: boolean; onChange: () => void; }> = ({ label, checked, onChange }) => (
-            <label className="flex items-center gap-3 p-4 rounded-2xl bg-neutral-50 border-2 border-transparent hover:border-fuchsia-100 cursor-pointer transition-all" onClick={onChange}>
-                {checked ? <CheckSquare size={20} className="text-fuchsia-600" /> : <Square size={20} className="text-neutral-300" />}
-                <span className="font-bold text-sm text-neutral-800">{label}</span>
+            <label className="flex items-center gap-3 p-3 rounded-2xl bg-neutral-50 border-2 border-transparent hover:border-fuchsia-100 cursor-pointer transition-all" onClick={onChange}>
+                {checked ? <CheckSquare size={18} className="text-fuchsia-600" /> : <Square size={18} className="text-neutral-300" />}
+                <span className="font-bold text-xs text-neutral-800">{label}</span>
             </label>
         );
 
         const canStart = sources.library || sources.collocations || sources.idioms;
 
         return (
-            <div className="flex flex-col h-full relative p-6 justify-center items-center text-center space-y-8 animate-in fade-in overflow-y-auto">
-                <div className="space-y-2">
-                    <div className="w-16 h-16 bg-fuchsia-100 text-fuchsia-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="flex flex-col h-full relative p-6 items-center animate-in fade-in overflow-y-auto">
+                <div className="text-center space-y-2 mb-6 mt-auto">
+                    <div className="w-16 h-16 bg-fuchsia-100 text-fuchsia-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
                         <RefreshCw size={32} />
                     </div>
-                    <h2 className="text-4xl font-black text-neutral-900 tracking-tight">Word Scatter</h2>
-                    <p className="text-neutral-500 font-medium max-w-sm">Match hidden words to their definitions in a structured matrix or column match.</p>
+                    <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Word Scatter</h2>
+                    <p className="text-neutral-500 font-medium text-sm max-w-sm mx-auto">Match hidden words to their definitions.</p>
                 </div>
 
-                <div className="w-full max-w-md space-y-6">
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-8">
-                        <div className="space-y-3">
-                             <label htmlFor="sessionSize" className="text-xs font-black uppercase text-neutral-400 tracking-widest block text-left px-1">
-                                Items: <span className="text-xl font-black text-fuchsia-600">{sessionSize}</span>
-                             </label>
-                             <input
-                                id="sessionSize"
-                                type="range"
-                                min={MIN_WORDS}
-                                max={MAX_WORDS}
-                                value={sessionSize}
-                                onChange={(e) => setSessionSize(parseInt(e.target.value, 10))}
-                                className="w-full h-2 bg-neutral-100 rounded-full appearance-none cursor-pointer accent-fuchsia-500"
-                            />
-                             <div className="flex justify-between text-[10px] font-black text-neutral-300 uppercase px-1">
-                                 <span>{MIN_WORDS}</span>
-                                 <span>{MAX_WORDS}</span>
-                             </div>
-                        </div>
-                        
-                        <div className="space-y-3">
-                            <label className="text-xs font-black uppercase text-neutral-400 tracking-widest block text-left px-1">Content Sources</label>
-                            <div className="grid grid-cols-1 gap-2">
-                                <CheckboxOption label="Library Definitions" checked={sources.library} onChange={() => setSources(s => ({ ...s, library: !s.library }))} />
-                                <CheckboxOption label="Collocations" checked={sources.collocations} onChange={() => setSources(s => ({ ...s, collocations: !s.collocations }))} />
-                                <CheckboxOption label="Idioms" checked={sources.idioms} onChange={() => setSources(s => ({ ...s, idioms: !s.idioms }))} />
-                            </div>
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-auto">
+                    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-4 flex flex-col justify-center">
+                         <label htmlFor="sessionSize" className="text-[10px] font-black uppercase text-neutral-400 tracking-widest block text-left px-1">
+                            Items: <span className="text-xl font-black text-fuchsia-600">{sessionSize}</span>
+                         </label>
+                         <input
+                            id="sessionSize"
+                            type="range"
+                            min={MIN_WORDS}
+                            max={MAX_WORDS}
+                            value={sessionSize}
+                            onChange={(e) => setSessionSize(parseInt(e.target.value, 10))}
+                            className="w-full h-2 bg-neutral-100 rounded-full appearance-none cursor-pointer accent-fuchsia-500"
+                        />
+                         <div className="flex justify-between text-[9px] font-black text-neutral-300 uppercase px-1">
+                             <span>{MIN_WORDS}</span>
+                             <span>{MAX_WORDS}</span>
+                         </div>
+                    </div>
+                    
+                    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-2">
+                        <label className="text-[10px] font-black uppercase text-neutral-400 tracking-widest block text-left px-1">Content Sources</label>
+                        <div className="grid grid-cols-1 gap-2">
+                            <CheckboxOption label="Library Definitions" checked={sources.library} onChange={() => setSources(s => ({ ...s, library: !s.library }))} />
+                            <CheckboxOption label="Collocations" checked={sources.collocations} onChange={() => setSources(s => ({ ...s, collocations: !s.collocations }))} />
+                            <CheckboxOption label="Idioms" checked={sources.idioms} onChange={() => setSources(s => ({ ...s, idioms: !s.idioms }))} />
                         </div>
                     </div>
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex gap-4 w-full max-w-md">
                     <button onClick={onExit} className="px-10 py-4 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-2xl hover:bg-neutral-50 transition-all active:scale-95">Back</button>
-                    <button onClick={() => setGameState('PLAYING')} disabled={!canStart} className="px-12 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95">
+                    <button onClick={() => setGameState('PLAYING')} disabled={!canStart} className="flex-1 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95">
                         <Play size={18} fill="white"/> Start
                     </button>
                 </div>

@@ -176,38 +176,29 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
         const DiffButton = ({ id, label, icon: Icon, desc }: any) => (
             <button
                 onClick={() => setDifficulty(id)}
-                className={`p-4 rounded-2xl border-2 transition-all text-left flex flex-col gap-2 ${difficulty === id ? 'border-emerald-500 bg-emerald-50 shadow-md' : 'border-neutral-100 bg-white hover:border-neutral-300'}`}
+                className={`p-3 rounded-2xl border-2 transition-all text-left flex flex-col gap-1 ${difficulty === id ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-neutral-100 bg-white hover:border-neutral-300'}`}
             >
                 <div className="flex items-center gap-2">
-                    <div className={`p-1.5 rounded-lg ${difficulty === id ? 'bg-emerald-500 text-white' : 'bg-neutral-100 text-neutral-400'}`}><Icon size={16}/></div>
-                    <span className={`text-xs font-black uppercase tracking-wider ${difficulty === id ? 'text-emerald-700' : 'text-neutral-500'}`}>{label}</span>
+                    <div className={`p-1.5 rounded-lg ${difficulty === id ? 'bg-emerald-500 text-white' : 'bg-neutral-100 text-neutral-400'}`}><Icon size={14}/></div>
+                    <span className={`text-[10px] font-black uppercase tracking-wider ${difficulty === id ? 'text-emerald-700' : 'text-neutral-500'}`}>{label}</span>
                 </div>
-                <p className="text-[10px] font-bold text-neutral-400 leading-tight">{desc}</p>
+                <p className="text-[9px] font-bold text-neutral-400 leading-tight">{desc}</p>
             </button>
         );
 
         return (
-            <div className="flex flex-col h-full relative p-6 justify-center items-center text-center space-y-8 animate-in fade-in max-w-5xl mx-auto overflow-y-auto">
-                <div className="space-y-2">
-                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="flex flex-col h-full relative p-6 items-center animate-in fade-in max-w-5xl mx-auto overflow-y-auto">
+                <div className="text-center space-y-2 mb-6 mt-auto">
+                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
                         <Shuffle size={32} />
                     </div>
                     <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Sentence Scramble</h2>
-                    <p className="text-neutral-500 font-medium">Reconstruct examples to master syntax and flow.</p>
+                    <p className="text-neutral-500 font-medium text-sm">Reconstruct examples to master syntax and flow.</p>
                 </div>
 
-                <div className="w-full max-w-sm space-y-6">
-                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-6">
-                        <div className="space-y-3">
-                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Difficulty</span>
-                            <div className="grid grid-cols-1 gap-2">
-                                <DiffButton id="EASY" label="Easy" icon={Layers} desc="Chunks of 1-3 words. Great for collocations." />
-                                <DiffButton id="MEDIUM" label="Medium" icon={Zap} desc="Chunks of 1-2 words. More challenging." />
-                                <DiffButton id="HARD" label="Hard" icon={Brain} desc="Individual words only. True mastery." />
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-auto items-start">
+                    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col justify-center space-y-6">
+                        <div className="space-y-4">
                             <div className="flex justify-between items-center px-1">
                                 <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Session Size</span>
                                 <span className="text-xl font-black text-emerald-600">{sessionSize}</span>
@@ -217,13 +208,27 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
                                 onChange={(e) => setSessionSize(parseInt(e.target.value, 10))}
                                 className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                             />
+                            <div className="flex justify-between text-[9px] font-bold text-neutral-300 uppercase tracking-tighter px-1">
+                                <span>5 Items</span>
+                                <span>15 Items</span>
+                                <span>25 Items</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-4">
+                        <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Difficulty</span>
+                        <div className="grid grid-cols-1 gap-2">
+                            <DiffButton id="EASY" label="Easy" icon={Layers} desc="Chunks of 1-3 words. Great for collocations." />
+                            <DiffButton id="MEDIUM" label="Medium" icon={Zap} desc="Chunks of 1-2 words. More challenging." />
+                            <DiffButton id="HARD" label="Hard" icon={Brain} desc="Individual words only. True mastery." />
                         </div>
                     </div>
                 </div>
 
-                <div className="flex gap-4">
-                    <button onClick={onExit} className="px-10 py-4 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-2xl hover:bg-neutral-50 transition-all">Back</button>
-                    <button onClick={handleStartGame} className="px-12 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl active:scale-95 flex items-center gap-2"><Play size={18} fill="white"/> Start</button>
+                <div className="flex gap-4 w-full max-w-md">
+                    <button onClick={onExit} className="px-10 py-4 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-2xl hover:bg-neutral-50 transition-all active:scale-95">Back</button>
+                    <button onClick={handleStartGame} className="flex-1 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl active:scale-95 flex justify-center items-center gap-2"><Play size={18} fill="white"/> Start</button>
                 </div>
             </div>
         );

@@ -229,42 +229,41 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
         const SourceButton = ({ type: t, label, icon: Icon }: { type: SourceType, label: string, icon: React.ElementType }) => (
             <button
                 onClick={() => setSourceType(t)}
-                className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all min-w-[70px] ${sourceType === t ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-300'}`}
+                className={`flex flex-col items-center justify-center p-2 rounded-2xl border-2 transition-all min-w-[60px] ${sourceType === t ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-300'}`}
             >
-                <Icon size={20} className="mb-1"/>
-                <span className="text-[9px] font-black uppercase tracking-widest">{label}</span>
+                <Icon size={18} className="mb-1"/>
+                <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
             </button>
         );
 
         const DiffButton = ({ level, label, desc }: { level: Difficulty, label: string, desc: string }) => (
             <button
                 onClick={() => setDifficulty(level)}
-                className={`flex flex-col items-start p-4 rounded-2xl border-2 transition-all text-left group ${difficulty === level ? 'bg-indigo-50 border-indigo-500 shadow-sm' : 'bg-white border-neutral-100 hover:border-neutral-200'}`}
+                className={`flex flex-col items-start p-3 rounded-2xl border-2 transition-all text-left group ${difficulty === level ? 'bg-indigo-50 border-indigo-500 shadow-sm' : 'bg-white border-neutral-100 hover:border-neutral-200'}`}
             >
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-0.5">
                     <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${difficulty === level ? 'text-indigo-700' : 'text-neutral-400'}`}>{label}</span>
                     {difficulty === level && <Check size={14} className="text-indigo-600" />}
                 </div>
-                <span className="text-[10px] font-bold text-neutral-400 leading-tight">{desc}</span>
+                <span className="text-[9px] font-bold text-neutral-400 leading-tight">{desc}</span>
             </button>
         );
 
         return (
-            <div className="flex flex-col h-full relative p-6 items-center text-center space-y-6 animate-in fade-in overflow-y-auto">
-                <div className="space-y-2 mt-auto">
-                    <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="flex flex-col h-full relative p-6 items-center animate-in fade-in overflow-y-auto">
+                <div className="space-y-2 mb-6 mt-auto">
+                    <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
                         <Zap size={32} fill="currentColor" />
                     </div>
-                    <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Context Match Setup</h2>
-                    <p className="text-neutral-500 font-medium max-w-sm mx-auto">Link meanings and fill the blanks.</p>
+                    <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Context Match</h2>
+                    <p className="text-neutral-500 font-medium text-sm max-w-sm mx-auto">Link meanings and fill the blanks.</p>
                 </div>
 
-                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-auto">
                     {/* LEFT COLUMN: Source & Size */}
-                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-6 flex flex-col justify-between">
-                        <div className="space-y-3">
+                    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-5 flex flex-col justify-between">
+                        <div className="space-y-2">
                             <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Source</span>
-                            {/* CHANGED TO GRID */}
                             <div className="grid grid-cols-2 gap-2 w-full">
                                 <SourceButton type="PARAPHRASE" label="Paraphrase" icon={Zap} />
                                 <SourceButton type="COLLOCATION" label="Collocation" icon={Split} />
@@ -287,17 +286,17 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
                     </div>
 
                     {/* RIGHT COLUMN: Difficulty */}
-                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-3">
+                    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-2">
                         <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Difficulty</span>
-                        <div className="grid grid-cols-1 gap-3">
+                        <div className="grid grid-cols-1 gap-2">
                             <DiffButton level="EASY" label="Easy" desc="Match definitions to phrases. No typing required." />
-                            <DiffButton level="MEDIUM" label="Medium" desc="Match meanings and select the missing word from a dropdown." />
-                            <DiffButton level="HARD" label="Hard" desc="Match meanings and type the missing word from memory." />
+                            <DiffButton level="MEDIUM" label="Medium" desc="Match meanings and select word from dropdown." />
+                            <DiffButton level="HARD" label="Hard" desc="Match meanings and type word from memory." />
                         </div>
                     </div>
                 </div>
 
-                <div className="flex gap-4 w-full max-w-md mb-auto">
+                <div className="flex gap-4 w-full max-w-md">
                     <button onClick={onExit} className="px-10 py-4 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-2xl hover:bg-neutral-50 transition-all active:scale-95">Back</button>
                     <button onClick={handleStartGame} className="flex-1 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl active:scale-95 flex justify-center items-center gap-2"><Play size={18} fill="white"/> Start</button>
                 </div>

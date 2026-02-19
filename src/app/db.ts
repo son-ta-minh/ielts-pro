@@ -548,7 +548,7 @@ export const findWordByText = async (wordText: string): Promise<VocabularyItem |
         const store = tx.objectStore(STORE_NAME);
         const target = wordText.trim(); 
         const resolveImmediately = (result: VocabularyItem | null) => resolve(result);
-        const useCursorFallback = (currentDb: IDBDatabase, _currentUserId: string, currentTarget: string) => {
+        const useCursorFallback = (currentDb: IDBDatabase, currentTarget: string) => {
             const fallbackTx = currentDb.transaction(STORE_NAME, 'readonly');
             // const index = fallbackTx.objectStore(STORE_NAME).index('userId');
             // const req = index.openCursor(IDBKeyRange.only(currentUserId));

@@ -136,7 +136,7 @@ export const ComparisonLabGame: React.FC<Props> = ({ user, onComplete, onExit })
         prepareTurn(shuffled[0]);
     };
 
-    const prepareTurn = (q: ComparisonQuestion) => {
+    const prepareTurn = (_q: ComparisonQuestion) => {
         setUserAnswer('');
         setIsChecked(false);
         setIsCorrect(false);
@@ -208,19 +208,32 @@ export const ComparisonLabGame: React.FC<Props> = ({ user, onComplete, onExit })
 
     // --- RENDER SETUP ---
     if (gameState === 'SETUP') {
+        const DiffButton = ({ id, label, desc }: { id: Difficulty, label: string, desc: string }) => (
+            <button 
+                onClick={() => setDifficulty(id)}
+                className={`flex flex-col items-start p-3 rounded-2xl border-2 transition-all text-left group ${difficulty === id ? 'bg-indigo-50 border-indigo-500 shadow-sm' : 'bg-white border-neutral-100 hover:border-neutral-200'}`}
+            >
+                <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${difficulty === id ? 'text-indigo-700' : 'text-neutral-400'}`}>{label}</span>
+                    {difficulty === id && <CheckCircle2 size={14} className="text-indigo-600" />}
+                </div>
+                <span className="text-[9px] font-bold text-neutral-400 leading-tight">{desc}</span>
+            </button>
+        );
+
         return (
             <div className="flex flex-col h-full items-center p-6 animate-in fade-in overflow-y-auto">
-                <div className="text-center space-y-2 mb-8 mt-auto">
+                <div className="text-center space-y-2 mb-6 mt-auto">
                     <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm -rotate-3">
                         <Split size={32} />
                     </div>
                     <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Word Contrast</h2>
-                    <p className="text-neutral-500 font-medium max-w-xs mx-auto">Distinguish and identify confusing word pairs based on their usage nuance.</p>
+                    <p className="text-neutral-500 font-medium text-sm max-w-xs mx-auto">Distinguish confusing word pairs based on usage nuance.</p>
                 </div>
 
-                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-auto">
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-auto items-start">
                     {/* LEFT COLUMN: Stats & Settings */}
-                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-6 flex flex-col justify-between">
+                    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-5 flex flex-col justify-between">
                         <div className="flex justify-between items-center bg-neutral-50 p-3 rounded-2xl">
                              <div className="text-center flex-1 border-r border-neutral-200">
                                  <p className="text-2xl font-black text-emerald-500">{masteredItems}</p>
@@ -234,14 +247,14 @@ export const ComparisonLabGame: React.FC<Props> = ({ user, onComplete, onExit })
 
                         <div className="space-y-3">
                             <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Game Mode</p>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button onClick={() => setGameMode('MASTER')} className={`p-3 rounded-xl border-2 text-xs font-bold transition-all ${gameMode === 'MASTER' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => setGameMode('MASTER')} className={`p-2.5 rounded-xl border-2 text-[10px] font-bold transition-all ${gameMode === 'MASTER' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
                                     Master It
-                                    <p className="text-[9px] font-normal opacity-70 mt-1">Focus on weak items</p>
+                                    <p className="text-[8px] font-normal opacity-70 mt-0.5">Focus on weak items</p>
                                 </button>
-                                <button onClick={() => setGameMode('REVIEW')} className={`p-3 rounded-xl border-2 text-xs font-bold transition-all ${gameMode === 'REVIEW' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
+                                <button onClick={() => setGameMode('REVIEW')} className={`p-2.5 rounded-xl border-2 text-[10px] font-bold transition-all ${gameMode === 'REVIEW' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
                                     Review All
-                                    <p className="text-[9px] font-normal opacity-70 mt-1">Random practice</p>
+                                    <p className="text-[8px] font-normal opacity-70 mt-0.5">Random practice</p>
                                 </button>
                             </div>
                         </div>
@@ -260,23 +273,11 @@ export const ComparisonLabGame: React.FC<Props> = ({ user, onComplete, onExit })
                     </div>
 
                     {/* RIGHT COLUMN: Difficulty */}
-                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-3">
+                    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-2">
                         <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Difficulty</p>
-                        <div className="grid grid-cols-1 gap-3 h-full">
-                            <button onClick={() => setDifficulty('EASY')} className={`flex flex-col items-start p-4 rounded-2xl border-2 transition-all text-left group ${difficulty === 'EASY' ? 'bg-indigo-50 border-indigo-500 shadow-sm' : 'bg-white border-neutral-100 hover:border-neutral-200'}`}>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${difficulty === 'EASY' ? 'text-indigo-700' : 'text-neutral-400'}`}>Easy</span>
-                                    {difficulty === 'EASY' && <CheckCircle2 size={14} className="text-indigo-600" />}
-                                </div>
-                                <span className="text-[10px] font-bold text-neutral-400 leading-tight">Select the correct word from a list of options.</span>
-                            </button>
-                            <button onClick={() => setDifficulty('HARD')} className={`flex flex-col items-start p-4 rounded-2xl border-2 transition-all text-left group ${difficulty === 'HARD' ? 'bg-indigo-50 border-indigo-500 shadow-sm' : 'bg-white border-neutral-100 hover:border-neutral-200'}`}>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${difficulty === 'HARD' ? 'text-indigo-700' : 'text-neutral-400'}`}>Hard</span>
-                                    {difficulty === 'HARD' && <CheckCircle2 size={14} className="text-indigo-600" />}
-                                </div>
-                                <span className="text-[10px] font-bold text-neutral-400 leading-tight">Type the correct word from memory without hints.</span>
-                            </button>
+                        <div className="grid grid-cols-1 gap-2">
+                            <DiffButton id="EASY" label="Easy" desc="Select from list" />
+                            <DiffButton id="HARD" label="Hard" desc="Type from memory" />
                         </div>
                     </div>
                 </div>

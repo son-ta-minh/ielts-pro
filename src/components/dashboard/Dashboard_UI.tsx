@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
   Download, History, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
-  Target, Headphones, Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Gamepad2, Puzzle, Brain,
+  Target, Headphones, Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain,
   CloudUpload, Percent, MessagesSquare, Scale, Dumbbell
 } from 'lucide-react';
 import { DailyGoalConfig } from '../../app/settingsManager';
@@ -112,9 +112,9 @@ const NavButton: React.FC<{
                 <Icon size={18} />
             </div>
             <div className="flex-1 min-w-0">
-                <div className="text-xs font-black text-neutral-900 group-hover:text-white transition-colors tracking-tight leading-tight">{label}</div>
+                <div className={`text-xs font-black text-neutral-900 ${!disabled ? 'group-hover:text-white' : ''} transition-colors tracking-tight leading-tight`}>{label}</div>
                 {subLabel && (
-                    <div className={`font-medium text-neutral-400 group-hover:text-neutral-300 transition-colors mt-0.5 leading-snug ${largeSub ? 'text-[10px]' : 'text-[10px] truncate'}`}>
+                    <div className={`font-medium text-neutral-400 ${!disabled ? 'group-hover:text-neutral-300' : ''} transition-colors mt-0.5 leading-snug ${largeSub ? 'text-[10px]' : 'text-[10px] truncate'}`}>
                         {subLabel}
                     </div>
                 )}
@@ -209,23 +209,23 @@ const VocabularyCenterPanel: React.FC<{
                     </div>
                     
                     <div className="h-4 bg-white rounded-full flex overflow-hidden border border-neutral-200 shadow-inner">
-                        <div className="h-full bg-blue-500" style={{ width: `${newPercent}%` }} />
-                        <div className="h-full bg-cyan-500" style={{ width: `${studyingPercent}%` }} />
                         <div className="h-full bg-purple-500" style={{ width: `${masteredPercent}%` }} />
+                        <div className="h-full bg-cyan-500" style={{ width: `${studyingPercent}%` }} />
+                        <div className="h-full bg-neutral-300" style={{ width: `${newPercent}%` }} />
                     </div>
 
                     <div className="flex items-center justify-between gap-2 mt-1">
                         <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-blue-500" />
-                            <span className="text-[10px] font-bold text-neutral-600">New ({newCount})</span>
+                            <div className="w-2 h-2 rounded-full bg-purple-500" />
+                            <span className="text-[10px] font-bold text-neutral-600">Mastered ({masteredCount})</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                             <div className="w-2 h-2 rounded-full bg-cyan-500" />
                             <span className="text-[10px] font-bold text-neutral-600">Learning ({studyingCount})</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-purple-500" />
-                            <span className="text-[10px] font-bold text-neutral-600">Mastered ({masteredCount})</span>
+                            <div className="w-2 h-2 rounded-full bg-neutral-300" />
+                            <span className="text-[10px] font-bold text-neutral-600">New ({newCount})</span>
                         </div>
                     </div>
                 </div>
@@ -304,7 +304,7 @@ const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({
         <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-3">
              <div className="flex items-center gap-3">
                  <div className="p-2 bg-fuchsia-50 rounded-xl text-fuchsia-600 shadow-md">
-                     <Gamepad2 size={18} />
+                     <Dumbbell size={18} />
                  </div>
                  <div>
                      <h3 className="text-base font-black text-neutral-900 tracking-tight">Practice Arcade</h3>
@@ -489,7 +489,15 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   studyStats, isStatsLoading
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
-  const [activeTab, setActiveTab] = useState<'STUDY' | 'PRACTICE' | 'INSIGHT'>('STUDY');
+  const [activeTab, setActiveTab] = useState<'STUDY' | 'PRACTICE' | 'INSIGHT'>(() => {
+    const saved = sessionStorage.getItem('dashboard_active_tab');
+    if (saved === 'STUDY' || saved === 'PRACTICE' || saved === 'INSIGHT') return saved;
+    return 'STUDY';
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem('dashboard_active_tab', activeTab);
+  }, [activeTab]);
   
   return (
     <div className="space-y-4 animate-in fade-in duration-500">

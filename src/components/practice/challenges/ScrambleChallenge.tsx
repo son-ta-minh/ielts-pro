@@ -17,6 +17,7 @@ interface Props {
 export const ScrambleChallenge: React.FC<Props> = ({ 
     word, original, shuffled, userAnswer, onAnswer, isFinishing, isCorrect, showHint, containerRef 
 }) => {
+    const [insertionIndex, setInsertionIndex] = React.useState(0);
     const currentSelection = userAnswer || [];
     
     // Calculate used indices based on current selection
@@ -29,7 +30,10 @@ export const ScrambleChallenge: React.FC<Props> = ({
 
     const handleToggleWord = (wordStr: string) => {
         if (isFinishing) return;
-        onAnswer([...currentSelection, wordStr]);
+        const next = [...currentSelection];
+        next.splice(insertionIndex, 0, wordStr);
+        onAnswer(next);
+        setInsertionIndex(prev => prev + 1);
     };
 
     const handleRemoveWord = (idxToRemove: number) => {
@@ -37,6 +41,22 @@ export const ScrambleChallenge: React.FC<Props> = ({
         const next = [...currentSelection];
         next.splice(idxToRemove, 1);
         onAnswer(next);
+        if (insertionIndex > idxToRemove) {
+            setInsertionIndex(prev => prev - 1);
+        }
+    };
+
+    const InsertionSlot = ({ index }: { index: number }) => {
+        const isActive = index === insertionIndex;
+        if (isFinishing) return <div className="w-1 mx-0.5" />;
+        return (
+            <div 
+                onClick={() => setInsertionIndex(index)}
+                className={`h-8 w-2 rounded-full cursor-pointer transition-all duration-200 mx-0.5 flex items-center justify-center ${isActive ? 'bg-indigo-500 scale-110 shadow-sm' : 'bg-transparent hover:bg-neutral-200'}`}
+            >
+                <div className={`w-1 h-4 rounded-full ${isActive ? 'bg-white/50' : 'bg-transparent'}`}></div>
+            </div>
+        );
     };
 
     return (
@@ -46,12 +66,17 @@ export const ScrambleChallenge: React.FC<Props> = ({
               <p className="text-xs text-neutral-500 font-medium">Reconstruct the example sentence for "{word.word}".</p>
           </div>
 
-          <div className={`min-h-[120px] p-6 rounded-[2rem] border-2 border-dashed flex flex-wrap gap-2 items-center justify-center transition-all ${isFinishing ? (isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200') : 'bg-neutral-50 border-neutral-200'}`}>
-              {currentSelection.length === 0 && !isFinishing && <span className="text-sm font-bold text-neutral-300 italic">Click words below to build sentence...</span>}
+          <div className={`min-h-[120px] p-6 rounded-[2rem] border-2 border-dashed flex flex-wrap gap-y-3 items-center justify-center transition-all ${isFinishing ? (isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200') : 'bg-neutral-50 border-neutral-200'}`}>
+              {currentSelection.length === 0 && !isFinishing && <span className="absolute text-sm font-bold text-neutral-300 italic pointer-events-none">Click words below to build sentence...</span>}
+              
+              <InsertionSlot index={0} />
               {currentSelection.map((w, i) => (
-                  <button key={i} onClick={() => handleRemoveWord(i)} disabled={isFinishing} className={`px-3 py-2 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 ${isFinishing ? (isCorrect ? 'bg-green-50 text-white' : 'bg-red-500 text-white') : 'bg-white text-neutral-900 border border-neutral-100 hover:border-neutral-300'}`}>
-                      {w} <X size={14} className="inline-block ml-1" />
-                  </button>
+                  <React.Fragment key={`${w}-${i}`}>
+                      <button onClick={() => handleRemoveWord(i)} disabled={isFinishing} className={`px-3 py-2 rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95 flex items-center gap-1 group ${isFinishing ? (isCorrect ? 'bg-green-600 text-white' : 'bg-red-500 text-white') : 'bg-white text-neutral-900 border border-neutral-100 hover:border-red-200 hover:text-red-500'}`}>
+                          {w} {!isFinishing && <X size={14} className="opacity-40 group-hover:opacity-100" />}
+                      </button>
+                      <InsertionSlot index={i + 1} />
+                  </React.Fragment>
               ))}
           </div>
 
