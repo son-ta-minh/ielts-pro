@@ -1,5 +1,5 @@
 
-import { getStoredJSON } from "../utils/storage";
+
 
 export interface AiConfig {
   enableGeminiApi: boolean;
@@ -201,7 +201,7 @@ function isObject(item: any): boolean {
 function mergeConfigs(target: any, source: any): any {
   const output = { ...target };
   if (isObject(target) && isObject(source)) {
-    Object.keys(source).forEach(key => {
+    for (const key of Object.keys(source)) {
       if (isObject(source[key])) {
         if (!(key in target)) {
           Object.assign(output, { [key]: source[key] });
@@ -209,9 +209,9 @@ function mergeConfigs(target: any, source: any): any {
           output[key] = mergeConfigs(target[key], source[key]);
         }
       } else {
-        output[key] = source[key];
+        Object.assign(output, { [key]: source[key] });
       }
-    });
+    }
   }
   return output;
 }

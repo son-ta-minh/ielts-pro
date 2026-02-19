@@ -1,11 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
-import { User, AppView } from '../types';
+import { User } from '../types';
 import { getAllUsers, saveUser, seedDatabaseIfEmpty } from '../db';
 import { ADVENTURE_CHAPTERS } from '../../data/adventure_content';
 import { generateMap } from '../../data/adventure_map';
 import { restoreFromServer } from '../../services/backupService';
-import { getConfig, getServerUrl } from '../../app/settingsManager';
-import { DEFAULT_USER_ID } from '../../data/user_data';
+
 
 export const useAuthAndUser = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -59,7 +58,7 @@ export const useAuthAndUser = () => {
                 } else {
                     // Removed log
                 }
-            } catch (e) {
+            } catch {
                 // Removed log
             } finally {
                 // Clear flag after a safety buffer to ensure events settle

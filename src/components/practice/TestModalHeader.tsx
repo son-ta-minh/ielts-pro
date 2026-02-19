@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { X, Flag, Clock } from 'lucide-react';
-import { ChallengeType } from './TestModalTypes';
+
 
 interface TestModalHeaderProps {
     title: string;

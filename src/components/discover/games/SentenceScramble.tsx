@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, X, Volume2, Play, Check, Shuffle, Brain, Zap, Layers, ChevronDown } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, Volume2, Play, Check, Shuffle, Brain, Zap, Layers } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
 import { speak } from '../../../utils/audio';
 
@@ -310,7 +310,7 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
                         {isCorrect === false && (
                             <div className="animate-in slide-in-from-top-2 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-center max-w-2xl">
                                 <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Original Sentence</p>
-                                <p className="text-sm font-bold text-emerald-900 italic">"{currentItem.originalSentence}"</p>
+                                <p className="text-sm font-bold text-emerald-900 italic">`&quot;`{currentItem.originalSentence}`&quot;`</p>
                             </div>
                         )}
                     </div>

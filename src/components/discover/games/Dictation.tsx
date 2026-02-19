@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ArrowLeft, ArrowRight, Play, RotateCw, CheckCircle2, XCircle, Keyboard, Mic, Settings2, Server, Book, Loader2, RefreshCw, SkipForward, ChevronDown, ListFilter, Brain, Zap, Volume2, Check, Ear } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, ArrowRight, Play, Keyboard, Server, Book, Loader2, Brain, Check, Volume2 } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
 import { speak, stopSpeaking, fetchServerVoices, VoiceDefinition } from '../../../utils/audio';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
@@ -140,7 +140,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
             const shuffledFiles = textFiles.sort(() => Math.random() - 0.5);
             const filesToFetch = shuffledFiles.slice(0, 5); 
 
-            let pool: string[] = [];
+            const pool: string[] = [];
             await Promise.all(filesToFetch.map(async (file: any) => {
                 try {
                     const fileName = file.name as string;

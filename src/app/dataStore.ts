@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem } from './types';
+import { VocabularyItem, User, Unit, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
@@ -10,9 +10,9 @@ import { getConfig } from './settingsManager';
 let _isInitialized = false;
 let _isInitializing = false; 
 let _allWords = new Map<string, VocabularyItem>();
-let _composedWordIds = new Set<string>(); // Fast lookup for 'composed' filter
-let _bookWordIds = new Set<string>(); // Fast lookup for 'in book' filter
-let _bookWordMap = new Map<string, Set<string>>(); // Map bookId -> Set of word texts
+const _composedWordIds = new Set<string>(); // Fast lookup for 'composed' filter
+const _bookWordIds = new Set<string>(); // Fast lookup for 'in book' filter
+const _bookWordMap = new Map<string, Set<string>>(); // Map bookId -> Set of word texts
 let _currentUserId: string | null = null; // Track user ID for backups
 
 let _statsCache: any = {

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { VocabularyItem, ReviewGrade, WordFamily } from '../../app/types';
+import { VocabularyItem, ReviewGrade } from '../../app/types';
 import { TestModalUI } from './TestModal_UI';
 import { Challenge, ChallengeType, RecapData } from './TestModalTypes';
 import { generateAvailableChallenges, prepareChallenges } from '../../utils/challengeUtils';

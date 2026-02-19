@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, AudioLines, Lock, Play, Zap, Layers, CheckCircle2 } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { ArrowLeft, Lock, Zap, Layers, CheckCircle2 } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
 
 interface Props {
@@ -145,9 +145,7 @@ export const IpaSorter: React.FC<Props> = ({ words, onComplete, onExit, onBulkUp
             const has1 = hasPhoneme(w.ipaUs!, contrast.sym1);
             const has2 = hasPhoneme(w.ipaUs!, contrast.sym2);
             
-            let targetSymbol = '';
-            if (has1 && has2) targetSymbol = Math.random() > 0.5 ? contrast.sym1 : contrast.sym2;
-            else targetSymbol = has1 ? contrast.sym1 : contrast.sym2;
+            const targetSymbol = (has1 && has2) ? (Math.random() > 0.5 ? contrast.sym1 : contrast.sym2) : (has1 ? contrast.sym1 : contrast.sym2);
 
             // Masking Logic
             const escaped = targetSymbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -161,11 +159,7 @@ export const IpaSorter: React.FC<Props> = ({ words, onComplete, onExit, onBulkUp
             else if (targetSymbol === 'e') regex = new RegExp(`${escaped}(?!ɪ|ə)`, 'g');
             else regex = new RegExp(escaped, 'g');
 
-            let maskedIpa = w.ipaUs!.replace(regex, '___');
-
-            if (maskedIpa === w.ipaUs!) {
-                maskedIpa = w.ipaUs!.split(targetSymbol).join('___');
-            }
+            const maskedIpa = w.ipaUs!.replace(regex, '___');
 
             queue.push({ id: w.id, wordObj: w, word: w.word, ipa: w.ipaUs!, maskedIpa, targetSymbol });
         }

@@ -26,7 +26,7 @@ const DbConnectionLostModal: React.FC = () => (
                     <p className="text-neutral-500 text-sm leading-relaxed font-medium">
                         The connection to your local storage was closed unexpectedly by the browser. 
                         <br/><br/>
-                        Don't worry, <strong>your data is safe</strong>. Refreshing the application will restore the connection immediately.
+                        Don&apos;t worry, <strong>your data is safe</strong>. Refreshing the application will restore the connection immediately.
                     </p>
                 </div>
 

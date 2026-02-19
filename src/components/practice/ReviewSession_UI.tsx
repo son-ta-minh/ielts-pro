@@ -1,6 +1,6 @@
 
-import React, { useMemo } from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, ShieldAlert, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap } from 'lucide-react';
+import React from 'react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditWordModal from '../word_lib/EditWordModal';
@@ -64,10 +64,7 @@ const MasteryScoreGauge: React.FC<{ score: number }> = ({ score }) => {
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (score / 100) * circumference;
 
-    let color = 'text-neutral-400';
-    if (score >= 80) color = 'text-green-500';
-    else if (score >= 50) color = 'text-yellow-500';
-    else if (score > 0) color = 'text-orange-500';
+    const color = score >= 80 ? 'text-green-500' : score >= 50 ? 'text-yellow-500' : score > 0 ? 'text-orange-500' : 'text-neutral-400';
 
     return (
         <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>

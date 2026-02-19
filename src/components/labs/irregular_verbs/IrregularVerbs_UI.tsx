@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IrregularVerb, VocabularyItem } from '../../../app/types';
-import { FileClock, Plus, Edit3, Trash2, Loader2, Save, X, Eye, Library, Wand2, CheckSquare, Square, Info, Play, BrainCircuit, Dices, Search, ChevronLeft, ChevronRight, Sparkles, Check, Zap, RefreshCw, BarChart, CheckCircle, XCircle } from 'lucide-react';
+import { FileClock, Plus, Edit3, Trash2, Loader2, Save, X, Eye, Library, Wand2, CheckSquare, Square, Info, Play, BrainCircuit, Dices, Search, ChevronLeft, ChevronRight, Sparkles, Check, Zap, RefreshCw } from 'lucide-react';
 import ConfirmationModal from '../../common/ConfirmationModal';
 
 interface AddEditVerbModalProps {

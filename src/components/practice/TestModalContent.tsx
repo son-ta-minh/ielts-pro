@@ -4,15 +4,8 @@ import { VocabularyItem } from '../../app/types';
 import { 
     Challenge, ChallengeResult, 
     PrepositionQuizChallenge, 
-    ParaphraseContextQuizChallenge, ParaphraseContextQuizItem,
-    CollocationContextQuizChallenge, 
-    IdiomContextQuizChallenge,
-    CollocationMultichoiceQuizChallenge,
-    CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge,
-    PronunciationChallenge as PronunciationChallengeType,
-    HeteronymQuizChallenge,
-    SentenceScrambleChallenge,
-    IpaQuizChallenge, MeaningQuizChallenge
+    ParaphraseContextQuizItem,
+    PronunciationChallenge as PronunciationChallengeType
 } from './TestModalTypes';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 

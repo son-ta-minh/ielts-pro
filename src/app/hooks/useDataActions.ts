@@ -4,7 +4,7 @@ import { User, VocabularyItem, DataScope } from '../types';
 import * as dataStore from '../dataStore';
 import { processJsonImport, generateJsonExport, ImportResult } from '../../utils/dataHandler';
 import { useToast } from '../../contexts/ToastContext';
-import * as db from '../db';
+
 import { calculateMasteryScore } from '../../utils/srs';
 import { restoreFromServer } from '../../services/backupService';
 import { getConfig, saveConfig } from '../../app/settingsManager';
@@ -15,16 +15,15 @@ interface UseDataActionsProps {
     refreshGlobalStats: () => void;
     sessionWords: VocabularyItem[] | null;
     setSessionWords: React.Dispatch<React.SetStateAction<VocabularyItem[] | null>>;
-    wotd: VocabularyItem | null;
-    setWotd: React.Dispatch<React.SetStateAction<VocabularyItem | null>>;
+
     globalViewWord: VocabularyItem | null;
     setGlobalViewWord: React.Dispatch<React.SetStateAction<VocabularyItem | null>>;
     onUpdateUser: (user: User) => Promise<void>;
-    serverStatus?: 'connected' | 'disconnected';
+
 }
 
 export const useDataActions = (props: UseDataActionsProps) => {
-    const { currentUser, setView, refreshGlobalStats, sessionWords, setSessionWords, wotd, setWotd, globalViewWord, setGlobalViewWord, onUpdateUser, serverStatus } = props;
+    const { currentUser, setView, refreshGlobalStats, sessionWords, setSessionWords, globalViewWord, setGlobalViewWord, onUpdateUser } = props;
     const { showToast } = useToast();
 
     const getLastBackup = () => {
@@ -215,7 +214,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
             await dataStore.forceReload(currentUser.id);
             refreshGlobalStats(); 
             setView('DASHBOARD');
-        } catch (err) {
+        } catch (_err) {
             window.location.reload();
         }
     };

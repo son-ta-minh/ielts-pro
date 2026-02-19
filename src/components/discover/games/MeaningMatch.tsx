@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Play, BookOpen, Languages, RefreshCw, Check, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, Play, BookOpen, Languages, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
 
 interface Card {

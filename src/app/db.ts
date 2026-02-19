@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -39,7 +39,7 @@ export const tryPersistStorage = async () => {
             if (!isPersisted) {
                 await navigator.storage.persist();
             }
-        } catch (e) {
+        } catch {
             // Silent fail is fine here
         }
     }
@@ -92,7 +92,9 @@ export const checkLocalStorageHealth = (): { hasBackup: boolean, backupSize: num
                     timestamp = new Date(parsed[0].updatedAt).toLocaleString();
                 }
             }
-        } catch (e) {}
+        } catch {
+            // Silent fail is acceptable here
+        }
     }
     return { hasBackup, backupSize: size, backupTimestamp: timestamp };
 };
@@ -538,10 +540,10 @@ export const saveUser = async (user: User): Promise<void> => {
     }
     return crudTemplate(USER_STORE, tx => tx.objectStore(USER_STORE).put(user)); 
 };
-export const findWordByText = async (_userId: string, wordText: string): Promise<VocabularyItem | null> => {
+export const findWordByText = async (wordText: string): Promise<VocabularyItem | null> => {
   return withRetry(async () => {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
         const target = wordText.trim(); 
@@ -562,13 +564,13 @@ export const findWordByText = async (_userId: string, wordText: string): Promise
         if (store.indexNames.contains('word')) {
             const index = store.index('word');
             const req = index.get(target); 
-            req.onsuccess = () => { if (req.result) resolveImmediately(req.result); else useCursorFallback(db, _userId, target); };
-            req.onerror = () => useCursorFallback(db, _userId, target);
-        } else { useCursorFallback(db, _userId, target); }
+            req.onsuccess = () => { if (req.result) resolveImmediately(req.result); else useCursorFallback(db, target); };
+            req.onerror = () => useCursorFallback(db, target);
+        } else { useCursorFallback(db, target); }
     });
   });
 };
-export const getRandomMeanings = async (_userId: string, count: number, excludeId: string): Promise<string[]> => {
+export const getRandomMeanings = async (count: number, excludeId: string): Promise<string[]> => {
   return withRetry(async () => {
       const db = await openDB();
       return new Promise((resolve) => {
@@ -581,7 +583,7 @@ export const getRandomMeanings = async (_userId: string, count: number, excludeI
           const GENERIC_DISTRACTORS = [ "To express an idea or feeling", "A state of great comfort and luxury", "Happening or developing gradually", "To influence or change someone or something", "A formal meeting for discussion", "Necessary for a particular purpose", "The ability to do something well", "A careful and detailed study of something", "To make something new or original", ];
           const potential = allItems.filter(i => i.id !== excludeId && i.quality === WordQuality.VERIFIED && i.meaningVi && i.meaningVi.trim().length > 0 && i.meaningVi.length < 150).map(i => i.meaningVi);
           const shuffled = [...potential].sort(() => Math.random() - 0.5);
-          let finalMeanings = shuffled.slice(0, count);
+          const finalMeanings = shuffled.slice(0, count);
           if (finalMeanings.length < count) {
               const needed = count - finalMeanings.length;
               const shuffledGenerics = [...GENERIC_DISTRACTORS].sort(() => Math.random() - 0.5);
@@ -660,7 +662,7 @@ export const filterItem = (
     }
     return false;
 };
-export const getReviewCounts = async (_userId: string): Promise<{ total: number, due: number, newWords: number, learned: number }> => {
+export const getReviewCounts = async (): Promise<{ total: number, due: number, newWords: number, learned: number }> => {
   return withRetry(async () => {
       const db = await openDB();
       const now = Date.now();
@@ -684,7 +686,7 @@ export const getReviewCounts = async (_userId: string): Promise<{ total: number,
       });
   });
 };
-export const getDueWords = async (_userId: string, limit: number = 30): Promise<VocabularyItem[]> => {
+export const getDueWords = async (limit: number = 30): Promise<VocabularyItem[]> => {
   return withRetry(async () => {
       const db = await openDB();
       const now = Date.now();
@@ -705,7 +707,7 @@ export const getDueWords = async (_userId: string, limit: number = 30): Promise<
       });
   });
 };
-export const getNewWords = async (_userId: string, limit: number = 20): Promise<VocabularyItem[]> => {
+export const getNewWords = async (limit: number = 20): Promise<VocabularyItem[]> => {
   return withRetry(async () => {
       const db = await openDB();
       return new Promise((resolve, reject) => {
@@ -762,129 +764,129 @@ export const bulkSaveWords = async (items: VocabularyItem[]): Promise<void> => {
     // }
     await crudTemplate(STORE_NAME, tx => { const store = tx.objectStore(STORE_NAME); items.forEach(i => store.put(i)); }); 
 };
-export const getAllWordsForExport = async (_userId: string): Promise<VocabularyItem[]> => await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).getAll(), 'readonly');
+export const getAllWordsForExport = async (): Promise<VocabularyItem[]> => await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).getAll(), 'readonly');
 export const saveUnit = async (unit: Unit): Promise<void> => { unit.updatedAt = Date.now(); await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).put(unit)); };
 export const deleteUnit = async (id: string): Promise<void> => { await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).delete(id)); };
-export const getUnitsByUserId = async (_userId: string): Promise<Unit[]> => await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).getAll(), 'readonly');
-export const getUnitsContainingWord = async (_userId: string, wordId: string): Promise<Unit[]> => { const units = await getUnitsByUserId(_userId); return units.filter(u => u.wordIds.includes(wordId)); };
+export const getUnitsByUserId = async (): Promise<Unit[]> => await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).getAll(), 'readonly');
+export const getUnitsContainingWord = async (wordId: string): Promise<Unit[]> => { const units = await getUnitsByUserId(); return units.filter(u => u.wordIds.includes(wordId)); };
 export const bulkSaveUnits = async (items: Unit[]): Promise<void> => { await crudTemplate(UNIT_STORE, tx => { const store = tx.objectStore(UNIT_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteUnits = async (ids: string[]): Promise<void> => { await crudTemplate(UNIT_STORE, tx => { const store = tx.objectStore(UNIT_STORE); ids.forEach(id => store.delete(id)); }); };
 export const saveParaphraseLog = async (log: ParaphraseLog): Promise<void> => { await crudTemplate(LOG_STORE, tx => tx.objectStore(LOG_STORE).put(log)); };
-export const getParaphraseLogs = async (_userId: string): Promise<ParaphraseLog[]> => { const logs = await crudTemplate<ParaphraseLog[]>(LOG_STORE, tx => tx.objectStore(LOG_STORE).getAll(), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
+export const getParaphraseLogs = async (): Promise<ParaphraseLog[]> => { const logs = await crudTemplate<ParaphraseLog[]>(LOG_STORE, tx => tx.objectStore(LOG_STORE).getAll(), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
 export const bulkSaveParaphraseLogs = async (items: ParaphraseLog[]): Promise<void> => { await crudTemplate(LOG_STORE, tx => { const store = tx.objectStore(LOG_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Speaking Feature ---
 export const saveSpeakingLog = async (log: SpeakingLog): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).put(log)); };
-export const getSpeakingLogs = async (_userId: string): Promise<SpeakingLog[]> => { const logs = await crudTemplate<SpeakingLog[]>(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).getAll(), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
+export const getSpeakingLogs = async (): Promise<SpeakingLog[]> => { const logs = await crudTemplate<SpeakingLog[]>(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).getAll(), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
 export const deleteSpeakingLog = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).delete(id)); };
-export const getAllSpeakingLogsForExport = async (_userId: string): Promise<SpeakingLog[]> => await crudTemplate(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).getAll(), 'readonly');
+export const getAllSpeakingLogsForExport = async (): Promise<SpeakingLog[]> => await crudTemplate(SPEAKING_LOG_STORE, tx => tx.objectStore(SPEAKING_LOG_STORE).getAll(), 'readonly');
 export const bulkSaveSpeakingLogs = async (items: SpeakingLog[]): Promise<void> => { await crudTemplate(SPEAKING_LOG_STORE, tx => { const store = tx.objectStore(SPEAKING_LOG_STORE); items.forEach(i => store.put(i)); }); };
 
 export const saveSpeakingTopic = async (topic: SpeakingTopic): Promise<void> => { topic.updatedAt = Date.now(); await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).put(topic)); };
 export const deleteSpeakingTopic = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).delete(id)); };
-export const getSpeakingTopicsByUserId = async (_userId: string): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).getAll(), 'readonly');
-export const getAllSpeakingTopicsForExport = async (_userId: string): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).getAll(), 'readonly');
+export const getSpeakingTopicsByUserId = async (): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).getAll(), 'readonly');
+export const getAllSpeakingTopicsForExport = async (): Promise<SpeakingTopic[]> => await crudTemplate(SPEAKING_TOPIC_STORE, tx => tx.objectStore(SPEAKING_TOPIC_STORE).getAll(), 'readonly');
 export const bulkSaveSpeakingTopics = async (items: SpeakingTopic[]): Promise<void> => { await crudTemplate(SPEAKING_TOPIC_STORE, tx => { const store = tx.objectStore(SPEAKING_TOPIC_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Native Speak & Conversation Features ---
 export const saveNativeSpeakItem = async (item: NativeSpeakItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).put(item)); };
-export const getNativeSpeakItemsByUserId = async (_userId: string): Promise<NativeSpeakItem[]> => await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).getAll(), 'readonly');
+export const getNativeSpeakItemsByUserId = async (): Promise<NativeSpeakItem[]> => await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).getAll(), 'readonly');
 export const deleteNativeSpeakItem = async (id: string): Promise<void> => { await crudTemplate(NATIVE_SPEAK_STORE, tx => tx.objectStore(NATIVE_SPEAK_STORE).delete(id)); };
 export const bulkSaveNativeSpeakItems = async (items: NativeSpeakItem[]): Promise<void> => { await crudTemplate(NATIVE_SPEAK_STORE, tx => { const store = tx.objectStore(NATIVE_SPEAK_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteNativeSpeakItems = async (ids: string[]): Promise<void> => { await crudTemplate(NATIVE_SPEAK_STORE, tx => { const store = tx.objectStore(NATIVE_SPEAK_STORE); ids.forEach(id => store.delete(id)); }); };
 
 export const saveConversationItem = async (item: ConversationItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(CONVERSATION_STORE, tx => tx.objectStore(CONVERSATION_STORE).put(item)); };
-export const getConversationItemsByUserId = async (_userId: string): Promise<ConversationItem[]> => await crudTemplate(CONVERSATION_STORE, tx => tx.objectStore(CONVERSATION_STORE).getAll(), 'readonly');
+export const getConversationItemsByUserId = async (): Promise<ConversationItem[]> => await crudTemplate(CONVERSATION_STORE, tx => tx.objectStore(CONVERSATION_STORE).getAll(), 'readonly');
 export const deleteConversationItem = async (id: string): Promise<void> => { await crudTemplate(CONVERSATION_STORE, tx => tx.objectStore(CONVERSATION_STORE).delete(id)); };
 export const bulkSaveConversationItems = async (items: ConversationItem[]): Promise<void> => { await crudTemplate(CONVERSATION_STORE, tx => { const store = tx.objectStore(CONVERSATION_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteConversationItems = async (ids: string[]): Promise<void> => { await crudTemplate(CONVERSATION_STORE, tx => { const store = tx.objectStore(CONVERSATION_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- Free Talk Feature ---
 export const saveFreeTalkItem = async (item: FreeTalkItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(FREE_TALK_STORE, tx => tx.objectStore(FREE_TALK_STORE).put(item)); };
-export const getFreeTalkItemsByUserId = async (_userId: string): Promise<FreeTalkItem[]> => await crudTemplate(FREE_TALK_STORE, tx => tx.objectStore(FREE_TALK_STORE).getAll(), 'readonly');
+export const getFreeTalkItemsByUserId = async (): Promise<FreeTalkItem[]> => await crudTemplate(FREE_TALK_STORE, tx => tx.objectStore(FREE_TALK_STORE).getAll(), 'readonly');
 export const deleteFreeTalkItem = async (id: string): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => tx.objectStore(FREE_TALK_STORE).delete(id)); };
 export const bulkSaveFreeTalkItems = async (items: FreeTalkItem[]): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => { const store = tx.objectStore(FREE_TALK_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteFreeTalkItems = async (ids: string[]): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => { const store = tx.objectStore(FREE_TALK_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- Writing Feature ---
 export const saveWritingLog = async (log: WritingLog): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).put(log)); };
-export const getWritingLogs = async (_userId: string): Promise<WritingLog[]> => { const logs = await crudTemplate<WritingLog[]>(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).getAll(), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
+export const getWritingLogs = async (): Promise<WritingLog[]> => { const logs = await crudTemplate<WritingLog[]>(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).getAll(), 'readonly'); return logs.sort((a,b) => b.timestamp - a.timestamp); };
 export const deleteWritingLog = async (id: string): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).delete(id)); };
-export const getAllWritingLogsForExport = async (_userId: string): Promise<WritingLog[]> => await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).getAll(), 'readonly');
+export const getAllWritingLogsForExport = async (): Promise<WritingLog[]> => await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).getAll(), 'readonly');
 export const bulkSaveWritingLogs = async (items: WritingLog[]): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => { const store = tx.objectStore(WRITING_LOG_STORE); items.forEach(i => store.put(i)); }); };
 
 export const saveWritingTopic = async (topic: WritingTopic): Promise<void> => { topic.updatedAt = Date.now(); await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).put(topic)); };
 export const deleteWritingTopic = async (id: string): Promise<void> => { await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).delete(id)); };
-export const getWritingTopicsByUserId = async (_userId: string): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).getAll(), 'readonly');
-export const getAllWritingTopicsForExport = async (_userId: string): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).getAll(), 'readonly');
+export const getWritingTopicsByUserId = async (): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).getAll(), 'readonly');
+export const getAllWritingTopicsForExport = async (): Promise<WritingTopic[]> => await crudTemplate(WRITING_TOPIC_STORE, tx => tx.objectStore(WRITING_TOPIC_STORE).getAll(), 'readonly');
 export const bulkSaveWritingTopics = async (items: WritingTopic[]): Promise<void> => { await crudTemplate(WRITING_TOPIC_STORE, tx => { const store = tx.objectStore(WRITING_TOPIC_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Irregular Verbs Feature ---
 export const saveIrregularVerb = async (verb: IrregularVerb): Promise<void> => { verb.updatedAt = Date.now(); await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).put(verb)); };
-export const getIrregularVerbsByUserId = async (_userId: string): Promise<IrregularVerb[]> => await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).getAll(), 'readonly');
+export const getIrregularVerbsByUserId = async (): Promise<IrregularVerb[]> => await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).getAll(), 'readonly');
 export const deleteIrregularVerb = async (id: string): Promise<void> => { await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).delete(id)); };
 export const bulkSaveIrregularVerbs = async (items: IrregularVerb[]): Promise<void> => { await crudTemplate(IRREGULAR_VERBS_STORE, tx => { const store = tx.objectStore(IRREGULAR_VERBS_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteIrregularVerbs = async (ids: string[]): Promise<void> => { await crudTemplate(IRREGULAR_VERBS_STORE, tx => { const store = tx.objectStore(IRREGULAR_VERBS_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- Lessons Feature ---
 export const saveLesson = async (lesson: Lesson): Promise<void> => { lesson.updatedAt = Date.now(); await crudTemplate(LESSON_STORE, tx => tx.objectStore(LESSON_STORE).put(lesson)); };
-export const getLessonsByUserId = async (_userId: string): Promise<Lesson[]> => await crudTemplate(LESSON_STORE, tx => tx.objectStore(LESSON_STORE).getAll(), 'readonly');
+export const getLessonsByUserId = async (): Promise<Lesson[]> => await crudTemplate(LESSON_STORE, tx => tx.objectStore(LESSON_STORE).getAll(), 'readonly');
 export const deleteLesson = async (id: string): Promise<void> => { await crudTemplate(LESSON_STORE, tx => tx.objectStore(LESSON_STORE).delete(id)); };
 export const bulkSaveLessons = async (items: Lesson[]): Promise<void> => { await crudTemplate(LESSON_STORE, tx => { const store = tx.objectStore(LESSON_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteLessons = async (ids: string[]): Promise<void> => { await crudTemplate(LESSON_STORE, tx => { const store = tx.objectStore(LESSON_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- Listening Items Feature ---
 export const saveListeningItem = async (item: ListeningItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(LISTENING_STORE, tx => tx.objectStore(LISTENING_STORE).put(item)); };
-export const getListeningItemsByUserId = async (_userId: string): Promise<ListeningItem[]> => await crudTemplate(LISTENING_STORE, tx => tx.objectStore(LISTENING_STORE).getAll(), 'readonly');
+export const getListeningItemsByUserId = async (): Promise<ListeningItem[]> => await crudTemplate(LISTENING_STORE, tx => tx.objectStore(LISTENING_STORE).getAll(), 'readonly');
 export const deleteListeningItem = async (id: string): Promise<void> => { await crudTemplate(LISTENING_STORE, tx => tx.objectStore(LISTENING_STORE).delete(id)); };
 export const bulkSaveListeningItems = async (items: ListeningItem[]): Promise<void> => { await crudTemplate(LISTENING_STORE, tx => { const store = tx.objectStore(LISTENING_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Composition Feature ---
 export const saveComposition = async (comp: Composition): Promise<void> => { comp.updatedAt = Date.now(); await crudTemplate(COMPOSITIONS_STORE, tx => tx.objectStore(COMPOSITIONS_STORE).put(comp)); };
-export const getCompositionsByUserId = async (_userId: string): Promise<Composition[]> => await crudTemplate(COMPOSITIONS_STORE, tx => tx.objectStore(COMPOSITIONS_STORE).getAll(), 'readonly');
+export const getCompositionsByUserId = async (): Promise<Composition[]> => await crudTemplate(COMPOSITIONS_STORE, tx => tx.objectStore(COMPOSITIONS_STORE).getAll(), 'readonly');
 export const deleteComposition = async (id: string): Promise<void> => { await crudTemplate(COMPOSITIONS_STORE, tx => tx.objectStore(COMPOSITIONS_STORE).delete(id)); };
 export const bulkSaveCompositions = async (items: Composition[]): Promise<void> => { await crudTemplate(COMPOSITIONS_STORE, tx => { const store = tx.objectStore(COMPOSITIONS_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteCompositions = async (ids: string[]): Promise<void> => { await crudTemplate(COMPOSITIONS_STORE, tx => { const store = tx.objectStore(COMPOSITIONS_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- Word Book Feature ---
 export const saveWordBook = async (book: WordBook): Promise<void> => { await crudTemplate(WORDBOOK_STORE, tx => tx.objectStore(WORDBOOK_STORE).put(book)); };
-export const getWordBooksByUserId = async (_userId: string): Promise<WordBook[]> => await crudTemplate(WORDBOOK_STORE, tx => tx.objectStore(WORDBOOK_STORE).getAll(), 'readonly');
-export const deleteWordBook = async (id: string, _userId: string): Promise<void> => { await crudTemplate(WORDBOOK_STORE, tx => tx.objectStore(WORDBOOK_STORE).delete(id)); };
+export const getWordBooksByUserId = async (): Promise<WordBook[]> => await crudTemplate(WORDBOOK_STORE, tx => tx.objectStore(WORDBOOK_STORE).getAll(), 'readonly');
+export const deleteWordBook = async (id: string): Promise<void> => { await crudTemplate(WORDBOOK_STORE, tx => tx.objectStore(WORDBOOK_STORE).delete(id)); };
 export const bulkSaveWordBooks = async (items: WordBook[]): Promise<void> => { await crudTemplate(WORDBOOK_STORE, tx => { const store = tx.objectStore(WORDBOOK_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Reading Book Feature ---
 export const saveReadingBook = async (book: ReadingBook): Promise<void> => { await crudTemplate(READING_BOOK_STORE, tx => tx.objectStore(READING_BOOK_STORE).put(book)); };
-export const getReadingBooksByUserId = async (_userId: string): Promise<ReadingBook[]> => await crudTemplate(READING_BOOK_STORE, tx => tx.objectStore(READING_BOOK_STORE).getAll(), 'readonly');
+export const getReadingBooksByUserId = async (): Promise<ReadingBook[]> => await crudTemplate(READING_BOOK_STORE, tx => tx.objectStore(READING_BOOK_STORE).getAll(), 'readonly');
 export const deleteReadingBook = async (id: string): Promise<void> => { await crudTemplate(READING_BOOK_STORE, tx => tx.objectStore(READING_BOOK_STORE).delete(id)); };
 export const bulkSaveReadingBooks = async (items: ReadingBook[]): Promise<void> => { await crudTemplate(READING_BOOK_STORE, tx => { const store = tx.objectStore(READING_BOOK_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Lesson Book Feature ---
 export const saveLessonBook = async (book: LessonBook): Promise<void> => { await crudTemplate(LESSON_BOOK_STORE, tx => tx.objectStore(LESSON_BOOK_STORE).put(book)); };
-export const getLessonBooksByUserId = async (_userId: string): Promise<LessonBook[]> => await crudTemplate(LESSON_BOOK_STORE, tx => tx.objectStore(LESSON_BOOK_STORE).getAll(), 'readonly');
+export const getLessonBooksByUserId = async (): Promise<LessonBook[]> => await crudTemplate(LESSON_BOOK_STORE, tx => tx.objectStore(LESSON_BOOK_STORE).getAll(), 'readonly');
 export const deleteLessonBook = async (id: string): Promise<void> => { await crudTemplate(LESSON_BOOK_STORE, tx => tx.objectStore(LESSON_BOOK_STORE).delete(id)); };
 export const bulkSaveLessonBooks = async (items: LessonBook[]): Promise<void> => { await crudTemplate(LESSON_BOOK_STORE, tx => { const store = tx.objectStore(LESSON_BOOK_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Listening Book Feature ---
 export const saveListeningBook = async (book: ListeningBook): Promise<void> => { await crudTemplate(LISTENING_BOOK_STORE, tx => tx.objectStore(LISTENING_BOOK_STORE).put(book)); };
-export const getListeningBooksByUserId = async (_userId: string): Promise<ListeningBook[]> => await crudTemplate(LISTENING_BOOK_STORE, tx => tx.objectStore(LISTENING_BOOK_STORE).getAll(), 'readonly');
+export const getListeningBooksByUserId = async (): Promise<ListeningBook[]> => await crudTemplate(LISTENING_BOOK_STORE, tx => tx.objectStore(LISTENING_BOOK_STORE).getAll(), 'readonly');
 export const deleteListeningBook = async (id: string): Promise<void> => { await crudTemplate(LISTENING_BOOK_STORE, tx => tx.objectStore(LISTENING_BOOK_STORE).delete(id)); };
 export const bulkSaveListeningBooks = async (items: ListeningBook[]): Promise<void> => { await crudTemplate(LISTENING_BOOK_STORE, tx => { const store = tx.objectStore(LISTENING_BOOK_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Speaking Book Feature ---
 export const saveSpeakingBook = async (book: SpeakingBook): Promise<void> => { await crudTemplate(SPEAKING_BOOK_STORE, tx => tx.objectStore(SPEAKING_BOOK_STORE).put(book)); };
-export const getSpeakingBooksByUserId = async (_userId: string): Promise<SpeakingBook[]> => await crudTemplate(SPEAKING_BOOK_STORE, tx => tx.objectStore(SPEAKING_BOOK_STORE).getAll(), 'readonly');
+export const getSpeakingBooksByUserId = async (): Promise<SpeakingBook[]> => await crudTemplate(SPEAKING_BOOK_STORE, tx => tx.objectStore(SPEAKING_BOOK_STORE).getAll(), 'readonly');
 export const deleteSpeakingBook = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_BOOK_STORE, tx => tx.objectStore(SPEAKING_BOOK_STORE).delete(id)); };
 export const bulkSaveSpeakingBooks = async (items: SpeakingBook[]): Promise<void> => { await crudTemplate(SPEAKING_BOOK_STORE, tx => { const store = tx.objectStore(SPEAKING_BOOK_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Writing Book Feature ---
 export const saveWritingBook = async (book: WritingBook): Promise<void> => { await crudTemplate(WRITING_BOOK_STORE, tx => tx.objectStore(WRITING_BOOK_STORE).put(book)); };
 /* Fixed: Changed getAl to getAll in the index lookup */
-export const getWritingBooksByUserId = async (_userId: string): Promise<WritingBook[]> => await crudTemplate(WRITING_BOOK_STORE, tx => tx.objectStore(WRITING_BOOK_STORE).getAll(), 'readonly');
+export const getWritingBooksByUserId = async (): Promise<WritingBook[]> => await crudTemplate(WRITING_BOOK_STORE, tx => tx.objectStore(WRITING_BOOK_STORE).getAll(), 'readonly');
 export const deleteWritingBook = async (id: string): Promise<void> => { await crudTemplate(WRITING_BOOK_STORE, tx => tx.objectStore(WRITING_BOOK_STORE).delete(id)); };
 export const bulkSaveWritingBooks = async (items: WritingBook[]): Promise<void> => { await crudTemplate(WRITING_BOOK_STORE, tx => { const store = tx.objectStore(WRITING_BOOK_STORE); items.forEach(i => store.put(i)); }); };
 
 // --- Planning Feature ---
 export const savePlanningGoal = async (goal: PlanningGoal): Promise<void> => { await crudTemplate(PLANNING_STORE, tx => tx.objectStore(PLANNING_STORE).put(goal)); };
-export const getPlanningGoalsByUserId = async (_userId: string): Promise<PlanningGoal[]> => await crudTemplate(PLANNING_STORE, tx => tx.objectStore(PLANNING_STORE).getAll(), 'readonly');
+export const getPlanningGoalsByUserId = async (): Promise<PlanningGoal[]> => await crudTemplate(PLANNING_STORE, tx => tx.objectStore(PLANNING_STORE).getAll(), 'readonly');
 export const deletePlanningGoal = async (id: string): Promise<void> => { await crudTemplate(PLANNING_STORE, tx => tx.objectStore(PLANNING_STORE).delete(id)); };
 export const bulkSavePlanningGoals = async (items: PlanningGoal[]): Promise<void> => { await crudTemplate(PLANNING_STORE, tx => { const store = tx.objectStore(PLANNING_STORE); items.forEach(i => store.put(i)); }); };

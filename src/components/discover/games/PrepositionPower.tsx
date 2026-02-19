@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Play, Check, ChevronRight, Zap, Search, Loader2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { ArrowLeft, Play, Check, ChevronRight, Zap, Search } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
 
 interface Props {
@@ -62,7 +62,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
                 
                 if (regex.test(w.example)) {
                     // Truncate at first period
-                    let truncatedExample = w.example.split('.')[0] + '.';
+                    const truncatedExample = w.example.split('.')[0] + '.';
                     // Double check regex still works in truncated part
                     if (regex.test(truncatedExample)) {
                         const exampleWithBlank = truncatedExample.replace(regex, `${w.word} ___`);
@@ -156,13 +156,14 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
                 setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
                 break;
             case 'Enter':
-            case 'Tab':
+            case 'Tab': {
                 e.preventDefault();
                 const selected = suggestions[selectedIndex];
                 setUserGuess(selected);
                 setShowDropdown(false);
                 handleCheck(selected);
                 break;
+            }
             case 'Escape':
                 setShowDropdown(false);
                 break;

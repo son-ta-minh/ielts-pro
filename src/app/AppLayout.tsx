@@ -1,9 +1,9 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
-  Plus, LayoutDashboard, List, Settings, LogOut, Sparkles, Menu, X, Layers3, BookCopy, Loader2, Map, Mic, PenLine, AlertTriangle, BookText, Ear, Zap, Calendar, Gamepad2, BookMarked, Waves, RefreshCw, Save, ListTodo, Users
+  Menu, X, BookCopy, Loader2, AlertTriangle, Users
 } from 'lucide-react';
-import { AppView, SessionType, VocabularyItem } from './types';
+import { AppView, VocabularyItem } from './types';
 import { useAppController } from './useAppController';
 import EditWordModal from '../components/word_lib/EditWordModal';
 import ViewWordModal from '../components/word_lib/ViewWordModal';
@@ -46,12 +46,12 @@ const navItems = [
 
 const Sidebar: React.FC<AppLayoutProps & { 
     onNavigate: (view: AppView, action?: () => void) => void;
-    onLogoutRequest: () => void;
+
     onSwitchUser: () => void;
-}> = ({ controller, onNavigate, onLogoutRequest, onSwitchUser }) => {
+}> = ({ controller, onNavigate, onSwitchUser }) => {
   const { 
     currentUser, view, setView, sessionType, isSidebarOpen, setIsSidebarOpen, 
-    forceExpandAdd, openAddWordLibrary, serverStatus, handleBackup, hasUnsavedChanges, nextAutoBackupTime,
+    forceExpandAdd, serverStatus, handleBackup, hasUnsavedChanges, nextAutoBackupTime,
     triggerServerBackup
   } = controller;
 
@@ -151,10 +151,10 @@ const Sidebar: React.FC<AppLayoutProps & {
 };
 
 const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { view, currentUser, stats, xpToNextLevel, wotd, setGlobalViewWord, setView, lastBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, triggerLocalBackup, triggerServerBackup, handleNavigateToList, startDueReviewSession, startNewLearnSession, sessionWords, sessionType, sessionFocus, updateWord, bulkUpdateWords, handleSessionComplete, gainExperienceAndLevelUp, recalculateXpAndLevelUp, handleRetrySession, deleteWord, bulkDeleteWords, startSession, initialListFilter, setInitialListFilter, forceExpandAdd, setForceExpandAdd, handleUpdateUser, refreshGlobalStats, handleLibraryReset, apiUsage, xpGained, lastMasteryScoreUpdateTimestamp, isWotdComposed, randomizeWotd, handleComposeWithWord, writingContextWord, consumeWritingContext, serverStatus, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, planningAction, consumePlanningAction, targetGameMode, consumeTargetGameMode } = controller;
+  const { view, currentUser, stats, xpToNextLevel, wotd, setGlobalViewWord, setView, lastBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, triggerLocalBackup, triggerServerBackup, handleNavigateToList, sessionWords, sessionType, sessionFocus, updateWord, bulkUpdateWords, handleSessionComplete, gainExperienceAndLevelUp, recalculateXpAndLevelUp, handleRetrySession, deleteWord, bulkDeleteWords, startSession, initialListFilter, setInitialListFilter, forceExpandAdd, setForceExpandAdd, handleUpdateUser, refreshGlobalStats, handleLibraryReset, apiUsage, xpGained, lastMasteryScoreUpdateTimestamp, isWotdComposed, randomizeWotd, handleComposeWithWord, writingContextWord, consumeWritingContext, serverStatus, planningAction, consumePlanningAction, targetGameMode, consumeTargetGameMode } = controller;
   if (!currentUser) return null;
   switch (view) {
-    case 'DASHBOARD': return <Dashboard userId={currentUser.id} user={currentUser} totalCount={stats.total} dueCount={stats.due} newCount={stats.new} xpToNextLevel={xpToNextLevel} wotd={wotd} onViewWotd={setGlobalViewWord} setView={setView} lastBackupTime={lastBackupTime} onBackup={handleBackup} onRestore={() => {}} restoreFromServerAction={async () => await restoreFromServerAction()} triggerLocalRestore={triggerLocalRestore} onLocalBackup={triggerLocalBackup} onServerBackup={triggerServerBackup} onNavigateToWordList={handleNavigateToList} onStartDueReview={startDueReviewSession} onStartNewLearn={startNewLearnSession} isWotdComposed={isWotdComposed} onComposeWotd={handleComposeWithWord} onRandomizeWotd={randomizeWotd} serverStatus={serverStatus} onAction={(action) => { controller.handleSpecialAction(action); }} />;
+    case 'DASHBOARD': return <Dashboard userId={currentUser.id} user={currentUser} totalCount={stats.total} dueCount={stats.due} newCount={stats.new} xpToNextLevel={xpToNextLevel} wotd={wotd} onViewWotd={setGlobalViewWord} setView={setView} lastBackupTime={lastBackupTime} onBackup={handleBackup} onRestore={() => {}} restoreFromServerAction={async () => await restoreFromServerAction()} triggerLocalRestore={triggerLocalRestore} onLocalBackup={triggerLocalBackup} onServerBackup={triggerServerBackup} onNavigateToWordList={handleNavigateToList} isWotdComposed={isWotdComposed} onComposeWotd={handleComposeWithWord} onRandomizeWotd={randomizeWotd} serverStatus={serverStatus} onAction={(action) => { controller.handleSpecialAction(action); }} />;
     case 'WORDBOOK': return <WordBookPage user={currentUser} />;
     case 'PLANNING': return <PlanningPage user={currentUser} initialAction={planningAction} onActionConsumed={consumePlanningAction} />;
     case 'REVIEW': return sessionWords && sessionType ? <ReviewSession user={currentUser} sessionWords={sessionWords} sessionType={sessionType} sessionFocus={sessionFocus} onUpdate={updateWord} onBulkUpdate={bulkUpdateWords} onComplete={handleSessionComplete} onRetry={handleRetrySession} /> : null;
@@ -173,7 +173,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
 };
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, handleLogout, setForceExpandAdd, openAddWordLibrary, currentUser, stats, startDueReviewSession, startNewLearnSession, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen, connectionScanStatus, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore } = controller;
+  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen, connectionScanStatus, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
   const handleNavigation = (targetView: AppView, action?: () => void) => {
@@ -192,7 +192,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
 
   return (
     <div className="min-h-screen bg-neutral-50 md:flex">
-      <Sidebar controller={controller} onNavigate={handleNavigation} onLogoutRequest={handleLogout} onSwitchUser={handleSwitchUser} />
+      <Sidebar controller={controller} onNavigate={handleNavigation} onSwitchUser={handleSwitchUser} />
       <div className={`fixed inset-0 bg-black/30 z-40 md:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
       <main className="flex-1 p-6 md:p-10 overflow-y-auto relative">
         <button onClick={() => setIsSidebarOpen(true)} className="md:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30"><Menu size={24} /></button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { VocabularyItem, ReviewGrade, ReviewMode, SessionType, User } from '../../app/types';
+import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { updateSRS, calculateMasteryScore, getLogicalKnowledgeUnits } from '../../utils/srs';
 import { ReviewSessionUI } from './ReviewSession_UI';
 import { getStoredJSON } from '../../utils/storage';
@@ -16,9 +16,7 @@ interface Props {
   onRetry: () => void;
 }
 
-export const logSrsUpdate = (grade: ReviewGrade, before: VocabularyItem, after: VocabularyItem) => {
-    // Debug logging removed for production
-};
+
 
 const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onBulkUpdate, onComplete, onRetry }) => {
   const { showToast } = useToast();

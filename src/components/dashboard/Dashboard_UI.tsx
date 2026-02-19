@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
-  Upload, Download, History, Lightbulb, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, Eye, PenLine, Shuffle, CheckCircle2, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, Music, MessageSquare, BookOpen, MessageCircle, Play,
-  Zap, Target, Headphones, Split, LayoutDashboard, BarChart3, Keyboard, Move, AtSign, SlidersHorizontal, Quote, BoxSelect, Map, Gamepad2, Puzzle, Brain,
+  Download, History, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
+  Target, Headphones, Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Gamepad2, Puzzle, Brain,
   CloudUpload, Percent, MessagesSquare, Scale
 } from 'lucide-react';
-import { AppView, VocabularyItem, User } from '../../app/types';
+import { User } from '../../app/types';
 import { DailyGoalConfig } from '../../app/settingsManager';
 import { DayProgress } from './DayProgress';
 import { PieChart, Pie, Cell, Tooltip } from 'recharts';
@@ -27,7 +27,7 @@ const getFormattedBuildDate = () => {
         const hours = d.getHours().toString().padStart(2, '0');
         const minutes = d.getMinutes().toString().padStart(2, '0');
         return `v${year}${month}${day}_${hours}${minutes}`;
-    } catch (e) {
+    } catch (_e) {
         return 'v_error';
     }
 };
@@ -483,20 +483,55 @@ const LibraryHealthPanel: React.FC<{
   );
 };
 
+const WordStatsBar: React.FC<{
+    newCount: number;
+    studyingCount: number;
+    masteredCount: number;
+    totalCount: number;
+}> = ({ newCount, studyingCount, masteredCount, totalCount }) => {
+    if (totalCount === 0) {
+        return (
+            <div className="w-56 h-10 flex items-center justify-center bg-neutral-100 rounded-2xl">
+                <span className="text-[10px] font-bold text-neutral-400">Library Empty</span>
+            </div>
+        );
+    }
+
+    const newPercent = (newCount / totalCount) * 100;
+    const studyingPercent = (studyingCount / totalCount) * 100;
+    const masteredPercent = (masteredCount / totalCount) * 100;
+
+    const BarSegment = ({ percent, color, label, value }: { percent: number, color: string, label: string, value: number }) => (
+        <div className="h-full group relative" style={{ width: `${percent}%`, backgroundColor: color }}>
+            <div className="absolute bottom-full mb-2 w-max px-2 py-1 bg-neutral-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap left-1/2 -translate-x-1/2">
+                {label}: {value} ({Math.round(percent)}%)
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="flex items-center gap-3">
+            <div className="w-56 h-2.5 bg-neutral-200 rounded-full flex overflow-hidden border border-neutral-200">
+                <BarSegment percent={newPercent} color="#3b82f6" label="New" value={newCount} />
+                <BarSegment percent={studyingPercent} color="#06b6d4" label="Studying" value={studyingCount} />
+                <BarSegment percent={masteredPercent} color="#a855f7" label="Mastered" value={masteredCount} />
+            </div>
+            <div className="text-xs font-black text-neutral-800 flex items-center gap-1.5">
+                <BookCopy size={12} className="text-neutral-400"/>
+                {totalCount}
+            </div>
+        </div>
+    );
+};
+
 export interface DashboardUIProps {
-  user: User;
   onNavigate: (view: string) => void;
   totalCount: number;
   newCount: number;
-  dueCount: number;
-  learnedCount: number;
   rawCount: number;
   refinedCount: number;
   reviewStats: any;
-  wotd: VocabularyItem | null;
-  isWotdComposed: boolean;
-  onRandomizeWotd: () => void;
-  onComposeWotd: () => void;
   lastBackupTime: number | null;
   onBackup: (mode: 'server' | 'file') => void;
   onRestore: (mode: 'server' | 'file') => void;
@@ -510,14 +545,13 @@ export interface DashboardUIProps {
   goalStats: { totalTasks: number; completedTasks: number; };
   studyStats: StudyStats | null;
   isStatsLoading: boolean;
-  onRefreshStats: () => void;
 }
 
 export const DashboardUI: React.FC<DashboardUIProps> = ({
-  user, onNavigate, totalCount, newCount, dueCount, learnedCount, rawCount, refinedCount, reviewStats,
-  wotd, isWotdComposed, onRandomizeWotd, onComposeWotd, lastBackupTime, onBackup, onRestore,
+  onNavigate, totalCount, newCount, rawCount, refinedCount, reviewStats,
+  lastBackupTime, onBackup, onRestore,
   serverStatus, onAction, onStartNewLearn, onStartDueReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats,
-  studyStats, isStatsLoading, onRefreshStats
+  studyStats, isStatsLoading
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
   const [activeTab, setActiveTab] = useState<'STUDY' | 'INSIGHT'>('STUDY');
@@ -562,9 +596,17 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
         </div>
       </header>
 
-      <div className="inline-flex p-1 bg-white border-2 border-neutral-100 rounded-2xl w-fit shadow-sm self-start">
-           <button onClick={() => setActiveTab('STUDY')} className={`w-32 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'STUDY' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><LayoutDashboard size={16} /> Study</button>
-           <button onClick={() => setActiveTab('INSIGHT')} className={`w-32 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'INSIGHT' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BarChart3 size={16} /> Insight</button>
+      <div className="flex items-center justify-between">
+        <div className="inline-flex p-1 bg-white border-2 border-neutral-100 rounded-2xl w-fit shadow-sm self-start">
+             <button onClick={() => setActiveTab('STUDY')} className={`w-32 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'STUDY' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><LayoutDashboard size={16} /> Study</button>
+             <button onClick={() => setActiveTab('INSIGHT')} className={`w-32 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'INSIGHT' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BarChart3 size={16} /> Insight</button>
+        </div>
+        <WordStatsBar 
+            newCount={newCount}
+            studyingCount={reviewStats.learned}
+            masteredCount={reviewStats.mastered}
+            totalCount={totalCount}
+        />
       </div>
 
       {activeTab === 'STUDY' && (

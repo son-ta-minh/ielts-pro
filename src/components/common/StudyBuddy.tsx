@@ -1,18 +1,15 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { User, AppView, WordQuality, VocabularyItem, Lesson } from '../../app/types';
-import { X, MessageSquare, BookOpen, Languages, Book, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Info, AudioLines, Square, GraduationCap, ScanLine, Wrench } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
+import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Square, Wrench } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, getIsSpeaking } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
-import * as db from '../../app/db';
 import { createNewWord, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
-import UniversalAiModal from './UniversalAiModal';
-import { getGenerateWordLessonEssayPrompt } from '../../services/promptService';
 import { ToolsModal } from '../tools/ToolsModal';
 
 const MAX_READ_LENGTH = 1000;
@@ -46,7 +43,7 @@ const AVATAR_DEFINITIONS = {
     unicorn: { url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Unicorn.png', bg: 'bg-purple-100' },
 };
 
-export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onViewWord, isAnyModalOpen }) => {
+export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }) => {
     const { showToast } = useToast();
     const [config, setConfig] = useState<SystemConfig>(getConfig());
     const [isAudioPlaying, setIsAudioPlaying] = useState(getIsSpeaking());
@@ -94,6 +91,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
                 setIsCambridgeValid(data.exists);
             }
         } catch (e: any) {
+            // Silent fail is acceptable here
         } finally {
             setIsCambridgeChecking(false);
         }
@@ -181,7 +179,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
                 setIsOpen(true);
                 speak(translation, false, 'vi', coach.viVoice, coach.viAccent);
             }
-        } catch (e) {
+        } catch (_e) {
             showToast("Translation error!", "error");
         } finally {
             setIsThinking(false);
@@ -216,6 +214,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
                 setIsOpen(true);
             }
         } catch (e) {
+            // Silent fail is acceptable here
         } finally {
             setIsThinking(false);
         }
@@ -231,7 +230,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, currentView, onNavigate, onV
             try {
                 const results = await lookupWordsInGlobalLibrary([selectedText]);
                 if (results.length > 0) serverItem = results[0];
-            } catch (e) {}
+            } catch (e) {
+                // Silent fail is acceptable here
+            }
 
             if (serverItem) {
                 newItem = {

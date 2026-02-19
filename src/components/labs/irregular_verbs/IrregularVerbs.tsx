@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, IrregularVerb, VocabularyItem, WordQuality } from '../../../app/types';
+import { User, IrregularVerb, VocabularyItem } from '../../../app/types';
 import * as db from '../../../app/db';
 import * as dataStore from '../../../app/dataStore';
 import { useToast } from '../../../contexts/ToastContext';
@@ -58,15 +58,9 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
               const currentComplete = !!(v.v2 && v.v3);
               
               // Logic: Keep the "Complete" one. If both complete/incomplete, keep the newer one (presumably better/edited)
-              let keepCurrent = false;
 
-              if (currentComplete && !existingComplete) {
-                  keepCurrent = true;
-              } else if (currentComplete === existingComplete) {
-                   if (v.updatedAt > existing.updatedAt) {
-                       keepCurrent = true;
-                   }
-              }
+
+              const keepCurrent = (currentComplete && !existingComplete) || (currentComplete === existingComplete && v.updatedAt > existing.updatedAt);
 
               if (keepCurrent) {
                   idsToDelete.push(existing.id);
@@ -447,7 +441,7 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
         await db.saveIrregularVerb(updatedVerb);
         setVerbs(prevVerbs => prevVerbs.map(v => v.id === verb.id ? updatedVerb : v));
         showToast(`Marked "${verb.v1}" as ${result === 'pass' ? 'Known' : 'Forgot'}.`, 'success');
-    } catch (e: any) {
+    } catch (_e: any) {
         showToast('Failed to update status.', 'error');
     }
   };

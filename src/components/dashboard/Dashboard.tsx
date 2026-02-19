@@ -4,9 +4,7 @@ import { AppView, User, VocabularyItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import * as db from '../../app/db';
 import { DashboardUI, DashboardUIProps, StudyStats } from './Dashboard_UI';
-import { getConfig, getServerUrl } from '../../app/settingsManager';
-// Removed ConfirmationModal import as it is no longer used for restore
-import { AlertTriangle, Download } from 'lucide-react';
+import { getConfig } from '../../app/settingsManager';
 
 interface Props {
   userId: string;
@@ -39,7 +37,7 @@ interface Props {
 }
 
 const Dashboard: React.FC<Props> = ({ 
-    userId, totalCount, user, xpToNextLevel, wotd, onViewWotd, serverStatus, 
+    userId, totalCount, user, wotd, serverStatus, 
     restoreFromServerAction, triggerLocalRestore,
     onLocalBackup, onServerBackup,
     onAction,
