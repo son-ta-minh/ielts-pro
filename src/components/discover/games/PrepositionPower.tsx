@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Play, Check, ChevronRight, Zap, Search } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
 

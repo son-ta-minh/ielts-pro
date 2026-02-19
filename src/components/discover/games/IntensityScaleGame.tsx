@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Play, CheckCircle2, Scale, ChevronDown, SkipForward, XCircle, ArrowRight, Loader2, Info } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle2, Scale, ChevronDown, SkipForward, ArrowRight, Loader2, Info } from 'lucide-react';
 import { User, IntensityRow, IntensityItem } from '../../../app/types';
 import * as db from '../../../app/db';
 import * as dataStore from '../../../app/dataStore';
@@ -230,8 +230,8 @@ export const IntensityScaleGame: React.FC<Props> = ({ user, onComplete, onExit }
                     updatedAt: Date.now()
                 });
             }
-        } catch (e) {
-            console.error("Failed to save result", e);
+        } catch (_e) {
+            console.error("Failed to save result", _e);
         } finally {
             setIsSaving(false);
         }
@@ -256,72 +256,82 @@ export const IntensityScaleGame: React.FC<Props> = ({ user, onComplete, onExit }
     // --- RENDER SETUP ---
     if (gameState === 'SETUP') {
         return (
-            <div className="flex flex-col h-full items-center justify-center p-6 space-y-8 animate-in fade-in">
-                <div className="text-center space-y-2">
-                    <div className="w-20 h-20 bg-orange-100 text-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-sm -rotate-3">
-                        <Scale size={40} fill="currentColor" />
+            <div className="flex flex-col h-full items-center p-6 animate-in fade-in overflow-y-auto">
+                <div className="text-center space-y-2 mb-8 mt-auto">
+                    <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm -rotate-3">
+                        <Scale size={32} fill="currentColor" />
                     </div>
                     <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Intensity Scale</h2>
                     <p className="text-neutral-500 font-medium max-w-xs mx-auto">Drill synonyms based on their degree of intensity.</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-[2rem] border border-neutral-200 shadow-sm w-full max-w-sm space-y-6">
-                    <div className="flex justify-between items-center bg-neutral-50 p-3 rounded-xl">
-                         <div className="text-center flex-1 border-r border-neutral-200">
-                             <p className="text-2xl font-black text-emerald-500">{masteredItems}</p>
-                             <p className="text-[10px] font-bold text-neutral-400 uppercase">Mastered</p>
-                         </div>
-                         <div className="text-center flex-1">
-                             <p className="text-2xl font-black text-neutral-900">{totalItems}</p>
-                             <p className="text-[10px] font-bold text-neutral-400 uppercase">Total</p>
-                         </div>
-                    </div>
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-4 mb-auto">
+                    {/* LEFT COLUMN: Stats & Settings */}
+                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-6 flex flex-col justify-between">
+                        <div className="flex justify-between items-center bg-neutral-50 p-3 rounded-2xl">
+                             <div className="text-center flex-1 border-r border-neutral-200">
+                                 <p className="text-2xl font-black text-emerald-500">{masteredItems}</p>
+                                 <p className="text-[10px] font-bold text-neutral-400 uppercase">Mastered</p>
+                             </div>
+                             <div className="text-center flex-1">
+                                 <p className="text-2xl font-black text-neutral-900">{totalItems}</p>
+                                 <p className="text-[10px] font-bold text-neutral-400 uppercase">Total</p>
+                             </div>
+                        </div>
 
-                    <div className="space-y-3">
-                        <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Game Mode</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button onClick={() => setGameMode('MASTER')} className={`p-3 rounded-xl border-2 text-xs font-bold transition-all ${gameMode === 'MASTER' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
-                                Master It
-                                <p className="text-[9px] font-normal opacity-70 mt-1">Focus on weak items</p>
-                            </button>
-                            <button onClick={() => setGameMode('REVIEW')} className={`p-3 rounded-xl border-2 text-xs font-bold transition-all ${gameMode === 'REVIEW' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
-                                Review All
-                                <p className="text-[9px] font-normal opacity-70 mt-1">Random practice</p>
-                            </button>
+                        <div className="space-y-3">
+                            <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Game Mode</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => setGameMode('MASTER')} className={`p-3 rounded-xl border-2 text-xs font-bold transition-all ${gameMode === 'MASTER' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
+                                    Master It
+                                    <p className="text-[9px] font-normal opacity-70 mt-1">Focus on weak items</p>
+                                </button>
+                                <button onClick={() => setGameMode('REVIEW')} className={`p-3 rounded-xl border-2 text-xs font-bold transition-all ${gameMode === 'REVIEW' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
+                                    Review All
+                                    <p className="text-[9px] font-normal opacity-70 mt-1">Random practice</p>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Question Count</span>
+                                <span className="text-xl font-black text-orange-600">{sessionSize}</span>
+                            </div>
+                            <input
+                                type="range" min="5" max="25" step="5" value={sessionSize}
+                                onChange={(e) => setSessionSize(parseInt(e.target.value, 10))}
+                                className="w-full h-2 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                            />
                         </div>
                     </div>
 
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center px-1">
-                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Question Count</span>
-                            <span className="text-xl font-black text-orange-600">{sessionSize}</span>
-                        </div>
-                        <input
-                            type="range" min="5" max="25" step="5" value={sessionSize}
-                            onChange={(e) => setSessionSize(parseInt(e.target.value, 10))}
-                            className="w-full h-2 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-orange-500"
-                        />
-                    </div>
-
-                    <div className="space-y-3">
+                    {/* RIGHT COLUMN: Difficulty */}
+                    <div className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-3">
                         <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Difficulty</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button onClick={() => setDifficulty('EASY')} className={`p-3 rounded-xl border-2 text-xs font-bold transition-all ${difficulty === 'EASY' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
-                                Easy
-                                <p className="text-[9px] font-normal opacity-70 mt-1">Select from list</p>
+                        <div className="grid grid-cols-1 gap-3 h-full">
+                            <button onClick={() => setDifficulty('EASY')} className={`flex flex-col items-start p-4 rounded-2xl border-2 transition-all text-left group ${difficulty === 'EASY' ? 'bg-orange-50 border-orange-500 shadow-sm' : 'bg-white border-neutral-100 hover:border-neutral-200'}`}>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${difficulty === 'EASY' ? 'text-orange-700' : 'text-neutral-400'}`}>Easy</span>
+                                    {difficulty === 'EASY' && <CheckCircle2 size={14} className="text-orange-600" />}
+                                </div>
+                                <span className="text-[10px] font-bold text-neutral-400 leading-tight">Select the correct word from a list of options.</span>
                             </button>
-                            <button onClick={() => setDifficulty('HARD')} className={`p-3 rounded-xl border-2 text-xs font-bold transition-all ${difficulty === 'HARD' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
-                                Hard
-                                <p className="text-[9px] font-normal opacity-70 mt-1">Fill in the blank</p>
+                            <button onClick={() => setDifficulty('HARD')} className={`flex flex-col items-start p-4 rounded-2xl border-2 transition-all text-left group ${difficulty === 'HARD' ? 'bg-orange-50 border-orange-500 shadow-sm' : 'bg-white border-neutral-100 hover:border-neutral-200'}`}>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${difficulty === 'HARD' ? 'text-orange-700' : 'text-neutral-400'}`}>Hard</span>
+                                    {difficulty === 'HARD' && <CheckCircle2 size={14} className="text-orange-600" />}
+                                </div>
+                                <span className="text-[10px] font-bold text-neutral-400 leading-tight">Type the correct word from memory without hints.</span>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex gap-4">
-                    <button onClick={onExit} className="px-8 py-3 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-xl hover:bg-neutral-50">Back</button>
-                    <button onClick={handleStartGame} className="px-10 py-3 bg-neutral-900 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-neutral-800 shadow-lg flex items-center gap-2">
-                        <Play size={16} fill="white" /> Start Game
+                <div className="flex gap-4 w-full max-w-md">
+                    <button onClick={onExit} className="px-10 py-4 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-2xl hover:bg-neutral-50 transition-all active:scale-95">Back</button>
+                    <button onClick={handleStartGame} className="flex-1 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl active:scale-95 flex justify-center items-center gap-2">
+                        <Play size={18} fill="white" /> Start
                     </button>
                 </div>
             </div>
@@ -376,7 +386,7 @@ export const IntensityScaleGame: React.FC<Props> = ({ user, onComplete, onExit }
                     
                     <div className="space-y-1">
                         <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">What is the {currentQ.targetCategory} of</p>
-                        <h3 className="text-4xl font-black text-neutral-900 tracking-tighter">"{currentQ.pivotWord}"?</h3>
+                        <h3 className="text-4xl font-black text-neutral-900 tracking-tighter">&quot;{currentQ.pivotWord}&quot;?</h3>
                     </div>
                 </div>
 

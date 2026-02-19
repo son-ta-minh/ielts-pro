@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Server, Wifi, AlertTriangle, ExternalLink, RefreshCw, X, ShieldAlert, Square, ScanSearch, Link } from 'lucide-react';
+import { Loader2, Wifi, AlertTriangle, ExternalLink, X, ShieldAlert, Square, ScanSearch, Link } from 'lucide-react';
 import { getServerUrl, getConfig } from '../../app/settingsManager';
 
 interface Props {

@@ -6,7 +6,7 @@ import { useSession } from './hooks/useSession';
 import { useGamification, calculateWordDifficultyXp as movedCalc } from './hooks/useGamification';
 import { useDataFetching } from './hooks/useDataFetching';
 import { useDataActions } from './hooks/useDataActions';
-import { getDueWords, getNewWords, saveUser } from './db';
+import { getDueWords, getNewWords } from './db';
 import * as dataStore from './dataStore';
 import * as db from './db';
 import { getConfig, getServerUrl, saveConfig } from './settingsManager';
@@ -20,7 +20,7 @@ export const calculateWordDifficultyXp = movedCalc;
 export const useAppController = () => {
     const { showToast } = useToast();
     
-    const { currentUser, isLoaded, handleLogin, handleLogout, handleUpdateUser, setCurrentUser, shouldSkipAuth } = useAuthAndUser();
+    const { currentUser, isLoaded, handleLogin, handleUpdateUser, setCurrentUser, shouldSkipAuth } = useAuthAndUser();
     const [view, setView] = useState<AppView>('AUTH');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [globalViewWord, setGlobalViewWord] = useState<VocabularyItem | null>(null);
@@ -151,8 +151,8 @@ export const useAppController = () => {
                 setConnectionScanStatus('failed');
                 return false;
             }
-        } catch (e: any) {
-            if (e.message === 'aborted') return false;
+        } catch (_e: any) {
+            if (_e.message === 'aborted') return false;
             setConnectionScanStatus('failed');
             return false;
         }
@@ -202,7 +202,7 @@ export const useAppController = () => {
                         setSyncPrompt({ isOpen: true, type: 'push', localDate: new Date(localTime).toLocaleString(), serverDate: new Date(serverTime).toLocaleString(), serverId: userBackup.id, serverMtime: serverTime });
                     }
                 }
-            } catch (e) { console.warn("[Sync] Initial check failed:", e); }
+            } catch (_e) { console.warn("[Sync] Initial check failed:", _e); }
         };
         const t = setTimeout(performSyncCheck, 2000);
         return () => clearTimeout(t);
@@ -217,7 +217,7 @@ export const useAppController = () => {
                  try {
                      const backups = await fetchServerBackups();
                      if (backups && backups.length > 0) { setAutoRestoreCandidates(backups); setIsAutoRestoreOpen(true); }
-                 } catch (e) { console.warn("[AutoRestore] Failed to fetch backups on init:", e); }
+                 } catch (_e) { console.warn("[AutoRestore] Failed to fetch backups on init:", _e); }
              }
         };
         const t = setTimeout(checkForBackups, 1000);
@@ -239,7 +239,7 @@ export const useAppController = () => {
             const mtime = target ? new Date(target.date).getTime() : undefined;
             await restoreFromServerAction(identifier, mtime);
             setIsSyncing(false);
-        } catch (e) { setIsSyncing(false); showToast("Restore failed.", "error"); }
+        } catch (_e) { setIsSyncing(false); showToast("Restore failed.", "error"); }
     };
 
     const handleLocalRestoreSetup = () => { setIsAutoRestoreOpen(false); triggerLocalRestore(); };
@@ -251,7 +251,7 @@ export const useAppController = () => {
             await dataStore.wipeAllLocalData(); 
             const defaultUser = await db.seedDatabaseIfEmpty(true);
             if (defaultUser) { handleLogin(defaultUser); setView('SETTINGS'); showToast("Welcome! Your data has been wiped. Please set up your new profile.", "success"); }
-        } catch (e) { showToast("Failed to prepare new profile.", "error"); } finally { setIsResetting(false); }
+        } catch (_e) { showToast("Failed to prepare new profile.", "error"); } finally { setIsResetting(false); }
     };
 
     const handleSwitchUser = async () => {
@@ -261,26 +261,26 @@ export const useAppController = () => {
         hasCheckedAutoRestore.current = false;
         if (currentUser && currentUser.id !== DEFAULT_USER_ID) {
              showToast("Syncing current profile...", "info");
-             try { await performAutoBackup(currentUser.id, currentUser, true); } catch (e) { showToast("Backup failed, proceeding...", "error"); }
+             try { await performAutoBackup(currentUser.id, currentUser, true); } catch (_e) { showToast("Backup failed, proceeding...", "error"); }
         }
         try {
             await dataStore.clearVocabularyOnly();
             const backups = await fetchServerBackups();
             setAutoRestoreCandidates(backups);
             setIsAutoRestoreOpen(true);
-        } catch (e) { showToast("Failed to fetch user list from server.", "error"); }
+        } catch (_e) { showToast("Failed to fetch user list from server.", "error"); }
     };
 
     const handleSyncPush = async () => {
         if (!currentUser) return;
         setIsSyncing(true);
-        try { await performAutoBackup(currentUser.id, currentUser, true); showToast("Cloud backup updated!", "success"); setSyncPrompt(null); } catch (e) { showToast("Push failed.", "error"); } finally { setIsSyncing(false); }
+        try { await performAutoBackup(currentUser.id, currentUser, true); showToast("Cloud backup updated!", "success"); setSyncPrompt(null); } catch (_e) { showToast("Push failed.", "error"); } finally { setIsSyncing(false); }
     };
 
     const handleSyncRestore = async () => {
         if (!syncPrompt) return;
         setIsSyncing(true);
-        try { await restoreFromServerAction(syncPrompt.serverId, syncPrompt.serverMtime); setSyncPrompt(null); setIsSyncing(false); } catch (e) { showToast("Restore failed.", "error"); setIsSyncing(false); }
+        try { await restoreFromServerAction(syncPrompt.serverId, syncPrompt.serverMtime); setSyncPrompt(null); setIsSyncing(false); } catch (_e) { showToast("Restore failed.", "error"); setIsSyncing(false); }
     };
 
     useEffect(() => {
@@ -398,19 +398,54 @@ export const useAppController = () => {
         else handleSessionComplete();
     }, [sessionWords, sessionType, sessionFocus, startSession, handleSessionComplete]);
 
-    const startDueReviewSession = useCallback(async () => { if (!currentUser) return; const words = await getDueWords(currentUser.id, 30); startSession(words, 'due'); }, [currentUser, startSession]);
-    const startNewLearnSession = useCallback(async () => { if (!currentUser) return; const words = await getNewWords(currentUser.id, 20); startSession(words, 'new'); }, [currentUser, startSession]);
+    const startDueReviewSession = useCallback(async () => { 
+        if (!currentUser) return; 
+        // Use dataStore for consistency with stats
+        const allWords = dataStore.getAllWords();
+        const now = Date.now();
+        const dueWords = allWords
+            .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality !== 'FAILED')
+            .sort((a, b) => a.nextReview - b.nextReview)
+            .slice(0, 30);
+        
+        if (dueWords.length === 0) {
+            showToast("No words due for review!", "success");
+            return;
+        }
+        startSession(dueWords, 'due'); 
+    }, [currentUser, startSession, showToast]);
+
+    const startNewLearnSession = useCallback(async () => { 
+        if (!currentUser) return; 
+        // Use dataStore for consistency with stats
+        const allWords = dataStore.getAllWords();
+        const newWords = allWords
+            .filter(w => !w.isPassive && !w.lastReview && w.quality === 'VERIFIED')
+            .sort((a, b) => a.createdAt - b.createdAt)
+            .slice(0, 20);
+            
+        if (newWords.length === 0) {
+            showToast("No new words to learn!", "success");
+            return;
+        }
+        startSession(newWords, 'new'); 
+    }, [currentUser, startSession, showToast]);
+
     const handleNavigateToList = (filter: string) => { setInitialListFilter(filter); setView('BROWSE'); };
     const openAddWordLibrary = () => { setView('BROWSE'); setForceExpandAdd(true); };
     const handleComposeWithWord = (word: VocabularyItem) => { setWritingContextWord(word); setView('WRITING'); };
     const consumeWritingContext = () => setWritingContextWord(null);
 
     const handleSpecialAction = (action: string, params?: any) => {
+        // console.log("Handling Special Action:", action);
         switch(action) {
             case 'REVIEW': startDueReviewSession(); break;
             case 'BROWSE': startNewLearnSession(); break;
             case 'LESSON': if (params && params.lessonId) setTargetLessonId(params.lessonId); setView('LESSON'); break;
-            case 'LESSON_GRAMMAR': setTargetLessonTag('Grammar'); setView('LESSON'); break; // Added
+            case 'LESSON_GRAMMAR': 
+                setTargetLessonTag('Grammar'); 
+                setView('LESSON'); 
+                break;
             case 'IRREGULAR_VERBS': setView('IRREGULAR_VERBS'); break;
             case 'MIMIC': setView('MIMIC'); break; 
             case 'PLAN_AI': setPlanningAction('AI'); setView('PLANNING'); break;

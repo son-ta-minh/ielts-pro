@@ -122,7 +122,7 @@ export const WordTransformer: React.FC<Props> = ({ words, onComplete, onExit }) 
                 <div className="flex flex-col items-center justify-center flex-1 space-y-8">
                     <div className="space-y-2 text-center">
                         <h3 className="text-2xl font-black text-neutral-900 leading-tight">Word Transformation</h3>
-                        <p className="text-neutral-500 text-sm font-medium">Transform "<span className="font-bold text-orange-600">{currentItem.hintWord}</span>" to fit.</p>
+                        <p className="text-neutral-500 text-sm font-medium">Transform &quot;<span className="font-bold text-orange-600">{currentItem.hintWord}</span>&quot; to fit.</p>
                     </div>
 
                     <div className="w-full max-w-xl bg-white p-8 rounded-[2rem] shadow-xl border border-neutral-200 text-center space-y-6">
@@ -144,7 +144,7 @@ export const WordTransformer: React.FC<Props> = ({ words, onComplete, onExit }) 
                                 </React.Fragment>
                             ))}
                         </div>
-                        {isCorrect === false && <div className="text-center text-rose-600 font-bold text-sm animate-in fade-in slide-in-from-top-1">Incorrect! Hint: "{currentItem.answer}".</div>}
+                        {isCorrect === false && <div className="text-center text-rose-600 font-bold text-sm animate-in fade-in slide-in-from-top-1">Incorrect! Hint: &quot;{currentItem.answer}&quot;.</div>}
                     </div>
 
                     <div className="flex gap-4 pt-4">

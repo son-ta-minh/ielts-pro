@@ -65,7 +65,7 @@ export const useShelfLogic = <T extends BookWithTitle>(
         setStoredJSON(storageKey, newCustomShelves);
         
         // Auto select new shelf
-        const newIndex = allShelves.length; // It will be sorted, but for UX let's just wait for effect or force it. 
+        // It will be sorted, but for UX let's just wait for effect or force it. 
         // Actually, since allShelves is computed, we can't predict index easily without finding it.
         // We will just return true and let parent handle specific selection logic if needed, 
         // or we can set index by finding name in next render.

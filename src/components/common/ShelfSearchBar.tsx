@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Search, ChevronRight, BookOpen, NotebookText } from 'lucide-react';
+import { Search, ChevronRight, NotebookText } from 'lucide-react';
 
 interface Props {
     shelves: string[];

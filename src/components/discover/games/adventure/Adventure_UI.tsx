@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, AdventureProgress, MapNode } from '../../../../app/types';
-import { X, ArrowRight, Zap, Key, GitCommit, ShoppingBag, ChevronLeft, ChevronRight, MapPin, Lock, Disc, Terminal, ShieldCheck, Rocket, Swords, Skull, Plus, Minus, Trophy } from 'lucide-react';
+import { X, ArrowRight, Zap, Key, GitCommit, ShoppingBag, ChevronLeft, ChevronRight, MapPin, Terminal, ShieldCheck, Swords, Skull, Trophy } from 'lucide-react';
 
 interface Props {
     user: User;

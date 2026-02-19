@@ -250,7 +250,7 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
         const canStart = sources.library || sources.collocations || sources.idioms;
 
         return (
-            <div className="flex flex-col h-full relative p-6 justify-center items-center text-center space-y-8 animate-in fade-in">
+            <div className="flex flex-col h-full relative p-6 justify-center items-center text-center space-y-8 animate-in fade-in overflow-y-auto">
                 <div className="space-y-2">
                     <div className="w-16 h-16 bg-fuchsia-100 text-fuchsia-600 rounded-full flex items-center justify-center mx-auto mb-4">
                         <RefreshCw size={32} />

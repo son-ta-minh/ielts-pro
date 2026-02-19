@@ -42,7 +42,7 @@ const SuggestionSection: React.FC<{ title: string; icon: React.ReactNode; sugges
                         )}
                         <div>
                             <p className={`font-bold text-sm ${s.suggestion === 'ignore' ? 'text-neutral-500' : 'text-neutral-900'}`}>{s.item}</p>
-                            <p className="text-xs text-neutral-600 italic">"{s.reason}"</p>
+                            <p className="text-xs text-neutral-600 italic">&quot;{s.reason}&quot;</p>
                         </div>
                     </li>
                 ))}

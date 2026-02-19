@@ -155,7 +155,7 @@ const Dashboard: React.FC<Props> = ({
       }
 
       setRawCount(stats.dashboardStats.rawCount || 0);
-      setRefinedCount(stats.dashboardStats.refinedCount);
+      setRefinedCount(stats.dashboardStats.refinedCount || 0);
       
       if (stats.reviewCounts) {
         setReviewStats({

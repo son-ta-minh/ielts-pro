@@ -65,7 +65,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             } else {
                 showToast("IPA server unavailable", "error");
             }
-        } catch (e) {
+        } catch (_e) {
             showToast("Failed to fetch IPA", "error");
         } finally {
             setIsIpaLoading(false);
@@ -150,8 +150,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                         }
                     }
                 );
-            } catch (e) {
-                console.error(e);
+            } catch (_e) {
+                console.error(_e);
                 setIsRecording(false);
                 isRecordingRef.current = false;
             }
@@ -227,7 +227,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                             <span className="text-xs font-black uppercase tracking-widest">Listening...</span>
                         </div>
                     ) : transcript && (
-                        <p className="text-sm font-medium italic text-neutral-500 line-clamp-2">"{transcript}"</p>
+                        <p className="text-sm font-medium italic text-neutral-500 line-clamp-2">&quot;{transcript}&quot;</p>
                     )}
 
                     {analysis && (

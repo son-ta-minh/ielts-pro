@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Check, Bot, Sparkles, Command, CornerDownLeft, Loader2, Globe, Radio, Target } from 'lucide-react';
+import { X, Check, Bot, Sparkles, Command, CornerDownLeft, Loader2, Globe, Radio, Target, BookOpen } from 'lucide-react';
 import { copyToClipboard } from '../../utils/text';
 import { User, ParaphraseMode } from '../../app/types';
 
@@ -151,12 +151,12 @@ const UniversalAiModal: React.FC<Props> = ({
             let parsedData;
             try {
                 parsedData = JSON.parse(cleanJson);
-            } catch (e) {
+            } catch (_e) {
                 try {
                     cleanJson = cleanJson.replace(/,\s*([}\]])/g, '$1');
                     parsedData = JSON.parse(cleanJson);
                 } catch (e2) {
-                    throw new Error("Cannot read AI response. Please ensure you copied the full code.", { cause: e2 as Error });
+                    throw new Error("Cannot read AI response. Please ensure you copied the full code.", { cause: e2 });
                 }
             }
 

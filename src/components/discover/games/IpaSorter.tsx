@@ -222,7 +222,7 @@ export const IpaSorter: React.FC<Props> = ({ words, onComplete, onExit, onBulkUp
 
             // Badge styling logic
             const percent = stats.total > 0 ? (stats.correct / stats.total) * 100 : 0;
-            let badgeClass = "text-neutral-500 bg-neutral-100 border-neutral-200";
+            let badgeClass;
             
             if (!isAvailable) {
                  badgeClass = "text-neutral-300 bg-neutral-50 border-neutral-100";

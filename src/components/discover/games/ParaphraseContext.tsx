@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { ArrowLeft, Check, RefreshCw, Play, Zap, Split, Layers, Brain, BookOpen, ChevronDown, Link2, CheckCircle2, Quote } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
 
@@ -40,8 +40,6 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
     const [selectedContextId, setSelectedContextId] = useState<string | null>(null);
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
     const [score, setScore] = useState(0);
-
-    const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
     const handleStartGame = () => {
         const allPairs: { context: string, fullText: string, headword: string, pairId: string }[] = [];
@@ -89,7 +87,7 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
         const newItems: Card[] = [];
 
         gamePairs.forEach((pair, pIdx) => {
-            let maskedText = pair.fullText;
+            let maskedText;
             let partnerWord = pair.fullText;
             let isPreFilled = false;
 
@@ -210,9 +208,8 @@ export const ParaphraseContext: React.FC<Props> = ({ words, onComplete, onExit }
         
         if (isCorrect) {
             const nextItems = items.map(i => i.pairId === pairId ? { ...i, isFilled: true, text: i.fullText } : i);
-            const nextContexts = [...contexts];
             setItems(nextItems);
-            checkPairComplete(pairId, nextContexts, nextItems);
+            checkPairComplete(pairId, contexts, nextItems);
         } else if (value.trim().length > 0 && !item.choices.includes(value)) {
             // Only show error for typed input that is wrong and complete
             setItems(prev => prev.map(i => i.pairId === pairId ? { ...i, error: true } : i));

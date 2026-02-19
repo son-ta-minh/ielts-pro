@@ -1,7 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { User, VocabularyItem, AppView, WordQuality } from '../types';
-import * as db from '../db';
 import * as dataStore from '../dataStore';
 import { getStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
@@ -13,7 +12,7 @@ interface UseDataFetchingProps {
     onUpdateUser: (user: User) => void;
 }
 
-export const useDataFetching = ({ currentUser, view, onUpdateUser }: UseDataFetchingProps) => {
+export const useDataFetching = ({ currentUser, onUpdateUser }: UseDataFetchingProps) => {
     const [stats, setStats] = useState({ total: 0, due: 0, new: 0, learned: 0 });
     const [wotd, setWotd] = useState<VocabularyItem | null>(null);
     const [randomWotd, setRandomWotd] = useState<VocabularyItem | null>(null);
@@ -63,7 +62,7 @@ export const useDataFetching = ({ currentUser, view, onUpdateUser }: UseDataFetc
         const progress = currentUser.adventure;
         if (progress) {
             const wordsByText = new Map(allUserWords.map(w => [w.word.toLowerCase(), w]));
-            let updatedProgress = { ...progress };
+            const updatedProgress = { ...progress };
             let masteryUnlocked = false;
             let dailyStarAwarded = false;
             const todayStr = new Date().toISOString().split('T')[0];

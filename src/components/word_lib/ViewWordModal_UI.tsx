@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { X, Mic, Quote, Layers, Combine, MessageSquare, RotateCw, Plus, CheckCircle2, Tag as TagIcon, StickyNote, Edit3, Archive, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, Info, ChevronDown, ChevronRight, Link as LinkIcon, Users2, BrainCircuit, Loader2, Ear, BookText, ClipboardList, Sparkles, RefreshCw } from 'lucide-react';
+import { X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone, WordFamily } from '../../app/types';
-import { getRemainingTime, updateSRS, resetProgress, calculateMasteryScore } from '../../utils/srs';
+import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
-import { logSrsUpdate } from '../practice/ReviewSession';
 import { parseMarkdown } from '../../utils/markdownParser';
 
 // --- Visual Components ---
@@ -239,11 +238,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
         if (isViewOnly) return;
         if (statusId === 'NEW') {
             const finalWord = resetProgress(word);
-            logSrsUpdate('RESET' as any, word, finalWord);
             onUpdate(finalWord);
         } else {
             const finalWord = updateSRS(word, statusId as ReviewGrade);
-            logSrsUpdate(statusId as ReviewGrade, word, finalWord);
             onUpdate(finalWord);
         }
     };
@@ -434,7 +431,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     <div className="p-4 bg-emerald-50 rounded-full text-emerald-600"><ClipboardList size={32} /></div>
                                     <div className="text-center">
                                         <p className="font-black text-neutral-900">No Practice Test</p>
-                                        <p className="text-xs text-neutral-400 font-medium">Create an interactive test based on this word's usage.</p>
+                                        <p className="text-xs text-neutral-400 font-medium">Create an interactive test based on this word&apos;s usage.</p>
                                     </div>
                                     {!isViewOnly && (
                                         <button onClick={() => onGenerateLesson?.('TEST')} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-neutral-800 transition-all active:scale-95 shadow-lg"><Sparkles size={16}/> Generate Test</button>

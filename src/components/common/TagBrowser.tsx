@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronRight, Tag, Search, Share2, FolderTree } from 'lucide-react';
+import { ChevronRight, Tag, Search, FolderTree } from 'lucide-react';
 
 export interface TagTreeNode {
     name: string;

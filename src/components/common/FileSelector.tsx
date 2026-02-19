@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Music, FileText, Folder, ChevronRight, CornerLeftUp, X, Loader2, Lock, Globe, Server, Tag, Search, ListTodo } from 'lucide-react';
+import { Music, FileText, Folder, ChevronRight, CornerLeftUp, X, Loader2, Server, Tag, Search, ListTodo } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 
@@ -71,7 +71,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
             } else {
                 showToast("Failed to connect to server", "error");
             }
-        } catch (e) {
+        } catch (_e) {
             showToast("Server unreachable", "error");
         } finally {
             setLoading(false);
@@ -93,7 +93,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
             } else {
                 showToast("Failed to load files", "error");
             }
-        } catch (e) {
+        } catch (_e) {
             showToast("Connection error", "error");
         } finally {
             setLoading(false);
@@ -140,7 +140,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
             } else {
                 showToast("Failed to load Master Library", "error");
             }
-        } catch (e) {
+        } catch (_e) {
             showToast("Connection error", "error");
         } finally {
             setLoading(false);
@@ -215,7 +215,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                 } else {
                     showToast("Failed to load file content", "error");
                 }
-            } catch (e) {
+            } catch (_e) {
                 showToast("Error reading file", "error");
             } finally {
                 setLoading(false);
@@ -354,9 +354,6 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                     ) : (
                         <div className="space-y-1">
                             {filteredFiles.map((item, idx) => {
-                                // For master mode, we treat everything as a 'file' (selectable unit)
-                                const isFile = item.type === 'file' || item.type === 'unit' || item.type === 'plan';
-                                
                                 return (
                                     <button 
                                         key={`${item.name}-${idx}`} 

@@ -1,7 +1,6 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { VocabularyItem } from '../../app/types';
-import { CalendarCheck, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface Props {
     learnedToday: number;

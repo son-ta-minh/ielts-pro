@@ -16,7 +16,6 @@ export const AudioTrimmer: React.FC<Props> = ({ audioBlob, onTrim, onCancel }) =
     const [endPos, setEndPos] = useState(1); // 0 to 1
     const [isPlaying, setIsPlaying] = useState(false);
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
-    const startTimeRef = useRef(0);
 
     useEffect(() => {
         const init = async () => {
@@ -109,7 +108,6 @@ export const AudioTrimmer: React.FC<Props> = ({ audioBlob, onTrim, onCancel }) =
         // Lazy import to avoid circular dependency issues if any
         const { bufferToWav } = await import('../../utils/audio');
         
-        const duration = audioBuffer.duration;
         const startSample = Math.floor(startPos * audioBuffer.length);
         const endSample = Math.floor(endPos * audioBuffer.length);
         const frameCount = endSample - startSample;

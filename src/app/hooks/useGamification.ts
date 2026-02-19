@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { User, VocabularyItem, ReviewGrade } from '../types';
 import { useToast } from '../../contexts/ToastContext';
 

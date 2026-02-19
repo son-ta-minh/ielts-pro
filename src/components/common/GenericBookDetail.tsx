@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ArrowLeft, Plus, Loader2, Palette, Type, Move, Image as ImageIcon, Trash2, Edit3, X, CheckSquare, Square, Search, Pen, BookOpen } from 'lucide-react';
+import { ArrowLeft, Plus, Palette, Type, Image as ImageIcon, Trash2, Edit3, X, CheckSquare, Square, Search, Pen, BookOpen } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { COLORS, TITLE_COLORS, BookIcon } from '../wordbook/WordBookCard';
 import { UniversalCard } from './UniversalCard';
@@ -302,7 +302,7 @@ export const GenericBookDetail: React.FC<Props> = ({
                     {items.length === 0 && (
                         <div className="col-span-full py-20 text-center text-neutral-400 border-2 border-dashed border-neutral-200 rounded-3xl">
                             <p className="font-bold">This book is empty.</p>
-                            <p className="text-sm mt-1">Click "Add Content" to fill it up.</p>
+                            <p className="text-sm mt-1">Click &quot;Add Content&quot; to fill it up.</p>
                         </div>
                     )}
                 </div>

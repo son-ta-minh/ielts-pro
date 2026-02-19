@@ -49,7 +49,7 @@ export const MoveBookModal: React.FC<{
                 <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
                     <div>
                         <h3 className="text-xl font-black text-neutral-900">Move Book</h3>
-                        <p className="text-xs text-neutral-500 font-bold mt-1 truncate">"{bookTitle}"</p>
+                        <p className="text-xs text-neutral-500 font-bold mt-1 truncate">&quot;{bookTitle}&quot;</p>
                     </div>
                     <button onClick={onClose} className="p-2 -mr-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
                 </header>

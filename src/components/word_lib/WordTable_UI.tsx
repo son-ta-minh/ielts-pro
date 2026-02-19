@@ -1,9 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ArrowDownAZ, ListFilter, Copy, ShieldCheck, ShieldX, Ghost, Zap, GitCommit, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, Sparkles, PenLine, BookMarked, BookPlus, Replace } from 'lucide-react';
+import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Mic, Tag, Play, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, PenLine, BookMarked, BookPlus, Replace } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, WordQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
-import ConfirmationModal from '../common/ConfirmationModal';
-import UniversalAiModal from '../common/UniversalAiModal';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
 
 export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'archive' | 'duplicate';
@@ -301,8 +299,8 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const totalPages = Math.ceil(total / pageSize);
-  const defaultDeleteMessage = <span>Are you sure you want to permanently delete <span className="font-bold text-neutral-900">"{wordToDelete?.word}"</span>? This action cannot be undone.</span>;
-  const unitUnlinkMessage = <span>Remove <span className="font-bold text-neutral-900">"{wordToDelete?.word}"</span> from this unit? It remains in your library.</span>;
+  const defaultDeleteMessage = <span>Are you sure you want to permanently delete <span className="font-bold text-neutral-900">&quot;{wordToDelete?.word}&quot;</span>? This action cannot be undone.</span>;
+  const unitUnlinkMessage = <span>Remove <span className="font-bold text-neutral-900">&quot;{wordToDelete?.word}&quot;</span> from this unit? It remains in your library.</span>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 relative">

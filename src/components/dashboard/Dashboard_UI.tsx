@@ -3,12 +3,10 @@ import {
   RotateCw, 
   Download, History, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
   Target, Headphones, Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Gamepad2, Puzzle, Brain,
-  CloudUpload, Percent, MessagesSquare, Scale
+  CloudUpload, Percent, MessagesSquare, Scale, Dumbbell
 } from 'lucide-react';
-import { User } from '../../app/types';
 import { DailyGoalConfig } from '../../app/settingsManager';
 import { DayProgress } from './DayProgress';
-import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 
 const getFormattedBuildDate = () => {
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
@@ -27,7 +25,7 @@ const getFormattedBuildDate = () => {
         const hours = d.getHours().toString().padStart(2, '0');
         const minutes = d.getMinutes().toString().padStart(2, '0');
         return `v${year}${month}${day}_${hours}${minutes}`;
-    } catch (_e) {
+    } catch {
         return 'v_error';
     }
 };
@@ -173,13 +171,82 @@ const MasteryOverviewPanel: React.FC<{ stats: StudyStats | null }> = ({ stats })
     );
 };
 
+const VocabularyCenterPanel: React.FC<{
+    stats: StudyStats | null;
+    totalCount: number;
+    newCount: number;
+    studyingCount: number;
+    masteredCount: number;
+    rawCount: number;
+    refinedCount: number;
+    onStartNew: () => void;
+    onStartDue: () => void;
+    onRefineRaw: () => void;
+    onVerifyRefined: () => void;
+}> = ({ stats, totalCount, newCount, studyingCount, masteredCount, rawCount, refinedCount, onStartNew, onStartDue, onRefineRaw, onVerifyRefined }) => {
+    const newPercent = totalCount > 0 ? (newCount / totalCount) * 100 : 0;
+    const studyingPercent = totalCount > 0 ? (studyingCount / totalCount) * 100 : 0;
+    const masteredPercent = totalCount > 0 ? (masteredCount / totalCount) * 100 : 0;
+
+    return (
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4">
+             <div className="flex items-center gap-3">
+                 <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 shadow-md">
+                     <BookCopy size={18} />
+                 </div>
+                 <div>
+                     <h3 className="text-base font-black text-neutral-900 tracking-tight">Vocabulary Center</h3>
+                     <p className="text-[10px] font-medium text-neutral-400">Manage and expand your lexical resource.</p>
+                 </div>
+             </div>
+
+             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                {/* Chart Section - 2 Columns */}
+                <div className="lg:col-span-2 flex flex-col justify-center gap-4 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-black text-neutral-500 uppercase tracking-wider">Distribution</span>
+                        <span className="text-xs font-bold text-neutral-400">{totalCount} Total Words</span>
+                    </div>
+                    
+                    <div className="h-4 bg-white rounded-full flex overflow-hidden border border-neutral-200 shadow-inner">
+                        <div className="h-full bg-blue-500" style={{ width: `${newPercent}%` }} />
+                        <div className="h-full bg-cyan-500" style={{ width: `${studyingPercent}%` }} />
+                        <div className="h-full bg-purple-500" style={{ width: `${masteredPercent}%` }} />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-blue-500" />
+                            <span className="text-[10px] font-bold text-neutral-600">New ({newCount})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-cyan-500" />
+                            <span className="text-[10px] font-bold text-neutral-600">Learning ({studyingCount})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-purple-500" />
+                            <span className="text-[10px] font-bold text-neutral-600">Mastered ({masteredCount})</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Actions - 2 Columns (2x2 Grid) */}
+                <div className="lg:col-span-2 grid grid-cols-2 gap-3">
+                    <NavButton label="Learn New" subLabel={`${stats ? stats.vocab.new : '-'} words ready`} icon={Sparkles} color="text-indigo-600" bg="bg-indigo-50" onClick={onStartNew} disabled={!stats || stats.vocab.new === 0} />
+                    <NavButton label="Review" subLabel={`${stats ? stats.vocab.due : '-'} words due`} icon={RotateCw} color="text-amber-600" bg="bg-amber-50" onClick={onStartDue} disabled={!stats || stats.vocab.due === 0} />
+                    <NavButton label="Refine" subLabel={`${rawCount} raw words`} icon={Wand2} color="text-purple-600" bg="bg-purple-50" onClick={onRefineRaw} disabled={rawCount === 0} />
+                    <NavButton label="Verify" subLabel={`${refinedCount} pending`} icon={ShieldCheck} color="text-emerald-600" bg="bg-emerald-50" onClick={onVerifyRefined} disabled={refinedCount === 0} />
+                </div>
+             </div>
+        </div>
+    );
+};
+
 const StudyNowPanel: React.FC<{
     stats: StudyStats | null;
     isLoading: boolean;
-    onStartNew: () => void;
-    onStartDue: () => void;
     onAction: (action: string) => void;
-}> = ({ stats, isLoading, onStartNew, onStartDue, onAction }) => {
+}> = ({ stats, isLoading, onAction }) => {
 
     return (
         <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4 relative overflow-hidden">
@@ -201,28 +268,17 @@ const StudyNowPanel: React.FC<{
                  </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="flex flex-col gap-2 md:col-span-2 lg:col-span-1">
-                        <div className="flex items-center gap-2 text-neutral-400 px-1">
-                        <BookCopy size={12} />
-                        <span className="font-black uppercase tracking-widest text-[10px]">Vocabulary</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-2">
-                        <NavButton label="Learn New" subLabel={`${stats ? stats.vocab.new : '-'} words`} icon={Sparkles} color="text-indigo-600" bg="bg-indigo-50" onClick={onStartNew} disabled={!stats || stats.vocab.new === 0} />
-                        <NavButton label="Review" subLabel={`${stats ? stats.vocab.due : '-'} words`} icon={RotateCw} color="text-amber-600" bg="bg-amber-50" onClick={onStartDue} disabled={!stats || stats.vocab.due === 0} />
-                    </div>
-                </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="flex flex-col gap-2 md:col-span-2 lg:col-span-2">
                         <div className="flex items-center gap-2 text-neutral-400 px-1">
                         <Target size={12} />
                         <span className="font-black uppercase tracking-widest text-[10px]">Skills</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                        <NavButton label="Reading" subLabel="Passages & Vocab" icon={BookOpen} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('UNIT_LIBRARY')} />
-                        <NavButton label="Listening" subLabel="Transcripts" icon={Headphones} color="text-sky-600" bg="bg-sky-50" onClick={() => onAction('LISTENING')} />
-                        <NavButton label="Writing" subLabel="Task 1 & 2" icon={PenLine} color="text-pink-600" bg="bg-pink-50" onClick={() => onAction('WRITING')} />
-                        <NavButton label="Speaking" subLabel="Simulator" icon={Mic} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('SPEAKING')} />
+                        <NavButton largeSub label="Reading" subLabel="Master comprehension with interactive texts." icon={BookOpen} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('UNIT_LIBRARY')} />
+                        <NavButton largeSub label="Listening" subLabel="Train your ear with diverse audio clips." icon={Headphones} color="text-sky-600" bg="bg-sky-50" onClick={() => onAction('LISTENING')} />
+                        <NavButton largeSub label="Writing" subLabel="Practice Task 1 & 2 with AI feedback." icon={PenLine} color="text-pink-600" bg="bg-pink-50" onClick={() => onAction('WRITING')} />
+                        <NavButton largeSub label="Speaking" subLabel="Simulate real IELTS speaking tests." icon={Mic} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('SPEAKING')} />
                     </div>
                 </div>
 
@@ -232,10 +288,10 @@ const StudyNowPanel: React.FC<{
                         <span className="font-black uppercase tracking-widest text-[10px]">Domains</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                        <NavButton label="Grammar" subLabel="Structure" icon={BookText} color="text-purple-600" bg="bg-purple-50" onClick={() => onAction('LESSON_GRAMMAR')} />
-                        <NavButton label="Irregular Verb" subLabel="V1, V2, V3" icon={FileClock} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('IRREGULAR_VERBS')} />
-                        <NavButton label="Pronunciation" subLabel="Intonation" icon={AudioLines} color="text-emerald-600" bg="bg-emerald-50" onClick={() => onAction('MIMIC')} />
-                        <NavButton label="Lesson" subLabel="General" icon={BookOpen} color="text-blue-600" bg="bg-blue-50" onClick={() => onAction('LESSON')} />
+                        <NavButton largeSub label="Grammar" subLabel="Deep dive into essential grammar rules." icon={BookText} color="text-purple-600" bg="bg-purple-50" onClick={() => onAction('LESSON_GRAMMAR')} />
+                        <NavButton largeSub label="Irregular Verb" subLabel="Master tricky verb forms and usage." icon={FileClock} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('IRREGULAR_VERBS')} />
+                        <NavButton largeSub label="Pronunciation" subLabel="Perfect your accent and intonation." icon={AudioLines} color="text-emerald-600" bg="bg-emerald-50" onClick={() => onAction('MIMIC')} />
+                        <NavButton largeSub label="Lesson" subLabel="Structured lessons for holistic learning." icon={BookOpen} color="text-blue-600" bg="bg-blue-50" onClick={() => onAction('LESSON')} />
                     </div>
                 </div>
             </div>
@@ -256,7 +312,7 @@ const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({
                  </div>
              </div>
              
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                  <NavButton 
                     label="Listening & Spelling" 
                     subLabel="Dictation drills to sharpen auditory accuracy." 
@@ -424,128 +480,7 @@ const BackupStatus: React.FC<{
   );
 };
 
-const LibraryHealthPanel: React.FC<{
-  totalCount: number;
-  newCount: number;
-  rawCount: number;
-  refinedCount: number;
-  reviewStats: { learned: number; mastered: number; statusForgot: number; statusHard: number; statusEasy: number; statusLearned: number; };
-  onRefineRaw: () => void;
-  onVerifyRefined: () => void;
-  onViewLibrary: () => void;
-}> = ({ totalCount, newCount, rawCount, refinedCount, reviewStats, onRefineRaw, onVerifyRefined, onViewLibrary }) => {
-  
-  const chartData = [
-    { name: 'New', value: newCount, color: '#3b82f6' },
-    { name: 'Learning', value: reviewStats.learned, color: '#06b6d4' },
-    { name: 'Mastered', value: reviewStats.mastered, color: '#a855f7' },
-  ];
-  const activeData = totalCount > 0 ? chartData : [{ name: 'Empty', value: 1, color: '#f3f4f6' }];
 
-  return (
-    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col h-full">
-      <div className="flex justify-between items-start mb-1">
-        <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Library Health</h3>
-        <button onClick={onViewLibrary} className="group text-neutral-300 hover:text-neutral-900 transition-colors p-1.5 -mr-1.5 -mt-1.5"><ChevronRight size={18} /></button>
-      </div>
-
-      <div className="flex-grow flex items-start justify-center gap-6 pt-1 pb-4">
-        <div className="h-40 w-40 relative select-none shrink-0 flex items-center justify-center">
-             <PieChart width={160} height={160}>
-                <Pie data={activeData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={totalCount > 0 ? 5 : 0} dataKey="value" stroke="none" cornerRadius={4}>
-                    {activeData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-                </Pie>
-                <Tooltip content={({ active, payload }) => {
-                         if (active && payload && payload.length) return (<div className="bg-neutral-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xl">{payload[0].name}: {payload[0].value}</div>);
-                         return null;
-                }} />
-            </PieChart>
-             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                 <span className="text-2xl font-black text-neutral-900 leading-none">{totalCount}</span>
-                 <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest mt-1">Total</span>
-             </div>
-        </div>
-        <div className="flex-1 flex flex-col justify-center gap-3 self-center">
-             {chartData.map(item => (
-                 <div key={item.name} className="flex items-center justify-between group">
-                     <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide">{item.name}</span></div>
-                     <span className="font-black text-neutral-900 text-xs">{item.value}</span>
-                 </div>
-             ))}
-        </div>
-      </div>
-      
-      <div className="mt-2 flex flex-col sm:flex-row gap-2">
-        <button onClick={onRefineRaw} disabled={rawCount === 0} className="flex-1 justify-between px-3 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center hover:bg-indigo-100 transition-all active:scale-95 disabled:opacity-50 border border-indigo-100 shadow-sm"><div className="flex items-center space-x-1.5"><Wand2 size={12} /><span>REFINE RAW</span></div><span className="px-1.5 py-0.5 bg-indigo-200/50 rounded-md font-black">{rawCount}</span></button>
-        <button onClick={onVerifyRefined} disabled={refinedCount === 0} className="flex-1 justify-between px-3 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center hover:bg-emerald-100 transition-all active:scale-95 disabled:opacity-50 border border-emerald-100 shadow-sm"><div className="flex items-center space-x-1.5"><ShieldCheck size={12} /><span>VERIFY REFINED</span></div><span className="px-1.5 py-0.5 bg-emerald-200/50 rounded-md font-black">{refinedCount}</span></button>
-      </div>
-    </div>
-  );
-};
-
-const WordStatsBar: React.FC<{
-    newCount: number;
-    studyingCount: number;
-    masteredCount: number;
-    totalCount: number;
-}> = ({ newCount, studyingCount, masteredCount, totalCount }) => {
-    if (totalCount === 0) {
-        return (
-            <div className="w-56 h-10 flex items-center justify-center bg-neutral-100 rounded-2xl">
-                <span className="text-[10px] font-bold text-neutral-400">Library Empty</span>
-            </div>
-        );
-    }
-
-    const newPercent = (newCount / totalCount) * 100;
-    const studyingPercent = (studyingCount / totalCount) * 100;
-    const masteredPercent = (masteredCount / totalCount) * 100;
-
-    const BarSegment = ({ percent, color, label, value }: { percent: number, color: string, label: string, value: number }) => (
-        <div className="h-full group relative" style={{ width: `${percent}%`, backgroundColor: color }}>
-            <div className="absolute bottom-full mb-2 w-max px-2 py-1 bg-neutral-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap left-1/2 -translate-x-1/2">
-                {label}: {value} ({Math.round(percent)}%)
-                <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
-            </div>
-        </div>
-    );
-
-    return (
-        <div className="flex items-center gap-3">
-            <div className="w-56 h-2.5 bg-neutral-200 rounded-full flex overflow-hidden border border-neutral-200">
-                <BarSegment percent={newPercent} color="#3b82f6" label="New" value={newCount} />
-                <BarSegment percent={studyingPercent} color="#06b6d4" label="Studying" value={studyingCount} />
-                <BarSegment percent={masteredPercent} color="#a855f7" label="Mastered" value={masteredCount} />
-            </div>
-            <div className="text-xs font-black text-neutral-800 flex items-center gap-1.5">
-                <BookCopy size={12} className="text-neutral-400"/>
-                {totalCount}
-            </div>
-        </div>
-    );
-};
-
-export interface DashboardUIProps {
-  onNavigate: (view: string) => void;
-  totalCount: number;
-  newCount: number;
-  rawCount: number;
-  refinedCount: number;
-  reviewStats: any;
-  lastBackupTime: number | null;
-  onBackup: (mode: 'server' | 'file') => void;
-  onRestore: (mode: 'server' | 'file') => void;
-  serverStatus: 'connected' | 'disconnected';
-  onAction: (action: string, params?: any) => void;
-  onStartNewLearn: () => void;
-  onStartDueReview: () => void;
-  dayProgress: any;
-  dailyGoals: DailyGoalConfig;
-  onNavigateToWordList: (filter: string) => void;
-  goalStats: { totalTasks: number; completedTasks: number; };
-  studyStats: StudyStats | null;
-  isStatsLoading: boolean;
-}
 
 export const DashboardUI: React.FC<DashboardUIProps> = ({
   onNavigate, totalCount, newCount, rawCount, refinedCount, reviewStats,
@@ -554,7 +489,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   studyStats, isStatsLoading
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
-  const [activeTab, setActiveTab] = useState<'STUDY' | 'INSIGHT'>('STUDY');
+  const [activeTab, setActiveTab] = useState<'STUDY' | 'PRACTICE' | 'INSIGHT'>('STUDY');
   
   return (
     <div className="space-y-4 animate-in fade-in duration-500">
@@ -598,20 +533,33 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
 
       <div className="flex items-center justify-between">
         <div className="inline-flex p-1 bg-white border-2 border-neutral-100 rounded-2xl w-fit shadow-sm self-start">
-             <button onClick={() => setActiveTab('STUDY')} className={`w-32 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'STUDY' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><LayoutDashboard size={16} /> Study</button>
-             <button onClick={() => setActiveTab('INSIGHT')} className={`w-32 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'INSIGHT' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BarChart3 size={16} /> Insight</button>
+             <button onClick={() => setActiveTab('STUDY')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'STUDY' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><LayoutDashboard size={16} /> Study</button>
+             <button onClick={() => setActiveTab('PRACTICE')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'PRACTICE' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><Dumbbell size={16} /> Practice</button>
+             <button onClick={() => setActiveTab('INSIGHT')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'INSIGHT' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BarChart3 size={16} /> Insight</button>
         </div>
-        <WordStatsBar 
-            newCount={newCount}
-            studyingCount={reviewStats.learned}
-            masteredCount={reviewStats.mastered}
-            totalCount={totalCount}
-        />
       </div>
 
       {activeTab === 'STUDY' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <StudyNowPanel stats={studyStats} isLoading={isStatsLoading} onStartNew={onStartNewLearn} onStartDue={onStartDueReview} onAction={(action) => onNavigate(action)} />
+              <VocabularyCenterPanel 
+                stats={studyStats} 
+                totalCount={totalCount} 
+                newCount={newCount} 
+                studyingCount={reviewStats.learned} 
+                masteredCount={reviewStats.mastered} 
+                rawCount={rawCount}
+                refinedCount={refinedCount}
+                onStartNew={onStartNewLearn} 
+                onStartDue={onStartDueReview} 
+                onRefineRaw={() => onNavigateToWordList('raw')}
+                onVerifyRefined={() => onNavigateToWordList('refined')}
+              />
+              <StudyNowPanel stats={studyStats} isLoading={isStatsLoading} onAction={(action) => onAction(action)} />
+          </div>
+      )}
+
+      {activeTab === 'PRACTICE' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <PracticeArcadePanel onAction={onAction} />
           </div>
       )}
@@ -628,9 +576,8 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                    </div>
               </div>
 
-              {/* Row 2: Library + Day */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   <LibraryHealthPanel totalCount={totalCount} newCount={newCount} rawCount={rawCount} refinedCount={refinedCount} reviewStats={reviewStats} onRefineRaw={() => onNavigateToWordList('raw')} onVerifyRefined={() => onNavigateToWordList('refined')} onViewLibrary={() => onNavigate('BROWSE')} />
+              {/* Row 2: Day Progress */}
+              <div className="grid grid-cols-1 gap-4">
                    <DayProgress learnedToday={dayProgress.learned} reviewedToday={dayProgress.reviewed} maxLearn={dailyGoals.max_learn_per_day} maxReview={dailyGoals.max_review_per_day} learnedWords={dayProgress.learnedWords} reviewedWords={dayProgress.reviewedWords} onViewWord={() => {}} />
               </div>
           </div>

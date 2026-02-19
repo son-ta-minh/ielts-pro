@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, ArrowRight, Play, Keyboard, Server, Book, Loader2, Brain, Check, Volume2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Play, Keyboard, Server, Book, Loader2, Brain, Check, Volume2, Zap } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
 import { speak, stopSpeaking, fetchServerVoices, VoiceDefinition } from '../../../utils/audio';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
@@ -173,7 +173,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     };
 
     const startGame = async () => {
-        let rawData: string[] = [];
+        let rawData: string[];
 
         if (contentSource === 'SERVER') {
             setIsServerLoading(true);

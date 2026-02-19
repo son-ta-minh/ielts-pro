@@ -214,7 +214,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
             await dataStore.forceReload(currentUser.id);
             refreshGlobalStats(); 
             setView('DASHBOARD');
-        } catch (_err) {
+        } catch {
             window.location.reload();
         }
     };

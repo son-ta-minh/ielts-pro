@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Tag, X, Target, CheckCircle2 } from 'lucide-react';
+import { X, Target, CheckCircle2 } from 'lucide-react';
 import { FocusColor } from '../../app/types';
 
 export interface CardBadge {

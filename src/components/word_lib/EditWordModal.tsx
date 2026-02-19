@@ -5,7 +5,6 @@ import { getWordDetailsPrompt, getLearningSuggestionsPrompt } from '../../servic
 import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { EditWordModalUI } from './EditWordModal_UI';
 import { useToast } from '../../contexts/ToastContext';
-import { logSrsUpdate } from '../practice/ReviewSession';
 import UniversalAiModal from '../common/UniversalAiModal';
 import LearningSuggestionModal from '../common/LearningSuggestionModal';
 import { calculateGameEligibility } from '../../utils/gameEligibility';

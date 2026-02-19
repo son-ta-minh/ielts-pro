@@ -90,7 +90,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 const data = await response.json();
                 setIsCambridgeValid(data.exists);
             }
-        } catch (e: any) {
+        } catch (_e: any) {
             // Silent fail is acceptable here
         } finally {
             setIsCambridgeChecking(false);
@@ -105,7 +105,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     useEffect(() => {
         const handleConfigUpdate = () => setConfig(getConfig());
-        const handleAudioStatus = (e: any) => setIsAudioPlaying(e.detail.isSpeaking);
+        const handleAudioStatus = (_e: any) => setIsAudioPlaying(_e.detail.isSpeaking);
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
         return () => {
@@ -179,7 +179,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 setIsOpen(true);
                 speak(translation, false, 'vi', coach.viVoice, coach.viAccent);
             }
-        } catch (_e) {
+        } catch {
             showToast("Translation error!", "error");
         } finally {
             setIsThinking(false);
@@ -213,7 +213,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 setMessage({ text: `**IPA:** ${data.ipa}`, icon: <Binary size={18} className="text-purple-500" /> });
                 setIsOpen(true);
             }
-        } catch (e) {
+        } catch (_e) {
             // Silent fail is acceptable here
         } finally {
             setIsThinking(false);
@@ -230,7 +230,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             try {
                 const results = await lookupWordsInGlobalLibrary([selectedText]);
                 if (results.length > 0) serverItem = results[0];
-            } catch (e) {
+            } catch (_e) {
                 // Silent fail is acceptable here
             }
 
@@ -268,7 +268,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             setIsAlreadyInLibrary(true);
             setIsOpen(false);
             setMenuPos(null);
-        } catch (e) {
+        } catch (_e) {
             showToast("Add error!", "error");
         } finally {
             setIsAddingToLibrary(false);

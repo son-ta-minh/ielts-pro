@@ -1,7 +1,7 @@
 
 import React from 'react';
 // Fix: Replace non-existent ArrowUpCloud and ArrowDownCloud with CloudUpload and CloudDownload from lucide-react
-import { Cloud, CloudUpload, CloudDownload, X, AlertTriangle, Loader2 } from 'lucide-react';
+import { CloudUpload, CloudDownload, AlertTriangle, Loader2 } from 'lucide-react';
 
 interface Props {
     isOpen: boolean;

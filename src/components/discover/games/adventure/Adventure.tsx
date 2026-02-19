@@ -16,7 +16,7 @@ interface Props {
     onStartSession: (words: VocabularyItem[], type: SessionType) => void;
 }
 
-const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser, onStartSession }) => {
+const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser }) => {
     const { showToast } = useToast();
     const [activeBoss, setActiveBoss] = useState<{ boss: any, words: VocabularyItem[] } | null>(null);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);

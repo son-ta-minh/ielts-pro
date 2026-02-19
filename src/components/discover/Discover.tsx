@@ -17,16 +17,12 @@ import { IntensityScaleGame } from './games/IntensityScaleGame';
 import { ComparisonLabGame } from './games/ComparisonLabGame';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { useToast } from '../../contexts/ToastContext';
-import * as db from '../../app/db';
 
 interface Props {
     user: User;
     onExit: () => void;
-    onGainXp: (xpAmount: number) => Promise<number>; 
     onRecalculateXp: (totalXp: number) => Promise<void>;
-    xpGained: { amount: number, levelUp: boolean, newLevel: number | null } | null;
     xpToNextLevel: number;
-    totalWords: number;
     onStartSession: (words: VocabularyItem[], type: SessionType) => void;
     onUpdateUser: (user: User) => Promise<void>;
     lastMasteryScoreUpdateTimestamp: number;
@@ -35,7 +31,7 @@ interface Props {
     onConsumeGameMode?: () => void;
 }
 
-const Discover: React.FC<Props> = ({ user, onExit, onGainXp, onRecalculateXp, xpGained, xpToNextLevel, totalWords, onStartSession, onUpdateUser, lastMasteryScoreUpdateTimestamp, onBulkUpdate, initialGameMode, onConsumeGameMode }) => {
+const Discover: React.FC<Props> = ({ user, onExit, onRecalculateXp, xpToNextLevel, onStartSession, onUpdateUser, lastMasteryScoreUpdateTimestamp, onBulkUpdate, initialGameMode, onConsumeGameMode }) => {
     const [gameMode, setGameMode] = useState<DiscoverGame>('ADVENTURE');
     const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
     const [isRecalculatingXp, setIsRecalculatingXp] = useState(true);
