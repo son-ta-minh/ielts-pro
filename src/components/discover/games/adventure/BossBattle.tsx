@@ -1,12 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { AdventureBoss } from '../../../../data/adventure_content';
 import { VocabularyItem, ReviewGrade, User } from '../../../../app/types';
-import { Heart, Swords, ShieldAlert, CheckCircle2, X, Loader2, Clock, Zap, Skull, Sword, Sparkles, User as UserIcon, Briefcase, Plus } from 'lucide-react';
+import { Heart, Swords, Clock, Skull, Sword, Briefcase } from 'lucide-react';
 import { updateSRS } from '../../../../utils/srs';
 import TestModal from '../../../practice/TestModal';
 import * as dataStore from '../../../../app/dataStore';
-import { Challenge } from '../../../practice/TestModalTypes';
 import { useToast } from '../../../../contexts/ToastContext';
 
 interface Boss {
@@ -124,7 +122,7 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
         await dataStore.saveWord(updatedWord);
     };
 
-    const checkWinCondition = (lastWasHit: boolean) => {
+    const checkWinCondition = () => {
         setBossHp(currentBossHp => {
             setPlayerHp(currentPlayerHp => {
                 if (currentBossHp <= 0) {
@@ -148,15 +146,15 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
         return `${m}:${s.toString().padStart(2, '0')}`;
     };
 
-    const battleChallengeFilter = (challenge: Challenge) => {
+    const battleChallengeFilter = (challenge: any) => {
         if (challenge.type === 'SPELLING') return false;
         // Filter out very long challenges to keep battle pace fast
         if (challenge.type === 'COLLOCATION_QUIZ') {
-            const validCollocs = challenge.word.collocationsArray?.filter(c => !c.isIgnored && c.d) || [];
+            const validCollocs = challenge.word.collocationsArray?.filter((c: any) => !c.isIgnored && c.d) || [];
             if (validCollocs.length > 2) return false;
         }
         if (challenge.type === 'PARAPHRASE_QUIZ') {
-            const validParas = challenge.word.paraphrases?.filter(p => !p.isIgnored) || [];
+            const validParas = challenge.word.paraphrases?.filter((p: any) => !p.isIgnored) || [];
             if (validParas.length > 2) return false;
         }
         return true;
@@ -202,7 +200,7 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
             <div className="absolute inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in duration-500">
                 <div className="text-8xl mb-6 animate-bounce">{boss.image}</div>
                 <h2 className="text-4xl font-black text-red-500 mb-2 uppercase tracking-widest">{boss.name}</h2>
-                <div className="bg-neutral-800/80 p-6 rounded-2xl border-l-4 border-red-500 max-w-md mb-8"><p className="text-xl font-medium italic">"{boss.dialogueIntro}"</p></div>
+                <div className="bg-neutral-800/80 p-6 rounded-2xl border-l-4 border-red-500 max-w-md mb-8"><p className="text-xl font-medium italic">&quot;{boss.dialogueIntro}&quot;</p></div>
                 <button onClick={() => setGameState('fighting')} className="px-10 py-4 bg-red-600 hover:bg-red-500 text-white font-black text-xl rounded-2xl uppercase tracking-widest shadow-[0_0_30px_rgba(220,38,38,0.5)] transition-all transform hover:scale-105 flex items-center gap-3"><Swords size={24} /> FIGHT!</button>
             </div>
         );
@@ -214,7 +212,7 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
             <div className={`absolute inset-0 z-[100] flex flex-col items-center justify-center text-white p-6 text-center animate-in zoom-in duration-500 ${isWin ? 'bg-emerald-900/90' : 'bg-neutral-900/95'}`}>
                 <div className={`text-8xl mb-6 ${!isWin && 'grayscale opacity-50'}`}>{isWin ? '🏆' : '💀'}</div>
                 <h2 className={`text-4xl font-black mb-2 ${isWin ? 'text-emerald-400' : 'text-red-500'}`}>{isWin ? 'VICTORY!' : 'DEFEATED'}</h2>
-                <p className="text-lg opacity-80 mb-8 italic">{isWin ? `"${boss.dialogueWin}"` : `"${boss.dialogueLose}"`}</p>
+                <p className="text-lg opacity-80 mb-8 italic">{isWin ? `&quot;${boss.dialogueWin}&quot;` : `&quot;${boss.dialogueLose}&quot;`}</p>
                 <button onClick={isWin ? onVictory : onDefeat} className={`px-8 py-3 font-bold rounded-xl transition-all ${isWin ? 'bg-white text-emerald-900 hover:scale-105' : 'bg-neutral-700 text-white hover:bg-neutral-600'}`}>{isWin ? 'Claim Reward' : 'Retreat & Study'}</button>
             </div>
         );

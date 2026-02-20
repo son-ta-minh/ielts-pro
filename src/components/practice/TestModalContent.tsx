@@ -328,8 +328,6 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
                 isFinishing={isFinishing}
                 result={isCorrect}
                 showHint={showHint}
-                toggleListening={toggleListening}
-                listeningId={listeningId}
             />
         );
       }

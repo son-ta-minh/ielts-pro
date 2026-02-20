@@ -4,9 +4,6 @@ import { VocabularyItem, ReviewGrade } from '../../../../app/types';
 import { Heart, Swords, ShieldAlert, X, Loader2 } from 'lucide-react';
 import { updateSRS } from '../../../../utils/srs';
 import TestModal from '../../../practice/TestModal';
-import { getRandomMeanings } from '../../../../app/db';
-import { Challenge, ChallengeType, IpaQuizChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge } from '../../../practice/TestModalTypes';
-import { WordFamily, PrepositionPattern } from '../../../../app/types';
 
 interface Props {
     boss: AdventureBoss;

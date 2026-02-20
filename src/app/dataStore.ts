@@ -62,6 +62,7 @@ async function _executeBackup() {
 export function cancelPendingBackup() {
     if (_backupTimeout) { clearTimeout(_backupTimeout); _backupTimeout = null; }
     if (_maxWaitTimeout) { clearTimeout(_maxWaitTimeout); _maxWaitTimeout = null; }
+    if (_notifyTimeout) { clearTimeout(_notifyTimeout); _notifyTimeout = null; }
 }
 
 function _triggerBackup() {

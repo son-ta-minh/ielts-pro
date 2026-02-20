@@ -72,7 +72,6 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
     const [isIpaLoading, setIsIpaLoading] = useState(false);
 
     // Analysis State (Local)
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [localAnalysis, setLocalAnalysis] = useState<AnalysisResult | null>(null);
 
     const recognitionManager = useRef(new SpeechRecognitionManager());
@@ -221,7 +220,7 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
                     showToast("IPA server unavailable", "error");
                 }
             }
-        } catch (e) {
+        } catch {
             showToast("Failed to fetch IPA", "error");
         } finally {
             setIsIpaLoading(false);

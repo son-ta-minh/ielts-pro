@@ -13,7 +13,7 @@ import * as dataStore from '../../app/dataStore';
 const SILENCE_TIMEOUT = 3000;
 
 interface Props {
-    target: string;
+    target: string | null; // Allow null for manual input
     onClose: () => void;
     onSaveScore?: (score: number) => void;
 }
@@ -21,6 +21,7 @@ interface Props {
 export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore }) => {
     const [isRecording, setIsRecording] = useState(false);
     const isRecordingRef = useRef(false);
+    const [editedTarget, setEditedTarget] = useState(target || '');
     const [transcript, setTranscript] = useState('');
     const [userAudio, setUserAudio] = useState<{base64: string, mimeType: string} | null>(null);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -37,6 +38,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const { showToast } = useToast();
 
     const fetchIpa = useCallback(async () => {
+        if (!editedTarget) return;
         if (ipa) {
             setShowIpa(!showIpa);
             return;
@@ -45,7 +47,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         setIsIpaLoading(true);
         try {
             // 1. Check Library first from cached store (reliable and fast)
-            const cleaned = target.trim().toLowerCase();
+            const cleaned = editedTarget.trim().toLowerCase();
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
             if (existing && existing.ipaUs) {
                 setIpa(existing.ipaUs);
@@ -57,7 +59,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             // 2. Fallback to Server API
             const config = getConfig();
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(target)}`);
+            const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(editedTarget)}`);
             if (res.ok) {
                 const data = await res.json();
                 setIpa(data.ipa);
@@ -65,14 +67,15 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             } else {
                 showToast("IPA server unavailable", "error");
             }
-        } catch (_e) {
+        } catch {
             showToast("Failed to fetch IPA", "error");
         } finally {
             setIsIpaLoading(false);
         }
-    }, [target, ipa, showIpa, showToast]);
+    }, [editedTarget, ipa, showIpa, showToast]);
 
     const stopSession = useCallback(async (currentTranscript: string) => {
+        if (!editedTarget) return; // Should not happen if isEditingTarget is false
         if (silenceTimerRef.current) {
             clearInterval(silenceTimerRef.current);
             silenceTimerRef.current = null;
@@ -84,12 +87,12 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         }
         setIsRecording(false);
         isRecordingRef.current = false;
-        const result = analyzeSpeechLocally(target, currentTranscript);
+        const result = analyzeSpeechLocally(editedTarget, currentTranscript);
         setAnalysis(result);
         if (onSaveScore) {
             onSaveScore(result.score);
         }
-    }, [target, onSaveScore]);
+    }, [editedTarget, onSaveScore]);
 
     const resetActivity = useCallback(() => {
         lastActivityRef.current = Date.now();
@@ -123,6 +126,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     }, []);
 
     const handleToggleRecord = async () => {
+        if (!editedTarget) return; // Cannot record without a target
+
         if (isRecording) {
             await stopSession(transcript);
         } else {
@@ -166,18 +171,19 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     };
 
     const handleAddToQueue = () => {
+        if (!editedTarget) return;
         const queue = getStoredJSON<any[]>('vocab_pro_mimic_practice_queue', []);
         
         // Simple duplicate check based on text
-        if (queue.some((item: any) => item.text === target)) {
+        if (queue.some((item: any) => item.text === editedTarget)) {
             showToast("Already in Pronunciation Queue", "info");
             return;
         }
 
         const newItem = {
             id: `quick-save-${Date.now()}`,
-            text: target,
-            sourceWord: target.length > 30 ? target.substring(0, 30) + '...' : target,
+            text: editedTarget,
+            sourceWord: editedTarget.length > 30 ? editedTarget.substring(0, 30) + '...' : editedTarget,
             type: 'Quick Practice'
         };
 
@@ -198,20 +204,12 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 </div>
 
                 <div className="w-full p-6 bg-neutral-50 rounded-[2rem] border border-neutral-200 flex flex-col items-center gap-3 min-h-[120px] overflow-hidden">
-                    <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 overflow-y-auto custom-scrollbar max-h-[25vh] items-center">
-                        {target.split(/\s+/).map((word, wIdx) => {
-                            const wordResult = analysis?.words[wIdx];
-                            return (
-                                <span key={wIdx} onClick={() => speak(word)} className="text-2xl font-black cursor-pointer hover:underline decoration-neutral-300 transition-all flex">
-                                    {wordResult?.chars ? wordResult.chars.map((c: CharDiff, cIdx: number) => (
-                                        <span key={cIdx} className={c.status === 'correct' ? 'text-emerald-500' : c.status === 'wrong' ? 'text-rose-500' : 'text-neutral-300'}>
-                                            {c.char}
-                                        </span>
-                                    )) : <span className="text-neutral-900">{word}</span>}
-                                </span>
-                            );
-                        })}
-                    </div>
+                    <textarea
+                        value={editedTarget}
+                        onChange={(e) => setEditedTarget(e.target.value)}
+                        placeholder="Enter text to practice..." 
+                        className="w-full h-32 p-4 bg-white border border-neutral-200 rounded-xl font-medium resize-none focus:ring-2 focus:ring-neutral-900 outline-none text-base leading-relaxed"
+                    />
                     
                     {showIpa && ipa && (
                         <div className="px-4 py-1.5 bg-white border border-neutral-200 rounded-xl text-sm font-mono font-medium text-neutral-500 animate-in slide-in-from-top-2 duration-300">
@@ -241,7 +239,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 </div>
 
                 <div className="flex items-center gap-4 pt-2">
-                    <button onClick={() => speak(target)} className="p-4 rounded-2xl bg-neutral-100 text-neutral-600 hover:text-neutral-900 transition-all" title="Listen">
+                    <button onClick={() => speak(editedTarget)} disabled={!editedTarget.trim()} className="p-4 rounded-2xl bg-neutral-100 text-neutral-600 hover:text-neutral-900 transition-all" title="Listen">
                         <Volume2 size={24} />
                     </button>
                     
@@ -277,7 +275,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     >
                         <Play size={24} fill={userAudio && !isRecording ? "currentColor" : "none"} />
                     </button>
-                    <button onClick={handleAddToQueue} className="p-4 rounded-2xl bg-neutral-100 text-neutral-600 hover:text-indigo-600 transition-all" title="Save to Pronunciation Page">
+                    <button onClick={handleAddToQueue} disabled={!editedTarget.trim()} className="p-4 rounded-2xl bg-neutral-100 text-neutral-600 hover:text-indigo-600 transition-all" title="Save to Pronunciation Page">
                         <ListPlus size={24} />
                     </button>
                 </div>

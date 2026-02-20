@@ -110,29 +110,29 @@ export const SpeakingSessionViewUI: React.FC<SpeakingSessionViewUIProps> = ({
                         const isOpen = hasAudio || hasTranscript;
 
                         return (
-                            <details key={i} open={isOpen} className={`p-4 rounded-xl ${isOpen ? 'bg-neutral-50' : 'bg-neutral-100 opacity-60'}`}>
-                                <summary className="flex justify-between items-center cursor-pointer list-none">
-                                <div>
-                                    <p className="text-xs font-bold text-neutral-500">Question {i+1}</p>
+                            <div key={i} className={`p-4 rounded-2xl ${isOpen ? 'bg-neutral-50' : 'bg-neutral-100 opacity-60'}`}>
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <p className="text-xs font-bold text-neutral-500">Question {i+1}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {hasAudio && <button onClick={(e) => { e.preventDefault(); onDownloadAudio(i); }} className="p-3 bg-white rounded-full shadow-sm border text-neutral-400 hover:text-neutral-900" title="Download Audio"><Download size={16}/></button>}
+                                        {hasAudio && <button onClick={(e) => { e.preventDefault(); onPlayAudio(i); }} className="p-3 bg-white rounded-full shadow-sm border text-neutral-600" title="Play Audio"><Play size={16} fill="currentColor" /></button>}
+                                        {!hasAudio && !hasTranscript && <span className="text-xs font-bold text-neutral-400">Skipped</span>}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    {hasAudio && <button onClick={(e) => { e.preventDefault(); onDownloadAudio(i); }} className="p-3 bg-white rounded-full shadow-sm border text-neutral-400 hover:text-neutral-900" title="Download Audio"><Download size={16}/></button>}
-                                    {hasAudio && <button onClick={(e) => { e.preventDefault(); onPlayAudio(i); }} className="p-3 bg-white rounded-full shadow-sm border text-neutral-600" title="Play Audio"><Play size={16} fill="currentColor" /></button>}
-                                    {!hasAudio && !hasTranscript && <span className="text-xs font-bold text-neutral-400">Skipped</span>}
-                                </div>
-                                </summary>
                                 {hasTranscript && (
-                                    <div className="mt-3 pt-3 border-t border-neutral-200 space-y-1">
-                                        <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">Editable Transcript</label>
+                                    <div className="mt-4 pt-4 border-t border-neutral-200 space-y-2">
+                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Editable Transcript</label>
                                         <textarea
                                             value={sessionTranscripts[i]}
                                             onChange={(e) => onTranscriptChange(i, e.target.value)}
-                                            className="w-full bg-neutral-100/50 p-3 rounded-lg border border-neutral-200/50 text-sm font-medium italic text-neutral-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition-colors"
-                                            rows={4}
+                                            className="w-full bg-white p-4 rounded-lg border border-neutral-200 text-base font-medium italic text-neutral-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                                            rows={5}
                                         />
                                     </div>
                                 )}
-                            </details>
+                            </div>
                         );
                     })}
                 </div>

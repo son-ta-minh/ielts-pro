@@ -151,7 +151,7 @@ const UniversalAiModal: React.FC<Props> = ({
             let parsedData;
             try {
                 parsedData = JSON.parse(cleanJson);
-            } catch (_e) {
+            } catch {
                 try {
                     cleanJson = cleanJson.replace(/,\s*([}\]])/g, '$1');
                     parsedData = JSON.parse(cleanJson);

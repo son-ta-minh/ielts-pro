@@ -450,11 +450,23 @@ export interface UserRecording {
     duration?: number;
 }
 
+export interface ScriptItem {
+  id: string;
+  type: 'script' | 'note';
+  content: string;
+  audioRanges?: {
+    start: number;
+    end: number;
+    text: string;
+  }[];
+}
+
 export interface FreeTalkItem {
   id: string;
   userId: string;
   title: string;
   content: string; 
+  scriptItems?: ScriptItem[];
   path?: string;
   tags: string[];
   audioLinks?: string[]; 

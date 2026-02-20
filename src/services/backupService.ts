@@ -1,5 +1,5 @@
 
-import { generateJsonExport, processJsonImport, ImportResult, _mapToShortKeys, _mapUserToShortKeys } from '../utils/dataHandler';
+import { processJsonImport, ImportResult, _mapToShortKeys, _mapUserToShortKeys } from '../utils/dataHandler';
 import { User, DataScope, VocabularyItem } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
 import * as dataStore from '../app/dataStore';
@@ -20,15 +20,18 @@ const FULL_SCOPE: DataScope = {
     planning: true
 };
 
+let _isSyncing = false;
+
 export const performAutoBackup = async (userId: string, user: User, force: boolean = false) => {
-    // CRITICAL SAFETY: Never backup if we are in restoration mode
-    if ((window as any).isRestoring) {
+    // CRITICAL SAFETY: Never backup if we are in restoration mode or already syncing
+    if ((window as any).isRestoring || _isSyncing) {
         return;
     }
 
     const config = getConfig();
     if (!config.sync.autoBackupEnabled && !force) return;
     
+    _isSyncing = true;
     const serverUrl = getServerUrl(config);
 
     try {
@@ -60,6 +63,8 @@ export const performAutoBackup = async (userId: string, user: User, force: boole
     } catch (e) {
         console.warn("[Backup] Upload failed:", e);
         window.dispatchEvent(new CustomEvent('backup-complete', { detail: { success: false } }));
+    } finally {
+        _isSyncing = false;
     }
 };
 

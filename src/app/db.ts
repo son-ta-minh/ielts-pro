@@ -581,7 +581,7 @@ export const getRandomMeanings = async (count: number, excludeId: string): Promi
         req.onsuccess = () => {
           const allItems = req.result as VocabularyItem[];
           const GENERIC_DISTRACTORS = [ "To express an idea or feeling", "A state of great comfort and luxury", "Happening or developing gradually", "To influence or change someone or something", "A formal meeting for discussion", "Necessary for a particular purpose", "The ability to do something well", "A careful and detailed study of something", "To make something new or original", ];
-          const potential = allItems.filter(i => i.id !== excludeId && i.quality === WordQuality.VERIFIED && i.meaningVi && i.meaningVi.trim().length > 0 && i.meaningVi.length < 150).map(i => i.meaningVi);
+          const potential = Array.from(new Set(allItems.filter(i => i.id !== excludeId && i.quality === WordQuality.VERIFIED && i.meaningVi && i.meaningVi.trim().length > 0 && i.meaningVi.length < 150).map(i => i.meaningVi.trim())));
           const shuffled = [...potential].sort(() => Math.random() - 0.5);
           const finalMeanings = shuffled.slice(0, count);
           if (finalMeanings.length < count) {

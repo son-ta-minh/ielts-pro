@@ -208,7 +208,8 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         updated.lastTestResults = applyTestResults(updated, testResults);
       }
       updated.masteryScore = calculateMasteryScore(updated);
-      await onUpdate(updated);
+      setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
+      nextItem();
     }
   };
   

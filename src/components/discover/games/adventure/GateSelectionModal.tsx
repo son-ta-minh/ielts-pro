@@ -104,7 +104,7 @@ export const GateSelectionModal: React.FC<Props> = ({ isOpen, onClose, segment, 
                         >
                             <Swords size={32} className="mb-2"/>
                             <h4 className="text-lg font-black uppercase tracking-widest">Challenge Boss</h4>
-                            <p className="text-xs font-medium text-white/70">"{segment.boss.name}" awaits!</p>
+                            <p className="text-xs font-medium text-white/70">&quot;{segment.boss.name}&quot; awaits!</p>
                         </button>
                     </footer>
                 )}

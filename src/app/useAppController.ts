@@ -6,7 +6,6 @@ import { useSession } from './hooks/useSession';
 import { useGamification, calculateWordDifficultyXp as movedCalc } from './hooks/useGamification';
 import { useDataFetching } from './hooks/useDataFetching';
 import { useDataActions } from './hooks/useDataActions';
-import { getDueWords, getNewWords } from './db';
 import * as dataStore from './dataStore';
 import * as db from './db';
 import { getConfig, getServerUrl, saveConfig } from './settingsManager';
@@ -239,19 +238,19 @@ export const useAppController = () => {
             const mtime = target ? new Date(target.date).getTime() : undefined;
             await restoreFromServerAction(identifier, mtime);
             setIsSyncing(false);
-        } catch (_e) { setIsSyncing(false); showToast("Restore failed.", "error"); }
+        } catch { setIsSyncing(false); showToast("Restore failed.", "error"); }
     };
 
     const handleLocalRestoreSetup = () => { setIsAutoRestoreOpen(false); triggerLocalRestore(); };
 
-    const handleNewUserSetup = async (e?: any) => {
+    const handleNewUserSetup = async () => {
         sessionStorage.setItem('vocab_pro_suppress_auto_restore', 'true');
         setIsAutoRestoreOpen(false); setIsResetting(true); setResetStep('Wiping all data and preparing new profile...');
         try {
             await dataStore.wipeAllLocalData(); 
             const defaultUser = await db.seedDatabaseIfEmpty(true);
             if (defaultUser) { handleLogin(defaultUser); setView('SETTINGS'); showToast("Welcome! Your data has been wiped. Please set up your new profile.", "success"); }
-        } catch (_e) { showToast("Failed to prepare new profile.", "error"); } finally { setIsResetting(false); }
+        } catch { showToast("Failed to prepare new profile.", "error"); } finally { setIsResetting(false); }
     };
 
     const handleSwitchUser = async () => {
@@ -261,26 +260,26 @@ export const useAppController = () => {
         hasCheckedAutoRestore.current = false;
         if (currentUser && currentUser.id !== DEFAULT_USER_ID) {
              showToast("Syncing current profile...", "info");
-             try { await performAutoBackup(currentUser.id, currentUser, true); } catch (_e) { showToast("Backup failed, proceeding...", "error"); }
+             try { await performAutoBackup(currentUser.id, currentUser, true); } catch { showToast("Backup failed, proceeding...", "error"); }
         }
         try {
             await dataStore.clearVocabularyOnly();
             const backups = await fetchServerBackups();
             setAutoRestoreCandidates(backups);
             setIsAutoRestoreOpen(true);
-        } catch (_e) { showToast("Failed to fetch user list from server.", "error"); }
+        } catch { showToast("Failed to fetch user list from server.", "error"); }
     };
 
     const handleSyncPush = async () => {
         if (!currentUser) return;
         setIsSyncing(true);
-        try { await performAutoBackup(currentUser.id, currentUser, true); showToast("Cloud backup updated!", "success"); setSyncPrompt(null); } catch (_e) { showToast("Push failed.", "error"); } finally { setIsSyncing(false); }
+        try { await performAutoBackup(currentUser.id, currentUser, true); showToast("Cloud backup updated!", "success"); setSyncPrompt(null); } catch { showToast("Push failed.", "error"); } finally { setIsSyncing(false); }
     };
 
     const handleSyncRestore = async () => {
         if (!syncPrompt) return;
         setIsSyncing(true);
-        try { await restoreFromServerAction(syncPrompt.serverId, syncPrompt.serverMtime); setSyncPrompt(null); setIsSyncing(false); } catch (_e) { showToast("Restore failed.", "error"); setIsSyncing(false); }
+        try { await restoreFromServerAction(syncPrompt.serverId, syncPrompt.serverMtime); setSyncPrompt(null); setIsSyncing(false); } catch { showToast("Restore failed.", "error"); setIsSyncing(false); }
     };
 
     useEffect(() => {
@@ -352,19 +351,18 @@ export const useAppController = () => {
         await dataStore.saveWord(updatedWord);
         if (sessionWords) setSessionWords(prevWords => (prevWords || []).map(w => w.id === updatedWord.id ? updatedWord : w));
         if (globalViewWord && globalViewWord.id === updatedWord.id) setGlobalViewWord(updatedWord);
-        await checkEnergyRewards();
     };
     
     const triggerServerBackup = async () => {
         if (!currentUser) return;
+        dataStore.cancelPendingBackup();
         setHasUnsavedChanges(false);
         setNextAutoBackupTime(null);
         await performAutoBackup(currentUser.id, currentUser, true);
-        // showToast này đã được tích hợp trong onBackupComplete
     };
 
     const handleBackupWrapper = async () => { if (serverStatus === 'connected' && currentUser) await triggerServerBackup(); else await handleBackup(); };
-    const bulkUpdateWordsAndNotify = async (updatedWords: VocabularyItem[]) => { await bulkUpdateWords(updatedWords); await checkEnergyRewards(); };
+    const bulkUpdateWordsAndNotify = async (updatedWords: VocabularyItem[]) => { await bulkUpdateWords(updatedWords); };
     const saveWordAndUserAndUpdateState = async (word: VocabularyItem, user: User) => {
         await dataStore.saveWordAndUser(word, user);
         setCurrentUser(user);
@@ -372,7 +370,6 @@ export const useAppController = () => {
         if (!oldWord || oldWord.masteryScore !== word.masteryScore) setLastMasteryScoreUpdateTimestamp(Date.now());
         if (sessionWords) setSessionWords(prevWords => (prevWords || []).map(w => w.id === word.id ? word : w));
         if (globalViewWord && globalViewWord.id === word.id) setGlobalViewWord(word);
-        await checkEnergyRewards();
     };
 
     const { gainExperienceAndLevelUp, recalculateXpAndLevelUp, xpGained, xpToNextLevel } = useGamification({ currentUser, onUpdateUser: handleUpdateUser, onSaveWordAndUser: saveWordAndUserAndUpdateState });

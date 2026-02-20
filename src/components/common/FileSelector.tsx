@@ -71,7 +71,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
             } else {
                 showToast("Failed to connect to server", "error");
             }
-        } catch (_e) {
+        } catch {
             showToast("Server unreachable", "error");
         } finally {
             setLoading(false);
@@ -93,7 +93,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
             } else {
                 showToast("Failed to load files", "error");
             }
-        } catch (_e) {
+        } catch {
             showToast("Connection error", "error");
         } finally {
             setLoading(false);
@@ -140,7 +140,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
             } else {
                 showToast("Failed to load Master Library", "error");
             }
-        } catch (_e) {
+        } catch {
             showToast("Connection error", "error");
         } finally {
             setLoading(false);

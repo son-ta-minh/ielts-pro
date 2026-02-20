@@ -215,8 +215,10 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
     const finalChallenges: Challenge[] = [];
     for (const challenge of challenges) {
         if (challenge.type === 'MEANING_QUIZ') {
-            const distractors = await getRandomMeanings(word.userId, 3, word.id);
-            const options = shuffleArray([word.meaningVi, ...distractors]);
+            const distractors = await getRandomMeanings(3, word.id);
+            // Ensure distractors don't include the correct answer
+            const filteredDistractors = distractors.filter(d => d.trim().toLowerCase() !== word.meaningVi.trim().toLowerCase());
+            const options = shuffleArray([word.meaningVi, ...filteredDistractors]).slice(0, 4);
             finalChallenges.push({ ...challenge, options } as MeaningQuizChallenge);
         } 
         else if (challenge.type === 'COLLOCATION_MULTICHOICE_QUIZ') {

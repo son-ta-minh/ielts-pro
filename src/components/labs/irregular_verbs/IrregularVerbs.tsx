@@ -441,7 +441,7 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
         await db.saveIrregularVerb(updatedVerb);
         setVerbs(prevVerbs => prevVerbs.map(v => v.id === verb.id ? updatedVerb : v));
         showToast(`Marked "${verb.v1}" as ${result === 'pass' ? 'Known' : 'Forgot'}.`, 'success');
-    } catch (_e: any) {
+    } catch {
         showToast('Failed to update status.', 'error');
     }
   };

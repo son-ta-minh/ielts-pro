@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { X, Star } from 'lucide-react';
 
 interface Props {
@@ -10,7 +10,7 @@ const PARTICLE_COUNT = 30;
 
 const Fireworks: React.FC<Props> = ({ onComplete, badge }) => {
     // Generate particles only once on mount
-    const [particles] = useState(() => Array.from({ length: PARTICLE_COUNT }).map((_, i) => ({
+    const [particles] = useState(() => Array.from({ length: PARTICLE_COUNT }).map(() => ({
         angle: Math.random() * 360,
         distance: Math.random() * 200 + 100, // Distance from center
         size: Math.random() * 6 + 2,

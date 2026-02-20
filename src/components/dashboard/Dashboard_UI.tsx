@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
-  Download, History, BookCopy, Sparkles, ChevronRight, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
+  Download, History, BookCopy, Sparkles, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
   Target, Headphones, Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain,
   CloudUpload, Percent, MessagesSquare, Scale, Dumbbell
 } from 'lucide-react';
-import { DailyGoalConfig } from '../../app/settingsManager';
 import { DayProgress } from './DayProgress';
 
 const getFormattedBuildDate = () => {
@@ -246,7 +245,7 @@ const StudyNowPanel: React.FC<{
     stats: StudyStats | null;
     isLoading: boolean;
     onAction: (action: string) => void;
-}> = ({ stats, isLoading, onAction }) => {
+}> = ({ isLoading, onAction }) => {
 
     return (
         <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4 relative overflow-hidden">

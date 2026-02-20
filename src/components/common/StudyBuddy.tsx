@@ -90,7 +90,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 const data = await response.json();
                 setIsCambridgeValid(data.exists);
             }
-        } catch (_e: any) {
+        } catch {
             // Silent fail is acceptable here
         } finally {
             setIsCambridgeChecking(false);
@@ -105,7 +105,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     useEffect(() => {
         const handleConfigUpdate = () => setConfig(getConfig());
-        const handleAudioStatus = (_e: any) => setIsAudioPlaying(_e.detail.isSpeaking);
+        const handleAudioStatus = (e: any) => setIsAudioPlaying(e.detail.isSpeaking);
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
         return () => {
@@ -213,7 +213,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 setMessage({ text: `**IPA:** ${data.ipa}`, icon: <Binary size={18} className="text-purple-500" /> });
                 setIsOpen(true);
             }
-        } catch (_e) {
+        } catch {
             // Silent fail is acceptable here
         } finally {
             setIsThinking(false);
@@ -230,7 +230,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             try {
                 const results = await lookupWordsInGlobalLibrary([selectedText]);
                 if (results.length > 0) serverItem = results[0];
-            } catch (_e) {
+            } catch {
                 // Silent fail is acceptable here
             }
 
@@ -268,7 +268,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             setIsAlreadyInLibrary(true);
             setIsOpen(false);
             setMenuPos(null);
-        } catch (_e) {
+        } catch {
             showToast("Add error!", "error");
         } finally {
             setIsAddingToLibrary(false);
@@ -298,16 +298,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     const handleSpeakSelection = () => {
         const selectedText = window.getSelection()?.toString().trim();
-        if (selectedText) {
-            if (selectedText.length > MAX_MIMIC_LENGTH) {
-                showToast("Selection too long for mimic!", "error");
-                return;
-            }
-            setIsOpen(false);
-            setMenuPos(null);
-            setMimicTarget(selectedText);
+        setIsOpen(false);
+        setMenuPos(null);
+        if (selectedText && selectedText.length > MAX_MIMIC_LENGTH) {
+            showToast("Selection too long for mimic!", "error");
+            setMimicTarget(null); // Still open modal but with no pre-filled text
         } else {
-            showToast("Highlight text to practice!", "info");
+            setMimicTarget(selectedText || ''); // Pass selected text or empty string for manual input
         }
     };
     
@@ -375,7 +372,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                     </div>
                 </div>
             </div>
-            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
+            {mimicTarget !== null && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
             <ToolsModal isOpen={isToolsModalOpen} onClose={() => setIsToolsModalOpen(false)} />
         </>
     );

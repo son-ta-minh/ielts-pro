@@ -136,7 +136,7 @@ export const ComparisonLabGame: React.FC<Props> = ({ user, onComplete, onExit })
         prepareTurn(shuffled[0]);
     };
 
-    const prepareTurn = (_q: ComparisonQuestion) => {
+    const prepareTurn = () => {
         setUserAnswer('');
         setIsChecked(false);
         setIsCorrect(false);

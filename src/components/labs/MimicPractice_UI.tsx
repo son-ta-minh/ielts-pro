@@ -5,6 +5,7 @@ import { TargetPhrase } from './MimicPractice';
 import { AnalysisResult, CharDiff } from '../../utils/speechAnalysis';
 import { speak } from '../../utils/audio';
 
+
 interface AddEditPhraseModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -292,7 +293,7 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                             {userTranscript && !isRecording && (
                                 <div className="space-y-1 animate-in fade-in">
                                     <p className="text-neutral-400 text-[10px] font-black uppercase tracking-widest">What we heard</p>
-                                    <p className="text-lg font-medium italic text-neutral-600 line-clamp-2">"{userTranscript}"</p>
+                                    <p className="text-lg font-medium italic text-neutral-600 line-clamp-2">&quot;{userTranscript}&quot;</p>
                                 </div>
                             )}
                         </div>
