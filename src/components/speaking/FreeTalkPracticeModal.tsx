@@ -11,7 +11,7 @@ import * as dataStore from '../../app/dataStore';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
-import { Mic, Play, Square, Pause, Save, Upload, Trash2, Calendar, FileAudio, LayoutList, Mic2, X, BookText, Loader2, RotateCcw, Check } from 'lucide-react';
+import { Mic, Play, Square, Pause, Save, Upload, Trash2, Calendar, FileAudio, LayoutList, Mic2, X, BookText, Loader2, RotateCcw, Check, Edit3, Volume2 } from 'lucide-react';
 import ConfirmationModal from '../common/ConfirmationModal';
 import { AudioTrimmer } from '../common/AudioTrimmer';
 
@@ -21,7 +21,7 @@ interface Props {
     item: FreeTalkItem | null;
 }
 
-type PracticeMode = 'MIMIC' | 'RECORDING';
+type PracticeMode = 'MIMIC' | 'RECORDING' | 'PLAYBACK';
 
 export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: initialItem }) => {
     const { showToast } = useToast();
@@ -60,6 +60,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     const [rawRecording, setRawRecording] = useState<Blob | null>(null);
     const [trimmedRecording, setTrimmedRecording] = useState<Blob | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
     
     // Audio Player State
     const [currentPlayingRef, setCurrentPlayingRef] = useState<string | null>(null); // url of currently playing reference
@@ -365,6 +366,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
         setRawRecording(null);
         setTrimmedRecording(null);
         setRecordingDuration(0);
+        setIsEditing(false);
     };
 
     const handleSaveRecording = async () => {
@@ -513,6 +515,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     const pagedItems = queue.slice(page * pageSize, (page + 1) * pageSize);
 
     const formatTime = (seconds: number) => {
+        if (!seconds || isNaN(seconds)) return "0:00";
         const m = Math.floor(seconds / 60);
         const s = Math.floor(seconds % 60);
         return `${m}:${s.toString().padStart(2, '0')}`;
@@ -520,7 +523,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl border border-neutral-200 flex flex-col h-[85vh] overflow-hidden relative">
+            <div className="bg-white w-full max-w-6xl rounded-[3rem] shadow-2xl border border-neutral-200 flex flex-col h-[85vh] overflow-hidden relative">
                 
                 {/* Header Switcher */}
                 <div className="px-8 py-4 border-b border-neutral-100 flex items-center justify-between bg-white z-10">
@@ -531,12 +534,15 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                         <button onClick={() => { setMode('RECORDING'); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'RECORDING' ? 'bg-white shadow-sm text-rose-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
                             <Mic2 size={14}/> Recording
                         </button>
+                        <button onClick={() => { setMode('PLAYBACK'); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'PLAYBACK' ? 'bg-white shadow-sm text-emerald-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                            <Play size={14}/> Playback
+                        </button>
                     </div>
-                     <h3 className="text-sm font-black text-neutral-900 truncate max-w-md hidden md:block">{item.title}</h3>
+                     <h3 className="text-xs font-black text-neutral-900 truncate max-w-md hidden md:block">{item.title}</h3>
                 </div>
 
                 <div className="flex-1 overflow-hidden relative">
-                    {mode === 'MIMIC' ? (
+                    {mode === 'MIMIC' && (
                         <div className="h-full flex">
                              {/* Re-use existing Mimic UI structure but constrained to this container */}
                             <MimicPracticeUI 
@@ -592,49 +598,79 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                 onSaveItem={() => {}}
                             />
                         </div>
-                    ) : (
+                    )}
+                    {mode === 'RECORDING' && (
                         <div className="h-full flex flex-col p-8 overflow-y-auto custom-scrollbar bg-neutral-50/50">
                             {/* CLOSE BUTTON */}
                             <button onClick={onClose} className="absolute top-4 right-4 p-2 text-neutral-400 hover:bg-neutral-100 rounded-full z-50"><X size={20} /></button>
 
-                            <div className="max-w-2xl mx-auto w-full space-y-6 pb-20">
+                            <div className="max-w-5xl mx-auto w-full space-y-6 pb-20">
                                 
                                 {/* 1. RECORDER / REVIEW - COMPACT REDESIGN */}
                                 <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden transition-all">
                                     {rawRecording ? (
-                                        <div className="p-4 flex flex-col gap-4 animate-in fade-in">
-                                            {/* Header */}
-                                            <div className="flex items-center justify-between">
-                                                <h4 className="text-xs font-black uppercase text-neutral-400 tracking-widest">Review</h4>
-                                                <span className="text-xs font-bold text-neutral-500">{formatTime(recordingDuration)}</span>
+                                        isEditing ? (
+                                            <div className="p-4 flex flex-col gap-4 animate-in fade-in">
+                                                {/* Header */}
+                                                <div className="flex items-center justify-between">
+                                                    <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Edit Recording</h4>
+                                                    <button onClick={() => setIsEditing(false)} className="text-xs font-bold text-neutral-500 hover:text-neutral-800">Cancel</button>
+                                                </div>
+                                                {/* Trimmer */}
+                                                <div className="flex-1 min-h-[10rem]">
+                                                    <AudioTrimmer 
+                                                        audioBlob={rawRecording} 
+                                                        onTrim={(blob) => { setTrimmedRecording(blob); setIsEditing(false); showToast("Trimmed!", "success"); }} 
+                                                        onCancel={() => setIsEditing(false)} 
+                                                    />
+                                                </div>
                                             </div>
-                                            {/* Trimmer */}
-                                            <div className="flex-1 min-h-[10rem]">
-                                                <AudioTrimmer 
-                                                    audioBlob={rawRecording} 
-                                                    onTrim={(blob) => { setTrimmedRecording(blob); showToast("Trimmed!", "success"); }} 
-                                                    onCancel={() => {}} 
-                                                />
-                                            </div>
-                                            {/* Footer Buttons */}
-                                            <div className="flex items-center justify-end gap-2">
+                                        ) : (
+                                            <div className="p-3 flex items-center gap-3 animate-in fade-in">
+                                                {/* Play/Pause Button */}
                                                 <button 
-                                                    onClick={handleDiscardRecording} 
-                                                    className="p-3 text-neutral-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                                                    title="Discard"
+                                                    onClick={() => {
+                                                        if (currentPlayingRef === 'preview') {
+                                                            stopAllAudio();
+                                                        } else {
+                                                            const url = URL.createObjectURL(trimmedRecording || rawRecording);
+                                                            playAudio(url, 'preview', null);
+                                                        }
+                                                    }}
+                                                    className={`p-2 rounded-full transition-all flex-shrink-0 ${currentPlayingRef === 'preview' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
                                                 >
-                                                    <RotateCcw size={18}/>
+                                                    {currentPlayingRef === 'preview' ? <Pause size={14} fill="currentColor"/> : <Play size={14} fill="currentColor"/>}
                                                 </button>
-                                                <button 
-                                                    onClick={handleSaveRecording} 
-                                                    disabled={isUploading}
-                                                    className="px-4 py-3 bg-neutral-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-neutral-800 transition-all shadow-lg flex items-center gap-2"
-                                                >
-                                                    {isUploading ? <Loader2 size={16} className="animate-spin"/> : <Check size={16}/>}
-                                                    <span className="hidden sm:inline">{isUploading ? 'Saving...' : 'Save'}</span>
-                                                </button>
+
+                                                {/* Progress Bar */}
+                                                <div className="flex-1 flex items-center gap-2 min-w-0">
+                                                     <span className="text-[9px] font-mono font-bold text-neutral-400 w-8 text-right flex-shrink-0">{formatTime(currentPlayingRef === 'preview' ? playbackTime : 0)}</span>
+                                                     <input 
+                                                        type="range" 
+                                                        min="0" 
+                                                        max={currentPlayingRef === 'preview' ? playbackDuration : recordingDuration} 
+                                                        value={currentPlayingRef === 'preview' ? playbackTime : 0} 
+                                                        onChange={handleSeek}
+                                                        className="flex-1 h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 min-w-0"
+                                                        disabled={currentPlayingRef !== 'preview'}
+                                                    />
+                                                    <span className="text-[9px] font-mono font-bold text-neutral-400 w-8 text-left flex-shrink-0">{formatTime(currentPlayingRef === 'preview' ? playbackDuration : recordingDuration)}</span>
+                                                </div>
+
+                                                {/* Actions */}
+                                                <div className="flex items-center gap-1 flex-shrink-0 border-l border-neutral-100 pl-2 ml-1">
+                                                    <button onClick={() => setIsEditing(true)} className="p-2 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit">
+                                                        <Edit3 size={16} />
+                                                    </button>
+                                                    <button onClick={handleDiscardRecording} className="p-2 text-neutral-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all" title="Discard">
+                                                        <RotateCcw size={16} />
+                                                    </button>
+                                                    <button onClick={handleSaveRecording} disabled={isUploading} className="p-2 text-neutral-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Save">
+                                                        {isUploading ? <Loader2 size={16} className="animate-spin"/> : <Check size={16} />}
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
+                                        )
                                     ) : (
                                         <div className="p-4 flex items-center justify-between gap-4">
                                             <div className="flex items-center gap-4">
@@ -645,10 +681,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                                     {isLongRecording ? <Square size={16} fill="currentColor"/> : <Mic size={20}/>}
                                                 </button>
                                                 <div>
-                                                    <p className={`text-lg font-black font-mono tracking-widest leading-none ${isLongRecording ? 'text-rose-600' : 'text-neutral-800'}`}>
-                                                        {formatTime(recordingDuration)}
-                                                    </p>
-                                                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-1">
+                                                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                                                         {isLongRecording ? 'Recording...' : 'Tap to Record'}
                                                     </p>
                                                 </div>
@@ -665,10 +698,10 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                         </div>
                                     )}
                                 </div>
-                                
+
                                 {/* 2. SPEECH CONTENT (Script & Notes) */}
                                 <div className="space-y-4">
-                                    <h4 className="text-xs font-black uppercase text-neutral-400 tracking-widest flex items-center gap-2">
+                                    <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest flex items-center gap-2">
                                         <BookText size={14}/> Script & Notes
                                     </h4>
                                     
@@ -694,9 +727,11 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                                             audioLinks={item.audioLinks || []}
                                                             onPlaySegment={handlePlaySegment}
                                                             showDash={true}
+                                                            fontSize="text-xs"
+                                                            compact={true}
                                                         />
                                                     ) : (
-                                                        <div className="p-6 text-lg font-medium leading-relaxed whitespace-pre-wrap">
+                                                        <div className="p-4 text-xs font-medium leading-relaxed whitespace-pre-wrap font-mono">
                                                             {scriptItem.content}
                                                         </div>
                                                     )}
@@ -704,43 +739,53 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm">
-                                            <div className="text-lg font-medium text-neutral-800 leading-relaxed whitespace-pre-wrap">
+                                        <div className="bg-white p-4 rounded-3xl border border-neutral-200 shadow-sm">
+                                            <div className="text-xs font-medium text-neutral-800 leading-relaxed whitespace-pre-wrap font-mono">
                                                 {item.content}
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                
-                                {/* 3. REFERENCE AUDIO */}
+                            </div>
+                        </div>
+                    )}
+
+                    {mode === 'PLAYBACK' && (
+                        <div className="h-full flex flex-col p-8 overflow-y-auto custom-scrollbar bg-neutral-50/50">
+                            <button onClick={onClose} className="absolute top-4 right-4 p-2 text-neutral-400 hover:bg-neutral-100 rounded-full z-50"><X size={20} /></button>
+                            
+                            <div className="max-w-5xl mx-auto w-full space-y-8 pb-20">
+                                {/* 1. REFERENCE AUDIO */}
                                 {item.audioLinks && item.audioLinks.length > 0 && (
-                                    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm space-y-4">
-                                        <h4 className="text-xs font-black uppercase text-neutral-400 tracking-widest flex items-center gap-2"><FileAudio size={14}/> Reference Audio</h4>
-                                        <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar pr-2">
+                                    <div className="space-y-4">
+                                        <h4 className="text-xs font-black uppercase text-neutral-500 tracking-widest flex items-center gap-2"><FileAudio size={16}/> Reference Audio</h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                             {item.audioLinks.map((url, idx) => {
                                                 const isPlaying = currentPlayingRef === url;
                                                 return (
-                                                    <div key={idx}>
-                                                        <div className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${isPlaying ? 'bg-indigo-50 border-indigo-100' : 'bg-neutral-50 border-neutral-100'}`}>
-                                                            <span className={`text-xs font-bold truncate max-w-[200px] ${isPlaying ? 'text-indigo-700' : 'text-neutral-600'}`}>
-                                                                {decodeURIComponent(url.split('/').pop() || `Track ${idx + 1}`)}
-                                                            </span>
-                                                            <button onClick={() => playAudio(url, url, null)} className={`p-2 rounded-full transition-all ${isPlaying ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border border-indigo-100 hover:bg-indigo-50'}`}>
-                                                                {isPlaying ? <Pause size={14} fill="currentColor"/> : <Play size={14} fill="currentColor"/>}
-                                                            </button>
+                                                    <div key={idx} className={`rounded-2xl border transition-all overflow-hidden ${isPlaying ? 'bg-indigo-50 border-indigo-200 shadow-lg' : 'bg-white border-neutral-200 hover:border-neutral-300'}`}>
+                                                        <div className="flex items-center justify-between p-3 gap-3">
+                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                <button onClick={() => playAudio(url, url, null)} className={`w-12 h-12 rounded-full transition-all flex-shrink-0 flex items-center justify-center ${isPlaying ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+                                                                    {isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}
+                                                                </button>
+                                                                 <span className={`text-sm font-bold truncate ${isPlaying ? 'text-indigo-800' : 'text-neutral-800'}`}>
+                                                                    {decodeURIComponent(url.split('/').pop() || `Track ${idx + 1}`)}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                         {isPlaying && (
-                                                             <div className="flex items-center gap-3 px-2 pt-2 animate-in fade-in slide-in-from-top-1">
-                                                                <span className="text-[10px] font-mono font-bold text-neutral-400 w-8 text-right">{formatTime(playbackTime)}</span>
+                                                             <div className="flex items-center gap-2 px-4 pb-3 pt-0 animate-in fade-in slide-in-from-top-1">
+                                                                <span className="text-xs font-mono font-bold text-neutral-500 w-10 text-right">{formatTime(playbackTime)}</span>
                                                                 <input 
                                                                     type="range" 
                                                                     min="0" 
                                                                     max={playbackDuration || 100} 
                                                                     value={playbackTime} 
                                                                     onChange={handleSeek}
-                                                                    className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                                                    className="flex-1 h-1.5 bg-indigo-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                                                                 />
-                                                                <span className="text-[10px] font-mono font-bold text-neutral-400 w-8 text-left">{formatTime(playbackDuration)}</span>
+                                                                <span className="text-xs font-mono font-bold text-neutral-500 w-10 text-left">{formatTime(playbackDuration)}</span>
                                                              </div>
                                                         )}
                                                     </div>
@@ -750,44 +795,44 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                     </div>
                                 )}
 
-                                {/* 4. HISTORY */}
+                                {/* 2. HISTORY */}
                                 <div className="space-y-4">
-                                     <h4 className="text-xs font-black uppercase text-neutral-400 tracking-widest flex items-center gap-2"><Calendar size={14}/> Recordings History ({activeRecordings.length})</h4>
+                                     <h4 className="text-xs font-black uppercase text-neutral-500 tracking-widest flex items-center gap-2"><Calendar size={16}/> Recordings History ({activeRecordings.length})</h4>
                                      {activeRecordings.length === 0 ? (
-                                         <div className="text-center py-8 text-neutral-300 italic text-xs">No recordings yet.</div>
+                                         <div className="text-center py-8 text-neutral-400 italic text-sm">No recordings yet.</div>
                                      ) : (
-                                         <div className="grid gap-3">
+                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                              {activeRecordings.map((rec) => {
                                                  const isPlaying = currentPlayingUser === rec.id;
                                                  return (
                                                      <div key={rec.id} className="flex flex-col bg-white rounded-2xl border border-neutral-200 shadow-sm hover:border-neutral-300 transition-colors overflow-hidden">
-                                                         <div className="flex items-center justify-between p-4">
-                                                             <div className="flex items-center gap-3">
-                                                                 <button onClick={() => playAudio(rec.url, null, rec.id)} className={`p-3 rounded-full transition-all ${isPlaying ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
-                                                                     {isPlaying ? <Pause size={16} fill="currentColor"/> : <Play size={16} fill="currentColor"/>}
+                                                         <div className="flex items-center justify-between p-3 gap-3">
+                                                             <div className="flex items-center gap-3 min-w-0">
+                                                                 <button onClick={() => playAudio(rec.url, null, rec.id)} className={`w-12 h-12 rounded-full transition-all flex-shrink-0 flex items-center justify-center ${isPlaying ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+                                                                     {isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}
                                                                  </button>
-                                                                 <div>
-                                                                     <p className="text-xs font-bold text-neutral-800">{new Date(rec.timestamp).toLocaleString()}</p>
-                                                                     <p className="text-[10px] font-medium text-neutral-400">{formatTime(rec.duration || 0)}</p>
+                                                                 <div className="min-w-0">
+                                                                     <p className={`text-sm font-bold truncate ${isPlaying ? 'text-indigo-800' : 'text-neutral-800'}`}>{new Date(rec.timestamp).toLocaleString()}</p>
+                                                                     <p className="text-xs font-medium text-neutral-500">{formatTime(rec.duration || 0)}</p>
                                                                  </div>
                                                              </div>
-                                                             <button onClick={() => setRecToDelete(rec)} className="p-2 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
-                                                                 <Trash2 size={16} />
+                                                             <button onClick={() => setRecToDelete(rec)} className="p-2.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all flex-shrink-0">
+                                                                 <Trash2 size={18} />
                                                              </button>
                                                          </div>
                                                          
                                                          {isPlaying && (
-                                                             <div className="px-4 pb-4 pt-0 flex items-center gap-3 animate-in fade-in slide-in-from-top-1 bg-white">
-                                                                <span className="text-[10px] font-mono font-bold text-neutral-400 w-8 text-right">{formatTime(playbackTime)}</span>
+                                                             <div className="flex items-center gap-2 px-4 pb-3 pt-0 animate-in fade-in slide-in-from-top-1 bg-white">
+                                                                <span className="text-xs font-mono font-bold text-neutral-500 w-10 text-right">{formatTime(playbackTime)}</span>
                                                                 <input 
                                                                     type="range" 
                                                                     min="0" 
                                                                     max={playbackDuration || 100} 
                                                                     value={playbackTime} 
                                                                     onChange={handleSeek}
-                                                                    className="flex-1 h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                                                    className="flex-1 h-1.5 bg-indigo-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                                                                 />
-                                                                <span className="text-[10px] font-mono font-bold text-neutral-400 w-8 text-left">{formatTime(playbackDuration)}</span>
+                                                                <span className="text-xs font-mono font-bold text-neutral-500 w-10 text-left">{formatTime(playbackDuration)}</span>
                                                              </div>
                                                          )}
                                                      </div>

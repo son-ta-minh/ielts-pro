@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Highlighter, Volume2, Eraser, Settings2, Baseline } from 'lucide-react';
+import { Highlighter, Volume2, Eraser, Settings2 } from 'lucide-react';
 import { speak } from '../../utils/audio';
 import { AudioMarkModal } from './AudioMarkModal';
 
@@ -34,6 +34,8 @@ interface InteractiveTranscriptProps {
     showDash?: boolean;
     audioLinks?: string[]; // Needed for the modal selector
     onPlaySegment: (filename: string | undefined, start: number | undefined, duration: number | undefined, textFallback: string) => void;
+    fontSize?: string;
+    compact?: boolean;
 }
 
 type SegmentType = 'text' | 'highlight' | 'audio';
@@ -48,8 +50,7 @@ interface TranscriptSegment {
     meta?: string;
 }
 
-export const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, onUpdate, readOnly = false, showDash: initialShowDash = true, audioLinks = [], onPlaySegment }) => {
-    const [isDashlineVisible, setIsDashlineVisible] = useState(initialShowDash);
+export const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ rawText, onUpdate, readOnly = false, showDash: initialShowDash = true, audioLinks = [], onPlaySegment, fontSize = 'text-lg', compact = false }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editText, setEditText] = useState(rawText);
 
@@ -421,22 +422,17 @@ export const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ ra
     };
 
     return (
-        <div className="relative h-full flex flex-col"> 
+        <div className="relative h-full flex flex-col group"> 
             {/* --- CONTROLS --- */}
             {!readOnly && (
-                <div className="absolute top-4 right-6 z-10 flex items-center gap-2">
+                <div className={`absolute top-4 right-6 z-10 flex items-center gap-2 transition-opacity duration-200 ${isEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                     {isEditing ? (
                         <>
                             <button onClick={handleSave} className="px-4 py-2 text-xs font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors">Save</button>
                             <button onClick={handleCancel} className="px-4 py-2 text-xs font-bold text-neutral-700 bg-neutral-200 rounded-lg hover:bg-neutral-300 transition-colors">Cancel</button>
                         </>
                     ) : (
-                                                <>
-                            <button onClick={() => setIsDashlineVisible(!isDashlineVisible)} className={`p-2 text-xs font-bold rounded-lg transition-colors border ${isDashlineVisible ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'text-neutral-500 bg-neutral-100 border-neutral-200 hover:bg-neutral-200'}`} title="Toggle Dashed Line">
-                               <Baseline size={16}/>
-                            </button>
-                            <button onClick={handleEnterEditMode} className="px-4 py-2 text-xs font-bold text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors border border-neutral-200">Edit</button>
-                        </>
+                        <button onClick={handleEnterEditMode} className="px-4 py-2 text-xs font-bold text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors border border-neutral-200 shadow-sm">Edit</button>
                     )}
                 </div>
             )}
@@ -519,12 +515,12 @@ export const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ ra
                 <textarea 
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
-                    className="flex-1 w-full p-6 text-lg font-mono bg-neutral-50 border-0 focus:ring-0 resize-none"
+                    className={`flex-1 w-full font-mono bg-neutral-50 border-0 focus:ring-0 resize-none ${compact ? 'p-4' : 'p-6'} ${fontSize}`}
                 />
             ) : (
                 <div 
                     ref={containerRef}
-                    className="text-lg font-medium text-neutral-800 leading-relaxed whitespace-pre-wrap px-6 pb-8 pt-8 select-text cursor-text font-mono"
+                    className={`font-medium text-neutral-800 leading-relaxed whitespace-pre-wrap select-text cursor-text font-mono ${compact ? 'px-4 py-4' : 'px-6 pb-8 pt-8'} ${fontSize}`}
                     onMouseUp={handleSelectionCheck}
                     onKeyUp={handleSelectionCheck}
                 >
@@ -550,13 +546,10 @@ export const InteractiveTranscript: React.FC<InteractiveTranscriptProps> = ({ ra
                                     onClick={(e) => handlePlaySegment(e, seg)}
                                     onMouseEnter={(e) => handleSegmentEnter(e, i, 'audio')}
                                     onMouseLeave={handleSegmentLeave}
-                                    className={`${isDashlineVisible ? 'bg-indigo-100/50' : ''} text-indigo-900 cursor-pointer hover:bg-indigo-100 transition-colors mx-0.5 relative group/audio py-0.5 rounded`}
+                                    className="text-indigo-900 cursor-pointer hover:bg-indigo-100 transition-colors mx-0.5 relative group/audio py-0.5 rounded"
                                     title="Click to listen"
                                 >
                                     <HighlightedText text={seg.displayContent || 'error'} />
-                                    {seg.text.includes('](') && (
-                                        <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
-                                    )}
                                 </span>
                             );
                         }

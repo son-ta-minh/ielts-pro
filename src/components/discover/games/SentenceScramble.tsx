@@ -32,6 +32,11 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
     // New state for insertion position
     const [insertionIndex, setInsertionIndex] = useState(0);
 
+    const getFirstSentence = (text: string): string => {
+        const match = text.match(/.*?[.!?](?:\s|$)/);
+        return match ? match[0].trim() : text.trim();
+    };
+
     const chunkify = (sentence: string, diff: Difficulty): string[] => {
         const wordsArr = sentence.split(/\s+/).filter(Boolean);
         if (diff === 'HARD') return wordsArr;
@@ -58,7 +63,7 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
 
         const shuffledCandidates = [...candidates].sort(() => Math.random() - 0.5);
         const newQueue = shuffledCandidates.slice(0, sessionSize).map(w => {
-            const originalSentence = w.example.trim();
+            const originalSentence = getFirstSentence(w.example);
             const chunks = chunkify(originalSentence, difficulty);
             const shuffled = [...chunks].sort(() => Math.random() - 0.5);
             return { id: w.id, word: w.word, originalSentence, shuffledChunks: shuffled };

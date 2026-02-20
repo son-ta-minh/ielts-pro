@@ -25,6 +25,13 @@ interface DictationItem {
 
 const normalize = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
 
+const getFirstSentence = (text: string): string => {
+    // Split by sentence terminators, keeping the terminator.
+    // This regex looks for . ! ? followed by space or end of string.
+    const match = text.match(/.*?[.!?](?:\s|$)/);
+    return match ? match[0].trim() : text.trim();
+};
+
 // Improved Speech Formatting
 // 1. Times (9:30:15) -> "9 30 15" (Read naturally as numbers)
 // 2. Years/4-digits (1995) -> "19 95" (Read as pairs)
@@ -186,7 +193,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
                 showToast("No suitable example sentences found in Library.", "error");
                 return;
             }
-            rawData = [...candidates].sort(() => Math.random() - 0.5).slice(0, sessionSize).map(w => w.example.trim());
+            rawData = [...candidates].sort(() => Math.random() - 0.5).slice(0, sessionSize).map(w => getFirstSentence(w.example));
         }
         
         const newQueue: DictationItem[] = rawData.map((originalSentence, idx) => {

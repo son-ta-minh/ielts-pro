@@ -73,6 +73,7 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
 
     // Analysis State (Local)
     const [localAnalysis, setLocalAnalysis] = useState<AnalysisResult | null>(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
 
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const userAudioPlayer = useRef<HTMLAudioElement | null>(null);
