@@ -83,6 +83,14 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
 
     const displayTranscript = fullTranscript.substring(transcriptOffset).trimStart();
 
+    // Real-time analysis during recording
+    useEffect(() => {
+        if (isRecording && target && displayTranscript) {
+            const result = analyzeSpeechLocally(target.text, displayTranscript);
+            setLocalAnalysis(result);
+        }
+    }, [displayTranscript, isRecording, target]);
+
     const saveQueue = (newQueue: TargetPhrase[]) => {
         setQueue(newQueue);
         setStoredJSON(MIMIC_PRACTICE_QUEUE_KEY, newQueue);

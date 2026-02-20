@@ -135,6 +135,14 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
     const target = queue[currentIndex] || null;
 
+    // Real-time analysis during recording
+    useEffect(() => {
+        if (isRecording && target && fullTranscript) {
+            const result = analyzeSpeechLocally(target.text, fullTranscript);
+            setLocalAnalysis(result);
+        }
+    }, [fullTranscript, isRecording, target]);
+
     // Reset state when target changes in Mimic
     useEffect(() => {
         if (mode === 'MIMIC') {

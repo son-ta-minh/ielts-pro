@@ -132,6 +132,29 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
     ipa, showIpa, isIpaLoading, onToggleIpa
 }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const textContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const container = textContainerRef.current;
+        if (container && targetText) {
+            // Use a timeout to allow DOM to render before measuring
+            setTimeout(() => {
+                if (!textContainerRef.current) return;
+                
+                container.style.fontSize = '1.5rem'; // Reset to base size (24px) for calculation
+                const parent = container.parentElement;
+                if (parent) {
+                    const containerWidth = container.scrollWidth;
+                    const parentWidth = parent.clientWidth;
+    
+                    if (containerWidth > parentWidth) {
+                        const newFontSize = (parentWidth / containerWidth) * 24; // 24px is base
+                        container.style.fontSize = `${Math.max(newFontSize, 14)}px`;
+                    }
+                }
+            }, 50); // Small delay
+        }
+    }, [targetText]);
 
     if (isEmpty) {
         return (
@@ -216,43 +239,33 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                     <div className="flex-1 flex flex-col items-center justify-center p-4 space-y-6 animate-in fade-in">
                         <div className="relative w-full max-w-2xl">
                             <div className={`p-6 md:p-8 rounded-[2rem] border-2 text-center transition-all duration-300 min-h-[180px] flex flex-col items-center justify-center relative bg-white border-neutral-200 shadow-xl shadow-neutral-100`}>
-                                {isGlobalMode && (
-                                    <div className="absolute top-6 left-6 px-3 py-1 bg-neutral-50 rounded-lg text-[10px] font-black uppercase tracking-widest text-neutral-400 border border-neutral-100">
-                                        Pronunciation Practice
-                                    </div>
-                                )}
                                 <button onClick={onToggleReveal} className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-indigo-500">{isRevealed ? <EyeOff size={20} /> : <Eye size={20} />}</button>
                                 
                                 <div className="relative px-4 w-full flex flex-col items-center gap-4">
-                                    <div className="flex flex-wrap justify-center gap-x-1.5 gap-y-1">
+                                    <div ref={textContainerRef} className="flex flex-wrap justify-center gap-x-1.5 gap-y-1" style={{ fontSize: '1.5rem', lineHeight: '1.4' }}>
                                         {targetText?.split(/\s+/).map((word, wIdx) => {
                                             const analysis = localAnalysis?.words[wIdx];
-                                            const isWordMissing = analysis?.status === 'missing';
                                             
+                                            let colorClass = 'text-neutral-800';
+                                            if (analysis) {
+                                                switch (analysis.status) {
+                                                    case 'correct': colorClass = 'text-emerald-600'; break;
+                                                    case 'near': colorClass = 'text-amber-500'; break;
+                                                    case 'wrong': colorClass = 'text-rose-500'; break;
+                                                    case 'missing': colorClass = 'text-neutral-300'; break;
+                                                    default: colorClass = 'text-neutral-800';
+                                                }
+                                            }
+
+                                            const isSpoken = analysis && analysis.status !== 'missing';
+
                                             return (
                                                 <span 
                                                     key={wIdx} 
                                                     onClick={() => speak(word)}
-                                                    className={`text-xl md:text-2xl font-bold cursor-pointer hover:underline decoration-neutral-200 transition-all flex leading-normal ${isRevealed || localAnalysis ? 'opacity-100' : 'text-transparent blur-md select-none'}`}
+                                                    className={`font-bold cursor-pointer hover:underline decoration-neutral-200 transition-all leading-normal ${isRevealed || isSpoken ? 'opacity-100' : 'text-transparent blur-md select-none'}`}
                                                 >
-                                                    {analysis?.chars ? (
-                                                        analysis.chars.map((c: CharDiff, cIdx: number) => (
-                                                            <span 
-                                                                key={cIdx} 
-                                                                className={
-                                                                    c.status === 'correct' ? 'text-emerald-600' : 
-                                                                    c.status === 'wrong' ? 'text-rose-500' : 
-                                                                    'text-rose-300'
-                                                                }
-                                                            >
-                                                                {c.char}
-                                                            </span>
-                                                        ))
-                                                    ) : (
-                                                        <span className={isWordMissing ? 'text-neutral-300' : 'text-neutral-800'}>
-                                                            {word}
-                                                        </span>
-                                                    )}
+                                                    <span className={colorClass}>{word}</span>
                                                 </span>
                                             );
                                         })}

@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2 } from 'lucide-react';
+import { X, Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2, Edit2 } from 'lucide-react';
 import { speak, stopRecording, startRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { analyzeSpeechLocally, AnalysisResult, CharDiff } from '../../utils/speechAnalysis';
@@ -22,6 +22,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const [isRecording, setIsRecording] = useState(false);
     const isRecordingRef = useRef(false);
     const [editedTarget, setEditedTarget] = useState(target || '');
+    const [isEditing, setIsEditing] = useState(!target);
     const [transcript, setTranscript] = useState('');
     const [userAudio, setUserAudio] = useState<{base64: string, mimeType: string} | null>(null);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -36,6 +37,14 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const silenceTimerRef = useRef<any>(null);
     const lastActivityRef = useRef(Date.now());
     const { showToast } = useToast();
+
+    // Real-time analysis during recording
+    useEffect(() => {
+        if (isRecording && editedTarget && transcript) {
+            const result = analyzeSpeechLocally(editedTarget, transcript);
+            setAnalysis(result);
+        }
+    }, [transcript, isRecording, editedTarget]);
 
     const fetchIpa = useCallback(async () => {
         if (!editedTarget) return;
@@ -127,6 +136,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
 
     const handleToggleRecord = async () => {
         if (!editedTarget) return; // Cannot record without a target
+        if (isEditing) setIsEditing(false); // Switch to view mode when recording starts
 
         if (isRecording) {
             await stopSession(transcript);
@@ -191,6 +201,14 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         showToast("Saved to Pronunciation Page", "success");
     };
 
+    const getFontSizeClass = (text: string) => {
+        const len = text.length;
+        if (len < 40) return 'text-2xl md:text-3xl';
+        if (len < 80) return 'text-xl md:text-2xl';
+        if (len < 150) return 'text-lg md:text-xl';
+        return 'text-base md:text-lg';
+    };
+
     return (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-neutral-200 p-8 flex flex-col items-center gap-6 relative">
@@ -203,15 +221,53 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     <h3 className="text-xl font-bold text-neutral-900 leading-tight">Practice Selected Phrase</h3>
                 </div>
 
-                <div className="w-full p-6 bg-neutral-50 rounded-[2rem] border border-neutral-200 flex flex-col items-center gap-3 min-h-[120px] overflow-hidden">
-                    <textarea
-                        value={editedTarget}
-                        onChange={(e) => setEditedTarget(e.target.value)}
-                        placeholder="Enter text to practice..." 
-                        className="w-full h-32 p-4 bg-white border border-neutral-200 rounded-xl font-medium resize-none focus:ring-2 focus:ring-neutral-900 outline-none text-base leading-relaxed"
-                    />
+                <div className="w-full p-6 bg-neutral-50 rounded-[2rem] border border-neutral-200 flex flex-col items-center gap-3 min-h-[120px] overflow-hidden relative group">
+                    {isEditing ? (
+                        <div className="w-full relative">
+                            <textarea
+                                value={editedTarget}
+                                onChange={(e) => setEditedTarget(e.target.value)}
+                                placeholder="Enter text to practice..." 
+                                className="w-full h-32 p-4 bg-white border border-neutral-200 rounded-xl font-medium resize-none focus:ring-2 focus:ring-neutral-900 outline-none text-base leading-relaxed"
+                            />
+                            <button onClick={() => setIsEditing(false)} className="absolute bottom-4 right-4 px-3 py-1.5 bg-neutral-900 text-white rounded-lg text-xs font-bold shadow-sm">
+                                Done
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <button onClick={() => setIsEditing(true)} className="absolute top-4 right-4 p-2 text-neutral-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full shadow-sm">
+                                <Edit2 size={16} />
+                            </button>
+                            <div className="flex flex-wrap justify-center gap-x-1.5 gap-y-1 w-full">
+                                {editedTarget.split(/\s+/).map((word, wIdx) => {
+                                    const wordAnalysis = analysis?.words[wIdx];
+                                    let colorClass = 'text-neutral-800';
+                                    if (wordAnalysis) {
+                                        switch (wordAnalysis.status) {
+                                            case 'correct': colorClass = 'text-emerald-600'; break;
+                                            case 'near': colorClass = 'text-amber-500'; break;
+                                            case 'wrong': colorClass = 'text-rose-500'; break;
+                                            case 'missing': colorClass = 'text-neutral-300'; break;
+                                            default: colorClass = 'text-neutral-800';
+                                        }
+                                    }
+
+                                    return (
+                                        <span 
+                                            key={wIdx} 
+                                            onClick={() => speak(word)}
+                                            className={`${getFontSizeClass(editedTarget)} font-bold cursor-pointer hover:underline decoration-neutral-200 transition-all leading-normal ${colorClass}`}
+                                        >
+                                            {word}
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
                     
-                    {showIpa && ipa && (
+                    {showIpa && ipa && !isEditing && (
                         <div className="px-4 py-1.5 bg-white border border-neutral-200 rounded-xl text-sm font-mono font-medium text-neutral-500 animate-in slide-in-from-top-2 duration-300">
                             {ipa}
                         </div>
