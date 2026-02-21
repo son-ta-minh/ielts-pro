@@ -240,25 +240,78 @@ router.get('/lookup/cambridge', (req, res) => {
 });
 
 // --- IPA Markdown Storage ---
-const IPA_FILE = path.join(settings.BACKUP_DIR, 'server', 'ipa_pronunciation.md');
+const MODULES_DIR = path.join(settings.BACKUP_DIR, 'server', 'modules');
+const OLD_IPA_FILE = path.join(settings.BACKUP_DIR, 'server', 'ipa_pronunciation.md');
 
-router.get('/ipa/content', (req, res) => {
+// Ensure modules directory exists
+if (!fs.existsSync(MODULES_DIR)) {
+    fs.mkdirSync(MODULES_DIR, { recursive: true });
+}
+
+// Migration: Move old single file to modules if modules is empty
+try {
+    const files = fs.readdirSync(MODULES_DIR);
+    if (files.length === 0 && fs.existsSync(OLD_IPA_FILE)) {
+        const content = fs.readFileSync(OLD_IPA_FILE, 'utf8');
+        fs.writeFileSync(path.join(MODULES_DIR, '01_General.md'), content);
+        // Optional: fs.unlinkSync(OLD_IPA_FILE); // Keep backup for safety
+        console.log("[IPA] Migrated old single file to modules/01_General.md");
+    }
+} catch (e) {
+    console.error("[IPA] Migration failed:", e.message);
+}
+
+router.get('/ipa/modules', (req, res) => {
     try {
-        if (fs.existsSync(IPA_FILE)) {
-            const content = fs.readFileSync(IPA_FILE, 'utf8');
+        if (!fs.existsSync(MODULES_DIR)) {
+            return res.json([]);
+        }
+        const files = fs.readdirSync(MODULES_DIR)
+            .filter(f => f.endsWith('.md'))
+            .sort(); // Sort alphabetically
+        
+        const modules = files.map(filename => ({
+            id: filename,
+            title: filename.replace('.md', '').replace(/_/g, ' '),
+            filename: filename
+        }));
+        res.json(modules);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.get('/ipa/modules/:filename', (req, res) => {
+    const { filename } = req.params;
+    // Basic security check to prevent directory traversal
+    if (filename.includes('..') || filename.includes('/')) {
+        return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filePath = path.join(MODULES_DIR, filename);
+    try {
+        if (fs.existsSync(filePath)) {
+            const content = fs.readFileSync(filePath, 'utf8');
             res.json({ content });
         } else {
-            res.json({ content: '' });
+            res.status(404).json({ error: 'Module not found' });
         }
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-router.post('/ipa/content', (req, res) => {
+router.post('/ipa/modules/:filename', (req, res) => {
+    const { filename } = req.params;
     const { content } = req.body;
+
+    if (filename.includes('..') || filename.includes('/')) {
+        return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filePath = path.join(MODULES_DIR, filename);
     try {
-        fs.writeFileSync(IPA_FILE, content || '', 'utf8');
+        fs.writeFileSync(filePath, content || '', 'utf8');
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
