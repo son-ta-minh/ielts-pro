@@ -122,3 +122,7 @@ dist
 
 # Server certificates
 /server/.certs/
+
+# Server runtime files
+/server/server.log
+/server/server.pid
