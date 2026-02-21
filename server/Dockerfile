@@ -1,20 +1,28 @@
-# Use an official Node.js runtime as a parent image
-FROM node:18-alpine
-
-# Set the working directory in the container
+# Stage 1: Build the React application
+FROM node:18-alpine AS build
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json (or yarn.lock) to leverage Docker cache
+# Copy package.json and install dependencies
 COPY package*.json ./
-
-# Install app dependencies
 RUN npm install
 
-# Bundle app source
+# Copy the rest of the application source code
 COPY . .
 
-# The app binds to 8080, but the reverse proxy will expose it on 3000 (via 443)
-EXPOSE 8080
+# Build the application
+RUN npm run build
 
-# Define the command to run your app
-CMD [ "node", "server.ts" ]
+# Stage 2: Serve the application with Nginx
+FROM nginx:alpine
+
+# Copy the build output from the 'build' stage
+COPY --from=build /usr/src/app/dist /usr/share/nginx/html
+
+# Copy custom Nginx configuration for SPA and HTTPS
+COPY server/nginx/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 443 for HTTPS
+EXPOSE 443
+
+# Start Nginx
+CMD ["nginx", "-g", "daemon off;"]
