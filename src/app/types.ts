@@ -1,4 +1,4 @@
-export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LISTENING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT';
+export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT';
 
 export enum ReviewGrade {
   FORGOT = 'FORGOT',
@@ -42,7 +42,6 @@ export interface DataScope {
   reading: boolean;
   writing: boolean;
   speaking: boolean;
-  listening: boolean;
   mimic: boolean;
   wordBook: boolean;
   planning: boolean;
@@ -371,22 +370,6 @@ export interface Lesson {
   isFocused?: boolean;
 }
 
-export interface ListeningItem {
-  id: string;
-  userId: string;
-  title?: string; 
-  text: string; 
-  note?: string;
-  path?: string;
-  tags?: string[];
-  audioLinks?: string[]; 
-  image?: string;
-  createdAt: number;
-  updatedAt: number;
-  focusColor?: FocusColor;
-  isFocused?: boolean;
-}
-
 export interface NativeSpeakAnswer {
   tone: 'casual' | 'semi-academic' | 'academic';
   anchor: string;
@@ -520,23 +503,6 @@ export interface ReadingBook {
 }
 
 export interface LessonBook {
-  id: string;
-  userId: string;
-  title: string; 
-  icon?: string;
-  color?: string;
-  itemIds: string[]; 
-  createdAt: number;
-  updatedAt: number;
-  titleColor?: string;
-  titleSize?: number;
-  titleTop?: number;
-  titleLeft?: number;
-  iconTop?: number;
-  iconLeft?: number;
-}
-
-export interface ListeningBook {
   id: string;
   userId: string;
   title: string; 

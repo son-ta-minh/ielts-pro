@@ -540,33 +540,30 @@ export const saveUser = async (user: User): Promise<void> => {
     }
     return crudTemplate(USER_STORE, tx => tx.objectStore(USER_STORE).put(user)); 
 };
-export const findWordByText = async (wordText: string): Promise<VocabularyItem | null> => {
+export const findWordByText = async (userId: string, wordText: string): Promise<VocabularyItem | null> => {
   return withRetry(async () => {
     const db = await openDB();
     return new Promise((resolve) => {
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
-        const target = wordText.trim(); 
-        const resolveImmediately = (result: VocabularyItem | null) => resolve(result);
-        const useCursorFallback = (currentDb: IDBDatabase, currentTarget: string) => {
-            const fallbackTx = currentDb.transaction(STORE_NAME, 'readonly');
-            // const index = fallbackTx.objectStore(STORE_NAME).index('userId');
-            // const req = index.openCursor(IDBKeyRange.only(currentUserId));
-            const req = fallbackTx.objectStore(STORE_NAME).openCursor();
-            const targetLower = currentTarget.toLowerCase();
-            req.onsuccess = (event) => {
-              const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
-              if (cursor) { if (cursor.value.word.toLowerCase().trim() === targetLower) resolveImmediately(cursor.value); else cursor.continue(); } 
-              else { resolveImmediately(null); }
-            };
-            req.onerror = () => resolveImmediately(null);
+        const req = store.openCursor();
+        const targetLower = wordText.trim().toLowerCase();
+
+        req.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+            if (cursor) {
+                if (cursor.value.userId === userId && cursor.value.word.trim().toLowerCase() === targetLower) {
+                    resolve(cursor.value); // Found a match for this user
+                } else {
+                    cursor.continue();
+                }
+            } else {
+                resolve(null); // Reached end of store
+            }
         };
-        if (store.indexNames.contains('word')) {
-            const index = store.index('word');
-            const req = index.get(target); 
-            req.onsuccess = () => { if (req.result) resolveImmediately(req.result); else useCursorFallback(db, target); };
-            req.onerror = () => useCursorFallback(db, target);
-        } else { useCursorFallback(db, target); }
+        req.onerror = () => {
+            resolve(null);
+        };
     });
   });
 };

@@ -540,7 +540,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                             <LayoutList size={14}/> Mimic
                         </button>
                         <button onClick={() => { setMode('RECORDING'); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'RECORDING' ? 'bg-white shadow-sm text-rose-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
-                            <Mic2 size={14}/> Recording
+                            <Mic2 size={14}/> Essay
                         </button>
                         <button onClick={() => { setMode('PLAYBACK'); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'PLAYBACK' ? 'bg-white shadow-sm text-emerald-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
                             <Play size={14}/> Playback

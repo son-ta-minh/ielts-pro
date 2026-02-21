@@ -79,7 +79,6 @@ const Dashboard: React.FC<Props> = ({
               nativeSpeakItems,
               conversations,
               freeTalkItems,
-              listeningItems,
               writingTopics
           ] = await Promise.all([
               db.getLessonsByUserId(userId),
@@ -88,7 +87,6 @@ const Dashboard: React.FC<Props> = ({
               db.getNativeSpeakItemsByUserId(userId),
               db.getConversationItemsByUserId(userId),
               db.getFreeTalkItemsByUserId(userId),
-              db.getListeningItemsByUserId(userId),
               db.getWritingTopicsByUserId(userId)
           ]);
           
@@ -132,7 +130,6 @@ const Dashboard: React.FC<Props> = ({
                   conversation: { completed: conversations.filter(i => i.focusColor === 'green').length, total: conversations.length },
                   pronunciation: { completed: pronCompleted, total: pronTotal }
               },
-              listening: { completed: listeningItems.filter(i => i.focusColor === 'green').length, total: listeningItems.length },
               writing: { completed: writingTopics.filter(t => t.focusColor === 'green').length, total: writingTopics.length }
           });
       } catch (e) {

@@ -586,21 +586,7 @@ export async function deleteLesson(id: string) {
     _notifyChanges();
 }
 
-export async function saveListeningItem(item: ListeningItem) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.saveListeningItem(item);
-    _triggerBackup();
-    _notifyChanges();
-}
 
-export async function deleteListeningItem(id: string) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.deleteListeningItem(id);
-    _triggerBackup();
-    _notifyChanges();
-}
 
 export async function saveSpeakingTopic(topic: SpeakingTopic) {
     if (!canWrite()) return;
@@ -668,21 +654,7 @@ export async function deleteLessonBook(id: string) {
     _notifyChanges();
 }
 
-export async function saveListeningBook(book: ListeningBook) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.saveListeningBook(book);
-    _triggerBackup();
-    _notifyChanges();
-}
 
-export async function deleteListeningBook(id: string) {
-    if (!canWrite()) return;
-    _updateLocalLastModified();
-    await db.deleteListeningBook(id);
-    _triggerBackup();
-    _notifyChanges();
-}
 
 export async function saveWritingBook(book: WritingBook) {
     if (!canWrite()) return;

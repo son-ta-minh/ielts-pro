@@ -45,7 +45,6 @@ export interface StudyStats {
         conversation: { completed: number, total: number };
         pronunciation: { completed: number, total: number };
     };
-    listening: { completed: number, total: number };
     writing: { completed: number, total: number };
 }
 
@@ -157,7 +156,6 @@ const MasteryOverviewPanel: React.FC<{ stats: StudyStats | null }> = ({ stats })
             {/* 4 Columns for compactness */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatRow label="Reading" completed={stats?.reading.completed || 0} total={stats?.reading.total || 0} icon={BookOpen} colorClass="text-indigo-600" />
-                <StatRow label="Listening" completed={stats?.listening.completed || 0} total={stats?.listening.total || 0} icon={Headphones} colorClass="text-sky-600" />
                 <StatRow label="Writing" completed={stats?.writing.completed || 0} total={stats?.writing.total || 0} icon={PenLine} colorClass="text-pink-600" />
                 <StatRow label="Speaking" completed={speakingCompleted} total={speakingTotal} icon={Mic} colorClass="text-rose-600" />
                 
@@ -275,9 +273,8 @@ const StudyNowPanel: React.FC<{
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                         <NavButton largeSub label="Reading" subLabel="Master comprehension with interactive texts." icon={BookOpen} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('UNIT_LIBRARY')} />
-                        <NavButton largeSub label="Listening" subLabel="Train your ear with diverse audio clips." icon={Headphones} color="text-sky-600" bg="bg-sky-50" onClick={() => onAction('LISTENING')} />
                         <NavButton largeSub label="Writing" subLabel="Practice Task 1 & 2 with AI feedback." icon={PenLine} color="text-pink-600" bg="bg-pink-50" onClick={() => onAction('WRITING')} />
-                        <NavButton largeSub label="Speaking" subLabel="Simulate real IELTS speaking tests." icon={Mic} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('SPEAKING')} />
+                        <NavButton largeSub label="Listen & Speak" subLabel="Simulate real IELTS speaking tests." icon={Mic} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('SPEAKING')} />
                     </div>
                 </div>
 
