@@ -36,5 +36,5 @@ else
     echo "Failed to stop server with PID $PID. It may need to be stopped manually."
 fi
 
-# Keep the terminal window open for a few seconds
-sleep 3
+# Wait for the user to press a key before closing the window
+read -p "Press any key to close this window..."

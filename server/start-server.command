@@ -28,5 +28,5 @@ echo $! > server.pid
 echo "Server started successfully in the background."
 echo "Output is being written to server/server.log"
 
-# Keep the terminal window open for a few seconds to show the message
-sleep 3
+# Wait for the user to press a key before closing the window
+read -p "Press any key to close this window..."
