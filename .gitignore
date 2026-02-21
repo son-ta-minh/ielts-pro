@@ -119,3 +119,6 @@ dist
 
 # Mac
 .DS_Store
+
+# Server certificates
+/server/.certs/
