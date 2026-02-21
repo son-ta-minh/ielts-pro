@@ -29,6 +29,8 @@ interface Props {
   onConsumeLessonId?: () => void;
   initialTag?: string | null;
   onConsumeTag?: () => void;
+  initialType?: string | null;
+  onConsumeType?: () => void;
 }
 
 type ResourceItem = 
@@ -39,7 +41,7 @@ type ResourceItem =
 const lessonConfig: ResourceConfig = { filterSchema: [], viewSchema: [] };
 const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
 
-export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavigate, onUpdateUser, initialLessonId, onConsumeLessonId, initialTag, onConsumeTag }) => {
+export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavigate, onUpdateUser, initialLessonId, onConsumeLessonId, initialTag, onConsumeTag, initialType, onConsumeType }) => {
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,6 +112,13 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
           onConsumeTag?.();
       }
   }, [initialTag, onConsumeTag]);
+
+  useEffect(() => {
+      if (initialType) {
+          setTypeFilter(initialType as any);
+          onConsumeType?.();
+      }
+  }, [initialType, onConsumeType]);
   
   useEffect(() => { setPage(0); }, [selectedTag, searchQuery, typeFilter, focusFilter, colorFilter, pageSize]);
 

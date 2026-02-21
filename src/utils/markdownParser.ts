@@ -2,6 +2,9 @@
 
 
 
+import { playSound } from './audio';
+import { getConfig, getServerUrl } from '../app/settingsManager';
+
 /**
  * Lightweight Markdown Parser supporting custom tags:
  * [Audio-VN]text[/] -> Speaker button + text (inline)
@@ -11,6 +14,8 @@
  * [Select: Correct | Option 2 | Option 3] -> Dropdown Selection (Locked after check)
  * [Formula: Part | Part] -> Amber box with badges
  * [Tip content] -> Blue info box with lightbulb icon
+ * [SOUND text|link|start|duration] -> Play sound button
+ * [IMG link|width] -> Image with optional width scaling
  */
 
 if (typeof window !== 'undefined') {
@@ -100,6 +105,10 @@ if (typeof window !== 'undefined') {
             btn.classList.remove('bg-white', 'text-neutral-700', 'opacity-50');
             btn.classList.add('bg-red-500', 'text-white', 'border-red-600');
         }
+    };
+
+    (window as any).handleLessonSound = (link: string, start?: number, duration?: number, markPoints?: number[]) => {
+        playSound(link, start, duration, markPoints).catch(err => console.error("Sound play failed", err));
     };
 }
 
@@ -296,6 +305,71 @@ const processAudioBlocks = (text: string): string => {
     });
 };
 
+/**
+ * Process [SOUND text|link|start|duration]
+ */
+const processSound = (text: string): string => {
+    return text.replace(/\[SOUND\s*(.*?)\]/gi, (_, content) => {
+        let markPoints: number[] = [];
+        let cleanContent = content;
+        
+        if (content.includes('<')) {
+            const parts_mark = content.split('<');
+            cleanContent = parts_mark[0];
+            markPoints = parts_mark[1].split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n)).slice(0, 10);
+        }
+
+        const parts = cleanContent.split('|').map((s: string) => s.trim());
+        if (parts.length < 2) return `[Invalid Sound: ${content}]`;
+
+        const btnText = parts[0];
+        const link = parts[1];
+        const start = parts[2] ? parseFloat(parts[2]) : undefined;
+        const duration = parts[3] ? parseFloat(parts[3]) : undefined;
+
+        const args: string[] = [`'${link.replace(/'/g, "\\'")}'`];
+        if (markPoints.length > 0 || duration !== undefined || start !== undefined) {
+            args.push(start !== undefined ? start.toString() : 'undefined');
+        }
+        if (markPoints.length > 0 || duration !== undefined) {
+            args.push(duration !== undefined ? duration.toString() : 'undefined');
+        }
+        if (markPoints.length > 0) {
+            args.push(`[${markPoints.join(',')}]`);
+        }
+
+        return `<button onclick="window.handleLessonSound(${args.join(', ')})" class="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-neutral-200 hover:border-indigo-300 hover:bg-indigo-50 text-neutral-700 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 my-1 mx-1 select-none"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>${btnText}</button>`;
+    });
+};
+
+/**
+ * Process [IMG link|width]
+ */
+const processImages = (text: string): string => {
+    return text.replace(/\[IMG\s*(.*?)\]/gi, (_, content) => {
+        const parts = content.split('|').map((s: string) => s.trim());
+        const link = parts[0];
+        const width = parts[1];
+
+        let fullUrl = link;
+        if (!link.startsWith('http')) {
+            const config = getConfig();
+            const baseUrl = getServerUrl(config);
+            const cleanPath = link.startsWith('/') ? link.slice(1) : link;
+            if (!cleanPath.startsWith('api/')) {
+                fullUrl = `${baseUrl}/api/audio/stream/${cleanPath}`;
+            } else {
+                fullUrl = `${baseUrl}/${cleanPath}`;
+            }
+        }
+
+        const styleAttr = width ? `style="width: ${width}; max-width: 100%; height: auto;"` : '';
+        const classAttr = width ? 'class="rounded-lg my-4 shadow-md border border-neutral-200"' : 'class="max-w-full h-auto rounded-lg my-4 shadow-md border border-neutral-200"';
+        
+        return `<img src="${fullUrl}" ${styleAttr} ${classAttr} />`;
+    });
+};
+
 export const parseMarkdown = (text: string): string => {
     if (!text) return '';
 
@@ -305,6 +379,8 @@ export const parseMarkdown = (text: string): string => {
 
     // 1. Process Audio and Spoilers first (as they can be inline)
     let processed = processAudioBlocks(normalized);
+    processed = processSound(processed);
+    processed = processImages(processed);
     processed = processQuiz(processed);
     processed = processDropdown(processed); // New: Select
     processed = processMultiChoice(processed); // Process Multi before table to safely replace pipes
@@ -372,8 +448,8 @@ export const parseMarkdown = (text: string): string => {
             continue;
         }
 
-        // Process [Tip Block] - Exclude Audio, HIDDEN, Quiz, Select, Multi tags (inline forms)
-        const tipMatch = lineTrim.match(/^\[(?!(HIDDEN:|Quiz:|Select:|QUIZ:|Multi:|Formula:|Audio-|(\/\])))(.*)\]$/);
+        // Process [Tip Block] - Exclude Audio, HIDDEN, Quiz, Select, Multi, IMG tags (inline forms)
+        const tipMatch = lineTrim.match(/^\[(?!(HIDDEN:|Quiz:|Select:|QUIZ:|Multi:|Formula:|Audio-|IMG|(\/\])))(.*)\]$/);
         if (tipMatch) {
             closeLists(0);
             const lightbulbSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5 text-sky-500"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>`;
@@ -435,7 +511,20 @@ export const parseMarkdown = (text: string): string => {
     closeLists(0);
     
     return output.join('')
-        .replace(/!\[(.*?)\]\((.*?)\)/g, '<img alt="$1" src="$2" class="max-w-full h-auto rounded-lg my-4 shadow-md border border-neutral-200" />')
+        .replace(/!\[(.*?)\]\((.*?)\)/g, (_, alt, src) => {
+            let fullUrl = src;
+            if (!src.startsWith('http')) {
+                const config = getConfig();
+                const baseUrl = getServerUrl(config);
+                const cleanPath = src.startsWith('/') ? src.slice(1) : src;
+                if (!cleanPath.startsWith('api/')) {
+                    fullUrl = `${baseUrl}/api/audio/stream/${cleanPath}`;
+                } else {
+                    fullUrl = `${baseUrl}/${cleanPath}`;
+                }
+            }
+            return `<img alt="${alt}" src="${fullUrl}" class="max-w-full h-auto rounded-lg my-4 shadow-md border border-neutral-200" />`;
+        })
         .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-indigo-600 font-bold hover:underline">$1</a>')
         .replace(/\*\*(.*?)\*\*/g, '<strong class="font-black text-neutral-900">$1</strong>')
         .replace(/\*(.*?)\*/g, '<span class="italic font-normal text-inherit">$1</span>')

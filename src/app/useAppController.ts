@@ -49,6 +49,9 @@ export const useAppController = () => {
     const [targetLessonTag, setTargetLessonTag] = useState<string | null>(null);
     const consumeTargetLessonTag = useCallback(() => setTargetLessonTag(null), []);
 
+    const [targetLessonType, setTargetLessonType] = useState<string | null>(null);
+    const consumeTargetLessonType = useCallback(() => setTargetLessonType(null), []);
+
     // NEW: State for deep-linking to specific game
     const [targetGameMode, setTargetGameMode] = useState<DiscoverGame | null>(null);
     const consumeTargetGameMode = useCallback(() => setTargetGameMode(null), []);
@@ -443,6 +446,14 @@ export const useAppController = () => {
                 setTargetLessonTag('Grammar'); 
                 setView('LESSON'); 
                 break;
+            case 'LESSON_SCALE':
+                setTargetLessonType('INTENSITY');
+                setView('LESSON');
+                break;
+            case 'LESSON_DIFF':
+                setTargetLessonType('COMPARISON');
+                setView('LESSON');
+                break;
             case 'IRREGULAR_VERBS': setView('IRREGULAR_VERBS'); break;
             case 'MIMIC': setView('MIMIC'); break; 
             case 'PLAN_AI': setPlanningAction('AI'); setView('PLANNING'); break;
@@ -486,7 +497,8 @@ export const useAppController = () => {
         startDueReviewSession, startNewLearnSession, lastMasteryScoreUpdateTimestamp,
         writingContextWord, handleComposeWithWord, consumeWritingContext,
         targetLessonId, setTargetLessonId, consumeTargetLessonId, 
-        targetLessonTag, consumeTargetLessonTag, // Added export
+        targetLessonTag, consumeTargetLessonTag, 
+        targetLessonType, consumeTargetLessonType,
         targetGameMode, consumeTargetGameMode, // New exports for game linking
         planningAction, setPlanningAction, consumePlanningAction,
         serverStatus, hasUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,

@@ -12,6 +12,7 @@ const MAX_SPEECH_LENGTH = 1500;
 let voices: SpeechSynthesisVoice[] = [];
 let currentServerAudio: HTMLAudioElement | null = null;
 let isSpeaking = false;
+let currentMarkPoints: number[] = [];
 
 // Cache the successfully connected base URL
 let cachedBaseUrl: string | null = null;
@@ -164,10 +165,12 @@ export const stopSpeaking = () => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
     }
+    currentMarkPoints = [];
     notifyStatus(false);
 };
 
 export const getIsSpeaking = () => isSpeaking;
+export const getMarkPoints = () => currentMarkPoints;
 
 /**
  * Fetches audio blob from the server without playing it.
@@ -331,6 +334,71 @@ export const speak = async (text: string, isDialogue = false, forcedLang?: 'en' 
   }
 };
 
+export const playSound = async (url: string, startTime?: number, duration?: number, markPoints?: number[]) => {
+    stopSpeaking();
+    currentMarkPoints = markPoints || [];
+    
+    const baseUrl = await getBaseUrl();
+    let fullUrl = url;
+
+    if (!url.startsWith('http')) {
+        const cleanPath = url.startsWith('/') ? url.slice(1) : url;
+        if (!cleanPath.startsWith('api/')) {
+            fullUrl = `${baseUrl}/api/audio/stream/${cleanPath}`;
+        } else {
+            fullUrl = `${baseUrl}/${cleanPath}`;
+        }
+    }
+
+    const audio = new Audio(fullUrl);
+    currentServerAudio = audio;
+
+    return new Promise<boolean>((resolve, reject) => {
+        const startPlay = () => {
+            if (startTime !== undefined) {
+                audio.currentTime = startTime;
+            }
+            
+            if (duration !== undefined) {
+                const stopTime = (startTime || 0) + duration;
+                const checkTime = () => {
+                    if (audio.currentTime >= stopTime) {
+                        audio.pause();
+                        notifyStatus(false);
+                        audio.removeEventListener('timeupdate', checkTime);
+                        resolve(true);
+                    }
+                };
+                audio.addEventListener('timeupdate', checkTime);
+            }
+
+            notifyStatus(true);
+            audio.play()
+                .then(() => {
+                    audio.onended = () => {
+                        notifyStatus(false);
+                        resolve(true);
+                    };
+                })
+                .catch(e => {
+                    notifyStatus(false);
+                    reject(e);
+                });
+        };
+
+        if (audio.readyState >= 1) {
+            startPlay();
+        } else {
+            audio.onloadedmetadata = startPlay;
+        }
+
+        audio.onerror = (e) => {
+            notifyStatus(false);
+            reject(e);
+        };
+    });
+};
+
 export const startRecording = async (): Promise<void> => {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const options = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(type => MediaRecorder.isTypeSupported(type));
@@ -362,4 +430,20 @@ export const stopRecording = (): Promise<{base64: string, mimeType: string} | nu
     if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     else resolve(null);
   });
+};
+
+export const seekAudio = (time: number) => {
+    if (currentServerAudio) {
+        currentServerAudio.currentTime = time;
+    }
+};
+
+export const getAudioProgress = () => {
+    if (currentServerAudio) {
+        return {
+            currentTime: currentServerAudio.currentTime,
+            duration: currentServerAudio.duration || 0
+        };
+    }
+    return null;
 };

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
 import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Square, Wrench } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
-import { speak, stopSpeaking, getIsSpeaking } from '../../utils/audio';
+import { speak, stopSpeaking, getIsSpeaking, getAudioProgress, seekAudio, getMarkPoints } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
@@ -47,6 +47,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const { showToast } = useToast();
     const [config, setConfig] = useState<SystemConfig>(getConfig());
     const [isAudioPlaying, setIsAudioPlaying] = useState(getIsSpeaking());
+    const [audioProgress, setAudioProgress] = useState({ currentTime: 0, duration: 0 });
+    const [markPoints, setMarkPoints] = useState<number[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [message, setMessage] = useState<Message | null>(null);
     const [isThinking, setIsThinking] = useState(false);
@@ -105,9 +107,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     useEffect(() => {
         const handleConfigUpdate = () => setConfig(getConfig());
-        const handleAudioStatus = (e: any) => setIsAudioPlaying(e.detail.isSpeaking);
+        const handleAudioStatus = () => setIsAudioPlaying(getIsSpeaking());
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
+        
+        // Initial check
+        setIsAudioPlaying(getIsSpeaking());
+
         return () => {
             window.removeEventListener('config-updated', handleConfigUpdate);
             window.removeEventListener('audio-status-changed', handleAudioStatus);
@@ -340,6 +346,35 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         return text.replace(boldRegex, '<strong>$1</strong>');
     };
 
+    useEffect(() => {
+        let interval: any;
+        if (isAudioPlaying) {
+            setMarkPoints(getMarkPoints());
+            interval = setInterval(() => {
+                const prog = getAudioProgress();
+                if (prog) {
+                    setAudioProgress(prog);
+                }
+            }, 100);
+        } else {
+            setAudioProgress({ currentTime: 0, duration: 0 });
+            setMarkPoints([]);
+        }
+        return () => clearInterval(interval);
+    }, [isAudioPlaying]);
+
+    const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const time = parseFloat(e.target.value);
+        seekAudio(time);
+        setAudioProgress(prev => ({ ...prev, currentTime: time }));
+    };
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
     return (
         <>
             {isOpen && menuPos && (
@@ -369,6 +404,38 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 </>
                             )}
                         </button>
+
+                        {/* Progress Bar */}
+                        {isAudioPlaying && audioProgress.duration > 0 && (
+                            <div className="absolute left-16 bottom-2 flex items-center gap-3 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl border border-neutral-200 animate-in fade-in slide-in-from-left-4 duration-300 pointer-events-auto min-w-[24rem]">
+                                <span className="text-[10px] font-mono text-neutral-500 tabular-nums w-8">{formatTime(audioProgress.currentTime)}</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max={audioProgress.duration}
+                                    step="0.1"
+                                    value={audioProgress.currentTime}
+                                    onChange={handleSeek}
+                                    className="flex-1 h-1.5 bg-neutral-100 rounded-full appearance-none cursor-pointer accent-indigo-600 hover:accent-indigo-700 transition-all"
+                                />
+                                <span className="text-[10px] font-mono text-neutral-400 tabular-nums w-8">{formatTime(audioProgress.duration)}</span>
+                                
+                                {markPoints.length > 0 && (
+                                    <div className="flex items-center gap-1 ml-1 border-l border-neutral-200 pl-2">
+                                        {markPoints.map((pt, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => { seekAudio(pt); setAudioProgress(prev => ({ ...prev, currentTime: pt })); }}
+                                                className="w-5 h-5 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold hover:bg-indigo-600 hover:text-white transition-colors border border-indigo-100"
+                                                title={`Jump to ${formatTime(pt)}`}
+                                            >
+                                                {idx + 1}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
