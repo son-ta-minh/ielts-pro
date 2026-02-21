@@ -2,8 +2,8 @@
 # Get the directory where this script is located to ensure paths are correct
 BASEDIR=$(dirname "$0")
 
-# Navigate into the server directory
-cd "$BASEDIR/server"
+# Navigate to the script's directory, which is the server directory
+cd "$BASEDIR"
 
 # Check if the server is already running
 if [ -f server.pid ]; then
