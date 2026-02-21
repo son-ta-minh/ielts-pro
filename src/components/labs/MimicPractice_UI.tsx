@@ -170,7 +170,7 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
         );
     }
 
-    const rootClasses = isGlobalMode ? 'h-full rounded-[2.5rem] shadow-sm border border-neutral-200' : 'h-full';
+    const rootClasses = isGlobalMode ? 'h-full' : 'h-full rounded-[2.5rem] shadow-sm border border-neutral-200';
 
     return (
         <>

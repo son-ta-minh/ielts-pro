@@ -238,4 +238,30 @@ router.get('/lookup/cambridge', (req, res) => {
     checkReq.end();
 });
 
+// --- IPA Markdown Storage ---
+const IPA_FILE = path.join(settings.BACKUP_DIR, 'server', 'ipa_pronunciation.md');
+
+router.get('/ipa/content', (req, res) => {
+    try {
+        if (fs.existsSync(IPA_FILE)) {
+            const content = fs.readFileSync(IPA_FILE, 'utf8');
+            res.json({ content });
+        } else {
+            res.json({ content: '' });
+        }
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/ipa/content', (req, res) => {
+    const { content } = req.body;
+    try {
+        fs.writeFileSync(IPA_FILE, content || '', 'utf8');
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = router;
