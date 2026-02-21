@@ -1,28 +1,21 @@
-# Stage 1: Build the React application
-FROM node:18-alpine AS build
+# Use an official Node.js runtime as a parent image
+FROM node:18-alpine
+
+# Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Copy package.json and install dependencies
+# Copy server-specific package.json and package-lock.json
 COPY package*.json ./
+
+# Install app dependencies
 RUN npm install
 
-# Copy the rest of the application source code
+# Bundle app source
 COPY . .
 
-# Build the application
-RUN npm run build
+# The app binds to a port, which we will expose
+# The default port in your index.js is likely 3000, but we'll use 8080 internally for flexibility
+EXPOSE 8080
 
-# Stage 2: Serve the application with Nginx
-FROM nginx:alpine
-
-# Copy the build output from the 'build' stage
-COPY --from=build /usr/src/app/dist /usr/share/nginx/html
-
-# Copy custom Nginx configuration for SPA and HTTPS
-COPY server/nginx/nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port 443 for HTTPS
-EXPOSE 443
-
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Define the command to run your app
+CMD [ "node", "index.js" ]

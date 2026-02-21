@@ -1,80 +1,56 @@
-# Vocab Pro - Unified Server
+# Server Deployment with Docker
 
-This Node.js server provides two critical services for the Vocab Pro application:
-1.  **Backup Service**: Handles streaming uploads/downloads of large JSON backup files (unlimited size).
-2.  **TTS Service**: Provides high-quality Text-to-Speech using the native macOS `say` command.
+This setup uses Docker and Docker Compose to run the application behind an Nginx reverse proxy that handles HTTPS.
 
 ## Prerequisites
 
-*   **Node.js** installed.
-*   **macOS** (Required for TTS functionality. Backup works on any OS).
+- Docker
+- Docker Compose
 
-## Installation
+## Setup Instructions
 
-1.  Navigate to this folder:
-    ```bash
-    cd server
-    ```
-2.  Install dependencies:
-    ```bash
-    npm install
-    ```
+### 1. Generate SSL Certificates
 
-## HTTPS Configuration (Recommended)
+Before you can run the server with HTTPS, you need to generate a self-signed SSL certificate. Your project includes a script for this.
 
-Modern browsers require HTTPS for many features (like audio playback from local servers on secure sites).
-
-### Option A: Using mkcert (Recommended)
-This creates a locally trusted certificate.
-
-1.  Install `mkcert` (one time per machine):
-    ```bash
-    brew install mkcert
-    mkcert -install
-    ```
-2.  Run the generation script:
-    ```bash
-    npm run gen-cert
-    ```
-    This will generate `localhost.pem` and `localhost-key.pem` in `.certs/`.
-
-### Option B: Self-Signed Fallback
-If `mkcert` is not installed, running `npm run gen-cert` will fallback to `openssl`. The browser will show a warning ("Your connection is not private") which you must manually bypass.
-
-## Running the Server
-
-Start the server:
+First, make the script executable:
 ```bash
-npm start
-```
-By default, it runs on **port 3001**. You can override this:
-```bash
-node index.js -p 4000
+chmod +x server/generate_cert.sh
 ```
 
-## Client Configuration
+Then, run the script from the root directory of the project:
+```bash
+./server/generate_cert.sh
+```
 
-In the Vocab Pro web application settings:
+This will create the necessary certificate files for Nginx.
 
-1.  **Backup Settings**: Set Server URL to `https://localhost:3001` (or `http` if no certs).
-2.  **Audio Coach**: Set TTS Server URL to `https://localhost:3001`.
+### 2. Build and Run the Containers
 
-## IMPORTANT: Trusting HTTPS
+Navigate to the `/server` directory and use Docker Compose to build the images and start the services:
 
-If you are using self-signed certificates (Option B), or if the browser blocks the connection:
+```bash
+cd server
+docker-compose up --build
+```
 
-1.  Open `https://localhost:3001/voices` in a new browser tab.
-2.  You will see a security warning.
-3.  Click **Advanced** -> **Proceed to localhost (unsafe)**.
-4.  Once you see a JSON response, the web app can now connect to the server.
+- The `--build` flag tells Docker Compose to build the images from your `Dockerfile` before starting the containers.
+- You can run it in the background by adding the `-d` (detached) flag: `docker-compose up --build -d`.
 
-## API Endpoints
+## Accessing the Application
 
-### Backup
-*   `POST /api/backup?userId={id}`: Stream upload JSON.
-*   `GET /api/backup/{userId}`: Stream download JSON.
+Once the containers are running, you can access your application at:
 
-### TTS (macOS Only)
-*   `GET /voices`: List available system voices.
-*   `POST /select-voice`: Set active voice context.
-*   `POST /speak`: Generate and stream audio. Body: `{ "text": "...", "voice": "Samantha" }`.
+**https://localhost:3000**
+
+Since the SSL certificate is self-signed, your browser will show a security warning. You will need to accept the risk to proceed.
+
+## Stopping the Server
+
+To stop the application, press `Ctrl+C` in the terminal where `docker-compose` is running. If you are running in detached mode, use the following command from the `/server` directory:
+
+```bash
+docker-compose down
+```
+
+This will stop and remove the containers and the network created by Docker Compose.
