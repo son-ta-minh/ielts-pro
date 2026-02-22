@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, ChevronRight, Loader2, Plus, Trash2, Edit2, X, Video, Mic, PenTool, GraduationCap, Globe, Layout, Code, Music, Calculator, FlaskConical, Briefcase, ArrowUp, ArrowDown } from 'lucide-react';
+import { User } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
 import { CourseViewer } from './CourseViewer';
@@ -9,6 +10,7 @@ interface Course {
     title: string;
     icon?: string;
     isSystem?: boolean;
+    allowReadingUnitCreation?: boolean;
 }
 
 const AVAILABLE_ICONS = [
@@ -42,9 +44,10 @@ const COURSE_COLORS = [
 interface CourseListProps {
     initialCourseId?: string | null;
     onConsumeInitialCourseId?: () => void;
+    currentUser?: User;
 }
 
-export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsumeInitialCourseId }) => {
+export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsumeInitialCourseId, currentUser }) => {
     const { showToast } = useToast();
     const [courses, setCourses] = useState<Course[]>([]);
     const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -53,6 +56,8 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
     const [editingCourse, setEditingCourse] = useState<Course | null>(null);
     const [courseTitle, setCourseTitle] = useState('');
     const [selectedIcon, setSelectedIcon] = useState('BookOpen');
+    const [isSystemCourse, setIsSystemCourse] = useState(false);
+    const [allowReadingUnitCreation, setAllowReadingUnitCreation] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
     const loadCourses = async () => {
@@ -96,13 +101,14 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
             const res = await fetch(`${serverUrl}/api/courses`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: courseTitle, icon: selectedIcon })
+                body: JSON.stringify({ title: courseTitle, icon: selectedIcon, isSystem: isSystemCourse, allowReadingUnitCreation: allowReadingUnitCreation })
             });
             if (res.ok) {
                 showToast("Course created successfully", "success");
                 setIsModalOpen(false);
                 setCourseTitle('');
                 setSelectedIcon('BookOpen');
+                setIsSystemCourse(false);
                 loadCourses();
             } else {
                 const err = await res.json();
@@ -125,7 +131,7 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
             const res = await fetch(`${serverUrl}/api/courses/${editingCourse.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: courseTitle, icon: selectedIcon })
+                body: JSON.stringify({ title: courseTitle, icon: selectedIcon, isSystem: isSystemCourse, allowReadingUnitCreation: allowReadingUnitCreation })
             });
             if (res.ok) {
                 showToast("Course updated successfully", "success");
@@ -133,6 +139,7 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
                 setEditingCourse(null);
                 setCourseTitle('');
                 setSelectedIcon('BookOpen');
+                setIsSystemCourse(false);
                 loadCourses();
             } else {
                 showToast("Failed to update course", "error");
@@ -160,7 +167,8 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
                 showToast("Course deleted successfully", "success");
                 loadCourses();
             } else {
-                showToast("Failed to delete course", "error");
+                const errorData = await res.json();
+                showToast(errorData.error || "Failed to delete course", "error");
             }
         } catch (e) {
             console.error(e);
@@ -203,6 +211,8 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
         setEditingCourse(null);
         setCourseTitle('');
         setSelectedIcon('BookOpen');
+        setIsSystemCourse(false);
+        setAllowReadingUnitCreation(false);
         setIsModalOpen(true);
     };
 
@@ -212,6 +222,8 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
         setEditingCourse(course);
         setCourseTitle(course.title);
         setSelectedIcon(course.icon || 'BookOpen');
+        setIsSystemCourse(!!course.isSystem);
+        setAllowReadingUnitCreation(!!course.allowReadingUnitCreation);
         setIsModalOpen(true);
     };
 
@@ -234,7 +246,7 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
                     <span className="text-sm font-black text-neutral-900">{selectedCourse.title}</span>
                 </div>
                 <div className="flex-grow overflow-hidden">
-                    <CourseViewer courseId={selectedCourse.id} courseTitle={selectedCourse.title} />
+                    <CourseViewer courseId={selectedCourse.id} courseTitle={selectedCourse.title} currentUser={currentUser} isSystem={selectedCourse.isSystem} allowReadingUnitCreation={selectedCourse.allowReadingUnitCreation} />
                 </div>
             </div>
         );
@@ -361,6 +373,30 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+                            <div>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="checkbox"
+                                        checked={isSystemCourse}
+                                        onChange={(e) => setIsSystemCourse(e.target.checked)}
+                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                                    />
+                                    <span className="text-sm font-bold text-neutral-700">Mark as System Course</span>
+                                </label>
+                                <p className="text-xs text-neutral-400 mt-1 ml-6">System courses cannot be deleted and have special behaviors.</p>
+                            </div>
+                            <div>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="checkbox"
+                                        checked={allowReadingUnitCreation}
+                                        onChange={(e) => setAllowReadingUnitCreation(e.target.checked)}
+                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                                    />
+                                    <span className="text-sm font-bold text-neutral-700">Allow Reading Unit Creation</span>
+                                </label>
+                                <p className="text-xs text-neutral-400 mt-1 ml-6">If enabled, users can create Reading Units from level 2/3 sessions in this course.</p>
                             </div>
                             <div className="flex justify-end gap-2 pt-4">
                                 <button 

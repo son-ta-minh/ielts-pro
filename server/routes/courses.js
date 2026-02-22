@@ -7,7 +7,7 @@ const { settings } = require('../config');
 
 // --- Courses Storage ---
 const COURSES_DIR = path.join(settings.BACKUP_DIR, 'server', 'courses');
-const SYSTEM_COURSES = ['grammar', 'pronunciation_roadmap'];
+// Removed hardcoded SYSTEM_COURSES. We now rely on metadata.isSystem.
 
 // Ensure courses directory exists
 if (!fs.existsSync(COURSES_DIR)) {
@@ -46,18 +46,23 @@ router.get('/courses', (req, res) => {
             const metaPath = path.join(COURSES_DIR, id, 'metadata.json');
             let title = id.replace(/_/g, ' ');
             let icon = null;
+            let isSystem = false;
+            let allowReadingUnitCreation = false;
             if (fs.existsSync(metaPath)) {
                 try {
                     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
                     if (meta.title) title = meta.title;
                     if (meta.icon) icon = meta.icon;
+                    if (meta.isSystem) isSystem = meta.isSystem;
+                    if (meta.allowReadingUnitCreation) allowReadingUnitCreation = meta.allowReadingUnitCreation;
                 } catch (e) {}
             }
             return { 
                 id, 
                 title,
                 icon,
-                isSystem: SYSTEM_COURSES.includes(id)
+                isSystem,
+                allowReadingUnitCreation
             };
         });
 
@@ -96,7 +101,7 @@ router.put('/courses/order', (req, res) => {
 
 // Create new course
 router.post('/courses', (req, res) => {
-    const { title, icon } = req.body;
+    const { title, icon, isSystem, allowReadingUnitCreation } = req.body;
     if (!title) return res.status(400).json({ error: 'Title required' });
 
     const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -108,9 +113,9 @@ router.post('/courses', (req, res) => {
         }
         fs.mkdirSync(coursePath, { recursive: true });
         fs.mkdirSync(path.join(coursePath, 'modules'), { recursive: true });
-        fs.writeFileSync(path.join(coursePath, 'metadata.json'), JSON.stringify({ title, icon }, null, 2));
+        fs.writeFileSync(path.join(coursePath, 'metadata.json'), JSON.stringify({ title, icon, isSystem: !!isSystem, allowReadingUnitCreation: !!allowReadingUnitCreation }, null, 2));
         
-        res.json({ id, title, icon, isSystem: false });
+        res.json({ id, title, icon, isSystem: !!isSystem, allowReadingUnitCreation: !!allowReadingUnitCreation });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -121,17 +126,31 @@ router.delete('/courses/:courseId', (req, res) => {
     const { courseId } = req.params;
     if (courseId.includes('..') || courseId.includes('/')) return res.status(400).json({ error: 'Invalid courseId' });
     
-    if (SYSTEM_COURSES.includes(courseId)) {
+    const coursePath = getCoursePath(courseId);
+    const metaPath = path.join(coursePath, 'metadata.json');
+    let isSystem = false;
+    
+    if (fs.existsSync(metaPath)) {
+        try {
+            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+            if (meta.isSystem) isSystem = true;
+        } catch (e) {}
+    }
+
+    if (isSystem) {
+        console.log(`[Courses] Attempted to delete system course: ${courseId}`);
         return res.status(403).json({ error: 'Cannot delete system course' });
     }
 
-    const coursePath = getCoursePath(courseId);
     try {
+        console.log(`[Courses] Attempting to delete course directory: ${coursePath}`);
         if (fs.existsSync(coursePath)) {
             fs.rmSync(coursePath, { recursive: true, force: true });
+            console.log(`[Courses] Successfully deleted course directory: ${coursePath}`);
         }
         res.json({ success: true });
     } catch (e) {
+        console.error(`[Courses] Failed to delete course directory ${coursePath}:`, e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -139,7 +158,7 @@ router.delete('/courses/:courseId', (req, res) => {
 // Update course metadata
 router.put('/courses/:courseId', (req, res) => {
     const { courseId } = req.params;
-    const { title, icon } = req.body;
+    const { title, icon, isSystem, allowReadingUnitCreation } = req.body;
     if (courseId.includes('..') || courseId.includes('/')) return res.status(400).json({ error: 'Invalid courseId' });
 
     const coursePath = getCoursePath(courseId);
@@ -151,10 +170,12 @@ router.put('/courses/:courseId', (req, res) => {
         const meta = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, 'utf8')) : {};
         if (title) meta.title = title;
         if (icon !== undefined) meta.icon = icon;
+        if (isSystem !== undefined) meta.isSystem = isSystem;
+        if (allowReadingUnitCreation !== undefined) meta.allowReadingUnitCreation = allowReadingUnitCreation;
         
         fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
         
-        res.json({ id: courseId, title: meta.title, icon: meta.icon });
+        res.json({ id: courseId, title: meta.title, icon: meta.icon, isSystem: meta.isSystem, allowReadingUnitCreation: meta.allowReadingUnitCreation });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -350,19 +371,40 @@ router.post('/courses/:courseId/modules/:filename', (req, res) => {
 
 // --- Migration / Initialization Logic ---
 // Create default courses if they don't exist
-const defaultCourses = ['pronunciation_roadmap', 'grammar'];
+const defaultCourses = ['pronunciation_roadmap', 'grammar', 'collins_reading'];
 
 defaultCourses.forEach(courseId => {
     const coursePath = getCoursePath(courseId);
     if (!fs.existsSync(coursePath)) {
         fs.mkdirSync(coursePath, { recursive: true });
         // Create metadata
-        const title = courseId === 'pronunciation_roadmap' ? 'Pronunciation Roadmap' : 'Grammar';
-        const icon = courseId === 'pronunciation_roadmap' ? 'Mic' : 'BookOpen';
-        fs.writeFileSync(path.join(coursePath, 'metadata.json'), JSON.stringify({ title, icon }, null, 2));
+        let title = '';
+        let icon = 'BookOpen';
+        let allowReadingUnitCreation = false;
+        
+        switch(courseId) {
+            case 'pronunciation_roadmap': title = 'Pronunciation Roadmap'; icon = 'Mic'; break;
+            case 'grammar': title = 'Grammar'; icon = 'BookOpen'; break;
+            case 'collins_reading': title = 'Collins Reading'; icon = 'BookOpen'; allowReadingUnitCreation = true; break;
+            default: title = courseId;
+        }
+
+        fs.writeFileSync(path.join(coursePath, 'metadata.json'), JSON.stringify({ title, icon, isSystem: true, allowReadingUnitCreation }, null, 2));
         
         // Create modules folder
         fs.mkdirSync(path.join(coursePath, 'modules'), { recursive: true });
+    } else {
+        // Ensure existing system courses are marked as system
+        const metaPath = path.join(coursePath, 'metadata.json');
+        if (fs.existsSync(metaPath)) {
+            try {
+                const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+                if (!meta.isSystem) {
+                    meta.isSystem = true;
+                    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+                }
+            } catch (e) {}
+        }
     }
 });
 
