@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
   Download, History, BookCopy, Sparkles, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
-  Headphones, Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain,
+  Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain,
   CloudUpload, Percent, MessagesSquare, Scale, Dumbbell
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
@@ -266,9 +266,10 @@ const StudyNowPanel: React.FC<{
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                <NavButton largeSub label="Lesson" subLabel="Explore all learning materials." icon={BookOpen} color="text-blue-600" bg="bg-blue-50" onClick={() => onAction('LESSON_ONLY')} />
                 <NavButton largeSub label="Grammar" subLabel="Deep dive into essential grammar rules." icon={BookText} color="text-purple-600" bg="bg-purple-50" onClick={() => onAction('LESSON_GRAMMAR')} />
                 <NavButton largeSub label="Irregular Verb" subLabel="Master tricky verb forms and usage." icon={FileClock} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('IRREGULAR_VERBS')} />
-                <NavButton largeSub label="Pronunciation" subLabel="Perfect your accent and intonation." icon={AudioLines} color="text-emerald-600" bg="bg-emerald-50" onClick={() => onAction('MIMIC')} />
+                <NavButton largeSub label="Pronunciation" subLabel="Perfect your accent and intonation." icon={AudioLines} color="text-emerald-600" bg="bg-emerald-50" onClick={() => onAction('PRONUNCIATION_ROADMAP')} />
                 <NavButton largeSub label="Word Intensity" subLabel="Master nuanced words by their scale." icon={Scale} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('LESSON_SCALE')} />
                 <NavButton largeSub label="Confusing Words" subLabel="Contrast and identify confusing pairs." icon={Split} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('LESSON_DIFF')} />
             </div>
@@ -290,11 +291,16 @@ const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({
              </div>
              
              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                 <NavButton 
-                    label="Listening & Spelling" 
-                    subLabel="Dictation drills to sharpen auditory accuracy." 
-                    largeSub icon={Keyboard} color="text-cyan-600" bg="bg-cyan-50" onClick={() => onAction('DICTATION')} 
-                 />
+                <NavButton 
+                   label="Pronunciation Focus" 
+                   subLabel="Targeted speech practice." 
+                   largeSub icon={Mic} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('MIMIC')} 
+                />
+                <NavButton 
+                   label="Listening & Spelling" 
+                   subLabel="Dictation drills to sharpen auditory accuracy." 
+                   largeSub icon={Keyboard} color="text-cyan-600" bg="bg-cyan-50" onClick={() => onAction('DICTATION')} 
+                />
                  <NavButton 
                     label="Grammar & Syntax" 
                     subLabel="Unscramble sentences to master word order." 

@@ -32,21 +32,46 @@ router.get('/courses', (req, res) => {
             .filter(dirent => dirent.isDirectory())
             .map(dirent => dirent.name);
         
+        // Read order file
+        let order = [];
+        const orderPath = path.join(COURSES_DIR, 'order.json');
+        if (fs.existsSync(orderPath)) {
+            try {
+                order = JSON.parse(fs.readFileSync(orderPath, 'utf8'));
+            } catch (e) {}
+        }
+
         const courses = dirs.map(id => {
             // Try to read metadata if exists, else use folder name
             const metaPath = path.join(COURSES_DIR, id, 'metadata.json');
             let title = id.replace(/_/g, ' ');
+            let icon = null;
             if (fs.existsSync(metaPath)) {
                 try {
                     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
                     if (meta.title) title = meta.title;
+                    if (meta.icon) icon = meta.icon;
                 } catch (e) {}
             }
             return { 
                 id, 
                 title,
+                icon,
                 isSystem: SYSTEM_COURSES.includes(id)
             };
+        });
+
+        // Sort courses based on order array
+        courses.sort((a, b) => {
+            const indexA = order.indexOf(a.id);
+            const indexB = order.indexOf(b.id);
+            
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+            
+            // Fallback to alphabetical
+            return a.title.localeCompare(b.title);
         });
 
         res.json(courses);
@@ -55,9 +80,23 @@ router.get('/courses', (req, res) => {
     }
 });
 
+// Reorder courses
+router.put('/courses/order', (req, res) => {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) return res.status(400).json({ error: 'Invalid order data' });
+
+    try {
+        const orderPath = path.join(COURSES_DIR, 'order.json');
+        fs.writeFileSync(orderPath, JSON.stringify(orderedIds, null, 2));
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Create new course
 router.post('/courses', (req, res) => {
-    const { title } = req.body;
+    const { title, icon } = req.body;
     if (!title) return res.status(400).json({ error: 'Title required' });
 
     const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -69,9 +108,9 @@ router.post('/courses', (req, res) => {
         }
         fs.mkdirSync(coursePath, { recursive: true });
         fs.mkdirSync(path.join(coursePath, 'modules'), { recursive: true });
-        fs.writeFileSync(path.join(coursePath, 'metadata.json'), JSON.stringify({ title }, null, 2));
+        fs.writeFileSync(path.join(coursePath, 'metadata.json'), JSON.stringify({ title, icon }, null, 2));
         
-        res.json({ id, title, isSystem: false });
+        res.json({ id, title, icon, isSystem: false });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -100,7 +139,7 @@ router.delete('/courses/:courseId', (req, res) => {
 // Update course metadata
 router.put('/courses/:courseId', (req, res) => {
     const { courseId } = req.params;
-    const { title } = req.body;
+    const { title, icon } = req.body;
     if (courseId.includes('..') || courseId.includes('/')) return res.status(400).json({ error: 'Invalid courseId' });
 
     const coursePath = getCoursePath(courseId);
@@ -110,10 +149,46 @@ router.put('/courses/:courseId', (req, res) => {
         if (!fs.existsSync(coursePath)) return res.status(404).json({ error: 'Course not found' });
         
         const meta = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, 'utf8')) : {};
-        meta.title = title;
+        if (title) meta.title = title;
+        if (icon !== undefined) meta.icon = icon;
+        
         fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
         
-        res.json({ id: courseId, title });
+        res.json({ id: courseId, title: meta.title, icon: meta.icon });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Rename module
+router.put('/courses/:courseId/modules/:filename/rename', (req, res) => {
+    const { courseId, filename } = req.params;
+    const { newTitle } = req.body;
+    
+    if (courseId.includes('..') || courseId.includes('/')) return res.status(400).json({ error: 'Invalid courseId' });
+    if (filename.includes('..') || filename.includes('/')) return res.status(400).json({ error: 'Invalid filename' });
+    if (!newTitle) return res.status(400).json({ error: 'New title required' });
+
+    const modulesDir = getModulesPath(courseId);
+    const oldPath = path.join(modulesDir, filename);
+
+    try {
+        if (!fs.existsSync(oldPath)) return res.status(404).json({ error: 'Module not found' });
+
+        // Keep the existing prefix (e.g. "01_")
+        const prefixMatch = filename.match(/^(\d+_)/);
+        const prefix = prefixMatch ? prefixMatch[1] : '';
+        
+        const safeTitle = newTitle.replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '_');
+        const newFilename = `${prefix}${safeTitle}.md`;
+        const newPath = path.join(modulesDir, newFilename);
+
+        if (fs.existsSync(newPath) && newFilename !== filename) {
+            return res.status(400).json({ error: 'Module with this name already exists' });
+        }
+
+        fs.renameSync(oldPath, newPath);
+        res.json({ success: true, newFilename });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -283,7 +358,8 @@ defaultCourses.forEach(courseId => {
         fs.mkdirSync(coursePath, { recursive: true });
         // Create metadata
         const title = courseId === 'pronunciation_roadmap' ? 'Pronunciation Roadmap' : 'Grammar';
-        fs.writeFileSync(path.join(coursePath, 'metadata.json'), JSON.stringify({ title }, null, 2));
+        const icon = courseId === 'pronunciation_roadmap' ? 'Mic' : 'BookOpen';
+        fs.writeFileSync(path.join(coursePath, 'metadata.json'), JSON.stringify({ title, icon }, null, 2));
         
         // Create modules folder
         fs.mkdirSync(path.join(coursePath, 'modules'), { recursive: true });

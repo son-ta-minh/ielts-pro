@@ -79,6 +79,8 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
 
     // Module management state
     const [isAddModuleModalOpen, setIsAddModuleModalOpen] = useState(false);
+    const [isRenameModuleModalOpen, setIsRenameModuleModalOpen] = useState(false);
+    const [moduleToRename, setModuleToRename] = useState<ModuleInfo | null>(null);
     const [newModuleTitle, setNewModuleTitle] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -183,6 +185,42 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
         } finally {
             setIsProcessing(false);
         }
+    };
+
+    const handleRenameModule = async () => {
+        if (!moduleToRename || !newModuleTitle.trim()) return;
+        setIsProcessing(true);
+        try {
+            const config = getConfig();
+            const serverUrl = getServerUrl(config);
+            const res = await fetch(`${serverUrl}/api/courses/${courseId}/modules/${moduleToRename.filename}/rename`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newTitle: newModuleTitle })
+            });
+            if (res.ok) {
+                showToast("Module renamed successfully", "success");
+                setIsRenameModuleModalOpen(false);
+                setModuleToRename(null);
+                setNewModuleTitle('');
+                loadModules();
+            } else {
+                const err = await res.json();
+                showToast(err.error || "Failed to rename module", "error");
+            }
+        } catch (e) {
+            console.error(e);
+            showToast("Failed to rename module", "error");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const openRenameModal = (module: ModuleInfo, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setModuleToRename(module);
+        setNewModuleTitle(module.title);
+        setIsRenameModuleModalOpen(true);
     };
 
     const handleDeleteModule = async (filename: string, e: React.MouseEvent) => {
@@ -410,6 +448,12 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                                                         <ArrowDown size={14} />
                                                     </button>
                                                     <button 
+                                                        onClick={(e) => openRenameModal(mod, e)}
+                                                        className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                    >
+                                                        <Edit size={14} />
+                                                    </button>
+                                                    <button 
                                                         onClick={(e) => handleDeleteModule(mod.filename, e)}
                                                         className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                     >
@@ -506,6 +550,47 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                                 >
                                     {isProcessing && <Loader2 size={16} className="animate-spin" />}
                                     Create Module
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Rename Module Modal */}
+            {isRenameModuleModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-black text-neutral-900">Rename Module</h3>
+                            <button onClick={() => setIsRenameModuleModalOpen(false)} className="p-2 hover:bg-neutral-100 rounded-full text-neutral-400"><X size={20} /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-widest mb-2">Module Title</label>
+                                <input 
+                                    type="text" 
+                                    value={newModuleTitle}
+                                    onChange={(e) => setNewModuleTitle(e.target.value)}
+                                    className="w-full p-4 bg-neutral-50 border border-neutral-200 rounded-xl font-bold text-neutral-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="e.g. Introduction to Phonetics"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-4">
+                                <button 
+                                    onClick={() => setIsRenameModuleModalOpen(false)}
+                                    className="px-6 py-3 rounded-xl font-bold text-neutral-500 hover:bg-neutral-100 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={handleRenameModule}
+                                    disabled={!newModuleTitle.trim() || isProcessing}
+                                    className="px-6 py-3 rounded-xl font-black text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                    {isProcessing && <Loader2 size={16} className="animate-spin" />}
+                                    Save Changes
                                 </button>
                             </div>
                         </div>

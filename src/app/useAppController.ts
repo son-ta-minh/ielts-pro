@@ -52,6 +52,10 @@ export const useAppController = () => {
     const [targetLessonType, setTargetLessonType] = useState<string | null>(null);
     const consumeTargetLessonType = useCallback(() => setTargetLessonType(null), []);
 
+    // NEW: State for deep-linking to a specific course
+    const [targetCourseId, setTargetCourseId] = useState<string | null>(null);
+    const consumeTargetCourseId = useCallback(() => setTargetCourseId(null), []);
+
     // NEW: State for deep-linking to specific game
     const [targetGameMode, setTargetGameMode] = useState<DiscoverGame | null>(null);
     const consumeTargetGameMode = useCallback(() => setTargetGameMode(null), []);
@@ -442,9 +446,13 @@ export const useAppController = () => {
             case 'REVIEW': startDueReviewSession(); break;
             case 'BROWSE': startNewLearnSession(); break;
             case 'LESSON': if (params && params.lessonId) setTargetLessonId(params.lessonId); setView('LESSON'); break;
+            case 'LESSON_ONLY':
+                setTargetLessonType('ESSAY');
+                setView('LESSON');
+                break;
             case 'LESSON_GRAMMAR': 
-                setTargetLessonTag('Grammar'); 
-                setView('LESSON'); 
+                setTargetCourseId('grammar'); 
+                setView('COURSE'); 
                 break;
             case 'LESSON_SCALE':
                 setTargetLessonType('INTENSITY');
@@ -455,7 +463,13 @@ export const useAppController = () => {
                 setView('LESSON');
                 break;
             case 'IRREGULAR_VERBS': setView('IRREGULAR_VERBS'); break;
-            case 'MIMIC': setView('MIMIC'); break; 
+            case 'MIMIC': 
+                setView('MIMIC'); 
+                break; 
+            case 'PRONUNCIATION_ROADMAP':
+                setTargetCourseId('pronunciation_roadmap');
+                setView('COURSE');
+                break;
             case 'PLAN_AI': setPlanningAction('AI'); setView('PLANNING'); break;
             case 'PLAN_IMPORT': setPlanningAction('IMPORT'); setView('PLANNING'); break;
             
@@ -499,6 +513,7 @@ export const useAppController = () => {
         targetLessonId, setTargetLessonId, consumeTargetLessonId, 
         targetLessonTag, consumeTargetLessonTag, 
         targetLessonType, consumeTargetLessonType,
+        targetCourseId, consumeTargetCourseId,
         targetGameMode, consumeTargetGameMode, // New exports for game linking
         planningAction, setPlanningAction, consumePlanningAction,
         serverStatus, hasUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
