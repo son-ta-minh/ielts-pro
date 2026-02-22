@@ -27,6 +27,7 @@ const KnowledgeLibrary = React.lazy(() => import('../dynamic/templates/LessonLib
 const PlanningPage = React.lazy(() => import('../dynamic/templates/PlanningPage').then(module => ({ default: module.PlanningPage })));
 const ExpressionPage = React.lazy(() => import('../dynamic/templates/SpeakingCardPage').then(module => ({ default: module.SpeakingCardPage })));
 const WordBookPage = React.lazy(() => import('../dynamic/templates/WordBookPage').then(module => ({ default: module.WordBookPage })));
+const CourseList = React.lazy(() => import('../components/courses/CourseList').then(module => ({ default: module.CourseList })));
 
 type AppController = ReturnType<typeof useAppController>;
 
@@ -38,6 +39,7 @@ const navItems = [
   { id: 'DASHBOARD', view: 'DASHBOARD', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Mobile%20Phone.png", label: 'Dashboard' },
   { id: 'BROWSE', view: 'BROWSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png", label: 'Library' },
   { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Lesson' },
+  { id: 'COURSE', view: 'COURSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Graduation%20Cap.png", label: 'Course' },
   { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },
   { id: 'SPEAKING', view: 'SPEAKING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png", label: 'Listen & Speak' },
   { id: 'WRITING', view: 'WRITING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png", label: 'Writing' }
@@ -159,6 +161,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'REVIEW': return sessionWords && sessionType ? <ReviewSession user={currentUser} sessionWords={sessionWords} sessionType={sessionType} sessionFocus={sessionFocus} onUpdate={updateWord} onBulkUpdate={bulkUpdateWords} onComplete={handleSessionComplete} onRetry={handleRetrySession} /> : null;
     case 'BROWSE': return <WordList user={currentUser} onDelete={async (id) => await deleteWord(id)} onBulkDelete={async (ids) => await bulkDeleteWords(ids)} onUpdate={updateWord} onStartSession={(words) => startSession(words, 'custom')} initialFilter={initialListFilter} onInitialFilterApplied={() => setInitialListFilter(null)} forceExpandAdd={forceExpandAdd} onExpandAddConsumed={() => setForceExpandAdd(false)} onNavigate={setView} />;
     case 'LESSON': return <KnowledgeLibrary user={currentUser} onStartSession={(words) => startSession(words, 'custom')} onExit={() => setView('DASHBOARD')} onNavigate={setView} onUpdateUser={handleUpdateUser} initialLessonId={controller.targetLessonId} onConsumeLessonId={controller.consumeTargetLessonId} initialTag={controller.targetLessonTag} onConsumeTag={controller.consumeTargetLessonTag} initialType={controller.targetLessonType} onConsumeType={controller.consumeTargetLessonType} />;
+    case 'COURSE': return <CourseList />;
     case 'UNIT_LIBRARY': return <ReadingUnitPage user={currentUser} onStartSession={(words) => startSession(words, 'new_study')} onUpdateUser={handleUpdateUser} />;
     case 'SETTINGS': return <SettingsView user={currentUser} onUpdateUser={handleUpdateUser} onRefresh={refreshGlobalStats} onNuke={handleLibraryReset} apiUsage={apiUsage} />;
     case 'DISCOVER': return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} onRecalculateXp={recalculateXpAndLevelUp} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} lastMasteryScoreUpdateTimestamp={lastMasteryScoreUpdateTimestamp} onBulkUpdate={bulkUpdateWords} initialGameMode={targetGameMode} onConsumeGameMode={consumeTargetGameMode} />;

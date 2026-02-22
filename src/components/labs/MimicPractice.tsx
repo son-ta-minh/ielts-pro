@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { PronunciationRoadmap } from './PronunciationRoadmap';
+import { CourseViewer } from '../courses/CourseViewer';
 import { PronunciationFocus } from './PronunciationFocus';
 import { VocabularyItem } from '../../app/types';
 
@@ -33,7 +33,7 @@ export const MimicPractice: React.FC<Props> = ({ scopedWord, onClose }) => {
                 </div>
             </div>
             <div className="flex-grow overflow-hidden">
-                {activeTab === 'IPA' && <PronunciationRoadmap />}
+                {activeTab === 'IPA' && <CourseViewer courseId="pronunciation_roadmap" courseTitle="Pronunciation Roadmap" />}
                 {activeTab === 'FOCUS' && <PronunciationFocus scopedWord={scopedWord} onClose={onClose} />}
             </div>
         </div>

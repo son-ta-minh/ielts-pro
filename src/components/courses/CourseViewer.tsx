@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { parseMarkdown } from '../../utils/markdownParser';
-import { ChevronLeft, ChevronRight, Edit, Menu, Save, Loader2, ArrowLeft, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit, Menu, Save, Loader2, ArrowLeft, BookOpen, Plus, Trash2, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -13,6 +13,11 @@ interface ModuleInfo {
 interface Section {
     title: string;
     content: string;
+}
+
+interface CourseViewerProps {
+    courseId: string;
+    courseTitle: string;
 }
 
 const parseSections = (markdown: string): Section[] => {
@@ -59,7 +64,7 @@ const parseSections = (markdown: string): Section[] => {
     return sections.length > 0 ? sections : [{ title: "General", content: markdown }];
 };
 
-export const PronunciationRoadmap: React.FC = () => {
+export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitle }) => {
     const { showToast } = useToast();
     const [modules, setModules] = useState<ModuleInfo[]>([]);
     const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
@@ -72,6 +77,11 @@ export const PronunciationRoadmap: React.FC = () => {
     const [isChapterMenuOpen, setIsChapterMenuOpen] = useState(false);
     const chapterMenuRef = useRef<HTMLDivElement>(null);
 
+    // Module management state
+    const [isAddModuleModalOpen, setIsAddModuleModalOpen] = useState(false);
+    const [newModuleTitle, setNewModuleTitle] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+
     const activeModule = useMemo(() => modules.find(m => m.id === activeModuleId), [modules, activeModuleId]);
     const sections = useMemo(() => parseSections(markdown), [markdown]);
     const activeSection = sections[currentSectionIdx];
@@ -81,7 +91,7 @@ export const PronunciationRoadmap: React.FC = () => {
         try {
             const config = getConfig();
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/ipa/modules`);
+            const res = await fetch(`${serverUrl}/api/courses/${courseId}/modules`);
             if (res.ok) {
                 const data = await res.json();
                 setModules(data);
@@ -92,14 +102,14 @@ export const PronunciationRoadmap: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [showToast]);
+    }, [courseId, showToast]);
 
     const loadModuleContent = useCallback(async (filename: string) => {
         setIsLoading(true);
         try {
             const config = getConfig();
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/ipa/modules/${filename}`);
+            const res = await fetch(`${serverUrl}/api/courses/${courseId}/modules/${filename}`);
             if (res.ok) {
                 const data = await res.json();
                 setMarkdown(data.content || '');
@@ -111,7 +121,7 @@ export const PronunciationRoadmap: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [showToast]);
+    }, [courseId, showToast]);
 
     useEffect(() => {
         loadModules();
@@ -129,15 +139,14 @@ export const PronunciationRoadmap: React.FC = () => {
         try {
             const config = getConfig();
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/ipa/modules/${activeModule.filename}`, {
+            const res = await fetch(`${serverUrl}/api/courses/${courseId}/modules/${activeModule.filename}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: markdown })
             });
             if (res.ok) {
                 showToast("Module content saved", "success");
-                setViewMode('module'); // Stay in module view or go home? User said "edit module... when clicked... allowed to edit".
-                // Let's go back to module view (read mode) after save.
+                setViewMode('module'); 
             } else {
                 throw new Error("Save failed");
             }
@@ -146,6 +155,91 @@ export const PronunciationRoadmap: React.FC = () => {
             showToast("Failed to save content", "error");
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleAddModule = async () => {
+        if (!newModuleTitle.trim()) return;
+        setIsProcessing(true);
+        try {
+            const config = getConfig();
+            const serverUrl = getServerUrl(config);
+            const res = await fetch(`${serverUrl}/api/courses/${courseId}/modules`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: newModuleTitle })
+            });
+            if (res.ok) {
+                showToast("Module created successfully", "success");
+                setIsAddModuleModalOpen(false);
+                setNewModuleTitle('');
+                loadModules();
+            } else {
+                showToast("Failed to create module", "error");
+            }
+        } catch (e) {
+            console.error(e);
+            showToast("Failed to create module", "error");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleDeleteModule = async (filename: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!window.confirm("Are you sure you want to delete this module?")) return;
+        
+        try {
+            const config = getConfig();
+            const serverUrl = getServerUrl(config);
+            const res = await fetch(`${serverUrl}/api/courses/${courseId}/modules/${filename}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                showToast("Module deleted successfully", "success");
+                loadModules();
+            } else {
+                showToast("Failed to delete module", "error");
+            }
+        } catch (e) {
+            console.error(e);
+            showToast("Failed to delete module", "error");
+        }
+    };
+
+    const handleMoveModule = async (index: number, direction: 'up' | 'down', e: React.MouseEvent) => {
+        e.stopPropagation();
+        if ((direction === 'up' && index === 0) || (direction === 'down' && index === modules.length - 1)) return;
+
+        const newModules = [...modules];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        
+        // Swap
+        [newModules[index], newModules[targetIndex]] = [newModules[targetIndex], newModules[index]];
+        
+        // Optimistic update
+        setModules(newModules);
+
+        try {
+            const config = getConfig();
+            const serverUrl = getServerUrl(config);
+            const res = await fetch(`${serverUrl}/api/courses/${courseId}/modules/order`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderedFilenames: newModules.map(m => m.filename) })
+            });
+            
+            if (!res.ok) {
+                showToast("Failed to reorder modules", "error");
+                loadModules(); // Revert
+            } else {
+                 // Reload to get new filenames (since they are renamed on server)
+                 loadModules();
+            }
+        } catch (e) {
+            console.error(e);
+            showToast("Failed to reorder modules", "error");
+            loadModules(); // Revert
         }
     };
 
@@ -186,7 +280,7 @@ export const PronunciationRoadmap: React.FC = () => {
                         </button>
                     )}
                     <div className="flex flex-col">
-                        <h2 className="text-sm font-black text-neutral-900 tracking-tight">Pronunciation Roadmap</h2>
+                        <h2 className="text-sm font-black text-neutral-900 tracking-tight">{courseTitle}</h2>
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                             {viewMode === 'home' ? 'Course Overview' : viewMode === 'edit' ? 'Editor' : activeModule?.title}
                         </span>
@@ -272,9 +366,16 @@ export const PronunciationRoadmap: React.FC = () => {
                 {viewMode === 'home' ? (
                     <div className="h-full overflow-y-auto p-8 md:p-12">
                         <div className="max-w-4xl mx-auto">
-                            <div className="mb-10 text-center">
-                                <h1 className="text-3xl font-black text-neutral-900 tracking-tight mb-2">Pronunciation Roadmap</h1>
-                                <p className="text-sm font-medium text-neutral-500">Master English sounds with structured lessons and interactive practice.</p>
+                            <div className="mb-10 text-center relative">
+                                <h1 className="text-3xl font-black text-neutral-900 tracking-tight mb-2">{courseTitle}</h1>
+                                <p className="text-sm font-medium text-neutral-500">Master your skills with structured lessons and interactive practice.</p>
+                                <button 
+                                    onClick={() => setIsAddModuleModalOpen(true)}
+                                    className="absolute right-0 top-0 p-3 bg-neutral-900 text-white rounded-xl shadow-lg hover:bg-neutral-800 transition-all active:scale-95"
+                                    title="Add Module"
+                                >
+                                    <Plus size={20} />
+                                </button>
                             </div>
                             
                             {isLoading ? (
@@ -284,20 +385,44 @@ export const PronunciationRoadmap: React.FC = () => {
                             ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {modules.map((mod, idx) => (
-                                        <button
+                                        <div
                                             key={mod.id}
                                             onClick={() => handleModuleClick(mod)}
-                                            className="group relative flex flex-col items-start p-6 bg-white border-2 border-neutral-100 rounded-3xl hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/10 transition-all text-left active:scale-[0.98]"
+                                            className="group relative flex flex-col items-start p-6 bg-white border-2 border-neutral-100 rounded-3xl hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/10 transition-all text-left active:scale-[0.98] cursor-pointer"
                                         >
-                                            <div className="w-10 h-10 rounded-2xl bg-neutral-50 flex items-center justify-center text-neutral-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors mb-4">
-                                                <BookOpen size={20} />
+                                            <div className="w-full flex justify-between items-start mb-4">
+                                                <div className="w-10 h-10 rounded-2xl bg-neutral-50 flex items-center justify-center text-neutral-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                                                    <BookOpen size={20} />
+                                                </div>
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button 
+                                                        onClick={(e) => handleMoveModule(idx, 'up', e)}
+                                                        disabled={idx === 0}
+                                                        className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-30"
+                                                    >
+                                                        <ArrowUp size={14} />
+                                                    </button>
+                                                    <button 
+                                                        onClick={(e) => handleMoveModule(idx, 'down', e)}
+                                                        disabled={idx === modules.length - 1}
+                                                        className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-30"
+                                                    >
+                                                        <ArrowDown size={14} />
+                                                    </button>
+                                                    <button 
+                                                        onClick={(e) => handleDeleteModule(mod.filename, e)}
+                                                        className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
                                             </div>
                                             <div className="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-1">Module {idx + 1}</div>
                                             <h3 className="text-base font-black text-neutral-900 group-hover:text-indigo-600 transition-colors leading-tight">{mod.title}</h3>
                                             <div className="mt-4 flex items-center gap-1.5 text-[10px] font-bold text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 Start Learning <ChevronRight size={12} />
                                             </div>
-                                        </button>
+                                        </div>
                                     ))}
                                 </div>
                             )}
@@ -313,7 +438,7 @@ export const PronunciationRoadmap: React.FC = () => {
                         />
                     </div>
                 ) : (
-                    <div className="h-full overflow-y-auto p-8 md:p-12 bg-white">
+                    <div className="h-full overflow-y-auto px-6 py-4 md:px-8 md:py-6 bg-white">
                         <div className="max-w-4xl mx-auto">
                             <div className="prose prose-neutral max-w-none prose-headings:font-black prose-headings:tracking-tight prose-p:leading-relaxed prose-strong:font-black prose-a:text-indigo-600 prose-img:rounded-3xl prose-img:shadow-xl" dangerouslySetInnerHTML={{ __html: htmlContent }} />
                             
@@ -346,7 +471,47 @@ export const PronunciationRoadmap: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* Add Module Modal */}
+            {isAddModuleModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-black text-neutral-900">New Module</h3>
+                            <button onClick={() => setIsAddModuleModalOpen(false)} className="p-2 hover:bg-neutral-100 rounded-full text-neutral-400"><X size={20} /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-widest mb-2">Module Title</label>
+                                <input 
+                                    type="text" 
+                                    value={newModuleTitle}
+                                    onChange={(e) => setNewModuleTitle(e.target.value)}
+                                    className="w-full p-4 bg-neutral-50 border border-neutral-200 rounded-xl font-bold text-neutral-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="e.g. Introduction to Phonetics"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-4">
+                                <button 
+                                    onClick={() => setIsAddModuleModalOpen(false)}
+                                    className="px-6 py-3 rounded-xl font-bold text-neutral-500 hover:bg-neutral-100 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={handleAddModule}
+                                    disabled={!newModuleTitle.trim() || isProcessing}
+                                    className="px-6 py-3 rounded-xl font-black text-white bg-neutral-900 hover:bg-neutral-800 disabled:opacity-50 transition-colors flex items-center gap-2"
+                                >
+                                    {isProcessing && <Loader2 size={16} className="animate-spin" />}
+                                    Create Module
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
-
