@@ -195,7 +195,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
     <div className="min-h-screen bg-neutral-50 md:flex">
       <Sidebar controller={controller} onNavigate={handleNavigation} onSwitchUser={handleSwitchUser} />
       <div className={`fixed inset-0 bg-black/30 z-40 md:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
-      <main className={`flex-1 overflow-y-auto relative ${view === 'MIMIC' ? 'p-0' : 'p-4 md:p-8'}`}>
+      <main className={`flex-1 overflow-y-auto relative ${view === 'MIMIC' ? 'p-0' : 'p-6 md:p-10'}`}>
         <button onClick={() => setIsSidebarOpen(true)} className="md:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30"><Menu size={24} /></button>
         <Suspense fallback={<div className="flex justify-center p-20"><Loader2 className="animate-spin text-neutral-300" size={32} /></div>}><MainContent controller={controller} /></Suspense>
       </main>

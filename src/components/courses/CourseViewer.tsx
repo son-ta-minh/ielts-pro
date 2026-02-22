@@ -3,7 +3,6 @@ import { parseMarkdown } from '../../utils/markdownParser';
 import { ChevronLeft, ChevronRight, Edit, Menu, Save, Loader2, ArrowLeft, BookOpen, Plus, Trash2, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
-import { User } from '../../app/types';
 
 interface ModuleInfo {
     id: string;
@@ -19,9 +18,6 @@ interface Section {
 interface CourseViewerProps {
     courseId: string;
     courseTitle: string;
-    isSystem?: boolean;
-    allowReadingUnitCreation?: boolean;
-    currentUser?: User;
 }
 
 const parseSections = (markdown: string): Section[] => {
@@ -68,7 +64,7 @@ const parseSections = (markdown: string): Section[] => {
     return sections.length > 0 ? sections : [{ title: "General", content: markdown }];
 };
 
-export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitle, isSystem, allowReadingUnitCreation, currentUser }) => {
+export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitle }) => {
     const { showToast } = useToast();
     const [modules, setModules] = useState<ModuleInfo[]>([]);
     const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
@@ -87,46 +83,10 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
     const [moduleToRename, setModuleToRename] = useState<ModuleInfo | null>(null);
     const [newModuleTitle, setNewModuleTitle] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
-    const [isCreateReadingUnitModalOpen, setIsCreateReadingUnitModalOpen] = useState(false);
 
     const activeModule = useMemo(() => modules.find(m => m.id === activeModuleId), [modules, activeModuleId]);
     const sections = useMemo(() => parseSections(markdown), [markdown]);
     const activeSection = sections[currentSectionIdx];
-    const activeSectionLevel = useMemo(() => activeSection?.content.match(/^##\s+(.+)/) ? 2 : activeSection?.content.match(/^###\s+(.+)/) ? 3 : 0, [activeSection]);
-
-    const handleCreateReadingUnit = async () => {
-        if (!activeModule || !activeSection || !currentUser) return;
-
-        setIsProcessing(true);
-        try {
-            const config = getConfig();
-            const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/units`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: currentUser.id,
-                    name: activeSection.title,
-                    description: `Created from ${courseTitle}/${activeModule.title}`,
-                    essay: activeSection.content.replace(/^##\s+(.+)/, '').replace(/^###\s+(.+)/, '').trim(),
-                    tags: ['reading_unit', courseTitle.toLowerCase().replace(/\s/g, '_'), activeModule.title.toLowerCase().replace(/\s/g, '_')],
-                })
-            });
-
-            if (res.ok) {
-                showToast("Reading unit created successfully!", "success");
-                setIsCreateReadingUnitModalOpen(false);
-            } else {
-                const err = await res.json();
-                showToast(err.error || "Failed to create reading unit", "error");
-            }
-        } catch (e) {
-            console.error("Failed to create reading unit", e);
-            showToast("Failed to create reading unit", "error");
-        } finally {
-            setIsProcessing(false);
-        }
-    };
 
     const loadModules = useCallback(async () => {
         setIsLoading(true);
@@ -436,16 +396,6 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                             Edit Content
                         </button>
                     ) : null}
-
-                    {viewMode === 'module' && isSystem && allowReadingUnitCreation && (activeSectionLevel === 2 || activeSectionLevel === 3) && (
-                        <button
-                            onClick={() => setIsCreateReadingUnitModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 text-xs font-black bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-lg shadow-emerald-200 active:scale-95 uppercase tracking-widest"
-                        >
-                            <Plus size={14} />
-                            Create Reading Unit
-                        </button>
-                    )}
                 </div>
             </div>
 
@@ -600,41 +550,6 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                                 >
                                     {isProcessing && <Loader2 size={16} className="animate-spin" />}
                                     Create Module
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Create Reading Unit Modal */}
-            {isCreateReadingUnitModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-black text-neutral-900">Create Reading Unit</h3>
-                            <button onClick={() => setIsCreateReadingUnitModalOpen(false)} className="p-2 hover:bg-neutral-100 rounded-full text-neutral-400"><X size={20} /></button>
-                        </div>
-                        <div className="space-y-4">
-                            <p className="text-neutral-700">
-                                This will create a new Reading Unit from the current section:
-                            </p>
-                            <p className="font-bold text-neutral-900">Title: {activeSection?.title}</p>
-                            <p className="text-neutral-600">Description: Created from {courseTitle}/{activeModule?.title}</p>
-                            <div className="flex justify-end gap-2 pt-4">
-                                <button 
-                                    onClick={() => setIsCreateReadingUnitModalOpen(false)}
-                                    className="px-6 py-3 rounded-xl font-bold text-neutral-500 hover:bg-neutral-100 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button 
-                                    onClick={handleCreateReadingUnit}
-                                    disabled={isProcessing}
-                                    className="px-6 py-3 rounded-xl font-black text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-                                >
-                                    {isProcessing && <Loader2 size={16} className="animate-spin" />}
-                                    Confirm Create
                                 </button>
                             </div>
                         </div>
