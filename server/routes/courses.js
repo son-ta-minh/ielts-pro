@@ -44,7 +44,7 @@ router.get('/courses', (req, res) => {
         const courses = dirs.map(id => {
             // Try to read metadata if exists, else use folder name
             const metaPath = path.join(COURSES_DIR, id, 'metadata.json');
-            let title = id.replace(/_/g, ' ');
+            let title = id;
             let icon = null;
             let isSystem = false;
             let allowReadingUnitCreation = false;
@@ -235,7 +235,7 @@ router.get('/courses/:courseId/modules', (req, res) => {
         
         const modules = files.map(filename => ({
             id: filename,
-            title: filename.replace(/^\d+_/, '').replace('.md', '').replace(/_/g, ' '),
+            title: filename,
             filename: filename
         }));
         res.json(modules);
