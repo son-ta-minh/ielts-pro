@@ -7,6 +7,7 @@ import { CourseViewer } from './CourseViewer';
 interface Course {
     id: string;
     title: string;
+    isSystem?: boolean;
 }
 
 export const CourseList: React.FC = () => {
@@ -193,12 +194,14 @@ export const CourseList: React.FC = () => {
                                     >
                                         <Edit2 size={16} />
                                     </button>
-                                    <button 
-                                        onClick={(e) => handleDeleteCourse(course.id, e)}
-                                        className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
+                                    {!course.isSystem && (
+                                        <button 
+                                            onClick={(e) => handleDeleteCourse(course.id, e)}
+                                            className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="text-neutral-300 group-hover:text-indigo-500 transition-colors ml-2">
                                     <ChevronRight size={20} />

@@ -7,6 +7,7 @@ const { settings } = require('../config');
 
 // --- Courses Storage ---
 const COURSES_DIR = path.join(settings.BACKUP_DIR, 'server', 'courses');
+const SYSTEM_COURSES = ['grammar', 'pronunciation_roadmap'];
 
 // Ensure courses directory exists
 if (!fs.existsSync(COURSES_DIR)) {
@@ -41,7 +42,11 @@ router.get('/courses', (req, res) => {
                     if (meta.title) title = meta.title;
                 } catch (e) {}
             }
-            return { id, title };
+            return { 
+                id, 
+                title,
+                isSystem: SYSTEM_COURSES.includes(id)
+            };
         });
 
         res.json(courses);
@@ -66,7 +71,7 @@ router.post('/courses', (req, res) => {
         fs.mkdirSync(path.join(coursePath, 'modules'), { recursive: true });
         fs.writeFileSync(path.join(coursePath, 'metadata.json'), JSON.stringify({ title }, null, 2));
         
-        res.json({ id, title });
+        res.json({ id, title, isSystem: false });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -77,6 +82,10 @@ router.delete('/courses/:courseId', (req, res) => {
     const { courseId } = req.params;
     if (courseId.includes('..') || courseId.includes('/')) return res.status(400).json({ error: 'Invalid courseId' });
     
+    if (SYSTEM_COURSES.includes(courseId)) {
+        return res.status(403).json({ error: 'Cannot delete system course' });
+    }
+
     const coursePath = getCoursePath(courseId);
     try {
         if (fs.existsSync(coursePath)) {
