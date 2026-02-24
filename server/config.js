@@ -74,7 +74,7 @@ const settings = {
 });
 
 // --- Paths for Config Files (In VocabPro/server) ---
-const FOLDER_MAPPINGS_FILE = () => path.join(CLOUD_CONFIG_DIR, 'folder_mappings.json');
+const FOLDER_MAPPINGS_FILE = () => path.join(__dirname, 'folder_mappings.json');
 const MASTER_LIBRARY_FILE = () => path.join(CLOUD_CONFIG_DIR, 'master_library.json');
 const MASTER_READING_FILE = () => path.join(CLOUD_CONFIG_DIR, 'master_reading.json');
 const MASTER_PLANNING_FILE = () => path.join(CLOUD_CONFIG_DIR, 'master_planning.json');
