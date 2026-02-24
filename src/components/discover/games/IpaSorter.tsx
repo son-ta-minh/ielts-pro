@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { ArrowLeft, Lock, Zap, Layers, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Lock, Zap, Layers, CheckCircle2, Volume2 } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
+import { speak } from '../../../utils/audio';
 
 interface Props {
     words: VocabularyItem[];
@@ -369,6 +370,14 @@ export const IpaSorter: React.FC<Props> = ({ words, onComplete, onExit, onBulkUp
                     {currentItem ? (
                         <div className="bg-white px-10 py-16 rounded-[2rem] shadow-2xl border border-neutral-200 text-center space-y-4 animate-in zoom-in duration-300 w-full max-w-sm mx-auto z-10 hover:scale-105 transition-transform">
                             <h3 className="text-4xl font-black text-neutral-900">{currentItem.word}</h3>
+                            <button
+                                onClick={() => speak(currentItem.word, false, 'en')}
+                                className="mx-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition-colors text-xs font-black uppercase tracking-wider"
+                                title="Speak this word"
+                            >
+                                <Volume2 size={14} />
+                                Speak
+                            </button>
                             <div className="inline-block bg-neutral-100 px-6 py-3 rounded-xl border border-neutral-200">
                                 <p className="text-xl font-mono font-medium text-neutral-500 tracking-wide">
                                     {currentItem.maskedIpa.split('___').map((part, i, arr) => (

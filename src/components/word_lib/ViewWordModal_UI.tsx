@@ -6,6 +6,7 @@ import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { parseMarkdown } from '../../utils/markdownParser';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 // --- Visual Components ---
 
@@ -208,6 +209,37 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const viewMenuRef = useRef<HTMLDivElement>(null);
 
+    const handlePronounceWithCoachLookup = (targetWord: string) => {
+        speak(targetWord);
+        void (async () => {
+            try {
+                const serverUrl = getServerUrl(getConfig());
+                const normalizedWord = targetWord.trim().toLowerCase();
+                const cacheRes = await fetch(`${serverUrl}/api/lookup/cambridge/cache?word=${encodeURIComponent(normalizedWord)}`, {
+                    cache: 'no-store'
+                });
+                if (cacheRes.ok) {
+                    const raw = await cacheRes.text();
+                    const data = raw ? JSON.parse(raw) : null;
+                    if (data?.exists) {
+                        window.dispatchEvent(new CustomEvent('coach-cambridge-lookup-request', { detail: { word: normalizedWord, data } }));
+                        return;
+                    }
+                }
+                const simpleRes = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(normalizedWord)}`, {
+                    cache: 'no-store'
+                });
+                if (!simpleRes.ok) return;
+                const raw = await simpleRes.text();
+                const data = raw ? JSON.parse(raw) : null;
+                if (!data?.exists) return;
+                window.dispatchEvent(new CustomEvent('coach-cambridge-lookup-request', { detail: { word: normalizedWord, data } }));
+            } catch {
+                // Silent fail: speaker should still work even if cache lookup fails.
+            }
+        })();
+    };
+
     useEffect(() => { setStoredJSON('ielts_pro_word_view_settings', viewSettings); }, [viewSettings]);
     const handleSettingChange = <K extends keyof typeof viewSettings>(key: K, value: (typeof viewSettings)[K]) => setViewSettings(prev => ({...prev, [key]: value}));
 
@@ -307,7 +339,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
                                 {!word.isPassive && (
                                     <>
-                                        <button onClick={(e) => { e.stopPropagation(); speak(word.word); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce"><Volume2 size={18} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); handlePronounceWithCoachLookup(word.word); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce"><Volume2 size={18} /></button>
                                         <button onClick={(e) => { e.stopPropagation(); onMimicRequest(); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Mimic"><Mic size={18} /></button>
                                     </>
                                 )}

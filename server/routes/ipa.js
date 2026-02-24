@@ -6,7 +6,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const cheerio = require('cheerio');
 const https = require('https');
-const { settings } = require('../config');
+const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
 
 // --- CMU Logic ---
 const CMU = {};
@@ -211,6 +211,351 @@ async function textToCambridgeIPA(text) {
     return `/${results.join(" ")}/`;
 }
 
+function normalizeLookupWord(text) {
+    if (!text || typeof text !== 'string') return '';
+    return text
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .toLowerCase()
+        .replace(/[^a-z0-9'-]/g, '')
+        .trim();
+}
+
+function escapeHtml(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function compactText(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim();
+}
+
+function toAbsoluteCambridgeUrl(src) {
+    const value = compactText(src);
+    if (!value) return null;
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
+    if (value.startsWith('//')) return `https:${value}`;
+    if (value.startsWith('/')) return `https://dictionary.cambridge.org${value}`;
+    return `https://dictionary.cambridge.org/${value}`;
+}
+
+function loadFolderMappings() {
+    try {
+        const mappingFile = FOLDER_MAPPINGS_FILE();
+        if (!fs.existsSync(mappingFile)) return {};
+        return JSON.parse(fs.readFileSync(mappingFile, 'utf8')) || {};
+    } catch {
+        return {};
+    }
+}
+
+function getQualitySoundDir() {
+    const mappings = loadFolderMappings();
+    const dir = mappings['Quality_Sound'];
+    if (!dir) return null;
+    const resolved = path.resolve(dir);
+    if (!fs.existsSync(resolved)) fs.mkdirSync(resolved, { recursive: true });
+    return resolved;
+}
+
+function toSafeFileToken(text) {
+    return compactText(text)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function toPosShort(partOfSpeech) {
+    const lower = compactText(partOfSpeech).toLowerCase();
+    if (/\bnoun\b/.test(lower)) return 'N';
+    if (/\badverb\b/.test(lower)) return 'ADV';
+    if (/\bverb\b/.test(lower)) return 'V';
+    if (/\badjective\b/.test(lower)) return 'ADJ';
+    if (/\bpronoun\b/.test(lower)) return 'PRO';
+    if (/\bpreposition\b/.test(lower)) return 'PREP';
+    if (/\bconjunction\b/.test(lower)) return 'CONJ';
+    if (/\binterjection\b/.test(lower)) return 'INTJ';
+    return 'X';
+}
+
+async function ensureCachedAudio(remoteUrl, targetPath) {
+    if (!remoteUrl || !targetPath) return false;
+    if (fs.existsSync(targetPath)) return true;
+    try {
+        const response = await fetch(remoteUrl, {
+            headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://dictionary.cambridge.org/" },
+            signal: AbortSignal.timeout(15000)
+        });
+        if (!response.ok) return false;
+        const arrayBuffer = await response.arrayBuffer();
+        const content = Buffer.from(arrayBuffer);
+        if (!content.length) return false;
+        const tmp = `${targetPath}.tmp`;
+        fs.writeFileSync(tmp, content);
+        fs.renameSync(tmp, targetPath);
+        return fs.existsSync(targetPath);
+    } catch {
+        return false;
+    }
+}
+
+function getLookupCachePath(word) {
+    const qualityRoot = getQualitySoundDir();
+    if (!qualityRoot) return null;
+    const wordToken = toSafeFileToken(word).toLowerCase() || 'word';
+    return path.join(qualityRoot, `${wordToken}.txt`);
+}
+
+function readLookupCache(word) {
+    try {
+        const txtPath = getLookupCachePath(word);
+        if (!txtPath || !fs.existsSync(txtPath)) return null;
+        const raw = fs.readFileSync(txtPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+
+        // Negative cache: confirmed no exact Cambridge data for this word.
+        if (parsed.exists === false) {
+            return {
+                exists: false,
+                word: parsed.word || word,
+                url: parsed.url || null,
+                cachedAt: parsed.cachedAt || null
+            };
+        }
+
+        // Positive cache (backward compatible with old format without explicit exists flag).
+        if (parsed.word && Array.isArray(parsed.pronunciations)) {
+            return {
+                exists: true,
+                word: parsed.word,
+                url: parsed.url || null,
+                pronunciations: parsed.pronunciations,
+                cachedAt: parsed.cachedAt || null
+            };
+        }
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+function writeLookupCache(word, payload) {
+    try {
+        const txtPath = getLookupCachePath(word);
+        if (!txtPath) return;
+        fs.writeFileSync(txtPath, JSON.stringify(payload, null, 2), 'utf8');
+    } catch (e) {
+        console.warn(`[Cambridge Cache] Failed writing cache for "${word}": ${e.message}`);
+    }
+}
+
+async function cachePronunciationAudios(word, pronunciations) {
+    const mappings = loadFolderMappings();
+    const qualityRoot = mappings['Quality_Sound'];
+    if (!qualityRoot || !Array.isArray(pronunciations) || pronunciations.length === 0) {
+        return pronunciations;
+    }
+
+    const root = path.resolve(qualityRoot);
+    if (!fs.existsSync(root)) fs.mkdirSync(root, { recursive: true });
+
+    const wordToken = toSafeFileToken(word).toLowerCase() || 'word';
+    let defaultUsAssigned = false;
+
+    for (const p of pronunciations) {
+        const pos = toPosShort(p.partOfSpeech);
+
+        if (p.audioUs) {
+            const usName = `${wordToken}_${pos}_US.mp3`;
+            const usPath = path.join(root, usName);
+            const usCached = await ensureCachedAudio(p.audioUs, usPath);
+            if (usCached) p.audioUs = `/api/audio/stream/Quality_Sound/${encodeURIComponent(usName)}`;
+
+            if (!defaultUsAssigned) {
+                const defaultName = `${wordToken}.mp3`;
+                const defaultPath = path.join(root, defaultName);
+                if (usCached && !fs.existsSync(defaultPath)) {
+                    try {
+                        fs.copyFileSync(usPath, defaultPath);
+                    } catch {}
+                }
+                defaultUsAssigned = true;
+            }
+        }
+
+        if (p.audioUk) {
+            const ukName = `${wordToken}_${pos}_UK.mp3`;
+            const ukPath = path.join(root, ukName);
+            const ukCached = await ensureCachedAudio(p.audioUk, ukPath);
+            if (ukCached) p.audioUk = `/api/audio/stream/Quality_Sound/${encodeURIComponent(ukName)}`;
+        }
+    }
+
+    return pronunciations;
+}
+
+async function getCambridgeSimplified(word) {
+    const requested = normalizeLookupWord(word);
+    if (!requested) return null;
+
+    const cached = readLookupCache(requested);
+    if (cached) {
+        if (cached.exists === false) {
+            return {
+                exists: false,
+                url: cached.url || `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(requested)}`
+            };
+        }
+        return {
+            exists: true,
+            url: cached.url || `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(requested)}`,
+            word: cached.word,
+            pronunciations: cached.pronunciations
+        };
+    }
+
+    const slug = requested.replace(/\s+/g, '-');
+    const url = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(slug)}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch(url, {
+        headers: {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://dictionary.cambridge.org/"
+        },
+        signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+        // Cache only definitive not-found responses to avoid pinning transient failures.
+        if (response.status === 404) {
+            writeLookupCache(requested, {
+                exists: false,
+                word: requested,
+                url,
+                cachedAt: Date.now()
+            });
+        }
+        return { exists: false, url };
+    }
+
+    const html = await response.text();
+    const $ = cheerio.load(html);
+
+    const matchedEntries = [];
+    $('.entry-body__el').each((_, el) => {
+        const hw = normalizeLookupWord($(el).find('.hw.dhw').first().text());
+        if (hw && hw === requested) matchedEntries.push(el);
+    });
+
+    if (matchedEntries.length === 0) {
+        const firstHw = normalizeLookupWord($('.hw.dhw').first().text());
+        if (firstHw === requested) {
+            const first = $('.entry-body__el').first().get(0);
+            if (first) matchedEntries.push(first);
+        }
+    }
+
+    if (matchedEntries.length === 0) {
+        writeLookupCache(requested, {
+            exists: false,
+            word: requested,
+            url,
+            cachedAt: Date.now()
+        });
+        return { exists: false, url };
+    }
+
+    const $entry = $(matchedEntries[0]);
+    const headword = compactText($entry.find('.hw.dhw').first().text()) || word;
+
+    const rawPronunciations = [];
+
+    matchedEntries.forEach((entryEl) => {
+        $(entryEl).find('.pos-header').each((_, header) => {
+        const $header = $(header);
+        const partOfSpeech = compactText($header.find('.pos').first().text()) || null;
+        const ipaUs = compactText($header.find('.us .ipa').first().text()) || null;
+        const ipaUk = compactText($header.find('.uk .ipa').first().text()) || null;
+        const audioUs = toAbsoluteCambridgeUrl($header.find('.us source[type="audio/mpeg"]').first().attr('src'));
+        const audioUk = toAbsoluteCambridgeUrl($header.find('.uk source[type="audio/mpeg"]').first().attr('src'));
+
+        if (!partOfSpeech && !ipaUs && !ipaUk && !audioUs && !audioUk) return;
+        rawPronunciations.push({
+            partOfSpeech,
+            ipaUs,
+            ipaUk,
+            audioUs: audioUs || null,
+            audioUk: audioUk || null
+        });
+        });
+    });
+
+    if (rawPronunciations.length === 0) {
+        rawPronunciations.push({
+            partOfSpeech: compactText($entry.find('.pos').first().text()) || null,
+            ipaUs: compactText($entry.find('.us .ipa').first().text()) || null,
+            ipaUk: compactText($entry.find('.uk .ipa').first().text()) || null,
+            audioUs: toAbsoluteCambridgeUrl($entry.find('.us source[type="audio/mpeg"]').first().attr('src')),
+            audioUk: toAbsoluteCambridgeUrl($entry.find('.uk source[type="audio/mpeg"]').first().attr('src'))
+        });
+    }
+
+    // Merge duplicate rows into one row per part-of-speech.
+    const byPos = new Map();
+    rawPronunciations.forEach((p) => {
+        const posKey = (p.partOfSpeech || 'n/a').toLowerCase();
+        const current = byPos.get(posKey) || {
+            partOfSpeech: p.partOfSpeech || 'N/A',
+            ipaUs: null,
+            ipaUk: null,
+            audioUs: null,
+            audioUk: null
+        };
+
+        if (!current.ipaUs && p.ipaUs) current.ipaUs = p.ipaUs;
+        if (!current.ipaUk && p.ipaUk) current.ipaUk = p.ipaUk;
+        if (!current.audioUs && p.audioUs) current.audioUs = p.audioUs;
+        if (!current.audioUk && p.audioUk) current.audioUk = p.audioUk;
+
+        byPos.set(posKey, current);
+    });
+
+    const pronunciations = Array.from(byPos.values());
+
+    const cachedPronunciations = await cachePronunciationAudios(headword, pronunciations);
+
+    const result = {
+        exists: true,
+        url,
+        word: headword,
+        pronunciations: cachedPronunciations
+    };
+    writeLookupCache(requested, {
+        exists: true,
+        word: headword,
+        url,
+        pronunciations: cachedPronunciations,
+        cachedAt: Date.now()
+    });
+    return result;
+}
+
 router.get('/convert/ipa', async (req, res) => {
     const { text, mode } = req.query;
     if (!text) return res.status(400).json({ error: 'Text required' });
@@ -237,6 +582,42 @@ router.get('/lookup/cambridge', (req, res) => {
     });
     checkReq.on('error', () => res.json({ exists: false }));
     checkReq.end();
+});
+
+router.get('/lookup/cambridge/simple', async (req, res) => {
+    const { word } = req.query;
+    if (!word) return res.status(400).json({ error: 'word_required' });
+    try {
+        const result = await getCambridgeSimplified(String(word));
+        if (!result) return res.status(200).json({ exists: false });
+        res.json(result);
+    } catch (e) {
+        console.error("[Cambridge Simple] Failed:", e.message);
+        res.status(500).json({ error: 'cambridge_lookup_failed' });
+    }
+});
+
+router.get('/lookup/cambridge/cache', (req, res) => {
+    const { word } = req.query;
+    if (!word) return res.status(400).json({ error: 'word_required' });
+    const requested = normalizeLookupWord(String(word));
+    if (!requested) return res.json({ exists: false });
+    const cached = readLookupCache(requested);
+    if (!cached) return res.json({ exists: false });
+    if (cached.exists === false) {
+        return res.json({
+            exists: false,
+            word: cached.word || requested,
+            url: cached.url || `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(requested)}`,
+            cachedAt: cached.cachedAt || null
+        });
+    }
+    res.json({
+        exists: true,
+        word: cached.word,
+        url: cached.url || `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(requested)}`,
+        pronunciations: cached.pronunciations
+    });
 });
 
 // --- IPA Markdown Storage ---

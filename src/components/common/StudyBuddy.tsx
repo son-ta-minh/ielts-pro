@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
-import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Square, Wrench, Pause, Play } from 'lucide-react';
+import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
-import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getAudioProgress, seekAudio, getMarkPoints } from '../../utils/audio';
+import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
@@ -26,11 +26,68 @@ interface Props {
 }
 
 interface Message {
-    text: string;
+    text?: string;
     action?: string;
     actionLabel?: string;
+    actionUrl?: string;
+    cambridge?: {
+        word?: string;
+        pronunciations?: CambridgePronunciation[];
+    };
     icon?: React.ReactNode;
 }
+
+interface CambridgePronunciation {
+    partOfSpeech?: string | null;
+    ipaUs?: string | null;
+    ipaUk?: string | null;
+    audioUs?: string | null;
+    audioUk?: string | null;
+}
+
+interface CambridgeSimpleResult {
+    exists: boolean;
+    url?: string;
+    word?: string;
+    pronunciations?: CambridgePronunciation[];
+}
+
+const normalizeCambridgePronunciations = (items?: CambridgePronunciation[]): CambridgePronunciation[] => {
+    if (!Array.isArray(items) || items.length === 0) return [];
+    const byPos = new Map<string, CambridgePronunciation>();
+    const order: string[] = [];
+
+    const canonicalPos = (value?: string | null): string => {
+        const lower = String(value || '').toLowerCase();
+        if (/\bnoun\b/.test(lower)) return 'NOUN';
+        if (/\bverb\b/.test(lower)) return 'VERB';
+        if (/\badjective\b/.test(lower)) return 'ADJECTIVE';
+        if (/\badverb\b/.test(lower)) return 'ADVERB';
+        if (/\bpronoun\b/.test(lower)) return 'PRONOUN';
+        if (/\bpreposition\b/.test(lower)) return 'PREPOSITION';
+        if (/\bconjunction\b/.test(lower)) return 'CONJUNCTION';
+        if (/\binterjection\b/.test(lower)) return 'INTERJECTION';
+        const compact = String(value || '').replace(/\s+/g, ' ').trim().toUpperCase();
+        return compact || 'N/A';
+    };
+
+    for (const item of items) {
+        const pos = canonicalPos(item.partOfSpeech);
+        if (!byPos.has(pos)) {
+            byPos.set(pos, { partOfSpeech: pos, ipaUs: null, ipaUk: null, audioUs: null, audioUk: null });
+            order.push(pos);
+        }
+        const merged = byPos.get(pos)!;
+        if (!merged.ipaUs && item.ipaUs) merged.ipaUs = item.ipaUs;
+        if (!merged.ipaUk && item.ipaUk) merged.ipaUk = item.ipaUk;
+        if (!merged.audioUs && item.audioUs) merged.audioUs = item.audioUs;
+        if (!merged.audioUk && item.audioUk) merged.audioUk = item.audioUk;
+    }
+
+    return order
+        .map((pos) => byPos.get(pos)!)
+        .filter((p) => p.ipaUs || p.ipaUk || p.audioUs || p.audioUk);
+};
 
 const AVATAR_DEFINITIONS = {
     woman_teacher: { url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/People/Woman%20Teacher.png', bg: 'bg-indigo-50' },
@@ -48,6 +105,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [config, setConfig] = useState<SystemConfig>(getConfig());
     const [isAudioPlaying, setIsAudioPlaying] = useState(getIsSpeaking());
     const [isAudioPaused, setIsAudioPaused] = useState(getIsAudioPaused());
+    const [isSingleWordAudio, setIsSingleWordAudio] = useState(getIsSingleWordPlayback());
+    const [showPlaybackControls, setShowPlaybackControls] = useState(false);
+    const [playbackRate, setPlaybackRateState] = useState(getPlaybackRate());
     const [audioProgress, setAudioProgress] = useState({ currentTime: 0, duration: 0 });
     const [markPoints, setMarkPoints] = useState<number[]>([]);
     const [isOpen, setIsOpen] = useState(false);
@@ -58,6 +118,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     
     const [isCambridgeChecking, setIsCambridgeChecking] = useState(false);
     const [isCambridgeValid, setIsCambridgeValid] = useState(false);
+    const [cambridgePreview, setCambridgePreview] = useState<{ query: string; data: CambridgeSimpleResult | null }>({ query: '', data: null });
     const [isAlreadyInLibrary, setIsAlreadyInLibrary] = useState(false);
     const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
     
@@ -65,8 +126,17 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [isToolsModalOpen, setIsToolsModalOpen] = useState(false);
 
     const commandBoxRef = useRef<HTMLDivElement>(null);
+    const messageBoxRef = useRef<HTMLDivElement>(null);
     const checkAbortControllerRef = useRef<AbortController | null>(null);
     const closeMenuTimeoutRef = useRef<number | null>(null);
+    const audioStatusSettleTimeoutRef = useRef<number | null>(null);
+    const playbackControlsHideTimeoutRef = useRef<number | null>(null);
+    const isCoachHoveredRef = useRef(false);
+    const selectedTextRef = useRef<string>('');
+    const cambridgeAudioRef = useRef<HTMLAudioElement | null>(null);
+    const isOpenRef = useRef(false);
+    const messageRef = useRef<Message | null>(null);
+    const lastCoachLookupRef = useRef<{ word: string; at: number }>({ word: '', at: 0 });
     
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
@@ -83,16 +153,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         if (!word) return;
         setIsCambridgeValid(false);
         setIsCambridgeChecking(true);
+        setCambridgePreview({ query: word, data: null });
         if (checkAbortControllerRef.current) checkAbortControllerRef.current.abort();
         checkAbortControllerRef.current = new AbortController();
         try {
             const serverUrl = getServerUrl(config);
-            const response = await fetch(`${serverUrl}/api/lookup/cambridge?word=${encodeURIComponent(word)}`, {
+            const response = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(word)}`, {
                 signal: checkAbortControllerRef.current.signal
             });
             if (response.ok) {
-                const data = await response.json();
-                setIsCambridgeValid(data.exists);
+                const data: CambridgeSimpleResult = await response.json();
+                setIsCambridgeValid(!!data?.exists);
+                setCambridgePreview({ query: word, data });
             }
         } catch {
             // Silent fail is acceptable here
@@ -108,21 +180,153 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     useEffect(() => {
+        isOpenRef.current = isOpen;
+    }, [isOpen]);
+
+    useEffect(() => {
+        const shouldShow = isAudioPlaying && !isSingleWordAudio;
+        if (shouldShow) {
+            if (playbackControlsHideTimeoutRef.current) {
+                window.clearTimeout(playbackControlsHideTimeoutRef.current);
+                playbackControlsHideTimeoutRef.current = null;
+            }
+            setShowPlaybackControls(true);
+            return;
+        }
+
+        if (playbackControlsHideTimeoutRef.current) {
+            window.clearTimeout(playbackControlsHideTimeoutRef.current);
+        }
+        playbackControlsHideTimeoutRef.current = window.setTimeout(() => {
+            setShowPlaybackControls(false);
+            playbackControlsHideTimeoutRef.current = null;
+        }, 260);
+    }, [isAudioPlaying, isSingleWordAudio]);
+
+    useEffect(() => {
+        messageRef.current = message;
+    }, [message]);
+
+    useEffect(() => {
         const handleConfigUpdate = () => setConfig(getConfig());
-        const handleAudioStatus = () => {
-            setIsAudioPlaying(getIsSpeaking());
-            setIsAudioPaused(getIsAudioPaused());
+        const handleAudioStatus = (event: Event) => {
+            const detail = (event as CustomEvent<{ isSpeaking?: boolean; isAudioPaused?: boolean; isSingleWordPlayback?: boolean; playbackRate?: number }>).detail;
+            const nextSpeaking = typeof detail?.isSpeaking === 'boolean' ? detail.isSpeaking : getIsSpeaking();
+            const nextPaused = typeof detail?.isAudioPaused === 'boolean' ? detail.isAudioPaused : getIsAudioPaused();
+            const nextSingle = typeof detail?.isSingleWordPlayback === 'boolean' ? detail.isSingleWordPlayback : getIsSingleWordPlayback();
+            const nextRate = typeof detail?.playbackRate === 'number' ? detail.playbackRate : getPlaybackRate();
+            setPlaybackRateState(nextRate);
+
+            if (nextSpeaking) {
+                if (audioStatusSettleTimeoutRef.current) {
+                    window.clearTimeout(audioStatusSettleTimeoutRef.current);
+                    audioStatusSettleTimeoutRef.current = null;
+                }
+                setIsAudioPlaying(true);
+                setIsAudioPaused(nextPaused);
+                setIsSingleWordAudio(nextSingle);
+                return;
+            }
+
+            // Avoid UI flicker when clips switch rapidly: wait briefly before confirming "stopped".
+            if (audioStatusSettleTimeoutRef.current) {
+                window.clearTimeout(audioStatusSettleTimeoutRef.current);
+            }
+            audioStatusSettleTimeoutRef.current = window.setTimeout(() => {
+                setIsAudioPlaying(getIsSpeaking());
+                setIsAudioPaused(getIsAudioPaused());
+                setIsSingleWordAudio(getIsSingleWordPlayback());
+                audioStatusSettleTimeoutRef.current = null;
+            }, 180);
+        };
+        const handleCoachLookupRequest = (event: Event) => {
+            const customEvent = event as CustomEvent<{ word?: string; data?: CambridgeSimpleResult }>;
+            const requestedWord = customEvent.detail?.word?.trim();
+            const payload = customEvent.detail?.data;
+            if (!requestedWord || !payload?.exists) return;
+            const normalizedWord = requestedWord.toLowerCase();
+
+            const currentMessageWord = messageRef.current?.cambridge?.word?.trim().toLowerCase();
+            if (isOpenRef.current && currentMessageWord === normalizedWord) {
+                if (closeMenuTimeoutRef.current) {
+                    window.clearTimeout(closeMenuTimeoutRef.current);
+                    closeMenuTimeoutRef.current = null;
+                }
+                const now = Date.now();
+                lastCoachLookupRef.current = { word: normalizedWord, at: now };
+                return;
+            }
+
+            const now = Date.now();
+            const recent = lastCoachLookupRef.current;
+            if (recent.word === normalizedWord && now - recent.at < 500) return;
+
+            selectedTextRef.current = normalizedWord;
+            setCambridgePreview({ query: normalizedWord, data: payload });
+            setIsCambridgeValid(true);
+            setIsThinking(false);
+            setMenuPos(null);
+            setMessage({
+                actionLabel: "Go to Cambridge",
+                actionUrl: payload.url,
+                cambridge: {
+                    word: payload.word || normalizedWord,
+                    pronunciations: normalizeCambridgePronunciations(payload.pronunciations)
+                },
+                icon: <Search size={18} className="text-blue-500" />
+            });
+            lastCoachLookupRef.current = { word: normalizedWord, at: now };
+            setIsOpen(true);
+        };
+        const handleCoachIpaFallbackRequest = (event: Event) => {
+            const customEvent = event as CustomEvent<{ word?: string; ipa?: string }>;
+            const requestedWord = customEvent.detail?.word?.trim();
+            const ipa = customEvent.detail?.ipa;
+            if (!requestedWord || !ipa) return;
+            const normalizedWord = requestedWord.toLowerCase();
+
+            const currentMessageWord = messageRef.current?.cambridge?.word?.trim().toLowerCase();
+            if (isOpenRef.current && currentMessageWord === normalizedWord) return;
+
+            selectedTextRef.current = normalizedWord;
+            setIsCambridgeValid(false);
+            setIsThinking(false);
+            setMenuPos(null);
+            setMessage({
+                text: `**IPA:** ${ipa}`,
+                icon: <Binary size={18} className="text-purple-500" />
+            });
+            lastCoachLookupRef.current = { word: normalizedWord, at: Date.now() };
+            setIsOpen(true);
         };
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
+        window.addEventListener('coach-cambridge-lookup-request', handleCoachLookupRequest as EventListener);
+        window.addEventListener('coach-ipa-fallback-request', handleCoachIpaFallbackRequest as EventListener);
         
         // Initial check
         setIsAudioPlaying(getIsSpeaking());
         setIsAudioPaused(getIsAudioPaused());
+        setIsSingleWordAudio(getIsSingleWordPlayback());
+        setPlaybackRateState(getPlaybackRate());
 
         return () => {
+            if (audioStatusSettleTimeoutRef.current) {
+                window.clearTimeout(audioStatusSettleTimeoutRef.current);
+                audioStatusSettleTimeoutRef.current = null;
+            }
+            if (playbackControlsHideTimeoutRef.current) {
+                window.clearTimeout(playbackControlsHideTimeoutRef.current);
+                playbackControlsHideTimeoutRef.current = null;
+            }
             window.removeEventListener('config-updated', handleConfigUpdate);
             window.removeEventListener('audio-status-changed', handleAudioStatus);
+            window.removeEventListener('coach-cambridge-lookup-request', handleCoachLookupRequest as EventListener);
+            window.removeEventListener('coach-ipa-fallback-request', handleCoachIpaFallbackRequest as EventListener);
+            if (cambridgeAudioRef.current) {
+                cambridgeAudioRef.current.pause();
+                cambridgeAudioRef.current = null;
+            }
         };
     }, []);
 
@@ -142,6 +346,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                     y: placement === 'top' ? rect.top : rect.bottom, 
                     placement 
                 });
+                selectedTextRef.current = selectedText;
                 setMessage(null);
                 setIsOpen(true);
                 
@@ -157,7 +362,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         };
 
         const handleClickOutside = (e: MouseEvent) => {
-            if (commandBoxRef.current && !commandBoxRef.current.contains(e.target as Node)) {
+            const target = e.target as Node;
+            const clickedOutsideCommand = !commandBoxRef.current || !commandBoxRef.current.contains(target);
+            const clickedOutsideMessage = !messageBoxRef.current || !messageBoxRef.current.contains(target);
+            if (messageRef.current?.cambridge) return;
+            if (clickedOutsideCommand && clickedOutsideMessage) {
                 if (isOpen) { 
                     setIsOpen(false); 
                     setMenuPos(null); 
@@ -215,6 +424,35 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setMenuPos(null);
         try {
             const cleaned = selectedText.toLowerCase();
+            const isSingleWord = cleaned.split(/\s+/).filter(Boolean).length === 1;
+
+            // Priority 1: Cambridge (if exact single-word entry exists)
+            if (isSingleWord) {
+                const serverUrl = getServerUrl(config);
+                const cambridgeRes = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(cleaned)}`, {
+                    cache: 'no-store'
+                });
+                if (cambridgeRes.ok) {
+                    const raw = await cambridgeRes.text();
+                    const data: CambridgeSimpleResult | null = raw ? JSON.parse(raw) : null;
+                    if (data?.exists) {
+                        setMessage({
+                            actionLabel: "Go to Cambridge",
+                            actionUrl: data.url,
+                            cambridge: {
+                                word: data.word || cleaned,
+                                pronunciations: normalizeCambridgePronunciations(data.pronunciations)
+                            },
+                            icon: <Search size={18} className="text-blue-500" />
+                        });
+                        setIsOpen(true);
+                        setIsThinking(false);
+                        return;
+                    }
+                }
+            }
+
+            // Priority 2: Word Library IPA
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
             if (existing && existing.ipaUs) {
                 setMessage({ text: `**IPA:** ${existing.ipaUs}`, icon: <Binary size={18} className="text-emerald-500" /> });
@@ -222,6 +460,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 setIsThinking(false);
                 return;
             }
+
+            // Priority 3: Server IPA conversion fallback
             const serverUrl = getServerUrl(config);
             const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(selectedText)}&mode=2`);
             if (res.ok) {
@@ -292,7 +532,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const handleViewWord = async () => {
-        const selectedText = window.getSelection()?.toString().trim();
+        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
         if (!selectedText || !user.id || !onViewWord || isAnyModalOpen) return;
         const wordObj = await dataStore.findWordByText(user.id, selectedText);
         if (wordObj) {
@@ -302,14 +542,42 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
     };
 
-    const handleCambridgeLookup = () => {
-        const selectedText = window.getSelection()?.toString().trim();
+    const handleCambridgeLookup = async () => {
+        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
         if (!selectedText) return;
-        const slug = selectedText.toLowerCase().replace(/\s+/g, '-');
-        const url = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(slug)}`;
-        window.open(url, '_blank');
+        setIsThinking(true);
         setIsOpen(false);
         setMenuPos(null);
+        try {
+            let data = cambridgePreview.query === selectedText ? cambridgePreview.data : null;
+            if (!data) {
+                const serverUrl = getServerUrl(config);
+                const res = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(selectedText)}`);
+                data = await res.json();
+                if (res.ok) {
+                    setCambridgePreview({ query: selectedText, data });
+                }
+            }
+
+            if (!data?.exists) {
+                showToast("No exact Cambridge entry found.", "info");
+                return;
+            }
+            setMessage({
+                actionLabel: "Go to Cambridge",
+                actionUrl: data.url,
+                cambridge: {
+                    word: data.word || selectedText,
+                    pronunciations: normalizeCambridgePronunciations(data.pronunciations)
+                },
+                icon: <Search size={18} className="text-blue-500" />
+            });
+            setIsOpen(true);
+        } catch {
+            showToast("Cambridge lookup failed.", "error");
+        } finally {
+            setIsThinking(false);
+        }
     };
 
     const handleSpeakSelection = () => {
@@ -330,6 +598,70 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setIsToolsModalOpen(true);
     };
 
+    const playCambridgeAudio = (url?: string) => {
+        if (!url) {
+            showToast("Audio not available.", "info");
+            return;
+        }
+        try {
+            const resolvedUrl = url.startsWith('http')
+                ? url
+                : `${getServerUrl(config)}${url.startsWith('/') ? '' : '/'}${url}`;
+            if (cambridgeAudioRef.current) {
+                cambridgeAudioRef.current.pause();
+                cambridgeAudioRef.current = null;
+            }
+            const audio = new Audio(resolvedUrl);
+            cambridgeAudioRef.current = audio;
+            audio.onerror = () => showToast("Failed to play Cambridge audio.", "error");
+            audio.onended = () => {
+                if (cambridgeAudioRef.current === audio) cambridgeAudioRef.current = null;
+            };
+            audio.play().catch(() => showToast("Failed to play Cambridge audio.", "error"));
+        } catch {
+            showToast("Failed to play Cambridge audio.", "error");
+        }
+    };
+
+    const openCoachMenu = () => {
+        isCoachHoveredRef.current = true;
+        if (closeMenuTimeoutRef.current) {
+            window.clearTimeout(closeMenuTimeoutRef.current);
+            closeMenuTimeoutRef.current = null;
+        }
+        setIsOpen(true);
+    };
+
+    const scheduleCloseCoachMenu = () => {
+        isCoachHoveredRef.current = false;
+        if (closeMenuTimeoutRef.current) {
+            window.clearTimeout(closeMenuTimeoutRef.current);
+        }
+        closeMenuTimeoutRef.current = window.setTimeout(() => {
+            setIsOpen(false);
+            closeMenuTimeoutRef.current = null;
+        }, messageRef.current?.cambridge ? 3000 : 300);
+    };
+
+    useEffect(() => {
+        if (!isOpen || !message?.cambridge) return;
+        if (isCoachHoveredRef.current) return;
+        if (closeMenuTimeoutRef.current) {
+            window.clearTimeout(closeMenuTimeoutRef.current);
+        }
+        closeMenuTimeoutRef.current = window.setTimeout(() => {
+            if (isCoachHoveredRef.current) return;
+            setIsOpen(false);
+            closeMenuTimeoutRef.current = null;
+        }, 3000);
+        return () => {
+            if (closeMenuTimeoutRef.current) {
+                window.clearTimeout(closeMenuTimeoutRef.current);
+                closeMenuTimeoutRef.current = null;
+            }
+        };
+    }, [isOpen, message]);
+
     const CommandBox = () => (
         <div ref={commandBoxRef} className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200">
             {/* Using a 6-column grid allows us to have col-span-2 buttons that are perfectly equal in width */}
@@ -345,8 +677,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
                 {/* BOTTOM ROW (3 buttons, 2 columns each) */}
                 <button type="button" onClick={handleSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
-                <button type="button" onClick={handleCambridgeLookup} disabled={isCambridgeChecking || !isCambridgeValid} className={`col-span-2 aspect-square rounded-2xl flex items-center justify-center transition-all shadow-sm ${isCambridgeValid ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`} title="Cambridge Lookup">{isCambridgeChecking ? <Loader2 size={14} className="animate-spin"/> : <Search size={15}/>}</button>
                 <button type="button" onClick={handleOpenTools} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Coach Tools"><Wrench size={15}/></button>
+                <div aria-hidden="true" className="col-span-2 aspect-square rounded-2xl border border-neutral-100 bg-neutral-50/50" />
             </div>
         </div>
     );
@@ -370,6 +702,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             setAudioProgress({ currentTime: 0, duration: 0 });
             setMarkPoints([]);
             setIsAudioPaused(false);
+            setIsSingleWordAudio(false);
         }
         return () => clearInterval(interval);
     }, [isAudioPlaying]);
@@ -386,6 +719,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const cyclePlaybackRate = () => {
+        const speeds = [0.6, 0.7, 0.8, 0.9, 1, 1.25, 1.5];
+        const idx = speeds.findIndex((v) => Math.abs(v - playbackRate) < 0.001);
+        const next = speeds[(idx + 1) % speeds.length];
+        setPlaybackRate(next);
+        setPlaybackRateState(next);
+    };
+
     return (
         <>
             {isOpen && menuPos && (
@@ -397,43 +738,100 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         {isOpen && !menuPos && (
                             <div className="absolute bottom-16 left-0 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
                                 {message ? (
-                                    <div className="bg-white p-5 rounded-[2.5rem] shadow-2xl border border-neutral-200 w-72 relative">
-                                        <button onClick={() => setMessage(null)} className="absolute top-4 right-4 text-neutral-300 hover:text-neutral-900"><X size={14}/></button>
+                                    <div ref={messageBoxRef} className="bg-white p-5 rounded-[2.5rem] shadow-2xl border border-neutral-200 w-[26rem] relative">
+                                        <button onClick={() => { setMessage(null); setIsOpen(false); setMenuPos(null); }} className="absolute top-4 right-4 text-neutral-300 hover:text-neutral-900"><X size={14}/></button>
                                         <div className="flex items-start gap-3">
                                             <div className="shrink-0 mt-1">{message.icon || <MessageSquare size={18} />}</div>
-                                            <div className="text-xs font-medium text-neutral-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatBoldText(message.text) }} />
+                                            <div className="text-xs font-medium text-neutral-700 leading-relaxed space-y-2">
+                                                {message.cambridge ? (
+                                                    <div className="space-y-1.5">
+                                                        <h4 className="text-base font-black text-neutral-900">{message.cambridge.word}</h4>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            {(message.cambridge.pronunciations || []).map((p, idx) => (
+                                                                <div key={idx} className="rounded-lg border border-neutral-200 bg-neutral-50 p-2 space-y-1.5">
+                                                                    <p className="text-[10px] font-black uppercase tracking-wide text-neutral-500">
+                                                                        {p.partOfSpeech || 'N/A'}
+                                                                    </p>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => playCambridgeAudio(p.audioUs || undefined)}
+                                                                            disabled={!p.audioUs}
+                                                                            className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border transition-colors ${p.audioUs ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100' : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'}`}
+                                                                        >
+                                                                            US
+                                                                        </button>
+                                                                        <p className="text-[11px] text-neutral-700 leading-relaxed flex-1 break-words">{p.ipaUs ? `/${p.ipaUs}/` : 'N/A'}</p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => playCambridgeAudio(p.audioUk || undefined)}
+                                                                            disabled={!p.audioUk}
+                                                                            className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border transition-colors ${p.audioUk ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100' : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'}`}
+                                                                        >
+                                                                            UK
+                                                                        </button>
+                                                                        <p className="text-[11px] text-neutral-700 leading-relaxed flex-1 break-words">{p.ipaUk ? `/${p.ipaUk}/` : 'N/A'}</p>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div dangerouslySetInnerHTML={{ __html: formatBoldText(message.text || '') }} />
+                                                )}
+                                                {message.actionUrl && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => window.open(message.actionUrl, '_blank')}
+                                                        className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wide rounded-lg bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100 transition-colors"
+                                                    >
+                                                        {message.actionLabel || 'Open'}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 ) : <CommandBox />}
                             </div>
                         )}
-                        <button onClick={(e) => { if (isAudioPlaying) { e.stopPropagation(); stopSpeaking(); } }} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-10 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}>
+                        <button onClick={(e) => { if (showPlaybackControls) { e.stopPropagation(); stopSpeaking(); } }} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-10 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}>
                             {isThinking ? <Loader2 size={20} className="animate-spin text-neutral-400"/> : (
                                 <>
-                                    <img src={avatarInfo.url} className={`w-10 h-10 object-contain ${isAudioPlaying ? 'opacity-30 scale-90 blur-[1px]' : ''}`} alt="Coach" />
-                                    {isAudioPlaying && <div className="absolute inset-0 flex items-center justify-center text-indigo-600 animate-in fade-in zoom-in duration-200"><Square size={24} fill="currentColor" /></div>}
+                                    <img src={avatarInfo.url} className={`w-10 h-10 object-contain ${showPlaybackControls ? 'opacity-30 scale-90 blur-[1px]' : ''}`} alt="Coach" />
+                                    {showPlaybackControls && (
+                                        <div className="absolute inset-0 flex items-center justify-center text-indigo-600 animate-in fade-in zoom-in duration-200">
+                                            <Square size={24} fill="currentColor" />
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </button>
 
                         {/* Progress Bar */}
-                        {isAudioPlaying && audioProgress.duration > 0 && (
+                        {showPlaybackControls && (
                             <div
                                 className="absolute left-16 bottom-2 flex items-center gap-3 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl border border-neutral-200 animate-in fade-in slide-in-from-left-4 duration-300 pointer-events-auto min-w-[24rem]"
                                 onMouseEnter={openCoachMenu}
                                 onMouseLeave={scheduleCloseCoachMenu}
                             >
-                                <span className="text-[10px] font-mono text-neutral-500 tabular-nums w-8">{formatTime(audioProgress.currentTime)}</span>
+                                <span className="text-[10px] font-mono text-neutral-500 tabular-nums w-8">
+                                    {audioProgress.duration > 0 ? formatTime(audioProgress.currentTime) : '--:--'}
+                                </span>
                                 <input
                                     type="range"
                                     min="0"
-                                    max={audioProgress.duration}
+                                    max={audioProgress.duration > 0 ? audioProgress.duration : 1}
                                     step="0.1"
-                                    value={audioProgress.currentTime}
+                                    value={audioProgress.duration > 0 ? audioProgress.currentTime : 0}
                                     onChange={handleSeek}
+                                    disabled={audioProgress.duration <= 0}
                                     className="flex-1 h-1.5 bg-neutral-100 rounded-full appearance-none cursor-pointer accent-indigo-600 hover:accent-indigo-700 transition-all"
                                 />
-                                <span className="text-[10px] font-mono text-neutral-400 tabular-nums w-8">{formatTime(audioProgress.duration)}</span>
+                                <span className="text-[10px] font-mono text-neutral-400 tabular-nums w-8">
+                                    {audioProgress.duration > 0 ? formatTime(audioProgress.duration) : '--:--'}
+                                </span>
                                 <button
                                     onClick={() => {
                                         if (isAudioPaused) {
@@ -447,8 +845,15 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 >
                                     {isAudioPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
                                 </button>
+                                <button
+                                    onClick={cyclePlaybackRate}
+                                    className="h-6 px-2 rounded-lg bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors flex items-center justify-center border border-neutral-200 text-[10px] font-black tabular-nums"
+                                    title="Playback speed"
+                                >
+                                    {playbackRate.toFixed(playbackRate % 1 === 0 ? 1 : 2)}x
+                                </button>
                                 
-                                {markPoints.length > 0 && (
+                                {markPoints.length > 0 && audioProgress.duration > 0 && (
                                     <div className="flex items-center gap-1 ml-1 border-l border-neutral-200 pl-2">
                                         {markPoints.map((pt, idx) => (
                                             <button
@@ -472,20 +877,3 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         </>
     );
 };
-    const openCoachMenu = () => {
-        if (closeMenuTimeoutRef.current) {
-            window.clearTimeout(closeMenuTimeoutRef.current);
-            closeMenuTimeoutRef.current = null;
-        }
-        setIsOpen(true);
-    };
-
-    const scheduleCloseCoachMenu = () => {
-        if (closeMenuTimeoutRef.current) {
-            window.clearTimeout(closeMenuTimeoutRef.current);
-        }
-        closeMenuTimeoutRef.current = window.setTimeout(() => {
-            setIsOpen(false);
-            closeMenuTimeoutRef.current = null;
-        }, 300);
-    };

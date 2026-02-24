@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { FreeTalkItem, UserRecording, VocabularyItem } from '../../app/types';
 import { TargetPhrase } from '../labs/MimicPractice';
 import { MimicPracticeUI } from '../labs/MimicPractice_UI';
-import { startRecording, stopRecording, speak, stopSpeaking } from '../../utils/audio';
+import { startRecording, stopRecording, speak, stopSpeaking, playSound, getAudioProgress, seekAudio } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { analyzeSpeechLocally, AnalysisResult } from '../../utils/speechAnalysis';
 import * as dataStore from '../../app/dataStore';
@@ -269,6 +269,35 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
     // Unified Audio Player logic
     const playAudio = (url: string, refId: string | null, userId: string | null, startTime?: number, duration?: number) => {
+        const isBlobSource = url.startsWith('blob:');
+
+        // Playback/Reference audio should be controlled by shared Coach media control.
+        if (!isBlobSource) {
+            if ((refId && currentPlayingRef === refId) || (userId && currentPlayingUser === userId)) {
+                stopAllAudio();
+                if (!startTime && !duration) return;
+            }
+            stopAllAudio();
+            if (refId) setCurrentPlayingRef(refId);
+            if (userId) setCurrentPlayingUser(userId);
+            setPlaybackTime(0);
+            setPlaybackDuration(0);
+            stopAtTimeRef.current = null;
+            playSound(url, startTime, duration).then(() => {
+                setCurrentPlayingRef(null);
+                setCurrentPlayingUser(null);
+                setPlaybackTime(0);
+                setPlaybackDuration(0);
+            }).catch(() => {
+                showToast("Failed to play audio.", "error");
+                setCurrentPlayingRef(null);
+                setCurrentPlayingUser(null);
+                setPlaybackTime(0);
+                setPlaybackDuration(0);
+            });
+            return;
+        }
+
         // If already playing this one, pause it (unless we are changing segment)
         if ((refId && currentPlayingRef === refId) || (userId && currentPlayingUser === userId)) {
             stopAllAudio();
@@ -324,8 +353,22 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
         setPlaybackTime(time);
         if (audioRef.current) {
             audioRef.current.currentTime = time;
+        } else {
+            seekAudio(time);
         }
     };
+
+    useEffect(() => {
+        // Sync card-level progress UI when playback is controlled by shared audio engine.
+        if (audioRef.current || (!currentPlayingRef && !currentPlayingUser)) return;
+        const timer = window.setInterval(() => {
+            const progress = getAudioProgress();
+            if (!progress) return;
+            setPlaybackTime(progress.currentTime || 0);
+            setPlaybackDuration(progress.duration || 0);
+        }, 100);
+        return () => window.clearInterval(timer);
+    }, [currentPlayingRef, currentPlayingUser]);
 
     const handleToggleRecordLong = async () => {
         if (isLongRecording) {
@@ -539,10 +582,10 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                         <button onClick={() => { setMode('MIMIC'); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'MIMIC' ? 'bg-white shadow-sm text-indigo-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
                             <LayoutList size={14}/> Mimic
                         </button>
-                        <button onClick={() => { setMode('RECORDING'); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'RECORDING' ? 'bg-white shadow-sm text-rose-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                        <button onClick={() => { setMode('RECORDING'); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'RECORDING' ? 'bg-white shadow-sm text-rose-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
                             <Mic2 size={14}/> Essay
                         </button>
-                        <button onClick={() => { setMode('PLAYBACK'); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'PLAYBACK' ? 'bg-white shadow-sm text-emerald-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                        <button onClick={() => { setMode('PLAYBACK'); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'PLAYBACK' ? 'bg-white shadow-sm text-emerald-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
                             <Play size={14}/> Playback
                         </button>
                     </div>
