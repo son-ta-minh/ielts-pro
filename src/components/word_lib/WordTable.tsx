@@ -572,6 +572,21 @@ const WordTable: React.FC<Props> = ({
     fetchBooks();
   }, [user.id]);
 
+  // Single-word delete handler
+  const handleConfirmDelete = async () => {
+    if (!onDelete || !wordToDelete) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(wordToDelete);
+      setNotification({ type: 'success', message: `Deleted "${wordToDelete.word}".` });
+      setWordToDelete(null);
+    } catch (e) {
+      setNotification({ type: 'error', message: 'Failed to delete word.' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const uiProps: Omit<WordTableUIProps, 'viewingWord' | 'setViewingWord' | 'editingWord' | 'setEditingWord'> = {
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
     onPractice, context, onDelete,
@@ -614,7 +629,19 @@ const WordTable: React.FC<Props> = ({
   return (
     <>
       <WordTableUI {...uiProps} />
-      {/* FIX: Renamed typo onBoldDelete to onBulkDelete */}
+      {/* Single-word delete confirmation modal */}
+      <ConfirmationModal
+        isOpen={!!wordToDelete}
+        title={context === 'unit' ? `Unlink Word?` : `Delete Word?`}
+        message={context === 'unit' ? `Remove "${wordToDelete?.word}" from this unit? It will remain in your library.` : `Permanently delete "${wordToDelete?.word}"? This action cannot be undone.`}
+        confirmText={context === 'unit' ? 'UNLINK' : 'DELETE'}
+        isProcessing={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onClose={() => setWordToDelete(null)}
+        confirmButtonClass={context === 'unit' ? "bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" : "bg-red-600 text-white hover:bg-red-700 shadow-red-200"}
+        icon={context === 'unit' ? <Unlink size={40} className="text-orange-50"/> : <Trash2 size={40} className="text-red-500"/>}
+      />
+      {/* Bulk delete modal */}
       {onBulkDelete && <ConfirmationModal 
         isOpen={isBulkDeleteModalOpen}
         title={context === 'unit' ? `Unlink ${selectedIds.size} Words?` : `Delete ${selectedIds.size} Words?`}
@@ -626,6 +653,7 @@ const WordTable: React.FC<Props> = ({
         confirmButtonClass={context === 'unit' ? "bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" : "bg-red-600 text-white hover:bg-red-700 shadow-red-200"}
         icon={context === 'unit' ? <Unlink size={40} className="text-orange-50"/> : <Trash2 size={40} className="text-red-500"/>}
       />}
+      {/* Bulk hard delete modal */}
       {onBulkHardDelete && (
         <ConfirmationModal 
           isOpen={isBulkHardDeleteModalOpen}
@@ -639,6 +667,7 @@ const WordTable: React.FC<Props> = ({
           icon={<Trash2 size={40} className="text-red-500"/>}
         />
       )}
+      {/* AI hint modal */}
        {isHintModalOpen && selectedWordsMissingHints.length > 0 && (
         <UniversalAiModal 
             isOpen={isHintModalOpen} 
@@ -654,6 +683,7 @@ const WordTable: React.FC<Props> = ({
             hidePrimaryInput={true}
         />
       )}
+      {/* AI refine modal */}
       {isAiModalOpen && selectedWordsToRefine.length > 0 && (
         <UniversalAiModal 
             isOpen={isAiModalOpen} 
@@ -668,6 +698,7 @@ const WordTable: React.FC<Props> = ({
             actionLabel="Apply to All"
         />
       )}
+      {/* AI paraphrase modal */}
       {isParaModalOpen && selectedWordsToRefine.length > 0 && (
         <UniversalAiModal 
             isOpen={isParaModalOpen} 

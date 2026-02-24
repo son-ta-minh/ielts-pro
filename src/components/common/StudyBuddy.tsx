@@ -509,15 +509,17 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                      lastTestResults: {},
                      groups: [...(serverItem.groups || []), 'coach-added']
                 };
-                 newItem.complexity = calculateComplexity(newItem);
-                 newItem.masteryScore = calculateMasteryScore(newItem);
-                 newItem.gameEligibility = calculateGameEligibility(newItem);
+                newItem.isPassive = false;
+                newItem.complexity = calculateComplexity(newItem);
+                newItem.masteryScore = calculateMasteryScore(newItem);
+                newItem.gameEligibility = calculateGameEligibility(newItem);
             } else {
                 newItem = { 
                     ...createNewWord(selectedText, '', '', '', '', ['coach-added'], false, false, false, false, selectedText.includes(' ')), 
                     userId: user.id, 
                     quality: WordQuality.RAW 
                 };
+                newItem.isPassive = false;
             }
             await dataStore.saveWord(newItem);
             showToast(`"${selectedText}" added!`, 'success');

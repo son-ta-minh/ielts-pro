@@ -20,7 +20,51 @@ interface Props {
 
 const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onBulkUpdate, onComplete, onRetry }) => {
   const { showToast } = useToast();
-  const sessionWords = initialWords;
+  // --- Learn session: persist queue for the day, only update if needed ---
+  const LEARN_QUEUE_KEY = `vocab_pro_learn_queue_${user.id}`;
+  const LEARN_QUEUE_DATE_KEY = `vocab_pro_learn_queue_date_${user.id}`;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [learnQueue, setLearnQueue] = useState<VocabularyItem[]>([]);
+
+  useEffect(() => {
+    if (sessionType === 'new' || sessionType === 'new_study') {
+      let queueIds: string[] = [];
+      let storedDate = '';
+      try {
+        queueIds = JSON.parse(sessionStorage.getItem(LEARN_QUEUE_KEY) || '[]');
+        storedDate = sessionStorage.getItem(LEARN_QUEUE_DATE_KEY) || '';
+      } catch {}
+
+      let queue: VocabularyItem[] = [];
+      if (storedDate === todayStr && queueIds.length > 0) {
+        // Only remove words that are no longer 'New', keep order
+        queue = queueIds
+          .map(id => initialWords.find(w => w.id === id))
+          .filter(w => w && (!w.lastReview || w.lastGrade !== 'LEARNED')) as VocabularyItem[];
+      } else {
+        // Only create a new queue if none exists for today
+        const newWords = initialWords.filter(w => !w.lastReview || w.lastGrade !== 'LEARNED');
+        queue = newWords.slice(0, 20);
+      }
+
+      // If queue is less than 20, append new 'New' words not already in queue
+      const alreadyInQueue = new Set(queue.map(w => w.id));
+      const newWords = initialWords.filter(w => !w.lastReview || w.lastGrade !== 'LEARNED');
+      for (const w of newWords) {
+        if (queue.length >= 20) break;
+        if (!alreadyInQueue.has(w.id)) queue.push(w);
+      }
+
+      // Save updated queue to sessionStorage
+      sessionStorage.setItem(LEARN_QUEUE_KEY, JSON.stringify(queue.map(w => w.id)));
+      sessionStorage.setItem(LEARN_QUEUE_DATE_KEY, todayStr);
+      setLearnQueue(queue);
+    } else {
+      setLearnQueue(initialWords);
+    }
+  }, [initialWords, sessionType]);
+
+  const sessionWords = (sessionType === 'new' || sessionType === 'new_study') ? learnQueue : initialWords;
   const sessionIdentityRef = useRef<string | null>(null);
   const [newWordIds, setNewWordIds] = useState<Set<string>>(new Set());
 
