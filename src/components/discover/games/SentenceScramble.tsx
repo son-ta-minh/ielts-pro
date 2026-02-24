@@ -25,6 +25,8 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
     
     const [queue, setQueue] = useState<SentenceItem[]>([]);
     const [selectedChunks, setSelectedChunks] = useState<string[]>([]);
+    // Track which source index each selected chunk came from so we can restore it on remove
+    const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
     const [usedIndices, setUsedIndices] = useState<Set<number>>(new Set());
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     const [score, setScore] = useState(0);
@@ -77,6 +79,7 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
 
     const resetRound = () => {
         setSelectedChunks([]);
+        setSelectedIndices([]);
         setUsedIndices(new Set());
         setInsertionIndex(0);
         setIsCorrect(null);
@@ -92,6 +95,12 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
         newSelected.splice(insertionIndex, 0, chunk);
         
         setSelectedChunks(newSelected);
+        // Also record which source index was used for this inserted chunk
+        setSelectedIndices(prev => {
+            const next = [...prev];
+            next.splice(insertionIndex, 0, idx);
+            return next;
+        });
         setUsedIndices(prev => new Set(prev).add(idx));
         
         // Move cursor to after the inserted word
@@ -100,36 +109,27 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
 
     const handleRemoveChunk = (idxToRemove: number) => {
         if (isCorrect !== null) return;
-        
-        const chunkToRemove = selectedChunks[idxToRemove];
-        const newSelected = selectedChunks.filter((_, i) => i !== idxToRemove);
-        setSelectedChunks(newSelected);
+
+        // Remove the selected chunk and restore the exact source index that contributed it
+        setSelectedChunks(prev => prev.filter((_, i) => i !== idxToRemove));
+
+        setSelectedIndices(prev => {
+            const next = [...prev];
+            const freedSourceIndex = next[idxToRemove];
+            next.splice(idxToRemove, 1);
+            // Immediately free the used index
+            setUsedIndices(usedPrev => {
+                const usedNext = new Set(usedPrev);
+                usedNext.delete(freedSourceIndex);
+                return usedNext;
+            });
+            return next;
+        });
 
         // Adjust cursor if necessary
         if (insertionIndex > idxToRemove) {
             setInsertionIndex(prev => prev - 1);
         }
-
-        // Find which source index corresponds to this chunk and is currently used
-        // We need to be careful if there are duplicate words/chunks. 
-        // We find the first matching used index in the source list.
-        const currentChunks = currentItem.shuffledChunks;
-        
-        // We need to find the correct index to free up.
-        // Simple strategy: Iterate source chunks, find one that matches text AND is in usedIndices.
-        // NOTE: This simple strategy might free the "wrong" identical word if duplicates exist, 
-        // but for this game logic it doesn't matter which identical tile is freed.
-        let freed = false;
-        setUsedIndices(prev => {
-            const next = new Set(prev);
-            for (let i = 0; i < currentChunks.length; i++) {
-                if (currentChunks[i] === chunkToRemove && next.has(i) && !freed) {
-                    next.delete(i);
-                    freed = true; // Only free one instance
-                }
-            }
-            return next;
-        });
     };
 
     const handleCheck = () => {

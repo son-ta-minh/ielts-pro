@@ -34,6 +34,8 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
 
   const [sessionOutcomes, setSessionOutcomes] = useState<Record<string, string>>(() => getStoredJSON<Record<string, string>>('vocab_pro_session_outcomes', {}));
   const [sessionUpdates, setSessionUpdates] = useState<Map<string, VocabularyItem>>(new Map());
+  // Store the most recent test results for the current word
+  const lastTestResultsRef = useRef<Record<string, boolean> | null>(null);
 
   const { current: currentIndex, max: maxIndexVisited } = progress;
   const [sessionFinished, setSessionFinished] = useState(false);
@@ -108,12 +110,30 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
 
   const handleReview = async (grade: ReviewGrade) => {
     if (!currentWord) return;
-    
+
     setSessionOutcomes(prev => ({...prev, [currentWord.id]: grade}));
-    const updated = updateSRS(currentWord, grade);
-    
+    // Always prefer the most up-to-date lastTestResults: sessionUpdates > ref > currentWord
+    let latestTestResults = undefined;
+    let latestMasteryScore = undefined;
+    // 1. Check if sessionUpdates already has a newer version (from practice)
+    const prevUpdated = sessionUpdates.get(currentWord.id);
+    if (prevUpdated && prevUpdated.lastTestResults) {
+      latestTestResults = { ...prevUpdated.lastTestResults };
+      latestMasteryScore = prevUpdated.masteryScore;
+    } else if (lastTestResultsRef.current) {
+      latestTestResults = { ...lastTestResultsRef.current };
+      latestMasteryScore = calculateMasteryScore({ ...currentWord, lastTestResults: lastTestResultsRef.current });
+    } else if (currentWord.lastTestResults) {
+      latestTestResults = { ...currentWord.lastTestResults };
+      latestMasteryScore = currentWord.masteryScore;
+    }
+
+    let updated = updateSRS(currentWord, grade);
+    if (latestTestResults) {
+      updated = { ...updated, lastTestResults: latestTestResults, masteryScore: latestMasteryScore };
+    }
     setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
-    
+    lastTestResultsRef.current = null;
     nextItem();
   };
 
@@ -162,6 +182,11 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
 
     let wordWithUpdatedFlags = { ...currentWord };
 
+    // Store testResults in ref for next handleReview
+    if (testResults) {
+      lastTestResultsRef.current = applyTestResults(wordWithUpdatedFlags, testResults);
+    }
+
     if (isQuickReviewMode && counts) {
         const wrong = counts.tested - counts.correct;
         let autoGrade = ReviewGrade.FORGOT;
@@ -173,7 +198,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         const updated = updateSRS(wordWithUpdatedFlags, autoGrade);
 
         if (testResults) {
-            updated.lastTestResults = applyTestResults(updated, testResults);
+            updated.lastTestResults = lastTestResultsRef.current;
         }
         updated.masteryScore = calculateMasteryScore(updated);
 
@@ -181,6 +206,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         
         setIsQuickReviewMode(false);
         nextItem();
+        lastTestResultsRef.current = null;
         return;
     }
 
@@ -191,7 +217,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       const updated = updateSRS(wordWithUpdatedFlags, grade);
 
       if (testResults) {
-          updated.lastTestResults = applyTestResults(updated, testResults);
+          updated.lastTestResults = lastTestResultsRef.current;
       }
       updated.masteryScore = calculateMasteryScore(updated);
       
@@ -202,14 +228,17 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       } else {
         nextItem();
       }
+      lastTestResultsRef.current = null;
     } else {
+      // Learn session: do NOT auto-next after practice, just update state and wait for user action
       const updated: VocabularyItem = { ...wordWithUpdatedFlags };
       if (testResults) {
-        updated.lastTestResults = applyTestResults(updated, testResults);
+        updated.lastTestResults = lastTestResultsRef.current;
       }
       updated.masteryScore = calculateMasteryScore(updated);
       setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
-      nextItem();
+      // Do NOT call nextItem();
+      lastTestResultsRef.current = null;
     }
   };
   

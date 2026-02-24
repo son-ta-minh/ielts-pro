@@ -93,24 +93,25 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
 }
 
 export function resetProgress(item: VocabularyItem): VocabularyItem {
-  const now = Date.now();
-  const resetItem: VocabularyItem = {
-    ...item,
-    nextReview: now,
-    interval: 0,
-    easeFactor: 2.5,
-    consecutiveCorrect: 0,
-    forgotCount: 0,
-    lastGrade: undefined,
-    lastReview: undefined,
-    updatedAt: now,
-    lastXpEarnedTime: undefined,
-    lastTestResults: {} // Clear test history on full reset
-  };
-  resetItem.complexity = calculateComplexity(resetItem);
-  resetItem.masteryScore = calculateMasteryScore(resetItem);
-  resetItem.gameEligibility = calculateGameEligibility(resetItem);
-  return resetItem;
+    const now = Date.now();
+    const resetItem: VocabularyItem = {
+        ...item,
+        nextReview: now,
+        interval: 0,
+        easeFactor: 2.5,
+        consecutiveCorrect: 0,
+        forgotCount: 0,
+        lastGrade: undefined,
+        lastReview: undefined,
+        updatedAt: now,
+        lastXpEarnedTime: undefined,
+        // Preserve lastTestResults and masteryScore
+        lastTestResults: item.lastTestResults ?? {},
+        masteryScore: item.masteryScore
+    };
+    resetItem.complexity = calculateComplexity(resetItem);
+    resetItem.gameEligibility = calculateGameEligibility(resetItem);
+    return resetItem;
 }
 
 export function isDue(item: VocabularyItem): boolean {
