@@ -129,3 +129,4 @@ dist
 
 # Server dictionary file
 /server/cmudict.dict
+server/folder_mappings.json
