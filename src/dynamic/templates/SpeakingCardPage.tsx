@@ -4,7 +4,7 @@ import { User, NativeSpeakItem, VocabularyItem, FocusColor, ConversationItem, Fr
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Mic, Plus, Edit3, Trash2, AudioLines, Sparkles, MessageSquare, Play, Target, FolderPlus, Pen, Move, ArrowLeft, MessageCircle, Tag, Shuffle } from 'lucide-react';
+import { Mic, Plus, Edit3, Trash2, AudioLines, Sparkles, MessageSquare, Play, Target, FolderPlus, Pen, Move, ArrowLeft, MessageCircle, Tag, Shuffle, Search, LayoutGrid } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { TagBrowser } from '../../components/common/TagBrowser';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
@@ -216,13 +216,65 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
     showToast("Deck shuffled!", "success");
   };
 
+  const QuickFilterBar = () => (
+    <div className="flex flex-col gap-4 mb-6">
+      {isTagBrowserOpen && (
+        <TagBrowser
+          items={items.map(i => i.data)}
+          selectedTag={selectedTag}
+          onSelectTag={setSelectedTag}
+          forcedView="tags"
+          title="Browse Tags"
+          icon={<Tag size={16} />}
+        />
+      )}
+
+      <div className="flex flex-col sm:flex-row items-center gap-4">
+        <div className="relative w-full sm:w-auto sm:flex-1 max-w-sm">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search phrases, conversations..."
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-neutral-900 transition-all shadow-sm"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0 no-scrollbar">
+          <button
+            onClick={() => handleSettingChange('resourceType', 'ALL')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSettings.resourceType === 'ALL' ? 'bg-neutral-900 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-neutral-900'}`}
+          >
+            <LayoutGrid size={12} /> All
+          </button>
+          <button
+            onClick={() => handleSettingChange('resourceType', 'CARD')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSettings.resourceType === 'CARD' ? 'bg-teal-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-teal-600'}`}
+          >
+            <AudioLines size={12} /> Expression
+          </button>
+          <button
+            onClick={() => handleSettingChange('resourceType', 'CONVERSATION')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSettings.resourceType === 'CONVERSATION' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-indigo-600'}`}
+          >
+            <MessageSquare size={12} /> Conversation
+          </button>
+          <button
+            onClick={() => handleSettingChange('resourceType', 'FREE_TALK')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSettings.resourceType === 'FREE_TALK' ? 'bg-cyan-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-cyan-600'}`}
+          >
+            <Pen size={12} /> Essay
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
     <ResourcePage title="Listen & Speak" subtitle="Master listening comprehension and speaking skills." icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png" className="w-8 h-8 object-contain" alt="Speaking" />} 
-    query={searchQuery}
-    onQueryChange={setSearchQuery}
-    searchPlaceholder="Search phrases, conversations..."
-    config={{}} isLoading={loading} isEmpty={filteredItems.length === 0} emptyMessage="No items found." activeFilters={{}} onFilterChange={() => {}} pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }} aboveGrid={<>{isTagBrowserOpen && <TagBrowser items={items.map(i => i.data)} selectedTag={selectedTag} onSelectTag={setSelectedTag} forcedView="tags" title="Browse Tags" icon={<Tag size={16}/>} />}</>} actions={<ResourceActions viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} hasActiveFilters={hasActiveFilters} filterOptions={[{ label: 'All', value: 'ALL', isActive: viewSettings.resourceType === 'ALL', onClick: () => handleSettingChange('resourceType', 'ALL') }, { label: 'Card', value: 'CARD', isActive: viewSettings.resourceType === 'CARD', onClick: () => handleSettingChange('resourceType', 'CARD') }, { label: 'Conv.', value: 'CONVERSATION', isActive: viewSettings.resourceType === 'CONVERSATION', onClick: () => handleSettingChange('resourceType', 'CONVERSATION') }, { label: 'Essay', value: 'FREE_TALK', isActive: viewSettings.resourceType === 'FREE_TALK', onClick: () => handleSettingChange('resourceType', 'FREE_TALK') }]} customSection={<><div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2"><Target size={10}/> Focus & Status</div><div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2"><button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>{focusFilter === 'focused' ? 'Focused Only' : 'All Items'}</button><div className="flex gap-1"><button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} /></div></div></>} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]} />} browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }} addActions={[{ label: 'New Native Expression', icon: Plus, onClick: () => { setEditingItem(null); setIsModalOpen(true); } }, { label: 'New Conversation', icon: MessageSquare, onClick: () => { setEditingConversation(null); setIsConversationModalOpen(true); } }, { label: 'New Essay', icon: Pen, onClick: () => { setEditingFreeTalk(null); setIsFreeTalkModalOpen(true); } }]} extraActions={<><button onClick={handleRandomize} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button></>} />}>
+    config={{}} isLoading={loading} isEmpty={filteredItems.length === 0} emptyMessage="No items found." activeFilters={{}} onFilterChange={() => {}} pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }} aboveGrid={<QuickFilterBar />} actions={<ResourceActions viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} hasActiveFilters={hasActiveFilters} filterOptions={[{ label: 'All', value: 'ALL', isActive: viewSettings.resourceType === 'ALL', onClick: () => handleSettingChange('resourceType', 'ALL') }, { label: 'Card', value: 'CARD', isActive: viewSettings.resourceType === 'CARD', onClick: () => handleSettingChange('resourceType', 'CARD') }, { label: 'Conv.', value: 'CONVERSATION', isActive: viewSettings.resourceType === 'CONVERSATION', onClick: () => handleSettingChange('resourceType', 'CONVERSATION') }, { label: 'Essay', value: 'FREE_TALK', isActive: viewSettings.resourceType === 'FREE_TALK', onClick: () => handleSettingChange('resourceType', 'FREE_TALK') }]} customSection={<><div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2"><Target size={10}/> Focus & Status</div><div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2"><button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>{focusFilter === 'focused' ? 'Focused Only' : 'All Items'}</button><div className="flex gap-1"><button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} /></div></div></>} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]} />} browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }} addActions={[{ label: 'New Native Expression', icon: Plus, onClick: () => { setEditingItem(null); setIsModalOpen(true); } }, { label: 'New Conversation', icon: MessageSquare, onClick: () => { setEditingConversation(null); setIsConversationModalOpen(true); } }, { label: 'New Essay', icon: Pen, onClick: () => { setEditingFreeTalk(null); setIsFreeTalkModalOpen(true); } }]} extraActions={<><button onClick={handleRandomize} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button></>} />}>
       {() => (
         <>
           {(pagedItems as SpeakingItem[]).map((item) => {

@@ -93,6 +93,18 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
     }, [lesson, activeTab]);
 
     const chapters = useMemo(() => splitContentIntoChapters(rawContent), [rawContent]);
+    const chapterHeadingIndex = useMemo(() => {
+        const map = new Map<string, number>();
+        chapters.forEach((chapter, idx) => {
+            chapter.content.split('\n').forEach(line => {
+                const headerMatch = line.trim().match(/^#{1,4}\s+(.+)/);
+                if (!headerMatch) return;
+                const heading = headerMatch[1].trim().toLowerCase();
+                if (heading && !map.has(heading)) map.set(heading, idx);
+            });
+        });
+        return map;
+    }, [chapters]);
 
     useEffect(() => {
         setCurrentChapterIdx(0);
@@ -217,6 +229,37 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
             delete (window as any).handleLessonSpeak;
         };
     }, []);
+
+    useEffect(() => {
+        (window as any).resolveMarkdownNav = (query: string) => {
+            if (viewMode !== 'PAGED') return false;
+            if (activeTab === 'INTENSITY' || activeTab === 'COMPARISON') return false;
+
+            const chapterIdx = chapterHeadingIndex.get(query);
+            if (chapterIdx === undefined) return false;
+
+            const navigateAndScroll = () => {
+                const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4')) as HTMLElement[];
+                const exact = headings.find(h => (h.textContent || '').trim().toLowerCase() === query);
+                const fuzzy = headings.find(h => (h.textContent || '').trim().toLowerCase().includes(query));
+                const target = exact || fuzzy;
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                else window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+
+            if (chapterIdx !== currentChapterIdx) {
+                setCurrentChapterIdx(chapterIdx);
+                requestAnimationFrame(() => requestAnimationFrame(navigateAndScroll));
+            } else {
+                navigateAndScroll();
+            }
+            return true;
+        };
+
+        return () => {
+            delete (window as any).resolveMarkdownNav;
+        };
+    }, [viewMode, activeTab, chapterHeadingIndex, currentChapterIdx]);
 
     // Tab Availability Logic
     const hasListening = !!lesson.listeningContent;

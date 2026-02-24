@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, ChevronRight, Loader2, Plus, Trash2, Edit2, X, Video, Mic, PenTool, GraduationCap, Globe, Layout, Code, Music, Calculator, FlaskConical, Briefcase, ArrowUp, ArrowDown } from 'lucide-react';
+import { BookOpen, Loader2, Plus, Trash2, Edit2, X, Video, Mic, PenTool, GraduationCap, Globe, Layout, Code, Music, Calculator, FlaskConical, Briefcase, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
 import { CourseViewer } from './CourseViewer';
+import ConfirmationModal from '../common/ConfirmationModal';
 
 interface Course {
     id: string;
@@ -54,6 +55,9 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
     const [courseTitle, setCourseTitle] = useState('');
     const [selectedIcon, setSelectedIcon] = useState('BookOpen');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
+    const [isDeletingCourse, setIsDeletingCourse] = useState(false);
+    const [isManageMode, setIsManageMode] = useState(false);
 
     const loadCourses = async () => {
         setIsLoading(true);
@@ -145,19 +149,24 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
         }
     };
 
-    const handleDeleteCourse = async (courseId: string, e: React.MouseEvent) => {
+    const openDeleteModal = (course: Course, e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
-        if (!window.confirm("Are you sure you want to delete this course? This action cannot be undone.")) return;
-        
+        setCourseToDelete(course);
+    };
+
+    const handleDeleteCourse = async () => {
+        if (!courseToDelete) return;
+        setIsDeletingCourse(true);
         try {
             const config = getConfig();
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/courses/${courseId}`, {
+            const res = await fetch(`${serverUrl}/api/courses/${courseToDelete.id}`, {
                 method: 'DELETE'
             });
             if (res.ok) {
                 showToast("Course deleted successfully", "success");
+                setCourseToDelete(null);
                 loadCourses();
             } else {
                 showToast("Failed to delete course", "error");
@@ -165,6 +174,8 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
         } catch (e) {
             console.error(e);
             showToast("Failed to delete course", "error");
+        } finally {
+            setIsDeletingCourse(false);
         }
     };
 
@@ -223,15 +234,13 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
     if (selectedCourse) {
         return (
             <div className="h-full flex flex-col">
-                <div className="flex-shrink-0 px-6 py-3 border-b flex items-center gap-3 bg-white/80 backdrop-blur-md sticky top-0 z-20">
+                <div className="flex-shrink-0 px-6 py-3 border-b flex items-center bg-white/80 backdrop-blur-md sticky top-0 z-20">
                     <button 
                         onClick={() => setSelectedCourse(null)}
                         className="text-sm font-bold text-neutral-500 hover:text-neutral-900 transition-colors"
                     >
-                        Courses
+                        Back to Courses
                     </button>
-                    <ChevronRight size={14} className="text-neutral-300" />
-                    <span className="text-sm font-black text-neutral-900">{selectedCourse.title}</span>
                 </div>
                 <div className="flex-grow overflow-hidden">
                     <CourseViewer courseId={selectedCourse.id} courseTitle={selectedCourse.title} />
@@ -241,21 +250,33 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
     }
 
     return (
-        <div className="h-full overflow-y-auto p-4 md:p-8 bg-neutral-50/30">
-            <div className="max-w-5xl mx-auto">
-                <div className="mb-8 flex items-center justify-between">
+        <div className="h-full overflow-y-auto">
+            <div>
+                <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
                     <div>
                         <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Course Library</h1>
                         <p className="text-neutral-500 mt-2 font-medium">Select a course to start learning.</p>
                     </div>
-                    <button 
-                        onClick={openCreateModal}
-                        className="p-2.5 bg-neutral-900 text-white rounded-xl shadow-lg hover:bg-neutral-800 transition-all active:scale-95 flex items-center gap-2"
-                        title="Create New Course"
-                    >
-                        <Plus size={18} />
-                        <span className="text-xs font-bold hidden sm:inline">New Course</span>
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            onClick={() => setIsManageMode(v => !v)}
+                            className={`px-4 py-3 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isManageMode ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`}
+                            title={isManageMode ? 'Done Editing' : 'Edit Courses'}
+                        >
+                            <Edit2 size={16} />
+                            <span>{isManageMode ? 'Done' : 'Edit'}</span>
+                        </button>
+                        <button 
+                            onClick={openCreateModal}
+                            className="flex items-center gap-2.5 p-2 bg-white border border-neutral-200 rounded-2xl hover:border-indigo-400 hover:shadow-sm transition-all group shrink-0"
+                            title="Create New Course"
+                        >
+                            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+                                <Plus size={18} className="text-indigo-600" />
+                            </div>
+                            <span className="text-sm font-black text-neutral-900 pr-3">New Course</span>
+                        </button>
+                    </div>
                 </div>
 
                 {isLoading ? (
@@ -282,45 +303,46 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
                                         {course.isSystem && <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider mt-1 block">System</span>}
                                     </div>
                                     
-                                    {/* Action Buttons - Absolute positioned to not mess with layout */}
-                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <div className="flex gap-1">
-                                            <button 
-                                                onClick={(e) => handleMoveCourse(index, 'up', e)}
-                                                disabled={index === 0}
-                                                className="p-1.5 text-neutral-300 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg disabled:opacity-30"
-                                                title="Move Up"
-                                            >
-                                                <ArrowUp size={14} />
-                                            </button>
-                                            <button 
-                                                onClick={(e) => handleMoveCourse(index, 'down', e)}
-                                                disabled={index === courses.length - 1}
-                                                className="p-1.5 text-neutral-300 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg disabled:opacity-30"
-                                                title="Move Down"
-                                            >
-                                                <ArrowDown size={14} />
-                                            </button>
-                                        </div>
-                                        <div className="flex gap-1">
-                                            <button 
-                                                onClick={(e) => openEditModal(course, e)}
-                                                className="p-1.5 text-neutral-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                                title="Edit"
-                                            >
-                                                <Edit2 size={14} />
-                                            </button>
-                                            {!course.isSystem && (
+                                    {isManageMode && (
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1">
+                                            <div className="flex gap-1">
                                                 <button 
-                                                    onClick={(e) => handleDeleteCourse(course.id, e)}
-                                                    className="p-1.5 text-neutral-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title="Delete"
+                                                    onClick={(e) => handleMoveCourse(index, 'up', e)}
+                                                    disabled={index === 0}
+                                                    className="p-1.5 text-neutral-300 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg disabled:opacity-30"
+                                                    title="Move Up"
                                                 >
-                                                    <Trash2 size={14} />
+                                                    <ArrowUp size={14} />
                                                 </button>
-                                            )}
+                                                <button 
+                                                    onClick={(e) => handleMoveCourse(index, 'down', e)}
+                                                    disabled={index === courses.length - 1}
+                                                    className="p-1.5 text-neutral-300 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg disabled:opacity-30"
+                                                    title="Move Down"
+                                                >
+                                                    <ArrowDown size={14} />
+                                                </button>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <button 
+                                                    onClick={(e) => openEditModal(course, e)}
+                                                    className="p-1.5 text-neutral-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                    title="Edit"
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                                {!course.isSystem && (
+                                                    <button 
+                                                        onClick={(e) => openDeleteModal(course, e)}
+                                                        className="p-1.5 text-neutral-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             );
                         })}
@@ -382,6 +404,22 @@ export const CourseList: React.FC<CourseListProps> = ({ initialCourseId, onConsu
                     </div>
                 </div>
             )}
+
+            <ConfirmationModal
+                isOpen={!!courseToDelete}
+                title="Delete Course?"
+                message={
+                    <span>
+                        Are you sure you want to delete <span className="font-bold text-neutral-900">&quot;{courseToDelete?.title}&quot;</span>? This action cannot be undone.
+                    </span>
+                }
+                confirmText="Delete Course"
+                isProcessing={isDeletingCourse}
+                onConfirm={handleDeleteCourse}
+                onClose={() => setCourseToDelete(null)}
+                icon={<AlertTriangle size={40} className="text-red-500" />}
+                confirmButtonClass="bg-red-600 text-white hover:bg-red-700 shadow-red-200"
+            />
         </div>
     );
 };

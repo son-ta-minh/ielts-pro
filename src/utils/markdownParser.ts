@@ -8,6 +8,8 @@ import { getConfig, getServerUrl } from '../app/settingsManager';
 /**
  * Lightweight Markdown Parser supporting custom tags:
  * [Audio-VN]text[/] -> Speaker button + text (inline)
+ * [W_AUDIO]word 1, word 2[/] -> Clickable word badges with per-item audio
+ * [NAV]Header Text[/] -> Jump to heading with matching text
  * [HIDDEN: text] -> Reveal button (inline replacement)
  * [Quiz: answer] -> Input field checking against 'answer'
  * [Multi: Correct | Option 2 | Option 3] -> Multiple Choice Buttons (Inline buttons)
@@ -109,6 +111,35 @@ if (typeof window !== 'undefined') {
 
     (window as any).handleLessonSound = (link: string, start?: number, duration?: number, markPoints?: number[]) => {
         playSound(link, start, duration, markPoints).catch(err => console.error("Sound play failed", err));
+    };
+
+    (window as any).handleWordAudioSpeak = (text: string) => {
+        const speaker = (window as any).handleLessonSpeak;
+        if (typeof speaker === 'function') {
+            speaker(text);
+        } else {
+            console.warn('handleLessonSpeak is not registered in current view.');
+        }
+    };
+
+    (window as any).handleMarkdownNav = (targetText: string) => {
+        const query = String(targetText || '').trim().toLowerCase();
+        if (!query) return;
+
+        const resolver = (window as any).resolveMarkdownNav;
+        if (typeof resolver === 'function') {
+            const handled = resolver(query);
+            if (handled) return;
+        }
+
+        const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4')) as HTMLElement[];
+        const exact = headings.find(h => (h.textContent || '').trim().toLowerCase() === query);
+        const fuzzy = headings.find(h => (h.textContent || '').trim().toLowerCase().includes(query));
+        const target = exact || fuzzy;
+
+        if (!target) return;
+
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 }
 
@@ -306,6 +337,51 @@ const processAudioBlocks = (text: string): string => {
 };
 
 /**
+ * Process [W_AUDIO]word 1, word 2[/] tags into clickable badges.
+ * Each comma-separated item becomes one badge and plays only its own text.
+ */
+const processWordAudioBlocks = (text: string): string => {
+    const regex = /\[W_AUDIO\]([\s\S]*?)\[\/\]/gi;
+
+    return text.replace(regex, (_, content) => {
+        const items = String(content || '')
+            .split(',')
+            .map((item: string) => item.trim())
+            .filter((item: string) => item.length > 0);
+
+        if (!items.length) return '';
+
+        const badges = items.map((item: string) => {
+            const safe = item.replace(/'/g, "\\'");
+            return `<button onclick="window.handleWordAudioSpeak('${safe}')" class="inline-flex items-center px-2.5 py-1 bg-white border border-neutral-200 hover:border-indigo-300 hover:bg-indigo-50 text-neutral-700 hover:text-indigo-700 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95">${item}</button>`;
+        }).join('');
+
+        return `<span class="inline-flex flex-wrap items-center gap-1.5 align-middle my-1">${badges}</span>`;
+    });
+};
+
+/**
+ * Process [NAV]Header Text[/] tags into navigation buttons.
+ */
+const processNavTags = (text: string): string => {
+    // Supports both:
+    // [NAV]Header Text[/] -> label = target
+    // [NAV target heading]Label[/] -> custom display label
+    const regex = /\[NAV(?:\s+([^\]]+))?\]([\s\S]*?)\[\/\]/gi;
+    return text.replace(regex, (_, explicitTarget, content) => {
+        const label = String(content || '').trim();
+        const target = String(explicitTarget || label).trim();
+        if (!label) return '';
+        if (!target) return '';
+        const safe = target
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\n/g, ' ');
+        return `<button onclick="window.handleMarkdownNav('${safe}')" class="inline-flex items-center gap-1 px-2.5 py-1 bg-neutral-100 border border-neutral-200 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 text-neutral-700 rounded-lg text-xs font-bold transition-all active:scale-95 my-1">${label}</button>`;
+    });
+};
+
+/**
  * Process [SOUND text|link|start|duration]
  */
 const processSound = (text: string): string => {
@@ -379,6 +455,8 @@ export const parseMarkdown = (text: string): string => {
 
     // 1. Process Audio and Spoilers first (as they can be inline)
     let processed = processAudioBlocks(normalized);
+    processed = processWordAudioBlocks(processed);
+    processed = processNavTags(processed);
     processed = processSound(processed);
     processed = processImages(processed);
     processed = processQuiz(processed);

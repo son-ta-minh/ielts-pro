@@ -3,19 +3,77 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { settings } = require('../config');
+const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
 const { runCommand } = require('../utils');
 
 let selectedVoice = ""; 
 let selectedLanguage = "en";
 let selectedAccent = "";
 let voiceIndex = {};
+const QUALITY_SOUND_MAP_NAME = 'Quality_Sound';
+const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac', '.webm', '.aiff'];
 
 function mapLanguage(accent) {
     if (!accent) return null;
     const lower = accent.toLowerCase();
     if (lower.startsWith("vi")) return "vi";
     if (lower.startsWith("en")) return "en";
+    return null;
+}
+
+function loadFolderMappings() {
+    try {
+        const mappingFile = FOLDER_MAPPINGS_FILE();
+        if (!fs.existsSync(mappingFile)) return {};
+        return JSON.parse(fs.readFileSync(mappingFile, 'utf8')) || {};
+    } catch (e) {
+        console.error("[TTS] Failed to load folder mappings:", e.message);
+        return {};
+    }
+}
+
+function toWordCandidates(rawText) {
+    if (!rawText || typeof rawText !== 'string') return [];
+    const trimmed = rawText.trim();
+    if (!trimmed || /\s/.test(trimmed)) return [];
+
+    const base = trimmed
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, '');
+
+    if (!base) return [];
+
+    const candidates = new Set([
+        base,
+        base.toLowerCase(),
+        base.replace(/'/g, ''),
+        base.toLowerCase().replace(/'/g, '')
+    ]);
+
+    return Array.from(candidates).filter(Boolean);
+}
+
+function findQualitySoundFile(wordText) {
+    const candidates = toWordCandidates(wordText);
+    if (candidates.length === 0) return null;
+
+    const mappings = loadFolderMappings();
+    const qualityRoot = mappings[QUALITY_SOUND_MAP_NAME];
+    if (!qualityRoot || !fs.existsSync(qualityRoot)) return null;
+
+    const resolvedRoot = path.resolve(qualityRoot);
+    for (const word of candidates) {
+        for (const ext of AUDIO_EXTENSIONS) {
+            const directPath = path.resolve(path.join(resolvedRoot, `${word}${ext}`));
+            if (directPath.startsWith(resolvedRoot) && fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
+                return directPath;
+            }
+        }
+    }
+
     return null;
 }
 
@@ -108,6 +166,12 @@ router.post('/speak', async (req, res) => {
 
     // Ensure text is NFC normalized
     const cleanText = text.normalize('NFC');
+
+    // Fast path: for single-word requests, serve pre-recorded quality audio if available.
+    const qualityAudioFile = findQualitySoundFile(cleanText);
+    if (qualityAudioFile) {
+        return res.sendFile(qualityAudioFile);
+    }
     
     const timestamp = Date.now();
     const outFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.aiff`);

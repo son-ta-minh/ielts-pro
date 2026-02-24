@@ -12,6 +12,7 @@ const MAX_SPEECH_LENGTH = 1500;
 let voices: SpeechSynthesisVoice[] = [];
 let currentServerAudio: HTMLAudioElement | null = null;
 let isSpeaking = false;
+let isAudioPaused = false;
 let currentMarkPoints: number[] = [];
 
 // Cache the successfully connected base URL
@@ -153,7 +154,7 @@ export const fetchServerVoices = async (urlOverride?: string): Promise<ServerVoi
 
 const notifyStatus = (status: boolean) => {
     isSpeaking = status;
-    window.dispatchEvent(new CustomEvent('audio-status-changed', { detail: { isSpeaking } }));
+    window.dispatchEvent(new CustomEvent('audio-status-changed', { detail: { isSpeaking, isAudioPaused } }));
 };
 
 export const stopSpeaking = () => {
@@ -165,12 +166,33 @@ export const stopSpeaking = () => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
     }
+    isAudioPaused = false;
     currentMarkPoints = [];
     notifyStatus(false);
 };
 
 export const getIsSpeaking = () => isSpeaking;
+export const getIsAudioPaused = () => isAudioPaused;
 export const getMarkPoints = () => currentMarkPoints;
+
+export const pauseSpeaking = () => {
+    if (!currentServerAudio || currentServerAudio.paused) return;
+    currentServerAudio.pause();
+    isAudioPaused = true;
+    notifyStatus(true);
+};
+
+export const resumeSpeaking = async () => {
+    if (!currentServerAudio || !currentServerAudio.paused) return;
+    try {
+        await currentServerAudio.play();
+        isAudioPaused = false;
+        notifyStatus(true);
+    } catch (e) {
+        notifyStatus(false);
+        throw e;
+    }
+};
 
 /**
  * Fetches audio blob from the server without playing it.
@@ -204,6 +226,7 @@ export const prefetchSpeech = async (text: string, forcedLang?: 'en' | 'vi'): Pr
 
 const playBlob = (blob: Blob): Promise<boolean> => {
     stopSpeaking();
+    isAudioPaused = false;
     notifyStatus(true);
     const audioUrl = URL.createObjectURL(blob);
     const audio = new Audio(audioUrl);
@@ -214,12 +237,14 @@ const playBlob = (blob: Blob): Promise<boolean> => {
             .then(() => {
                 audio.onended = () => {
                     URL.revokeObjectURL(audioUrl);
+                    isAudioPaused = false;
                     notifyStatus(false);
                     resolve(true);
                 };
             })
             .catch(e => {
                 URL.revokeObjectURL(audioUrl);
+                isAudioPaused = false;
                 notifyStatus(false);
                 reject(e);
             });
@@ -228,6 +253,7 @@ const playBlob = (blob: Blob): Promise<boolean> => {
 
 const speakViaServer = async (text: string, language: 'en' | 'vi', accent: string, voice: string, urlOverride?: string) => {
     stopSpeaking(); 
+    isAudioPaused = false;
     notifyStatus(true);
 
     try {
@@ -249,10 +275,12 @@ const speakViaServer = async (text: string, language: 'en' | 'vi', accent: strin
             const blob = await res.blob();
             return await playBlob(blob);
         } else {
+            isAudioPaused = false;
             notifyStatus(false);
             return true;
         }
     } catch (e: any) {
+        isAudioPaused = false;
         notifyStatus(false);
         throw e;
     }
@@ -263,6 +291,7 @@ const speakViaBrowser = (text: string, voiceName?: string, langCode: 'en' | 'vi'
         if (typeof window === 'undefined' || !window.speechSynthesis) return resolve(false);
         
         stopSpeaking(); 
+        isAudioPaused = false;
         notifyStatus(true);
 
         const utterance = new SpeechSynthesisUtterance(text);
@@ -276,10 +305,12 @@ const speakViaBrowser = (text: string, voiceName?: string, langCode: 'en' | 'vi'
         utterance.rate = 0.95;
         
         utterance.onend = () => {
+            isAudioPaused = false;
             notifyStatus(false);
             resolve(true);
         };
         utterance.onerror = () => {
+            isAudioPaused = false;
             notifyStatus(false);
             resolve(false);
         };
@@ -373,14 +404,17 @@ export const playSound = async (url: string, startTime?: number, duration?: numb
             }
 
             notifyStatus(true);
+            isAudioPaused = false;
             audio.play()
                 .then(() => {
                     audio.onended = () => {
+                        isAudioPaused = false;
                         notifyStatus(false);
                         resolve(true);
                     };
                 })
                 .catch(e => {
+                    isAudioPaused = false;
                     notifyStatus(false);
                     reject(e);
                 });
@@ -393,6 +427,7 @@ export const playSound = async (url: string, startTime?: number, duration?: numb
         }
 
         audio.onerror = (e) => {
+            isAudioPaused = false;
             notifyStatus(false);
             reject(e);
         };

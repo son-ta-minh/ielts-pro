@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
-import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Square, Wrench } from 'lucide-react';
+import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Square, Wrench, Pause, Play } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
-import { speak, stopSpeaking, getIsSpeaking, getAudioProgress, seekAudio, getMarkPoints } from '../../utils/audio';
+import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getAudioProgress, seekAudio, getMarkPoints } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
@@ -47,6 +47,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const { showToast } = useToast();
     const [config, setConfig] = useState<SystemConfig>(getConfig());
     const [isAudioPlaying, setIsAudioPlaying] = useState(getIsSpeaking());
+    const [isAudioPaused, setIsAudioPaused] = useState(getIsAudioPaused());
     const [audioProgress, setAudioProgress] = useState({ currentTime: 0, duration: 0 });
     const [markPoints, setMarkPoints] = useState<number[]>([]);
     const [isOpen, setIsOpen] = useState(false);
@@ -65,6 +66,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     const commandBoxRef = useRef<HTMLDivElement>(null);
     const checkAbortControllerRef = useRef<AbortController | null>(null);
+    const closeMenuTimeoutRef = useRef<number | null>(null);
     
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
@@ -107,12 +109,16 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     useEffect(() => {
         const handleConfigUpdate = () => setConfig(getConfig());
-        const handleAudioStatus = () => setIsAudioPlaying(getIsSpeaking());
+        const handleAudioStatus = () => {
+            setIsAudioPlaying(getIsSpeaking());
+            setIsAudioPaused(getIsAudioPaused());
+        };
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
         
         // Initial check
         setIsAudioPlaying(getIsSpeaking());
+        setIsAudioPaused(getIsAudioPaused());
 
         return () => {
             window.removeEventListener('config-updated', handleConfigUpdate);
@@ -162,6 +168,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         document.addEventListener('contextmenu', handleContextMenu);
         document.addEventListener('mousedown', handleClickOutside);
         return () => {
+            if (closeMenuTimeoutRef.current) {
+                window.clearTimeout(closeMenuTimeoutRef.current);
+                closeMenuTimeoutRef.current = null;
+            }
             document.removeEventListener('contextmenu', handleContextMenu);
             document.removeEventListener('mousedown', handleClickOutside);
         };
@@ -359,6 +369,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         } else {
             setAudioProgress({ currentTime: 0, duration: 0 });
             setMarkPoints([]);
+            setIsAudioPaused(false);
         }
         return () => clearInterval(interval);
     }, [isAudioPlaying]);
@@ -381,7 +392,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 <div className="fixed z-[2147483647]" style={{ left: `${menuPos.x}px`, top: `${menuPos.y}px`, transform: menuPos.placement === 'top' ? 'translate(-50%, -100%) translateY(-10px)' : 'translate(-50%, 0) translateY(10px)' }}><CommandBox /></div>
             )}
             <div className="fixed bottom-0 left-6 z-[2147483646] flex flex-col items-start pointer-events-none">
-                <div className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" onMouseEnter={() => setIsOpen(true)} onMouseLeave={() => setTimeout(() => setIsOpen(false), 300)}>
+                <div className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" onMouseEnter={openCoachMenu} onMouseLeave={scheduleCloseCoachMenu}>
                     <div className="relative">
                         {isOpen && !menuPos && (
                             <div className="absolute bottom-16 left-0 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -407,7 +418,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
                         {/* Progress Bar */}
                         {isAudioPlaying && audioProgress.duration > 0 && (
-                            <div className="absolute left-16 bottom-2 flex items-center gap-3 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl border border-neutral-200 animate-in fade-in slide-in-from-left-4 duration-300 pointer-events-auto min-w-[24rem]">
+                            <div
+                                className="absolute left-16 bottom-2 flex items-center gap-3 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl border border-neutral-200 animate-in fade-in slide-in-from-left-4 duration-300 pointer-events-auto min-w-[24rem]"
+                                onMouseEnter={openCoachMenu}
+                                onMouseLeave={scheduleCloseCoachMenu}
+                            >
                                 <span className="text-[10px] font-mono text-neutral-500 tabular-nums w-8">{formatTime(audioProgress.currentTime)}</span>
                                 <input
                                     type="range"
@@ -419,6 +434,19 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                     className="flex-1 h-1.5 bg-neutral-100 rounded-full appearance-none cursor-pointer accent-indigo-600 hover:accent-indigo-700 transition-all"
                                 />
                                 <span className="text-[10px] font-mono text-neutral-400 tabular-nums w-8">{formatTime(audioProgress.duration)}</span>
+                                <button
+                                    onClick={() => {
+                                        if (isAudioPaused) {
+                                            resumeSpeaking().catch(() => showToast("Cannot resume audio.", "error"));
+                                        } else {
+                                            pauseSpeaking();
+                                        }
+                                    }}
+                                    className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center justify-center border border-indigo-100"
+                                    title={isAudioPaused ? "Resume audio" : "Pause audio"}
+                                >
+                                    {isAudioPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
+                                </button>
                                 
                                 {markPoints.length > 0 && (
                                     <div className="flex items-center gap-1 ml-1 border-l border-neutral-200 pl-2">
@@ -444,3 +472,20 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         </>
     );
 };
+    const openCoachMenu = () => {
+        if (closeMenuTimeoutRef.current) {
+            window.clearTimeout(closeMenuTimeoutRef.current);
+            closeMenuTimeoutRef.current = null;
+        }
+        setIsOpen(true);
+    };
+
+    const scheduleCloseCoachMenu = () => {
+        if (closeMenuTimeoutRef.current) {
+            window.clearTimeout(closeMenuTimeoutRef.current);
+        }
+        closeMenuTimeoutRef.current = window.setTimeout(() => {
+            setIsOpen(false);
+            closeMenuTimeoutRef.current = null;
+        }, 300);
+    };
