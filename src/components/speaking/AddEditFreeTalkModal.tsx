@@ -122,17 +122,21 @@ export const AddEditFreeTalkModal: React.FC<Props> = ({ isOpen, onClose, onSave,
       }
   };
   
-  const handleConfirmTranscript = () => {
-      if (transcriptToApply) {
-          setScriptItems([{
-              id: Date.now().toString(),
-              type: 'script',
-              content: transcriptToApply
-          }]);
-      }
-      setTranscriptToApply(null);
-      setIsTranscriptConfirmOpen(false);
-  };
+    const handleConfirmTranscript = () => {
+        if (transcriptToApply) {
+            setScriptItems(prev => [
+                ...prev,
+                {
+                    id: Date.now().toString(),
+                    type: 'script',
+                    content: transcriptToApply
+                }
+            ]);
+        }
+
+        setTranscriptToApply(null);
+        setIsTranscriptConfirmOpen(false);
+    };
   
   const handleRemoveAudio = (index: number) => {
       setAudioLinks(prev => prev.filter((_, i) => i !== index));
@@ -264,15 +268,15 @@ export const AddEditFreeTalkModal: React.FC<Props> = ({ isOpen, onClose, onSave,
     />
     
     <ConfirmationModal 
-        isOpen={isTranscriptConfirmOpen}
-        title="Replace Content?"
-        message="This audio file comes with a linked transcript. Do you want to replace your current content with it?"
-        confirmText="Replace"
-        isProcessing={false}
-        onConfirm={handleConfirmTranscript}
-        onClose={() => setIsTranscriptConfirmOpen(false)}
-        icon={<FileText size={40} className="text-indigo-500"/>}
-        confirmButtonClass="bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200"
+    isOpen={isTranscriptConfirmOpen}
+    title="Create Script From Audio?"
+    message="This audio file includes a transcript. Do you want to create a new script block from it?"
+    confirmText="Create Script"
+    isProcessing={false}
+    onConfirm={handleConfirmTranscript}
+    onClose={() => setIsTranscriptConfirmOpen(false)}
+    icon={<FileText size={40} className="text-indigo-500"/>}
+    confirmButtonClass="bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200"
     />
     </>
   );
