@@ -31,21 +31,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
         }
     }, [isOpen, initialItem?.id]);
     
-    // --- MIMIC MODE STATE ---
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [page, setPage] = useState(0);
-    const [pageSize, setPageSize] = useState(10);
-    
-    const [isRecording, setIsRecording] = useState(false);
-    const [isRevealed, setIsRevealed] = useState(false);
-    const [fullTranscript, setFullTranscript] = useState('');
-    const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null);
-    
-    const [autoSpeak, setAutoSpeak] = useState(false);
-    const [ipa, setIpa] = useState<string | null>(null);
-    const [showIpa, setShowIpa] = useState(false);
-    const [isIpaLoading, setIsIpaLoading] = useState(false);
-
     // --- RECORDING MODE STATE ---
     const [isLongRecording, setIsLongRecording] = useState(false);
     const [recordingDuration, setRecordingDuration] = useState(0);
@@ -101,14 +86,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
             }
         };
     }, []);
-
-    const resetPracticeState = () => {
-        setIsRecording(false);
-        setFullTranscript('');
-        setUserAudioUrl(null);
-        setIpa(null);
-        setShowIpa(false);
-    };
 
     const stopAllAudio = () => {
         if (audioRef.current) {
