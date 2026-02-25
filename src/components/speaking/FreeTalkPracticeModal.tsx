@@ -87,41 +87,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     // Initialize: Split paragraph into sentences for Mimic & Load Recordings
     useEffect(() => {
         if (isOpen && item) {
-            // 1. Prepare Script Content for Mimic
-            let mimicContent = item.content;
-            
-            // If scriptItems exist, filter only 'script' types and join them
-            if (item.scriptItems && item.scriptItems.length > 0) {
-                mimicContent = item.scriptItems
-                    .filter(i => i.type === 'script')
-                    .map(i => i.content)
-                    .join('\n\n');
-            }
-
-            // Clean the text: remove markdown-like links and brackets
-            const cleanedContent = mimicContent
-                .replace(/\[([\s\S]*?)\]\([\s\S]*?\)/g, '$1') // [text](url) -> text
-                .replace(/\{([\s\S]*?)\}/g, '$1')           // {text} -> text
-                .replace(/\[([\s\S]*?)\]/g, '$1');          // [text] -> text
-
-            // Robust sentence splitting
-            const sentences = cleanedContent.split(/[.!?\n]+/g).filter(Boolean); // Split by punctuation AND newlines
-            const phrases: TargetPhrase[] = sentences
-                .map(s => s.trim())
-                .filter(Boolean)
-                .map((text, idx) => ({
-                    id: `ft-${item.id}-${idx}`,
-                    text: text,
-                    sourceWord: item.title,
-                    type: 'Free Talk',
-                    lastScore: item.sentenceScores?.[idx] // Restore from saved
-                }));
-
-            setQueue(phrases);
-            setCurrentIndex(0);
-            setPage(0);
-            setActiveRecordings(item.userRecordings || []); // Init local recordings
-            resetPracticeState();
+            // ...existing code...
         } else {
             // Cleanup on close
             stopSpeaking();
@@ -130,6 +96,13 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
             if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             setRawRecording(null);
             setTrimmedRecording(null);
+            // Stop recording if modal is closed
+            if (isLongRecording) {
+                try {
+                    stopRecording(); // No await in useEffect
+                } catch {}
+                setIsLongRecording(false);
+            }
         }
     }, [isOpen, item?.id]);
 
@@ -353,6 +326,13 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
         setPlaybackTime(time);
         if (audioRef.current) {
             audioRef.current.currentTime = time;
+            // If preview is paused, resume playback at new position
+            if (currentPlayingRef === null && rawRecording) {
+                audioRef.current.play().catch(() => {
+                    showToast("Failed to play audio.", "error");
+                });
+                setCurrentPlayingRef('preview');
+            }
         } else {
             seekAudio(time);
         }
@@ -681,10 +661,15 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                                 <button 
                                                     onClick={() => {
                                                         if (currentPlayingRef === 'preview') {
-                                                            stopAllAudio();
+                                                            // Pause preview, but do not reset progress bar
+                                                            if (audioRef.current) {
+                                                                audioRef.current.pause();
+                                                            }
+                                                            setCurrentPlayingRef(null);
                                                         } else {
+                                                            // Resume preview from last paused position
                                                             const url = URL.createObjectURL(trimmedRecording || rawRecording);
-                                                            playAudio(url, 'preview', null);
+                                                            playAudio(url, 'preview', null, playbackTime);
                                                         }
                                                     }}
                                                     className={`p-2 rounded-full transition-all flex-shrink-0 ${currentPlayingRef === 'preview' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
@@ -698,13 +683,23 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                                      <input 
                                                         type="range" 
                                                         min="0" 
-                                                        max={currentPlayingRef === 'preview' ? playbackDuration : recordingDuration} 
-                                                        value={currentPlayingRef === 'preview' ? playbackTime : 0} 
+                                                        max={currentPlayingRef === 'preview' ? (playbackDuration > 0 ? playbackDuration : recordingDuration) : recordingDuration} 
+                                                        value={
+                                                            (rawRecording || trimmedRecording)
+                                                                ? playbackTime
+                                                                : 0
+                                                        } 
                                                         onChange={handleSeek}
                                                         className="flex-1 h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 min-w-0"
-                                                        disabled={currentPlayingRef !== 'preview'}
+                                                        disabled={rawRecording == null && trimmedRecording == null}
                                                     />
-                                                    <span className="text-[9px] font-mono font-bold text-neutral-400 w-8 text-left flex-shrink-0">{formatTime(currentPlayingRef === 'preview' ? playbackDuration : recordingDuration)}</span>
+                                                    <span className="text-[9px] font-mono font-bold text-neutral-400 w-8 text-left flex-shrink-0">
+                                                        {formatTime(
+                                                            currentPlayingRef === 'preview'
+                                                                ? (playbackDuration > 0 ? playbackDuration : recordingDuration)
+                                                                : recordingDuration
+                                                        )}
+                                                    </span>
                                                 </div>
 
                                                 {/* Actions */}
