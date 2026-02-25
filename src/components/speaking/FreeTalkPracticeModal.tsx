@@ -1,14 +1,14 @@
 
-import { InteractiveTranscript } from '../common/InteractiveTranscript';
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { FreeTalkItem, UserRecording, VocabularyItem } from '../../app/types';
+import React, { useState, useEffect, useRef } from 'react';
+import { FreeTalkItem, UserRecording } from '../../app/types';
 import { startRecording, stopRecording, speak, stopSpeaking, playSound, getAudioProgress, seekAudio } from '../../utils/audio';
 import * as dataStore from '../../app/dataStore';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
-import { Mic, Play, Square, Pause, Save, Upload, Trash2, Calendar, FileAudio, LayoutList, Mic2, X, BookText, Loader2, RotateCcw, Check, Edit3, Volume2 } from 'lucide-react';
+import { Mic, Play, Square, Pause, Trash2, Calendar, FileAudio, Mic2, X, BookText, Loader2, RotateCcw, Check, Edit3 } from 'lucide-react';
 import ConfirmationModal from '../common/ConfirmationModal';
 import { AudioTrimmer } from '../common/AudioTrimmer';
+import { InteractiveTranscript } from '../common/InteractiveTranscript';
 
 interface Props {
     isOpen: boolean;
@@ -55,7 +55,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const recordingTimerRef = useRef<any>(null);
 
-    // Initialize: Split paragraph into sentences for Mimic & Load Recordings
     useEffect(() => {
         if (isOpen && item) {
             // ...existing code...
