@@ -701,6 +701,69 @@ router.post('/courses/:courseId/modules/:filename', (req, res) => {
     }
 });
 
+function exportAllCoursesToBackup() {
+    const coursesDir = path.join(settings.BACKUP_DIR, 'server', 'courses');
+    const backupDir = path.join(coursesDir, 'backup');
+
+    if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    const courseIds = fs.readdirSync(coursesDir)
+        .filter(name => name !== 'backup');
+
+    const result = [];
+
+    for (const courseId of courseIds) {
+        const coursePath = path.join(coursesDir, courseId);
+        const metadataPath = path.join(coursePath, 'metadata.json');
+        const modulesDir = path.join(coursePath, 'modules');
+
+        if (!fs.existsSync(metadataPath)) continue;
+
+        const metadata = JSON.parse(
+            fs.readFileSync(metadataPath, 'utf-8')
+        );
+
+        const modules = [];
+
+        if (fs.existsSync(modulesDir)) {
+            const files = fs.readdirSync(modulesDir);
+
+            for (const file of files) {
+                if (!file.endsWith('.md')) continue;
+
+                const content = fs.readFileSync(
+                    path.join(modulesDir, file),
+                    'utf-8'
+                );
+
+                modules.push({
+                    fileName: file,
+                    content
+                });
+            }
+        }
+
+        result.push({
+            id: courseId,
+            metadata,
+            modules
+        });
+    }
+
+    const snapshot = {
+        exportedAt: Date.now(),
+        version: 1,
+        courses: result
+    };
+
+    const latestPath = path.join(backupDir, 'full-export.json');
+    fs.writeFileSync(latestPath, JSON.stringify(snapshot, null, 2));
+
+    console.log('[Courses] Backup completed');
+}
+
 // --- Migration / Initialization Logic ---
 // Create default courses if they don't exist
 const defaultCourses = ['pronunciation_roadmap', 'grammar'];
@@ -752,4 +815,7 @@ if (fs.existsSync(OLD_IPA_MODULES_DIR)) {
     }
 }
 
-module.exports = router;
+module.exports = {
+    router,
+    exportAllCoursesToBackup
+};

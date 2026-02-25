@@ -61,7 +61,8 @@ app.use('/api', require('./routes/system'));
 app.use('/api', require('./routes/backup'));
 app.use('/', require('./routes/tts')); // TTS often uses root paths like /speak
 app.use('/api', require('./routes/ipa'));
-app.use('/api', require('./routes/courses'));
+const coursesModule = require('./routes/courses');
+app.use('/api', coursesModule.router);
 app.use('/api', require('./routes/audio'));
 app.use('/api', require('./routes/images')); // New Image Route
 // IMPORTANT: Ensure this line exists to activate the reading routes
@@ -124,7 +125,39 @@ server.listen(settings.PORT, settings.HOST, () => {
     // Initialize Library
     try {
         loadGlobalLibrary();
+        coursesModule.exportAllCoursesToBackup();
     } catch (e) {
         console.error("[Startup] Failed to load library:", e);
     }
+});
+
+function gracefulShutdown(signal) {
+    console.log(`\n[Shutdown] Received ${signal}. Backing up courses...`);
+
+    try {
+        coursesModule.exportAllCoursesToBackup();
+    } catch (e) {
+        console.error('[Shutdown] Backup failed:', e);
+    }
+
+    server.close(() => {
+        console.log('[Shutdown] Server closed.');
+        process.exit(0);
+    });
+
+    setTimeout(() => {
+        console.error('[Shutdown] Force exit.');
+        process.exit(1);
+    }, 5000);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));   // Ctrl+C
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // PM2 / Docker
+process.on('uncaughtException', (err) => {
+    console.error('[Fatal] Uncaught Exception:', err);
+    gracefulShutdown('uncaughtException');
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[Fatal] Unhandled Rejection:', reason);
+    gracefulShutdown('unhandledRejection');
 });
