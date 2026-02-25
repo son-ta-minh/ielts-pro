@@ -250,6 +250,7 @@ export interface WritingTopic {
   updatedAt: number;
   focusColor?: FocusColor;
   isFocused?: boolean;
+  note?: string;
 }
 
 export type CompositionLabel = 'IELTS Task 1' | 'IELTS Task 2' | 'Professional' | 'Academic' | 'Informal' | 'Free Write';

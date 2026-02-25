@@ -125,7 +125,7 @@ const Sidebar: React.FC<AppLayoutProps & {
         <nav className="flex-1 overflow-y-auto space-y-1">
           {sessionType && view !== 'REVIEW' && (
             <div className="relative group animate-in fade-in duration-300 mb-1">
-              <button onClick={() => { setView('REVIEW'); setIsSidebarOpen(false); }} className="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm bg-green-500 text-white shadow-lg shadow-green-500/20">
+              <button onClick={() => onNavigate('REVIEW')} className="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm bg-green-500 text-white shadow-lg shadow-green-500/20">
                 <div className="flex items-center space-x-3"><BookCopy size={20} /><span>Study Now</span></div>
                 <div className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span></div>
               </button>
@@ -166,7 +166,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'SETTINGS': return <SettingsView user={currentUser} onUpdateUser={handleUpdateUser} onRefresh={refreshGlobalStats} onNuke={handleLibraryReset} apiUsage={apiUsage} />;
     case 'DISCOVER': return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} onRecalculateXp={recalculateXpAndLevelUp} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} lastMasteryScoreUpdateTimestamp={lastMasteryScoreUpdateTimestamp} onBulkUpdate={bulkUpdateWords} initialGameMode={targetGameMode} onConsumeGameMode={consumeTargetGameMode} />;
     case 'SPEAKING': return <ExpressionPage user={currentUser} onNavigate={setView} />;
-    case 'WRITING': return <WritingStudioPage user={currentUser} initialContextWord={writingContextWord} onConsumeContext={consumeWritingContext} />;
+    case 'WRITING': return <WritingStudioPage controller={controller} user={currentUser} initialContextWord={writingContextWord} onConsumeContext={consumeWritingContext} />;
     case 'IRREGULAR_VERBS': return <IrregularVerbs user={currentUser} onGlobalViewWord={setGlobalViewWord} />;
     case 'MIMIC': return <MimicPractice />;
     default: return <div>Unknown view: {view}</div>;
@@ -178,8 +178,24 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
   const handleNavigation = (targetView: AppView, action?: () => void) => {
-    if (sessionType && targetView !== 'REVIEW') setEndSessionModal({isOpen: true, targetView, andThen: action});
-    else { if(action) setForceExpandAdd(true); else setForceExpandAdd(false); setView(targetView); setIsSidebarOpen(false); }
+    // Check unsaved writing changes first
+    if (controller.hasWritingUnsavedChanges) {
+      const confirmLeave = window.confirm(
+        'You have unsaved writing changes. Leave without saving?'
+      );
+      if (!confirmLeave) return;
+    }
+
+    // Existing session guard logic
+    if (sessionType && targetView !== 'REVIEW') {
+      setEndSessionModal({ isOpen: true, targetView, andThen: action });
+    } else {
+      if (action) setForceExpandAdd(true);
+      else setForceExpandAdd(false);
+
+      setView(targetView);
+      setIsSidebarOpen(false);
+    }
   };
   const confirmEndSession = () => {
     if (endSessionModal.targetView) { clearSessionState(); setView(endSessionModal.targetView); if (endSessionModal.andThen) endSessionModal.andThen(); else setForceExpandAdd(false); setIsSidebarOpen(false); } 

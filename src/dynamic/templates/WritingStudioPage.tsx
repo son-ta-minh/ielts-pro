@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, Composition, VocabularyItem, WritingTopic, WritingLog, CompositionLabel, FocusColor } from '../../app/types';
+import { User, Composition, VocabularyItem, WritingTopic, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { PenLine, Plus, Edit3, Trash2, BookOpen, Swords, Play, Sparkles, Loader2, Save, ArrowLeft, Tag, Layers, FolderTree, Target, Library, FolderPlus, Pen, Move, Book, LayoutGrid } from 'lucide-react';
+import { PenLine, Plus, Edit3, Trash2, Swords, Play, Sparkles, Loader2, Save, ArrowLeft, Tag, Target } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { CompositionEditor } from './CompositionEditor';
@@ -16,11 +16,9 @@ import { ViewMenu } from '../../components/common/ViewMenu';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { UniversalCard } from '../../components/common/UniversalCard';
 import { ResourceActions } from '../page/ResourceActions';
-import { UniversalBook } from '../../components/common/UniversalBook';
-import { UniversalShelf } from '../../components/common/UniversalShelf';
-import { FileSelector } from '../../components/common/FileSelector';
 
 interface Props {
+  controller: any;
   user: User;
   initialContextWord?: VocabularyItem | null;
   onConsumeContext?: () => void;
@@ -38,7 +36,42 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
     const [tagsInput, setTagsInput] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<'ESSAY' | 'NOTE'>('ESSAY');
+    const [note, setNote] = useState(topic.note || '');
     const { showToast } = useToast();
+
+    const isDirty =
+      name !== topic.name ||
+      description !== topic.description ||
+      task1 !== topic.task1 ||
+      task2 !== topic.task2 ||
+      note !== (topic.note || '');
+
+    const handleCancelWithConfirm = () => {
+      console.log('[TopicEditor] Cancel clicked');
+      console.log('[TopicEditor] isDirty =', isDirty);
+      console.log('[TopicEditor] current values:', { name, description, task1, task2, note });
+      console.log('[TopicEditor] original topic:', topic);
+
+      if (isDirty) {
+        const confirmed = window.confirm('You have unsaved changes. Leave without saving?');
+        console.log('[TopicEditor] confirm result =', confirmed);
+        if (!confirmed) return;
+      }
+
+      onCancel();
+    };
+
+    useEffect(() => {
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        if (!isDirty) return;
+        e.preventDefault();
+        e.returnValue = '';
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isDirty]);
 
     useEffect(() => {
         if (topic.path === undefined) {
@@ -56,13 +89,14 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
     const handleSave = async () => {
       setIsSaving(true);
       const finalTags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
-  
+
       const updatedTopic: WritingTopic = {
         ...topic,
         name: name.trim() || 'Untitled Topic',
         description: description.trim(),
         task1: task1.trim(),
         task2: task2.trim(),
+        note: note.trim(),
         path: path.trim(),
         tags: finalTags,
         updatedAt: Date.now()
@@ -88,10 +122,10 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
     }
   
     return (
-      <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300 pb-20">
+      <div className="w-full p-6 md:p-10 space-y-6 animate-in fade-in duration-300 bg-neutral-50">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <button onClick={onCancel} className="flex items-center space-x-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors mb-1">
+            <button onClick={handleCancelWithConfirm} className="flex items-center space-x-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors mb-1">
               <ArrowLeft size={16} /><span>Back to Library</span>
             </button>
             <h2 className="text-3xl font-black text-neutral-900 tracking-tight flex items-center gap-3"><PenLine size={28}/> Edit Topic</h2>
@@ -123,15 +157,54 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
              <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-2"><Tag size={12}/> Tags (Keywords)</label>
              <input type="text" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="e.g. Environment, Technology" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
           </div>
-  
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Task 1 Prompt</label>
-            <textarea value={task1} onChange={(e) => setTask1(e.target.value)} rows={6} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none font-medium"/>
+
+          <div className="flex gap-2 border-b border-neutral-200 pb-2">
+            <button
+              onClick={() => setActiveTab('ESSAY')}
+              className={`px-4 py-2 text-xs font-black rounded-xl transition-all ${
+                activeTab === 'ESSAY'
+                  ? 'bg-neutral-900 text-white'
+                  : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+              }`}
+            >
+              Essay
+            </button>
+            <button
+              onClick={() => setActiveTab('NOTE')}
+              className={`px-4 py-2 text-xs font-black rounded-xl transition-all ${
+                activeTab === 'NOTE'
+                  ? 'bg-neutral-900 text-white'
+                  : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+              }`}
+            >
+              Note
+            </button>
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Task 2 Prompt</label>
-            <textarea value={task2} onChange={(e) => setTask2(e.target.value)} rows={6} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none font-medium"/>
-          </div>
+
+          {activeTab === 'ESSAY' && (
+            <>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Task 1 Prompt</label>
+                <textarea value={task1} onChange={(e) => setTask1(e.target.value)} rows={6} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none font-medium"/>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Task 2 Prompt</label>
+                <textarea value={task2} onChange={(e) => setTask2(e.target.value)} rows={6} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none font-medium"/>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'NOTE' && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Private Note</label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={10}
+                className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none font-medium"
+              />
+            </div>
+          )}
         </div>
 
         {isAiModalOpen && (
@@ -150,7 +223,7 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
 };
 
 
-export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, onConsumeContext }) => {
+export const WritingStudioPage: React.FC<Props> = ({ controller, user, initialContextWord, onConsumeContext }) => {
     const [compositions, setCompositions] = useState<Composition[]>([]);
     const [topics, setTopics] = useState<WritingTopic[]>([]);
     const [loading, setLoading] = useState(true);
@@ -193,6 +266,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             ]);
             setCompositions(userComps.sort((a, b) => b.createdAt - a.createdAt));
             setTopics(userTopics.sort((a, b) => b.createdAt - a.createdAt));
+            
         } finally {
             setLoading(false);
         }
@@ -266,7 +340,7 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
             setActiveComposition(null);
             setViewMode('EDIT_COMP');
         } else {
-             const newTopic: WritingTopic = { id: `wrt-${Date.now()}`, userId: user.id, name: 'New Topic', description: '', task1: '', task2: '', tags: [], createdAt: Date.now(), updatedAt: Date.now() };
+             const newTopic: WritingTopic = { id: `wrt-${Date.now()}`, userId: user.id, name: 'New Topic', description: '', task1: '', task2: '', note: '', tags: [], createdAt: Date.now(), updatedAt: Date.now() };
              setActiveTopic(newTopic);
              setViewMode('EDIT_TOPIC');
         }
@@ -289,9 +363,16 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
         try {
             if (data && data.topic && data.task1 && data.task2) {
                 const newTopic: WritingTopic = {
-                    id: `wrt-gen-${Date.now()}`, userId: user.id, name: `Mock: ${data.topic}`, description: `Full test generated on ${data.topic}.`,
-                    task1: data.task1, task2: data.task2, tags: ['Mock Test', 'Generated'],
-                    createdAt: Date.now(), updatedAt: Date.now()
+                    id: `wrt-gen-${Date.now()}`,
+                    userId: user.id,
+                    name: `Mock: ${data.topic}`,
+                    description: `Full test generated on ${data.topic}.`,
+                    task1: data.task1,
+                    task2: data.task2,
+                    note: '',
+                    tags: ['Mock Test', 'Generated'],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
                 };
                 await dataStore.saveWritingTopic(newTopic);
                 await loadData();
@@ -334,10 +415,10 @@ export const WritingStudioPage: React.FC<Props> = ({ user, initialContextWord, o
     // --- Render Views ---
 
     if (viewMode === 'EDIT_COMP') {
-        return <CompositionEditor user={user} initialComposition={activeComposition} onSave={() => { setViewMode('LIST'); loadData(); }} onCancel={() => setViewMode('LIST')} />;
+        return <CompositionEditor controller={controller} user={user} initialComposition={activeComposition} onSave={() => { loadData(); }} onCancel={() => setViewMode('LIST')} />;
     }
     if (viewMode === 'EDIT_TOPIC' && activeTopic) {
-        return <TopicEditor user={user} topic={activeTopic} onSave={() => { setViewMode('LIST'); loadData(); }} onCancel={() => setViewMode('LIST')} />;
+        return <TopicEditor user={user} topic={activeTopic} onSave={() => { loadData(); }} onCancel={() => setViewMode('LIST')} />;
     }
     if (viewMode === 'SESSION' && activeTopic) {
         return <WritingSession user={user} topic={activeTopic} onComplete={() => { setViewMode('LIST'); loadData(); }} />;

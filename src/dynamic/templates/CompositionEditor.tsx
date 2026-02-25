@@ -6,19 +6,22 @@ import { getCompositionEvaluationPrompt } from '../../services/promptService';
 import { CompositionEditorUI } from './CompositionEditor_UI';
 
 interface Props {
+    controller: any;
     user: User;
     initialComposition: Composition | null;
     onSave: () => void;
     onCancel: () => void;
 }
 
-export const CompositionEditor: React.FC<Props> = ({ user, initialComposition, onSave, onCancel }) => {
+export const CompositionEditor: React.FC<Props> = ({ controller, user, initialComposition, onSave, onCancel }) => {
     const [title, setTitle] = useState('');
     const [path, setPath] = useState('');
     const [tagsInput, setTagsInput] = useState('');
     const [content, setContent] = useState('');
+    const [note, setNote] = useState('');
     const [linkedWordIds, setLinkedWordIds] = useState<Set<string>>(new Set());
     const [aiFeedback, setAiFeedback] = useState<string | undefined>(undefined);
+    const [isDirty, setIsDirty] = useState(false);
     
     const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -57,6 +60,7 @@ export const CompositionEditor: React.FC<Props> = ({ user, initialComposition, o
             }
 
             setContent(initialComposition.content);
+            setNote(initialComposition.note || '');
             setLinkedWordIds(new Set(initialComposition.linkedWordIds));
             setAiFeedback(initialComposition.aiFeedback);
             if (initialComposition.aiFeedback) {
@@ -67,11 +71,44 @@ export const CompositionEditor: React.FC<Props> = ({ user, initialComposition, o
             setPath('/');
             setTagsInput('');
             setContent('');
+            setNote('');
             setLinkedWordIds(new Set());
             setAiFeedback(undefined);
             setIsFeedbackOpen(false);
         }
     }, [initialComposition, user.id]);
+
+    useEffect(() => {
+        if (!initialComposition) {
+            setIsDirty(
+                !!title || !!content || !!note || !!tagsInput
+            );
+        } else {
+            setIsDirty(
+                title !== (initialComposition.title || '') ||
+                content !== initialComposition.content ||
+                note !== (initialComposition.note || '') ||
+                tagsInput !== (initialComposition.tags || []).join(', ') ||
+                path !== (initialComposition.path || '/')
+            );
+        }
+    }, [title, content, note, tagsInput, path, initialComposition]);
+
+    useEffect(() => {
+        if (controller?.setHasWritingUnsavedChanges) {
+            controller.setHasWritingUnsavedChanges(isDirty);
+        }
+    }, [isDirty, controller]);
+
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (!isDirty) return;
+            e.preventDefault();
+            e.returnValue = '';
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isDirty]);
 
     const linkedWords = useMemo(() => {
         const linkedMap = new Map<string, VocabularyItem>();
@@ -155,6 +192,7 @@ export const CompositionEditor: React.FC<Props> = ({ user, initialComposition, o
                 path: path.trim(),
                 tags: finalTags,
                 content,
+                note,
                 linkedWordIds: Array.from(linkedWordIds),
                 aiFeedback,
                 createdAt: initialComposition?.createdAt || now,
@@ -162,6 +200,10 @@ export const CompositionEditor: React.FC<Props> = ({ user, initialComposition, o
             };
             await dataStore.saveComposition(composition);
             showToast("Composition saved.", "success");
+            setIsDirty(false);
+            if (controller?.setHasWritingUnsavedChanges) {
+                controller.setHasWritingUnsavedChanges(false);
+            }
             onSave();
         } catch (e) {
             console.error(e);
@@ -194,13 +236,21 @@ export const CompositionEditor: React.FC<Props> = ({ user, initialComposition, o
             setTagsInput={setTagsInput}
             content={content}
             setContent={setContent}
+            note={note}
+            setNote={setNote}
             linkedWords={linkedWords}
             wordCount={wordCount}
             aiFeedback={aiFeedback}
             isFeedbackOpen={isFeedbackOpen}
             setIsFeedbackOpen={setIsFeedbackOpen}
             isSaving={isSaving}
-            onCancel={onCancel}
+            onCancel={() => {
+                if (isDirty) {
+                    const confirmed = window.confirm('You have unsaved changes. Leave without saving?');
+                    if (!confirmed) return;
+                }
+                onCancel();
+            }}
             onSave={handleSave}
             onAutoLink={handleAutoLink}
             onRemoveLink={handleRemoveLink}

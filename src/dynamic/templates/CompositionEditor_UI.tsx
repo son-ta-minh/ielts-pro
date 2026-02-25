@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { ArrowLeft, Save, Loader2, Link, Bot, X, Sparkles, ChevronDown, Tag, PenLine, Eye } from 'lucide-react';
 import { VocabularyItem } from '../../app/types';
@@ -15,6 +14,8 @@ export interface CompositionEditorUIProps {
     setTagsInput: (v: string) => void;
     content: string;
     setContent: (v: string) => void;
+    note: string;
+    setNote: (v: string) => void;
     linkedWords: VocabularyItem[];
     wordCount: number;
     aiFeedback: string | undefined;
@@ -39,20 +40,26 @@ export interface CompositionEditorUIProps {
 }
 
 export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
-    title, setTitle, path, setPath, tagsInput, setTagsInput, content, setContent,
+    title, setTitle, path, setPath, tagsInput, setTagsInput, content, setContent, note, setNote,
     linkedWords, wordCount, aiFeedback, isFeedbackOpen, setIsFeedbackOpen,
     isSaving, onCancel, onSave, onAutoLink, onRemoveLink,
     isWordSelectorOpen, setIsWordSelectorOpen, allWords, handleManualLink,
     isAiModalOpen, setIsAiModalOpen, handleGenerateEvalPrompt, handleAiResult
 }) => {
     const [isPreview, setIsPreview] = useState(false);
+    const [isNotePreview, setIsNotePreview] = useState(false);
+    const [activeTab, setActiveTab] = useState<'ESSAY' | 'NOTE'>('ESSAY');
 
     const previewHtml = useMemo(() => {
         return parseMarkdown(content);
     }, [content]);
 
+    const notePreviewHtml = useMemo(() => {
+        return parseMarkdown(note);
+    }, [note]);
+
     return (
-        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300 pb-20">
+        <div className="w-full h-screen flex flex-col bg-neutral-50">
             {/* Header */}
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -72,7 +79,7 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                 </div>
             </header>
 
-            <div className="bg-white p-8 rounded-3xl border border-neutral-200 shadow-sm flex flex-col">
+            <div className="flex-1 bg-white p-10 border-t border-neutral-200 flex flex-col">
                 {/* Meta Inputs */}
                 <div className="space-y-4 mb-6">
                      <div className="space-y-1">
@@ -91,32 +98,95 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                     </div>
                 </div>
 
-                {/* Markdown Editor/Preview */}
-                <div className="flex flex-col gap-2">
-                    <div className="flex justify-between items-center px-1">
-                        <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest">Content (Markdown Supported)</label>
-                        <button onClick={() => setIsPreview(!isPreview)} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm">
-                            {isPreview ? <PenLine size={12}/> : <Eye size={12}/>}
-                            <span>{isPreview ? 'Edit' : 'Preview'}</span>
-                        </button>
-                    </div>
-                    <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[500px] relative overflow-hidden">
-                        {isPreview ? (
-                            <div 
-                                className="p-6 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 overflow-y-auto absolute inset-0 bg-neutral-50/30"
-                                dangerouslySetInnerHTML={{ __html: previewHtml }}
-                            />
-                        ) : (
-                            <textarea 
-                                value={content} 
-                                onChange={(e) => setContent(e.target.value)} 
-                                className="absolute inset-0 w-full h-full p-6 resize-none focus:outline-none text-base leading-relaxed font-medium text-neutral-900 bg-white"
-                                placeholder="Start writing..."
-                                spellCheck={false}
-                            />
-                        )}
-                    </div>
+                {/* Essay / Note Tabs */}
+                <div className="flex gap-2 border-b border-neutral-200 pb-2 mb-4">
+                    <button
+                        onClick={() => setActiveTab('ESSAY')}
+                        className={`px-4 py-2 text-[10px] font-black rounded-xl uppercase tracking-widest transition-all ${
+                            activeTab === 'ESSAY'
+                                ? 'bg-neutral-900 text-white'
+                                : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                        }`}
+                    >
+                        Essay
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('NOTE')}
+                        className={`px-4 py-2 text-[10px] font-black rounded-xl uppercase tracking-widest transition-all ${
+                            activeTab === 'NOTE'
+                                ? 'bg-neutral-900 text-white'
+                                : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                        }`}
+                    >
+                        Note
+                    </button>
                 </div>
+
+                {activeTab === 'ESSAY' && (
+                    <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center px-1">
+                            <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest">
+                                Content (Markdown Supported)
+                            </label>
+                            <button
+                                onClick={() => setIsPreview(!isPreview)}
+                                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm"
+                            >
+                                {isPreview ? <PenLine size={12}/> : <Eye size={12}/>}
+                                <span>{isPreview ? 'Edit' : 'Preview'}</span>
+                            </button>
+                        </div>
+                        <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[500px] relative overflow-hidden">
+                            {isPreview ? (
+                                <div
+                                    className="p-6 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 overflow-y-auto absolute inset-0 bg-neutral-50/30"
+                                    dangerouslySetInnerHTML={{ __html: previewHtml }}
+                                />
+                            ) : (
+                                <textarea
+                                    value={content}
+                                    onChange={(e) => setContent(e.target.value)}
+                                    className="absolute inset-0 w-full h-full p-6 resize-none focus:outline-none text-base leading-relaxed font-medium text-neutral-900 bg-white"
+                                    placeholder="Start writing..."
+                                    spellCheck={false}
+                                />
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'NOTE' && (
+                    <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center px-1">
+                            <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest">
+                                Private Note (Markdown Supported)
+                            </label>
+                            <button
+                                onClick={() => setIsNotePreview(!isNotePreview)}
+                                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm"
+                            >
+                                {isNotePreview ? <PenLine size={12}/> : <Eye size={12}/>} 
+                                <span>{isNotePreview ? 'Edit' : 'Preview'}</span>
+                            </button>
+                        </div>
+                        <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[500px] relative overflow-hidden">
+                            {isNotePreview ? (
+                                <div
+                                    className="p-6 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 overflow-y-auto absolute inset-0 bg-neutral-50/30"
+                                    dangerouslySetInnerHTML={{ __html: notePreviewHtml }}
+                                />
+                            ) : (
+                                <textarea
+                                    value={note}
+                                    onChange={(e) => setNote(e.target.value)}
+                                    className="absolute inset-0 w-full h-full p-6 resize-none focus:outline-none text-base leading-relaxed font-medium text-neutral-900 bg-white"
+                                    placeholder="Write your private notes here..."
+                                    spellCheck={false}
+                                />
+                            )}
+                        </div>
+                    </div>
+                )}
                 
                 {/* Linked Words Footer */}
                 <div className="px-4 py-4 mt-6 bg-neutral-50/50 rounded-2xl border border-neutral-100 min-h-[80px]">

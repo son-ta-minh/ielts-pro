@@ -39,6 +39,7 @@ export const useAppController = () => {
     const hasCheckedSyncThisSession = useRef(false);
     
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [hasWritingUnsavedChanges, setHasWritingUnsavedChanges] = useState(false);
     const [nextAutoBackupTime, setNextAutoBackupTime] = useState<number | null>(null);
 
     const [writingContextWord, setWritingContextWord] = useState<VocabularyItem | null>(null);
@@ -516,7 +517,7 @@ export const useAppController = () => {
         targetCourseId, consumeTargetCourseId,
         targetGameMode, consumeTargetGameMode, // New exports for game linking
         planningAction, setPlanningAction, consumePlanningAction,
-        serverStatus, hasUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
+        serverStatus, hasUnsavedChanges, hasWritingUnsavedChanges, setHasWritingUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
         handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen,
         connectionScanStatus, scanningUrl, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt,
         isSyncing, handleSyncPush, handleSyncRestore, handleSpecialAction
