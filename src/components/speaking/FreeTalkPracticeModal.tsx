@@ -2,15 +2,10 @@
 import { InteractiveTranscript } from '../common/InteractiveTranscript';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { FreeTalkItem, UserRecording, VocabularyItem } from '../../app/types';
-import { TargetPhrase } from '../labs/MimicPractice';
-import { MimicPracticeUI } from '../labs/MimicPractice_UI';
 import { startRecording, stopRecording, speak, stopSpeaking, playSound, getAudioProgress, seekAudio } from '../../utils/audio';
-import { SpeechRecognitionManager } from '../../utils/speechRecognition';
-import { analyzeSpeechLocally, AnalysisResult } from '../../utils/speechAnalysis';
 import * as dataStore from '../../app/dataStore';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
-import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { Mic, Play, Square, Pause, Save, Upload, Trash2, Calendar, FileAudio, LayoutList, Mic2, X, BookText, Loader2, RotateCcw, Check, Edit3, Volume2 } from 'lucide-react';
 import ConfirmationModal from '../common/ConfirmationModal';
 import { AudioTrimmer } from '../common/AudioTrimmer';
@@ -21,7 +16,7 @@ interface Props {
     item: FreeTalkItem | null;
 }
 
-type PracticeMode = 'MIMIC' | 'RECORDING' | 'PLAYBACK';
+type PracticeMode = 'RECORDING' | 'PLAYBACK';
 
 export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: initialItem }) => {
     const { showToast } = useToast();
@@ -37,7 +32,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     }, [isOpen, initialItem?.id]);
     
     // --- MIMIC MODE STATE ---
-    const [queue, setQueue] = useState<TargetPhrase[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(10);
@@ -46,10 +40,8 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     const [isRevealed, setIsRevealed] = useState(false);
     const [fullTranscript, setFullTranscript] = useState('');
     const [userAudioUrl, setUserAudioUrl] = useState<string | null>(null);
-    const [localAnalysis, setLocalAnalysis] = useState<AnalysisResult | null>(null);
     
     const [autoSpeak, setAutoSpeak] = useState(false);
-    const [autoReveal, setAutoReveal] = useState(() => getStoredJSON('vocab_pro_mimic_autoreveal', true));
     const [ipa, setIpa] = useState<string | null>(null);
     const [showIpa, setShowIpa] = useState(false);
     const [isIpaLoading, setIsIpaLoading] = useState(false);
@@ -75,14 +67,8 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     const [recToDelete, setRecToDelete] = useState<UserRecording | null>(null);
 
     // Refs
-    const recognitionManager = useRef(new SpeechRecognitionManager());
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const recordingTimerRef = useRef<any>(null);
-
-    // Save autoReveal setting changes (shared with main MimicPractice)
-    useEffect(() => {
-        setStoredJSON('vocab_pro_mimic_autoreveal', autoReveal);
-    }, [autoReveal]);
 
     // Initialize: Split paragraph into sentences for Mimic & Load Recordings
     useEffect(() => {
@@ -92,7 +78,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
             // Cleanup on close
             stopSpeaking();
             stopAllAudio();
-            recognitionManager.current.stop();
             if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             setRawRecording(null);
             setTrimmedRecording(null);
@@ -105,27 +90,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
             }
         }
     }, [isOpen, item?.id]);
-
-    const target = queue[currentIndex] || null;
-
-    // Real-time analysis during recording
-    useEffect(() => {
-        if (isRecording && target && fullTranscript) {
-            const result = analyzeSpeechLocally(target.text, fullTranscript);
-            setLocalAnalysis(result);
-        }
-    }, [fullTranscript, isRecording, target]);
-
-    // Reset state when target changes in Mimic
-    useEffect(() => {
-        if (mode === 'MIMIC') {
-            resetPracticeState();
-            if (autoSpeak && target) {
-                const t = setTimeout(() => speak(target.text), 500);
-                return () => clearTimeout(t);
-            }
-        }
-    }, [target?.id, mode]);
 
     // Clean up audio object events
     useEffect(() => {
@@ -140,10 +104,8 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
     const resetPracticeState = () => {
         setIsRecording(false);
-        setIsRevealed(autoReveal); 
         setFullTranscript('');
         setUserAudioUrl(null);
-        setLocalAnalysis(null);
         setIpa(null);
         setShowIpa(false);
     };
@@ -159,83 +121,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
         setPlaybackDuration(0);
         stopAtTimeRef.current = null;
         stopSpeaking();
-    };
-
-    const saveProgress = async (currentQueue: TargetPhrase[]) => {
-        if (!item) return;
-        const sentenceScores: Record<number, number> = {};
-        let totalScoreSum = 0;
-        
-        currentQueue.forEach((p, idx) => {
-            // Use saved score, if not spoken (undefined) treat as 0
-            const score = p.lastScore || 0;
-            if (p.lastScore !== undefined) {
-                sentenceScores[idx] = p.lastScore;
-            }
-            totalScoreSum += score;
-        });
-
-        // Calculate average based on total sentences in queue, not just answered
-        const averageScore = currentQueue.length > 0 
-            ? Math.round(totalScoreSum / currentQueue.length) 
-            : 0;
-
-        const updatedItem = {
-            ...item,
-            bestScore: averageScore,
-            sentenceScores,
-            updatedAt: Date.now()
-        };
-        setItem(updatedItem);
-        await dataStore.saveFreeTalkItem(updatedItem);
-    };
-
-    // --- MIMIC Actions ---
-    const handleToggleRecordMimic = async () => {
-        if (!target) return;
-
-        if (isRecording) {
-            setIsRecording(false);
-            recognitionManager.current.stop();
-            try {
-                const result = await stopRecording();
-                if (result) setUserAudioUrl(result.base64);
-                const analysis = analyzeSpeechLocally(target.text, fullTranscript);
-                setLocalAnalysis(analysis);
-                const updatedQueue = queue.map((p, idx) => idx === currentIndex ? { ...p, lastScore: analysis.score } : p);
-                setQueue(updatedQueue);
-                await saveProgress(updatedQueue);
-            } catch (e) { console.error(e); }
-        } else {
-            resetPracticeState();
-            try {
-                await startRecording();
-                setIsRecording(true);
-                recognitionManager.current.start(
-                    (final, interim) => setFullTranscript(final + interim),
-                    (final) => setFullTranscript(final)
-                );
-            } catch (e) {
-                console.error("Mic error", e);
-                setIsRecording(false);
-            }
-        }
-    };
-
-    const handleFetchIpa = async () => {
-        if (!target) return;
-        if (ipa) { setShowIpa(!showIpa); return; }
-        setIsIpaLoading(true);
-        try {
-            const config = getConfig();
-            const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(target.text)}`);
-            if (res.ok) {
-                const data = await res.json();
-                setIpa(data.ipa);
-                setShowIpa(true);
-            } else { showToast("IPA server unavailable", "error"); }
-        } catch (e) { showToast("Failed to fetch IPA", "error"); } finally { setIsIpaLoading(false); }
     };
 
     // --- RECORDING MODE Actions ---
@@ -541,9 +426,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
     if (!isOpen || !item) return null;
 
-    const totalPages = Math.ceil(queue.length / pageSize);
-    const pagedItems = queue.slice(page * pageSize, (page + 1) * pageSize);
-
     const formatTime = (seconds: number) => {
         if (!seconds || isNaN(seconds)) return "0:00";
         const m = Math.floor(seconds / 60);
@@ -558,9 +440,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                 {/* Header Switcher */}
                 <div className="px-8 py-4 border-b border-neutral-100 flex items-center justify-between bg-white z-10">
                     <div className="flex bg-neutral-100 p-1 rounded-xl">
-                        <button onClick={() => { setMode('MIMIC'); stopAllAudio(); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'MIMIC' ? 'bg-white shadow-sm text-indigo-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
-                            <LayoutList size={14}/> Mimic
-                        </button>
                         <button onClick={() => { setMode('RECORDING'); }} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${mode === 'RECORDING' ? 'bg-white shadow-sm text-rose-600' : 'text-neutral-500 hover:text-neutral-700'}`}>
                             <Mic2 size={14}/> Essay
                         </button>
@@ -572,63 +451,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                 </div>
 
                 <div className="flex-1 overflow-hidden relative">
-                    {mode === 'MIMIC' && (
-                        <div className="h-full flex">
-                             {/* Re-use existing Mimic UI structure but constrained to this container */}
-                            <MimicPracticeUI 
-                                targetText={target?.text || null}
-                                sourceWord={item.title}
-                                type="Free Talk"
-                                isEmpty={queue.length === 0}
-                                isRecording={isRecording}
-                                isRevealed={isRevealed}
-                                userTranscript={fullTranscript}
-                                matchStatus={null}
-                                userAudioUrl={userAudioUrl}
-                                localAnalysis={localAnalysis}
-                                aiAnalysis={null}
-                                isAnalyzing={false}
-                                onAnalyze={() => {}}
-                                ipa={ipa}
-                                showIpa={showIpa}
-                                isIpaLoading={isIpaLoading}
-                                onToggleIpa={handleFetchIpa}
-                                onToggleRecord={handleToggleRecordMimic}
-                                onPlayTarget={() => target && speak(target.text)}
-                                onPlayUser={() => {
-                                    if (userAudioUrl) {
-                                        const audio = new Audio(`data:audio/webm;base64,${userAudioUrl}`);
-                                        audio.play();
-                                    }
-                                }}
-                                onToggleReveal={() => setIsRevealed(!isRevealed)}
-                                onNext={() => currentIndex < queue.length - 1 && setCurrentIndex(p => p + 1)}
-                                onClearTranscript={() => setFullTranscript('')}
-                                onClose={onClose}
-                                pagedItems={pagedItems}
-                                page={page}
-                                pageSize={pageSize}
-                                totalPages={totalPages}
-                                onPageChange={setPage}
-                                onPageSizeChange={(s) => { setPageSize(s); setPage(0); }}
-                                onSelect={(relIdx) => setCurrentIndex((page * pageSize) + relIdx)}
-                                currentAbsoluteIndex={currentIndex}
-                                autoSpeak={autoSpeak}
-                                onToggleAutoSpeak={() => setAutoSpeak(!autoSpeak)}
-                                autoReveal={autoReveal}
-                                onToggleAutoReveal={() => setAutoReveal(!autoReveal)}
-                                isGlobalMode={true}
-                                onAddItem={() => showToast("Editing not available in practice mode", "info")}
-                                onEditItem={() => {}}
-                                onDeleteItem={() => {}}
-                                onRandomize={() => {}}
-                                isModalOpen={false}
-                                editingItem={null}
-                                onCloseModal={() => {}}
-                                onSaveItem={() => {}}
-                            />
-                        </div>
-                    )}
                     {mode === 'RECORDING' && (
                         <div className="h-full flex flex-col p-8 overflow-y-auto custom-scrollbar bg-neutral-50/50">
                             {/* CLOSE BUTTON */}
