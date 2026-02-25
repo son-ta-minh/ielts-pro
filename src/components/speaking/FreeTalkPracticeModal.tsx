@@ -194,7 +194,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
         let totalScoreSum = 0;
         
         currentQueue.forEach((p, idx) => {
-            // Lấy điểm đã lưu, nếu chưa nói (undefined) thì coi là 0
+            // Use saved score, if not spoken (undefined) treat as 0
             const score = p.lastScore || 0;
             if (p.lastScore !== undefined) {
                 sentenceScores[idx] = p.lastScore;
@@ -202,7 +202,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
             totalScoreSum += score;
         });
 
-        // Tính trung bình dựa trên TỔNG số câu trong queue thay vì số câu đã trả lời
+        // Calculate average based on total sentences in queue, not just answered
         const averageScore = currentQueue.length > 0 
             ? Math.round(totalScoreSum / currentQueue.length) 
             : 0;
@@ -220,7 +220,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     // --- MIMIC Actions ---
     const handleToggleRecordMimic = async () => {
         if (!target) return;
-        
+
         if (isRecording) {
             setIsRecording(false);
             recognitionManager.current.stop();
@@ -234,7 +234,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                 await saveProgress(updatedQueue);
             } catch (e) { console.error(e); }
         } else {
-            resetPracticeState(); 
+            resetPracticeState();
             try {
                 await startRecording();
                 setIsRecording(true);
@@ -375,7 +375,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
             // Stop and Prepare for Review
             if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             setIsLongRecording(false);
-            
             try {
                 const result = await stopRecording();
                 if (result) {
@@ -387,7 +386,6 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                     }
                     const byteArray = new Uint8Array(byteNumbers);
                     const blob = new Blob([byteArray], { type: result.mimeType });
-                    
                     setRawRecording(blob);
                     setTrimmedRecording(blob); // Default full
                 }
@@ -397,7 +395,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
             }
         } else {
             // Start
-            stopAllAudio();
+            stopAllAudio(); // Stop preview playback before clearing blobs
             setRawRecording(null);
             setTrimmedRecording(null);
             try {
@@ -414,6 +412,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     };
 
     const handleDiscardRecording = () => {
+        stopAllAudio(); // Ensure audio is stopped before clearing
         setRawRecording(null);
         setTrimmedRecording(null);
         setRecordingDuration(0);
