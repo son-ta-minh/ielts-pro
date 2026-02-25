@@ -244,10 +244,9 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
             isFeedbackOpen={isFeedbackOpen}
             setIsFeedbackOpen={setIsFeedbackOpen}
             isSaving={isSaving}
-            onCancel={() => {
+            onCancel={async () => {
                 if (isDirty) {
-                    const confirmed = window.confirm('You have unsaved changes. Leave without saving?');
-                    if (!confirmed) return;
+                    await handleSave();
                 }
                 onCancel();
             }}

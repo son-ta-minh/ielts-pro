@@ -177,13 +177,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
   const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen, connectionScanStatus, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
+  const [writingConfirmModal, setWritingConfirmModal] = useState<{ isOpen: boolean; targetView: AppView | null; action?: () => void }>({
+    isOpen: false,
+    targetView: null,
+    action: undefined
+  });
   const handleNavigation = (targetView: AppView, action?: () => void) => {
     // Check unsaved writing changes first
     if (controller.hasWritingUnsavedChanges) {
-      const confirmLeave = window.confirm(
-        'You have unsaved writing changes. Leave without saving?'
-      );
-      if (!confirmLeave) return;
+      setWritingConfirmModal({ isOpen: true, targetView, action });
+      return;
     }
 
     // Existing session guard logic
@@ -219,6 +222,28 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
       {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
       {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
       <ConfirmationModal isOpen={endSessionModal.isOpen} title="End Current Session?" message="Navigating away will end your current study session. Are you sure you want to continue?" confirmText="End Session" isProcessing={false} onConfirm={confirmEndSession} onClose={cancelEndSession} icon={<AlertTriangle size={40} className="text-orange-50" />} confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" />
+      <ConfirmationModal
+        isOpen={writingConfirmModal.isOpen}
+        title="Unsaved Writing Changes"
+        message="You have unsaved writing changes. Leave without saving?"
+        confirmText="Leave"
+        isProcessing={false}
+        confirmButtonClass="bg-red-600 text-white hover:bg-red-700 shadow-red-200"
+        onConfirm={() => {
+          if (writingConfirmModal.targetView) {
+            controller.setHasWritingUnsavedChanges(false);
+            if (writingConfirmModal.action) {
+              writingConfirmModal.action();
+            } else {
+              setForceExpandAdd(false);
+            }
+            setView(writingConfirmModal.targetView);
+            setIsSidebarOpen(false);
+          }
+          setWritingConfirmModal({ isOpen: false, targetView: null, action: undefined });
+        }}
+        onClose={() => setWritingConfirmModal({ isOpen: false, targetView: null, action: undefined })}
+      />
       <ServerRestoreModal isOpen={isAutoRestoreOpen} onClose={() => setIsAutoRestoreOpen(false)} backups={autoRestoreCandidates} onRestore={(id) => { setIsRestoring(true); restoreFromServerAction(id).finally(() => setIsRestoring(false)); }} isRestoring={isRestoring} title="User Selection" description="We found existing profiles on the server. Select yours to restore." onNewUser={handleNewUserSetup} onLocalRestore={handleLocalRestoreSetup} />
       <ConnectionModal isOpen={isConnectionModalOpen} onClose={() => setIsConnectionModalOpen(false)} onRetry={handleScanAndConnect} onStop={handleStopScan} status={connectionScanStatus} scanningUrl={controller.scanningUrl} />
       {syncPrompt && <SyncPromptModal isOpen={syncPrompt.isOpen} onClose={() => setSyncPrompt(null)} onPush={handleSyncPush} onRestore={handleSyncRestore} type={syncPrompt.type} localDate={syncPrompt.localDate} serverDate={syncPrompt.serverDate} isProcessing={isSyncing} />}

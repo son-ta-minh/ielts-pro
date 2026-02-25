@@ -125,9 +125,6 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
       <div className="w-full p-6 md:p-10 space-y-6 animate-in fade-in duration-300 bg-neutral-50">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <button onClick={handleCancelWithConfirm} className="flex items-center space-x-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors mb-1">
-              <ArrowLeft size={16} /><span>Back to Library</span>
-            </button>
             <h2 className="text-3xl font-black text-neutral-900 tracking-tight flex items-center gap-3"><PenLine size={28}/> Edit Topic</h2>
           </div>
           <div className="flex items-center gap-2">
@@ -415,7 +412,22 @@ export const WritingStudioPage: React.FC<Props> = ({ controller, user, initialCo
     // --- Render Views ---
 
     if (viewMode === 'EDIT_COMP') {
-        return <CompositionEditor controller={controller} user={user} initialComposition={activeComposition} onSave={() => { loadData(); }} onCancel={() => setViewMode('LIST')} />;
+        return (
+            <CompositionEditor
+                controller={controller}
+                user={user}
+                initialComposition={activeComposition}
+                onSave={() => { loadData(); }}
+                onCancel={() => {
+                    if (controller.hasWritingUnsavedChanges) {
+                        // Let AppLayout ConfirmationModal handle it via global dirty flag
+                        controller.setHasWritingUnsavedChanges(true);
+                        return;
+                    }
+                    setViewMode('LIST');
+                }}
+            />
+        );
     }
     if (viewMode === 'EDIT_TOPIC' && activeTopic) {
         return <TopicEditor user={user} topic={activeTopic} onSave={() => { loadData(); }} onCancel={() => setViewMode('LIST')} />;

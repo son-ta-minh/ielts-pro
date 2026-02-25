@@ -63,18 +63,27 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
             {/* Header */}
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <button onClick={onCancel} className="flex items-center space-x-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors mb-1">
-                        <ArrowLeft size={16} /><span>Back to Studio</span>
-                    </button>
                     <h2 className="text-3xl font-black text-neutral-900 tracking-tight flex items-center gap-3"><PenLine size={24}/> Compose</h2>
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={() => setIsAiModalOpen(true)} disabled={!content.trim()} className="px-5 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest hover:bg-neutral-50 transition-all disabled:opacity-50">
                         <Bot size={14} className="text-indigo-500"/><span>AI Evaluate</span>
                     </button>
-                    <button onClick={onSave} disabled={isSaving} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-black text-[10px] flex items-center space-x-2 transition-all active:scale-95 hover:bg-neutral-800 disabled:opacity-50 uppercase tracking-widest shadow-sm">
+                    <button
+                        onClick={onSave}
+                        disabled={isSaving}
+                        className="px-6 py-2.5 bg-white border border-neutral-300 text-neutral-700 rounded-xl font-black text-[10px] flex items-center space-x-2 transition-all active:scale-95 hover:bg-neutral-50 disabled:opacity-50 uppercase tracking-widest shadow-sm"
+                    >
                         {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                        <span>{isSaving ? 'Saving...' : 'Save Draft'}</span>
+                        <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                    </button>
+                    <button
+                        onClick={onCancel}
+                        disabled={isSaving}
+                        className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-black text-[10px] flex items-center space-x-2 transition-all active:scale-95 hover:bg-neutral-800 disabled:opacity-50 uppercase tracking-widest shadow-sm"
+                    >
+                        <Save size={14} />
+                        <span>Save & Close</span>
                     </button>
                 </div>
             </header>
