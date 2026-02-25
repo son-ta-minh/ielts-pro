@@ -110,6 +110,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [playbackRate, setPlaybackRateState] = useState(getPlaybackRate());
     const [audioProgress, setAudioProgress] = useState({ currentTime: 0, duration: 0 });
     const [markPoints, setMarkPoints] = useState<number[]>([]);
+    const [markedTime, setMarkedTime] = useState<number>(0);
     const [isOpen, setIsOpen] = useState(false);
     const [message, setMessage] = useState<Message | null>(null);
     const [isThinking, setIsThinking] = useState(false);
@@ -834,41 +835,84 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 <span className="text-[10px] font-mono text-neutral-400 tabular-nums w-8">
                                     {audioProgress.duration > 0 ? formatTime(audioProgress.duration) : '--:--'}
                                 </span>
-                                <button
-                                    onClick={() => {
-                                        if (isAudioPaused) {
-                                            resumeSpeaking().catch(() => showToast("Cannot resume audio.", "error"));
-                                        } else {
-                                            pauseSpeaking();
-                                        }
-                                    }}
-                                    className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center justify-center border border-indigo-100"
-                                    title={isAudioPaused ? "Resume audio" : "Pause audio"}
-                                >
-                                    {isAudioPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
-                                </button>
-                                <button
-                                    onClick={cyclePlaybackRate}
-                                    className="h-6 px-2 rounded-lg bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors flex items-center justify-center border border-neutral-200 text-[10px] font-black tabular-nums"
-                                    title="Playback speed"
-                                >
-                                    {playbackRate.toFixed(playbackRate % 1 === 0 ? 1 : 2)}x
-                                </button>
-                                
-                                {markPoints.length > 0 && audioProgress.duration > 0 && (
-                                    <div className="flex items-center gap-1 ml-1 border-l border-neutral-200 pl-2">
-                                        {markPoints.map((pt, idx) => (
-                                            <button
-                                                key={idx}
-                                                onClick={() => { seekAudio(pt); setAudioProgress(prev => ({ ...prev, currentTime: pt })); }}
-                                                className="w-5 h-5 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold hover:bg-indigo-600 hover:text-white transition-colors border border-indigo-100"
-                                                title={`Jump to ${formatTime(pt)}`}
-                                            >
-                                                {idx + 1}
-                                            </button>
-                                        ))}
+                                {/* Media Controls Row */}
+                                <div className="flex items-center gap-2 w-full">
+                                    <button
+                                        onClick={() => {
+                                            const newTime = Math.max(0, audioProgress.currentTime - 5);
+                                            seekAudio(newTime);
+                                            setAudioProgress(prev => ({ ...prev, currentTime: newTime }));
+                                        }}
+                                        className="w-6 h-6 rounded-lg bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors flex items-center justify-center border border-neutral-200"
+                                        title="Rewind 5 seconds"
+                                    >
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 8L13 12V4L7 8ZM3 8L9 12V4L3 8Z" fill="currentColor"/></svg>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const newTime = Math.min(audioProgress.duration, audioProgress.currentTime + 5);
+                                            seekAudio(newTime);
+                                            setAudioProgress(prev => ({ ...prev, currentTime: newTime }));
+                                        }}
+                                        className="w-6 h-6 rounded-lg bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors flex items-center justify-center border border-neutral-200"
+                                        title="Forward 5 seconds"
+                                    >
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 8L3 4V12L9 8ZM13 8L7 4V12L13 8Z" fill="currentColor"/></svg>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (isAudioPaused) {
+                                                resumeSpeaking().catch(() => showToast("Cannot resume audio.", "error"));
+                                            } else {
+                                                pauseSpeaking();
+                                            }
+                                        }}
+                                        className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center justify-center border border-indigo-100"
+                                        title={isAudioPaused ? "Resume audio" : "Pause audio"}
+                                    >
+                                        {isAudioPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
+                                    </button>
+                                    <button
+                                        onClick={cyclePlaybackRate}
+                                        className="h-6 px-2 rounded-lg bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors flex items-center justify-center border border-neutral-200 text-[10px] font-black tabular-nums"
+                                        title="Playback speed"
+                                    >
+                                        {playbackRate.toFixed(playbackRate % 1 === 0 ? 1 : 2)}x
+                                    </button>
+                                    {markPoints.length > 0 && audioProgress.duration > 0 && (
+                                        <div className="flex items-center gap-1 ml-1 border-l border-neutral-200 pl-2">
+                                            {markPoints.map((pt, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => { seekAudio(pt); setAudioProgress(prev => ({ ...prev, currentTime: pt })); }}
+                                                    className="w-5 h-5 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold hover:bg-indigo-600 hover:text-white transition-colors border border-indigo-100"
+                                                    title={`Jump to ${formatTime(pt)}`}
+                                                >
+                                                    {idx + 1}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-1 border-l border-neutral-200 pl-1 pr-0 ml-0">
+                                        <button
+                                            onClick={() => setMarkedTime(audioProgress.currentTime)}
+                                            className="w-6 h-6 rounded-lg bg-yellow-50 text-yellow-700 hover:bg-yellow-100 transition-colors flex items-center justify-center border border-yellow-200"
+                                            title="Mark current time"
+                                        >
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                seekAudio(markedTime);
+                                                setAudioProgress(prev => ({ ...prev, currentTime: markedTime }));
+                                            }}
+                                            className="w-10 h-6 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors flex items-center justify-center border border-indigo-200 text-[11px] font-bold"
+                                            title={`Play at marked time (${markedTime.toFixed(1)}s)`}
+                                        >
+                                            {markedTime.toFixed(1)}
+                                        </button>
                                     </div>
-                                )}
+                                </div>
                             </div>
                         )}
                     </div>
