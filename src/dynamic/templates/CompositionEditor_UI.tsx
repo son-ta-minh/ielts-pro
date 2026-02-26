@@ -49,6 +49,7 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
     const [isPreview, setIsPreview] = useState(false);
     const [isNotePreview, setIsNotePreview] = useState(false);
     const [activeTab, setActiveTab] = useState<'ESSAY' | 'NOTE'>('ESSAY');
+    const [isMetaOpen, setIsMetaOpen] = useState(false);
 
     const previewHtml = useMemo(() => {
         return parseMarkdown(content);
@@ -59,13 +60,13 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
     }, [note]);
 
     return (
-        <div className="w-full h-screen flex flex-col bg-neutral-50">
+        <div className="w-full flex flex-col bg-neutral-50">
             {/* Header */}
-            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 className="text-3xl font-black text-neutral-900 tracking-tight flex items-center gap-3"><PenLine size={24}/> Compose</h2>
+                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-1 px-6 pt-0 pb-1.5 border-b border-neutral-200 bg-neutral-50">
+                <div className="-mt-1">
+                    <h2 className="text-2xl font-black leading-none text-neutral-900 tracking-tight flex items-center gap-2 -mt-1"><PenLine size={18}/> Compose</h2>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 -mt-1">
                     <button onClick={() => setIsAiModalOpen(true)} disabled={!content.trim()} className="px-5 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest hover:bg-neutral-50 transition-all disabled:opacity-50">
                         <Bot size={14} className="text-indigo-500"/><span>AI Evaluate</span>
                     </button>
@@ -83,91 +84,99 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                         className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-black text-[10px] flex items-center space-x-2 transition-all active:scale-95 hover:bg-neutral-800 disabled:opacity-50 uppercase tracking-widest shadow-sm"
                     >
                         <Save size={14} />
-                        <span>Save & Close</span>
+                        <span>Close</span>
                     </button>
                 </div>
             </header>
 
-            <div className="flex-1 bg-white p-10 border-t border-neutral-200 flex flex-col">
-                {/* Meta Inputs */}
-                <div className="space-y-4 mb-6">
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Title (Optional)</label>
-                        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="My Awesome Essay" className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"/>
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1"><Tag size={12}/> Tags (Keywords)</label>
-                        <input 
-                            type="text" 
-                            value={tagsInput} 
-                            onChange={(e) => setTagsInput(e.target.value)} 
-                            placeholder="e.g. Environment, Technology" 
-                            className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
-                        />
-                    </div>
+            <div className="bg-white px-6 pt-4 pb-2 flex flex-col">
+                {/* Meta Inputs (Collapsible) */}
+                <div className="mb-3 bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+                    <button
+                        type="button"
+                        onClick={() => setIsMetaOpen(v => !v)}
+                        className="w-full flex items-center justify-between px-6 py-3 text-left hover:bg-neutral-50 transition-colors"
+                    >
+                        <div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Topic</div>
+                            <div className="text-sm font-bold text-neutral-900">Edit Title</div>
+                        </div>
+                        <span className="text-xs font-bold text-neutral-500">
+                            {isMetaOpen ? 'Collapse' : 'Expand'}
+                        </span>
+                    </button>
+
+                    {isMetaOpen && (
+                        <div className="px-6 pb-4 pt-1 space-y-4 border-t border-neutral-100">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Title (Optional)</label>
+                                <input
+                                    type="text"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="My Awesome Essay"
+                                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center gap-1">
+                                    <Tag size={12}/> Tags (Keywords)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={tagsInput}
+                                    onChange={(e) => setTagsInput(e.target.value)}
+                                    placeholder="e.g. Environment, Technology"
+                                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Essay / Note Tabs */}
-                <div className="flex gap-2 border-b border-neutral-200 pb-2 mb-4">
-                    <button
-                        onClick={() => setActiveTab('ESSAY')}
-                        className={`px-4 py-2 text-[10px] font-black rounded-xl uppercase tracking-widest transition-all ${
-                            activeTab === 'ESSAY'
-                                ? 'bg-neutral-900 text-white'
-                                : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
-                        }`}
-                    >
-                        Essay
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('NOTE')}
-                        className={`px-4 py-2 text-[10px] font-black rounded-xl uppercase tracking-widest transition-all ${
-                            activeTab === 'NOTE'
-                                ? 'bg-neutral-900 text-white'
-                                : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
-                        }`}
-                    >
-                        Note
-                    </button>
-                </div>
+                {/* Essay / Note Tabs + Controls */}
+                <div className="flex items-center justify-between border-b border-neutral-200 pb-2 mb-2">
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setActiveTab('ESSAY')}
+                            className={`px-4 py-2 text-[10px] font-black rounded-xl uppercase tracking-widest transition-all ${
+                                activeTab === 'ESSAY'
+                                    ? 'bg-neutral-900 text-white'
+                                    : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                            }`}
+                        >
+                            Essay
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('NOTE')}
+                            className={`px-4 py-2 text-[10px] font-black rounded-xl uppercase tracking-widest transition-all ${
+                                activeTab === 'NOTE'
+                                    ? 'bg-neutral-900 text-white'
+                                    : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                            }`}
+                        >
+                            Note
+                        </button>
+                    </div>
 
-                {activeTab === 'ESSAY' && (
-                    <div className="flex flex-col gap-2">
-                        <div className="flex justify-between items-center px-1">
-                            <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest">
+                    {activeTab === 'ESSAY' && (
+                        <div className="flex items-center gap-4">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">
                                 Content (Markdown Supported)
                             </label>
                             <button
                                 onClick={() => setIsPreview(!isPreview)}
                                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm"
                             >
-                                {isPreview ? <PenLine size={12}/> : <Eye size={12}/>}
+                                {isPreview ? <PenLine size={12}/> : <Eye size={12}/>} 
                                 <span>{isPreview ? 'Edit' : 'Preview'}</span>
                             </button>
                         </div>
-                        <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[500px] relative overflow-hidden">
-                            {isPreview ? (
-                                <div
-                                    className="p-6 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 overflow-y-auto absolute inset-0 bg-neutral-50/30"
-                                    dangerouslySetInnerHTML={{ __html: previewHtml }}
-                                />
-                            ) : (
-                                <textarea
-                                    value={content}
-                                    onChange={(e) => setContent(e.target.value)}
-                                    className="absolute inset-0 w-full h-full p-6 resize-none focus:outline-none text-base leading-relaxed font-medium text-neutral-900 bg-white"
-                                    placeholder="Start writing..."
-                                    spellCheck={false}
-                                />
-                            )}
-                        </div>
-                    </div>
-                )}
+                    )}
 
-                {activeTab === 'NOTE' && (
-                    <div className="flex flex-col gap-2">
-                        <div className="flex justify-between items-center px-1">
-                            <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest">
+                    {activeTab === 'NOTE' && (
+                        <div className="flex items-center gap-4">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">
                                 Private Note (Markdown Supported)
                             </label>
                             <button
@@ -178,7 +187,33 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                                 <span>{isNotePreview ? 'Edit' : 'Preview'}</span>
                             </button>
                         </div>
-                        <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[500px] relative overflow-hidden">
+                    )}
+                </div>
+
+                {activeTab === 'ESSAY' && (
+                    <div className="flex flex-col gap-2">
+                        <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[510px] relative overflow-hidden">
+                            {isPreview ? (
+                                <div
+                                    className="p-6 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 overflow-y-auto absolute inset-0 bg-neutral-50/30"
+                                    dangerouslySetInnerHTML={{ __html: previewHtml }}
+                                />
+                            ) : (
+                                <textarea
+                                    value={content}
+                                    onChange={(e) => setContent(e.target.value)}
+                                    className="absolute inset-0 w-full h-full p-6 resize-none focus:outline-none text-sm leading-relaxed font-medium text-neutral-900 bg-white"
+                                    placeholder="Start writing..."
+                                    spellCheck={false}
+                                />
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'NOTE' && (
+                    <div className="flex flex-col gap-2">
+                        <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[510px] relative overflow-hidden">
                             {isNotePreview ? (
                                 <div
                                     className="p-6 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 overflow-y-auto absolute inset-0 bg-neutral-50/30"
@@ -188,7 +223,7 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                                 <textarea
                                     value={note}
                                     onChange={(e) => setNote(e.target.value)}
-                                    className="absolute inset-0 w-full h-full p-6 resize-none focus:outline-none text-base leading-relaxed font-medium text-neutral-900 bg-white"
+                                    className="absolute inset-0 w-full h-full p-6 resize-none focus:outline-none text-sm leading-relaxed font-medium text-neutral-900 bg-white"
                                     placeholder="Write your private notes here..."
                                     spellCheck={false}
                                 />
@@ -197,34 +232,6 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                     </div>
                 )}
                 
-                {/* Linked Words Footer */}
-                <div className="px-4 py-4 mt-6 bg-neutral-50/50 rounded-2xl border border-neutral-100 min-h-[80px]">
-                    <div className="flex justify-between items-center mb-3">
-                        <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest flex items-center gap-2">
-                            <Link size={12} /> Linked Vocabulary ({linkedWords.length})
-                        </h4>
-                        <div className="flex items-center gap-2">
-                             <span className="text-[10px] font-bold text-neutral-400">{wordCount} words</span>
-                             <div className="w-px h-3 bg-neutral-200"></div>
-                             <button onClick={onAutoLink} className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-400 hover:text-indigo-600 transition-colors" title="Auto Link Vocabulary"><Sparkles size={14} /></button>
-                             <button onClick={() => setIsWordSelectorOpen(true)} className="p-1.5 hover:bg-neutral-100 rounded-lg text-neutral-400 hover:text-indigo-600 transition-colors" title="Manually Link Word"><Link size={14} /></button>
-                        </div>
-                    </div>
-                    {linkedWords.length === 0 ? (
-                        <p className="text-xs text-neutral-400 italic text-center py-2">No words linked.</p>
-                    ) : (
-                        <div className="flex flex-wrap gap-2">
-                            {linkedWords.map(w => (
-                                <div key={w.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 rounded-lg shadow-sm group/tag">
-                                    <span className="text-xs font-bold text-neutral-700">{w.word}</span>
-                                    <button onClick={() => onRemoveLink(w.id)} className="text-neutral-300 hover:text-red-500 transition-colors opacity-0 group-hover/tag:opacity-100">
-                                        <X size={12} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
             </div>
 
             {/* AI Feedback Panel */}

@@ -568,9 +568,39 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
               </div>
 
               {/* Row 2: Day Progress */}
-              <div className="grid grid-cols-1 gap-4">
-                   <DayProgress learnedToday={dayProgress.learned} reviewedToday={dayProgress.reviewed} maxLearn={dailyGoals.max_learn_per_day} maxReview={dailyGoals.max_review_per_day} learnedWords={dayProgress.learnedWords} reviewedWords={dayProgress.reviewedWords} onViewWord={() => {}} />
-              </div>
+              {(() => {
+                // Effective max calculation for INSIGHT tab
+                const availableNew = studyStats?.vocab.new ?? 0;
+                const availableDue = studyStats?.vocab.due ?? 0;
+
+                const baseMaxLearn = Math.min(
+                  dailyGoals.max_learn_per_day,
+                  availableNew
+                );
+
+                const baseMaxReview = Math.min(
+                  dailyGoals.max_review_per_day,
+                  availableDue
+                );
+
+                // Ensure max is never smaller than what user already completed today
+                const effectiveMaxLearn = Math.max(baseMaxLearn, dayProgress.learned);
+                const effectiveMaxReview = Math.max(baseMaxReview, dayProgress.reviewed);
+
+                return (
+                  <div className="grid grid-cols-1 gap-4">
+                    <DayProgress
+                      learnedToday={dayProgress.learned}
+                      reviewedToday={dayProgress.reviewed}
+                      maxLearn={effectiveMaxLearn}
+                      maxReview={effectiveMaxReview}
+                      learnedWords={dayProgress.learnedWords}
+                      reviewedWords={dayProgress.reviewedWords}
+                      onViewWord={() => {}}
+                    />
+                  </div>
+                );
+              })()}
           </div>
       )}
     </div>
