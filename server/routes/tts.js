@@ -259,9 +259,18 @@ async function ensureCambridgeLookupCacheDirect(wordText) {
 
         writeLookupCache(requested, {
             exists: true,
+            requestedWord: requested,
+            headword: requested,
             word: requested,
             url,
-            pronunciations: dedup,
+            pronunciations: dedup.map(p => ({
+                headword: requested,
+                partOfSpeech: p.partOfSpeech || null,
+                ipaUs: p.ipaUs || null,
+                ipaUk: p.ipaUk || null,
+                audioUs: p.audioUs || null,
+                audioUk: p.audioUk || null
+            })),
             cachedAt: Date.now()
         });
         console.log(`[TTS] Ensure cache direct created txt for "${requested}"`);
@@ -280,45 +289,10 @@ async function ensureCambridgeLookupCache(req, wordText) {
     const normalized = normalizeLookupWord(wordText);
     if (!normalized) return false;
 
-    const host = req.get('host');
-    const localPort = req.socket && req.socket.localPort ? Number(req.socket.localPort) : null;
-    const baseCandidates = [];
-    if (host) {
-        // Reverse-proxy headers may report https even when app serves plain http locally.
-        baseCandidates.push(`http://${host}`);
-        baseCandidates.push(`https://${host}`);
-    }
-    if (localPort) {
-        baseCandidates.push(`http://127.0.0.1:${localPort}`);
-        baseCandidates.push(`http://localhost:${localPort}`);
-    }
+    console.log(`[TTS] Ensure cache (direct only) for "${normalized}"`);
 
-    const uniqueBases = Array.from(new Set(baseCandidates)).filter(Boolean);
-    if (uniqueBases.length === 0) {
-        console.log(`[TTS] Ensure cache skipped "${normalized}": no candidate base URL`);
-        return false;
-    }
-
-    for (const base of uniqueBases) {
-        const lookupUrl = `${base}/api/lookup/cambridge/simple?word=${encodeURIComponent(normalized)}`;
-        try {
-            const res = await fetch(lookupUrl, { signal: AbortSignal.timeout(12000) });
-            if (!res.ok) {
-                console.log(`[TTS] Ensure cache failed "${normalized}" url=${lookupUrl} status=${res.status}`);
-                continue;
-            }
-            const data = await res.json().catch(() => null);
-            if (data?.exists) {
-                console.log(`[TTS] Ensure cache ready for "${normalized}" via ${base}`);
-                return true;
-            }
-            console.log(`[TTS] Ensure cache no exact entry for "${normalized}" via ${base}`);
-            return false;
-        } catch (e) {
-            console.log(`[TTS] Ensure cache error "${normalized}" url=${lookupUrl}: ${e.message}`);
-        }
-    }
-
+    // Do NOT call self API via localhost/127.0.0.1 anymore.
+    // Directly fetch Cambridge page and build cache.
     return await ensureCambridgeLookupCacheDirect(normalized);
 }
 
@@ -328,7 +302,7 @@ function findQualitySoundFile(wordText) {
 
     const mappings = loadFolderMappings();
     const qualityRoot = mappings[QUALITY_SOUND_MAP_NAME];
-    console.log(`[TTS] Quality lookup "${wordText}" candidates=${JSON.stringify(candidates)} mapPath=${qualityRoot || '(missing)'}`);
+    // console.log(`[TTS] Quality lookup "${wordText}" candidates=${JSON.stringify(candidates)} mapPath=${qualityRoot || '(missing)'}`);
     if (!qualityRoot || !fs.existsSync(qualityRoot)) return null;
 
     const resolvedRoot = path.resolve(qualityRoot);
@@ -336,7 +310,7 @@ function findQualitySoundFile(wordText) {
         for (const ext of AUDIO_EXTENSIONS) {
             const directPath = path.resolve(path.join(resolvedRoot, `${word}${ext}`));
             if (directPath.startsWith(resolvedRoot) && fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
-                console.log(`[TTS] Quality hit "${wordText}" -> ${directPath}`);
+                // console.log(`[TTS] Quality hit "${wordText}" -> ${directPath}`);
                 return directPath;
             }
         }
@@ -569,17 +543,18 @@ router.post('/speak', async (req, res) => {
     if (effectiveLanguage === 'vi') {
         console.log(`[TTS] Vietnamese detected → skip quality & Cambridge for "${cleanText}"`);
     } else {
-        if (isSingleWordText(cleanText)) {
-            await ensureCambridgeLookupCache(req, cleanText);
-        }
-
-        // Fast path: for single-word requests, serve pre-recorded quality audio if available.
+        // Fast path first: for single-word requests, serve pre-recorded quality audio if available.
         const qualityAudioFile = findQualitySoundFile(cleanText);
         if (qualityAudioFile) {
             res.setHeader("X-TTS-Source", "quality");
             res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));
-            console.log(`[TTS] /speak source=quality file=${qualityAudioFile}`);
+            // console.log(`[TTS] /speak source=quality file=${qualityAudioFile}`);
             return res.sendFile(qualityAudioFile);
+        }
+
+        // Only ensure Cambridge cache if single word AND no quality file found
+        if (isSingleWordText(cleanText)) {
+            await ensureCambridgeLookupCache(req, cleanText);
         }
 
         // Fallback: try fetching US pronunciation MP3 from Cambridge and cache into Quality_Sound.

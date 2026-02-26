@@ -335,6 +335,15 @@ function readLookupCache(word) {
 
         // Positive cache (backward compatible with old format without explicit exists flag).
         if (parsed.word && Array.isArray(parsed.pronunciations)) {
+            const hasMissingHeadword = parsed.pronunciations.some(
+                p => p && typeof p === 'object' && !p.headword
+            );
+
+            if (hasMissingHeadword) {
+                console.log(`[Cambridge Cache] Missing headword detected for "${parsed.word}" -> invalidating cache and forcing fresh Cambridge query.`);
+                return null; // force re-fetch from Cambridge
+            }
+
             return {
                 exists: true,
                 word: parsed.word,
@@ -343,6 +352,7 @@ function readLookupCache(word) {
                 cachedAt: parsed.cachedAt || null
             };
         }
+        console.log(`[Cambridge Cache] Cache miss or invalid structure for "${word}" -> will query Cambridge.`);
         return null;
     } catch {
         return null;
@@ -487,27 +497,62 @@ async function getCambridgeSimplified(word) {
     const rawPronunciations = [];
 
     matchedEntries.forEach((entryEl) => {
-        $(entryEl).find('.pos-header').each((_, header) => {
-        const $header = $(header);
-        const partOfSpeech = compactText($header.find('.pos').first().text()) || null;
-        const ipaUs = compactText($header.find('.us .ipa').first().text()) || null;
-        const ipaUk = compactText($header.find('.uk .ipa').first().text()) || null;
-        const audioUs = toAbsoluteCambridgeUrl($header.find('.us source[type="audio/mpeg"]').first().attr('src'));
-        const audioUk = toAbsoluteCambridgeUrl($header.find('.uk source[type="audio/mpeg"]').first().attr('src'));
+        const $entryEl = $(entryEl);
 
-        if (!partOfSpeech && !ipaUs && !ipaUk && !audioUs && !audioUk) return;
-        rawPronunciations.push({
-            partOfSpeech,
-            ipaUs,
-            ipaUk,
-            audioUs: audioUs || null,
-            audioUk: audioUk || null
+        // 1) Main headword block (e.g., "inclination")
+        const mainHead = compactText($entryEl.find('> .pos-header .hw.dhw').first().text())
+            || compactText($entryEl.find('.hw.dhw').first().text())
+            || headword;
+
+        $entryEl.find('> .pos-header').each((_, header) => {
+            const $header = $(header);
+            const partOfSpeech = compactText($header.find('.pos').first().text()) || null;
+            const ipaUs = compactText($header.find('.us .ipa').first().text()) || null;
+            const ipaUk = compactText($header.find('.uk .ipa').first().text()) || null;
+            const audioUs = toAbsoluteCambridgeUrl($header.find('.us source[type="audio/mpeg"]').first().attr('src'));
+            const audioUk = toAbsoluteCambridgeUrl($header.find('.uk source[type="audio/mpeg"]').first().attr('src'));
+
+            if (!partOfSpeech && !ipaUs && !ipaUk && !audioUs && !audioUk) return;
+            rawPronunciations.push({
+                headword: mainHead,
+                partOfSpeech,
+                ipaUs,
+                ipaUk,
+                audioUs: audioUs || null,
+                audioUk: audioUk || null
+            });
         });
+
+        // 2) Runon blocks (word family, e.g., "inclined")
+        $entryEl.find('.runon').each((_, runonEl) => {
+            const $runon = $(runonEl);
+            const runonHead = compactText($runon.find('.runon-title .w.dw').first().text());
+            if (!runonHead) return;
+
+            $runon.find('.pos-header').each((_, header) => {
+                const $header = $(header);
+                const partOfSpeech = compactText($header.find('.pos').first().text()) || null;
+                const ipaUs = compactText($header.find('.us .ipa').first().text()) || null;
+                const ipaUk = compactText($header.find('.uk .ipa').first().text()) || null;
+                const audioUs = toAbsoluteCambridgeUrl($header.find('.us source[type="audio/mpeg"]').first().attr('src'));
+                const audioUk = toAbsoluteCambridgeUrl($header.find('.uk source[type="audio/mpeg"]').first().attr('src'));
+
+                if (!partOfSpeech && !ipaUs && !ipaUk && !audioUs && !audioUk) return;
+                rawPronunciations.push({
+                    headword: runonHead,
+                    partOfSpeech,
+                    ipaUs,
+                    ipaUk,
+                    audioUs: audioUs || null,
+                    audioUk: audioUk || null
+                });
+            });
         });
     });
 
     if (rawPronunciations.length === 0) {
         rawPronunciations.push({
+            headword,
             partOfSpeech: compactText($entry.find('.pos').first().text()) || null,
             ipaUs: compactText($entry.find('.us .ipa').first().text()) || null,
             ipaUk: compactText($entry.find('.uk .ipa').first().text()) || null,
@@ -516,11 +561,12 @@ async function getCambridgeSimplified(word) {
         });
     }
 
-    // Merge duplicate rows into one row per part-of-speech.
-    const byPos = new Map();
+    // Merge duplicate rows into one row per headword + part-of-speech.
+    const byKey = new Map();
     rawPronunciations.forEach((p) => {
-        const posKey = (p.partOfSpeech || 'n/a').toLowerCase();
-        const current = byPos.get(posKey) || {
+        const key = `${(p.headword || '').toLowerCase()}__${(p.partOfSpeech || 'n/a').toLowerCase()}`;
+        const current = byKey.get(key) || {
+            headword: p.headword,
             partOfSpeech: p.partOfSpeech || 'N/A',
             ipaUs: null,
             ipaUk: null,
@@ -533,26 +579,41 @@ async function getCambridgeSimplified(word) {
         if (!current.audioUs && p.audioUs) current.audioUs = p.audioUs;
         if (!current.audioUk && p.audioUk) current.audioUk = p.audioUk;
 
-        byPos.set(posKey, current);
+        byKey.set(key, current);
     });
 
-    const pronunciations = Array.from(byPos.values());
+    const pronunciations = Array.from(byKey.values());
 
     const cachedPronunciations = await cachePronunciationAudios(headword, pronunciations);
 
     const result = {
         exists: true,
         url,
-        word: headword,
+        requestedWord: requested,
+        headword: headword,
+        word: headword, // keep backward compatibility
         pronunciations: cachedPronunciations
     };
-    writeLookupCache(requested, {
+    const payload = {
         exists: true,
-        word: headword,
+        requestedWord: requested,
+        headword: headword,
+        word: headword, // backward compatibility
         url,
         pronunciations: cachedPronunciations,
         cachedAt: Date.now()
-    });
+    };
+
+    // Cache under requested word
+    writeLookupCache(requested, payload);
+
+    // If this is a word-family redirect (requested !== headword),
+    // also cache under the actual headword so future lookups hit directly.
+    const normalizedHead = normalizeLookupWord(headword);
+    if (normalizedHead && normalizedHead !== requested) {
+        writeLookupCache(normalizedHead, payload);
+    }
+
     return result;
 }
 
@@ -614,7 +675,8 @@ router.get('/lookup/cambridge/cache', (req, res) => {
     }
     res.json({
         exists: true,
-        word: cached.word,
+        requestedWord: requested,
+        headword: cached.word,
         url: cached.url || `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(requested)}`,
         pronunciations: cached.pronunciations
     });

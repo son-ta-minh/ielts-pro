@@ -74,10 +74,18 @@ const normalizeCambridgePronunciations = (items?: CambridgePronunciation[]): Cam
     for (const item of items) {
         const pos = canonicalPos(item.partOfSpeech);
         if (!byPos.has(pos)) {
-            byPos.set(pos, { partOfSpeech: pos, ipaUs: null, ipaUk: null, audioUs: null, audioUk: null });
+            byPos.set(pos, {
+                headword: (item as any).headword || null,
+                partOfSpeech: pos,
+                ipaUs: null,
+                ipaUk: null,
+                audioUs: null,
+                audioUk: null
+            } as any);
             order.push(pos);
         }
-        const merged = byPos.get(pos)!;
+        const merged: any = byPos.get(pos)!;
+        if (!merged.headword && (item as any).headword) merged.headword = (item as any).headword;
         if (!merged.ipaUs && item.ipaUs) merged.ipaUs = item.ipaUs;
         if (!merged.ipaUk && item.ipaUk) merged.ipaUk = item.ipaUk;
         if (!merged.audioUs && item.audioUs) merged.audioUs = item.audioUs;
@@ -619,7 +627,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const handleGoogleExampleSearch = () => {
         const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
         if (!selectedText) return;
-        const queryText = `Example in English for "${selectedText}"`;
+        const queryText = `Example in English sentence for "${selectedText}"`;
         const query = encodeURIComponent(queryText);
         window.open(`https://www.google.com/search?q=${query}`, '_blank');
         setIsOpen(false);
@@ -772,40 +780,126 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                             <div className="shrink-0 mt-1">{message.icon || <MessageSquare size={18} />}</div>
                                             <div className="text-xs font-medium text-neutral-700 leading-relaxed space-y-2">
                                                 {message.cambridge ? (
-                                                    <div className="space-y-1.5">
-                                                        <h4 className="text-base font-black text-neutral-900">{message.cambridge.word}</h4>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            {(message.cambridge.pronunciations || []).map((p, idx) => (
-                                                                <div key={idx} className="rounded-lg border border-neutral-200 bg-neutral-50 p-2 space-y-1.5">
-                                                                    <p className="text-[10px] font-black uppercase tracking-wide text-neutral-500">
-                                                                        {p.partOfSpeech || 'N/A'}
-                                                                    </p>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => playCambridgeAudio(p.audioUs || undefined)}
-                                                                            disabled={!p.audioUs}
-                                                                            className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border transition-colors ${p.audioUs ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100' : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'}`}
-                                                                        >
-                                                                            US
-                                                                        </button>
-                                                                        <p className="text-[11px] text-neutral-700 leading-relaxed flex-1 break-words">{p.ipaUs ? `/${p.ipaUs}/` : 'N/A'}</p>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => playCambridgeAudio(p.audioUk || undefined)}
-                                                                            disabled={!p.audioUk}
-                                                                            className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border transition-colors ${p.audioUk ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100' : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'}`}
-                                                                        >
-                                                                            UK
-                                                                        </button>
-                                                                        <p className="text-[11px] text-neutral-700 leading-relaxed flex-1 break-words">{p.ipaUk ? `/${p.ipaUk}/` : 'N/A'}</p>
-                                                                    </div>
+                                                  <div className="space-y-4">
+                                                    {Array.isArray((message.cambridge as any).wordFamily) &&
+                                                    (message.cambridge as any).wordFamily.length > 0 ? (
+                                                      (message.cambridge as any).wordFamily.map((entry: any, idx: number) => (
+                                                        <div key={idx} className="space-y-2">
+                                                          {/* Removed master headword display */}
+                                                          <div className="grid grid-cols-2 gap-2">
+                                                            {(entry.pronunciations || []).map((p: any, i: number) => (
+                                                              <div
+                                                                key={i}
+                                                                className="rounded-lg border border-neutral-200 bg-neutral-50 p-2 space-y-1.5"
+                                                              >
+                                                                {p.headword && (
+                                                                  <p className="text-[11px] font-extrabold text-indigo-700 break-words">
+                                                                    {p.headword}
+                                                                  </p>
+                                                                )}
+                                                                <p className="text-[10px] font-black uppercase tracking-wide text-neutral-500">
+                                                                  {p.partOfSpeech || 'N/A'}
+                                                                </p>
+
+                                                                <div className="flex items-center gap-2">
+                                                                  <button
+                                                                    type="button"
+                                                                    onClick={() => playCambridgeAudio(p.audioUs || undefined)}
+                                                                    disabled={!p.audioUs}
+                                                                    className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border transition-colors ${
+                                                                      p.audioUs
+                                                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
+                                                                        : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'
+                                                                    }`}
+                                                                  >
+                                                                    US
+                                                                  </button>
+                                                                  <p className="text-[11px] text-neutral-700 leading-relaxed flex-1 break-words">
+                                                                    {p.ipaUs ? `/${p.ipaUs}/` : 'N/A'}
+                                                                  </p>
                                                                 </div>
+
+                                                                <div className="flex items-center gap-2">
+                                                                  <button
+                                                                    type="button"
+                                                                    onClick={() => playCambridgeAudio(p.audioUk || undefined)}
+                                                                    disabled={!p.audioUk}
+                                                                    className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border transition-colors ${
+                                                                      p.audioUk
+                                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100'
+                                                                        : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'
+                                                                    }`}
+                                                                  >
+                                                                    UK
+                                                                  </button>
+                                                                  <p className="text-[11px] text-neutral-700 leading-relaxed flex-1 break-words">
+                                                                    {p.ipaUk ? `/${p.ipaUk}/` : 'N/A'}
+                                                                  </p>
+                                                                </div>
+                                                              </div>
                                                             ))}
+                                                          </div>
                                                         </div>
-                                                    </div>
+                                                      ))
+                                                    ) : (
+                                                      <div className="space-y-2">
+                                                        {/* Removed master headword display */}
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                          {(message.cambridge.pronunciations || []).map((p, idx) => (
+                                                            <div
+                                                              key={idx}
+                                                              className="rounded-lg border border-neutral-200 bg-neutral-50 p-2 space-y-1.5"
+                                                            >
+                                                              {(p as any).headword && (
+                                                                <p className="text-[11px] font-extrabold text-indigo-700 break-words">
+                                                                  {(p as any).headword}
+                                                                </p>
+                                                              )}
+                                                              <p className="text-[10px] font-black uppercase tracking-wide text-neutral-500">
+                                                                {p.partOfSpeech || 'N/A'}
+                                                              </p>
+
+                                                              <div className="flex items-center gap-2">
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() => playCambridgeAudio(p.audioUs || undefined)}
+                                                                  disabled={!p.audioUs}
+                                                                  className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border transition-colors ${
+                                                                    p.audioUs
+                                                                      ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
+                                                                      : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'
+                                                                  }`}
+                                                                >
+                                                                  US
+                                                                </button>
+                                                                <p className="text-[11px] text-neutral-700 leading-relaxed flex-1 break-words">
+                                                                  {p.ipaUs ? `/${p.ipaUs}/` : 'N/A'}
+                                                                </p>
+                                                              </div>
+
+                                                              <div className="flex items-center gap-2">
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() => playCambridgeAudio(p.audioUk || undefined)}
+                                                                  disabled={!p.audioUk}
+                                                                  className={`px-2 py-0.5 text-[9px] font-black uppercase rounded-md border transition-colors ${
+                                                                    p.audioUk
+                                                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100'
+                                                                      : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'
+                                                                  }`}
+                                                                >
+                                                                  UK
+                                                                </button>
+                                                                <p className="text-[11px] text-neutral-700 leading-relaxed flex-1 break-words">
+                                                                  {p.ipaUk ? `/${p.ipaUk}/` : 'N/A'}
+                                                                </p>
+                                                              </div>
+                                                            </div>
+                                                          ))}
+                                                        </div>
+                                                      </div>
+                                                    )}
+                                                  </div>
                                                 ) : (
                                                     <div dangerouslySetInnerHTML={{ __html: formatBoldText(message.text || '') }} />
                                                 )}

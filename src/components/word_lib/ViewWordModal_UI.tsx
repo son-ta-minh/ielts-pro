@@ -211,33 +211,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
     const handlePronounceWithCoachLookup = (targetWord: string) => {
         speak(targetWord);
-        void (async () => {
-            try {
-                const serverUrl = getServerUrl(getConfig());
-                const normalizedWord = targetWord.trim().toLowerCase();
-                const cacheRes = await fetch(`${serverUrl}/api/lookup/cambridge/cache?word=${encodeURIComponent(normalizedWord)}`, {
-                    cache: 'no-store'
-                });
-                if (cacheRes.ok) {
-                    const raw = await cacheRes.text();
-                    const data = raw ? JSON.parse(raw) : null;
-                    if (data?.exists) {
-                        window.dispatchEvent(new CustomEvent('coach-cambridge-lookup-request', { detail: { word: normalizedWord, data } }));
-                        return;
-                    }
-                }
-                const simpleRes = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(normalizedWord)}`, {
-                    cache: 'no-store'
-                });
-                if (!simpleRes.ok) return;
-                const raw = await simpleRes.text();
-                const data = raw ? JSON.parse(raw) : null;
-                if (!data?.exists) return;
-                window.dispatchEvent(new CustomEvent('coach-cambridge-lookup-request', { detail: { word: normalizedWord, data } }));
-            } catch {
-                // Silent fail: speaker should still work even if cache lookup fails.
-            }
-        })();
     };
 
     useEffect(() => { setStoredJSON('ielts_pro_word_view_settings', viewSettings); }, [viewSettings]);
