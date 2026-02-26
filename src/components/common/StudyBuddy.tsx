@@ -601,6 +601,16 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setIsToolsModalOpen(true);
     };
 
+    const handleGoogleExampleSearch = () => {
+        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
+        if (!selectedText) return;
+        const queryText = `Example in English for "${selectedText}"`;
+        const query = encodeURIComponent(queryText);
+        window.open(`https://www.google.com/search?q=${query}`, '_blank');
+        setIsOpen(false);
+        setMenuPos(null);
+    };
+
     const playCambridgeAudio = (url?: string) => {
         if (!url) {
             showToast("Audio not available.", "info");
@@ -681,7 +691,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 {/* BOTTOM ROW (3 buttons, 2 columns each) */}
                 <button type="button" onClick={handleSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
                 <button type="button" onClick={handleOpenTools} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Coach Tools"><Wrench size={15}/></button>
-                <div aria-hidden="true" className="col-span-2 aspect-square rounded-2xl border border-neutral-100 bg-neutral-50/50" />
+                <button type="button" onClick={handleGoogleExampleSearch} className="col-span-2 aspect-square bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shadow-sm" title="Search Google Examples"><Search size={15}/></button>
             </div>
         </div>
     );

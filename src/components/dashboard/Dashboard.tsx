@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppView, User, VocabularyItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
@@ -34,6 +33,7 @@ interface Props {
   onLocalBackup: () => void;
   onServerBackup?: () => Promise<void>;
   onAction?: (action: string) => void;
+  onViewWord: (word: VocabularyItem) => void;
 }
 
 const Dashboard: React.FC<Props> = ({ 
@@ -237,7 +237,8 @@ const Dashboard: React.FC<Props> = ({
     dayProgress,
     dailyGoals,
     serverStatus,
-    onAction: onAction || (() => {})
+    onAction: onAction || (() => {}),
+    onViewWord: restProps.onViewWord,
   };
   
   return (

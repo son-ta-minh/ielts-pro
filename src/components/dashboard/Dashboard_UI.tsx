@@ -469,7 +469,8 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   onNavigate, totalCount, newCount, rawCount, refinedCount, reviewStats,
   lastBackupTime, onBackup, onRestore,
   serverStatus, onAction, onStartNewLearn, onStartDueReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats,
-  studyStats, isStatsLoading
+  studyStats, isStatsLoading,
+  onViewWord
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
   const [activeTab, setActiveTab] = useState<'STUDY' | 'PRACTICE' | 'INSIGHT'>(() => {
@@ -596,7 +597,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                       maxReview={effectiveMaxReview}
                       learnedWords={dayProgress.learnedWords}
                       reviewedWords={dayProgress.reviewedWords}
-                      onViewWord={() => {}}
+                      onViewWord={onViewWord}
                     />
                   </div>
                 );

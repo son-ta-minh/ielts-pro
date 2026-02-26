@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { VocabularyItem } from '../../app/types';
 
@@ -69,8 +68,13 @@ export const DayProgress: React.FC<Props> = ({ learnedToday, reviewedToday, maxL
                         <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar max-h-32">
                             {allTodayWords.map(word => (
                                 <button 
+                                    type="button"
                                     key={word.id} 
-                                    onClick={() => onViewWord(word)}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        onViewWord(word);
+                                    }}
                                     className="w-full flex items-center gap-2 text-left p-1.5 rounded-lg hover:bg-neutral-50 group"
                                 >
                                     <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${learnedWords.some(lw => lw.id === word.id) ? 'bg-blue-500' : 'bg-orange-500'}`} />
