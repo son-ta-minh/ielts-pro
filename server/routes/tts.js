@@ -199,11 +199,12 @@ async function ensureCambridgeLookupCacheDirect(wordText) {
 
         const html = await response.text();
         const $ = cheerio.load(html);
+        // Collect ALL entries on the page (verb, adjective, adverb, etc.)
         const matchedEntries = [];
         $('.entry-body__el').each((_, el) => {
-            const hw = normalizeLookupWord($(el).find('.hw.dhw').first().text());
-            if (hw && hw === requested) matchedEntries.push(el);
+            matchedEntries.push(el);
         });
+
         if (matchedEntries.length === 0) {
             writeLookupCache(requested, { exists: false, word: requested, url, cachedAt: Date.now() });
             return false;
@@ -211,18 +212,65 @@ async function ensureCambridgeLookupCacheDirect(wordText) {
 
         const pronunciations = [];
         matchedEntries.forEach((entryEl) => {
+            const entryHeadwordRaw = compactText($(entryEl).find('.hw.dhw').first().text()) || requested;
+
             $(entryEl).find('.pos-header').each((_, header) => {
                 const $header = $(header);
+                // Skip pos-headers that belong to runon blocks (handled separately below)
+                if ($header.closest('.runon').length > 0) {
+                    return;
+                }
                 const partOfSpeech = compactText($header.find('.pos').first().text()) || null;
                 const ipaUs = compactText($header.find('.us .ipa').first().text()) || null;
                 const ipaUk = compactText($header.find('.uk .ipa').first().text()) || null;
                 const audioUs = toAbsoluteCambridgeUrl($header.find('.us source[type="audio/mpeg"]').first().attr('src'));
                 const audioUk = toAbsoluteCambridgeUrl($header.find('.uk source[type="audio/mpeg"]').first().attr('src'));
+
                 if (!partOfSpeech && !ipaUs && !ipaUk && !audioUs && !audioUk) return;
-                pronunciations.push({ partOfSpeech, ipaUs, ipaUk, audioUs: audioUs || null, audioUk: audioUk || null });
+
+                pronunciations.push({
+                    headword: entryHeadwordRaw,
+                    partOfSpeech,
+                    ipaUs,
+                    ipaUk,
+                    audioUs: audioUs || null,
+                    audioUk: audioUk || null
+                });
             });
         });
 
+        // Parse standalone runon blocks (e.g., intriguing, intriguingly)
+        $('.runon').each((_, runonEl) => {
+            const $runon = $(runonEl);
+
+            const runonHeadwordRaw = compactText(
+                $runon.find('.runon-title .w, .runon-title .dw').first().text()
+            );
+            if (!runonHeadwordRaw) return;
+
+            const $header = $runon.find('.pos-header').first();
+            if (!$header || !$header.length) return;
+
+            const partOfSpeech = compactText($header.find('.pos').first().text()) || null;
+            const ipaUs = compactText($header.find('.us .ipa').first().text()) || null;
+            const ipaUk = compactText($header.find('.uk .ipa').first().text()) || null;
+            const audioUs = toAbsoluteCambridgeUrl(
+                $header.find('.us source[type="audio/mpeg"]').first().attr('src')
+            );
+            const audioUk = toAbsoluteCambridgeUrl(
+                $header.find('.uk source[type="audio/mpeg"]').first().attr('src')
+            );
+            if (!partOfSpeech && !ipaUs && !ipaUk && !audioUs && !audioUk) return;
+
+            pronunciations.push({
+                headword: runonHeadwordRaw,
+                partOfSpeech,
+                ipaUs,
+                ipaUk,
+                audioUs: audioUs || null,
+                audioUk: audioUk || null
+            });
+        });
         if (pronunciations.length === 0) {
             writeLookupCache(requested, { exists: false, word: requested, url, cachedAt: Date.now() });
             return false;
@@ -231,7 +279,7 @@ async function ensureCambridgeLookupCacheDirect(wordText) {
         const dedup = [];
         const seen = new Set();
         for (const p of pronunciations) {
-            const key = `${p.partOfSpeech || ''}|${p.ipaUs || ''}|${p.ipaUk || ''}`;
+            const key = `${p.headword || ''}|${p.partOfSpeech || ''}|${p.ipaUs || ''}|${p.ipaUk || ''}`;
             if (seen.has(key)) continue;
             seen.add(key);
             dedup.push(p);
@@ -264,7 +312,7 @@ async function ensureCambridgeLookupCacheDirect(wordText) {
             word: requested,
             url,
             pronunciations: dedup.map(p => ({
-                headword: requested,
+                headword: p.headword || requested,
                 partOfSpeech: p.partOfSpeech || null,
                 ipaUs: p.ipaUs || null,
                 ipaUk: p.ipaUk || null,
