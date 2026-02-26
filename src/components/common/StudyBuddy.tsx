@@ -125,9 +125,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
     const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
     
-    const [isCambridgeChecking, setIsCambridgeChecking] = useState(false);
-    const [isCambridgeValid, setIsCambridgeValid] = useState(false);
-    const [cambridgePreview, setCambridgePreview] = useState<{ query: string; data: CambridgeSimpleResult | null }>({ query: '', data: null });
     const [isAlreadyInLibrary, setIsAlreadyInLibrary] = useState(false);
     const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
     
@@ -136,7 +133,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     const commandBoxRef = useRef<HTMLDivElement>(null);
     const messageBoxRef = useRef<HTMLDivElement>(null);
-    const checkAbortControllerRef = useRef<AbortController | null>(null);
     const closeMenuTimeoutRef = useRef<number | null>(null);
     const audioStatusSettleTimeoutRef = useRef<number | null>(null);
     const playbackControlsHideTimeoutRef = useRef<number | null>(null);
@@ -158,29 +154,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         return (AVATAR_DEFINITIONS as any)[avatarStr] || AVATAR_DEFINITIONS.woman_teacher;
     }
 
-    const checkCambridgeWord = async (word: string) => {
-        if (!word) return;
-        setIsCambridgeValid(false);
-        setIsCambridgeChecking(true);
-        setCambridgePreview({ query: word, data: null });
-        if (checkAbortControllerRef.current) checkAbortControllerRef.current.abort();
-        checkAbortControllerRef.current = new AbortController();
-        try {
-            const serverUrl = getServerUrl(config);
-            const response = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(word)}`, {
-                signal: checkAbortControllerRef.current.signal
-            });
-            if (response.ok) {
-                const data: CambridgeSimpleResult = await response.json();
-                setIsCambridgeValid(!!data?.exists);
-                setCambridgePreview({ query: word, data });
-            }
-        } catch {
-            // Silent fail is acceptable here
-        } finally {
-            setIsCambridgeChecking(false);
-        }
-    };
 
     const checkLibraryExistence = async (word: string) => {
         if (!word || !user.id) return;
@@ -271,8 +244,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             if (recent.word === normalizedWord && now - recent.at < 500) return;
 
             selectedTextRef.current = normalizedWord;
-            setCambridgePreview({ query: normalizedWord, data: payload });
-            setIsCambridgeValid(true);
+            // setCambridgePreview({ query: normalizedWord, data: payload });
+            // setIsCambridgeValid(true);
             setIsThinking(false);
             setMenuPos(null);
             setMessage({
@@ -298,7 +271,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             if (isOpenRef.current && currentMessageWord === normalizedWord) return;
 
             selectedTextRef.current = normalizedWord;
-            setIsCambridgeValid(false);
+            // setIsCambridgeValid(false);
             setIsThinking(false);
             setMenuPos(null);
             setMessage({
@@ -360,11 +333,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 setIsOpen(true);
                 
                 checkLibraryExistence(selectedText);
-                if (selectedText.split(/\s+/).filter(Boolean).length <= 5) {
-                    checkCambridgeWord(selectedText);
-                } else {
-                    setIsCambridgeValid(false);
-                }
+                // Cambridge check removed
             } else {
                 setMenuPos(null);
             }
@@ -575,14 +544,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setIsOpen(false);
         setMenuPos(null);
         try {
-            let data = cambridgePreview.query === selectedText ? cambridgePreview.data : null;
-            if (!data) {
+            let data: CambridgeSimpleResult | null = null;
+            {
                 const serverUrl = getServerUrl(config);
                 const res = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(selectedText)}`);
                 data = await res.json();
-                if (res.ok) {
-                    setCambridgePreview({ query: selectedText, data });
-                }
+                // setCambridgePreview({ query: selectedText, data }); // removed
             }
 
             if (!data?.exists) {

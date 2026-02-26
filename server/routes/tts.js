@@ -600,13 +600,27 @@ router.post('/speak', async (req, res) => {
             return res.sendFile(qualityAudioFile);
         }
 
-        // Only ensure Cambridge cache if single word AND no quality file found
+        const normalizedWord = normalizeLookupWord(cleanText);
+        let skipCambridge = false;
+
         if (isSingleWordText(cleanText)) {
-            await ensureCambridgeLookupCache(req, cleanText);
+            const lookupCache = readLookupCache(normalizedWord);
+
+            if (lookupCache && lookupCache.exists === false) {
+                console.log(`[TTS] Skip Cambridge completely (negative cache) for "${normalizedWord}"`);
+                skipCambridge = true;
+            } else {
+                await ensureCambridgeLookupCache(req, cleanText);
+            }
         }
 
         // Fallback: try fetching US pronunciation MP3 from Cambridge and cache into Quality_Sound.
-        const cachedCambridgeFile = await downloadCambridgeAudioToQuality(cleanText);
+        let cachedCambridgeFile = null;
+
+        if (!skipCambridge) {
+            cachedCambridgeFile = await downloadCambridgeAudioToQuality(cleanText);
+        }
+
         if (cachedCambridgeFile) {
             res.setHeader("X-TTS-Source", "cambridge");
             res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));

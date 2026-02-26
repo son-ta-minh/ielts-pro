@@ -350,7 +350,9 @@ const playBlob = (blob: Blob, meta?: { source?: string; word?: string; isSingleW
     stopSpeakingInternal(true);
     const sessionId = ++playbackSerial;
     isAudioPaused = false;
-    pendingCoachLookupWord = ((meta?.source === 'quality' || meta?.source === 'cambridge' || meta?.isSingleWord) && meta?.word) ? meta.word : null;
+    pendingCoachLookupWord = ((meta?.source === 'quality' || meta?.source === 'cambridge') && meta?.word)
+        ? meta.word
+        : null;
     isSingleWordPlayback = !!meta?.isSingleWord;
     notifyStatus(true);
     const lookupWord = pendingCoachLookupWord;
@@ -531,7 +533,7 @@ export const playSound = async (url: string, startTime?: number, duration?: numb
     currentMarkPoints = markPoints || [];
     const qualityLookupWord = extractQualityLookupWordFromUrl(url);
     isSingleWordPlayback = !!qualityLookupWord;
-    const lookupTask = qualityLookupWord ? triggerCoachLookup(qualityLookupWord) : Promise.resolve(false);
+    const lookupTask = (qualityLookupWord) ? triggerCoachLookup(qualityLookupWord) : Promise.resolve(false);
     
     const baseUrl = await getBaseUrl();
     let fullUrl = url;

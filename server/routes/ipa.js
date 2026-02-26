@@ -584,6 +584,22 @@ async function getCambridgeSimplified(word) {
 
     const pronunciations = Array.from(byKey.values());
 
+    // If Cambridge page exists but contains no usable pronunciation data
+    // (e.g., only "past simple of ..." without IPA/audio), treat as not found
+    const hasUsablePron = pronunciations.some(p =>
+        (p.ipaUs || p.ipaUk || p.audioUs || p.audioUk)
+    );
+
+    if (!hasUsablePron) {
+        writeLookupCache(requested, {
+            exists: false,
+            word: requested,
+            url,
+            cachedAt: Date.now()
+        });
+        return { exists: false, url };
+    }
+
     const cachedPronunciations = await cachePronunciationAudios(headword, pronunciations);
 
     const result = {
