@@ -604,13 +604,20 @@ router.post('/speak', async (req, res) => {
         let skipCambridge = false;
 
         if (isSingleWordText(cleanText)) {
-            const lookupCache = readLookupCache(normalizedWord);
+            let lookupCache = readLookupCache(normalizedWord);
 
             if (lookupCache && lookupCache.exists === false) {
                 console.log(`[TTS] Skip Cambridge completely (negative cache) for "${normalizedWord}"`);
                 skipCambridge = true;
             } else {
                 await ensureCambridgeLookupCache(req, cleanText);
+
+                // Re-check cache after ensure to avoid second fetch when negative cache was just created
+                lookupCache = readLookupCache(normalizedWord);
+                if (lookupCache && lookupCache.exists === false) {
+                    console.log(`[TTS] Skip Cambridge after ensure (negative cache) for "${normalizedWord}"`);
+                    skipCambridge = true;
+                }
             }
         }
 

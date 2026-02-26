@@ -135,6 +135,14 @@ async function getCambridgeIPA(word) {
     const cleanWord = word.toLowerCase().replace(/[^a-z-]/g, "");
     if (!cleanWord) return word;
 
+    // Respect negative cache from getCambridgeSimplified:
+    // if Cambridge was previously determined to have no usable data,
+    // skip scraping entirely.
+    const cached = readLookupCache(cleanWord);
+    if (cached && cached.exists === false) {
+        return null;
+    }
+
     const url = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(cleanWord)}`;
     try {
         const controller = new AbortController();
@@ -153,6 +161,14 @@ async function getCambridgeIPA(word) {
         
         if (!response.ok) {
             console.warn(`[IPA MODE 2] Cambridge fetch failed for "${cleanWord}" status: ${response.status}`);
+            if (response.status === 404) {
+                writeLookupCache(cleanWord, {
+                    exists: false,
+                    word: cleanWord,
+                    url,
+                    cachedAt: Date.now()
+                });
+            }
             return null;
         }
 
@@ -162,6 +178,12 @@ async function getCambridgeIPA(word) {
         const pageHw = $(".hw.dhw").first().text().toLowerCase().trim();
         if (pageHw && pageHw !== cleanWord) {
             console.warn(`[IPA MODE 2] Mismatch (Redirect): requested "${cleanWord}", found "${pageHw}".`);
+            writeLookupCache(cleanWord, {
+                exists: false,
+                word: cleanWord,
+                url,
+                cachedAt: Date.now()
+            });
             return null;
         }
 
@@ -186,6 +208,16 @@ async function getCambridgeIPA(word) {
             });
         }
         
+        if (!usIpa) {
+            writeLookupCache(cleanWord, {
+                exists: false,
+                word: cleanWord,
+                url,
+                cachedAt: Date.now()
+            });
+            return null;
+        }
+
         return usIpa;
     } catch (e) {
         console.error(`[IPA MODE 2] Error scraping "${cleanWord}":`, e.message);
