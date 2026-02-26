@@ -563,27 +563,35 @@ router.post('/speak', async (req, res) => {
     const cleanText = text.normalize('NFC');
     console.log(`[TTS] /speak request text="${cleanText}" voice="${voiceToUse || '(default)'}" lang="${language || '(auto)'}"`);
 
-    if (isSingleWordText(cleanText)) {
-        await ensureCambridgeLookupCache(req, cleanText);
+    const effectiveLanguage = language || selectedLanguage || 'en';
+
+    // If Vietnamese, skip Quality_Sound and Cambridge completely
+    if (effectiveLanguage === 'vi') {
+        console.log(`[TTS] Vietnamese detected → skip quality & Cambridge for "${cleanText}"`);
+    } else {
+        if (isSingleWordText(cleanText)) {
+            await ensureCambridgeLookupCache(req, cleanText);
+        }
+
+        // Fast path: for single-word requests, serve pre-recorded quality audio if available.
+        const qualityAudioFile = findQualitySoundFile(cleanText);
+        if (qualityAudioFile) {
+            res.setHeader("X-TTS-Source", "quality");
+            res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));
+            console.log(`[TTS] /speak source=quality file=${qualityAudioFile}`);
+            return res.sendFile(qualityAudioFile);
+        }
+
+        // Fallback: try fetching US pronunciation MP3 from Cambridge and cache into Quality_Sound.
+        const cachedCambridgeFile = await downloadCambridgeAudioToQuality(cleanText);
+        if (cachedCambridgeFile) {
+            res.setHeader("X-TTS-Source", "cambridge");
+            res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));
+            console.log(`[TTS] /speak source=cambridge file=${cachedCambridgeFile}`);
+            return res.sendFile(cachedCambridgeFile);
+        }
     }
 
-    // Fast path: for single-word requests, serve pre-recorded quality audio if available.
-    const qualityAudioFile = findQualitySoundFile(cleanText);
-    if (qualityAudioFile) {
-        res.setHeader("X-TTS-Source", "quality");
-        res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));
-        console.log(`[TTS] /speak source=quality file=${qualityAudioFile}`);
-        return res.sendFile(qualityAudioFile);
-    }
-
-    // Fallback: try fetching US pronunciation MP3 from Cambridge and cache into Quality_Sound.
-    const cachedCambridgeFile = await downloadCambridgeAudioToQuality(cleanText);
-    if (cachedCambridgeFile) {
-        res.setHeader("X-TTS-Source", "cambridge");
-        res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));
-        console.log(`[TTS] /speak source=cambridge file=${cachedCambridgeFile}`);
-        return res.sendFile(cachedCambridgeFile);
-    }
     console.log(`[TTS] /speak source=tts word="${cleanText}"`);
     
     const timestamp = Date.now();

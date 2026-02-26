@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
 import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
-import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints } from '../../utils/audio';
+import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
@@ -390,17 +390,32 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const handleTranslateSelection = async () => {
         const selectedText = window.getSelection()?.toString().trim();
         if (!selectedText) return;
+
+        // If already Vietnamese, do not call translation API
+        const detectedLang = detectLanguage(selectedText);
+
+        if (detectedLang === 'vi') {
+            setMessage({
+                text: selectedText,
+                icon: <Languages size={18} className="text-blue-500" />
+            });
+            setIsOpen(true);
+            speak(selectedText, false, 'vi', coach.viVoice, coach.viAccent);
+            return;
+        }
+
         setIsThinking(true);
         setIsOpen(false);
         setMenuPos(null);
+
         try {
             const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(selectedText)}&langpair=en|vi`);
             const data = await res.json();
             if (data?.responseData?.translatedText) {
                 const translation = data.responseData.translatedText;
-                setMessage({ 
-                    text: translation, 
-                    icon: <Languages size={18} className="text-blue-500" /> 
+                setMessage({
+                    text: translation,
+                    icon: <Languages size={18} className="text-blue-500" />
                 });
                 setIsOpen(true);
                 speak(translation, false, 'vi', coach.viVoice, coach.viAccent);

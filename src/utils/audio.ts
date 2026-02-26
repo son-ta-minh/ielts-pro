@@ -199,6 +199,12 @@ const isSingleWordText = (text: string): boolean => {
 const triggerCoachLookup = async (word: string): Promise<boolean> => {
     const cleanWord = normalizeLookupWord(word);
     if (!cleanWord) return false;
+    // Skip Cambridge lookup for Vietnamese words
+    const detectedLang = detectLanguage(word);
+    if (detectedLang === 'vi') {
+        console.log('[VI FLOW] Skip CoachLookup because detected Vietnamese:', word);
+        return false;
+    }
     const config = getConfig();
     const baseUrl = getServerUrl(config);
 
@@ -394,7 +400,7 @@ const playBlob = (blob: Blob, meta?: { source?: string; word?: string; isSingleW
 const speakViaServer = async (text: string, language: 'en' | 'vi', accent: string, voice: string, urlOverride?: string) => {
     stopSpeakingInternal(true); 
     const requestId = ++speakRequestSerial;
-    const singleWord = isSingleWordText(text);
+    const singleWord = language === 'en' && isSingleWordText(text);
     isSingleWordPlayback = singleWord;
     isAudioPaused = false;
     notifyStatus(true);
