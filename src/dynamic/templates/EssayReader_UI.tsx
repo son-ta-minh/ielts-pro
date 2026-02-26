@@ -4,9 +4,9 @@ import { Type, Underline, Minus, Plus, BookText, Link, Unlink, HelpCircle, Chevr
 import { VocabularyItem } from '../../app/types';
 import { parseVocabMapping, getEssayHighlightRegex } from '../../utils/text';
 
-export type HighlightColor = 'amber' | 'emerald' | 'sky' | 'rose';
+export type HighlightColor = 'none' | 'amber' | 'emerald' | 'sky' | 'rose';
 
-const highlightStyles: Record<HighlightColor, string> = { 
+const highlightStyles: Record<Exclude<HighlightColor, 'none'>, string> = { 
     amber: "bg-amber-200/60 text-neutral-900 border-amber-300", 
     emerald: "bg-emerald-200/60 text-neutral-900 border-emerald-300", 
     sky: "bg-sky-200/60 text-neutral-900 border-sky-300", 
@@ -48,7 +48,23 @@ const HighlightControls: React.FC<ControlProps> = ({
         </div>
         <div className="w-px h-4 bg-neutral-200 mx-1"></div>
         <button onClick={toggleUnderline} className={`p-1.5 rounded-lg transition-all duration-200 ${isUnderlined ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-400 hover:text-neutral-600'}`} title="Toggle Underline"><Underline size={14} /></button>
-        <div className="flex items-center gap-1.5 pl-1">{(['amber', 'emerald', 'sky', 'rose'] as HighlightColor[]).map(color => (<button key={color} onClick={() => setHighlightColor(color)} className={`w-3.5 h-3.5 rounded-full transition-all duration-200 ${highlightColor === color ? `ring-2 ring-offset-2 ring-neutral-300 scale-110 bg-${color}-400` : `opacity-40 hover:opacity-100 bg-${color}-400`}`} title={`Highlight ${color}`} />))}</div>
+        <div className="flex items-center gap-1.5 pl-1">
+            <button
+                onClick={() => setHighlightColor('none')}
+                className={`w-4 h-4 rounded-full flex items-center justify-center transition-all duration-200 border ${highlightColor === 'none' ? 'ring-2 ring-offset-2 ring-neutral-300 scale-110 bg-red-500 text-white' : 'bg-red-500 text-white opacity-60 hover:opacity-100'}`}
+                title="No Highlight"
+            >
+                <X size={10} />
+            </button>
+            {(['amber', 'emerald', 'sky', 'rose'] as Exclude<HighlightColor, 'none'>[]).map(color => (
+                <button
+                    key={color}
+                    onClick={() => setHighlightColor(color)}
+                    className={`w-3.5 h-3.5 rounded-full transition-all duration-200 ${highlightColor === color ? `ring-2 ring-offset-2 ring-neutral-300 scale-110 bg-${color}-400` : `opacity-40 hover:opacity-100 bg-${color}-400`}`}
+                    title={`Highlight ${color}`}
+                />
+            ))}
+        </div>
         
         {isPracticeMode && (
             <>
@@ -291,9 +307,23 @@ const HighlightedEssay: React.FC<{
                         return (
                             <span 
                                 key={index} 
-                                className={`transition-all font-semibold ${isPracticeMode ? 'text-neutral-900 border-b border-neutral-200' : `${highlightStyles[highlightColor]} ${isUnderlined ? 'border-b-2' : ''} px-0.5 rounded-t-sm cursor-help`}`} 
-                                onMouseEnter={(e) => !isPracticeMode && onHoverWord?.(wordObj, e.currentTarget.getBoundingClientRect())} 
-                                onMouseLeave={() => !isPracticeMode && onHoverWord?.(null, null)}
+                                className={`transition-all ${
+                                    isPracticeMode
+                                        ? 'text-neutral-900 border-b border-neutral-200'
+                                        : highlightColor === 'none'
+                                            ? 'text-neutral-800'
+                                            : `font-semibold ${highlightStyles[highlightColor as Exclude<HighlightColor, 'none'>]} ${isUnderlined ? 'border-b-2' : ''} px-0.5 rounded-t-sm cursor-help`
+                                }`}
+                                onMouseEnter={(e) => {
+                                    if (!isPracticeMode && highlightColor !== 'none') {
+                                        onHoverWord?.(wordObj, e.currentTarget.getBoundingClientRect());
+                                    }
+                                }}
+                                onMouseLeave={() => {
+                                    if (!isPracticeMode && highlightColor !== 'none') {
+                                        onHoverWord?.(null, null);
+                                    }
+                                }}
                             >
                                 {part}
                             </span>
