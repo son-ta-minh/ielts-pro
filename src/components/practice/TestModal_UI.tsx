@@ -511,10 +511,6 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                     </button>
                 ) : (
                     <>
-                        <button onClick={onSelectQuick} className="flex-1 py-4 bg-white border-2 border-neutral-100 text-neutral-600 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-all active:scale-95 shadow-sm group">
-                            <Bolt size={18} className="text-neutral-400 group-hover:text-amber-500 transition-colors fill-neutral-200 group-hover:fill-amber-500" />
-                            <span>Quick Test</span>
-                        </button>
                         {isMastered ? (
                             <button onClick={onSelectPartialScore} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-red-700 transition-all active:scale-95 shadow-lg shadow-red-200">
                                 <Swords size={18} />
@@ -526,6 +522,11 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                                 <span>Master It</span>
                             </button>
                         )}
+
+                        <button onClick={onSelectQuick} className="flex-1 py-4 bg-cyan-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-cyan-600 transition-all active:scale-95 shadow-lg shadow-cyan-200">
+                            <Bolt size={18} />
+                            <span>Quick Test</span>
+                        </button>
                     </>
                 )}
             </div>
