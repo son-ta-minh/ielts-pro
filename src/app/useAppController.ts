@@ -31,6 +31,7 @@ export const useAppController = () => {
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected'>('disconnected');
     const [serverUrl, setServerUrl] = useState<string>('');
     const [networkMode, setNetworkMode] = useState<'home' | 'outside' | null>(null);
+    const [isSwitchingServerMode, setIsSwitchingServerMode] = useState(false);
     const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
     const [connectionScanStatus, setConnectionScanStatus] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
     const [scanningUrl, setScanningUrl] = useState(''); 
@@ -79,6 +80,44 @@ export const useAppController = () => {
     const { sessionWords, setSessionWords, sessionType, sessionFocus, startSession, clearSessionState } = useSession({ setView, setIsSidebarOpen });
     const { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
 
+    const probeServerUrl = useCallback(async (targetUrl: string, signal?: AbortSignal): Promise<boolean | 'ssl_error'> => {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 1200);
+        const onAbort = () => controller.abort();
+        signal?.addEventListener('abort', onAbort);
+
+        try {
+            const res = await fetch(`${targetUrl}/api/health`, {
+                signal: controller.signal,
+                mode: 'cors'
+            });
+            clearTimeout(id);
+            signal?.removeEventListener('abort', onAbort);
+            return res.ok;
+        } catch (err: any) {
+            clearTimeout(id);
+            signal?.removeEventListener('abort', onAbort);
+
+            const errorMessage = (err && err.message) ? String(err.message).toLowerCase() : '';
+            const isLikelySslError =
+                targetUrl.startsWith('https://') &&
+                !controller.signal.aborted &&
+                (
+                    errorMessage.includes('certificate') ||
+                    errorMessage.includes('ssl') ||
+                    errorMessage.includes('secure')
+                );
+
+            if (isLikelySslError) {
+                console.warn('[SSL] Confirmed certificate issue at:', targetUrl, err);
+                setSslIssueUrl(targetUrl);
+                return 'ssl_error';
+            }
+
+            return false;
+        }
+    }, []);
+
     const checkServerConnection = useCallback(async (allowScan = false, urlOverride?: string, forceScan = false, signal?: AbortSignal) => {
         if (isConnectingRef.current) {
             console.log('[AutoConnect] Skip: already connecting');
@@ -98,50 +137,9 @@ export const useAppController = () => {
         }
         setServerUrl(url);
 
-        const tryConnect = async (targetUrl: string) => {
-             const controller = new AbortController();
-             const id = setTimeout(() => controller.abort(), 1200); 
-             const onAbort = () => controller.abort();
-             signal?.addEventListener('abort', onAbort);
-
-             try {
-                 const res = await fetch(`${targetUrl}/api/health`, { 
-                     signal: controller.signal,
-                     mode: 'cors'
-                 });
-                 clearTimeout(id);
-                 signal?.removeEventListener('abort', onAbort);
-                 return res.ok;
-             } catch (err: any) {
-                 clearTimeout(id);
-                 signal?.removeEventListener('abort', onAbort);
-
-                 // Detect REAL SSL certificate issue only (not generic network failure)
-                 const errorMessage = (err && err.message) ? String(err.message).toLowerCase() : '';
-
-                 const isLikelySslError =
-                     targetUrl.startsWith('https://') &&
-                     !controller.signal.aborted &&
-                     (
-                         errorMessage.includes('certificate') ||
-                         errorMessage.includes('ssl') ||
-                         errorMessage.includes('secure')
-                     );
-
-                 if (isLikelySslError) {
-                     console.warn('[SSL] Confirmed certificate issue at:', targetUrl, err);
-                     setSslIssueUrl(targetUrl);
-                     return 'ssl_error';
-                 }
-
-                 // Otherwise treat as normal connection failure (e.g. different machine, port closed, etc.)
-                 return false;
-             }
-        };
-
         if (!forceScan) {
             setScanningUrl(url);
-            const result = await tryConnect(url);
+            const result = await probeServerUrl(url, signal);
 
             if (result === true) {
                 setServerStatus('connected');
@@ -185,7 +183,7 @@ export const useAppController = () => {
                     console.log('[AutoConnect] Trying LOCALHOST first:', localhostUrl);
                     setScanningUrl(localhostUrl);
 
-                    let result = await tryConnect(localhostUrl);
+                    let result = await probeServerUrl(localhostUrl, signal);
                     console.log('[AutoConnect] LOCALHOST result:', result);
 
                     if (result === true) {
@@ -221,7 +219,7 @@ export const useAppController = () => {
                     console.log('[AutoConnect] Fallback to Firebase LOCAL hostname:', firebaseData.local);
                     setScanningUrl(firebaseData.local);
 
-                    result = await tryConnect(firebaseData.local);
+                    result = await probeServerUrl(firebaseData.local, signal);
                     console.log('[AutoConnect] Firebase LOCAL result:', result);
 
                     if (result === true) {
@@ -259,7 +257,7 @@ export const useAppController = () => {
                     console.log('[AutoConnect] Trying PUBLIC:', firebaseData.host);
                     setScanningUrl(firebaseData.host);
 
-                    const ok = await tryConnect(firebaseData.host);
+                    const ok = await probeServerUrl(firebaseData.host, signal);
                     console.log('[AutoConnect] PUBLIC result:', ok);
 
                     if (ok) {
@@ -293,7 +291,111 @@ export const useAppController = () => {
         }
         isConnectingRef.current = false;
         return false;
-    }, [showToast, networkMode]);
+    }, [showToast, networkMode, probeServerUrl, sslIssueUrl]);
+
+    const handleToggleServerMode = useCallback(async (targetMode: 'home' | 'public') => {
+        if (isSwitchingServerMode || isConnectingRef.current) return false;
+
+        setIsSwitchingServerMode(true);
+        setConnectionScanStatus('scanning');
+
+        try {
+            const firebaseData = await getCurrentHost();
+            const config = getConfig();
+
+            if (targetMode === 'home') {
+                if (!firebaseData?.local) {
+                    showToast('Home server URL not found on Firebase.', 'error');
+                    setConnectionScanStatus('failed');
+                    return false;
+                }
+
+                const localUrlObj = new URL(firebaseData.local);
+                const detectedPort = localUrlObj.port || '443';
+                const homeCandidates = [
+                    `https://localhost:${detectedPort}`,
+                    firebaseData.local
+                ];
+
+                for (const candidate of homeCandidates) {
+                    setScanningUrl(candidate);
+                    const result = await probeServerUrl(candidate);
+
+                    if (result === true) {
+                        const candidateUrl = new URL(candidate);
+                        const updatedConfig = {
+                            ...config,
+                            server: {
+                                ...config.server,
+                                host: candidateUrl.hostname,
+                                port: Number(candidateUrl.port || detectedPort) || 443,
+                                useCustomUrl: false,
+                                customUrl: ''
+                            }
+                        };
+
+                        saveConfig(updatedConfig, true);
+                        setNetworkMode('home');
+                        setServerUrl(candidate);
+                        setServerStatus('connected');
+                        setConnectionScanStatus('success');
+                        showToast(`Connected to ${candidate}`, 'success');
+                        return true;
+                    }
+
+                    if (result === 'ssl_error') {
+                        setConnectionScanStatus('failed');
+                        return false;
+                    }
+                }
+
+                showToast('Failed to switch to Home server.', 'error');
+                setConnectionScanStatus('failed');
+                return false;
+            }
+
+            if (!firebaseData?.host) {
+                showToast('Public server URL not found on Firebase.', 'error');
+                setConnectionScanStatus('failed');
+                return false;
+            }
+
+            setScanningUrl(firebaseData.host);
+            const publicResult = await probeServerUrl(firebaseData.host);
+
+            if (publicResult !== true) {
+                if (publicResult !== 'ssl_error') {
+                    showToast('Failed to switch to Public server.', 'error');
+                }
+                setConnectionScanStatus('failed');
+                return false;
+            }
+
+            const updatedConfig = {
+                ...config,
+                server: {
+                    ...config.server,
+                    useCustomUrl: true,
+                    customUrl: firebaseData.host
+                }
+            };
+
+            saveConfig(updatedConfig, true);
+            setNetworkMode('outside');
+            setServerUrl(firebaseData.host);
+            setServerStatus('connected');
+            setConnectionScanStatus('success');
+            showToast(`Connected to ${firebaseData.host}`, 'success');
+            return true;
+        } catch (e) {
+            console.warn('[ServerToggle] Failed to switch mode:', e);
+            showToast('Failed to switch server mode.', 'error');
+            setConnectionScanStatus('failed');
+            return false;
+        } finally {
+            setIsSwitchingServerMode(false);
+        }
+    }, [isSwitchingServerMode, probeServerUrl, showToast]);
 
     const handleScanAndConnect = async (urlOverride?: string) => {
         // Set network mode based on user choice
@@ -716,11 +818,14 @@ export const useAppController = () => {
         planningAction, setPlanningAction, consumePlanningAction,
         serverStatus,
         serverUrl,
+        networkMode,
+        isSwitchingServerMode,
+        handleToggleServerMode,
         sslIssueUrl,
         setSslIssueUrl,
         hasUnsavedChanges, hasWritingUnsavedChanges, setHasWritingUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
         handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen,
         connectionScanStatus, scanningUrl, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt,
-        isSyncing, handleSyncPush, handleSyncRestore, handleSpecialAction
+        isSyncing, handleSyncPush, handleSyncRestore, checkServerConnection, handleSpecialAction
     };
 };

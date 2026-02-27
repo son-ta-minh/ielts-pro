@@ -27,6 +27,9 @@ interface Props {
   // Received from controller via AppLayout
   serverStatus: 'connected' | 'disconnected';
   serverUrl?: string;
+  activeServerMode?: 'home' | 'public' | null;
+  isSwitchingServerMode?: boolean;
+  onToggleServerMode?: (mode: 'home' | 'public') => Promise<boolean>;
   // Actions passed from controller to handle actual restore logic
   restoreFromServerAction?: () => Promise<void>;
   triggerLocalRestore?: () => void;
@@ -38,7 +41,7 @@ interface Props {
 }
 
 const Dashboard: React.FC<Props> = ({ 
-    userId, totalCount, user, wotd, serverStatus, serverUrl,
+    userId, totalCount, user, wotd, serverStatus, serverUrl, activeServerMode, isSwitchingServerMode, onToggleServerMode,
     restoreFromServerAction, triggerLocalRestore,
     onLocalBackup, onServerBackup,
     onAction,
@@ -239,6 +242,9 @@ const Dashboard: React.FC<Props> = ({
     dailyGoals,
     serverStatus,
     serverUrl,
+    activeServerMode,
+    isSwitchingServerMode,
+    onToggleServerMode,
     onAction: onAction || (() => {}),
     onViewWord: restProps.onViewWord,
   };

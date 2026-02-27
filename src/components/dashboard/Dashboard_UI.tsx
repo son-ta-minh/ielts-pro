@@ -6,6 +6,7 @@ import {
   CloudUpload, Percent, MessagesSquare, Scale, Dumbbell
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
+import { AppView, User, VocabularyItem } from '../../app/types';
 
 const getFormattedBuildDate = () => {
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
@@ -46,6 +47,41 @@ export interface StudyStats {
         pronunciation: { completed: number, total: number };
     };
     writing: { completed: number, total: number };
+}
+
+export interface DashboardUIProps {
+    user: User;
+    totalCount: number;
+    dueCount: number;
+    newCount: number;
+    learnedCount: number;
+    rawCount: number;
+    refinedCount: number;
+    reviewStats: { learned: number; mastered: number; statusForgot: number; statusHard: number; statusEasy: number; statusLearned: number; };
+    wotd: VocabularyItem | null;
+    isWotdComposed: boolean;
+    onRandomizeWotd: () => void;
+    onComposeWotd: () => void;
+    goalStats: { totalTasks: number; completedTasks: number; };
+    studyStats: StudyStats | null;
+    isStatsLoading: boolean;
+    onRefreshStats: () => Promise<void>;
+    onNavigate: (view: AppView) => void;
+    onNavigateToWordList: (filter: string) => void;
+    onStartDueReview: () => void;
+    onStartNewLearn: () => void;
+    lastBackupTime: number | null;
+    onBackup: (mode: 'server' | 'file') => void;
+    onRestore: (mode: 'server' | 'file') => void;
+    dayProgress: { learned: number; reviewed: number; learnedWords: VocabularyItem[]; reviewedWords: VocabularyItem[]; };
+    dailyGoals: { max_learn_per_day: number; max_review_per_day: number; };
+    serverStatus: 'connected' | 'disconnected';
+    serverUrl?: string;
+    activeServerMode?: 'home' | 'public' | null;
+    isSwitchingServerMode?: boolean;
+    onToggleServerMode?: (mode: 'home' | 'public') => Promise<boolean>;
+    onAction: (action: string) => void;
+    onViewWord: (word: VocabularyItem) => void;
 }
 
 const TinyProgressRing: React.FC<{ percent: number, size?: number, stroke?: number }> = ({ percent, size = 20, stroke = 2.5 }) => {
@@ -471,7 +507,10 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   serverStatus, onAction, onStartNewLearn, onStartDueReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats,
   studyStats, isStatsLoading,
   onViewWord,
-  serverUrl
+  serverUrl,
+  activeServerMode,
+  isSwitchingServerMode,
+  onToggleServerMode
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
   const [activeTab, setActiveTab] = useState<'STUDY' | 'PRACTICE' | 'INSIGHT'>(() => {
@@ -492,13 +531,39 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                 <h2 className="text-3xl font-black text-neutral-900 tracking-tight">IELTS Vocab Pro</h2>
                 <span className="text-[10px] font-bold text-neutral-400 font-mono tracking-tighter bg-neutral-100 px-1.5 py-0.5 rounded-md border border-neutral-200">{version}</span>
             </div>
-            <div className="flex items-center gap-3 mt-2">
+            <div className="flex flex-wrap items-center gap-2 mt-2">
                  {serverStatus === 'connected' ? (
-                    <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="text-[10px] font-black tracking-widest break-all">
-                            Connected to: {serverUrl || 'Unknown Host'}
-                        </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <span className="text-[10px] font-black tracking-widest break-all">
+                                Connected to: {serverUrl || 'Unknown Host'}
+                            </span>
+                        </div>
+                        <div className="inline-flex items-center gap-1">
+                            <button
+                                onClick={() => onToggleServerMode?.('home')}
+                                disabled={!!isSwitchingServerMode}
+                                className={`px-2 py-1 rounded-md border text-[10px] font-black tracking-wide transition-colors ${
+                                    activeServerMode === 'home'
+                                        ? 'bg-neutral-900 text-white border-neutral-900'
+                                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
+                                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                            >
+                                {isSwitchingServerMode && activeServerMode === 'home' ? 'Switching...' : '>Home Server'}
+                            </button>
+                            <button
+                                onClick={() => onToggleServerMode?.('public')}
+                                disabled={!!isSwitchingServerMode}
+                                className={`px-2 py-1 rounded-md border text-[10px] font-black tracking-wide transition-colors ${
+                                    activeServerMode === 'public'
+                                        ? 'bg-neutral-900 text-white border-neutral-900'
+                                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
+                                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                            >
+                                {isSwitchingServerMode && activeServerMode === 'public' ? 'Switching...' : '>Public Server'}
+                            </button>
+                        </div>
                     </div>
                  ) : (
                     <div className="flex items-center gap-2 px-1.5 py-1.5 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm pr-1.5">
