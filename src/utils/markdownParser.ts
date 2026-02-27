@@ -330,7 +330,7 @@ const processAudioBlocks = (text: string): string => {
             .trim()
             .replace(/'/g, "\\'"); 
 
-        const speakerBtn = `<button onclick="window.handleLessonSpeak('${speechText}')" class="inline-flex items-center justify-center w-6 h-6 mr-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-md transition-all active:scale-90 align-middle shadow-sm" title="Listen"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>`;
+        const speakerBtn = `<button onclick="window.handleLessonSpeak('${speechText}', '${lang.toLowerCase()}')" class="inline-flex items-center justify-center w-6 h-6 mr-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-md transition-all active:scale-90 align-middle shadow-sm" title="Listen"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>`;
         
         return speakerBtn + content.trim();
     });

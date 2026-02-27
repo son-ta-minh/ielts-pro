@@ -175,9 +175,34 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
 
     const isIpa = !isNewWord && !!currentWord.ipaUs;
 
+    // --- Mobile Swipe Support ---
+    const touchStartX = React.useRef<number | null>(null);
+
+    const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+        touchStartX.current = e.touches[0].clientX;
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+        if (touchStartX.current === null) return;
+
+        const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+
+        const swipeThreshold = 50; // px
+
+        if (deltaX > swipeThreshold) {
+            // Swipe right → Previous
+            setProgress(p => ({ ...p, current: (p.current - 1 + sessionWords.length) % sessionWords.length }));
+        } else if (deltaX < -swipeThreshold) {
+            // Swipe left → Next
+            setProgress(p => ({ ...p, current: (p.current + 1) % sessionWords.length }));
+        }
+
+        touchStartX.current = null;
+    };
+
     return (
         <>
-            <div className="max-w-3xl mx-auto h-[calc(100vh-100px)] flex flex-col animate-in fade-in duration-300">
+            <div className="max-w-3xl mx-auto h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] flex flex-col animate-in fade-in duration-300 px-3 sm:px-0">
                 <div className="px-6 shrink-0 pb-4">
                     <div className="flex justify-between items-center mb-1">
                         <div className="w-24"></div> {/* Left spacer */}
@@ -196,25 +221,29 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                     </div>
                 </div>
 
-                <div className="flex-1 flex items-center justify-center relative gap-4">
+                <div className="flex-1 flex items-center justify-center relative gap-2 sm:gap-4">
                     <button 
                         onClick={() => setProgress(p => ({ ...p, current: (p.current - 1 + sessionWords.length) % sessionWords.length }))} 
-                        className="p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all"
+                        className="hidden sm:block p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all"
                         aria-label="Previous word"
                     >
                         <ArrowLeft size={28} />
                     </button>
 
-                    <div className="w-full max-w-xl h-full bg-white rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col relative overflow-hidden group select-none">
+                    <div
+                        onTouchStart={handleTouchStart}
+                        onTouchEnd={handleTouchEnd}
+                        className="w-full max-w-xl h-full bg-white rounded-3xl sm:rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col relative overflow-hidden group select-none touch-pan-y"
+                    >
                         {isQuickFire ? (
                             <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 w-full text-center space-y-4">
                                 <Loader2 className="animate-spin text-neutral-200" size={32} />
                                 <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading Next Test...</p>
                             </div>
                         ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 w-full text-center space-y-8">
+                            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 w-full text-center space-y-6 sm:space-y-8">
                                 <div className="flex items-center gap-4">
-                                    <h2 className={`font-black text-neutral-900 tracking-tight text-4xl ${isIpa ? 'font-serif' : ''}`}>{displayText}</h2>
+                                    <h2 className={`font-black text-neutral-900 tracking-tight text-3xl sm:text-4xl break-words ${isIpa ? 'font-serif' : ''}`}>{displayText}</h2>
                                     {isNewWord ? (
                                         <ComplexityIndicator complexity={currentWord.complexity ?? 0} />
                                     ) : (
@@ -238,7 +267,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                     
                     <button 
                         onClick={() => setProgress(p => ({ ...p, current: (p.current + 1) % sessionWords.length }))} 
-                        className="p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all"
+                        className="hidden sm:block p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all"
                         aria-label="Next word"
                     >
                         <ArrowRight size={28} />

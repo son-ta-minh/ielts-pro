@@ -185,8 +185,8 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
     }, [loadSessions]);
 
     useEffect(() => {
-        (window as any).handleLessonSpeak = (text: string) => {
-            speak(text, false, 'en');
+        (window as any).handleLessonSpeak = (text: string, lang?: 'en' | 'vi') => {
+            speak(text, false, lang);
         };
         return () => {
             delete (window as any).handleLessonSpeak;
@@ -574,7 +574,7 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
     return (
         <div className="h-full flex flex-col bg-neutral-50/30">
             {viewMode !== 'home' && (
-            <div className="flex-shrink-0 px-6 py-3 border-b flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-20">
+            <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white/80 backdrop-blur-md sticky top-0 z-20">
                 <div className="flex items-center gap-3 min-h-8">
                     {viewMode !== 'home' && (
                         <button
@@ -588,7 +588,7 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                 </div>
 
                 {viewMode === 'module' && sections.length > 1 && (
-                    <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
+                    <div className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center gap-2">
                         <button
                             onClick={() => setCurrentSectionIdx(Math.max(0, currentSectionIdx - 1))}
                             disabled={currentSectionIdx === 0}
@@ -661,6 +661,31 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                         </button>
                     ) : null}
                 </div>
+                {viewMode === 'module' && sections.length > 1 && (
+                    <div className="flex sm:hidden items-center justify-between gap-2 w-full">
+                        <button
+                            onClick={() => setCurrentSectionIdx(Math.max(0, currentSectionIdx - 1))}
+                            disabled={currentSectionIdx === 0}
+                            className="flex-1 flex items-center justify-center gap-1 p-2 bg-neutral-100 rounded-lg text-neutral-600 disabled:opacity-30"
+                        >
+                            <ChevronLeft size={16} />
+                            Prev
+                        </button>
+
+                        <div className="text-[11px] font-bold text-neutral-500 truncate text-center flex-1">
+                            {activeSection?.title}
+                        </div>
+
+                        <button
+                            onClick={() => setCurrentSectionIdx(Math.min(sections.length - 1, currentSectionIdx + 1))}
+                            disabled={currentSectionIdx === sections.length - 1}
+                            className="flex-1 flex items-center justify-center gap-1 p-2 bg-neutral-100 rounded-lg text-neutral-600 disabled:opacity-30"
+                        >
+                            Next
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                )}
             </div>
             )}
 

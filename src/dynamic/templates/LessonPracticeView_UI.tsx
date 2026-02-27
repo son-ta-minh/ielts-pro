@@ -221,8 +221,8 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
     };
 
     useEffect(() => {
-        (window as any).handleLessonSpeak = (text: string) => {
-            speak(text);
+        (window as any).handleLessonSpeak = (text: string, lang?: 'en' | 'vi') => {
+            speak(text, false, lang);
         };
         return () => {
             handleStop();

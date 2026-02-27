@@ -901,7 +901,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         {/* Progress Bar */}
                         {showPlaybackControls && (
                             <div
-                                className="absolute left-16 bottom-2 flex items-center gap-3 bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl border border-neutral-200 animate-in fade-in slide-in-from-left-4 duration-300 pointer-events-auto min-w-[24rem]"
+                                className="absolute left-16 bottom-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 bg-white/90 backdrop-blur-md px-3 sm:px-4 py-2 rounded-2xl shadow-xl border border-neutral-200 animate-in fade-in slide-in-from-left-4 duration-300 pointer-events-auto w-[calc(100vw-6rem)] sm:w-auto max-w-[95vw] sm:max-w-none"
                                 onMouseEnter={openCoachMenu}
                                 onMouseLeave={scheduleCloseCoachMenu}
                             >
@@ -922,7 +922,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                     {audioProgress.duration > 0 ? formatTime(audioProgress.duration) : '--:--'}
                                 </span>
                                 {/* Media Controls Row */}
-                                <div className="flex items-center gap-2 w-full">
+                                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full">
                                     <button
                                         onClick={() => {
                                             const newTime = Math.max(0, audioProgress.currentTime - 5);

@@ -223,7 +223,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     }, []);
 
     useEffect(() => {
-        (window as any).handleLessonSpeak = (text: string) => speak(text);
+        (window as any).handleLessonSpeak = (text: string, lang?: 'en' | 'vi') => {
+            speak(text, false, lang);
+        };
         return () => { delete (window as any).handleLessonSpeak; };
     }, []);
 
@@ -317,7 +319,13 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     </>
                                 )}
                                 <div className="relative group">
-                                    <button className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"><BookOpen size={18} /></button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); speak(word.meaningVi, false, 'vi'); }}
+                                        className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                        title="Read Vietnamese meaning"
+                                    >
+                                        <BookOpen size={18} />
+                                    </button>
                                     <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs px-3 py-2 bg-neutral-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">{word.meaningVi}<div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div></div>
                                 </div>
                                 <MasteryScoreCalculator word={word} />

@@ -147,8 +147,8 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
 
   // Attach speaker utility for data-only Audio tags
   useEffect(() => {
-    (window as any).handleLessonSpeak = (text: string) => {
-        speak(text);
+    (window as any).handleLessonSpeak = (text: string, lang?: 'en' | 'vi') => {
+        speak(text, false, lang);
     };
     return () => {
         delete (window as any).handleLessonSpeak;

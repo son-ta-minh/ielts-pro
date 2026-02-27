@@ -323,7 +323,15 @@ export const resumeSpeaking = async () => {
 export const prefetchSpeech = async (text: string, forcedLang?: 'en' | 'vi'): Promise<Blob | null> => {
     const config = getConfig();
     const serverUrl = getServerUrl(config);
-    const lang = forcedLang ? forcedLang : detectLanguage(text);
+    const normalizedForcedLang =
+        forcedLang === 'vi' ? 'vi' :
+        (forcedLang as any) === 'vn' ? 'vi' :
+        forcedLang === 'en' ? 'en' :
+        undefined;
+
+    const lang: 'en' | 'vi' = normalizedForcedLang
+        ? normalizedForcedLang
+        : detectLanguage(text);
     const coachType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[coachType];
     const voiceName = lang === 'vi' ? coach.viVoice : coach.enVoice;
@@ -515,8 +523,16 @@ export const speak = async (text: string, isDialogue = false, forcedLang?: 'en' 
   const coachType = config.audioCoach.activeCoach;
   const coach = config.audioCoach.coaches[coachType];
   const serverUrl = getServerUrl(config);
-  
-  const lang = forcedLang ? forcedLang : detectLanguage(cleanedText);
+
+  const normalizedForcedLang =
+      forcedLang === 'vi' ? 'vi' :
+      (forcedLang as any) === 'vn' ? 'vi' :
+      forcedLang === 'en' ? 'en' :
+      undefined;
+
+  const lang: 'en' | 'vi' = normalizedForcedLang
+      ? normalizedForcedLang
+      : detectLanguage(text);
   const voiceName = voiceOverride !== undefined ? voiceOverride : (lang === 'vi' ? coach.viVoice : coach.enVoice);
   const accentCode = accentOverride !== undefined ? accentOverride : (lang === 'vi' ? coach.viAccent : coach.enAccent);
 
