@@ -169,8 +169,11 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     if (!currentWord) return null;
     const HeaderIcon = isNewWord ? Lightbulb : BookOpen;
     const headerColor = isNewWord ? 'text-blue-500' : 'text-neutral-500';
-    const displayText = currentWord.ipaUs || currentWord.word;
-    const isIpa = !!currentWord.ipaUs;
+    const displayText = isNewWord
+    ? currentWord.word
+    : currentWord.ipaUs || currentWord.word;
+
+    const isIpa = !isNewWord && !!currentWord.ipaUs;
 
     return (
         <>
