@@ -138,6 +138,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const playbackControlsHideTimeoutRef = useRef<number | null>(null);
     const isCoachHoveredRef = useRef(false);
     const selectedTextRef = useRef<string>('');
+    const selectedRangeRef = useRef<Range | null>(null);
     const cambridgeAudioRef = useRef<HTMLAudioElement | null>(null);
     const isOpenRef = useRef(false);
     const messageRef = useRef<Message | null>(null);
@@ -313,59 +314,102 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     }, []);
 
     useEffect(() => {
+        if (!config.interface.rightClickCommandEnabled) return;
+
+        const openCoachMenu = (selection: Selection) => {
+            if (!selection || selection.rangeCount === 0) return;
+
+            const selectedText = selection.toString().trim();
+            if (!selectedText) return;
+
+            const range = selection.getRangeAt(0).cloneRange(); // clone để tránh iOS mất range
+            const rect = range.getBoundingClientRect();
+            const placement = rect.top > 250 ? 'top' : 'bottom';
+
+            selectedTextRef.current = selectedText;
+            selectedRangeRef.current = range; // ⚠ cần ref này ở component
+
+            setMenuPos({
+                x: rect.left + rect.width / 2,
+                y: placement === 'top' ? rect.top : rect.bottom,
+                placement
+            });
+
+            setMessage(null);
+            setIsOpen(true);
+
+            checkLibraryExistence(selectedText);
+        };
+
         const handleContextMenu = (e: MouseEvent) => {
-            if (!config.interface.rightClickCommandEnabled) return;
             const selection = window.getSelection();
-            const selectedText = selection?.toString().trim();
-            if (selectedText) {
-                e.preventDefault();
-                const range = selection!.getRangeAt(0);
-                const rect = range.getBoundingClientRect();
-                const placement = rect.top > 250 ? 'top' : 'bottom';
-                
-                setMenuPos({ 
-                    x: rect.left + rect.width / 2, 
-                    y: placement === 'top' ? rect.top : rect.bottom, 
-                    placement 
-                });
-                selectedTextRef.current = selectedText;
-                setMessage(null);
-                setIsOpen(true);
-                
-                checkLibraryExistence(selectedText);
-                // Cambridge check removed
-            } else {
-                setMenuPos(null);
-            }
+            if (!selection || !selection.toString().trim()) return;
+
+            e.preventDefault();
+            openCoachMenu(selection);
+        };
+
+        const handleSelectionClick = (e: MouseEvent) => {
+            if (isOpen) return;
+
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+
+            const selectedText = selection.toString().trim();
+            if (!selectedText) return;
+
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+
+            const x = e.clientX;
+            const y = e.clientY;
+
+            const clickedInsideSelection =
+                x >= rect.left &&
+                x <= rect.right &&
+                y >= rect.top &&
+                y <= rect.bottom;
+
+            if (!clickedInsideSelection) return;
+
+            openCoachMenu(selection);
         };
 
         const handleClickOutside = (e: MouseEvent) => {
             const target = e.target as Node;
-            const clickedOutsideCommand = !commandBoxRef.current || !commandBoxRef.current.contains(target);
-            const clickedOutsideMessage = !messageBoxRef.current || !messageBoxRef.current.contains(target);
-            if (messageRef.current?.cambridge) return;
+
+            const clickedOutsideCommand =
+                !commandBoxRef.current ||
+                !commandBoxRef.current.contains(target);
+
+            const clickedOutsideMessage =
+                !messageBoxRef.current ||
+                !messageBoxRef.current.contains(target);
+
             if (clickedOutsideCommand && clickedOutsideMessage) {
-                if (isOpen) { 
-                    setIsOpen(false); 
-                    setMenuPos(null); 
-                }
+                setIsOpen(false);
+                setMenuPos(null);
             }
         };
 
         document.addEventListener('contextmenu', handleContextMenu);
+        document.addEventListener('click', handleSelectionClick);
         document.addEventListener('mousedown', handleClickOutside);
+
         return () => {
-            if (closeMenuTimeoutRef.current) {
-                window.clearTimeout(closeMenuTimeoutRef.current);
-                closeMenuTimeoutRef.current = null;
-            }
             document.removeEventListener('contextmenu', handleContextMenu);
+            document.removeEventListener('click', handleSelectionClick);
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [config.interface.rightClickCommandEnabled, isOpen, config.server, user.id]);
+    }, [
+        config.interface.rightClickCommandEnabled,
+        config.server,
+        user.id,
+        isOpen
+    ]);
 
     const handleTranslateSelection = async () => {
-        const selectedText = window.getSelection()?.toString().trim();
+        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
         if (!selectedText) return;
 
         // If already Vietnamese, do not call translation API
@@ -405,7 +449,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const handleReadAndIpa = async () => {
-        const selectedText = window.getSelection()?.toString().trim();
+        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
         if (!selectedText) return;
         if (selectedText.length > MAX_READ_LENGTH) {
             showToast("Text is too long to read!", "error");
@@ -470,8 +514,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const handleAddToLibrary = async () => {
-        const selectedText = window.getSelection()?.toString().trim();
-        if (!selectedText || isAlreadyInLibrary) return;
+        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
+        if (!selectedText) return;        if (!selectedText || isAlreadyInLibrary) return;
         setIsAddingToLibrary(true);
         try {
             let newItem: VocabularyItem;
@@ -574,7 +618,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const handleSpeakSelection = () => {
-        const selectedText = window.getSelection()?.toString().trim();
+        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
         setIsOpen(false);
         setMenuPos(null);
         if (selectedText && selectedText.length > MAX_MIMIC_LENGTH) {
