@@ -2,7 +2,30 @@
  * Scans a range of ports on localhost and common macOS hostnames
  * to find the Vocab Pro Server.
  */
+import { getCurrentHost } from './firebase'; // adjust path if different
+
 export const scanForServer = async (onProgress?: (url: string) => void, signal?: AbortSignal): Promise<{ host: string; port: number } | null> => {
+    // 1️⃣ Try to get current host from Firebase first
+    try {
+        const firebaseHost = await getCurrentHost();
+        if (firebaseHost) {
+            const url = new URL(firebaseHost);
+            const port = url.port ? parseInt(url.port, 10) : (url.protocol === 'https:' ? 443 : 80);
+
+            if (onProgress) onProgress(firebaseHost);
+
+            const res = await fetch(`${firebaseHost}/api/health`, {
+                mode: 'cors',
+                cache: 'no-cache'
+            });
+
+            if (res.ok) {
+                return { host: url.hostname, port };
+            }
+        }
+    } catch {
+        // Ignore Firebase errors and fallback to local scanning
+    }
     // Hosts to scan
     const hosts = ['localhost', '127.0.0.1', 'macm2.local', 'macm4.local'];
     // Port range: 3000 to 3020

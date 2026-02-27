@@ -28,6 +28,7 @@ export const useAppController = () => {
     const [lastMasteryScoreUpdateTimestamp, setLastMasteryScoreUpdateTimestamp] = useState(Date.now());
     
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected'>('disconnected');
+    const [serverUrl, setServerUrl] = useState<string>('');
     const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
     const [connectionScanStatus, setConnectionScanStatus] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
     const [scanningUrl, setScanningUrl] = useState(''); 
@@ -77,6 +78,7 @@ export const useAppController = () => {
     const checkServerConnection = useCallback(async (allowScan = false, urlOverride?: string, forceScan = false, signal?: AbortSignal) => {
         const config = getConfig();
         const url = urlOverride || getServerUrl(config);
+        setServerUrl(url);
 
         const tryConnect = async (targetUrl: string) => {
              const controller = new AbortController();
@@ -517,7 +519,9 @@ export const useAppController = () => {
         targetCourseId, consumeTargetCourseId,
         targetGameMode, consumeTargetGameMode, // New exports for game linking
         planningAction, setPlanningAction, consumePlanningAction,
-        serverStatus, hasUnsavedChanges, hasWritingUnsavedChanges, setHasWritingUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
+        serverStatus,
+        serverUrl,
+        hasUnsavedChanges, hasWritingUnsavedChanges, setHasWritingUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
         handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen,
         connectionScanStatus, scanningUrl, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt,
         isSyncing, handleSyncPush, handleSyncRestore, handleSpecialAction

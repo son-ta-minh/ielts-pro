@@ -470,7 +470,8 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   lastBackupTime, onBackup, onRestore,
   serverStatus, onAction, onStartNewLearn, onStartDueReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats,
   studyStats, isStatsLoading,
-  onViewWord
+  onViewWord,
+  serverUrl
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
   const [activeTab, setActiveTab] = useState<'STUDY' | 'PRACTICE' | 'INSIGHT'>(() => {
@@ -495,7 +496,9 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                  {serverStatus === 'connected' ? (
                     <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
                         <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Cloud Connected</span>
+                        <span className="text-[10px] font-black tracking-widest break-all">
+                            Connected to: {serverUrl || 'Unknown Host'}
+                        </span>
                     </div>
                  ) : (
                     <div className="flex items-center gap-2 px-1.5 py-1.5 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm pr-1.5">

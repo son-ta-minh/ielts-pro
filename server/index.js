@@ -1,5 +1,4 @@
-
-/**
+/****
  * Unified Vocab Pro Server
  * Features:
  * 1. Streaming Backup System
@@ -16,14 +15,35 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const { spawn } = require('child_process');
 const { settings } = require('./config');
 const { loadGlobalLibrary } = require('./libraryManager');
+const admin = require('firebase-admin');
 
 // --- Stability Fix: Force CWD ---
 try {
     process.chdir(__dirname);
 } catch (err) {
     console.warn(`[Server] Failed to set CWD to ${__dirname}: ${err.message}`);
+}
+
+// --- Firebase Admin Init (No REST API / No Billing Required) ---
+if (!admin.apps.length) {
+    const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
+
+    if (!fs.existsSync(serviceAccountPath)) {
+        console.error('[Firebase] serviceAccountKey.json not found at:', serviceAccountPath);
+        process.exit(1);
+    }
+
+    const serviceAccount = require(serviceAccountPath);
+
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: serviceAccount.project_id
+    });
+
+    console.log('[Firebase] Admin initialized with project:', serviceAccount.project_id);
 }
 
 const app = express();
@@ -130,6 +150,65 @@ server.listen(settings.PORT, settings.HOST, () => {
         console.error("[Startup] Failed to load library:", e);
     }
 });
+
+// --- Auto Start Cloudflare Tunnel (if available) ---
+function startCloudflareTunnel() {
+    try {
+        console.log('[Cloudflare] Attempting to start tunnel...');
+        const tunnel = spawn('cloudflared', [
+            'tunnel',
+            '--url',
+            `${protocol}://localhost:${settings.PORT}`
+        ]);
+
+        let hostUpdated = false;
+
+        function handleTunnelOutput(raw) {
+            const output = raw.toString();
+            process.stdout.write(`[Cloudflare] ${output}`);
+
+            const match = output.match(/https:\/\/[-a-zA-Z0-9]+\.trycloudflare\.com/);
+            if (match && !hostUpdated) {
+                hostUpdated = true;
+                const publicUrl = match[0];
+                console.log(`[Cloudflare] Public URL detected: ${publicUrl}`);
+
+                // --- Update Firestore with new host ---
+                updateHostInFirestore(publicUrl);
+            }
+        }
+
+        tunnel.stdout.on('data', handleTunnelOutput);
+        tunnel.stderr.on('data', handleTunnelOutput);
+
+        tunnel.on('close', (code) => {
+            console.log(`[Cloudflare] Tunnel process exited with code ${code}`);
+        });
+
+    } catch (err) {
+        console.warn('[Cloudflare] cloudflared not found or failed to start:', err.message);
+    }
+}
+
+async function updateHostInFirestore(hostUrl) {
+    try {
+        console.log('[Firebase] Updating host in Firestore (Admin SDK)...');
+
+        const db = admin.firestore();
+
+        await db.collection('vocabpro').doc('server').set({
+            host: hostUrl,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        console.log('[Firebase] Host updated successfully.');
+    } catch (err) {
+        console.error('[Firebase] Admin update failed:', err.message);
+    }
+}
+
+// Start tunnel automatically if cloudflared exists
+startCloudflareTunnel();
 
 function gracefulShutdown(signal) {
     console.log(`\n[Shutdown] Received ${signal}. Backing up courses...`);
