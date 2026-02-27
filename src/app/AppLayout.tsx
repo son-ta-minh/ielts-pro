@@ -88,7 +88,7 @@ const Sidebar: React.FC<AppLayoutProps & {
 
   return (
     <>
-      <aside className={`fixed md:relative inset-y-0 left-0 z-50 w-64 bg-white border-r border-neutral-200 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col p-6`}>
+      <aside className={`fixed lg:relative inset-y-0 left-0 z-50 w-64 bg-white border-r border-neutral-200 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col p-6`}>
         <div className="mb-6">
            <div className="flex items-center justify-between gap-2">
              <div className="flex items-center space-x-3 overflow-hidden flex-1">
@@ -173,7 +173,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
 };
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore, sslIssueUrl, setSslIssueUrl, checkServerConnection } = controller;
+  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore, sslIssueUrl, setSslIssueUrl, retrySslConnection } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
   const [writingConfirmModal, setWritingConfirmModal] = useState<{ isOpen: boolean; targetView: AppView | null; action?: () => void }>({
@@ -212,9 +212,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
   return (
     <div className="min-h-screen bg-neutral-50 md:flex">
       <Sidebar controller={controller} onNavigate={handleNavigation} onSwitchUser={handleSwitchUser} />
-      <div className={`fixed inset-0 bg-black/30 z-40 md:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
+      <div className={`fixed inset-0 bg-black/30 z-40 lg:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
       <main className={`flex-1 overflow-y-auto relative ${view === 'MIMIC' ? 'p-0' : 'p-6 md:p-10'}`}>
-        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30"><Menu size={24} /></button>
+        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30"><Menu size={24} /></button>
         <Suspense fallback={<div className="flex justify-center p-20"><Loader2 className="animate-spin text-neutral-300" size={32} /></div>}><MainContent controller={controller} /></Suspense>
       </main>
       {currentUser && <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={controller.handleSpecialAction} onViewWord={setGlobalViewWord} isAnyModalOpen={!!globalViewWord || !!editingWord} />}
@@ -285,7 +285,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
               <button
                 onClick={async () => {
                   setSslIssueUrl(null);
-                  await checkServerConnection(true);
+                  await retrySslConnection();
                 }}
                 className="px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm"
               >

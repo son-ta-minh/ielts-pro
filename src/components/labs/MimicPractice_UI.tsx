@@ -272,9 +272,12 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                                     </div>
 
                                     {showIpa && ipa && (
-                                        <div className="px-4 py-1.5 bg-neutral-50 border border-neutral-100 rounded-xl text-lg font-mono font-medium text-neutral-500 animate-in slide-in-from-top-2 duration-500">
-                                            {ipa}
-                                        </div>
+                                        <div
+                                            className="w-full self-stretch px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-2xl text-base font-mono font-normal text-neutral-600 leading-relaxed text-left whitespace-pre-line animate-in slide-in-from-top-2 duration-500"
+                                            dangerouslySetInnerHTML={{
+                                                __html: ipa.replace(/\s+\//g, '<br/>/')
+                                            }}
+                                        />
                                     )}
 
                                     {!isRevealed && !localAnalysis && (

@@ -34,6 +34,7 @@ export const useAppController = () => {
         const cfg = getConfig();
         return cfg.server.useCustomUrl ? 'outside' : 'home';
     });
+    const [pendingSslRetryMode, setPendingSslRetryMode] = useState<'home' | 'public' | null>(null);
     const [isSwitchingServerMode, setIsSwitchingServerMode] = useState(false);
     const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
     const [connectionScanStatus, setConnectionScanStatus] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
@@ -205,7 +206,14 @@ export const useAppController = () => {
                             }
                         };
 
-                        saveConfig(updatedConfig, true);
+                        const shouldPersistHomeConfig =
+                            config.server.host !== 'localhost' ||
+                            config.server.port !== (Number(detectedPort) || 443) ||
+                            config.server.useCustomUrl ||
+                            !!config.server.customUrl;
+                        if (shouldPersistHomeConfig) {
+                            saveConfig(updatedConfig, true);
+                        }
                         showToast(`Connected to ${localhostUrl}`, "success");
                         isConnectingRef.current = false;
                         return true;
@@ -241,7 +249,14 @@ export const useAppController = () => {
                             }
                         };
 
-                        saveConfig(updatedConfig, true);
+                        const shouldPersistHomeConfig =
+                            config.server.host !== urlObj.hostname ||
+                            config.server.port !== (Number(detectedPort) || 443) ||
+                            config.server.useCustomUrl ||
+                            !!config.server.customUrl;
+                        if (shouldPersistHomeConfig) {
+                            saveConfig(updatedConfig, true);
+                        }
                         showToast(`Connected to ${firebaseData.local}`, "success");
                         isConnectingRef.current = false;
                         return true;
@@ -277,7 +292,12 @@ export const useAppController = () => {
                                 customUrl: firebaseData.host
                             }
                         };
-                        saveConfig(updatedConfig, true);
+                        const shouldPersistPublicConfig =
+                            !config.server.useCustomUrl ||
+                            config.server.customUrl !== firebaseData.host;
+                        if (shouldPersistPublicConfig) {
+                            saveConfig(updatedConfig, true);
+                        }
 
                         showToast(`Connected to ${firebaseData.host}`, "success");
                         isConnectingRef.current = false;
@@ -300,6 +320,7 @@ export const useAppController = () => {
         if (isSwitchingServerMode || isConnectingRef.current) return false;
 
         setIsSwitchingServerMode(true);
+        setPendingSslRetryMode(targetMode);
         setConnectionScanStatus('scanning');
 
         try {
@@ -319,9 +340,11 @@ export const useAppController = () => {
                     `https://localhost:${detectedPort}`,
                     firebaseData.local
                 ];
+                let lastHttpsCandidate: string | null = null;
 
                 for (const candidate of homeCandidates) {
                     setScanningUrl(candidate);
+                    if (candidate.startsWith('https://')) lastHttpsCandidate = candidate;
                     const result = await probeServerUrl(candidate);
 
                     if (result === true) {
@@ -352,13 +375,21 @@ export const useAppController = () => {
                     }
                 }
 
+                if (lastHttpsCandidate && !sslIssueUrl) {
+                    setSslIssueUrl(lastHttpsCandidate);
+                    setConnectionScanStatus('failed');
+                    return false;
+                }
+
                 showToast('Failed to switch to Home server.', 'error');
+                setPendingSslRetryMode(null);
                 setConnectionScanStatus('failed');
                 return false;
             }
 
             if (!firebaseData?.host) {
                 showToast('Public server URL not found on Firebase.', 'error');
+                setPendingSslRetryMode(null);
                 setConnectionScanStatus('failed');
                 return false;
             }
@@ -368,7 +399,13 @@ export const useAppController = () => {
 
             if (publicResult !== true) {
                 if (publicResult !== 'ssl_error') {
+                    if (firebaseData.host.startsWith('https://') && !sslIssueUrl) {
+                        setSslIssueUrl(firebaseData.host);
+                        setConnectionScanStatus('failed');
+                        return false;
+                    }
                     showToast('Failed to switch to Public server.', 'error');
+                    setPendingSslRetryMode(null);
                 }
                 setConnectionScanStatus('failed');
                 return false;
@@ -387,18 +424,28 @@ export const useAppController = () => {
             setNetworkMode('outside');
             setServerUrl(firebaseData.host);
             setServerStatus('connected');
+            setPendingSslRetryMode(null);
             setConnectionScanStatus('success');
             showToast(`Connected to ${firebaseData.host}`, 'success');
             return true;
         } catch (e) {
             console.warn('[ServerToggle] Failed to switch mode:', e);
             showToast('Failed to switch server mode.', 'error');
+            setPendingSslRetryMode(null);
             setConnectionScanStatus('failed');
             return false;
         } finally {
             setIsSwitchingServerMode(false);
         }
-    }, [isSwitchingServerMode, probeServerUrl, showToast]);
+    }, [isSwitchingServerMode, probeServerUrl, showToast, sslIssueUrl]);
+
+    const retrySslConnection = useCallback(async () => {
+        if (pendingSslRetryMode) {
+            await handleToggleServerMode(pendingSslRetryMode);
+            return;
+        }
+        await checkServerConnection(true);
+    }, [pendingSslRetryMode, handleToggleServerMode, checkServerConnection]);
 
     const handleScanAndConnect = async (urlOverride?: string) => {
         // Set network mode based on user choice
@@ -480,25 +527,32 @@ export const useAppController = () => {
                 }
             };
 
-            autoConnect();
+            // In React StrictMode (dev), the first mount is intentionally torn down.
+            // Delay boot connect slightly so the throwaway mount gets cancelled cleanly.
+            const bootConnectTimer = window.setTimeout(() => {
+                autoConnect();
+            }, 80);
 
             const interval = setInterval(() => {
                 const cfg = getConfig();
                 const preferredMode: 'home' | 'outside' = cfg.server.useCustomUrl ? 'outside' : 'home';
                 setNetworkMode(preferredMode);
-                checkServerConnection(true, undefined, preferredMode === 'home');
+                // Keepalive check only: do not force full LAN scan every cycle.
+                checkServerConnection(false, undefined, false);
             }, 30000);
 
             const onConfigUpdated = () => {
                 const cfg = getConfig();
                 const preferredMode: 'home' | 'outside' = cfg.server.useCustomUrl ? 'outside' : 'home';
                 setNetworkMode(preferredMode);
-                checkServerConnection(true, undefined, preferredMode === 'home');
+                // Respect updated config URL first; only scan if direct connect fails.
+                checkServerConnection(true, undefined, false);
             };
 
             window.addEventListener('config-updated', onConfigUpdated);
 
             return () => {
+                clearTimeout(bootConnectTimer);
                 controller.abort();
                 clearInterval(interval);
                 window.removeEventListener('config-updated', onConfigUpdated);
@@ -842,6 +896,6 @@ export const useAppController = () => {
         hasUnsavedChanges, hasWritingUnsavedChanges, setHasWritingUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
         handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen,
         connectionScanStatus, scanningUrl, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt,
-        isSyncing, handleSyncPush, handleSyncRestore, checkServerConnection, handleSpecialAction
+        isSyncing, handleSyncPush, handleSyncRestore, checkServerConnection, retrySslConnection, handleSpecialAction
     };
 };

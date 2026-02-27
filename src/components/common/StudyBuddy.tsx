@@ -732,7 +732,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     const formatBoldText = (text: string) => {
         const boldRegex = new RegExp('\\*\\*(.*?)\\*\\*', 'g');
-        return text.replace(boldRegex, '<strong>$1</strong>');
+        return text
+            .replace(boldRegex, '<strong>$1</strong>')
+            .replace(/\n/g, '<br/>');
     };
 
     useEffect(() => {
@@ -912,7 +914,28 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                                     )}
                                                   </div>
                                                 ) : (
-                                                    <div dangerouslySetInnerHTML={{ __html: formatBoldText(message.text || '') }} />
+                                                    (() => {
+                                                        const rawText = message.text || '';
+                                                        const isIPA = rawText.startsWith('IPA:');
+                                                        const ipaContent = isIPA ? rawText.replace(/^IPA:\s*/, '') : rawText;
+                                                        return (
+                                                            <>
+                                                                {isIPA && (
+                                                                    <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                                                                        IPA:
+                                                                    </div>
+                                                                )}
+                                                                <div
+                                                                    style={{ lineHeight: '1.6' }}
+                                                                    dangerouslySetInnerHTML={{
+                                                                        __html: formatBoldText(
+                                                                            ipaContent.replace(/\s+\//g, '<br/>/')
+                                                                        )
+                                                                    }}
+                                                                />
+                                                            </>
+                                                        );
+                                                    })()
                                                 )}
                                                 {message.actionUrl && (
                                                     <button

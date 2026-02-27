@@ -54,25 +54,54 @@ function ensureDictionary() {
 ensureDictionary();
 
 function cmuToIPA(cmu) {
-  let ipa = "";
-  let stressed = false;
-  for (const token of cmu.split(" ")) {
+  const tokens = cmu.split(" ");
+  const syllableCount = tokens.filter(t => /[012]$/.test(t)).length;
+
+  const syllables = [];
+  let consonantBuffer = "";
+
+  for (const token of tokens) {
     const m = token.match(/^([A-Z]+)([012])?$/);
     if (!m) continue;
+
     const [, ph, stress] = m;
-    
     let symbol = MAP[ph] || "";
-    if (ph === 'AH' && (stress === '0' || !stress)) {
-        symbol = "ə";
+
+    // Schwa handling
+    if (ph === "AH" && (stress === "0" || !stress)) {
+      symbol = "ə";
     }
 
-    if (stress === "1" && !stressed) {
-        ipa += "ˈ";
-        stressed = true;
+    // If this token has stress digit => vowel nucleus => start new syllable
+    if (stress !== undefined) {
+      const syllableText = consonantBuffer + symbol;
+      consonantBuffer = "";
+      syllables.push({
+        stress: stress,
+        text: syllableText
+      });
+    } else {
+      // Consonant → store in buffer until next vowel
+      consonantBuffer += symbol;
     }
-    if (stress === "2") ipa += "ˌ";
-    ipa += symbol;
   }
+
+  // Attach trailing consonants to last syllable
+  if (consonantBuffer && syllables.length > 0) {
+    syllables[syllables.length - 1].text += consonantBuffer;
+  }
+
+  // Build final IPA string
+  let ipa = "";
+
+  syllables.forEach((syl) => {
+    if (syllableCount > 1) {
+      if (syl.stress === "1") ipa += "ˈ";
+      if (syl.stress === "2") ipa += "ˌ";
+    }
+    ipa += syl.text;
+  });
+
   return ipa;
 }
 
@@ -115,18 +144,31 @@ function wordToIPA(word) {
 
 function textToIPA(text) {
     if (!text) return "";
-    const words = text.split(/\s+/);
-    const result = words.map((raw, i) => {
-        const clean = raw.toLowerCase().replace(/[^a-z-]/g, "");
-        if (clean === "the") {
-            const next = words[i + 1]?.[0]?.toLowerCase();
-            if (next && "aeiou".includes(next)) return "ði";
-            return "ðə";
-        }
-        const ipa = wordToIPA(clean);
-        return ipa ?? raw;
-    }).join(" ");
-    return `/${result}/`;
+
+    // Split by sentence punctuation (.!?)
+    const sentences = text.match(/[^.!?]+[.!?]?/g) || [];
+
+    const converted = sentences.map(sentence => {
+        const words = sentence.trim().split(/\s+/);
+
+        const result = words.map((raw, i) => {
+            const clean = raw.toLowerCase().replace(/[^a-z-]/g, "");
+            if (!clean) return "";
+
+            if (clean === "the") {
+                const next = words[i + 1]?.[0]?.toLowerCase();
+                if (next && "aeiou".includes(next)) return "ði";
+                return "ðə";
+            }
+
+            const ipa = wordToIPA(clean);
+            return ipa ?? raw;
+        }).filter(Boolean).join(" ");
+
+        return result ? `/${result}/` : "";
+    }).filter(Boolean);
+
+    return converted.join(" ");
 }
 
 // --- Cambridge Logic ---
@@ -227,20 +269,40 @@ async function getCambridgeIPA(word) {
 
 async function textToCambridgeIPA(text) {
     if (!text) return "";
-    const words = text.split(/\s+/);
-    const promises = words.map(async (raw, i) => {
-        const clean = raw.toLowerCase().replace(/[^a-z-]/g, "");
-        if (clean === "the") {
-            const next = words[i + 1]?.[0]?.toLowerCase();
-            if (next && "aeiou".includes(next)) return "ði";
-            return "ðə";
+
+    const sentences = text.match(/[^.!?]+[.!?]?/g) || [];
+
+    const converted = [];
+
+    for (const sentence of sentences) {
+        const words = sentence.trim().split(/\s+/);
+
+        const promises = words.map(async (raw, i) => {
+            const clean = raw.toLowerCase().replace(/[^a-z-]/g, "");
+            if (!clean) return "";
+
+            if (clean === "the") {
+                const next = words[i + 1]?.[0]?.toLowerCase();
+                if (next && "aeiou".includes(next)) return "ði";
+                return "ðə";
+            }
+
+            const cambridge = await getCambridgeIPA(clean);
+            if (cambridge) return cambridge;
+
+            return wordToIPA(clean);
+        });
+
+        const results = (await Promise.all(promises))
+            .filter(Boolean)
+            .join(" ");
+
+        if (results) {
+            converted.push(`/${results}/`);
         }
-        const cambridge = await getCambridgeIPA(clean);
-        if (cambridge) return cambridge;
-        return wordToIPA(clean);
-    });
-    const results = await Promise.all(promises);
-    return `/${results.join(" ")}/`;
+    }
+
+    return converted.join(" ");
 }
 
 function normalizeLookupWord(text) {
@@ -668,15 +730,23 @@ async function getCambridgeSimplified(word) {
 router.get('/convert/ipa', async (req, res) => {
     const { text, mode } = req.query;
     if (!text) return res.status(400).json({ error: 'Text required' });
-    
+
+    const rawText = String(text).trim();
+
+    // Determine if input is a single word (no whitespace after trimming)
+    const isSingleWord = rawText.split(/\s+/).length === 1;
+
     let result;
-    if (String(mode) === '2') {
-        result = await textToCambridgeIPA(text);
+
+    // Cambridge mode (mode=2) only applies to SINGLE WORD
+    if (String(mode) === '2' && isSingleWord) {
+        result = await textToCambridgeIPA(rawText);
     } else {
-        result = textToIPA(text);
+        // Fallback to CMU-based paragraph IPA
+        result = textToIPA(rawText);
     }
-    
-    res.json({ text, ipa: result });
+
+    res.json({ text: rawText, ipa: result });
 });
 
 router.get('/lookup/cambridge', (req, res) => {
