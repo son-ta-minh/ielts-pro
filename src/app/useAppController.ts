@@ -116,13 +116,25 @@ export const useAppController = () => {
                  clearTimeout(id);
                  signal?.removeEventListener('abort', onAbort);
 
-                 // Detect possible SSL certificate issue
-                 if (targetUrl.startsWith('https://') && !controller.signal.aborted) {
-                     console.warn('[SSL] Possible certificate issue at:', targetUrl, err);
+                 // Detect REAL SSL certificate issue only (not generic network failure)
+                 const errorMessage = (err && err.message) ? String(err.message).toLowerCase() : '';
+
+                 const isLikelySslError =
+                     targetUrl.startsWith('https://') &&
+                     !controller.signal.aborted &&
+                     (
+                         errorMessage.includes('certificate') ||
+                         errorMessage.includes('ssl') ||
+                         errorMessage.includes('secure')
+                     );
+
+                 if (isLikelySslError) {
+                     console.warn('[SSL] Confirmed certificate issue at:', targetUrl, err);
                      setSslIssueUrl(targetUrl);
                      return 'ssl_error';
                  }
 
+                 // Otherwise treat as normal connection failure (e.g. different machine, port closed, etc.)
                  return false;
              }
         };

@@ -126,6 +126,7 @@ dist
 # Server runtime files
 /server/server.log
 /server/server.pid
+/server/audio/*
 
 # Server dictionary file
 /server/cmudict.dict

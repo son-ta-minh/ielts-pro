@@ -302,11 +302,11 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const lessonTestHtml = useMemo(() => word.lesson?.test ? parseMarkdown(word.lesson.test) : null, [word.lesson?.test]);
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-6xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <header className="px-8 py-4 border-b border-neutral-100 bg-neutral-50/30 flex flex-col gap-1 shrink-0">
-                    <div className="flex justify-between items-start w-full gap-4">
-                        <div className="flex-1">
+        <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+            <div className="bg-white w-full max-w-6xl rounded-2xl sm:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
+                <header className="px-4 sm:px-8 py-4 border-b border-neutral-100 bg-neutral-50/30 flex flex-col gap-2 shrink-0">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start w-full gap-4">
+                        <div className="flex-1 w-full">
                             <div className="flex items-center gap-2">
                                 <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
                                 {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
@@ -323,7 +323,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 <MasteryScoreCalculator word={word} />
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end w-full sm:w-auto">
                             <StatusDropdown options={learnStatusOptions} selectedId={currentLearnStatus} onSelect={handleLearnStatusSelect} buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200" disabled={isViewOnly}/>
                             <div className="relative" ref={viewMenuRef}>
                                 <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className={`p-2 rounded-lg transition-colors ${isViewMenuOpen ? 'bg-neutral-900 text-white shadow-sm' : 'bg-white border border-neutral-200 text-neutral-400 hover:text-neutral-900'}`} title="View Options"><Eye size={16} /></button>
@@ -347,13 +347,13 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                     </div>
                 </header>
 
-                <nav className="px-8 border-b border-neutral-100 bg-white flex items-center gap-6 shrink-0 overflow-x-auto no-scrollbar">
+                <nav className="px-4 sm:px-8 border-b border-neutral-100 bg-white flex items-center gap-4 sm:gap-6 shrink-0 overflow-x-auto no-scrollbar">
                     <button onClick={() => setActiveTab('OVERVIEW')} className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === 'OVERVIEW' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>Overview</button>
                     <button onClick={() => setActiveTab('USAGE')} className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'USAGE' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}><BookText size={14}/> Usage</button>
                     <button onClick={() => setActiveTab('TEST')} className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'TEST' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}><ClipboardList size={14}/> Practice Test</button>
                 </nav>
 
-                <div className="flex-1 overflow-y-auto no-scrollbar px-6 pt-4 pb-8 bg-neutral-50/20">
+                <div className="flex-1 overflow-auto no-scrollbar px-4 sm:px-6 pt-4 pb-8 bg-neutral-50/20">
                     {activeTab === 'OVERVIEW' && (
                         <div className="space-y-6 animate-in fade-in duration-300">
                             {/* DETAILS ROW */}
