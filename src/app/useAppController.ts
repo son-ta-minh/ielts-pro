@@ -30,7 +30,10 @@ export const useAppController = () => {
     
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected'>('disconnected');
     const [serverUrl, setServerUrl] = useState<string>('');
-    const [networkMode, setNetworkMode] = useState<'home' | 'outside' | null>(null);
+    const [networkMode, setNetworkMode] = useState<'home' | 'outside' | null>(() => {
+        const cfg = getConfig();
+        return cfg.server.useCustomUrl ? 'outside' : 'home';
+    });
     const [isSwitchingServerMode, setIsSwitchingServerMode] = useState(false);
     const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
     const [connectionScanStatus, setConnectionScanStatus] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
@@ -463,7 +466,15 @@ export const useAppController = () => {
 
             const autoConnect = async () => {
                 try {
-                    await checkServerConnection(true, undefined, true, controller.signal);
+                    const cfg = getConfig();
+                    const preferredMode: 'home' | 'outside' = cfg.server.useCustomUrl ? 'outside' : 'home';
+                    setNetworkMode(preferredMode);
+                    await checkServerConnection(
+                        true,
+                        undefined,
+                        preferredMode === 'home',
+                        controller.signal
+                    );
                 } catch (e) {
                     console.warn('[AutoConnect] Failed:', e);
                 }
@@ -472,12 +483,17 @@ export const useAppController = () => {
             autoConnect();
 
             const interval = setInterval(() => {
-                // Always force full scan (local first) instead of reusing old URL
-                checkServerConnection(true, undefined, true);
+                const cfg = getConfig();
+                const preferredMode: 'home' | 'outside' = cfg.server.useCustomUrl ? 'outside' : 'home';
+                setNetworkMode(preferredMode);
+                checkServerConnection(true, undefined, preferredMode === 'home');
             }, 30000);
 
             const onConfigUpdated = () => {
-                checkServerConnection(true, undefined, true);
+                const cfg = getConfig();
+                const preferredMode: 'home' | 'outside' = cfg.server.useCustomUrl ? 'outside' : 'home';
+                setNetworkMode(preferredMode);
+                checkServerConnection(true, undefined, preferredMode === 'home');
             };
 
             window.addEventListener('config-updated', onConfigUpdated);
