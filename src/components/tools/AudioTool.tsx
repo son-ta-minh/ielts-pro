@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import ConfirmationModal from '../common/ConfirmationModal';
 import { Mic, Upload, Loader2, FolderOpen, Play, Pause, Save, Folder, ChevronRight, Copy, RefreshCw, CornerLeftUp, Trash2, FileAudio } from 'lucide-react';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
@@ -40,6 +41,8 @@ export const AudioTool: React.FC = () => {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -116,12 +119,18 @@ export const AudioTool: React.FC = () => {
         fetchFiles(browserMap, newPath);
     };
 
-    const handleDeleteFile = async (e: React.MouseEvent, filename: string) => {
+    const handleDeleteFile = (e: React.MouseEvent, filename: string) => {
         e.stopPropagation();
         if (!browserMap) return;
-        
-        const pathPart = currentPath ? `${currentPath}/${filename}` : filename;
-        
+        setDeleteTarget(filename);
+    };
+
+    const confirmDeleteFile = async () => {
+        if (!browserMap || !deleteTarget) return;
+
+        setIsDeleting(true);
+        const pathPart = currentPath ? `${currentPath}/${deleteTarget}` : deleteTarget;
+
         try {
             const res = await fetch(`${serverUrl}/api/audio/file?mapName=${encodeURIComponent(browserMap)}&filename=${encodeURIComponent(pathPart)}`, {
                 method: 'DELETE'
@@ -133,8 +142,11 @@ export const AudioTool: React.FC = () => {
             } else {
                 showToast(data.error || "Delete failed", "error");
             }
-        } catch(e) {
+        } catch (e) {
             showToast("Server error", "error");
+        } finally {
+            setIsDeleting(false);
+            setDeleteTarget(null);
         }
     };
 
@@ -366,7 +378,15 @@ export const AudioTool: React.FC = () => {
                                             </div>
                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button onClick={(e) => handleCopyUrl(e, item.name)} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="Copy URL"><Copy size={12} /></button>
-                                                <button onClick={(e) => handleDeleteFile(e, item.name)} className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Delete"><Trash2 size={12} /></button>
+                                                {browserMap === 'Upload_Audio' && (
+                                                    <button
+                                                        onClick={(e) => handleDeleteFile(e, item.name)}
+                                                        className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -376,6 +396,16 @@ export const AudioTool: React.FC = () => {
                     )}
                 </div>
             </div>
-        </div>
+        <ConfirmationModal
+            isOpen={!!deleteTarget}
+            title="Delete Audio File"
+            message={`Are you sure you want to delete "${deleteTarget}"? This action cannot be undone.`}
+            confirmText="Delete"
+            cancelText="Cancel"
+            onConfirm={confirmDeleteFile}
+            onClose={() => setDeleteTarget(null)}
+            isLoading={isDeleting}
+        />
+    </div>
     );
 };

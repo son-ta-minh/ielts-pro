@@ -571,7 +571,7 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl border border-neutral-200 flex flex-col h-[85vh] overflow-hidden">
-                <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-center shrink-0 bg-white z-10">
+                <header className="px-4 sm:px-8 py-4 sm:py-6 border-b border-neutral-100 flex flex-col sm:flex-row gap-4 sm:gap-0 sm:justify-between sm:items-center shrink-0 bg-white z-10">
                     <div className="flex flex-col gap-1">
                         <h3 className="text-xl font-black text-neutral-900 tracking-tight leading-none">{item.title}</h3>
                         <div className="flex items-center gap-3">
@@ -586,7 +586,7 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
                              </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
                         <div className="flex bg-neutral-100 p-1 rounded-xl gap-1">
                             <button onClick={handleToggleFullPlayback} className={`px-4 py-2 rounded-lg text-xs font-black flex items-center gap-2 transition-all ${isPlayingAll ? 'bg-indigo-600 text-white shadow-lg' : 'text-neutral-500 hover:text-neutral-900'}`} title="Play whole conversation non-stop">
                                 <Headphones size={14} /> 
@@ -660,7 +660,7 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
                     )}
                 </div>
 
-                <main ref={scrollContainerRef} className="flex-1 overflow-y-auto p-6 md:p-8 space-y-4 custom-scrollbar bg-white scroll-smooth pb-32">
+                <main ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-4 custom-scrollbar bg-white scroll-smooth pb-48 sm:pb-32">
                     {visibleSentences.map((s, i) => {
                         const actualIndex = isFocusMode ? currentIndex : i;
                         const isCurrent = isFocusMode ? true : i === currentIndex;
@@ -760,7 +760,7 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
                     })}
                 </main>
                 
-                <footer className="px-8 py-6 border-t border-neutral-100 bg-white/80 backdrop-blur-md flex justify-between items-center shrink-0 absolute bottom-0 left-0 right-0 z-20">
+                <footer className="px-4 sm:px-8 py-4 sm:py-6 border-t border-neutral-100 bg-white/80 backdrop-blur-md flex flex-col sm:flex-row gap-4 sm:gap-0 sm:justify-between sm:items-center shrink-0 absolute bottom-0 left-0 right-0 z-20">
                     <div className="flex items-center gap-4">
                         <button onClick={handleNavPrev} disabled={currentIndex === 0 || isUserTurn} className="p-3 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all"><ChevronLeft size={20}/></button>
                         <div className="flex flex-col items-center min-w-[80px]">
@@ -770,7 +770,7 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
                         <button onClick={handleNavNext} disabled={currentIndex === sentences.length - 1 || isUserTurn} className="p-3 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-900 disabled:opacity-30 transition-all"><ChevronRight size={20}/></button>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
                          {isPlayingAll ? (
                              <div className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-2xl shadow-lg animate-in fade-in">
                                 <Headphones size={14} />

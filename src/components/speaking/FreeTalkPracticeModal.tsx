@@ -104,6 +104,26 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     // Unified Audio Player logic
     const playAudio = (url: string, refId: string | null, userId: string | null, startTime?: number, duration?: number) => {
         const isBlobSource = url.startsWith('blob:');
+        // Normalize host: if URL already contains a host, replace it with current server host
+        if (!isBlobSource) {
+            try {
+                const config = getConfig();
+                const currentBase = getServerUrl(config); // e.g. https://macm2.local:3000
+
+                // If absolute URL -> strip old origin
+                if (url.startsWith('http://') || url.startsWith('https://')) {
+                    const parsed = new URL(url);
+                    url = parsed.pathname + parsed.search;
+                }
+
+                // If relative path -> prefix with current server
+                if (url.startsWith('/')) {
+                    url = `${currentBase}${url}`;
+                }
+            } catch (err) {
+                console.warn('[FreeTalkPracticeModal] URL normalization failed:', err);
+            }
+        }
 
         // Playback/Reference audio should be controlled by shared Coach media control.
         if (!isBlobSource) {
@@ -299,7 +319,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
                 const newRecording: UserRecording = {
                     id: `rec-${Date.now()}`,
-                    url: `${serverUrl}/api/audio/stream/${mapName}/${filename}`,
+                    url: `/api/audio/stream/${mapName}/${filename}`,
                     mapName: mapName,
                     filename: filename,
                     timestamp: Date.now(),
@@ -651,7 +671,11 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                                      <div key={rec.id} className="flex flex-col bg-white rounded-2xl border border-neutral-200 shadow-sm hover:border-neutral-300 transition-colors overflow-hidden">
                                                          <div className="flex items-center justify-between p-3 gap-3">
                                                              <div className="flex items-center gap-3 min-w-0">
-                                                                 <button onClick={() => playAudio(rec.url, null, rec.id)} className={`w-12 h-12 rounded-full transition-all flex-shrink-0 flex items-center justify-center ${isPlaying ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+                                                                 <button onClick={() => {
+                                                                     const config = getConfig();
+                                                                     const baseUrl = getServerUrl(config);
+                                                                     playAudio(`${baseUrl}${rec.url}`, null, rec.id);
+                                                                 }} className={`w-12 h-12 rounded-full transition-all flex-shrink-0 flex items-center justify-center ${isPlaying ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
                                                                      {isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}
                                                                  </button>
                                                                  <div className="min-w-0">
