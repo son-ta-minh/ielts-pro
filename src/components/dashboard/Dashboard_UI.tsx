@@ -536,32 +536,25 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
                             <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                            <span className="text-[10px] font-black tracking-widest break-all">
-                                Connected to: {serverUrl || 'Unknown Host'}
+                            <span className="text-[11px] font-semibold text-neutral-500">
+                                {activeServerMode === 'home' ? 'Private Server' : 'Public Server'}
                             </span>
                         </div>
                         <div className="inline-flex items-center gap-1">
                             <button
-                                onClick={() => onToggleServerMode?.('home')}
+                                onClick={() =>
+                                    onToggleServerMode?.(
+                                        activeServerMode === 'home' ? 'public' : 'home'
+                                    )
+                                }
                                 disabled={!!isSwitchingServerMode}
-                                className={`px-2 py-1 rounded-md border text-[10px] font-black tracking-wide transition-colors ${
-                                    activeServerMode === 'home'
-                                        ? 'bg-neutral-900 text-white border-neutral-900'
-                                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
-                                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                                className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all duration-150 bg-blue-500 text-white hover:bg-blue-600 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
                             >
-                                {isSwitchingServerMode && activeServerMode === 'home' ? 'Switching...' : '>Home Server'}
-                            </button>
-                            <button
-                                onClick={() => onToggleServerMode?.('public')}
-                                disabled={!!isSwitchingServerMode}
-                                className={`px-2 py-1 rounded-md border text-[10px] font-black tracking-wide transition-colors ${
-                                    activeServerMode === 'public'
-                                        ? 'bg-neutral-900 text-white border-neutral-900'
-                                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
-                                } disabled:opacity-60 disabled:cursor-not-allowed`}
-                            >
-                                {isSwitchingServerMode && activeServerMode === 'public' ? 'Switching...' : '>Public Server'}
+                                {isSwitchingServerMode
+                                    ? 'Switching...'
+                                    : (activeServerMode === 'home'
+                                        ? 'Switch to Public Server'
+                                        : 'Switch to Private Server')}
                             </button>
                         </div>
                     </div>
