@@ -32,6 +32,15 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const [ipa, setIpa] = useState<string | null>(null);
     const [isIpaLoading, setIsIpaLoading] = useState(false);
     const [showIpa, setShowIpa] = useState(false);
+    const [ipaWords, setIpaWords] = useState<string[] | null>(null);
+    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+    const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+    const [playSpeed, setPlaySpeed] = useState<number>(() => {
+        const saved = localStorage.getItem('mimic_play_speed');
+        return saved ? Number(saved) : 1;
+    });
+    const autoPlayRef = useRef<any>(null);
 
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const silenceTimerRef = useRef<any>(null);
@@ -72,6 +81,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             if (res.ok) {
                 const data = await res.json();
                 setIpa(data.ipa);
+                setIpaWords(data.ipaWords || null);
                 setShowIpa(true);
             } else {
                 showToast("IPA server unavailable", "error");
@@ -133,6 +143,10 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             recognitionManager.current.stop();
         };
     }, []);
+
+    useEffect(() => {
+        localStorage.setItem('mimic_play_speed', String(playSpeed));
+    }, [playSpeed]);
 
     const handleToggleRecord = async () => {
         if (!editedTarget) return; // Cannot record without a target
@@ -209,9 +223,59 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         return 'text-base md:text-lg';
     };
 
+    const estimateSyllables = (word: string) => {
+        const clean = word.toLowerCase().replace(/[^a-z]/g, '');
+        if (!clean) return 1;
+        const matches = clean.match(/[aeiouy]+/g);
+        return matches ? matches.length : 1;
+    };
+
+    const handleAutoPlay = () => {
+        if (!editedTarget) return;
+
+        const words = editedTarget.split(/\s+/);
+
+        if (isAutoPlaying) {
+            clearTimeout(autoPlayRef.current);
+            setIsAutoPlaying(false);
+            setHoverIndex(null);
+            return;
+        }
+
+        let index = 0;
+        setIsAutoPlaying(true);
+        setHoverIndex(0);
+
+        const playNext = () => {
+            if (index >= words.length) {
+                setIsAutoPlaying(false);
+                setHoverIndex(null);
+                return;
+            }
+
+            setHoverIndex(index);
+
+            const word = words[index];
+            const syllables = estimateSyllables(word);
+
+            // Base duration per syllable (affected by speed)
+            let duration = (400 * syllables) / playSpeed;
+
+            // Add pause for punctuation
+            if (/[,.]/.test(word)) duration += 300 / playSpeed;
+            if (/[!?;]/.test(word)) duration += 500 / playSpeed;
+            if (/[:]/.test(word)) duration += 400 / playSpeed;
+
+            index++;
+            autoPlayRef.current = setTimeout(playNext, duration);
+        };
+
+        playNext();
+    };
+
     return (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl border border-neutral-200 p-8 flex flex-col items-center gap-6 relative">
+            <div className="bg-white w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-5xl rounded-[2.5rem] shadow-2xl border border-neutral-200 p-8 flex flex-col items-center gap-6 relative">
                 <button onClick={onClose} className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-all">
                     <X size={20} />
                 </button>
@@ -240,36 +304,58 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                                 <Edit2 size={16} />
                             </button>
                             <div className="flex flex-wrap justify-center gap-x-1.5 gap-y-1 w-full">
-                                {editedTarget.split(/\s+/).map((word, wIdx) => {
-                                    const wordAnalysis = analysis?.words[wIdx];
-                                    let colorClass = 'text-neutral-800';
-                                    if (wordAnalysis) {
-                                        switch (wordAnalysis.status) {
-                                            case 'correct': colorClass = 'text-emerald-600'; break;
-                                            case 'near': colorClass = 'text-amber-500'; break;
-                                            case 'wrong': colorClass = 'text-rose-500'; break;
-                                            case 'missing': colorClass = 'text-neutral-300'; break;
-                                            default: colorClass = 'text-neutral-800';
+                                {editedTarget
+                                    .split(/\s+/)
+                                    .map((word, wIdx) => {
+                                        const wordAnalysis = analysis?.words[wIdx];
+                                        let colorClass = 'text-neutral-800';
+                                        if (wordAnalysis) {
+                                            switch (wordAnalysis.status) {
+                                                case 'correct': colorClass = 'text-emerald-600'; break;
+                                                case 'near': colorClass = 'text-amber-500'; break;
+                                                case 'wrong': colorClass = 'text-rose-500'; break;
+                                                case 'missing': colorClass = 'text-neutral-300'; break;
+                                                default: colorClass = 'text-neutral-800';
+                                            }
                                         }
-                                    }
 
-                                    return (
-                                        <span 
-                                            key={wIdx} 
-                                            onClick={() => speak(word)}
-                                            className={`${getFontSizeClass(editedTarget)} font-bold cursor-pointer hover:underline decoration-neutral-200 transition-all leading-normal ${colorClass}`}
-                                        >
-                                            {word}
-                                        </span>
-                                    );
-                                })}
+                                        return (
+                                            <span 
+                                                key={wIdx} 
+                                                onClick={() => speak(word)}
+                                                onMouseEnter={() => setHoverIndex(wIdx)}
+                                                onMouseLeave={() => setHoverIndex(null)}
+                                                className={`${getFontSizeClass(editedTarget)} font-bold cursor-pointer transition-colors leading-normal px-1 rounded ${colorClass} ${hoverIndex === wIdx ? 'bg-indigo-100/70' : 'bg-transparent'}`}
+                                            >
+                                                {word}
+                                            </span>
+                                        );
+                                    })}
                             </div>
                         </>
                     )}
                     
                     {showIpa && ipa && !isEditing && (
-                        <div className="px-4 py-1.5 bg-white border border-neutral-200 rounded-xl text-sm font-mono font-medium text-neutral-500 animate-in slide-in-from-top-2 duration-300">
-                            {ipa}
+                        <div className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-mono font-normal text-neutral-600 leading-relaxed animate-in slide-in-from-top-2 duration-300 flex flex-wrap gap-x-2 gap-y-1 text-left">
+                            {(ipaWords && ipaWords.length > 0
+                                ? ipaWords
+                                : ipa
+                                    .replace(/\//g, '')
+                                    .replace(/\/\/+/g, ' ')
+                                    .split(/\s+/)
+                                    .filter(Boolean)
+                            ).map((word, index) => (
+                                <span
+                                    key={index}
+                                    className={`px-1 rounded transition-all ${
+                                        hoverIndex === index
+                                            ? 'bg-indigo-200 text-indigo-900'
+                                            : ''
+                                    }`}
+                                >
+                                    {word}
+                                </span>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -307,6 +393,35 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     >
                         {isIpaLoading ? <Loader2 size={24} className="animate-spin" /> : <AudioLines size={24} />}
                     </button>
+
+                    {/* Play Highlight and Speed Selector */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleAutoPlay}
+                            disabled={!editedTarget.trim()}
+                            className={`p-4 rounded-2xl transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:text-indigo-600'}`}
+                            title="Play Highlight"
+                        >
+                            <Waves size={24} />
+                        </button>
+                        <select
+                            value={playSpeed}
+                            onChange={(e) => setPlaySpeed(Number(e.target.value))}
+                            className="text-xs border border-neutral-200 rounded-lg px-2 py-1 bg-white"
+                        >
+                            <option value={0.5}>75 WPM</option>
+                            <option value={0.75}>110 WPM</option>
+                            <option value={1}>150 WPM</option>
+                            <option value={1.25}>190 WPM</option>
+                            <option value={1.5}>225 WPM</option>
+                            <option value={1.75}>260 WPM</option>
+                            <option value={2}>300 WPM</option>
+                            <option value={2.25}>325 WPM</option>
+                            <option value={2.5}>350 WPM</option>
+                            <option value={2.75}>375 WPM</option>
+                            <option value={3}>400 WPM</option>
+                        </select>
+                    </div>
 
                     <button 
                         onClick={handleToggleRecord} 

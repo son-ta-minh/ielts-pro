@@ -132,6 +132,13 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
     ipa, showIpa, isIpaLoading, onToggleIpa
 }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+    const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+    const [playSpeed, setPlaySpeed] = useState<number>(() => {
+        const saved = localStorage.getItem('mimic_play_speed');
+        return saved ? Number(saved) : 1;
+    });
+    const autoPlayRef = useRef<any>(null);
     const textContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -155,6 +162,56 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
             }, 50); // Small delay
         }
     }, [targetText]);
+
+    useEffect(() => {
+        localStorage.setItem('mimic_play_speed', String(playSpeed));
+    }, [playSpeed]);
+
+    const estimateSyllables = (word: string) => {
+        const clean = word.toLowerCase().replace(/[^a-z]/g, '');
+        if (!clean) return 1;
+        const matches = clean.match(/[aeiouy]+/g);
+        return matches ? matches.length : 1;
+    };
+
+    const handleAutoPlay = () => {
+        if (!targetText) return;
+
+        const words = targetText.split(/\s+/);
+
+        if (isAutoPlaying) {
+            clearTimeout(autoPlayRef.current);
+            setIsAutoPlaying(false);
+            setHoverIndex(null);
+            return;
+        }
+
+        let index = 0;
+        setIsAutoPlaying(true);
+
+        const playNext = () => {
+            if (index >= words.length) {
+                setIsAutoPlaying(false);
+                setHoverIndex(null);
+                return;
+            }
+
+            setHoverIndex(index);
+            const word = words[index];
+            const syllables = estimateSyllables(word);
+
+            let duration = (400 * syllables) / playSpeed;
+
+            if (/[,.]/.test(word)) duration += 300 / playSpeed;
+            if (/[!?;]/.test(word)) duration += 500 / playSpeed;
+            if (/[:]/.test(word)) duration += 400 / playSpeed;
+
+            index++;
+            autoPlayRef.current = setTimeout(playNext, duration);
+        };
+
+        playNext();
+    };
 
     if (isEmpty) {
         return (
@@ -263,7 +320,9 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                                                 <span 
                                                     key={wIdx} 
                                                     onClick={() => speak(word)}
-                                                    className={`font-bold cursor-pointer hover:underline decoration-neutral-200 transition-all leading-normal ${isRevealed || isSpoken ? 'opacity-100' : 'text-transparent blur-md select-none'}`}
+                                                    onMouseEnter={() => setHoverIndex(wIdx)}
+                                                    onMouseLeave={() => setHoverIndex(null)}
+                                                    className={`font-bold cursor-pointer transition-all leading-normal px-1 rounded ${colorClass} ${hoverIndex === wIdx ? 'bg-indigo-100/70' : 'bg-transparent'} ${isRevealed || isSpoken ? 'opacity-100' : 'text-transparent blur-md select-none'}`}
                                                 >
                                                     <span className={colorClass}>{word}</span>
                                                 </span>
@@ -272,12 +331,19 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                                     </div>
 
                                     {showIpa && ipa && (
-                                        <div
-                                            className="w-full self-stretch px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-2xl text-base font-mono font-normal text-neutral-600 leading-relaxed text-left whitespace-pre-line animate-in slide-in-from-top-2 duration-500"
-                                            dangerouslySetInnerHTML={{
-                                                __html: ipa.replace(/\s+\//g, '<br/>/')
-                                            }}
-                                        />
+                                        <div className="w-full self-stretch px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-2xl text-base font-mono font-normal text-neutral-600 leading-relaxed text-left animate-in slide-in-from-top-2 duration-500 flex flex-wrap gap-x-2 gap-y-1">
+                                            {ipa
+                                                .replace(/\//g, '')
+                                                .split(/\s+/)
+                                                .map((ipaWord, idx) => (
+                                                    <span
+                                                        key={idx}
+                                                        className={`px-1 rounded transition-all ${hoverIndex === idx ? 'bg-indigo-200 text-indigo-900' : ''}`}
+                                                    >
+                                                        {ipaWord}
+                                                    </span>
+                                                ))}
+                                        </div>
                                     )}
 
                                     {!isRevealed && !localAnalysis && (
@@ -325,6 +391,34 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
                             >
                                 {isIpaLoading ? <Loader2 size={24} className="animate-spin" /> : <AudioLines size={24} />}
                             </button>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleAutoPlay}
+                                    disabled={!targetText}
+                                    className={`p-4 rounded-2xl border transition-all shadow-sm ${isAutoPlaying ? 'bg-neutral-900 text-white scale-105' : 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600'}`}
+                                    title="Auto Highlight"
+                                >
+                                    <Waves size={24} className={isAutoPlaying ? "animate-pulse" : ""} />
+                                </button>
+                                <select
+                                    value={playSpeed}
+                                    onChange={(e) => setPlaySpeed(Number(e.target.value))}
+                                    className="text-xs border border-neutral-200 rounded-lg px-2 py-1 bg-white"
+                                >
+                                    <option value={0.5}>75 WPM</option>
+                                    <option value={0.75}>110 WPM</option>
+                                    <option value={1}>150 WPM</option>
+                                    <option value={1.25}>190 WPM</option>
+                                    <option value={1.5}>225 WPM</option>
+                                    <option value={1.75}>260 WPM</option>
+                                    <option value={2}>300 WPM</option>
+                                    <option value={2.25}>325 WPM</option>
+                                    <option value={2.5}>350 WPM</option>
+                                    <option value={2.75}>375 WPM</option>
+                                    <option value={3}>400 WPM</option>
+                                </select>
+                            </div>
 
                             <button onClick={onToggleRecord} className={`w-24 h-24 rounded-full flex items-center justify-center shadow-xl transition-all transform ${isRecording ? 'bg-rose-500 text-white scale-110 ring-8 ring-rose-100' : 'bg-white border-4 border-neutral-100 text-neutral-900 hover:border-neutral-200 hover:scale-105'}`}>{isRecording ? <Square size={32} fill="currentColor" /> : <Mic size={32} />}</button>
                             <button onClick={onPlayUser} disabled={!userAudioUrl || isRecording} className={`p-4 rounded-2xl border transition-all shadow-sm ${userAudioUrl && !isRecording ? 'bg-white border-neutral-200 text-neutral-600 hover:text-indigo-600' : 'bg-neutral-50 border-neutral-100 text-neutral-300 cursor-not-allowed'}`}><Play size={24} fill={userAudioUrl && !isRecording ? "currentColor" : "none"} /></button>

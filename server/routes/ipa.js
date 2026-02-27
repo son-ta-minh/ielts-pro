@@ -746,7 +746,15 @@ router.get('/convert/ipa', async (req, res) => {
         result = textToIPA(rawText);
     }
 
-    res.json({ text: rawText, ipa: result });
+    // Build structured IPA array for word-level alignment (remove sentence slashes)
+    const ipaClean = String(result || '').replace(/\//g, '').trim();
+    const ipaWords = ipaClean ? ipaClean.split(/\s+/) : [];
+
+    res.json({
+        text: rawText,
+        ipa: result,          // original string format (backward compatible)
+        ipaWords: ipaWords    // new structured array for hover/highlight mapping
+    });
 });
 
 router.get('/lookup/cambridge', (req, res) => {
