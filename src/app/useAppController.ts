@@ -11,8 +11,9 @@ import * as db from './db';
 import { getConfig, getServerUrl, saveConfig } from './settingsManager';
 import { performAutoBackup, fetchServerBackups, ServerBackupItem } from '../services/backupService';
 import { DEFAULT_USER_ID } from '../data/user_data';
-import { scanForServer } from '../utils/networkScanner';
 import { generateMap } from '../data/adventure_map';
+
+import { getCurrentHost } from '../utils/firebase';
 
 export const calculateWordDifficultyXp = movedCalc;
 
@@ -29,10 +30,13 @@ export const useAppController = () => {
     
     const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected'>('disconnected');
     const [serverUrl, setServerUrl] = useState<string>('');
+    const [networkMode, setNetworkMode] = useState<'home' | 'outside' | null>(null);
     const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
     const [connectionScanStatus, setConnectionScanStatus] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
     const [scanningUrl, setScanningUrl] = useState(''); 
+    const [sslIssueUrl, setSslIssueUrl] = useState<string | null>(null);
     const hasCheckedInitialConnection = useRef(false);
+    const isConnectingRef = useRef(false);
     const scanAbortControllerRef = useRef<AbortController | null>(null);
 
     const [syncPrompt, setSyncPrompt] = useState<{ isOpen: boolean; type: 'push' | 'restore'; localDate: string; serverDate: string; serverId: string; serverMtime: number } | null>(null);
@@ -76,8 +80,22 @@ export const useAppController = () => {
     const { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
 
     const checkServerConnection = useCallback(async (allowScan = false, urlOverride?: string, forceScan = false, signal?: AbortSignal) => {
+        if (isConnectingRef.current) {
+            console.log('[AutoConnect] Skip: already connecting');
+            return false;
+        }
+        isConnectingRef.current = true;
         const config = getConfig();
-        const url = urlOverride || getServerUrl(config);
+        let url: string;
+
+        if (networkMode === 'home') {
+            // In home mode, ignore custom/Cloudflare URL and use internal config only
+            const internalConfig = { ...config, server: { ...config.server, useCustomUrl: false } };
+            url = getServerUrl(internalConfig);
+        } else {
+            // Outside mode OR manual override
+            url = urlOverride || getServerUrl(config);
+        }
         setServerUrl(url);
 
         const tryConnect = async (targetUrl: string) => {
@@ -94,17 +112,26 @@ export const useAppController = () => {
                  clearTimeout(id);
                  signal?.removeEventListener('abort', onAbort);
                  return res.ok;
-             } catch {
+             } catch (err: any) {
                  clearTimeout(id);
                  signal?.removeEventListener('abort', onAbort);
+
+                 // Detect possible SSL certificate issue
+                 if (targetUrl.startsWith('https://') && !controller.signal.aborted) {
+                     console.warn('[SSL] Possible certificate issue at:', targetUrl, err);
+                     setSslIssueUrl(targetUrl);
+                     return 'ssl_error';
+                 }
+
                  return false;
              }
         };
 
         if (!forceScan) {
             setScanningUrl(url);
-            const isConnected = await tryConnect(url);
-            if (isConnected) {
+            const result = await tryConnect(url);
+
+            if (result === true) {
                 setServerStatus('connected');
                 if (!config.sync.autoBackupEnabled) {
                     saveConfig({ ...config, sync: { ...config.sync, autoBackupEnabled: true } }, true);
@@ -114,33 +141,166 @@ export const useAppController = () => {
                      saveConfig(newConfig, true);
                      showToast(`Connected to ${urlOverride}`, "success");
                 }
+                isConnectingRef.current = false;
                 return true;
+            }
+
+            // 🚨 HARD STOP if SSL error during initial attempt
+            if (result === 'ssl_error') {
+                console.warn('[AutoConnect] SSL error during initial attempt. Hard stop.');
+                setServerStatus('disconnected');
+                isConnectingRef.current = false;
+                return false;
             }
         }
 
         if ((!urlOverride && allowScan) || forceScan) {
             if (signal?.aborted) return false;
-            const scanResult = await scanForServer((url) => { setScanningUrl(url); }, signal);
-            if (scanResult) {
-                const newConfig = { 
-                    ...config, 
-                    server: { ...config.server, host: scanResult.host, port: scanResult.port, useCustomUrl: false },
-                    sync: { ...config.sync, autoBackupEnabled: true }
-                };
-                saveConfig(newConfig, true); 
-                setServerStatus('connected');
-                showToast(`Server found at ${scanResult.host}:${scanResult.port}`, "success");
-                return true;
+
+            try {
+                const firebaseData = await getCurrentHost();
+                console.log('[AutoConnect] Firebase data:', firebaseData);
+
+                // STRICT priority: try LOCAL first
+                if (firebaseData?.local) {
+                    console.log('[AutoConnect] Firebase LOCAL raw:', firebaseData.local);
+
+                    const urlObj = new URL(firebaseData.local);
+                    const detectedPort = urlObj.port || '443';
+
+                    // 🔥 First try https://localhost:<port>
+                    const localhostUrl = `https://localhost:${detectedPort}`;
+                    console.log('[AutoConnect] Trying LOCALHOST first:', localhostUrl);
+                    setScanningUrl(localhostUrl);
+
+                    let result = await tryConnect(localhostUrl);
+                    console.log('[AutoConnect] LOCALHOST result:', result);
+
+                    if (result === true) {
+                        setServerUrl(localhostUrl);
+                        setServerStatus('connected');
+                        setNetworkMode('home');
+
+                        const updatedConfig = {
+                            ...config,
+                            server: {
+                                ...config.server,
+                                host: 'localhost',
+                                port: Number(detectedPort) || 443,
+                                useCustomUrl: false,
+                                customUrl: ''
+                            }
+                        };
+
+                        saveConfig(updatedConfig, true);
+                        showToast(`Connected to ${localhostUrl}`, "success");
+                        isConnectingRef.current = false;
+                        return true;
+                    }
+
+                    if (result === 'ssl_error') {
+                        console.warn('[AutoConnect] SSL error at localhost. Hard stop.');
+                        setServerStatus('disconnected');
+                        isConnectingRef.current = false;
+                        return false;
+                    }
+
+                    // 🔁 Fallback to firebase local hostname (e.g., macm2.local)
+                    console.log('[AutoConnect] Fallback to Firebase LOCAL hostname:', firebaseData.local);
+                    setScanningUrl(firebaseData.local);
+
+                    result = await tryConnect(firebaseData.local);
+                    console.log('[AutoConnect] Firebase LOCAL result:', result);
+
+                    if (result === true) {
+                        setServerUrl(firebaseData.local);
+                        setServerStatus('connected');
+                        setNetworkMode('home');
+
+                        const updatedConfig = {
+                            ...config,
+                            server: {
+                                ...config.server,
+                                host: urlObj.hostname,
+                                port: Number(detectedPort) || 443,
+                                useCustomUrl: false,
+                                customUrl: ''
+                            }
+                        };
+
+                        saveConfig(updatedConfig, true);
+                        showToast(`Connected to ${firebaseData.local}`, "success");
+                        isConnectingRef.current = false;
+                        return true;
+                    }
+
+                    if (result === 'ssl_error') {
+                        console.warn('[AutoConnect] SSL error detected. Hard stop.');
+                        setServerStatus('disconnected');
+                        isConnectingRef.current = false;
+                        return false;
+                    }
+                }
+
+                // Only fallback to PUBLIC if there is NO SSL issue active
+                if (!sslIssueUrl && firebaseData?.host) {
+                    console.log('[AutoConnect] Trying PUBLIC:', firebaseData.host);
+                    setScanningUrl(firebaseData.host);
+
+                    const ok = await tryConnect(firebaseData.host);
+                    console.log('[AutoConnect] PUBLIC result:', ok);
+
+                    if (ok) {
+                        setServerUrl(firebaseData.host);
+                        setServerStatus('connected');
+                        setNetworkMode('outside');
+
+                        // Persist PUBLIC (Cloudflare) as custom URL
+                        const updatedConfig = {
+                            ...config,
+                            server: {
+                                ...config.server,
+                                useCustomUrl: true,
+                                customUrl: firebaseData.host
+                            }
+                        };
+                        saveConfig(updatedConfig, true);
+
+                        showToast(`Connected to ${firebaseData.host}`, "success");
+                        isConnectingRef.current = false;
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn('[Firebase] Failed to fetch host:', e);
             }
         }
         
         if (!signal?.aborted) {
             setServerStatus('disconnected');
         }
+        isConnectingRef.current = false;
         return false;
-    }, [showToast]);
+    }, [showToast, networkMode]);
 
     const handleScanAndConnect = async (urlOverride?: string) => {
+        // Set network mode based on user choice
+        if (urlOverride) {
+            setNetworkMode('outside');
+        } else {
+            setNetworkMode('home');
+            // Hard-disable any previously saved Cloudflare/custom URL
+            const config = getConfig();
+            const cleanedConfig = {
+                ...config,
+                server: {
+                    ...config.server,
+                    useCustomUrl: false,
+                    customUrl: ''
+                }
+            };
+            saveConfig(cleanedConfig, true);
+        }
         if (scanAbortControllerRef.current) scanAbortControllerRef.current.abort();
         scanAbortControllerRef.current = new AbortController();
         const signal = scanAbortControllerRef.current.signal;
@@ -150,7 +310,12 @@ export const useAppController = () => {
                 const t = setTimeout(resolve, 800);
                 signal.addEventListener('abort', () => { clearTimeout(t); reject(new Error('aborted')); });
             });
-            const success = await checkServerConnection(!urlOverride, urlOverride, !urlOverride, signal);
+            const success = await checkServerConnection(
+                !urlOverride,                  // allowScan only if HOME
+                urlOverride,
+                urlOverride ? false : true,   // 👈 forceScan = true when HOME
+                signal
+            );
             if (signal.aborted) return false;
             if (success) {
                 setConnectionScanStatus('success');
@@ -178,20 +343,38 @@ export const useAppController = () => {
 
     useEffect(() => {
         if (isLoaded && !hasCheckedInitialConnection.current) {
-             hasCheckedInitialConnection.current = true;
-             const isDefault = isStrictDefaultUser();
-             if (isDefault) { setIsConnectionModalOpen(true); setConnectionScanStatus('scanning'); }
-             checkServerConnection(true).then((connected) => {
-                 if (connected) {
-                     setServerStatus('connected');
-                     if (isDefault) { setConnectionScanStatus('success'); setTimeout(() => setIsConnectionModalOpen(false), 800); }
-                 } else if (isDefault) { setConnectionScanStatus('failed'); }
-             });
-             const interval = setInterval(() => checkServerConnection(false), 30000);
-             window.addEventListener('config-updated', () => checkServerConnection(false));
-             return () => { clearInterval(interval); window.removeEventListener('config-updated', () => checkServerConnection(false)); };
+            hasCheckedInitialConnection.current = true;
+
+            const controller = new AbortController();
+
+            const autoConnect = async () => {
+                try {
+                    await checkServerConnection(true, undefined, true, controller.signal);
+                } catch (e) {
+                    console.warn('[AutoConnect] Failed:', e);
+                }
+            };
+
+            autoConnect();
+
+            const interval = setInterval(() => {
+                // Always force full scan (local first) instead of reusing old URL
+                checkServerConnection(true, undefined, true);
+            }, 30000);
+
+            const onConfigUpdated = () => {
+                checkServerConnection(true, undefined, true);
+            };
+
+            window.addEventListener('config-updated', onConfigUpdated);
+
+            return () => {
+                controller.abort();
+                clearInterval(interval);
+                window.removeEventListener('config-updated', onConfigUpdated);
+            };
         }
-    }, [isLoaded, checkServerConnection, isStrictDefaultUser]);
+    }, [isLoaded, checkServerConnection]);
 
     useEffect(() => {
         const performSyncCheck = async () => {
@@ -521,6 +704,8 @@ export const useAppController = () => {
         planningAction, setPlanningAction, consumePlanningAction,
         serverStatus,
         serverUrl,
+        sslIssueUrl,
+        setSslIssueUrl,
         hasUnsavedChanges, hasWritingUnsavedChanges, setHasWritingUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
         handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen,
         connectionScanStatus, scanningUrl, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt,

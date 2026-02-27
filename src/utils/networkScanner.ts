@@ -4,27 +4,35 @@
  */
 import { getCurrentHost } from './firebase'; // adjust path if different
 
-export const scanForServer = async (onProgress?: (url: string) => void, signal?: AbortSignal): Promise<{ host: string; port: number } | null> => {
-    // 1️⃣ Try to get current host from Firebase first
-    try {
-        const firebaseHost = await getCurrentHost();
-        if (firebaseHost) {
-            const url = new URL(firebaseHost);
-            const port = url.port ? parseInt(url.port, 10) : (url.protocol === 'https:' ? 443 : 80);
+export const scanForServer = async (
+    options?: { useFirebase?: boolean },
+    onProgress?: (url: string) => void,
+    signal?: AbortSignal
+): Promise<{ host: string; port: number } | null> => {
+    const useFirebase = options?.useFirebase ?? true;
 
-            if (onProgress) onProgress(firebaseHost);
+    if (useFirebase) {
+        // Try to get current host from Firebase first
+        try {
+            const firebaseHost = await getCurrentHost();
+            if (firebaseHost) {
+                const url = new URL(firebaseHost);
+                const port = url.port ? parseInt(url.port, 10) : (url.protocol === 'https:' ? 443 : 80);
 
-            const res = await fetch(`${firebaseHost}/api/health`, {
-                mode: 'cors',
-                cache: 'no-cache'
-            });
+                if (onProgress) onProgress(firebaseHost);
 
-            if (res.ok) {
-                return { host: url.hostname, port };
+                const res = await fetch(`${firebaseHost}/api/health`, {
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
+
+                if (res.ok) {
+                    return { host: url.hostname, port };
+                }
             }
+        } catch {
+            // Ignore Firebase errors and fallback to local scanning
         }
-    } catch {
-        // Ignore Firebase errors and fallback to local scanning
     }
     // Hosts to scan
     const hosts = ['localhost', '127.0.0.1', 'macm2.local', 'macm4.local'];

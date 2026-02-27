@@ -10,7 +10,6 @@ import ViewWordModal from '../components/word_lib/ViewWordModal';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import { StudyBuddy } from '../components/common/StudyBuddy';
 import { ServerRestoreModal } from '../components/common/ServerRestoreModal';
-import { ConnectionModal } from '../components/common/ConnectionModal';
 import { SyncPromptModal } from '../components/common/SyncPromptModal';
 
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
@@ -174,7 +173,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
 };
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen, connectionScanStatus, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore } = controller;
+  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore, sslIssueUrl, setSslIssueUrl, checkServerConnection } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
   const [writingConfirmModal, setWritingConfirmModal] = useState<{ isOpen: boolean; targetView: AppView | null; action?: () => void }>({
@@ -245,8 +244,57 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
         onClose={() => setWritingConfirmModal({ isOpen: false, targetView: null, action: undefined })}
       />
       <ServerRestoreModal isOpen={isAutoRestoreOpen} onClose={() => setIsAutoRestoreOpen(false)} backups={autoRestoreCandidates} onRestore={(id) => { setIsRestoring(true); restoreFromServerAction(id).finally(() => setIsRestoring(false)); }} isRestoring={isRestoring} title="User Selection" description="We found existing profiles on the server. Select yours to restore." onNewUser={handleNewUserSetup} onLocalRestore={handleLocalRestoreSetup} />
-      <ConnectionModal isOpen={isConnectionModalOpen} onClose={() => setIsConnectionModalOpen(false)} onRetry={handleScanAndConnect} onStop={handleStopScan} status={connectionScanStatus} scanningUrl={controller.scanningUrl} />
       {syncPrompt && <SyncPromptModal isOpen={syncPrompt.isOpen} onClose={() => setSyncPrompt(null)} onPush={handleSyncPush} onRestore={handleSyncRestore} type={syncPrompt.type} localDate={syncPrompt.localDate} serverDate={syncPrompt.serverDate} isProcessing={isSyncing} />}
+      {sslIssueUrl && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+          <div className="bg-white rounded-2xl p-6 w-[440px] shadow-2xl border border-red-100">
+            <h2 className="text-lg font-bold text-red-600 mb-2">
+              SSL Certificate Required
+            </h2>
+
+            <p className="text-sm text-neutral-600 mb-4">
+              Cannot securely connect to:
+            </p>
+
+            <div className="text-xs font-mono bg-neutral-100 p-2 rounded mb-4 break-all">
+              {sslIssueUrl}
+            </div>
+
+            <p className="text-sm text-neutral-600 mb-6">
+              Your browser blocked this connection because the SSL certificate
+              is not trusted yet.
+              <br /><br />
+              Please open the link, trust the certificate, then come back and press Retry.
+            </p>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setSslIssueUrl(null)}
+                className="px-3 py-2 rounded-lg bg-neutral-200 hover:bg-neutral-300 text-sm"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={() => window.open(sslIssueUrl, '_blank')}
+                className="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm"
+              >
+                Open & Trust
+              </button>
+
+              <button
+                onClick={async () => {
+                  setSslIssueUrl(null);
+                  await checkServerConnection(true);
+                }}
+                className="px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

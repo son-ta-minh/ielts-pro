@@ -70,11 +70,13 @@ export const ConnectionModal: React.FC<Props> = ({ isOpen, onClose, onRetry, onS
                     
                     <div className="space-y-1">
                         <h3 className="text-2xl font-black text-neutral-900 tracking-tight">
-                            {localStatus === 'scanning' ? 'Connecting...' : 
+                            {localStatus === 'idle' ? 'Choose Network' :
+                             localStatus === 'scanning' ? 'Connecting...' : 
                              localStatus === 'failed' ? 'Connection Failed' : 'Connected!'}
                         </h3>
                         <p className="text-sm font-medium text-neutral-500">
-                            {localStatus === 'scanning' ? (scanningUrl ? "Scanning network..." : "Contacting Vocab Pro Server...") : 
+                            {localStatus === 'idle' ? "Are you at home or outside?" :
+                             localStatus === 'scanning' ? (scanningUrl ? "Scanning network..." : "Contacting Vocab Pro Server...") : 
                              localStatus === 'failed' ? "Could not talk to the server." : "Server found. Syncing..."}
                         </p>
                     </div>
@@ -82,6 +84,25 @@ export const ConnectionModal: React.FC<Props> = ({ isOpen, onClose, onRetry, onS
 
                 {/* Content Area */}
                 <div className="p-6 space-y-6">
+                    {localStatus === 'idle' && (
+                        <div className="space-y-4">
+                            <button
+                                onClick={handleAutoScan}
+                                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-3 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg"
+                            >
+                                <Wifi size={18} />
+                                🏠 Home Network (Scan LAN)
+                            </button>
+
+                            <button
+                                onClick={() => handleManualConnect()}
+                                className="w-full py-4 bg-neutral-900 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-3 hover:bg-neutral-800 active:scale-95 transition-all shadow-lg"
+                            >
+                                <ExternalLink size={18} />
+                                🌍 Outside (Use Cloudflare)
+                            </button>
+                        </div>
+                    )}
                     {localStatus === 'scanning' && (
                         <div className="flex flex-col gap-4">
                             <div className="h-2 w-full bg-neutral-100 rounded-full overflow-hidden">

@@ -25,7 +25,11 @@ export async function getCurrentHost() {
       return null;
     }
 
-    return snap.data().host;
+    const data = snap.data();
+    return {
+      host: data.host || null,
+      local: data.local || null,
+    };
   } catch (err) {
     console.error("Firebase error:", err);
     return null;

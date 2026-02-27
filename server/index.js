@@ -19,6 +19,7 @@ const { spawn } = require('child_process');
 const { settings } = require('./config');
 const { loadGlobalLibrary } = require('./libraryManager');
 const admin = require('firebase-admin');
+const os = require('os');
 
 // --- Stability Fix: Force CWD ---
 try {
@@ -196,8 +197,28 @@ async function updateHostInFirestore(hostUrl) {
 
         const db = admin.firestore();
 
+        // Try to get proper macOS LocalHostName (for mDNS .local access)
+        let localHostname = null;
+
+        try {
+            const { execSync } = require('child_process');
+            localHostname = execSync('scutil --get LocalHostName', { encoding: 'utf8' }).trim();
+        } catch (e) {
+            // Fallback to OS hostname
+            localHostname = os.hostname();
+        }
+
+        // If hostname is actually an IP, fallback to "localhost"
+        const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(localHostname);
+        if (isIp || !localHostname) {
+            localHostname = 'localhost';
+        }
+
+        const localUrl = `${protocol}://${localHostname}.local:${settings.PORT}`;
+
         await db.collection('vocabpro').doc('server').set({
-            host: hostUrl,
+            host: hostUrl,                 // Cloudflare public URL
+            local: localUrl,               // Full local network URL
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
