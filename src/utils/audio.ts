@@ -350,7 +350,8 @@ const playBlob = (blob: Blob, meta?: { source?: string; word?: string; isSingleW
     stopSpeakingInternal(true);
     const sessionId = ++playbackSerial;
     isAudioPaused = false;
-    pendingCoachLookupWord = ((meta?.source === 'quality' || meta?.source === 'cambridge') && meta?.word)
+    // Auto trigger CoachLookup for any single English word playback (same behavior as playSound)
+    pendingCoachLookupWord = (meta?.isSingleWord && meta?.word)
         ? meta.word
         : null;
     isSingleWordPlayback = !!meta?.isSingleWord;

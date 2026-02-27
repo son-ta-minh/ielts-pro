@@ -65,7 +65,7 @@ const UniversalAiModal: React.FC<Props> = ({
   const jsonInputRef = useRef<HTMLTextAreaElement>(null);
   const prevIsOpen = useRef<boolean | undefined>(undefined);
 
-  const isLessonRelated = ['GENERATE_LESSON', 'GENERATE_WORD_LESSON', 'REFINE_UNIT', 'GENERATE_AUDIO_SCRIPT'].includes(type);
+  const isLessonRelated = ['GENERATE_LESSON', 'GENERATE_WORD_LESSON', 'GENERATE_AUDIO_SCRIPT'].includes(type);
 
   // Initialize inputs only when the modal opens
   useEffect(() => {
