@@ -41,7 +41,7 @@ export function getGenerateWordLessonEssayPrompt(word: VocabularyItem, prefs: Le
      - If no data exists for a category (e.g., no idioms), you may skip that section or note it as "No common idioms".
      - All instructional text and headers should be in ${language}. All material/examples in English.
 
-  Return a JSON object:
+  Return in code block format a JSON object:
   {
     "content": "string (Markdown formatted with headers and tables, use \\n for newlines)"
   }`;

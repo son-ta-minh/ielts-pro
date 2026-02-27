@@ -19,7 +19,7 @@ export function getRefineFreeTalkPrompt(
     4.  **Maintain Voice**: Keep it sounding like a natural spoken response, not a written essay.
 
     STRICT JSON OUTPUT FORMAT:
-    Return a single JSON object.
+    Return in code block format a single JSON object.
     {
       "content": "string (The fully rewritten, improved paragraph)"
     }

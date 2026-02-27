@@ -29,7 +29,7 @@ HINTS:
 - You MUST ALWAYS generate 1 to 5 strategic hints for the final sentence (either the one provided or the one you generated).
 - ${hintInstruction}
 
-Return a strict JSON object with this exact schema:
+Return in code block format a strict JSON object with this exact schema:
 {
   "sentence": "string (The sentence for the task. If a sentence was provided, return it verbatim. If not, this is the new sentence you generated.)",
   "hints": ["string"] (An array of hint strings.)

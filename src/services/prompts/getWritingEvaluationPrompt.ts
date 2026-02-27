@@ -35,7 +35,7 @@ export function getWritingEvaluationPrompt(
         - **Lexical Resource**: What is the range and accuracy of the vocabulary? Are there good collocations? Is the tone appropriate?
         - **Grammatical Range and Accuracy**: Is there a good range of sentence structures? How frequent are grammatical errors?
 
-    Return a strict JSON object with this exact schema. Do not include any text outside the JSON block.
+    Return in code block format a strict JSON object with this exact schema. Do not include any text outside the JSON block.
 
     {
       "band": number (e.g., 6.5, 7.0, 8.5),

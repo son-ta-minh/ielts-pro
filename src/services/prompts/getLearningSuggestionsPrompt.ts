@@ -32,7 +32,7 @@ export function getLearningSuggestionsPrompt(word: VocabularyItem, user: User): 
     - For a primary school student goal, you might suggest 'learn' for the same phrase, reasoning: "This simple explanation is great for building foundational understanding before learning the scientific term."
     - For a common idiom, you might suggest 'learn' for an IELTS student: "Essential for demonstrating natural, native-like language in Speaking Part 1."
 
-    Return a single, strict JSON object. Do not include any text outside the JSON block.
+    Return in code block format a single, strict JSON object. Do not include any text outside the JSON block.
 
     STRICT JSON OUTPUT FORMAT:
     {

@@ -31,7 +31,7 @@ TASK:
 3.  The 'words' array in your JSON response must be EXPANDED. It must include both original words (if they still appear in the essay) AND any NEW, useful words you've added to the essay. The goal is to grow the vocabulary list based on the new essay.
 4.  Generate 3-5 reading comprehension questions based on the new essay. For each question, provide a concise, correct answer.
 
-Return a strict JSON object with this schema:
+Return in code block format a strict JSON object with this schema:
 { 
   "name": "string (The updated unit name)", 
   "description": "string (The updated description)", 

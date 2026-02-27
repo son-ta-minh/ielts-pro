@@ -37,7 +37,7 @@ export function getGenerateLessonTestPrompt(lessonTitle: string, lessonContent: 
   - **No Repetition**: Do not simply repeat the essay text. Create new sentences or scenarios to test the knowledge.
   - **Language**: Instructions in the same language as the lesson's explanations (Vietnamese/English). Target material in English.
 
-  Return a JSON object:
+  Return in code block format a JSON object:
   {
     "content": "string (Markdown with interactive test components)"
   }`;

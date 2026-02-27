@@ -94,7 +94,7 @@ export function getLessonPrompt(params: LessonPromptParams): string {
   2. **NO RAW NEWLINES**: Use literal '\\n' for line breaks.
   3. **TABLES**: Use \`<br>\` for line breaks inside table cells.
 
-  OUTPUT TEMPLATE:
+  Return in code block format OUTPUT TEMPLATE:
   \`\`\`json
   {
     "title": "string",

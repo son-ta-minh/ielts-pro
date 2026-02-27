@@ -76,7 +76,7 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
   2. **NO RAW NEWLINES**: Use \`\\n\` (double backslash n) for line breaks in strings.
   3. **TABLES**: Use \`<br>\` for line breaks inside table cells. Do NOT use \`\\n\` or newlines inside table rows.
 
-  OUTPUT TEMPLATE:
+  OUTPUT TEMPLATE: Return in code block format
   \`\`\`json
   {
     "title": "string",

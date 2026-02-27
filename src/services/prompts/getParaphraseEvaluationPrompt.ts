@@ -21,7 +21,7 @@ Mode Guidelines:
 - LESS_ACADEMIC: Natural, native-like conversation style.
 - VARIETY: Different sentence structure.
 
-Return a JSON object with:
+Return in code block format a JSON object with:
 {
   "score": number (0-100 overall),
   "meaningScore": number (0-100),

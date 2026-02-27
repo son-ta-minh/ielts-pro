@@ -17,7 +17,7 @@ INSTRUCTIONS:
     -   Each task should be clear and actionable.
 
 STRICT JSON OUTPUT FORMAT:
-Return a single JSON object. Do not include any text outside the JSON block.
+Return in code block format a single JSON object. Do not include any text outside the JSON block.
 
 {
   "title": "string (Goal Title)",

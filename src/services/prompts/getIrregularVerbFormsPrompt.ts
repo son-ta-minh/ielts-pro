@@ -10,7 +10,7 @@ export function getIrregularVerbFormsPrompt(verbs: string[]): string {
     2.  If a verb has multiple common forms (e.g., "dreamt" / "dreamed"), provide the most common one first.
     3.  If a word is not an irregular verb, return its regular "-ed" forms.
     
-    Return your analysis as a strict JSON array of objects. Each object must contain "v1", "v2", and "v3".
+    Return in code block format your analysis as a strict JSON array of objects. Each object must contain "v1", "v2", and "v3".
 
     Response Example (Strict JSON Array):
     [

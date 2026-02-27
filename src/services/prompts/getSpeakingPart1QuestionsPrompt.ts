@@ -16,7 +16,7 @@ export function getFullSpeakingTestPrompt(theme: string): string {
     3.  **Part 3 (Two-way Discussion)**:
         - Generate 4-5 abstract, discussion-based questions that are a logical extension of the Part 2 topic. These questions should invite speculation, comparison, and opinion.
     
-    Return a strict JSON object with this exact schema. Do not include any text outside the JSON block.
+    Return in code block format a strict JSON object with this exact schema. Do not include any text outside the JSON block.
     
     {
       "topic": "string (The main theme, e.g., '${theme}')",

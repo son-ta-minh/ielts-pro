@@ -13,7 +13,7 @@ export function getGenerateConversationPrompt(topic: string): string {
     6.  Assign an "icon" (emoji string) to EVERY single sentence representing the speaker's specific emotion or tone at that moment. Use emojis exclusively from the "Smiley and Emotion" fluent group.
     
     STRICT JSON OUTPUT FORMAT:
-    Return a single JSON object. Do not include any text outside the JSON block.
+    Return in code block format a single JSON object. Do not include any text outside the JSON block.
     
     {
       "title": "string (A catchy title for the conversation)",

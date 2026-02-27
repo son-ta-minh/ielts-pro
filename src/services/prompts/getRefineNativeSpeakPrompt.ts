@@ -43,7 +43,7 @@ export function getRefineNativeSpeakPrompt(
         -   Example: Use "Sick and symptoms" instead of "Different ways to describe being sick or having a headache".
         -   If the core concept is simple, use **English**. If abstract/complex, use **Vietnamese**.
 
-    STRICT JSON OUTPUT FORMAT:
+    Return in code block format STRICT JSON OUTPUT FORMAT:
     {
       "standard": "string (Concise Context/Title - Max 8 words)",
       "answers": [

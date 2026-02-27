@@ -16,7 +16,7 @@ export function getIpaAccentsPrompt(words: string[]): string {
       - "near": There are slight, noticeable differences in vowels or stress that an accent learner should be aware of, but comprehension is not typically affected.
       - "different": The differences are significant (e.g., major vowel shifts, different stress patterns, or added/omitted syllables) and could potentially lead to misunderstanding or sound very distinct.
 
-    Return your analysis as a strict JSON array of objects. Each object MUST contain the original word ("og"), may contain "ipa_us" and "ipa_uk", and MUST contain the "pron_sim" field. Do not return any other fields.
+    Return in code block format your analysis as a strict JSON array of objects. Each object MUST contain the original word ("og"), may contain "ipa_us" and "ipa_uk", and MUST contain the "pron_sim" field. Do not return any other fields.
 
     Response Example (Strict JSON Array):
     [

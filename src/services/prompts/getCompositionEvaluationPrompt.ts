@@ -43,7 +43,7 @@ export function getCompositionEvaluationPrompt(text: string, context: string): s
     CONSTRAINT:
     Keep the entire feedback response **under 100 words**. Be concise and direct.
     
-    Return a strict JSON object with this exact schema. Do not include any text outside the JSON block.
+    Return in code block format a strict JSON object with this exact schema. Do not include any text outside the JSON block.
 
     {
       "feedback": "string (The feedback formatted as an HTML string)"

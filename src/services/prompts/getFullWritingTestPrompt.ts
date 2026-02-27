@@ -13,7 +13,7 @@ export function getFullWritingTestPrompt(theme: string): string {
         - Create an essay question that is thematically related to the Task 1 prompt.
         - The question should present an opinion, problem, or argument for the user to discuss. It should be a standard IELTS Task 2 format (e.g., agree/disagree, discuss both views, advantages/disadvantages, problem/solution).
     
-    Return a strict JSON object with this exact schema. Do not include any text outside the JSON block.
+    Return in code block format a strict JSON object with this exact schema. Do not include any text outside the JSON block.
     
     {
       "topic": "string (The main theme, e.g., '${theme}')",

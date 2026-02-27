@@ -13,7 +13,7 @@ export function getGenerateWordBookPrompt(topic: string): string {
     6.  **Select a Color**: From the provided list of classic book cover colors, choose ONE hex code that best fits the theme. For example, 'Environment' topics might be green or brown, 'Ocean' topics might be blue. AVAILABLE COLORS: ${availableColors}.
     
     STRICT JSON OUTPUT FORMAT:
-    Return a single JSON object with the following structure. Do not include any text outside the JSON block.
+    Return in code block format a single JSON object with the following structure. Do not include any text outside the JSON block.
 
     {
       "topic": "string (The topic name, MUST be in 'Category: Topic Name' format. e.g., 'Environment: Trees')",

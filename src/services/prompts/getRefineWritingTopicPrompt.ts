@@ -30,7 +30,7 @@ TASK:
 4.  For Task 1, create a prompt describing a chart, graph, table, or diagram (for Academic) or a letter-writing scenario (for General Training). Be descriptive.
 5.  For Task 2, create an essay question that is thematically linked to Task 1 if appropriate, or a standard standalone essay prompt.
 
-Return a strict JSON object with this schema:
+Return in code block format a strict JSON object with this schema:
 { 
   "name": "string (The updated topic name)", 
   "description": "string (The updated description, max 1-2 sentences)", 

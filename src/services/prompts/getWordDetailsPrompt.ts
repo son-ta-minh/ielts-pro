@@ -44,7 +44,7 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - type: The grammatical classification. MUST be one of: "idiom", "phrasal_verb", "collocation", "phrase", "vocabulary", "irregular_verb".
     - is_pas: Boolean. True if the word is "Passive" (vulgar, slang, or should be archived).
 
-    Response Example (Strict JSON Array):
+    Response Example (Return in code block format Strict JSON Array):
     [{
       "hw": "unhappy",
       "ipa_us": "/ʌnˈhæpi/",

@@ -19,7 +19,7 @@ YOUR ANALYSIS MUST INCLUDE:
     - Grammatical Range and Accuracy (sentence structures, error frequency).
     - Pronunciation (general clarity, intonation patterns, any persistent sound errors).
 
-Return a strict JSON object with this exact schema. Do not include any text outside the JSON block.
+Return in code block format a strict JSON object with this exact schema. Do not include any text outside the JSON block.
 
 {
   "band": number (e.g., 6.5, 7.0, 8.5),

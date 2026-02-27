@@ -30,7 +30,7 @@ export function getHintsPrompt(words: VocabularyItem[]): string {
         - "idm": (if present in input) An array of objects, where each object has "text" (the original idiom) and "d" (your new descriptive hint).
     4.  Do NOT modify the "text" of the items. Do NOT add any items that were not in the input.
 
-    STRICT JSON OUTPUT FORMAT:
+    Return in code block format STRICT JSON OUTPUT FORMAT:
     [
       {
         "og": "original_word_1",

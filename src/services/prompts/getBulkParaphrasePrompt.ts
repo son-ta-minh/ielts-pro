@@ -18,7 +18,7 @@ export function getBulkParaphrasePrompt(words: VocabularyItem[]): string {
     - 'c' (context) = a short (2-5 words) situational recall cue (e.g., "job interview", "arguing with friend").
 
     STRICT JSON OUTPUT FORMAT:
-    Return a single JSON array of objects in codeblock. Each object represents one word from the input list.
+    Return in code block format a single JSON array of objects in codeblock. Each object represents one word from the input list.
     
     [
       {

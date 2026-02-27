@@ -18,7 +18,7 @@ export function getAutoAddWordsToBookPrompt(topic: string, existingWords: string
     4.  For each new word, provide a very concise, easy-to-understand definition in English.
     
     STRICT JSON OUTPUT FORMAT:
-    Return a single JSON array of objects. Do not include any text outside the JSON block.
+    Return in code block format a single JSON array of objects. Do not include any text outside the JSON block.
 
     [
       {

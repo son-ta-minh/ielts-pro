@@ -12,7 +12,7 @@ export function getPronunciationAnalysisPrompt(targetText: string): string {
     4.  **Actionable Advice**: Give 1-2 specific tips to fix the errors.
 
     OUTPUT FORMAT:
-    Return a strict JSON object with this structure:
+    Return in code block format a strict JSON object with this structure:
     {
         "isCorrect": boolean (true if intelligible and mostly correct, false if major errors),
         "score": number (0-100 estimate),
