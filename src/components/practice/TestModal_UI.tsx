@@ -232,7 +232,6 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
   if (recapData) {
       // --- RECAP VIEW ---
       const masteryGain = Math.max(0, recapData.newMastery - recapData.oldMastery);
-      const hasAnyFailed = recapData.results.some(r => r.passed === false);
 
       // Grouping Results by Type
       const groupedResults: { type: string, label: string, passed: number, total: number }[] = Object.values(recapData.results.reduce((acc, res) => {
@@ -333,16 +332,6 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
               
               <div className="p-6 bg-white border-t border-neutral-100 shrink-0">
                   <div className="flex flex-col gap-3">
-                      {hasAnyFailed && (
-                          <button
-                              onClick={onRetryFailed}
-                              className="w-full py-3 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
-                          >
-                              <RotateCw size={16} />
-                              <span>Retry Failed</span>
-                          </button>
-                      )}
-
                       <button
                           onClick={onRecalculateFinish}
                           className="w-full py-4 bg-neutral-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-neutral-800 transition-all active:scale-95 flex items-center justify-center gap-2"
