@@ -348,7 +348,7 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
   } else if (isSetupMode) {
       const isSelectionEmpty = selectedChallengeTypes.size === 0;
       const hasFailedArea = Array.from(challengeStats.values())
-        .some(stat => stat.total > 0 && stat.attempted > 0 && stat.score === 0);
+        .some(stat => stat.total > 0 && stat.attempted > 0 && stat.score < stat.total);
       
       // Calculate Total Mastery for Header
       let totalCurrent = 0;
