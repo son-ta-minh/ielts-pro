@@ -51,8 +51,9 @@ export const useDataActions = (props: UseDataActionsProps) => {
         
         const exportData = await generateJsonExport(currentUser.id, currentUser, fullScope);
 
-        // Generate download
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        // Dashboard/local export should be human-readable.
+        const prettyJson = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([prettyJson], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

@@ -36,6 +36,7 @@ export const performAutoBackup = async (userId: string, user: User, force: boole
 
     try {
         const payloadObj = await getFullExportData(userId, user);
+        // Server sync/backup should stay compact to reduce transfer + storage size.
         const payloadString = JSON.stringify(payloadObj);
         const sizeInMB = (new Blob([payloadString]).size / (1024 * 1024)).toFixed(2);
         
