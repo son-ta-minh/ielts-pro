@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { updateSRS, calculateMasteryScore, getLogicalKnowledgeUnits } from '../../utils/srs';
+import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { ReviewSessionUI } from './ReviewSession_UI';
 import { getStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
@@ -20,6 +21,7 @@ interface Props {
 
 const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onBulkUpdate, onComplete, onRetry }) => {
   const { showToast } = useToast();
+  const AUTOSAVE_DELAY_MS = 1500;
   // --- Learn session: persist queue for the day, only update if needed ---
   const LEARN_QUEUE_KEY = `vocab_pro_learn_queue_${user.id}`;
   const LEARN_QUEUE_DATE_KEY = `vocab_pro_learn_queue_date_${user.id}`;
@@ -96,6 +98,9 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   useEffect(() => { sessionUpdatesRef.current = sessionUpdates; }, [sessionUpdates]);
   const sessionFinishedRef = useRef(sessionFinished);
   useEffect(() => { sessionFinishedRef.current = sessionFinished; }, [sessionFinished]);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const isSavingRef = useRef(false);
+  const savePromiseRef = useRef<Promise<void> | null>(null);
   
   useEffect(() => {
     const newSessionIdentity = initialWords.map(w => w.id).sort().join(',');
@@ -121,16 +126,88 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     setIsQuickReviewMode(false);
   }, [currentIndex, sessionType]);
 
-  const commitSessionResults = useCallback(async () => {
-    const wordsToUpdate = Array.from(sessionUpdatesRef.current.values());
-    if (wordsToUpdate.length === 0) return;
+  const commitSessionResults = useCallback((): Promise<void> => {
+    if (isSavingRef.current) {
+      return savePromiseRef.current || Promise.resolve();
+    }
 
-    await onBulkUpdate(wordsToUpdate);
-    setSessionUpdates(new Map());
-  }, [onBulkUpdate]);
+    const snapshot = Array.from(sessionUpdatesRef.current.values());
+    if (snapshot.length === 0) return Promise.resolve();
+
+    // Remove snapshot from queue before awaiting network/db write so new updates can continue queuing.
+    setSessionUpdates(prev => {
+      const next = new Map(prev);
+      snapshot.forEach(w => next.delete(w.id));
+      return next;
+    });
+
+    const wordsToUpdate = snapshot;
+    if (wordsToUpdate.length === 0) return Promise.resolve();
+
+    isSavingRef.current = true;
+    const saveTask = (async () => {
+      try {
+        await onBulkUpdate(wordsToUpdate);
+      } catch (e) {
+        // Restore failed snapshot so it can be retried on next autosave/end-session.
+        setSessionUpdates(prev => {
+          const next = new Map(prev);
+          wordsToUpdate.forEach(w => next.set(w.id, w));
+          return next;
+        });
+        showToast('Auto-save failed, will retry.', 'error');
+      } finally {
+        isSavingRef.current = false;
+        savePromiseRef.current = null;
+        if (sessionUpdatesRef.current.size > 0 && !sessionFinishedRef.current) {
+          if (autosaveTimerRef.current) {
+            window.clearTimeout(autosaveTimerRef.current);
+          }
+          autosaveTimerRef.current = window.setTimeout(() => {
+            autosaveTimerRef.current = null;
+            commitSessionResults();
+          }, AUTOSAVE_DELAY_MS);
+        }
+      }
+    })();
+
+    savePromiseRef.current = saveTask;
+    return saveTask;
+  }, [onBulkUpdate, showToast]);
+
+  const handleOpenWordDetails = useCallback(async (word: VocabularyItem) => {
+    const latestWord = sessionUpdatesRef.current.get(word.id) || word;
+
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+    await commitSessionResults();
+    setWordInModal(latestWord);
+  }, [commitSessionResults]);
+
+  const scheduleAutoSave = useCallback(() => {
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+    autosaveTimerRef.current = window.setTimeout(() => {
+      autosaveTimerRef.current = null;
+      commitSessionResults();
+    }, AUTOSAVE_DELAY_MS);
+  }, [commitSessionResults]);
+
+  useEffect(() => {
+    if (!sessionFinished && sessionUpdates.size > 0) {
+      scheduleAutoSave();
+    }
+  }, [sessionUpdates, sessionFinished, scheduleAutoSave]);
 
   useEffect(() => {
     return () => {
+        if (autosaveTimerRef.current) {
+            window.clearTimeout(autosaveTimerRef.current);
+            autosaveTimerRef.current = null;
+        }
         if (!sessionFinishedRef.current && sessionUpdatesRef.current.size > 0) {
             commitSessionResults();
         }
@@ -197,11 +274,12 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
    * to ensure the Mastery Score drops immediately.
    */
   const applyTestResults = (word: VocabularyItem, results: Record<string, boolean>) => {
-      const currentResults = { ...(word.lastTestResults || {}) };
+      const normalizedIncoming = normalizeTestResultKeys(results);
+      const currentResults = mergeTestResultsByGroup(word.lastTestResults, normalizedIncoming);
       // Get logical units (e.g., 'colloc:heavy rain' maps to ['COLLOCATION_QUIZ...', 'COLLOCATION_MULTI...'])
       const knowledgeUnits = getLogicalKnowledgeUnits(word);
 
-      Object.entries(results).forEach(([key, success]) => {
+      Object.entries(normalizedIncoming).forEach(([key, success]) => {
           // Always update the specific key outcome
           currentResults[key] = success;
 
@@ -308,6 +386,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       sessionFinished={sessionFinished}
       wordInModal={wordInModal}
       setWordInModal={setWordInModal}
+      onOpenWordDetails={handleOpenWordDetails}
       editingWordInModal={editingWordInModal}
       setEditingWordInModal={setEditingWordInModal}
       isTesting={isTesting}

@@ -7,6 +7,7 @@ import { generateAvailableChallenges, prepareChallenges } from '../../utils/chal
 import { Loader2 } from 'lucide-react';
 import { calculateMasteryScore, getLogicalKnowledgeUnits } from '../../utils/srs';
 import { useTestEngine } from './hooks/useTestEngine';
+import { mergeTestResultsByGroup } from '../../utils/testResultUtils';
 
 interface Props {
   word: VocabularyItem;
@@ -477,7 +478,7 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       } else {
           const oldMastery = word.masteryScore || 0;
           const oldStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
-          const tempWord = { ...word, lastTestResults: { ...(word.lastTestResults || {}), ...resultHistory } };
+          const tempWord = { ...word, lastTestResults: mergeTestResultsByGroup(word.lastTestResults, resultHistory) };
           const newMastery = calculateMasteryScore(tempWord);
 
           setRecapData({

@@ -9,6 +9,7 @@ import UniversalAiModal from '../common/UniversalAiModal';
 import { getConfig } from '../../app/settingsManager';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
 import { getGenerateWordLessonEssayPrompt, getGenerateWordLessonTestPrompt } from '../../services/promptService';
+import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
 
 interface Props {
   word: VocabularyItem;
@@ -23,7 +24,10 @@ interface Props {
 }
 
 const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEditRequest, onUpdate, onGainXp, isViewOnly = false, initialTab = 'OVERVIEW' }) => {
-  const [currentWord, setCurrentWord] = useState(word);
+  const [currentWord, setCurrentWord] = useState<VocabularyItem>({
+    ...word,
+    lastTestResults: normalizeTestResultKeys(word.lastTestResults)
+  });
   const [linkedUnits, setLinkedUnits] = useState<Unit[]>([]);
   const [relatedWords, setRelatedWords] = useState<Record<string, VocabularyItem[]>>({});
   const [relatedByGroup, setRelatedByGroup] = useState<Record<string, VocabularyItem[]>>({});
@@ -33,7 +37,8 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   const [isMimicOpen, setIsMimicOpen] = useState(false);
 
   useEffect(() => {
-    setCurrentWord(word);
+    const normalizedResults = normalizeTestResultKeys(word.lastTestResults);
+    setCurrentWord({ ...word, lastTestResults: normalizedResults });
   }, [word]);
 
   useEffect(() => {
@@ -123,19 +128,44 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   };
   
   const handleChallengeComplete = async (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => {
-    const updated = { ...currentWord }; 
+    const updated = { ...currentWord };
     if (results) {
-        updated.lastTestResults = { ...(updated.lastTestResults || {}), ...results };
+        const incomingResults = normalizeTestResultKeys(results);
+        const mergedResults = mergeTestResultsByGroup(updated.lastTestResults, incomingResults);
+
+        // --- Auto-mark missing collocation context items as false if quiz was attempted ---
+        if (incomingResults['COLLOCATION_CONTEXT_QUIZ'] === false && currentWord.collocationsArray) {
+            currentWord.collocationsArray.forEach(c => {
+                const key = `COLLOCATION_CONTEXT_QUIZ:${c.text}`;
+                if (!(key in mergedResults)) {
+                    mergedResults[key] = false;
+                }
+            });
+        }
+        // --- Auto-mark missing paraphrase context items as false if quiz was attempted ---
+        if (incomingResults['PARAPHRASE_CONTEXT_QUIZ'] === false && currentWord.paraphrases) {
+            currentWord.paraphrases.forEach(p => {
+                const key = `PARAPHRASE_CONTEXT_QUIZ:${p.word}`;
+                if (!(key in mergedResults)) {
+                    mergedResults[key] = false;
+                }
+            });
+        }
+
+        updated.lastTestResults = mergedResults;
     }
     updated.masteryScore = calculateMasteryScore(updated);
     await onUpdate(updated);
     setIsChallenging(false);
-    setCurrentWord(updated); 
+    setCurrentWord(updated);
   };
 
   const handleLocalUpdate = (updatedWord: VocabularyItem) => {
       onUpdate(updatedWord);
-      setCurrentWord(updatedWord);
+      setCurrentWord({
+        ...updatedWord,
+        lastTestResults: normalizeTestResultKeys(updatedWord.lastTestResults)
+      });
   };
 
   // --- AI Lesson Creation Logic ---

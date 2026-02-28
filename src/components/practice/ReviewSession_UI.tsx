@@ -22,6 +22,7 @@ export interface ReviewSessionUIProps {
   sessionFinished: boolean;
   wordInModal: VocabularyItem | null;
   setWordInModal: (word: VocabularyItem | null) => void;
+  onOpenWordDetails: (word: VocabularyItem) => void | Promise<void>;
   editingWordInModal: VocabularyItem | null;
   setEditingWordInModal: (word: VocabularyItem | null) => void;
   isTesting: boolean;
@@ -129,7 +130,7 @@ const ComplexityIndicator: React.FC<{ complexity: number }> = ({ complexity }) =
 export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const {
         user, initialWords, sessionWords, sessionType, newWordIds, progress, setProgress,
-        sessionOutcomes, sessionFinished, wordInModal, setWordInModal, editingWordInModal, setEditingWordInModal,
+        sessionOutcomes, sessionFinished, wordInModal, setWordInModal, onOpenWordDetails, editingWordInModal, setEditingWordInModal,
         isTesting, setIsTesting, currentWord, isNewWord, onUpdate, onComplete,
         nextItem, handleReview, handleTestComplete, handleRetry, handleEndSession,
         handleQuickReview, handleManualPractice, isQuickReviewMode
@@ -254,7 +255,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     </button>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <button onClick={() => setWordInModal(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
+                                    <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
                                         <Eye size={14}/><span>View Details</span>
                                     </button>
                                     <button onClick={handleManualPractice} className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-black text-[10px] hover:bg-amber-600 transition-all active:scale-95 uppercase tracking-widest shadow-lg shadow-amber-500/20">

@@ -154,15 +154,11 @@ export const useTestEngine = (): TestEngine => {
                 resultHistory[`PREPOSITION_QUIZ:${(challenge as PrepositionQuizChallenge).answer}`] = isCorrect;
             } else if (challenge.type === 'PARAPHRASE_CONTEXT_QUIZ') {
                 const ch = challenge as ParaphraseContextQuizChallenge;
-                // If the entire batch is correct, or based on specific details (if available)
-                // Since we want granular mastery, we iterate the items.
-                // Assuming `result` contains details mapping contextId -> correct boolean
                 if (typeof result === 'object' && result.details) {
                     ch.paraphrases.forEach(p => {
-                         // Find the context that pairs with this paraphrase
                          const context = ch.contexts.find(c => c.pairId === p.pairId);
-                         if (context && result.details[context.id]) {
-                             resultHistory[`PARAPHRASE_CONTEXT_QUIZ:${p.text}`] = true;
+                         if (context) {
+                             resultHistory[`PARAPHRASE_CONTEXT_QUIZ:${p.text}`] = !!result.details[context.id];
                          }
                     });
                 }
@@ -172,8 +168,8 @@ export const useTestEngine = (): TestEngine => {
                 if (typeof result === 'object' && result.details) {
                     ch.collocations.forEach(c => {
                          const context = ch.contexts.find(ctx => ctx.pairId === c.pairId);
-                         if (context && result.details[context.id]) {
-                             resultHistory[`COLLOCATION_CONTEXT_QUIZ:${c.text}`] = true;
+                         if (context) {
+                             resultHistory[`COLLOCATION_CONTEXT_QUIZ:${c.text}`] = !!result.details[context.id];
                          }
                     });
                 }
@@ -183,8 +179,8 @@ export const useTestEngine = (): TestEngine => {
                 if (typeof result === 'object' && result.details) {
                     ch.idioms.forEach(i => {
                          const context = ch.contexts.find(ctx => ctx.pairId === i.pairId);
-                         if (context && result.details[context.id]) {
-                             resultHistory[`IDIOM_CONTEXT_QUIZ:${i.text}`] = true;
+                         if (context) {
+                             resultHistory[`IDIOM_CONTEXT_QUIZ:${i.text}`] = !!result.details[context.id];
                          }
                     });
                 }
