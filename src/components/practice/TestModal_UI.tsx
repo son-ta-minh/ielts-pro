@@ -155,13 +155,15 @@ const TEST_GUIDE = [
     { label: 'Multi', desc: 'Multiple choice for collocations.' }
 ];
 
-const getScoreBadge = (score: number, total: number, attempted: number) => {
+const getScoreBadge = (score: number, total: number, attempted: number, attemptedTotal: number) => {
     if (total === 0) return { label: 'N/A', color: 'bg-neutral-50 text-neutral-400 border-neutral-100' };
     if (attempted === 0) return { label: `${score}/${total}`, color: 'bg-neutral-50 text-neutral-600 border-neutral-200' };
+    const effectiveTotal = attemptedTotal > 0 ? attemptedTotal : total;
     let color = 'bg-red-50 text-red-600 border-red-100';
-    if (score > 0) color = 'bg-green-50 text-green-700 border-green-100';
+    if (score === effectiveTotal) color = 'bg-green-50 text-green-700 border-green-100';
+    else if (score > 0) color = 'bg-yellow-50 text-yellow-700 border-yellow-100';
     
-    return { label: `${score}/${total}`, color };
+    return { label: `${score}/${effectiveTotal}`, color };
 };
 
 const ChallengeResultIcon: React.FC<{ passed: boolean }> = ({ passed }) => (
@@ -445,18 +447,21 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                                                 const availableInArea = area.types.filter(t => availableTypesSet.has(t));
                                                 if (availableInArea.length === 0) return null;
                                                 const selectedInArea = area.types.find(t => selectedChallengeTypes.has(t));
-                                                let areaCurrent = 0; let areaMax = 0; let areaAttempted = 0;
+                                                let areaCurrent = 0; let areaMax = 0; let areaAttempted = 0; let areaAttemptedTotal = 0;
                                                 area.types.forEach(t => {
                                                     const stat = challengeStats.get(t);
                                                     if (stat) {
                                                         areaCurrent += stat.score;
                                                         areaMax += stat.total;
                                                         areaAttempted += stat.attempted;
+                                                        if (stat.attempted > 0) areaAttemptedTotal += stat.total;
                                                     }
                                                 });
-                                                const badge = getScoreBadge(areaCurrent, areaMax, areaAttempted);
+                                                const badge = getScoreBadge(areaCurrent, areaMax, areaAttempted, areaAttemptedTotal);
                                                 const hasFail = areaAttempted > 0 && areaCurrent === 0;
-                                                const hasPass = areaCurrent > 0;
+                                                const effectiveAreaMax = areaAttempted > 0 ? areaAttemptedTotal : areaMax;
+                                                const hasFullPass = effectiveAreaMax > 0 && areaCurrent === effectiveAreaMax;
+                                                const hasPartialPass = areaCurrent > 0 && areaCurrent < effectiveAreaMax;
                                                 const isUnattempted = areaAttempted === 0;
 
                                                 return (
@@ -465,7 +470,8 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                                                             <div className="p-1.5 bg-white rounded-lg shadow-sm text-neutral-600"><area.icon size={14} /></div>
                                                             <span className={`text-xs font-bold ${
                                                                 hasFail ? 'text-red-600' :
-                                                                hasPass ? 'text-green-700' :
+                                                                hasFullPass ? 'text-green-700' :
+                                                                hasPartialPass ? 'text-yellow-700' :
                                                                 isUnattempted ? 'text-neutral-900' :
                                                                 selectedInArea ? 'text-neutral-900' : 'text-neutral-600'
                                                             }`}>
