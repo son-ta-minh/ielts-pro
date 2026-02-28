@@ -89,8 +89,12 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   const [editingWordInModal, setEditingWordInModal] = useState<VocabularyItem | null>(null);
   const [isTesting, setIsTesting] = useState(sessionType === 'random_test');
   const [isQuickReviewMode, setIsQuickReviewMode] = useState(false);
+  const latestWordStatesRef = useRef<Map<string, VocabularyItem>>(new Map());
   
-  const currentWord = sessionWords[currentIndex];
+  const queueWord = sessionWords[currentIndex];
+  const currentWord = queueWord
+    ? (sessionUpdates.get(queueWord.id) || latestWordStatesRef.current.get(queueWord.id) || queueWord)
+    : undefined;
   const isNewWord = useMemo(() => !currentWord?.lastReview, [currentWord]);
 
   // --- Refs for cleanup effects ---
@@ -111,6 +115,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         setSessionOutcomes({});
         setSessionFinished(false);
         setSessionUpdates(new Map());
+        latestWordStatesRef.current.clear();
         sessionStorage.removeItem('vocab_pro_session_progress');
         sessionStorage.removeItem('vocab_pro_session_outcomes');
     }
@@ -176,7 +181,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   }, [onBulkUpdate, showToast]);
 
   const handleOpenWordDetails = useCallback(async (word: VocabularyItem) => {
-    const latestWord = sessionUpdatesRef.current.get(word.id) || word;
+    const latestWord = sessionUpdatesRef.current.get(word.id) || latestWordStatesRef.current.get(word.id) || word;
 
     if (autosaveTimerRef.current) {
       window.clearTimeout(autosaveTimerRef.current);
@@ -253,6 +258,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     if (latestTestResults) {
       updated = { ...updated, lastTestResults: latestTestResults, masteryScore: latestMasteryScore };
     }
+    latestWordStatesRef.current.set(updated.id, updated);
     setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
     lastTestResultsRef.current = null;
     nextItem();
@@ -323,6 +329,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
             updated.lastTestResults = lastTestResultsRef.current;
         }
         updated.masteryScore = calculateMasteryScore(updated);
+        latestWordStatesRef.current.set(updated.id, updated);
 
         setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
         
@@ -342,6 +349,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
           updated.lastTestResults = lastTestResultsRef.current;
       }
       updated.masteryScore = calculateMasteryScore(updated);
+      latestWordStatesRef.current.set(updated.id, updated);
       
       setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
 
@@ -358,6 +366,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         updated.lastTestResults = lastTestResultsRef.current;
       }
       updated.masteryScore = calculateMasteryScore(updated);
+      latestWordStatesRef.current.set(updated.id, updated);
       setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
       // Do NOT call nextItem();
       lastTestResultsRef.current = null;
