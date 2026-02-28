@@ -36,6 +36,7 @@ export function getGenerateLessonTestPrompt(lessonTitle: string, lessonContent: 
   GENERAL GUIDELINES:
   - **No Repetition**: Do not simply repeat the essay text. Create new sentences or scenarios to test the knowledge.
   - **Language**: Instructions in the same language as the lesson's explanations (Vietnamese/English). Target material in English.
+  - Do not use emoji, compact layout, no consecutive new lines.
 
   Return in code block format a JSON object:
   {
