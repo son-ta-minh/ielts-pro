@@ -209,6 +209,12 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const viewMenuRef = useRef<HTMLDivElement>(null);
 
+    // useEffect(() => {
+    //   console.log('=== ViewWordModalUI LOAD ===');
+    //   console.log('word.id:', word?.id);
+    //   console.log('lastTestResults:', word?.lastTestResults);
+    // }, [word]);
+
     const handlePronounceWithCoachLookup = (targetWord: string) => {
         speak(targetWord);
     };
@@ -262,8 +268,64 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const renderFamilyCardGroup = (label: string, members: WordFamilyMember[] | undefined, color: string, typeKey: string) => {
         const visibleMembers = Array.isArray(members) ? members.filter(m => viewSettings.showHidden || !m.isIgnored) : [];
         if (visibleMembers.length === 0) return null;
+
+        const typeAliasMap: Record<string, string> = { nouns: 'n', verbs: 'v', adjs: 'j', advs: 'd' };
+        const shortTypeKey = typeAliasMap[typeKey] || typeKey;
+
         return (
-          <div className="space-y-1"><span className={`text-[8px] font-black uppercase text-${color}-600 tracking-widest ml-1`}>{label}</span><div className="flex flex-col gap-1">{visibleMembers.map((member, idx) => { const isExisting = existingVariants.has(member.word.toLowerCase()); const specificKey = `WORD_FAMILY:${typeKey}:${member.word.toLowerCase().trim()}`; const hasSpecificResult = word.lastTestResults && specificKey in word.lastTestResults; const specificResult = hasSpecificResult ? word.lastTestResults![specificKey] : undefined; let isMemberFailed = false; if (hasSpecificResult) isMemberFailed = specificResult === false; else { const categoryKey = `WORD_FAMILY_${typeKey.toUpperCase()}`; const categoryResult = word.lastTestResults?.[categoryKey]; if (categoryResult === false) isMemberFailed = true; else if (categoryResult === undefined && word.lastTestResults?.['WORD_FAMILY'] === false) isMemberFailed = true; } const isFailed = viewSettings.highlightFailed && isMemberFailed && !member.isIgnored; const isIgnored = member.isIgnored; let containerClass = "bg-white border-neutral-100 hover:border-neutral-300"; if (isFailed) containerClass = "bg-red-50 border-red-200 hover:border-red-300"; else if (isIgnored) containerClass = "bg-neutral-50/50 border-neutral-100 opacity-60"; return ( <div key={idx} className={`flex items-center justify-between px-2 py-1.5 rounded-lg border group transition-colors ${containerClass}`}> <div className="flex flex-col overflow-hidden"> <div className="flex items-center gap-1.5"> <span className={`text-[10px] font-bold truncate ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${isIgnored ? 'line-through decoration-neutral-400' : ''}`}>{member.word}</span> <button onClick={(e) => { e.stopPropagation(); speak(member.word); }} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button> {isFailed && <AlertCircle size={10} className="text-red-500 fill-red-100 shrink-0" />} </div> </div> <button type="button" disabled={addingVariant === member.word || isExisting} onClick={() => onAddVariantToLibrary({ word: member.word, ipa: '' }, 'family')} className={`p-1 rounded-md transition-all ${ isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100' }`} >{addingVariant === member.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}</button> </div> ); })}</div></div>
+            <div className="space-y-1">
+                <span className={`text-[8px] font-black uppercase text-${color}-600 tracking-widest ml-1`}>{label}</span>
+                <div className="flex flex-col gap-1">
+                    {visibleMembers.map((member, idx) => {
+                        const isExisting = existingVariants.has(member.word.toLowerCase());
+                        const normalizedWord = member.word.toLowerCase().trim();
+                        const specificKeys = [
+                            `WORD_FAMILY:${typeKey}:${normalizedWord}`,
+                            `WORD_FAMILY:${shortTypeKey}:${normalizedWord}`
+                        ];
+
+                        const specificResult = specificKeys
+                            .map(k => word.lastTestResults?.[k])
+                            .find(v => v !== undefined);
+
+                        let isMemberFailed = false;
+                        if (specificResult !== undefined) {
+                            isMemberFailed = specificResult === false;
+                        } else {
+                            const categoryKey = `WORD_FAMILY_${typeKey.toUpperCase()}`;
+                            const categoryResult = word.lastTestResults?.[categoryKey];
+                            if (categoryResult === false) isMemberFailed = true;
+                            else if (categoryResult === undefined && word.lastTestResults?.['WORD_FAMILY'] === false) isMemberFailed = true;
+                        }
+
+                        const isFailed = viewSettings.highlightFailed && isMemberFailed && !member.isIgnored;
+                        const isIgnored = member.isIgnored;
+                        let containerClass = 'bg-white border-neutral-100 hover:border-neutral-300';
+                        if (isFailed) containerClass = 'bg-red-50 border-red-200 hover:border-red-300';
+                        else if (isIgnored) containerClass = 'bg-neutral-50/50 border-neutral-100 opacity-60';
+
+                        return (
+                            <div key={idx} className={`flex items-center justify-between px-2 py-1.5 rounded-lg border group transition-colors ${containerClass}`}>
+                                <div className="flex flex-col overflow-hidden">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className={`text-[10px] font-bold truncate ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${isIgnored ? 'line-through decoration-neutral-400' : ''}`}>{member.word}</span>
+                                        <button onClick={(e) => { e.stopPropagation(); speak(member.word); }} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
+                                        {isFailed && <AlertCircle size={10} className="text-red-500 fill-red-100 shrink-0" />}
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    disabled={addingVariant === member.word || isExisting}
+                                    onClick={() => onAddVariantToLibrary({ word: member.word, ipa: '' }, 'family')}
+                                    className={`p-1 rounded-md transition-all ${isExisting ? 'text-green-500 cursor-default' : 'text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100'}`}
+                                >
+                                    {addingVariant === member.word ? <Loader2 size={10} className="animate-spin" /> : isExisting ? <CheckCircle2 size={10} /> : <Plus size={10} />}
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         );
     };
 
