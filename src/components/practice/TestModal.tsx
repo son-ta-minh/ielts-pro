@@ -122,7 +122,7 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
 
   const challengeStats = useMemo(() => {
     const history = word.lastTestResults || {};
-    const stats = new Map<ChallengeType, { score: number, total: number }>();
+    const stats = new Map<ChallengeType, { score: number, total: number, attempted: number }>();
     const uniqueTypes = Array.from(new Set(availableChallenges.map(c => c.type)));
 
     const getResult = (key: string, type: ChallengeType) => {
@@ -152,21 +152,27 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
                     if (result === true) currentScore++;
                 });
             }
-            stats.set(type, { score: currentScore, total: familyMembers.length });
+            const attemptedMembers = familyMembers.reduce((count, member) => {
+                const shortType = typeMap[member.typeKey];
+                const specificLongKey = `WORD_FAMILY:${shortType}:${member.word}`;
+                const specificShortKey = `wf:${shortType}:${member.word}`;
+                const categoryKey = `WORD_FAMILY_${member.typeKey.toUpperCase()}`;
+                const hasAttempt = history[specificLongKey] !== undefined || history[specificShortKey] !== undefined || history[categoryKey] !== undefined || history['WORD_FAMILY'] !== undefined;
+                return hasAttempt ? count + 1 : count;
+            }, 0);
+            stats.set(type, { score: currentScore, total: familyMembers.length, attempted: attemptedMembers });
             return;
         }
 
         // Special Case: Sentence Scramble (Group Logic - Pass ONE is enough for mastery display)
         if (type === 'SENTENCE_SCRAMBLE') {
-            const attempts = Object.keys(history).filter(key =>
-                key.startsWith('SENTENCE_SCRAMBLE') || key.startsWith('sc')
+            const anyPassed = Object.keys(history).some(key =>
+                (key.startsWith('SENTENCE_SCRAMBLE') || key.startsWith('sc')) && history[key] === true
             );
-
-            const anyPassed = attempts.some(key => history[key] === true);
-
             stats.set(type, {
                 score: anyPassed ? 1 : 0,
-                total: attempts.length
+                total: 1,
+                attempted: Object.keys(history).some(key => key.startsWith('SENTENCE_SCRAMBLE') || key.startsWith('sc')) ? 1 : 0
             });
 
             return;
@@ -191,7 +197,8 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
             else primaryKey = challenge.type;
 
             // 2. Check Primary Key
-            if (getResult(primaryKey, type) === true) {
+            const primaryResult = getResult(primaryKey, type);
+            if (primaryResult === true) {
                 isPassed = true;
             }
 
@@ -213,7 +220,7 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
             }
 
             const hasAttempt =
-                getResult(primaryKey, type) !== undefined ||
+                primaryResult !== undefined ||
                 (challenge.type === 'PARAPHRASE_QUIZ' && history[`PARAPHRASE_CONTEXT_QUIZ:${(challenge as any).answer}`] !== undefined) ||
                 (challenge.type === 'COLLOCATION_QUIZ' && (
                     history[`COLLOCATION_CONTEXT_QUIZ:${(challenge as any).fullText}`] !== undefined ||
@@ -222,9 +229,10 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
                 (challenge.type === 'IDIOM_QUIZ' && history[`IDIOM_CONTEXT_QUIZ:${(challenge as any).fullText}`] !== undefined);
 
             if (hasAttempt) attemptedCount++;
+            
             if (isPassed) currentScore++;
         });
-        stats.set(type, { score: currentScore, total: attemptedCount });
+        stats.set(type, { score: currentScore, total: allOfType.length, attempted: attemptedCount });
     });
     return stats;
   }, [word, availableChallenges]);
@@ -532,7 +540,7 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
   };
 
   const filteredStats = useMemo(() => {
-      const stats = new Map<ChallengeType, { score: number, total: number }>();
+      const stats = new Map<ChallengeType, { score: number, total: number, attempted: number }>();
       challengeStats.forEach((stat, type) => { if (!AUX_CHALLENGE_TYPES.includes(type)) stats.set(type, stat); });
       return stats;
   }, [challengeStats]);

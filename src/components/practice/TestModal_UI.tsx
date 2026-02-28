@@ -24,7 +24,7 @@ export interface TestModalUIProps {
   onSetSelection: (types: Set<ChallengeType>) => void;
   onStartTest: () => void;
   // CHANGED: Use scores instead of statuses
-  challengeStats: Map<ChallengeType, { score: number, total: number }>;
+  challengeStats: Map<ChallengeType, { score: number, total: number, attempted: number }>;
   onSelectQuick: () => void;
   onSelectPreferred: () => void; 
   onSelectZeroScore: () => void;
@@ -155,19 +155,11 @@ const TEST_GUIDE = [
     { label: 'Multi', desc: 'Multiple choice for collocations.' }
 ];
 
-const getScoreBadge = (score: number, total: number) => {
+const getScoreBadge = (score: number, total: number, attempted: number) => {
     if (total === 0) return { label: 'N/A', color: 'bg-neutral-50 text-neutral-400 border-neutral-100' };
-    
-    const percentage = (score / total) * 100;
-    let color = 'bg-neutral-50 text-neutral-400 border-neutral-100';
-    
-    if (percentage === 100) {
-        color = 'bg-green-50 text-green-700 border-green-100'; // Full Mastery
-    } else if (score > 0) {
-        color = 'bg-yellow-50 text-yellow-700 border-yellow-100'; // Partial/In Progress
-    } else {
-        color = 'bg-red-50 text-red-600 border-red-100'; // Zero score / New / Failed
-    }
+    if (attempted === 0) return { label: `${score}/${total}`, color: 'bg-neutral-50 text-neutral-600 border-neutral-200' };
+    let color = 'bg-red-50 text-red-600 border-red-100';
+    if (score > 0) color = 'bg-green-50 text-green-700 border-green-100';
     
     return { label: `${score}/${total}`, color };
 };
@@ -365,7 +357,7 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
   } else if (isSetupMode) {
       const isSelectionEmpty = selectedChallengeTypes.size === 0;
       const hasFailedArea = Array.from(challengeStats.values())
-        .some(stat => stat.total > 0 && stat.score === 0);
+        .some(stat => stat.total > 0 && stat.attempted > 0 && stat.score === 0);
       
       // Calculate Total Mastery for Header
       let totalCurrent = 0;
@@ -464,24 +456,30 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                                                 const availableInArea = area.types.filter(t => availableTypesSet.has(t));
                                                 if (availableInArea.length === 0) return null;
                                                 const selectedInArea = area.types.find(t => selectedChallengeTypes.has(t));
-                                                let areaCurrent = 0; let areaMax = 0;
-                                                area.types.forEach(t => { const stat = challengeStats.get(t); if (stat) { areaCurrent += stat.score; areaMax += stat.total; } });
-                                                const badge = getScoreBadge(areaCurrent, areaMax);
-                                                const hasFail = areaMax > 0 && areaCurrent === 0;
+                                                let areaCurrent = 0; let areaMax = 0; let areaAttempted = 0;
+                                                area.types.forEach(t => {
+                                                    const stat = challengeStats.get(t);
+                                                    if (stat) {
+                                                        areaCurrent += stat.score;
+                                                        areaMax += stat.total;
+                                                        areaAttempted += stat.attempted;
+                                                    }
+                                                });
+                                                const badge = getScoreBadge(areaCurrent, areaMax, areaAttempted);
+                                                const hasFail = areaAttempted > 0 && areaCurrent === 0;
+                                                const hasPass = areaCurrent > 0;
+                                                const isUnattempted = areaAttempted === 0;
 
                                                 return (
                                                     <div key={area.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 rounded-xl bg-white/40 hover:bg-white/70 transition-colors border border-transparent hover:border-black/5">
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             <div className="p-1.5 bg-white rounded-lg shadow-sm text-neutral-600"><area.icon size={14} /></div>
-                                                            <span
-                                                               className={`text-xs font-bold ${
-                                                                 hasFail
-                                                                   ? 'text-red-600'
-                                                                   : selectedInArea
-                                                                   ? 'text-neutral-900'
-                                                                   : 'text-neutral-600'
-                                                               }`}
-                                                             >
+                                                            <span className={`text-xs font-bold ${
+                                                                hasFail ? 'text-red-600' :
+                                                                hasPass ? 'text-green-700' :
+                                                                isUnattempted ? 'text-neutral-900' :
+                                                                selectedInArea ? 'text-neutral-900' : 'text-neutral-600'
+                                                            }`}>
                                                                {area.label}
                                                             </span>
                                                         </div>
