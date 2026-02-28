@@ -33,6 +33,14 @@ export function getGenerateLessonTestPrompt(lessonTitle: string, lessonContent: 
   - Do NOT follow the fixed 3-section structure of Case A unless it fits perfectly.
   - **Contextual**: Focus on testing application in context.
 
+  **DISTRACTOR DESIGN RULES (MANDATORY)**
+   - Distractors must be semantically close to the correct answer.
+   - All options must belong to the same lexical field and grammatical category.
+   - Avoid obviously wrong answers.
+   - The incorrect options should be plausible but fail due to nuance, intensity, tone, or collocation.
+   - The difficulty should test subtle distinctions (e.g., demonstrate vs illustrate vs indicate).
+   - Do NOT create distractors that are logically unrelated to the sentence.
+
   GENERAL GUIDELINES:
   - **No Repetition**: Do not simply repeat the essay text. Create new sentences or scenarios to test the knowledge.
   - **Language**: Instructions in the same language as the lesson's explanations (Vietnamese/English). Target material in English.

@@ -21,6 +21,14 @@ interface Props {
   closeOnSuccess?: boolean;
 }
 
+const getShorterPromptVersion = (text: string): string =>
+  (text || '')
+    .replace(/\[SOUND\s+[^\]]+\]/gi, '')
+    .replace(/\[IMG\s+[^\]]+\]/gi, '')
+    .replace(/\[W_AUDIO\][\s\S]*?\[\/\]/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
 const UniversalAiModal: React.FC<Props> = ({ 
   isOpen, 
   onClose, 
@@ -61,6 +69,7 @@ const UniversalAiModal: React.FC<Props> = ({
   const [isSuccess, setIsSuccess] = useState(false); 
   const [promptCopied, setPromptCopied] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState('');
+  const [useShorterPrompt, setUseShorterPrompt] = useState(false);
   
   const jsonInputRef = useRef<HTMLTextAreaElement>(null);
   const prevIsOpen = useRef<boolean | undefined>(undefined);
@@ -94,6 +103,7 @@ const UniversalAiModal: React.FC<Props> = ({
         setPromptCopied(false);
         setIsProcessing(false);
         setIsSuccess(false);
+        setUseShorterPrompt(false);
     }
     
     prevIsOpen.current = isOpen;
@@ -131,7 +141,8 @@ const UniversalAiModal: React.FC<Props> = ({
   if (!isOpen) return null;
 
   const handleCopyPrompt = async () => {
-    await copyToClipboard(currentPrompt);
+    const finalPrompt = useShorterPrompt ? getShorterPromptVersion(currentPrompt) : currentPrompt;
+    await copyToClipboard(finalPrompt);
     setPromptCopied(true);
     setTimeout(() => setPromptCopied(false), 2000);
     setTimeout(() => jsonInputRef.current?.focus(), 100);
@@ -304,6 +315,18 @@ const UniversalAiModal: React.FC<Props> = ({
             </div>
 
             <div className="space-y-3 pt-4 border-t border-neutral-100">
+                <label className="flex items-center gap-2 px-1 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
+                    <input
+                        type="checkbox"
+                        checked={useShorterPrompt}
+                        onChange={(e) => setUseShorterPrompt(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+                    />
+                    Shorter
+                    <span className="normal-case tracking-normal font-medium text-neutral-400">
+                        (remove [SOUND], [IMG], [W_AUDIO])
+                    </span>
+                </label>
                 <div className="space-y-2">
                     <button 
                         onClick={handleCopyPrompt}

@@ -768,7 +768,7 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                 )}
 
                 <div className="flex items-center gap-2">
-                    {(viewMode === 'module' || viewMode === 'edit') && activeModule && (
+                    {(viewMode === 'edit') && activeModule && (
                         <button
                             onClick={handleOpenAiRefine}
                             className="flex items-center gap-2 px-4 py-2 text-xs font-black border-2 border-amber-100 bg-amber-50 text-amber-700 rounded-xl hover:bg-amber-100 transition-all active:scale-95 uppercase tracking-widest"
