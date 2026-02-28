@@ -209,11 +209,11 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const viewMenuRef = useRef<HTMLDivElement>(null);
 
-    // useEffect(() => {
-    //   console.log('=== ViewWordModalUI LOAD ===');
-    //   console.log('word.id:', word?.id);
-    //   console.log('lastTestResults:', word?.lastTestResults);
-    // }, [word]);
+    useEffect(() => {
+      console.log('=== ViewWordModalUI LOAD ===');
+      console.log('word.id:', word?.id);
+      console.log('lastTestResults:', word?.lastTestResults);
+    }, [word]);
 
     const handlePronounceWithCoachLookup = (targetWord: string) => {
         speak(targetWord);
