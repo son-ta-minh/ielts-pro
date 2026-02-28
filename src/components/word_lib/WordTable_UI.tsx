@@ -506,9 +506,9 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
       </div>
       {selectedIds.size > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-full max-w-5xl px-4 animate-in slide-in-from-bottom-8">
-          <div className="bg-neutral-900 text-white rounded-[2rem] p-4 shadow-2xl flex items-center justify-between border border-neutral-800 overflow-x-auto no-scrollbar">
+          <div className="bg-neutral-900 text-white rounded-[2rem] p-4 shadow-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border border-neutral-800">
             <div className="flex items-center space-x-4 pl-2 shrink-0"><button onClick={() => setSelectedIds(new Set())} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button><div><div className="text-sm font-black">{selectedIds.size} selected</div></div></div>
-            <div className="flex items-center space-x-2 ml-4">
+            <div className="flex flex-wrap items-center gap-2 sm:ml-4">
               {onOpenBulkDeleteModal && (<button onClick={onOpenBulkDeleteModal} className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${context === 'unit' ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-500' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'}`}>{context === 'unit' ? <Unlink size={14} /> : <Trash2 size={14} />}<span>{context === 'unit' ? 'Unlink' : 'Delete'}</span></button>)}
               {context === 'unit' && onOpenBulkHardDeleteModal && selectedRawWordsCount > 0 && (
                   <button 
