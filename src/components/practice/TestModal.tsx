@@ -158,20 +158,23 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
 
         // Special Case: Sentence Scramble (Group Logic - Pass ONE is enough for mastery display)
         if (type === 'SENTENCE_SCRAMBLE') {
-            // Check if ANY sentence scramble test has been passed in history
-            // We look for any key starting with 'SENTENCE_SCRAMBLE' or 'sc' that is true
-            const anyPassed = Object.keys(history).some(key => 
-                (key.startsWith('SENTENCE_SCRAMBLE') || key.startsWith('sc')) && history[key] === true
+            const attempts = Object.keys(history).filter(key =>
+                key.startsWith('SENTENCE_SCRAMBLE') || key.startsWith('sc')
             );
-            
-            // For UI display purposes in Test Setup:
-            // Score = 1 if passed, 0 if not. Total = 1 (treat as a single skill check).
-            stats.set(type, { score: anyPassed ? 1 : 0, total: 1 });
+
+            const anyPassed = attempts.some(key => history[key] === true);
+
+            stats.set(type, {
+                score: anyPassed ? 1 : 0,
+                total: attempts.length
+            });
+
             return;
         }
 
         // Default Logic for other types
         let currentScore = 0;
+        let attemptedCount = 0;
         allOfType.forEach(challenge => {
             let isPassed = false;
             let primaryKey = '';
@@ -208,10 +211,20 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
                     if (history[`IDIOM_CONTEXT_QUIZ:${text}`] === true) isPassed = true;
                 }
             }
-            
+
+            const hasAttempt =
+                getResult(primaryKey, type) !== undefined ||
+                (challenge.type === 'PARAPHRASE_QUIZ' && history[`PARAPHRASE_CONTEXT_QUIZ:${(challenge as any).answer}`] !== undefined) ||
+                (challenge.type === 'COLLOCATION_QUIZ' && (
+                    history[`COLLOCATION_CONTEXT_QUIZ:${(challenge as any).fullText}`] !== undefined ||
+                    getResult(`COLLOCATION_MULTICHOICE_QUIZ:${(challenge as any).fullText}`, 'COLLOCATION_MULTICHOICE_QUIZ' as any) !== undefined
+                )) ||
+                (challenge.type === 'IDIOM_QUIZ' && history[`IDIOM_CONTEXT_QUIZ:${(challenge as any).fullText}`] !== undefined);
+
+            if (hasAttempt) attemptedCount++;
             if (isPassed) currentScore++;
         });
-        stats.set(type, { score: currentScore, total: allOfType.length });
+        stats.set(type, { score: currentScore, total: attemptedCount });
     });
     return stats;
   }, [word, availableChallenges]);
@@ -458,6 +471,22 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       handleStartTest(selection);
   };
 
+  const handleRetryFailed = () => {
+      const failedTypes = new Set<ChallengeType>();
+
+      challengeStats.forEach((stat, type) => {
+          // Only retry types that were attempted AND have zero score
+          if (stat.total > 0 && stat.score === 0) {
+              failedTypes.add(type);
+          }
+      });
+
+      if (failedTypes.size === 0) return;
+
+      setIsQuickMode(false);
+      handleStartTest(failedTypes);
+  };
+
   const handleChallengeStart = async () => {
       const allTypes = new Set<ChallengeType>(availableChallenges.map(c => c.type));
       // Challenge = Hard Priority (All categories, hardest versions)
@@ -544,7 +573,9 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       showHint={showHint} onToggleHint={() => setShowHint(!showHint)} sessionPosition={sessionPosition}
       challengeStats={filteredStats} disableHints={disableHints}
       onSelectQuick={handleQuickStart} onSelectPreferred={handleMasterStart}
-      onSelectZeroScore={handleMasterStart} onSelectPartialScore={handleChallengeStart} 
+      onSelectZeroScore={handleMasterStart}
+      onSelectPartialScore={handleChallengeStart}
+      onRetryFailed={handleRetryFailed}
       isQuickMode={isQuickMode} elapsedTime={formatTime(engine.elapsedSeconds)}
       recapData={recapData}
       onRecalculateFinish={() => recapData && onComplete(recapData.finalGrade, recapData.resultHistory, false, recapData.counts)}

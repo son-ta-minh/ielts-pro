@@ -29,6 +29,7 @@ export interface TestModalUIProps {
   onSelectPreferred: () => void; 
   onSelectZeroScore: () => void;
   onSelectPartialScore: () => void;
+  onRetryFailed: () => void;
   isQuickMode?: boolean;
 
   // Test Phase
@@ -197,12 +198,13 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
   userAnswers, handleAnswerChange, results, isFinishing,
   currentPrepositionGroup, isLastChallenge, handleNextClick, handleBackClick,
   handleIgnore, handleFinishEarly, showHint, onToggleHint, disableHints,
-  sessionPosition, elapsedTime, onSelectQuick, onSelectPreferred, onSelectZeroScore, onSelectPartialScore,
+  sessionPosition, elapsedTime, onSelectQuick, onSelectPreferred, onSelectZeroScore, onSelectPartialScore, onRetryFailed,
   recapData, onRecalculateFinish, isMastered
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false); // Collapsed state control
+  const [hoverMessage, setHoverMessage] = useState<string | null>(null);
 
   useEffect(() => {
       if (contentRef.current) {
@@ -238,6 +240,7 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
   if (recapData) {
       // --- RECAP VIEW ---
       const masteryGain = Math.max(0, recapData.newMastery - recapData.oldMastery);
+      const hasAnyFailed = recapData.results.some(r => r.passed === false);
 
       // Grouping Results by Type
       const groupedResults: { type: string, label: string, passed: number, total: number }[] = Object.values(recapData.results.reduce((acc, res) => {
@@ -337,15 +340,32 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
               </div>
               
               <div className="p-6 bg-white border-t border-neutral-100 shrink-0">
-                  <button onClick={onRecalculateFinish} className="w-full py-4 bg-neutral-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-neutral-800 transition-all active:scale-95 flex items-center justify-center gap-2">
-                      <span>Continue</span>
-                      <ArrowRight size={18} />
-                  </button>
+                  <div className="flex flex-col gap-3">
+                      {hasAnyFailed && (
+                          <button
+                              onClick={onRetryFailed}
+                              className="w-full py-3 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-red-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                              <RotateCw size={16} />
+                              <span>Retry Failed</span>
+                          </button>
+                      )}
+
+                      <button
+                          onClick={onRecalculateFinish}
+                          className="w-full py-4 bg-neutral-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-neutral-800 transition-all active:scale-95 flex items-center justify-center gap-2"
+                      >
+                          <span>Continue</span>
+                          <ArrowRight size={18} />
+                      </button>
+                  </div>
               </div>
           </div>
       );
   } else if (isSetupMode) {
       const isSelectionEmpty = selectedChallengeTypes.size === 0;
+      const hasFailedArea = Array.from(challengeStats.values())
+        .some(stat => stat.total > 0 && stat.score === 0);
       
       // Calculate Total Mastery for Header
       let totalCurrent = 0;
@@ -447,13 +467,23 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                                                 let areaCurrent = 0; let areaMax = 0;
                                                 area.types.forEach(t => { const stat = challengeStats.get(t); if (stat) { areaCurrent += stat.score; areaMax += stat.total; } });
                                                 const badge = getScoreBadge(areaCurrent, areaMax);
+                                                const hasFail = areaMax > 0 && areaCurrent === 0;
 
                                                 return (
                                                     <div key={area.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 rounded-xl bg-white/40 hover:bg-white/70 transition-colors border border-transparent hover:border-black/5">
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             <div className="p-1.5 bg-white rounded-lg shadow-sm text-neutral-600"><area.icon size={14} /></div>
-                                                            <span className={`text-xs font-bold ${selectedInArea ? 'text-neutral-900' : 'text-neutral-600'}`}>{area.label}</span>
-                                                            <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${badge.color}`}>{badge.label}</span>
+                                                            <span
+                                                               className={`text-xs font-bold ${
+                                                                 hasFail
+                                                                   ? 'text-red-600'
+                                                                   : selectedInArea
+                                                                   ? 'text-neutral-900'
+                                                                   : 'text-neutral-600'
+                                                               }`}
+                                                             >
+                                                               {area.label}
+                                                            </span>
                                                         </div>
                                                         <div className="flex flex-wrap gap-1.5 justify-end">
                                                             {availableInArea.map(type => {
@@ -481,7 +511,24 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                          <div className="relative w-48 h-48 flex items-center justify-center">
                             <svg className="absolute w-full h-full transform -rotate-90">
                                 <circle cx="50%" cy="50%" r={radius} stroke="currentColor" strokeWidth="12" fill="transparent" className="text-neutral-100" />
-                                <circle cx="50%" cy="50%" r={radius} stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className={`transition-all duration-1000 ease-out ${masteryPercentage === 100 ? 'text-green-500' : 'text-indigo-600'}`} />
+                                <circle
+                                  cx="50%"
+                                  cy="50%"
+                                  r={radius}
+                                  stroke="currentColor"
+                                  strokeWidth="12"
+                                  fill="transparent"
+                                  strokeDasharray={circumference}
+                                  strokeDashoffset={offset}
+                                  strokeLinecap="round"
+                                  className={`transition-all duration-1000 ease-out ${
+                                    masteryPercentage === 100
+                                      ? 'text-green-500'
+                                      : masteryPercentage >= 50
+                                      ? 'text-yellow-500'
+                                      : 'text-red-500'
+                                  }`}
+                                />
                             </svg>
                             <div className="flex flex-col items-center">
                                 <span className="text-4xl font-black text-neutral-900 tracking-tighter">{masteryPercentage.toFixed(0)}%</span>
@@ -489,9 +536,11 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                             </div>
                          </div>
                          
-                         <p className="text-center text-sm font-medium text-neutral-500 max-w-xs leading-relaxed">
-                            {totalCurrent === totalMax 
-                                ? "Incredible! You have mastered all challenges for this word. Keep practicing to maintain it." 
+                         <p className="text-center text-sm font-medium text-neutral-500 max-w-xs leading-relaxed transition-all duration-200 min-h-[48px] flex items-center justify-center">
+                            {hoverMessage
+                                ? hoverMessage
+                                : totalCurrent === totalMax
+                                ? "Incredible! You have mastered all challenges for this word. Keep practicing to maintain it."
                                 : "Ready to improve? Choose a quick mix or focus on what you haven't mastered yet."}
                          </p>
                     </div>
@@ -511,22 +560,49 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
                     </button>
                 ) : (
                     <>
-                        {isMastered ? (
-                            <button onClick={onSelectPartialScore} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-red-700 transition-all active:scale-95 shadow-lg shadow-red-200">
-                                <Swords size={18} />
-                                <span>Challenge</span>
-                            </button>
-                        ) : (
-                            <button onClick={onSelectZeroScore} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-200">
-                                <GraduationCap size={18} />
-                                <span>Master It</span>
-                            </button>
-                        )}
+                      {hasFailedArea && (
+                          <button
+                              onMouseEnter={() => setHoverMessage("Retry only the tests you failed.")}
+                              onMouseLeave={() => setHoverMessage(null)}
+                              onClick={onRetryFailed}
+                              className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-red-700 transition-all active:scale-95 shadow-lg shadow-red-200"
+                          >
+                              <RotateCw size={18} />
+                              <span>Retry Failed</span>
+                          </button>
+                      )}
 
-                        <button onClick={onSelectQuick} className="flex-1 py-4 bg-cyan-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-cyan-600 transition-all active:scale-95 shadow-lg shadow-cyan-200">
-                            <Bolt size={18} />
-                            <span>Quick Test</span>
-                        </button>
+                      {isMastered ? (
+                          <button
+                              onMouseEnter={() => setHoverMessage("Hard mode: focus on advanced usage and tougher variations.")}
+                              onMouseLeave={() => setHoverMessage(null)}
+                              onClick={onSelectPartialScore}
+                              className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-700 transition-all active:scale-95 shadow-lg shadow-rose-200"
+                          >
+                              <Swords size={18} />
+                              <span>Challenge</span>
+                          </button>
+                      ) : (
+                          <button
+                              onMouseEnter={() => setHoverMessage("Complete all unpassed tests including failed and untouched ones.")}
+                              onMouseLeave={() => setHoverMessage(null)}
+                              onClick={onSelectZeroScore}
+                              className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-200"
+                          >
+                              <GraduationCap size={18} />
+                              <span>Master It</span>
+                          </button>
+                      )}
+
+                      <button
+                          onMouseEnter={() => setHoverMessage("Core usage only. Fast mixed review.")}
+                          onMouseLeave={() => setHoverMessage(null)}
+                          onClick={onSelectQuick}
+                          className="flex-1 py-4 bg-cyan-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-cyan-600 transition-all active:scale-95 shadow-lg shadow-cyan-200"
+                      >
+                          <Bolt size={18} />
+                          <span>Quick Test</span>
+                      </button>
                     </>
                 )}
             </div>
