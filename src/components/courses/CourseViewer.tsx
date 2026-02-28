@@ -16,12 +16,15 @@ import {
     ArrowRight,
     X,
     AlertTriangle,
-    Minus
+    Minus,
+    Sparkles
 } from 'lucide-react';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../common/ConfirmationModal';
 import { speak } from '../../utils/audio';
+import UniversalAiModal from '../common/UniversalAiModal';
+import { getGenerateLessonTestPrompt, getLessonPrompt } from '../../services/promptService';
 
 interface ModuleInfo {
     id: string;
@@ -48,9 +51,13 @@ interface CourseViewerProps {
     courseTitle: string;
 }
 
+type ContentTab = 'lesson' | 'practice';
+
 const SESSION_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
 
 const getEditableTitleFromFilename = (filename: string): string => filename.replace(/\.md$/i, '');
+const isPracticeModuleFilename = (filename: string): boolean => /__test\.md$/i.test(filename);
+const getPracticeFilename = (lessonFilename: string): string => lessonFilename.replace(/\.md$/i, '__Test.md');
 
 const parseSections = (markdown: string): Section[] => {
     if (!markdown) return [];
@@ -91,6 +98,7 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
 
     const [sessions, setSessions] = useState<SessionInfo[]>([]);
     const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<ContentTab>('lesson');
     const [markdown, setMarkdown] = useState<string>('');
     const [viewMode, setViewMode] = useState<'home' | 'module' | 'edit'>('home');
     const [isLoading, setIsLoading] = useState(true);
@@ -119,8 +127,10 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
     const [sessionToDelete, setSessionToDelete] = useState<SessionInfo | null>(null);
     const [isDeletingSession, setIsDeletingSession] = useState(false);
     const [isModuleManageMode, setIsModuleManageMode] = useState(false);
+    const [aiModalMode, setAiModalMode] = useState<'lesson' | 'test' | null>(null);
+    const [lessonSourceMarkdown, setLessonSourceMarkdown] = useState('');
 
-    const allModules = useMemo(() => sessions.flatMap(s => s.modules), [sessions]);
+    const allModules = useMemo(() => sessions.flatMap(s => s.modules.filter(m => !isPracticeModuleFilename(m.filename))), [sessions]);
     const defaultSessionId = useMemo(() => sessions.find(s => s.isDefault)?.id || sessions[0]?.id || '', [sessions]);
     const activeModule = useMemo(() => allModules.find(m => m.id === activeModuleId), [allModules, activeModuleId]);
     const sections = useMemo(() => parseSections(markdown), [markdown]);
@@ -169,6 +179,11 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                     const data = await res.json();
                     setMarkdown(data.content || '');
                     setCurrentSectionIdx(0);
+                } else if (res.status === 404) {
+                    setMarkdown('');
+                    setCurrentSectionIdx(0);
+                } else {
+                    throw new Error(`Failed to load module content: ${res.status}`);
                 }
             } catch (e) {
                 console.error('Failed to load module content', e);
@@ -234,17 +249,93 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
 
     const handleModuleClick = (module: ModuleInfo) => {
         setActiveModuleId(module.id);
+        setActiveTab('lesson');
+        setAiModalMode(null);
+        setLessonSourceMarkdown('');
         loadModuleContent(module.filename);
         setViewMode('module');
     };
 
+    const handleTabChange = (tab: ContentTab) => {
+        if (!activeModule || tab === activeTab) return;
+        const targetFilename = tab === 'lesson' ? activeModule.filename : getPracticeFilename(activeModule.filename);
+        setActiveTab(tab);
+        setViewMode('module');
+        loadModuleContent(targetFilename);
+    };
+
+    useEffect(() => {
+        if (activeTab === 'lesson') {
+            setLessonSourceMarkdown(markdown);
+        }
+    }, [activeTab, markdown]);
+
+    const handleOpenAiRefine = () => {
+        if (!activeModule) return;
+        setAiModalMode(activeTab === 'practice' ? 'test' : 'lesson');
+    };
+
+    const handleGenerateAiPrompt = (inputs: {
+        request?: string;
+        language?: 'English' | 'Vietnamese';
+        targetAudience?: 'Kid' | 'Adult';
+        tone?: 'friendly_elementary' | 'professional_professor';
+    }) => {
+        if (!activeModule) return '';
+        const config = getConfig();
+        const activeType = config.audioCoach.activeCoach;
+        const coachName = config.audioCoach.coaches[activeType].name;
+        const lessonTitle = activeModule.title || getEditableTitleFromFilename(activeModule.filename);
+
+        if (aiModalMode === 'test') {
+            const lessonContent = lessonSourceMarkdown || '';
+            return getGenerateLessonTestPrompt(lessonTitle, lessonContent, inputs.request || '', []);
+        }
+
+        return getLessonPrompt({
+            task: markdown?.trim() ? 'refine_reading' : 'create_reading',
+            currentLesson: {
+                title: lessonTitle,
+                description: activeModule.description || '',
+                content: markdown
+            },
+            topic: inputs.request || lessonTitle,
+            userRequest: inputs.request || '',
+            language: inputs.language || 'English',
+            targetAudience: inputs.targetAudience || 'Adult',
+            tone: inputs.tone || 'professional_professor',
+            coachName,
+            format: 'reading'
+        });
+    };
+
+    const handleAiResult = async (data: any) => {
+        const result = data?.result || data;
+        const nextContent = typeof result?.content === 'string' ? result.content : '';
+
+        if (!nextContent) {
+            showToast('AI response missing content', 'error');
+            return;
+        }
+
+        setMarkdown(nextContent);
+        if (aiModalMode === 'lesson') {
+            setLessonSourceMarkdown(nextContent);
+            showToast('Lesson content refined!', 'success');
+        } else {
+            showToast('Practice test generated!', 'success');
+        }
+        setAiModalMode(null);
+    };
+
     const saveContent = async () => {
         if (!activeModule) return;
+        const filenameToSave = activeTab === 'lesson' ? activeModule.filename : getPracticeFilename(activeModule.filename);
         setIsSaving(true);
         try {
             const config = getConfig();
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/courses/${courseId}/modules/${activeModule.filename}`, {
+            const res = await fetch(`${serverUrl}/api/courses/${courseId}/modules/${filenameToSave}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: markdown })
@@ -374,10 +465,20 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
         e.stopPropagation();
         const session = sessions.find(s => s.id === sessionId);
         if (!session) return;
-        if ((direction === 'up' && index === 0) || (direction === 'down' && index === session.modules.length - 1)) return;
+        const visibleIndices = session.modules
+            .map((module, originalIndex) => ({ module, originalIndex }))
+            .filter(({ module }) => !isPracticeModuleFilename(module.filename))
+            .map(({ originalIndex }) => originalIndex);
+
+        const currentVisiblePos = visibleIndices.indexOf(index);
+        if (currentVisiblePos === -1) return;
+
+        const targetVisiblePos = direction === 'up' ? currentVisiblePos - 1 : currentVisiblePos + 1;
+        if (targetVisiblePos < 0 || targetVisiblePos >= visibleIndices.length) return;
+
+        const targetIndex = visibleIndices[targetVisiblePos];
 
         const newModules = [...session.modules];
-        const targetIndex = direction === 'up' ? index - 1 : index + 1;
         [newModules[index], newModules[targetIndex]] = [newModules[targetIndex], newModules[index]];
 
         setSessions(prev => prev.map(s => (s.id === sessionId ? { ...s, modules: newModules } : s)));
@@ -532,7 +633,8 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
 
     const openDeleteSessionModal = (session: SessionInfo, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (session.isDefault || session.modules.length > 0) return;
+        const hasVisibleModules = session.modules.some(module => !isPracticeModuleFilename(module.filename));
+        if (session.isDefault || hasVisibleModules) return;
         setSessionToDelete(session);
     };
 
@@ -580,10 +682,34 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                         <button
                             onClick={() => setViewMode('home')}
                             className="p-2 hover:bg-neutral-100 rounded-full transition-colors text-neutral-500"
-                            title="Back to Home"
+                            title="Back to Courses"
                         >
                             <ArrowLeft size={20} />
                         </button>
+                    )}
+                    {(viewMode === 'module' || viewMode === 'edit') && activeModule && (
+                        <>
+                            <button
+                                onClick={() => handleTabChange('lesson')}
+                                className={`px-3 py-2 text-xs font-black rounded-xl border-2 uppercase tracking-widest transition-all ${
+                                    activeTab === 'lesson'
+                                        ? 'bg-neutral-900 text-white border-neutral-900'
+                                        : 'bg-white text-neutral-600 border-neutral-100 hover:bg-neutral-50'
+                                }`}
+                            >
+                                Lesson
+                            </button>
+                            <button
+                                onClick={() => handleTabChange('practice')}
+                                className={`px-3 py-2 text-xs font-black rounded-xl border-2 uppercase tracking-widest transition-all ${
+                                    activeTab === 'practice'
+                                        ? 'bg-neutral-900 text-white border-neutral-900'
+                                        : 'bg-white text-neutral-600 border-neutral-100 hover:bg-neutral-50'
+                                }`}
+                            >
+                                Practice
+                            </button>
+                        </>
                     )}
                 </div>
 
@@ -642,6 +768,15 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                 )}
 
                 <div className="flex items-center gap-2">
+                    {(viewMode === 'module' || viewMode === 'edit') && activeModule && (
+                        <button
+                            onClick={handleOpenAiRefine}
+                            className="flex items-center gap-2 px-4 py-2 text-xs font-black border-2 border-amber-100 bg-amber-50 text-amber-700 rounded-xl hover:bg-amber-100 transition-all active:scale-95 uppercase tracking-widest"
+                        >
+                            <Sparkles size={14} />
+                            AI Refine
+                        </button>
+                    )}
                     {viewMode === 'edit' ? (
                         <button
                             onClick={saveContent}
@@ -732,7 +867,12 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {sessions.map((session, sessionIndex) => (
+                                    {sessions.map((session, sessionIndex) => {
+                                        const visibleModules = session.modules
+                                            .map((mod, originalIndex) => ({ mod, originalIndex }))
+                                            .filter(({ mod }) => !isPracticeModuleFilename(mod.filename));
+
+                                        return (
                                         <div
                                             key={session.id}
                                             className="rounded-2xl bg-white border p-3"
@@ -776,9 +916,9 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                                                         </button>
                                                         <button
                                                             onClick={(e) => openDeleteSessionModal(session, e)}
-                                                            disabled={session.isDefault || session.modules.length > 0}
+                                                            disabled={session.isDefault || visibleModules.length > 0}
                                                             className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-30"
-                                                            title={session.isDefault ? 'Default session cannot be deleted' : session.modules.length > 0 ? 'Only empty session can be deleted' : 'Delete Session'}
+                                                            title={session.isDefault ? 'Default session cannot be deleted' : visibleModules.length > 0 ? 'Only empty session can be deleted' : 'Delete Session'}
                                                         >
                                                             <Trash2 size={13} />
                                                         </button>
@@ -786,13 +926,13 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                                                 )}
                                             </div>
 
-                                            {session.modules.length === 0 ? (
+                                            {visibleModules.length === 0 ? (
                                                 <div className="text-xs font-bold text-neutral-400 px-2 py-4 border border-dashed border-neutral-200 rounded-xl">
                                                     Empty session
                                                 </div>
                                             ) : (
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                    {session.modules.map((mod, idx) => (
+                                                    {visibleModules.map(({ mod, originalIndex }, idx) => (
                                                         <div
                                                             key={mod.id}
                                                             onClick={() => handleModuleClick(mod)}
@@ -813,7 +953,7 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                                                                 {isModuleManageMode && (
                                                                     <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
                                                                         <button
-                                                                            onClick={(e) => handleMoveModule(session.id, idx, 'up', e)}
+                                                                            onClick={(e) => handleMoveModule(session.id, originalIndex, 'up', e)}
                                                                             disabled={idx === 0}
                                                                             className="p-1 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors disabled:opacity-30"
                                                                             title="Move Up"
@@ -821,8 +961,8 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                                                                             <ArrowUp size={13} />
                                                                         </button>
                                                                         <button
-                                                                            onClick={(e) => handleMoveModule(session.id, idx, 'down', e)}
-                                                                            disabled={idx === session.modules.length - 1}
+                                                                            onClick={(e) => handleMoveModule(session.id, originalIndex, 'down', e)}
+                                                                            disabled={idx === visibleModules.length - 1}
                                                                             className="p-1 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors disabled:opacity-30"
                                                                             title="Move Down"
                                                                         >
@@ -868,7 +1008,8 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                                                 </div>
                                             )}
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -1087,6 +1228,25 @@ export const CourseViewer: React.FC<CourseViewerProps> = ({ courseId, courseTitl
                         </div>
                     </div>
                 </div>
+            )}
+
+            {aiModalMode && activeModule && (
+                <UniversalAiModal
+                    isOpen={!!aiModalMode}
+                    onClose={() => setAiModalMode(null)}
+                    type={aiModalMode === 'test' ? 'GENERATE_AUDIO_SCRIPT' : 'REFINE_UNIT'}
+                    title={aiModalMode === 'test' ? 'Add Practice Test' : markdown?.trim() ? 'Refine Lesson' : 'Generate Lesson'}
+                    description={
+                        aiModalMode === 'test'
+                            ? 'AI will design a separate test based on lesson content.'
+                            : 'Enter instructions for the AI.'
+                    }
+                    initialData={{ format: aiModalMode === 'test' ? 'test' : 'reading' }}
+                    onGeneratePrompt={handleGenerateAiPrompt}
+                    onJsonReceived={handleAiResult}
+                    actionLabel="Apply Changes"
+                    closeOnSuccess={true}
+                />
             )}
 
             <ConfirmationModal
