@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
-import { updateSRS, calculateMasteryScore, getLogicalKnowledgeUnits } from '../../utils/srs';
+import { updateSRS, calculateMasteryScore } from '../../utils/srs';
 import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { ReviewSessionUI } from './ReviewSession_UI';
 import { getStoredJSON } from '../../utils/storage';
@@ -275,31 +275,15 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   };
 
   /**
-   * Helper to merge test results. 
-   * CRITICAL: If a specific test key failed, we invalidate ALL keys related to that knowledge unit 
-   * to ensure the Mastery Score drops immediately.
+   * Merge current and incoming test results.
+   * Keep only the exact outcomes from the latest test format (no cross-format forced fail).
    */
   const applyTestResults = (word: VocabularyItem, results: Record<string, boolean>) => {
       const normalizedIncoming = normalizeTestResultKeys(results);
       const currentResults = mergeTestResultsByGroup(word.lastTestResults, normalizedIncoming);
-      // Get logical units (e.g., 'colloc:heavy rain' maps to ['COLLOCATION_QUIZ...', 'COLLOCATION_MULTI...'])
-      const knowledgeUnits = getLogicalKnowledgeUnits(word);
 
       Object.entries(normalizedIncoming).forEach(([key, success]) => {
-          // Always update the specific key outcome
           currentResults[key] = success;
-
-          if (success === false) {
-              // If failed, find the unit this key belongs to
-              const unit = knowledgeUnits.find(u => u.testKeys.includes(key));
-              if (unit) {
-                  // Invalidate ALL keys for that unit. 
-                  // This ensures that failing a "Fill" test overrides a previous "Multiple Choice" pass.
-                  unit.testKeys.forEach(relatedKey => {
-                      currentResults[relatedKey] = false;
-                  });
-              }
-          }
       });
       return currentResults;
   };

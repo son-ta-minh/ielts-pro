@@ -479,21 +479,25 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       handleStartTest(selection);
   };
 
-  const handleRetryFailed = () => {
-      const failedTypes = new Set<ChallengeType>();
+    const handleRetryFailed = () => {
+        const history = word.lastTestResults || {};
+        if (!history) return;
 
-      challengeStats.forEach((stat, type) => {
-          // Only retry types that were attempted AND have zero score
-          if (stat.total > 0 && stat.score === 0) {
-              failedTypes.add(type);
-          }
-      });
+        const failedTypes = new Set<ChallengeType>();
 
-      if (failedTypes.size === 0) return;
+        Object.entries(history).forEach(([key, value]) => {
+            if (value === false) {
+                const type = key.split(':')[0] as ChallengeType;
+                failedTypes.add(type);
+            }
+        });
 
-      setIsQuickMode(false);
-      handleStartTest(failedTypes);
-  };
+        if (failedTypes.size === 0) return;
+        console.log("Retry Failed - failedTypes:", failedTypes);
+
+        setIsQuickMode(false);
+        handleStartTest(failedTypes);
+    };
 
   const handleChallengeStart = async () => {
       const allTypes = new Set<ChallengeType>(availableChallenges.map(c => c.type));
@@ -509,7 +513,7 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
   const handleFinish = (stopSession = false) => {
       const { finalGrade, resultHistory, detailedResults, counts } = engine.checkAnswers();
       engine.finishTest();
-
+     console.log("Before" + word.lastTestResults)
       if (skipRecap || isQuickFire) {
            setTimeout(() => onComplete(finalGrade, resultHistory, stopSession, counts), 1000);
       } else {
