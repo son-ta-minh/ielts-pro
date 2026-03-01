@@ -77,18 +77,38 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const userAudioPlayer = useRef<HTMLAudioElement | null>(null);
     const silenceTimer = useRef<any>(null);
-    const stopFnRef = useRef<() => void>(() => {});
+    const stopFnRef = useRef<() => Promise<void> | void>(() => {});
+    const autoStopTriggeredRef = useRef(false);
     const { showToast } = useToast();
 
     const displayTranscript = fullTranscript.substring(transcriptOffset).trimStart();
 
+    const analyzeAndPersistScore = useCallback((spokenText: string) => {
+        if (!target) return null;
+        const result = analyzeSpeechLocally(target.text, spokenText);
+        setLocalAnalysis(result);
+        const updatedQueue = queue.map((item, idx) =>
+            idx === currentIndex ? { ...item, lastScore: result.score } : item
+        );
+        saveQueue(updatedQueue);
+        return result;
+    }, [target, queue, currentIndex]);
+
     // Real-time analysis during recording
     useEffect(() => {
-        if (isRecording && target && displayTranscript) {
-            const result = analyzeSpeechLocally(target.text, displayTranscript);
-            setLocalAnalysis(result);
+        if (!isRecording || !target || !displayTranscript) return;
+
+        const result = analyzeSpeechLocally(target.text, displayTranscript);
+        setLocalAnalysis(result);
+
+        if (result.score >= 100 && !autoStopTriggeredRef.current) {
+            autoStopTriggeredRef.current = true;
+            (async () => {
+                await stopFnRef.current();
+                analyzeAndPersistScore(displayTranscript);
+            })();
         }
-    }, [displayTranscript, isRecording, target]);
+    }, [displayTranscript, isRecording, target, analyzeAndPersistScore]);
 
     const saveQueue = (newQueue: TargetPhrase[]) => {
         setQueue(newQueue);
@@ -237,6 +257,7 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
 
     useEffect(() => {
         if (isRecording) stopRecordingSession(true); 
+        autoStopTriggeredRef.current = false;
         setIsRevealed(autoReveal); // Use preference
         setFullTranscript('');
         setTranscriptOffset(0);
@@ -266,17 +287,11 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
         if (!target) return;
         if (isRecording) {
             await stopRecordingSession();
-            // Local Analysis is triggered instantly on stop
-            const result = analyzeSpeechLocally(target.text, displayTranscript);
-            setLocalAnalysis(result);
-            
-            // Save the score to the item in the queue
-            const updatedQueue = queue.map((item, idx) => 
-                idx === currentIndex ? { ...item, lastScore: result.score } : item
-            );
-            saveQueue(updatedQueue); // Persist score
+            autoStopTriggeredRef.current = false;
+            analyzeAndPersistScore(displayTranscript);
 
         } else {
+            autoStopTriggeredRef.current = false;
             setFullTranscript('');
             setTranscriptOffset(0);
             setMatchStatus(null);

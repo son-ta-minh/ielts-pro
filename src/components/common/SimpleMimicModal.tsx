@@ -45,6 +45,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const silenceTimerRef = useRef<any>(null);
     const lastActivityRef = useRef(Date.now());
+    const autoStopTriggeredRef = useRef(false);
     const { showToast } = useToast();
 
     // Real-time analysis during recording
@@ -52,6 +53,10 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         if (isRecording && editedTarget && transcript) {
             const result = analyzeSpeechLocally(editedTarget, transcript);
             setAnalysis(result);
+            if (result.score >= 100 && !autoStopTriggeredRef.current) {
+                autoStopTriggeredRef.current = true;
+                stopSession(transcript);
+            }
         }
     }, [transcript, isRecording, editedTarget]);
 
@@ -106,6 +111,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         }
         setIsRecording(false);
         isRecordingRef.current = false;
+        autoStopTriggeredRef.current = false;
         const result = analyzeSpeechLocally(editedTarget, currentTranscript);
         setAnalysis(result);
         if (onSaveScore) {
@@ -155,6 +161,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         if (isRecording) {
             await stopSession(transcript);
         } else {
+            autoStopTriggeredRef.current = false;
             setTranscript('');
             setAnalysis(null);
             setUserAudio(null);

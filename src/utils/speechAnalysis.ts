@@ -20,7 +20,13 @@ export interface AnalysisResult {
     words: WordResult[];
 }
 
-const normalize = (text: string) => text.toLowerCase().replace(/[.,!?;:]/g, '').trim();
+const tokenizeComparableWords = (text: string): string[] =>
+    (text || '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
 
 /**
  * Simple character alignment helper with safety break
@@ -65,22 +71,21 @@ function alignChars(target: string, input: string): CharDiff[] {
 }
 
 export function analyzeSpeechLocally(target: string, transcript: string): AnalysisResult {
-    const targetWords = target.split(/\s+/).filter(Boolean);
-    const userWordsRaw = normalize(transcript).split(/\s+/).filter(Boolean);
+    const targetWords = tokenizeComparableWords(target);
+    const userWordsRaw = tokenizeComparableWords(transcript);
     
     let totalChars = 0;
     let correctChars = 0;
 
     const wordResults: WordResult[] = targetWords.map(tWord => {
-        const cleanT = normalize(tWord);
-        totalChars += cleanT.length;
+        totalChars += tWord.length;
 
         // Find closest match in user words pool
         let bestMatchIdx = -1;
 
         userWordsRaw.forEach((uWord, idx) => {
             if (bestMatchIdx !== -1) return;
-            if (uWord === cleanT) {
+            if (uWord === tWord) {
                 bestMatchIdx = idx;
             }
         });
@@ -89,7 +94,7 @@ export function analyzeSpeechLocally(target: string, transcript: string): Analys
             // Fallback: simple fuzzy start match
             userWordsRaw.forEach((uWord, idx) => {
                 if (bestMatchIdx !== -1) return;
-                if (uWord.length >= 2 && (uWord.startsWith(cleanT.substring(0, 2)) || cleanT.startsWith(uWord.substring(0, 2)))) {
+                if (uWord.length >= 2 && (uWord.startsWith(tWord.substring(0, 2)) || tWord.startsWith(uWord.substring(0, 2)))) {
                     bestMatchIdx = idx;
                 }
             });
@@ -103,7 +108,7 @@ export function analyzeSpeechLocally(target: string, transcript: string): Analys
             const wordCorrect = chars.filter(c => c.status === 'correct').length;
             correctChars += wordCorrect;
 
-            const status = wordCorrect === cleanT.length ? 'correct' : 'near';
+            const status = wordCorrect === tWord.length ? 'correct' : 'near';
 
             return { 
                 word: tWord, 
@@ -116,7 +121,7 @@ export function analyzeSpeechLocally(target: string, transcript: string): Analys
         return { 
             word: tWord, 
             status: 'missing', 
-            chars: tWord.split('').map(char => ({ char, status: 'missing' })) 
+            chars: tWord.split('').map(char => ({ char, status: 'missing' }))
         };
     });
 
