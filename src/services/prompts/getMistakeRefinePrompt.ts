@@ -1,13 +1,17 @@
 import { MistakeRow } from '../../app/types';
 
-export function getMistakeRefinePrompt(rows: MistakeRow[]): string {
+export function getMistakeRefinePrompt(rows: MistakeRow[], userInput?: string): string {
     const rowsJson = JSON.stringify(rows);
+    const normalizedInput = (userInput || '').trim();
 
     return `You are an expert English linguist and IELTS writing coach.
     
     TASK: Refine and complete a "Common Mistakes" correction table.
     
     INPUT DATA:
+    ${normalizedInput || rowsJson}
+
+    EXISTING TABLE JSON (for backup context):
     ${rowsJson}
 
     INSTRUCTIONS:

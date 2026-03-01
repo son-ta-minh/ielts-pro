@@ -100,7 +100,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
 
     if (format === 'intensity') return getIntensityRefinePrompt(intensityRows);
     if (format === 'comparison') return getComparisonRefinePrompt(comparisonRows);
-    if (format === 'mistake') return getMistakeRefinePrompt(mistakeRows);
+    if (format === 'mistake') return getMistakeRefinePrompt(mistakeRows, inputs.request);
 
     if (format === 'test') {
         const currentTags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);

@@ -270,10 +270,10 @@ export const MistakeRecognitionGame: React.FC<Props> = ({ user, onComplete, onEx
 
                         <div className="flex gap-3">
                             <button onClick={() => handleSelfEvaluate(false)} className="flex-1 py-4 bg-white border border-neutral-200 text-neutral-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-neutral-50 transition-all">
-                                Sai
+                                Correct
                             </button>
                             <button onClick={() => handleSelfEvaluate(true)} className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2">
-                                <span>Đúng</span>
+                                <span>Incorrect</span>
                                 <ArrowRight size={18} />
                             </button>
                         </div>
