@@ -61,13 +61,6 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser }) => {
             else if (nextNode.type === 'key_fragment') {
                 currentProgress.keyFragments = (currentProgress.keyFragments || 0) + 1;
                 showToast("Picked up a Key Fragment 🗝️", 'success', 3000);
-                
-                // Auto-assemble Key
-                if (currentProgress.keyFragments >= 3) {
-                    currentProgress.keyFragments -= 3;
-                    currentProgress.keys = (currentProgress.keys || 0) + 1;
-                    showToast("✨ Key Fragments assembled into a Magic Key!", 'success', 4000);
-                }
             } 
             else if (nextNode.type === 'treasure') {
                 // Collect Treasure into Inventory
@@ -149,11 +142,6 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser }) => {
         
         // Award rewards
         newProgress.keyFragments = (newProgress.keyFragments || 0) + 1;
-        if (newProgress.keyFragments >= 3) {
-            newProgress.keyFragments -= 3;
-            newProgress.keys = (newProgress.keys || 0) + 1;
-            showToast("Key Fragments assembled into a Magic Key!", 'success', 4000);
-        }
 
         // Mark map node as defeated
         if (newProgress.map) {
@@ -247,6 +235,21 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser }) => {
         }
     };
 
+    const handleExchangeEnergyForDice = async () => {
+        const newProgress = { ...user.adventure };
+        const currentEnergy = newProgress.energy || 0;
+
+        if (currentEnergy < 3) {
+            showToast("Need at least 3 Energy to exchange for a Lucky Dice.", 'error');
+            return;
+        }
+
+        newProgress.energy = currentEnergy - 3;
+        newProgress.badges = [...(newProgress.badges || []), 'lucky_dice'];
+        await onUpdateUser({ ...user, adventure: newProgress });
+        showToast("Exchanged 3 Energy for 1 Lucky Dice! 🎲", 'success', 3000);
+    };
+
     const handleAdminAction = async (action: 'add_energy' | 'remove_energy' | 'add_key' | 'remove_key' | 'add_hp' | 'remove_hp' | 'add_fruit' | 'remove_fruit' | 'pass_boss') => {
         const newProgress = { ...user.adventure };
         if (action === 'add_energy') {
@@ -288,10 +291,6 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser }) => {
                 
                 // Simulate boss loot logic
                 newProgress.keyFragments = (newProgress.keyFragments || 0) + 1;
-                if (newProgress.keyFragments >= 3) {
-                    newProgress.keyFragments -= 3;
-                    newProgress.keys = (newProgress.keys || 0) + 1;
-                }
 
                 // Update Map
                 if (newProgress.map) {
@@ -346,6 +345,8 @@ const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser }) => {
                 onUseBadge={handleUseBadge}
                 hpPotions={user.adventure.hpPotions || 0}
                 wisdomFruits={user.adventure.wisdomFruits || 0}
+                energy={user.adventure.energy || 0}
+                onExchangeEnergyForDice={handleExchangeEnergyForDice}
             />
             {celebrationData && (
                 <Fireworks 

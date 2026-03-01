@@ -9,10 +9,21 @@ interface Props {
     badges: string[];
     hpPotions: number;
     wisdomFruits: number;
+    energy: number;
     onUseBadge: (badgeId: string) => void;
+    onExchangeEnergyForDice: () => void;
 }
 
-export const InventoryModal: React.FC<Props> = ({ isOpen, onClose, badges, hpPotions, wisdomFruits, onUseBadge }) => {
+export const InventoryModal: React.FC<Props> = ({
+    isOpen,
+    onClose,
+    badges,
+    hpPotions,
+    wisdomFruits,
+    energy,
+    onUseBadge,
+    onExchangeEnergyForDice
+}) => {
     if (!isOpen) return null;
 
     const uniqueBadgeCount = new Set(badges.filter(b => b !== 'locked_chest')).size;
@@ -54,6 +65,27 @@ export const InventoryModal: React.FC<Props> = ({ isOpen, onClose, badges, hpPot
                                     <div className="text-[9px] text-amber-400 mt-0.5 font-bold uppercase tracking-wider">Reveals Hint</div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Energy Exchange Section */}
+                    <div className="space-y-3">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2">
+                            <Zap size={12} /> Exchange
+                        </h4>
+                        <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4 flex items-center justify-between gap-4">
+                            <div>
+                                <div className="text-sm font-black text-cyan-900">Energy: {energy}</div>
+                                <div className="text-xs text-cyan-700">Đổi 3 Energy để nhận 1 Lucky Dice 🎲</div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onExchangeEnergyForDice}
+                                disabled={energy < 3}
+                                className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-cyan-600 text-white hover:bg-cyan-500 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Exchange
+                            </button>
                         </div>
                     </div>
 
