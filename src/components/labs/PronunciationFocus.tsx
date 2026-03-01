@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as dataStore from '../../app/dataStore';
 import { speak, startRecording, stopRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
