@@ -81,6 +81,9 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
     const singleWordStopTimerRef = useRef<any>(null);
     const stopFnRef = useRef<() => Promise<void> | void>(() => {});
     const autoStopTriggeredRef = useRef(false);
+    const transcriptOffsetRef = useRef(0);
+    const latestDisplayTranscriptRef = useRef('');
+    const latestAnalysisRef = useRef<AnalysisResult | null>(null);
     const { showToast } = useToast();
     const isSingleWordTarget = useMemo(() => {
         const tokens = (target?.text || '')
@@ -93,11 +96,23 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
     }, [target?.text]);
 
     const displayTranscript = fullTranscript.substring(transcriptOffset).trimStart();
+    const buildDisplayTranscript = useCallback((full: string) => {
+        return full.substring(transcriptOffsetRef.current).trimStart();
+    }, []);
+
+    useEffect(() => {
+        transcriptOffsetRef.current = transcriptOffset;
+        latestDisplayTranscriptRef.current = displayTranscript;
+    }, [transcriptOffset, displayTranscript]);
 
     const analyzeAndPersistScore = useCallback((spokenText: string) => {
         if (!target) return null;
-        const result = analyzeSpeechLocally(target.text, spokenText);
+        const cleaned = (spokenText || '').trim();
+        const result = cleaned
+            ? analyzeSpeechLocally(target.text, cleaned)
+            : (latestAnalysisRef.current || analyzeSpeechLocally(target.text, cleaned));
         setLocalAnalysis(result);
+        latestAnalysisRef.current = result;
         const updatedQueue = queue.map((item, idx) =>
             idx === currentIndex ? { ...item, lastScore: result.score } : item
         );
@@ -111,12 +126,13 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
 
         const result = analyzeSpeechLocally(target.text, displayTranscript);
         setLocalAnalysis(result);
+        latestAnalysisRef.current = result;
 
         if (result.score >= 100 && !autoStopTriggeredRef.current) {
             autoStopTriggeredRef.current = true;
             (async () => {
                 await stopFnRef.current();
-                analyzeAndPersistScore(displayTranscript);
+                analyzeAndPersistScore(latestDisplayTranscriptRef.current);
             })();
         }
     }, [displayTranscript, isRecording, target, analyzeAndPersistScore]);
@@ -227,7 +243,17 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
         } catch (e) { console.error("Audio capture failed", e); }
     }, []);
 
-    useEffect(() => { stopFnRef.current = stopRecordingSession; }, [stopRecordingSession]);
+    const stopAndPersistRef = useRef<() => Promise<void>>(async () => {});
+    useEffect(() => {
+        stopAndPersistRef.current = async () => {
+            await stopRecordingSession();
+            analyzeAndPersistScore(latestDisplayTranscriptRef.current);
+        };
+    }, [stopRecordingSession, analyzeAndPersistScore]);
+
+    useEffect(() => {
+        stopFnRef.current = () => stopAndPersistRef.current();
+    }, []);
 
     const handleFetchIpa = useCallback(async () => {
         if (!target) return;
@@ -276,6 +302,9 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
         setIsRevealed(autoReveal); // Use preference
         setFullTranscript('');
         setTranscriptOffset(0);
+        transcriptOffsetRef.current = 0;
+        latestDisplayTranscriptRef.current = '';
+        latestAnalysisRef.current = null;
         setUserAudioUrl(null);
         setMatchStatus(null);
         setLocalAnalysis(null);
@@ -304,7 +333,7 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
         if (isRecording) {
             await stopRecordingSession();
             autoStopTriggeredRef.current = false;
-            analyzeAndPersistScore(displayTranscript);
+            analyzeAndPersistScore(latestDisplayTranscriptRef.current);
 
         } else {
             autoStopTriggeredRef.current = false;
@@ -314,6 +343,9 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
             }
             setFullTranscript('');
             setTranscriptOffset(0);
+            transcriptOffsetRef.current = 0;
+            latestDisplayTranscriptRef.current = '';
+            latestAnalysisRef.current = null;
             setMatchStatus(null);
             setLocalAnalysis(null);
             try {
@@ -325,8 +357,10 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
                     (final, interim) => {
                         const fullText = final + interim;
                         setFullTranscript(fullText);
+                        const displayed = buildDisplayTranscript(fullText);
+                        latestDisplayTranscriptRef.current = displayed;
                         if (isSingleWordTarget && !singleWordStopTimerRef.current) {
-                            const hasAnyWord = fullText
+                            const hasAnyWord = displayed
                                 .toLowerCase()
                                 .replace(/[^\p{L}\p{N}]+/gu, ' ')
                                 .trim()
@@ -341,8 +375,10 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
                     },
                     (finalTranscript) => {
                         setFullTranscript(finalTranscript);
+                        const displayed = buildDisplayTranscript(finalTranscript);
+                        latestDisplayTranscriptRef.current = displayed;
                         if (isSingleWordTarget && !singleWordStopTimerRef.current) {
-                            const hasAnyWord = finalTranscript
+                            const hasAnyWord = displayed
                                 .toLowerCase()
                                 .replace(/[^\p{L}\p{N}]+/gu, ' ')
                                 .trim()
@@ -365,6 +401,9 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
     
     const handleClearTranscript = () => {
         setTranscriptOffset(fullTranscript.length);
+        transcriptOffsetRef.current = fullTranscript.length;
+        latestDisplayTranscriptRef.current = '';
+        latestAnalysisRef.current = null;
         setMatchStatus(null);
         setLocalAnalysis(null);
     };
