@@ -169,18 +169,43 @@ const MasteryOverviewPanel: React.FC<{ stats: StudyStats | null }> = ({ stats })
     const speakingCompleted = stats ? (stats.speaking.freeTalk.completed + stats.speaking.native.completed + stats.speaking.conversation.completed) : 0;
     const speakingTotal = stats ? (stats.speaking.freeTalk.total + stats.speaking.native.total + stats.speaking.conversation.total) : 0;
     
-    const StatRow = ({ label, completed, total, icon: Icon, colorClass }: { label: string, completed: number, total: number, icon: any, colorClass: string }) => (
-        <div className="flex items-center justify-between p-2 rounded-xl bg-neutral-50/50 hover:bg-neutral-50 transition-colors border border-transparent hover:border-neutral-100">
-            <div className="flex items-center gap-2">
-                <div className={`p-1.5 rounded-lg ${colorClass} bg-white shadow-sm`}><Icon size={12} /></div>
-                <span className="text-[10px] font-bold text-neutral-700">{label}</span>
+    const StatRow = ({
+        label,
+        completed,
+        total,
+        icon: Icon,
+        colorClass,
+        }: {
+        label: string;
+        completed: number;
+        total: number;
+        icon: any;
+        colorClass: string;
+        }) => (
+        <div className="flex items-start gap-2 p-2 rounded-xl bg-neutral-50/50 hover:bg-neutral-50 transition-colors border border-transparent hover:border-neutral-100">
+            
+            {/* Icon */}
+            <div className={`p-1.5 rounded-lg ${colorClass} bg-white shadow-sm shrink-0`}>
+            <Icon size={12} />
             </div>
-            <div className="flex items-center gap-2">
-                <span className="text-[9px] font-medium text-neutral-400">{completed}/{total}</span>
-                <TinyProgressRing percent={getProg(completed, total)} size={18} />
+
+            {/* Text Block */}
+            <div className="flex flex-col flex-1 min-w-0 leading-tight">
+            <span className="text-[10px] font-bold text-neutral-700 truncate">
+                {label}
+            </span>
+
+            <span className="text-[9px] font-medium text-neutral-400">
+                {completed}/{total}
+            </span>
+            </div>
+
+            {/* Progress Ring */}
+            <div className="shrink-0">
+            <TinyProgressRing percent={getProg(completed, total)} size={18} />
             </div>
         </div>
-    );
+        );
 
     return (
         <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4 h-full justify-center">
