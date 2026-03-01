@@ -1,11 +1,12 @@
 
 import React from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap } from 'lucide-react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditWordModal from '../word_lib/EditWordModal';
 import ViewWordModal from '../word_lib/ViewWordModal';
 import TestModal from './TestModal';
+import { SimpleMimicModal } from '../common/SimpleMimicModal';
 import { generateAvailableChallenges } from '../../utils/challengeUtils';
 import { ChallengeType, Challenge, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge, PrepositionQuizChallenge } from './TestModalTypes';
 import { calculateMasteryScore, getAllValidTestKeys } from '../../utils/srs';
@@ -139,6 +140,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
 
     const { current: currentIndex, max: maxIndexVisited } = progress;
     const isQuickFire = sessionType === 'random_test';
+    const [mimicTarget, setMimicTarget] = React.useState<string | null>(null);
 
     const handleEditRequest = (word: VocabularyItem) => {
       setWordInModal(null);
@@ -174,6 +176,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const displayText = isNewWord
     ? currentWord.word
     : currentWord.ipaUs || currentWord.word;
+    const vietnameseMeaning = currentWord.meaningVi?.trim() || currentWord.meaning?.trim() || 'No Vietnamese meaning available';
 
     const isIpa = !isNewWord && !!currentWord.ipaUs;
     const hasRetryableFailedTests = React.useMemo(() => {
@@ -265,6 +268,26 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     <button onClick={(e) => { e.stopPropagation(); speak(currentWord.word); }} className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce">
                                         <Volume2 size={22} />
                                     </button>
+                                    <button
+                                        onClick={() => setMimicTarget(currentWord.word)}
+                                        className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
+                                        title="Simple Mimic"
+                                    >
+                                        <Mic size={20} />
+                                    </button>
+                                    <div className="relative group">
+                                        <button
+                                            onClick={() => speak(vietnameseMeaning, false, 'vi')}
+                                            className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-amber-600 rounded-full transition-colors"
+                                            title="Read Vietnamese meaning"
+                                        >
+                                            <BookOpen size={20} />
+                                        </button>
+                                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 whitespace-nowrap max-w-[240px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none text-center leading-snug z-10">
+                                            {vietnameseMeaning}
+                                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                        </span>
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
@@ -317,6 +340,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
             {wordInModal && <ViewWordModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={async () => 0} isViewOnly={true} />}
             {editingWordInModal && <EditWordModal user={user} word={editingWordInModal} onSave={handleSaveEdit} onClose={() => setEditingWordInModal(null)} onSwitchToView={(word) => { setEditingWordInModal(null); setWordInModal(editingWordInModal); }} />}
             {isTesting && currentWord && <TestModal word={currentWord} isQuickFire={isQuickFire} sessionPosition={isQuickFire ? { current: currentIndex + 1, total: sessionWords.length } : undefined} onPrevWord={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} onClose={() => { if (isQuickFire) onComplete(); else setIsTesting(false); }} onComplete={handleTestComplete} skipSetup={isQuickReviewMode} />}
+            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
         </>
     );
 };
