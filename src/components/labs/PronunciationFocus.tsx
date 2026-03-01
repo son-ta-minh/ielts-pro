@@ -24,6 +24,7 @@ interface Props {
 }
 
 const MIMIC_PRACTICE_QUEUE_KEY = 'vocab_pro_mimic_practice_queue';
+const SINGLE_WORD_AUTOSTOP_DELAY = 1000;
 
 export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => {
     const [queue, setQueue] = useState<TargetPhrase[]>([]);
@@ -77,9 +78,19 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const userAudioPlayer = useRef<HTMLAudioElement | null>(null);
     const silenceTimer = useRef<any>(null);
+    const singleWordStopTimerRef = useRef<any>(null);
     const stopFnRef = useRef<() => Promise<void> | void>(() => {});
     const autoStopTriggeredRef = useRef(false);
     const { showToast } = useToast();
+    const isSingleWordTarget = useMemo(() => {
+        const tokens = (target?.text || '')
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}]+/gu, ' ')
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+        return tokens.length === 1;
+    }, [target?.text]);
 
     const displayTranscript = fullTranscript.substring(transcriptOffset).trimStart();
 
@@ -201,6 +212,10 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
     
     const stopRecordingSession = useCallback(async (abort = false) => {
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
+        if (singleWordStopTimerRef.current) {
+            clearTimeout(singleWordStopTimerRef.current);
+            singleWordStopTimerRef.current = null;
+        }
         setIsRecording(false);
         recognitionManager.current.stop();
         try {
@@ -280,6 +295,7 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
         return () => {
              recognitionManager.current.stop();
              if (silenceTimer.current) clearTimeout(silenceTimer.current);
+             if (singleWordStopTimerRef.current) clearTimeout(singleWordStopTimerRef.current);
         }
     }, []);
 
@@ -292,6 +308,10 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
 
         } else {
             autoStopTriggeredRef.current = false;
+            if (singleWordStopTimerRef.current) {
+                clearTimeout(singleWordStopTimerRef.current);
+                singleWordStopTimerRef.current = null;
+            }
             setFullTranscript('');
             setTranscriptOffset(0);
             setMatchStatus(null);
@@ -302,8 +322,39 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
                 if (silenceTimer.current) clearTimeout(silenceTimer.current);
                 silenceTimer.current = setTimeout(() => stopFnRef.current(), 10000);
                 recognitionManager.current.start(
-                    (final, interim) => setFullTranscript(final + interim),
-                    (finalTranscript) => setFullTranscript(finalTranscript)
+                    (final, interim) => {
+                        const fullText = final + interim;
+                        setFullTranscript(fullText);
+                        if (isSingleWordTarget && !singleWordStopTimerRef.current) {
+                            const hasAnyWord = fullText
+                                .toLowerCase()
+                                .replace(/[^\p{L}\p{N}]+/gu, ' ')
+                                .trim()
+                                .length > 0;
+                            if (hasAnyWord) {
+                                singleWordStopTimerRef.current = setTimeout(() => {
+                                    singleWordStopTimerRef.current = null;
+                                    stopFnRef.current();
+                                }, SINGLE_WORD_AUTOSTOP_DELAY);
+                            }
+                        }
+                    },
+                    (finalTranscript) => {
+                        setFullTranscript(finalTranscript);
+                        if (isSingleWordTarget && !singleWordStopTimerRef.current) {
+                            const hasAnyWord = finalTranscript
+                                .toLowerCase()
+                                .replace(/[^\p{L}\p{N}]+/gu, ' ')
+                                .trim()
+                                .length > 0;
+                            if (hasAnyWord) {
+                                singleWordStopTimerRef.current = setTimeout(() => {
+                                    singleWordStopTimerRef.current = null;
+                                    stopFnRef.current();
+                                }, SINGLE_WORD_AUTOSTOP_DELAY);
+                            }
+                        }
+                    }
                 );
             } catch (e) {
                 console.error("Failed to start recording", e);

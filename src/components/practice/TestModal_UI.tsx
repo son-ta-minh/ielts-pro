@@ -6,6 +6,7 @@ import { TestModalHeader } from './TestModalHeader';
 import { TestModalContent } from './TestModalContent';
 import { TestModalFooter } from './TestModalFooter';
 import { Settings, Play, CheckCircle2, AlertCircle, Loader2, Check, Type, Volume2, BookOpen, Combine, Quote, AtSign, Zap, Shuffle, Network, Grid2X2, ChevronDown, X, Sparkles, Layers, Eraser, CircleDashed, Bolt, RotateCw, Heart, HelpCircle, GraduationCap, XCircle, ArrowRight, Swords } from 'lucide-react';
+import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 
 // Re-export types so parent component (TestModal.tsx) doesn't break
 export * from './TestModalTypes';
@@ -347,8 +348,13 @@ export const TestModalUI: React.FC<TestModalUIProps> = ({
       );
   } else if (isSetupMode) {
       const isSelectionEmpty = selectedChallengeTypes.size === 0;
-      const hasFailedArea = Array.from(challengeStats.values())
+      const hasFailedAreaFromStats = Array.from(challengeStats.values())
         .some(stat => stat.total > 0 && stat.attempted > 0 && stat.score < stat.total);
+      const normalizedHistory = normalizeTestResultKeys(word.lastTestResults || {});
+      const hasFailedAreaFromHistory = Array.from(availableTypesSet).some(type =>
+        Object.entries(normalizedHistory).some(([key, value]) => (key === type || key.startsWith(`${type}:`)) && value === false)
+      );
+      const hasFailedArea = hasFailedAreaFromStats || hasFailedAreaFromHistory;
       
       // Calculate Total Mastery for Header
       let totalCurrent = 0;

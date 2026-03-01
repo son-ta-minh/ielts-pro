@@ -1,6 +1,6 @@
 
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { X, Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2, Edit2 } from 'lucide-react';
 import { speak, stopRecording, startRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
@@ -11,6 +11,7 @@ import { getConfig, getServerUrl } from '../../app/settingsManager';
 import * as dataStore from '../../app/dataStore';
 
 const SILENCE_TIMEOUT = 3000;
+const SINGLE_WORD_AUTOSTOP_DELAY = 1000;
 
 interface Props {
     target: string | null; // Allow null for manual input
@@ -44,9 +45,19 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
 
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const silenceTimerRef = useRef<any>(null);
+    const singleWordStopTimerRef = useRef<any>(null);
     const lastActivityRef = useRef(Date.now());
     const autoStopTriggeredRef = useRef(false);
     const { showToast } = useToast();
+    const isSingleWordTarget = useMemo(() => {
+        const tokens = (editedTarget || '')
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}]+/gu, ' ')
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+        return tokens.length === 1;
+    }, [editedTarget]);
 
     // Real-time analysis during recording
     useEffect(() => {
@@ -104,6 +115,10 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             clearInterval(silenceTimerRef.current);
             silenceTimerRef.current = null;
         }
+        if (singleWordStopTimerRef.current) {
+            clearTimeout(singleWordStopTimerRef.current);
+            singleWordStopTimerRef.current = null;
+        }
         recognitionManager.current.stop();
         const audioResult = await stopRecording();
         if (audioResult) {
@@ -146,6 +161,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     useEffect(() => {
         return () => {
             if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
+            if (singleWordStopTimerRef.current) clearTimeout(singleWordStopTimerRef.current);
             recognitionManager.current.stop();
         };
     }, []);
@@ -162,6 +178,10 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             await stopSession(transcript);
         } else {
             autoStopTriggeredRef.current = false;
+            if (singleWordStopTimerRef.current) {
+                clearTimeout(singleWordStopTimerRef.current);
+                singleWordStopTimerRef.current = null;
+            }
             setTranscript('');
             setAnalysis(null);
             setUserAudio(null);
@@ -178,6 +198,21 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                         const fullText = final + interim;
                         setTranscript(fullText);
                         resetActivity();
+                        if (isSingleWordTarget && !singleWordStopTimerRef.current) {
+                            const hasAnyWord = fullText
+                                .toLowerCase()
+                                .replace(/[^\p{L}\p{N}]+/gu, ' ')
+                                .trim()
+                                .length > 0;
+                            if (hasAnyWord) {
+                                singleWordStopTimerRef.current = setTimeout(() => {
+                                    singleWordStopTimerRef.current = null;
+                                    if (isRecordingRef.current) {
+                                        stopSession(fullText);
+                                    }
+                                }, SINGLE_WORD_AUTOSTOP_DELAY);
+                            }
+                        }
                     },
                     (final) => {
                         if (isRecordingRef.current) {

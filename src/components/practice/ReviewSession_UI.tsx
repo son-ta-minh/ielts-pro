@@ -8,7 +8,8 @@ import ViewWordModal from '../word_lib/ViewWordModal';
 import TestModal from './TestModal';
 import { generateAvailableChallenges } from '../../utils/challengeUtils';
 import { ChallengeType, Challenge, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge, PrepositionQuizChallenge } from './TestModalTypes';
-import { calculateMasteryScore } from '../../utils/srs';
+import { calculateMasteryScore, getAllValidTestKeys } from '../../utils/srs';
+import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 
 export interface ReviewSessionUIProps {
   user: User;
@@ -175,6 +176,17 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     : currentWord.ipaUs || currentWord.word;
 
     const isIpa = !isNewWord && !!currentWord.ipaUs;
+    const hasRetryableFailedTests = React.useMemo(() => {
+        const history = normalizeTestResultKeys(currentWord.lastTestResults || {});
+        const validKeys = getAllValidTestKeys(currentWord);
+        const validBaseTypes = new Set(Array.from(validKeys).map(key => key.split(':')[0]));
+        return Object.entries(history).some(([key, value]) => {
+            if (value !== false) return false;
+            if (validKeys.has(key)) return true;
+            const baseType = key.split(':')[0];
+            return validBaseTypes.has(baseType);
+        });
+    }, [currentWord]);
 
     // --- Mobile Swipe Support ---
     const touchStartX = React.useRef<number | null>(null);
@@ -258,7 +270,14 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
                                         <Eye size={14}/><span>View Details</span>
                                     </button>
-                                    <button onClick={handleManualPractice} className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-black text-[10px] hover:bg-amber-600 transition-all active:scale-95 uppercase tracking-widest shadow-lg shadow-amber-500/20">
+                                    <button
+                                        onClick={handleManualPractice}
+                                        className={`flex items-center gap-2 px-6 py-3 text-white rounded-xl font-black text-[10px] transition-all active:scale-95 uppercase tracking-widest shadow-lg ${
+                                            hasRetryableFailedTests
+                                                ? 'bg-red-600 hover:bg-red-700 shadow-red-500/20'
+                                                : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
+                                        }`}
+                                    >
                                         <BrainCircuit size={14}/><span>Practice</span>
                                     </button>
                                 </div>
