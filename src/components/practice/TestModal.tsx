@@ -365,10 +365,14 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
           }
       }
 
-      // 4. Random from Pool (IPA, Prep, Family, Idiom)
+      // 4. Always include Preposition if available
+      if (availableTypes.has('PREPOSITION_QUIZ')) {
+          selection.add('PREPOSITION_QUIZ');
+      }
+
+      // 5. Random from Pool (IPA, Family, Idiom)
       const randomPool: ChallengeType[] = [];
       if (availableTypes.has('IPA_QUIZ')) randomPool.push('IPA_QUIZ');
-      if (availableTypes.has('PREPOSITION_QUIZ')) randomPool.push('PREPOSITION_QUIZ');
       if (availableTypes.has('WORD_FAMILY')) randomPool.push('WORD_FAMILY');
       
       // Find best available idiom type to add to random pool
