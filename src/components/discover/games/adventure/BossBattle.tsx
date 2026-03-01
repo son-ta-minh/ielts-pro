@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { VocabularyItem, ReviewGrade, User } from '../../../../app/types';
-import { Heart, Swords, Clock, Skull, Sword, Briefcase } from 'lucide-react';
+import { Heart, Swords, Clock, Skull, Sword, Briefcase, LogOut } from 'lucide-react';
 import { updateSRS } from '../../../../utils/srs';
 import TestModal from '../../../practice/TestModal';
+import ConfirmationModal from '../../../common/ConfirmationModal';
 import * as dataStore from '../../../../app/dataStore';
 import { useToast } from '../../../../contexts/ToastContext';
 
@@ -49,6 +51,7 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
     // Inventory States
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
     const [hintActive, setHintActive] = useState(false);
+    const [isFleeConfirmOpen, setIsFleeConfirmOpen] = useState(false);
     
     const battleWords = useMemo(() => [...words].sort(() => Math.random() - 0.5), [words]);
     const currentWord = battleWords[currentWordIndex % battleWords.length];
@@ -73,6 +76,18 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
     useEffect(() => {
         setHintActive(false);
     }, [currentWordIndex]);
+
+    // Allow Escape key to exit boss battle (fullscreen safety)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onExit();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onExit]);
 
     const handleTestComplete = async (grade: ReviewGrade) => {
         const isCorrect = grade !== ReviewGrade.FORGOT;
@@ -220,9 +235,73 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
 
     // --- MAIN BATTLE RENDER ---
     return (
-        <div className="absolute inset-0 z-[100] bg-slate-900 flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col overflow-hidden">
             {/* Background Atmosphere */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-800 to-black opacity-50 pointer-events-none"></div>
+
+            {/* 2. UI Layer (Timer/Inventory) - UPDATED STYLES */}
+            <div className="fixed top-4 right-4 z-[1000] flex items-center gap-4">
+                <button 
+                    onClick={() => setIsInventoryOpen(!isInventoryOpen)}
+                    className={`p-3 rounded-xl border-2 backdrop-blur-md transition-all duration-300 group ${
+                        isInventoryOpen 
+                            ? 'bg-indigo-600 border-indigo-300 text-white shadow-[0_0_25px_rgba(99,102,241,0.6)] scale-105' 
+                            : 'bg-indigo-950/80 border-indigo-500/60 text-indigo-300 shadow-[0_0_15px_rgba(129,140,248,0.3)] hover:bg-indigo-900 hover:text-white hover:border-indigo-400 hover:shadow-[0_0_20px_rgba(129,140,248,0.5)] active:scale-95'
+                    }`}
+                    title="Items"
+                >
+                    <div className="relative">
+                        <Briefcase size={24} />
+                        {/* Small indicator dot if items exist */}
+                        {hasItems && (
+                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-white animate-bounce shadow-sm"></span>
+                        )}
+                    </div>
+                </button>
+                <div className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 backdrop-blur-md transition-all duration-300 font-mono font-black ${
+                    timeLeft < 60 
+                        ? 'bg-red-950/90 border-red-500 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.6)] animate-pulse scale-110' 
+                        : 'bg-cyan-950/80 border-cyan-500/60 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]'
+                }`}>
+                    <Clock size={24} className={timeLeft < 60 ? "animate-spin" : ""} />
+                    <span className="text-base tracking-widest">{formatTime(timeLeft)}</span>
+                </div>
+                <button
+                    onClick={() => setIsFleeConfirmOpen(true)}
+                    className="p-3 rounded-xl border-2 bg-red-950/80 border-red-500/60 text-red-400 backdrop-blur-md shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:bg-red-900 hover:text-white hover:border-red-400 hover:shadow-[0_0_20px_rgba(239,68,68,0.5)] active:scale-95 transition-all duration-300"
+                    title="Flee Battle"
+                >
+                    <LogOut size={24} />
+                </button>
+                {/* Inventory Dropdown */}
+                {isInventoryOpen && (
+                    <div className="absolute top-full right-0 mt-3 z-[9998] bg-slate-800/95 border border-slate-600 rounded-2xl p-4 shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 w-64">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Battle Supplies</h4>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-xl border border-slate-700">
+                                <div className="flex items-center gap-2">
+                                    <div className="text-xl">🧪</div>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-slate-200">HP Potion</span>
+                                        <span className="text-[10px] text-slate-500">x{user.adventure.hpPotions || 0}</span>
+                                    </div>
+                                </div>
+                                <button onClick={handleUsePotion} disabled={(user.adventure.hpPotions || 0) <= 0 || playerHp >= PLAYER_MAX_HP} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold uppercase disabled:opacity-50 disabled:bg-slate-700">Use</button>
+                            </div>
+                            <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-xl border border-slate-700">
+                                <div className="flex items-center gap-2">
+                                    <div className="text-xl">🍎</div>
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-slate-200">Wisdom Fruit</span>
+                                        <span className="text-[10px] text-slate-500">x{user.adventure.wisdomFruits || 0}</span>
+                                    </div>
+                                </div>
+                                <button onClick={handleUseFruit} disabled={(user.adventure.wisdomFruits || 0) <= 0 || hintActive} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold uppercase disabled:opacity-50 disabled:bg-slate-700">Use</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
             
             {/* --- TOP ZONE: BOSS (25%) --- */}
             <div className="relative z-10 flex flex-col items-center justify-center pt-2 pb-2 h-[25%] shrink-0">
@@ -254,7 +333,7 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
             </div>
 
             {/* --- MIDDLE ZONE: BATTLEFIELD & CARDS (Flex 1) --- */}
-            <div className="flex-1 relative z-10 flex items-center justify-center w-full px-4 overflow-hidden">
+            <div className="flex-1 relative z-10 flex items-center justify-center w-full px-4 overflow-auto">
                 
                 {/* 1. Projectile Layer (Z-Index 30 - Above Card) */}
                  {animState === 'player-attacking' && (
@@ -268,66 +347,10 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
                     </div>
                  )}
                  
-                 {/* 2. UI Layer (Timer/Inventory) - UPDATED STYLES */}
-                 <div className={`absolute top-4 right-4 flex items-center gap-2 px-4 py-2 rounded-xl font-mono font-black border-2 backdrop-blur-md z-20 transition-all duration-300 ${
-                    timeLeft < 60 
-                        ? 'bg-red-950/90 border-red-500 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.6)] animate-pulse scale-110' 
-                        : 'bg-cyan-950/80 border-cyan-500/60 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]'
-                }`}>
-                    <Clock size={18} className={timeLeft < 60 ? "animate-spin" : ""} />
-                    <span className="text-lg tracking-widest">{formatTime(timeLeft)}</span>
-                </div>
-
-                <button 
-                    onClick={() => setIsInventoryOpen(!isInventoryOpen)}
-                    className={`absolute top-4 left-4 p-3 rounded-xl border-2 backdrop-blur-md transition-all duration-300 z-20 group ${
-                        isInventoryOpen 
-                            ? 'bg-indigo-600 border-indigo-300 text-white shadow-[0_0_25px_rgba(99,102,241,0.6)] scale-105' 
-                            : 'bg-indigo-950/80 border-indigo-500/60 text-indigo-300 shadow-[0_0_15px_rgba(129,140,248,0.3)] hover:bg-indigo-900 hover:text-white hover:border-indigo-400 hover:shadow-[0_0_20px_rgba(129,140,248,0.5)] active:scale-95'
-                    }`}
-                    title="Items"
-                >
-                    <div className="relative">
-                         <Briefcase size={24} />
-                         {/* Small indicator dot if items exist */}
-                         {hasItems && (
-                             <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-white animate-bounce shadow-sm"></span>
-                         )}
-                    </div>
-                </button>
-
-                 {/* Inventory Dropdown */}
-                 {isInventoryOpen && (
-                    <div className="absolute top-16 left-4 z-40 bg-slate-800/95 border border-slate-600 rounded-2xl p-4 shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-left-4 w-64">
-                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Battle Supplies</h4>
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-xl border border-slate-700">
-                                <div className="flex items-center gap-2">
-                                    <div className="text-xl">🧪</div>
-                                    <div className="flex flex-col">
-                                        <span className="text-xs font-bold text-slate-200">HP Potion</span>
-                                        <span className="text-[10px] text-slate-500">x{user.adventure.hpPotions || 0}</span>
-                                    </div>
-                                </div>
-                                <button onClick={handleUsePotion} disabled={(user.adventure.hpPotions || 0) <= 0 || playerHp >= PLAYER_MAX_HP} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold uppercase disabled:opacity-50 disabled:bg-slate-700">Use</button>
-                            </div>
-                            <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-xl border border-slate-700">
-                                <div className="flex items-center gap-2">
-                                    <div className="text-xl">🍎</div>
-                                    <div className="flex flex-col">
-                                        <span className="text-xs font-bold text-slate-200">Wisdom Fruit</span>
-                                        <span className="text-[10px] text-slate-500">x{user.adventure.wisdomFruits || 0}</span>
-                                    </div>
-                                </div>
-                                <button onClick={handleUseFruit} disabled={(user.adventure.wisdomFruits || 0) <= 0 || hintActive} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold uppercase disabled:opacity-50 disabled:bg-slate-700">Use</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {/* 3. The Test Card (Centered) */}
                 {gameState === 'fighting' && currentWord ? (
-                    <div className="w-full max-w-md h-full max-h-[420px] z-10 animate-in zoom-in-95 duration-300 flex items-center">
+                    <div className="w-full max-w-md z-10 animate-in zoom-in-95 duration-300 flex items-stretch">
                         <TestModal 
                             word={currentWord} 
                             isQuickFire={true} 
@@ -401,6 +424,20 @@ export const BattleMode: React.FC<Props> = ({ user, boss, words, onVictory, onDe
                 .animate-shake { animation: shake 0.3s ease-in-out; }
                 .animate-float { animation: float 3s ease-in-out infinite; }
             `}</style>
+            {isFleeConfirmOpen && (
+                <ConfirmationModal
+                    isOpen={isFleeConfirmOpen}
+                    title="Retreat from Battle?"
+                    description="Are you sure you want to flee the battle? Your progress will be lost."
+                    confirmText="Flee"
+                    cancelText="Stay"
+                    onConfirm={() => {
+                        setIsFleeConfirmOpen(false);
+                        onExit();
+                    }}
+                    onCancel={() => setIsFleeConfirmOpen(false)}
+                />
+            )}
         </div>
     );
 };
