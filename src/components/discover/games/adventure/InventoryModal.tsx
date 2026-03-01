@@ -76,7 +76,7 @@ export const InventoryModal: React.FC<Props> = ({
                         <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4 flex items-center justify-between gap-4">
                             <div>
                                 <div className="text-sm font-black text-cyan-900">Energy: {energy}</div>
-                                <div className="text-xs text-cyan-700">Đổi 3 Energy để nhận 1 Lucky Dice 🎲</div>
+                                <div className="text-xs text-cyan-700">Exchange 3 Energies for 1 Lucky Dice 🎲</div>
                             </div>
                             <button
                                 type="button"
