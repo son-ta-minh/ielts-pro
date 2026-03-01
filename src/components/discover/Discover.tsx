@@ -15,6 +15,7 @@ import { Dictation } from './games/Dictation';
 import { NaturalExpressionGame } from './games/NaturalExpressionGame';
 import { IntensityScaleGame } from './games/IntensityScaleGame';
 import { ComparisonLabGame } from './games/ComparisonLabGame';
+import { MistakeRecognitionGame } from './games/MistakeRecognitionGame';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -109,6 +110,7 @@ const Discover: React.FC<Props> = ({ user, onExit, onRecalculateXp, xpToNextLeve
             case 'NATURAL_EXPRESSION': return <NaturalExpressionGame userId={user.id} {...commonProps} />;
             case 'INTENSITY_SCALE': return <IntensityScaleGame user={user} {...commonProps} />;
             case 'COMPARISON_LAB': return <ComparisonLabGame user={user} {...commonProps} />;
+            case 'MISTAKE_RECOGNITION': return <MistakeRecognitionGame user={user} {...commonProps} />;
             default: return <Adventure user={user} onUpdateUser={onUpdateUser} onStartSession={onStartSession} onExit={onExit} />;
         }
     };

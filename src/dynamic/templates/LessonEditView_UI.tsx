@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ArrowLeft, Save, Loader2, Eye, PenLine, Sparkles, BookOpen, Tag, Headphones, BookText, ClipboardList, Zap, Plus, Trash2, ChevronRight, Volume2, Split, X } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Eye, PenLine, Sparkles, BookOpen, Tag, Headphones, BookText, ClipboardList, Zap, Plus, Trash2, ChevronRight, Volume2, Split, X, AlertTriangle } from 'lucide-react';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { speak } from '../../utils/audio';
-import { IntensityRow, IntensityItem, ComparisonRow, LessonType } from '../../app/types';
+import { IntensityRow, IntensityItem, ComparisonRow, LessonType, MistakeRow } from '../../app/types';
 
 interface Props {
   type: LessonType;
@@ -24,6 +24,8 @@ interface Props {
   setIntensityRows: (rows: IntensityRow[]) => void;
   comparisonRows: ComparisonRow[];
   setComparisonRows: (rows: ComparisonRow[]) => void;
+  mistakeRows: MistakeRow[];
+  setMistakeRows: (rows: MistakeRow[]) => void;
   isSaving: boolean;
   onSave: () => void;
   onPractice: () => void;
@@ -37,15 +39,17 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
         content, setContent, listeningContent, setListeningContent, testContent, setTestContent,
         intensityRows, setIntensityRows,
         comparisonRows, setComparisonRows,
+        mistakeRows, setMistakeRows,
         isSaving, onSave, onPractice, onCancel, onOpenAiRefine 
     } = props;
     
-    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING' | 'TEST' | 'INTENSITY' | 'COMPARISON'>('READING');
+    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING' | 'TEST' | 'INTENSITY' | 'COMPARISON' | 'MISTAKE'>('READING');
     const [isPreview, setIsPreview] = useState(false);
 
     useEffect(() => {
         if (type === 'intensity') setActiveTab('INTENSITY');
         else if (type === 'comparison') setActiveTab('COMPARISON');
+        else if (type === 'mistake') setActiveTab('MISTAKE');
         else setActiveTab('READING');
     }, [type]);
 
@@ -95,6 +99,15 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
         setComparisonRows(newRows);
     };
 
+    // --- Mistake Handlers ---
+    const addMistakeRow = () => setMistakeRows([...mistakeRows, { mistake: '', explanation: '', correction: '' }]);
+    const removeMistakeRow = (idx: number) => setMistakeRows(mistakeRows.filter((_, i) => i !== idx));
+    const updateMistakeRow = (idx: number, field: keyof MistakeRow, value: string) => {
+        const newRows = [...mistakeRows];
+        newRows[idx] = { ...newRows[idx], [field]: value };
+        setMistakeRows(newRows);
+    };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300 pb-20">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -136,6 +149,9 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
                     )}
                     {type === 'comparison' && (
                         <button onClick={() => { setActiveTab('COMPARISON'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all shrink-0 ${activeTab === 'COMPARISON' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><Split size={12} className="inline mr-1"/> Contrast</button>
+                    )}
+                    {type === 'mistake' && (
+                        <button onClick={() => { setActiveTab('MISTAKE'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all shrink-0 ${activeTab === 'MISTAKE' ? 'bg-white text-rose-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><AlertTriangle size={12} className="inline mr-1"/> Mistake</button>
                     )}
                     <button onClick={() => { setActiveTab('READING'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all shrink-0 ${activeTab === 'READING' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><BookText size={12} className="inline mr-1"/> Reading</button>
                     <button onClick={() => { setActiveTab('LISTENING'); setIsPreview(false); }} className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all shrink-0 ${activeTab === 'LISTENING' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}><Headphones size={12} className="inline mr-1"/> Listening</button>
@@ -212,6 +228,33 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
                                 </div>
                             ))}
                             <button onClick={addComparisonRow} className="w-full py-6 border-2 border-dashed border-neutral-200 rounded-[2.5rem] text-neutral-400 font-black text-xs uppercase tracking-widest hover:border-indigo-300 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 bg-white/50"><Plus size={20}/> Add Comparison Pair</button>
+                        </div>
+                    </div>
+                ) : activeTab === 'MISTAKE' ? (
+                    <div className="absolute inset-0 p-6 overflow-y-auto space-y-4 bg-neutral-50/30 no-scrollbar">
+                        <div className="p-4 bg-white rounded-2xl border border-neutral-200 shadow-sm space-y-2">
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Edit Mistake Table</h4>
+                            <p className="text-[10px] text-neutral-500 italic">Define wrong phrases, explain why they are wrong, then provide the correction.</p>
+                        </div>
+                        <div className="space-y-4">
+                            {mistakeRows.map((row, idx) => (
+                                <div key={idx} className="bg-white p-6 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 relative group">
+                                    <button onClick={() => removeMistakeRow(idx)} className="absolute top-4 right-4 p-2 text-neutral-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={18}/></button>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-rose-500 uppercase tracking-wider pl-1">Mistake</label>
+                                        <textarea value={row.mistake} onChange={e => updateMistakeRow(idx, 'mistake', e.target.value)} rows={2} className="w-full p-4 bg-neutral-50 border border-neutral-100 rounded-2xl text-sm font-bold focus:bg-white outline-none resize-none leading-relaxed" placeholder="e.g. educating staffs" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-neutral-400 uppercase tracking-wider pl-1">Explanation</label>
+                                        <textarea value={row.explanation} onChange={e => updateMistakeRow(idx, 'explanation', e.target.value)} rows={2} className="w-full p-4 bg-neutral-50 border border-neutral-100 rounded-2xl text-sm font-medium focus:bg-white outline-none resize-none leading-relaxed" placeholder="e.g. “Staff” is uncountable..." />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] font-black text-emerald-600 uppercase tracking-wider pl-1">Correction</label>
+                                        <textarea value={row.correction} onChange={e => updateMistakeRow(idx, 'correction', e.target.value)} rows={2} className="w-full p-4 bg-neutral-50 border border-neutral-100 rounded-2xl text-sm font-bold focus:bg-white outline-none resize-none leading-relaxed" placeholder="e.g. teaching staff / teachers" />
+                                    </div>
+                                </div>
+                            ))}
+                            <button onClick={addMistakeRow} className="w-full py-6 border-2 border-dashed border-neutral-200 rounded-[2.5rem] text-neutral-400 font-black text-xs uppercase tracking-widest hover:border-rose-300 hover:text-rose-600 transition-all flex items-center justify-center gap-2 bg-white/50"><Plus size={20}/> Add Mistake Row</button>
                         </div>
                     </div>
                 ) : isPreview ? (

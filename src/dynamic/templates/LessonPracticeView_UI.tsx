@@ -1,10 +1,11 @@
 import React, { useMemo, useEffect, useState, useRef } from 'react';
 import { Lesson } from '../../app/types';
-import { ArrowLeft, Edit3, Play, Pause, Square, Headphones, Sparkles, Volume2, RefreshCw, Loader2, BookText, ClipboardList, GalleryHorizontalEnd, ScrollText, ChevronLeft, ChevronRight, Menu, Zap, Split } from 'lucide-react';
+import { ArrowLeft, Edit3, Play, Pause, Square, Headphones, Sparkles, Volume2, RefreshCw, Loader2, BookText, ClipboardList, GalleryHorizontalEnd, ScrollText, ChevronLeft, ChevronRight, Menu, Zap, Split, AlertTriangle } from 'lucide-react';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { speak, stopSpeaking, prefetchSpeech } from '../../utils/audio';
 import { IntensityTable } from '../../components/common/IntensityTable';
 import { ComparisonTable } from '../../components/common/ComparisonTable';
+import { MistakeTable } from '../../components/common/MistakeTable';
 
 interface Props {
   lesson: Lesson;
@@ -61,7 +62,7 @@ const splitContentIntoChapters = (markdown: string): Chapter[] => {
 };
 
 export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEdit, onAddSound, onAddTest }) => {
-    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING' | 'TEST' | 'INTENSITY' | 'COMPARISON'>('READING');
+    const [activeTab, setActiveTab] = useState<'READING' | 'LISTENING' | 'TEST' | 'INTENSITY' | 'COMPARISON' | 'MISTAKE'>('READING');
     const [viewMode, setViewMode] = useState<'SCROLL' | 'PAGED'>('SCROLL');
     const [currentChapterIdx, setCurrentChapterIdx] = useState(0);
 
@@ -83,6 +84,8 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
             setActiveTab('INTENSITY');
         } else if (lesson.type === 'comparison' && lesson.comparisonRows && lesson.comparisonRows.length > 0) {
             setActiveTab('COMPARISON');
+        } else if (lesson.type === 'mistake' && lesson.mistakeRows && lesson.mistakeRows.length > 0) {
+            setActiveTab('MISTAKE');
         }
     }, [lesson]);
 
@@ -233,7 +236,7 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
     useEffect(() => {
         (window as any).resolveMarkdownNav = (query: string) => {
             if (viewMode !== 'PAGED') return false;
-            if (activeTab === 'INTENSITY' || activeTab === 'COMPARISON') return false;
+            if (activeTab === 'INTENSITY' || activeTab === 'COMPARISON' || activeTab === 'MISTAKE') return false;
 
             const chapterIdx = chapterHeadingIndex.get(query);
             if (chapterIdx === undefined) return false;
@@ -266,9 +269,10 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
     const hasTest = !!lesson.testContent;
     const hasIntensity = !!(lesson.intensityRows && lesson.intensityRows.length > 0);
     const hasComparison = !!(lesson.comparisonRows && lesson.comparisonRows.length > 0);
+    const hasMistake = !!(lesson.mistakeRows && lesson.mistakeRows.length > 0);
     
     // Always have Reading available
-    const availableTabCount = (hasIntensity ? 1 : 0) + (hasComparison ? 1 : 0) + 1 + (hasListening ? 1 : 0) + (hasTest ? 1 : 0);
+    const availableTabCount = (hasIntensity ? 1 : 0) + (hasComparison ? 1 : 0) + (hasMistake ? 1 : 0) + 1 + (hasListening ? 1 : 0) + (hasTest ? 1 : 0);
 
     useEffect(() => {
         if (viewMode === 'PAGED') {
@@ -284,7 +288,7 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                         <ArrowLeft size={14} /><span>Back to Library</span>
                     </button>
                     
-                    {chapters.length > 1 && activeTab !== 'INTENSITY' && activeTab !== 'COMPARISON' && (
+                    {chapters.length > 1 && activeTab !== 'INTENSITY' && activeTab !== 'COMPARISON' && activeTab !== 'MISTAKE' && (
                         <div className="flex bg-neutral-100 p-1 rounded-xl">
                             <button 
                                 onClick={() => setViewMode('SCROLL')}
@@ -325,6 +329,14 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                                         className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'COMPARISON' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
                                     >
                                         <Split size={12} className="inline mr-1"/> Contrast
+                                    </button>
+                                )}
+                                {hasMistake && (
+                                    <button 
+                                        onClick={() => setActiveTab('MISTAKE')}
+                                        className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${activeTab === 'MISTAKE' ? 'bg-white text-rose-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                                    >
+                                        <AlertTriangle size={12} className="inline mr-1"/> Mistake
                                     </button>
                                 )}
                                 <button 
@@ -397,6 +409,14 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                          </div>
                          <ComparisonTable rows={lesson.comparisonRows || []} />
                      </div>
+                 ) : activeTab === 'MISTAKE' ? (
+                      <div className="space-y-6 animate-in fade-in duration-500">
+                         <div className="space-y-1 text-center mb-8">
+                            <h3 className="text-xl font-black text-neutral-900">Mistake Review</h3>
+                            <p className="text-sm text-neutral-500 font-medium">Spot common mistakes and learn the correct form.</p>
+                         </div>
+                         <MistakeTable rows={lesson.mistakeRows || []} />
+                     </div>
                  ) : activeTab === 'TEST' && !lesson.testContent ? (
                      <div className="h-full flex flex-col items-center justify-center py-20 text-neutral-300">
                          <ClipboardList size={48} className="mb-4 opacity-20" />
@@ -416,7 +436,7 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
             </div>
 
             {/* Paged Navigation Footer */}
-            {viewMode === 'PAGED' && activeTab !== 'INTENSITY' && activeTab !== 'COMPARISON' && chapters.length > 1 && (
+            {viewMode === 'PAGED' && activeTab !== 'INTENSITY' && activeTab !== 'COMPARISON' && activeTab !== 'MISTAKE' && chapters.length > 1 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-xl border border-neutral-200 flex items-center gap-2 animate-in slide-in-from-bottom-4">
                     <button 
                         onClick={() => setCurrentChapterIdx(Math.max(0, currentChapterIdx - 1))}

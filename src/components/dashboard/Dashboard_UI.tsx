@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, 
   Download, History, BookCopy, Sparkles, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
-  Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain,
+  Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain, AlertTriangle,
   CloudUpload, Percent, MessagesSquare, Scale, Dumbbell
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
@@ -333,6 +333,7 @@ const StudyNowPanel: React.FC<{
                 <NavButton largeSub label="Pronunciation" subLabel="Perfect your accent and intonation." icon={AudioLines} color="text-emerald-600" bg="bg-emerald-50" onClick={() => onAction('PRONUNCIATION_ROADMAP')} />
                 <NavButton largeSub label="Word Intensity" subLabel="Master nuanced words by their scale." icon={Scale} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('LESSON_SCALE')} />
                 <NavButton largeSub label="Confusing Words" subLabel="Contrast and identify confusing pairs." icon={Split} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('LESSON_DIFF')} />
+                <NavButton largeSub label="Mistake Cards" subLabel="Review common mistakes and corrections." icon={AlertTriangle} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('LESSON_MISTAKE')} />
             </div>
         </div>
     );
@@ -401,6 +402,11 @@ const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({
                     label="Word Contrast"
                     subLabel="Contrast and identify confusing word pairs."
                     largeSub icon={Split} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('COMPARISON_LAB')}
+                 />
+                 <NavButton
+                    label="Mistake Recognition"
+                    subLabel="Spot mistakes, reveal fixes, then self-evaluate."
+                    largeSub icon={AlertTriangle} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('MISTAKE_RECOGNITION')}
                  />
              </div>
         </div>

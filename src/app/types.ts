@@ -327,7 +327,7 @@ export interface IrregularVerb {
   lastTestIncorrectForms?: ('v1' | 'v2' | 'v3')[];
 }
 
-export type LessonType = 'essay' | 'word' | 'intensity' | 'comparison';
+export type LessonType = 'essay' | 'word' | 'intensity' | 'comparison' | 'mistake';
 
 export interface IntensityItem {
     word: string;
@@ -348,6 +348,13 @@ export interface ComparisonRow {
     lastResult?: 'correct' | 'incorrect';
 }
 
+export interface MistakeRow {
+    mistake: string;
+    explanation: string;
+    correction: string;
+    lastResult?: 'correct' | 'incorrect';
+}
+
 export interface Lesson {
   id: string;
   userId: string;
@@ -362,6 +369,7 @@ export interface Lesson {
   image?: string;
   intensityRows?: IntensityRow[];
   comparisonRows?: ComparisonRow[];
+  mistakeRows?: MistakeRow[];
   searchKeywords?: string[];
   path?: string;
   tags?: string[];
@@ -575,4 +583,4 @@ export interface PlanningGoal {
   isFocused?: boolean;
 }
 
-export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'IPA_SORTER' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER' | 'DICTATION' | 'NATURAL_EXPRESSION' | 'INTENSITY_SCALE' | 'COMPARISON_LAB';
+export type DiscoverGame = 'MENU' | 'ADVENTURE' | 'IPA_SORTER' | 'SENTENCE_SCRAMBLE' | 'PREPOSITION_POWER' | 'PARAPHRASE_CONTEXT' | 'WORD_SCATTER' | 'DICTATION' | 'NATURAL_EXPRESSION' | 'INTENSITY_SCALE' | 'COMPARISON_LAB' | 'MISTAKE_RECOGNITION';

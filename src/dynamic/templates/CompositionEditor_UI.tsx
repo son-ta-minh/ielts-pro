@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ArrowLeft, Save, Loader2, Link, Bot, X, Sparkles, ChevronDown, Tag, PenLine, Eye } from 'lucide-react';
 import { VocabularyItem } from '../../app/types';
 import WordSelectorModal from '../../components/discover/games/adventure/WordSelectorModal';
@@ -50,6 +50,10 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
     const [isNotePreview, setIsNotePreview] = useState(false);
     const [activeTab, setActiveTab] = useState<'ESSAY' | 'NOTE'>('ESSAY');
     const [isMetaOpen, setIsMetaOpen] = useState(false);
+    const [selectedWordCount, setSelectedWordCount] = useState(0);
+    const previewContainerRef = useRef<HTMLDivElement | null>(null);
+
+    const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
 
     const previewHtml = useMemo(() => {
         return parseMarkdown(content);
@@ -58,6 +62,44 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
     const notePreviewHtml = useMemo(() => {
         return parseMarkdown(note);
     }, [note]);
+
+    const handleEssaySelection = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+        const textarea = e.currentTarget;
+        const selectedText = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd);
+        setSelectedWordCount(countWords(selectedText));
+    };
+
+    useEffect(() => {
+        if (!(activeTab === 'ESSAY' && isPreview)) return;
+
+        const handleSelectionChange = () => {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+                setSelectedWordCount(0);
+                return;
+            }
+
+            const container = previewContainerRef.current;
+            if (!container) {
+                setSelectedWordCount(0);
+                return;
+            }
+
+            const range = selection.getRangeAt(0);
+            const anchorNode = range.commonAncestorContainer;
+            const insidePreview = container.contains(anchorNode.nodeType === Node.TEXT_NODE ? anchorNode.parentNode : anchorNode);
+
+            if (!insidePreview) {
+                setSelectedWordCount(0);
+                return;
+            }
+
+            setSelectedWordCount(countWords(selection.toString()));
+        };
+
+        document.addEventListener('selectionchange', handleSelectionChange);
+        return () => document.removeEventListener('selectionchange', handleSelectionChange);
+    }, [activeTab, isPreview]);
 
     return (
         <div className="w-full flex flex-col bg-neutral-50">
@@ -148,7 +190,10 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                             Essay
                         </button>
                         <button
-                            onClick={() => setActiveTab('NOTE')}
+                            onClick={() => {
+                                setActiveTab('NOTE');
+                                setSelectedWordCount(0);
+                            }}
                             className={`px-4 py-2 text-[10px] font-black rounded-xl uppercase tracking-widest transition-all ${
                                 activeTab === 'NOTE'
                                     ? 'bg-neutral-900 text-white'
@@ -161,6 +206,12 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
 
                     {activeTab === 'ESSAY' && (
                         <div className="flex items-center gap-4">
+                            <span className="px-2.5 py-1 rounded-lg bg-neutral-100 border border-neutral-200 text-[10px] font-black uppercase tracking-wider text-neutral-600">
+                                Total Words: {wordCount}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-lg bg-cyan-50 border border-cyan-100 text-[10px] font-black uppercase tracking-wider text-cyan-700">
+                                Selected Words: {selectedWordCount}
+                            </span>
                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">
                                 Content (Markdown Supported)
                             </label>
@@ -195,6 +246,7 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                         <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm h-[510px] relative overflow-hidden">
                             {isPreview ? (
                                 <div
+                                    ref={previewContainerRef}
                                     className="p-6 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 overflow-y-auto absolute inset-0 bg-neutral-50/30"
                                     dangerouslySetInnerHTML={{ __html: previewHtml }}
                                 />
@@ -202,9 +254,14 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                                 <textarea
                                     value={content}
                                     onChange={(e) => setContent(e.target.value)}
+                                    onSelect={handleEssaySelection}
+                                    onKeyUp={handleEssaySelection}
                                     className="absolute inset-0 w-full h-full p-6 resize-none focus:outline-none text-sm leading-relaxed font-medium text-neutral-900 bg-white"
                                     placeholder="Start writing..."
-                                    spellCheck={false}
+                                    spellCheck={true}
+                                    autoCorrect="on"
+                                    autoCapitalize="sentences"
+                                    lang="en"
                                 />
                             )}
                         </div>

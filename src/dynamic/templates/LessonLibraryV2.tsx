@@ -4,7 +4,7 @@ import { User, Lesson, VocabularyItem, SessionType, AppView, FocusColor } from '
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, FileClock, Target, Sparkles, Zap, Split, FileDiff, Scale, BookText, Search, LayoutGrid } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, FileClock, Target, Sparkles, Zap, Split, FileDiff, Scale, BookText, Search, LayoutGrid, AlertTriangle } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { TagBrowser } from '../../components/common/TagBrowser';
@@ -36,7 +36,8 @@ interface Props {
 type ResourceItem = 
   | { type: 'ESSAY'; data: Lesson; path?: string; tags?: string[]; date: number }
   | { type: 'INTENSITY'; data: Lesson; path?: string; tags?: string[]; date: number }
-  | { type: 'COMPARISON'; data: Lesson; path?: string; tags?: string[]; date: number };
+  | { type: 'COMPARISON'; data: Lesson; path?: string; tags?: string[]; date: number }
+  | { type: 'MISTAKE'; data: Lesson; path?: string; tags?: string[]; date: number };
 
 const lessonConfig: ResourceConfig = { filterSchema: [], viewSchema: [] };
 const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
@@ -52,7 +53,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'ESSAY' | 'INTENSITY' | 'COMPARISON'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'ESSAY' | 'INTENSITY' | 'COMPARISON' | 'MISTAKE'>('ALL');
   const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
   const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
@@ -84,6 +85,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
               let type: ResourceItem['type'] = 'ESSAY';
               if (l.type === 'intensity') type = 'INTENSITY';
               if (l.type === 'comparison') type = 'COMPARISON';
+              if (l.type === 'mistake') type = 'MISTAKE';
               return { type, data: l, path: l.path, tags: l.tags, date: l.createdAt };
           }),
       ];
@@ -194,12 +196,17 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         topic1: 'General', 
         topic2: 'General', 
         type,
-        title: type === 'intensity' ? 'New Intensity Scale' : type === 'comparison' ? 'New Comparison Lab' : `New Lesson`, 
+        title: type === 'intensity' ? 'New Intensity Scale' : type === 'comparison' ? 'New Comparison Lab' : type === 'mistake' ? 'New Mistake Card' : `New Lesson`, 
         description: '', 
         content: '', 
         tags: [], 
         intensityRows: type === 'intensity' ? [{ softened: [], neutral: [], intensified: [] }] : undefined,
         comparisonRows: type === 'comparison' ? [{ word: '', nuance: '', example: '' }] : undefined,
+        mistakeRows: type === 'mistake' ? [{
+            mistake: 'educating staffs',
+            explanation: '“Staff” is uncountable; “educating” is incorrect collocation.',
+            correction: 'teaching staff / teachers'
+        }] : undefined,
         createdAt: Date.now(), 
         updatedAt: Date.now() 
     };
@@ -261,6 +268,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       { label: 'Topic Lesson (AI)', icon: Sparkles, onClick: () => setIsAiModalOpen(true) },
       { label: 'Intensity Scale', icon: Zap, onClick: () => handleNewLesson('intensity') },
       { label: 'Comparison Lab', icon: Split, onClick: () => handleNewLesson('comparison') },
+      { label: 'Mistake Card', icon: AlertTriangle, onClick: () => handleNewLesson('mistake') },
       { label: 'New Lesson (Manual)', icon: Plus, onClick: () => handleNewLesson('essay') },
   ];
 
@@ -329,6 +337,12 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'COMPARISON' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-indigo-600'}`}
                  >
                     <FileDiff size={12} /> Diff
+                 </button>
+                 <button 
+                    onClick={() => setTypeFilter('MISTAKE')} 
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'MISTAKE' ? 'bg-rose-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-rose-600'}`}
+                 >
+                    <AlertTriangle size={12} /> Mistake
                  </button>
              </div>
         </div>
@@ -399,12 +413,15 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
 
             const isIntensity = item.type === 'INTENSITY';
             const isComparison = item.type === 'COMPARISON';
+            const isMistake = item.type === 'MISTAKE';
 
             let badge;
             if (isIntensity) {
                 badge = { label: 'Scale', colorClass: 'bg-orange-50 text-orange-700 border-orange-100', icon: Scale };
             } else if (isComparison) {
                 badge = { label: 'Diff', colorClass: 'bg-indigo-50 text-indigo-700 border-indigo-100', icon: FileDiff };
+            } else if (isMistake) {
+                badge = { label: 'Mistake', colorClass: 'bg-rose-50 text-rose-700 border-rose-100', icon: AlertTriangle };
             } else {
                 badge = { label: 'Lesson', colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: BookText };
             }

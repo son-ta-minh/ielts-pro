@@ -10,6 +10,7 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     2. FOR SINGLE WORDS: If the input is a single inflected word, identify its base form and ensure it is in SINGULAR form (e.g., "running" -> "run", "cities" -> "city", "problems" -> "problem").
     3. All details (meaning, IPA, examples) MUST correspond to the identified headword (the whole phrase or the base word).
     4. If input has multiple distinct meanings as a phrase vs a single word, prioritize the meaning of the input as provided.
+    5. If input is adverb, use the base adjective as headword.
 
     LANGUAGE RULES:
     - All content in English, except "m" (Meaning) which must be in ${nativeLanguage}.

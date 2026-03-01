@@ -832,6 +832,10 @@ export const useAppController = () => {
                 setTargetLessonType('COMPARISON');
                 setView('LESSON');
                 break;
+            case 'LESSON_MISTAKE':
+                setTargetLessonType('MISTAKE');
+                setView('LESSON');
+                break;
             case 'IRREGULAR_VERBS': setView('IRREGULAR_VERBS'); break;
             case 'MIMIC': 
                 setView('MIMIC'); 
@@ -857,6 +861,7 @@ export const useAppController = () => {
             case 'NATURAL_EXPRESSION':
             case 'INTENSITY_SCALE':
             case 'COMPARISON_LAB':
+            case 'MISTAKE_RECOGNITION':
             case 'ADVENTURE':
                 sessionStorage.setItem('dashboard_active_tab', 'PRACTICE');
                 setTargetGameMode(action as DiscoverGame);

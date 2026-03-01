@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lesson, User, IntensityRow, ComparisonRow } from '../../app/types';
+import { Lesson, User, IntensityRow, ComparisonRow, MistakeRow } from '../../app/types';
 import { LessonEditViewUI } from './LessonEditView_UI';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
 import { getLessonPrompt, getGenerateLessonTestPrompt, getIntensityRefinePrompt, getComparisonRefinePrompt } from '../../services/promptService';
@@ -25,6 +25,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   const [testContent, setTestContent] = useState(lesson.testContent || '');
   const [intensityRows, setIntensityRows] = useState<IntensityRow[]>(lesson.intensityRows || []);
   const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>(lesson.comparisonRows || []);
+  const [mistakeRows, setMistakeRows] = useState<MistakeRow[]>(lesson.mistakeRows || []);
   const [searchKeywords, setSearchKeywords] = useState<string[]>(lesson.searchKeywords || []);
   
   const [isSaving, setIsSaving] = useState(false);
@@ -59,6 +60,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
     let type: Lesson['type'] = lesson.type || 'essay';
     if (intensityRows.length > 0) type = 'intensity';
     else if (comparisonRows.length > 0) type = 'comparison';
+    else if (mistakeRows.length > 0) type = 'mistake';
 
     return {
       ...lesson,
@@ -72,6 +74,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
       testContent,
       intensityRows: intensityRows.length > 0 ? intensityRows : undefined,
       comparisonRows: comparisonRows.length > 0 ? comparisonRows : undefined,
+      mistakeRows: mistakeRows.length > 0 ? mistakeRows : undefined,
       searchKeywords,
       updatedAt: Date.now(),
     };
@@ -178,6 +181,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         testContent={testContent} setTestContent={setTestContent}
         intensityRows={intensityRows} setIntensityRows={setIntensityRows}
         comparisonRows={comparisonRows} setComparisonRows={setComparisonRows}
+        mistakeRows={mistakeRows} setMistakeRows={setMistakeRows}
         isSaving={isSaving} onSave={handleSave}
         onPractice={handlePractice} onCancel={onCancel}
         onOpenAiRefine={(format) => setAiModalMode({ format: format || 'reading' })}

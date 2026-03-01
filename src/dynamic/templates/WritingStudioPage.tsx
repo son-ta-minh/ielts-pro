@@ -85,7 +85,7 @@ const TopicEditor: React.FC<{ user: User, topic: WritingTopic, onSave: () => voi
             setTagsInput((topic.tags || []).join(', '));
         }
     }, [topic]);
-  
+
     const handleSave = async () => {
       setIsSaving(true);
       const finalTags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
