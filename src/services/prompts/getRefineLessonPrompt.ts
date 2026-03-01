@@ -24,7 +24,7 @@ export function getLessonPrompt(params: LessonPromptParams): string {
   
   const isVietnamese = language === 'Vietnamese';
   const explanationLang = isVietnamese ? 'Vietnamese' : 'English';
-  const isSpecialty = currentLesson?.type === 'intensity' || currentLesson?.type === 'comparison' || topic?.toLowerCase().includes('intensity') || topic?.toLowerCase().includes('comparison');
+  const isSpecialty = currentLesson?.type === 'intensity' || currentLesson?.type === 'comparison' || currentLesson?.type === 'mistake' || topic?.toLowerCase().includes('intensity') || topic?.toLowerCase().includes('comparison') || topic?.toLowerCase().includes('mistake');
 
   let systemTask = "";
   let formattingInstructions = "";

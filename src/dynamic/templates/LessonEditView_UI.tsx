@@ -30,7 +30,7 @@ interface Props {
   onSave: () => void;
   onPractice: () => void;
   onCancel: () => void;
-  onOpenAiRefine: (format?: 'reading' | 'listening' | 'test' | 'intensity' | 'comparison') => void;
+  onOpenAiRefine: (format?: 'reading' | 'listening' | 'test' | 'intensity' | 'comparison' | 'mistake') => void;
 }
 
 export const LessonEditViewUI: React.FC<Props> = (props) => {
@@ -163,6 +163,9 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
                     )}
                     {activeTab === 'COMPARISON' && (
                         <button onClick={() => onOpenAiRefine('comparison')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all text-[10px] font-black uppercase text-indigo-600 shadow-sm"><Sparkles size={12}/><span>AI Refine</span></button>
+                    )}
+                    {activeTab === 'MISTAKE' && (
+                        <button onClick={() => onOpenAiRefine('mistake')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-all text-[10px] font-black uppercase text-rose-600 shadow-sm"><Sparkles size={12}/><span>AI Refine</span></button>
                     )}
                     {(activeTab === 'READING' || activeTab === 'LISTENING' || activeTab === 'TEST') && (
                         <>

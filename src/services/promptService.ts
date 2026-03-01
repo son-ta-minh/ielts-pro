@@ -27,6 +27,7 @@ export * from './prompts/getPronunciationAnalysisPrompt';
 export * from './prompts/getBulkParaphrasePrompt';
 export * from './prompts/getIntensityRefinePrompt';
 export * from './prompts/getComparisonRefinePrompt';
+export * from './prompts/getMistakeRefinePrompt';
 export * from './prompts/getRefineFreeTalkPrompt';
 
 // Speaking feature prompts

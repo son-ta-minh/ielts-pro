@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Lesson, User, IntensityRow, ComparisonRow, MistakeRow } from '../../app/types';
 import { LessonEditViewUI } from './LessonEditView_UI';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
-import { getLessonPrompt, getGenerateLessonTestPrompt, getIntensityRefinePrompt, getComparisonRefinePrompt } from '../../services/promptService';
+import { getLessonPrompt, getGenerateLessonTestPrompt, getIntensityRefinePrompt, getComparisonRefinePrompt, getMistakeRefinePrompt } from '../../services/promptService';
 import { useToast } from '../../contexts/ToastContext';
 import { getConfig } from '../../app/settingsManager';
 import * as dataStore from '../../app/dataStore';
@@ -29,7 +29,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   const [searchKeywords, setSearchKeywords] = useState<string[]>(lesson.searchKeywords || []);
   
   const [isSaving, setIsSaving] = useState(false);
-  const [aiModalMode, setAiModalMode] = useState<{ format: 'reading' | 'listening' | 'test' | 'intensity' | 'comparison' } | null>(null);
+  const [aiModalMode, setAiModalMode] = useState<{ format: 'reading' | 'listening' | 'test' | 'intensity' | 'comparison' | 'mistake' } | null>(null);
   
   const { showToast } = useToast();
   
@@ -100,6 +100,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
 
     if (format === 'intensity') return getIntensityRefinePrompt(intensityRows);
     if (format === 'comparison') return getComparisonRefinePrompt(comparisonRows);
+    if (format === 'mistake') return getMistakeRefinePrompt(mistakeRows);
 
     if (format === 'test') {
         const currentTags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
@@ -153,6 +154,15 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
             setComparisonRows(rows);
             showToast("Comparison lab updated!", "success");
         }
+    } else if (format === 'mistake') {
+        const rows = Array.isArray(cleanResult) ? cleanResult : cleanResult.data;
+        if (cleanResult.title) setTitle(cleanResult.title);
+        if (cleanResult.description) setDescription(cleanResult.description);
+
+        if (Array.isArray(rows)) {
+            setMistakeRows(rows);
+            showToast("Mistake table updated!", "success");
+        }
     } else if (format === 'listening') {
         if (cleanResult.content) { setListeningContent(cleanResult.content); showToast("Listening script updated!", "success"); }
     } else if (format === 'test') {
@@ -191,8 +201,8 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
           isOpen={!!aiModalMode}
           onClose={() => setAiModalMode(null)}
           type="REFINE_UNIT"
-          title={aiModalMode.format === 'intensity' ? "Refine Intensity Scale" : aiModalMode.format === 'comparison' ? "Refine Word Contrast" : (content ? "Refine Lesson" : "Generate Lesson")}
-          description={aiModalMode.format === 'intensity' ? "AI will complete the intensity scale." : aiModalMode.format === 'comparison' ? "AI will complete the comparison pairs with nuances." : `Enter instructions for the AI.`}
+          title={aiModalMode.format === 'intensity' ? "Refine Intensity Scale" : aiModalMode.format === 'comparison' ? "Refine Word Contrast" : aiModalMode.format === 'mistake' ? "Refine Mistake Table" : (content ? "Refine Lesson" : "Generate Lesson")}
+          description={aiModalMode.format === 'intensity' ? "AI will complete the intensity scale." : aiModalMode.format === 'comparison' ? "AI will complete the comparison pairs with nuances." : aiModalMode.format === 'mistake' ? "AI will complete and improve your mistake-correction rows." : `Enter instructions for the AI.`}
           initialData={{ ...user.lessonPreferences, format: aiModalMode.format }}
           onGeneratePrompt={handleGenerateRefinePrompt}
           onJsonReceived={handleAiResult}
