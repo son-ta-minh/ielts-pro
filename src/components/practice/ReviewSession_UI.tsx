@@ -181,10 +181,10 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const visibleCollocations = (currentWord.collocationsArray || []).filter(c => !c.isIgnored);
     const visibleParaphrases = (currentWord.paraphrases || []).filter(p => !p.isIgnored);
     const visibleIdioms = (currentWord.idiomsList || []).filter(i => !i.isIgnored);
-    const prepositionTooltip = visiblePrepositions.slice(0, 6).map(p => `${p.prep}${p.usage ? ` - ${p.usage}` : ''}`).join('\n');
+    const prepositionTooltip = visiblePrepositions.slice(0, 6).map(p => p.prep).join('\n');
     const collocationTooltip = visibleCollocations.slice(0, 6).map(c => c.text).join('\n');
-    const paraphraseTooltip = visibleParaphrases.slice(0, 6).map(p => `${p.word}${p.context ? ` - ${p.context}` : ''}`).join('\n');
-    const idiomTooltip = visibleIdioms.slice(0, 6).map(i => `${i.text}${i.d ? ` - ${i.d}` : ''}`).join('\n');
+    const paraphraseTooltip = visibleParaphrases.slice(0, 6).map(p => p.word).join('\n');
+    const idiomTooltip = visibleIdioms.slice(0, 6).map(i => i.text).join('\n');
 
     const isIpa = !isNewWord && !!currentWord.ipaUs;
     const hasRetryableFailedTests = React.useMemo(() => {
@@ -293,26 +293,38 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                         <button
                                             onClick={() => speak(vietnameseMeaning, false, 'vi')}
                                             className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-amber-600 rounded-full transition-colors"
-                                            title="Read Vietnamese meaning"
                                         >
                                             <BookOpen size={20} />
                                         </button>
-                                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 whitespace-nowrap max-w-[240px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/book:opacity-100 transition-opacity pointer-events-none text-center leading-snug z-20">
+                                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[260px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/book:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 border border-neutral-200 shadow-lg">
+                                            <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
+                                                Meaning
+                                            </div>
                                             {vietnameseMeaning}
-                                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
                                         </span>
                                     </div>
                                     {visiblePrepositions.length > 0 && (
                                         <div className="relative group/prep">
                                             <button
                                                 className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-orange-600 rounded-full transition-colors"
-                                                title="Prepositions"
                                             >
                                                 <AtSign size={20} />
                                             </button>
-                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/prep:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line">
-                                                {prepositionTooltip}
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/prep:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
+                                                <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
+                                                    Prepositions
+                                                </div>
+                                                {prepositionTooltip.includes('\n') ? (
+                                                    <ul className="list-disc pl-4 space-y-0.5">
+                                                        {prepositionTooltip.split('\n').map((item, idx) => (
+                                                            <li key={idx}>{item}</li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    prepositionTooltip
+                                                )}
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
                                             </span>
                                         </div>
                                     )}
@@ -320,13 +332,23 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                         <div className="relative group/col">
                                             <button
                                                 className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
-                                                title="Collocations"
                                             >
                                                 <Combine size={20} />
                                             </button>
-                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/col:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line">
-                                                {collocationTooltip}
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/col:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
+                                                <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
+                                                    Collocations
+                                                </div>
+                                                {collocationTooltip.includes('\n') ? (
+                                                    <ul className="list-disc pl-4 space-y-0.5">
+                                                        {collocationTooltip.split('\n').map((item, idx) => (
+                                                            <li key={idx}>{item}</li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    collocationTooltip
+                                                )}
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
                                             </span>
                                         </div>
                                     )}
@@ -334,13 +356,23 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                         <div className="relative group/para">
                                             <button
                                                 className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-cyan-600 rounded-full transition-colors"
-                                                title="Paraphrases"
                                             >
                                                 <Zap size={20} />
                                             </button>
-                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/para:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line">
-                                                {paraphraseTooltip}
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/para:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
+                                                <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
+                                                    Paraphrases
+                                                </div>
+                                                {paraphraseTooltip.includes('\n') ? (
+                                                    <ul className="list-disc pl-4 space-y-0.5">
+                                                        {paraphraseTooltip.split('\n').map((item, idx) => (
+                                                            <li key={idx}>{item}</li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    paraphraseTooltip
+                                                )}
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
                                             </span>
                                         </div>
                                     )}
@@ -348,13 +380,23 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                         <div className="relative group/idiom">
                                             <button
                                                 className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-emerald-600 rounded-full transition-colors"
-                                                title="Idioms"
                                             >
                                                 <MessageSquare size={20} />
                                             </button>
-                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/idiom:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line">
-                                                {idiomTooltip}
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/idiom:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
+                                                <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
+                                                    Idioms
+                                                </div>
+                                                {idiomTooltip.includes('\n') ? (
+                                                    <ul className="list-disc pl-4 space-y-0.5">
+                                                        {idiomTooltip.split('\n').map((item, idx) => (
+                                                            <li key={idx}>{item}</li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    idiomTooltip
+                                                )}
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
                                             </span>
                                         </div>
                                     )}

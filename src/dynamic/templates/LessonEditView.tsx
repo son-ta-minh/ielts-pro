@@ -30,6 +30,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   
   const [isSaving, setIsSaving] = useState(false);
   const [aiModalMode, setAiModalMode] = useState<{ format: 'reading' | 'listening' | 'test' | 'intensity' | 'comparison' | 'mistake' } | null>(null);
+  const [mistakeContentMode, setMistakeContentMode] = useState<'append' | 'replace'>('replace');
   
   const { showToast } = useToast();
   
@@ -100,7 +101,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
 
     if (format === 'intensity') return getIntensityRefinePrompt(intensityRows);
     if (format === 'comparison') return getComparisonRefinePrompt(comparisonRows);
-    if (format === 'mistake') return getMistakeRefinePrompt(mistakeRows, inputs.request);
+    if (format === 'mistake') return getMistakeRefinePrompt(mistakeRows, inputs.request, inputs.contentMode || mistakeContentMode);
 
     if (format === 'test') {
         const currentTags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
@@ -156,12 +157,19 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         }
     } else if (format === 'mistake') {
         const rows = Array.isArray(cleanResult) ? cleanResult : cleanResult.data;
-        if (cleanResult.title) setTitle(cleanResult.title);
-        if (cleanResult.description) setDescription(cleanResult.description);
-
         if (Array.isArray(rows)) {
-            setMistakeRows(rows);
-            showToast("Mistake table updated!", "success");
+            const normalizedRows = rows.filter((r: any) => r?.mistake || r?.explanation || r?.correction);
+            if (mistakeContentMode === 'append') {
+                setMistakeRows(prev => [...prev, ...normalizedRows]);
+                if (!title && cleanResult.title) setTitle(cleanResult.title);
+                if (!description && cleanResult.description) setDescription(cleanResult.description);
+                showToast("Mistake rows appended!", "success");
+            } else {
+                if (cleanResult.title) setTitle(cleanResult.title);
+                if (cleanResult.description) setDescription(cleanResult.description);
+                setMistakeRows(normalizedRows);
+                showToast("Mistake table replaced!", "success");
+            }
         }
     } else if (format === 'listening') {
         if (cleanResult.content) { setListeningContent(cleanResult.content); showToast("Listening script updated!", "success"); }
@@ -194,7 +202,11 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         mistakeRows={mistakeRows} setMistakeRows={setMistakeRows}
         isSaving={isSaving} onSave={handleSave}
         onPractice={handlePractice} onCancel={onCancel}
-        onOpenAiRefine={(format) => setAiModalMode({ format: format || 'reading' })}
+        onOpenAiRefine={(format) => {
+          const targetFormat = format || 'reading';
+          if (targetFormat === 'mistake') setMistakeContentMode('replace');
+          setAiModalMode({ format: targetFormat });
+        }}
       />
       {aiModalMode && (
         <UniversalAiModal
@@ -204,6 +216,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
           title={aiModalMode.format === 'intensity' ? "Refine Intensity Scale" : aiModalMode.format === 'comparison' ? "Refine Word Contrast" : aiModalMode.format === 'mistake' ? "Refine Mistake Table" : (content ? "Refine Lesson" : "Generate Lesson")}
           description={aiModalMode.format === 'intensity' ? "AI will complete the intensity scale." : aiModalMode.format === 'comparison' ? "AI will complete the comparison pairs with nuances." : aiModalMode.format === 'mistake' ? "AI will complete and improve your mistake-correction rows." : `Enter instructions for the AI.`}
           initialData={{ ...user.lessonPreferences, format: aiModalMode.format }}
+          contentModeOptions={aiModalMode.format === 'mistake' ? { enabled: true, value: mistakeContentMode, onChange: setMistakeContentMode } : undefined}
           onGeneratePrompt={handleGenerateRefinePrompt}
           onJsonReceived={handleAiResult}
           actionLabel="Apply Changes"

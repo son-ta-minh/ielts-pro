@@ -19,6 +19,11 @@ interface Props {
   actionLabel?: string;
   hidePrimaryInput?: boolean;
   closeOnSuccess?: boolean;
+  contentModeOptions?: {
+    enabled: boolean;
+    value: 'append' | 'replace';
+    onChange: (mode: 'append' | 'replace') => void;
+  };
 }
 
 const getShorterPromptVersion = (text: string): string =>
@@ -40,7 +45,8 @@ const UniversalAiModal: React.FC<Props> = ({
   onJsonReceived,
   
   hidePrimaryInput = false,
-  closeOnSuccess = false
+  closeOnSuccess = false,
+  contentModeOptions
 }) => {
   // --- Dynamic Input States ---
   const [wordListInput, setWordListInput] = useState('');
@@ -61,6 +67,7 @@ const UniversalAiModal: React.FC<Props> = ({
 
   // Plan Gen State
   const [planRequest, setPlanRequest] = useState('');
+  const [refineContentMode, setRefineContentMode] = useState<'append' | 'replace'>(contentModeOptions?.value || 'replace');
 
   // --- Common States ---
   const [jsonInput, setJsonInput] = useState('');
@@ -87,6 +94,7 @@ const UniversalAiModal: React.FC<Props> = ({
         setParaContext('');
         setParaMode(ParaphraseMode.VARIETY);
         setPlanRequest('');
+        setRefineContentMode(contentModeOptions?.value || 'replace');
         
         if (type === 'REFINE_WORDS' && initialData?.words) {
             const formatted = initialData.words.replace(/\n/g, '; ');
@@ -107,7 +115,13 @@ const UniversalAiModal: React.FC<Props> = ({
     }
     
     prevIsOpen.current = isOpen;
-  }, [isOpen, type, initialData, isLessonRelated]);
+  }, [isOpen, type, initialData, isLessonRelated, contentModeOptions?.value]);
+
+  useEffect(() => {
+    if (contentModeOptions?.enabled) {
+      contentModeOptions.onChange(refineContentMode);
+    }
+  }, [refineContentMode, contentModeOptions]);
 
   // Calculate current prompt based on inputs
   useEffect(() => {
@@ -115,7 +129,7 @@ const UniversalAiModal: React.FC<Props> = ({
     if (type === 'REFINE_WORDS') {
         inputs = { words: hidePrimaryInput ? initialData?.words : wordListInput };
     } else if (type === 'REFINE_UNIT') {
-        inputs = { request: unitRequestInput, language: lessonLang, targetAudience: lessonAudience, tone: lessonTone, format: 'reading' };
+        inputs = { request: unitRequestInput, language: lessonLang, targetAudience: lessonAudience, tone: lessonTone, format: 'reading', contentMode: refineContentMode };
     } else if (type === 'GENERATE_AUDIO_SCRIPT') {
         inputs = { request: unitRequestInput, language: lessonLang, targetAudience: lessonAudience, tone: lessonTone, format: 'listening' };
     } else if (type === 'GENERATE_CHAPTER') {
@@ -135,7 +149,7 @@ const UniversalAiModal: React.FC<Props> = ({
     }
     
     setCurrentPrompt(onGeneratePrompt(inputs));
-  }, [type, wordListInput, unitRequestInput, chapterRequestInput, segmentRequestInput, paraTone, paraContext, paraMode, initialData, hidePrimaryInput, lessonTopic, lessonAudience, lessonLang, lessonTone, planRequest, onGeneratePrompt]);
+  }, [type, wordListInput, unitRequestInput, chapterRequestInput, segmentRequestInput, paraTone, paraContext, paraMode, initialData, hidePrimaryInput, lessonTopic, lessonAudience, lessonLang, lessonTone, planRequest, refineContentMode, onGeneratePrompt]);
 
 
   if (!isOpen) return null;
@@ -270,7 +284,7 @@ const UniversalAiModal: React.FC<Props> = ({
                 )}
                 
                 {['REFINE_UNIT', 'GENERATE_AUDIO_SCRIPT'].includes(type) && (
-                   <div className="space-y-1">
+                   <div className="space-y-2">
                         <label className="text-[9px] font-black text-neutral-400 uppercase tracking-widest px-1">Your Instructions</label>
                         <textarea 
                             value={unitRequestInput}
@@ -279,6 +293,26 @@ const UniversalAiModal: React.FC<Props> = ({
                             placeholder={type === 'GENERATE_AUDIO_SCRIPT' ? 'e.g., "Focus on the definition of key terms"' : 'e.g., "Add more advanced vocabulary and examples."'}
                             className="w-full h-24 p-4 bg-neutral-50/50 border border-neutral-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-none transition-all focus:bg-white disabled:opacity-50"
                         />
+                        {type === 'REFINE_UNIT' && contentModeOptions?.enabled && (
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setRefineContentMode('replace')}
+                                    disabled={isProcessing || isSuccess}
+                                    className={`px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all ${refineContentMode === 'replace' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-900 hover:bg-neutral-50'}`}
+                                >
+                                    Replace
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setRefineContentMode('append')}
+                                    disabled={isProcessing || isSuccess}
+                                    className={`px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-wider transition-all ${refineContentMode === 'append' ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-900 hover:bg-neutral-50'}`}
+                                >
+                                    Append
+                                </button>
+                            </div>
+                        )}
                    </div>
                 )}
 
