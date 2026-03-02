@@ -1,8 +1,8 @@
 import { VocabularyItem, ReviewGrade, WordQuality, WordSource, WordFamily } from '../app/types';
 import { ChallengeType } from '../components/practice/TestModalTypes';
 import { generateAvailableChallenges } from './challengeUtils';
-import { getConfig } from '../app/settingsManager';
 import { calculateGameEligibility } from './gameEligibility';
+import { getConfig, SystemConfig, getServerUrl } from '../app/settingsManager';
 
 /**
  * Calculates a future review timestamp, anchored to midnight (00:00:00).
@@ -127,15 +127,59 @@ export function getRemainingTime(nextReview: number): { label: string; urgency: 
   return { label: `${days}d`, urgency: days <= 1 ? 'soon' : 'later' };
 }
 
-export function createNewWord(
+export async function createNewWord(
   word: string, ipaUs: string, meaningVi: string, example: string, note: string, groups: string[],
   isIdiom = false, isPhrasalVerb = false,
   isCollocation = false, isStandardPhrase = false, isPassive = false, source: WordSource = 'manual'
-): VocabularyItem {
+): Promise<VocabularyItem> {
+  let finalIpaUs = ipaUs.trim();
+
+  if (!finalIpaUs) {
+    try {
+      const cleaned = word.trim().toLowerCase();
+      const config = getConfig();
+      const serverUrl = getServerUrl(config);
+
+      // 1. Try Cambridge simple lookup (exact headword, US)
+      const cambridgeRes = await fetch(
+        `${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(cleaned)}`,
+        { cache: 'no-store' }
+      );
+      if (cambridgeRes.ok) {
+        const cambridgeData = await cambridgeRes.json();
+        if (cambridgeData?.exists && Array.isArray(cambridgeData?.pronunciations)) {
+          const usPron = cambridgeData.pronunciations.find((p: any) => p?.ipaUs);
+          if (usPron?.ipaUs) {
+            finalIpaUs = usPron.ipaUs;
+            console.log('[createNewWord] IPA from Cambridge:', finalIpaUs);
+          }
+        }
+      }
+
+      // 2. Fallback to server IPA converter if still empty
+      if (!finalIpaUs) {
+        const fallbackRes = await fetch(
+          `${serverUrl}/api/convert/ipa?text=${encodeURIComponent(cleaned)}&mode=2`
+        );
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData?.ipa) {
+            finalIpaUs = fallbackData.ipa;
+            console.log('[createNewWord] IPA from fallback convert:', finalIpaUs);
+          }
+        }
+      }
+
+      console.log('[createNewWord] Final auto IPA result:', finalIpaUs);
+    } catch (err) {
+      console.log('[createNewWord] IPA fetch failed:', err);
+    }
+  }
+
   const now = Date.now();
   const newItem: VocabularyItem = {
     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-    userId: '', word: word.trim(), ipaUs: ipaUs.trim(), meaningVi: meaningVi.trim(), example: example.trim(), note, groups,
+    userId: '', word: word.trim(), ipaUs: finalIpaUs, meaningVi: meaningVi.trim(), example: example.trim(), note, groups,
     isIdiom, isPhrasalVerb, isCollocation, isStandardPhrase, isPassive,
     register: 'raw', quality: WordQuality.RAW, source, isExampleLocked: false,
     createdAt: now, updatedAt: now, nextReview: now, interval: 0, easeFactor: 2.5, consecutiveCorrect: 0, forgotCount: 0,

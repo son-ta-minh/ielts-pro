@@ -1,21 +1,25 @@
 
 import React, { useState } from 'react';
-import { X, ScanLine, Image as ImageIcon, Mic } from 'lucide-react';
+import { X, ScanLine, Image as ImageIcon, Mic, Library } from 'lucide-react';
+import { User } from '../../app/types';
 import { OCRTool } from './OCRTool';
 import { AudioTool } from './AudioTool';
 import { ImageManager } from './ImageManager';
+import { WordLibraryTool } from './WordLibraryTool';
 
 interface Props {
     isOpen: boolean;
     onClose: () => void;
+    user: User;
 }
 
-export const ToolsModal: React.FC<Props> = ({ isOpen, onClose }) => {
-    const [activeTab, setActiveTab] = useState<'OCR' | 'IMAGES' | 'AUDIO'>('OCR');
+export const ToolsModal: React.FC<Props> = ({ isOpen, onClose, user }) => {
+    const [activeTab, setActiveTab] = useState<'OCR' | 'IMAGES' | 'AUDIO' | 'WORD_LIBRARY'>('OCR');
 
     if (!isOpen) return null;
 
     const tabs = [
+        { id: 'WORD_LIBRARY', label: 'Word Library', icon: Library },
         { id: 'OCR', label: 'Image to Text', icon: ScanLine },
         { id: 'IMAGES', label: 'Image Manager', icon: ImageIcon },
         { id: 'AUDIO', label: 'Audio Tool', icon: Mic },
@@ -47,6 +51,7 @@ export const ToolsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
                 {/* Content - Changed overflow-hidden to overflow-y-auto to allow scrolling on small screens */}
                 <main className="flex-1 overflow-y-auto p-6 md:p-8">
+                    {activeTab === 'WORD_LIBRARY' && <WordLibraryTool user={user} />}
                     {activeTab === 'OCR' && <OCRTool />}
                     {activeTab === 'IMAGES' && <ImageManager />}
                     {activeTab === 'AUDIO' && <AudioTool />}
