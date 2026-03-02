@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { User } from '../../app/types';
 import * as dataStore from "../../app/dataStore";
 import { createNewWord } from '../../utils/srs';
+import { useToast } from '../../contexts/ToastContext';
 
 interface ParsedWord {
     word: string;
@@ -13,9 +14,11 @@ interface WordLibraryToolProps {
 }
 
 export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
+    const { showToast } = useToast();
     const [rawText, setRawText] = useState("");
     const [parsedWords, setParsedWords] = useState<ParsedWord[]>([]);
     const [loading, setLoading] = useState(false);
+    const [targetField, setTargetField] = useState<"meaningVi" | "example" | "note">("note");
 
     const parseText = () => {
         const lines = rawText
@@ -53,10 +56,6 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
     const handleBulkUpdate = async () => {
         if (parsedWords.length === 0) return;
 
-        console.log("[WordLibraryTool] handleBulkUpdate triggered");
-        console.log("[WordLibraryTool] user.id:", user.id);
-        console.log("[WordLibraryTool] parsedWords:", parsedWords);
-
         try {
             setLoading(true);
 
@@ -70,16 +69,18 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
                 const existing = await dataStore.findWordByText(user.id, text);
 
                 if (existing) {
-                    itemsToSave.push({
+                    const updatedItem = {
                         ...existing,
-                        meaningVi: item.meaning.trim(),
                         updatedAt: now,
-                    });
+                    } as any;
+
+                    updatedItem[targetField] = item.meaning.trim();
+                    itemsToSave.push(updatedItem);
                 } else {
                     const newItem = await createNewWord(
                         text,                    // word
                         "",                      // ipaUs
-                        item.meaning.trim(),     // meaningVi
+                        "",                      // meaningVi (set later dynamically)
                         "",                      // example
                         "",                      // note
                         [],                      // groups
@@ -93,33 +94,18 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
 
                     newItem.userId = user.id;
                     newItem.updatedAt = now;
+                    (newItem as any)[targetField] = item.meaning.trim();
 
                     itemsToSave.push(newItem);
                 }
             }
 
-            console.log("[WordLibraryTool] itemsToSave:", itemsToSave);
             await dataStore.bulkSaveWords(itemsToSave);
-            console.log("[WordLibraryTool] bulkSaveWords completed");
 
-            console.log("[WordLibraryTool] Verifying saved words in DB...");
-
-            for (const item of parsedWords) {
-                const text = item.word.trim();
-                if (!text) continue;
-
-                const reloaded = await dataStore.findWordByText(user.id, text);
-                console.log(`[WordLibraryTool] Reloaded from DB: ${text}`, reloaded);
-            }
-
-            const allWords = await dataStore.getAllWords(user.id);
-            console.log("[WordLibraryTool] Total words in DB for user:", allWords?.length);
-
-            alert("Words updated successfully.");
+            showToast("Words updated successfully.", "success");
         } catch (error) {
-            console.log("[WordLibraryTool] ERROR during bulk update");
             console.error(error);
-            alert("Failed to update words.");
+            showToast("Failed to update words.", "error");
         } finally {
             setLoading(false);
         }
@@ -149,11 +135,29 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
             {/* Editable Table */}
             {parsedWords.length > 0 && (
                 <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                        <label className="text-neutral-700">Update field:</label>
+                        <select
+                            value={targetField}
+                            onChange={(e) => setTargetField(e.target.value as any)}
+                            className="border border-neutral-300 rounded px-2 py-1"
+                        >
+                            <option value="note">Note</option>
+                            <option value="meaningVi">Meaning (Vietnamese)</option>
+                            <option value="example">Example</option>
+                        </select>
+                    </div>
                     <table className="w-full border border-neutral-300 text-sm">
                         <thead className="bg-neutral-100">
                             <tr>
                                 <th className="border px-2 py-1 text-left">Word</th>
-                                <th className="border px-2 py-1 text-left">Meaning</th>
+                                <th className="border px-2 py-1 text-left">
+                                    {targetField === "meaningVi"
+                                        ? "Meaning (Vietnamese)"
+                                        : targetField === "example"
+                                        ? "Example"
+                                        : "Note"}
+                                </th>
                                 <th className="border px-2 py-1 text-center w-20">Action</th>
                             </tr>
                         </thead>

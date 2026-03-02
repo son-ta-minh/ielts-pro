@@ -134,6 +134,27 @@ export async function createNewWord(
 ): Promise<VocabularyItem> {
   let finalIpaUs = ipaUs.trim();
 
+  let finalMeaningVi = meaningVi.trim();
+
+  // Auto-translate meaning if empty (EN → VI)
+  if (!finalMeaningVi) {
+    try {
+      const cleanedWord = word.trim();
+      const res = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanedWord)}&langpair=en|vi`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.responseData?.translatedText) {
+          finalMeaningVi = data.responseData.translatedText;
+          console.log('[createNewWord] Auto meaning from MyMemory:', finalMeaningVi);
+        }
+      }
+    } catch (err) {
+      console.error('[createNewWord] Meaning auto-translate failed:', err);
+    }
+  }
+
   if (!finalIpaUs) {
     try {
       const cleaned = word.trim().toLowerCase();
@@ -171,15 +192,19 @@ export async function createNewWord(
       }
 
       console.log('[createNewWord] Final auto IPA result:', finalIpaUs);
+      // Ensure IPA is wrapped with slashes, e.g. /ˈkæmpsaɪt/
+      if (finalIpaUs && !finalIpaUs.startsWith('/')) {
+        finalIpaUs = `/${finalIpaUs.replace(/^\/+|\/+$/g, '')}/`;
+      }
     } catch (err) {
-      console.log('[createNewWord] IPA fetch failed:', err);
+      console.error('[createNewWord] IPA fetch failed:', err);
     }
   }
 
   const now = Date.now();
   const newItem: VocabularyItem = {
     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-    userId: '', word: word.trim(), ipaUs: finalIpaUs, meaningVi: meaningVi.trim(), example: example.trim(), note, groups,
+    userId: '', word: word.trim(), ipaUs: finalIpaUs, meaningVi: finalMeaningVi, example: example.trim(), note, groups,
     isIdiom, isPhrasalVerb, isCollocation, isStandardPhrase, isPassive,
     register: 'raw', quality: WordQuality.RAW, source, isExampleLocked: false,
     createdAt: now, updatedAt: now, nextReview: now, interval: 0, easeFactor: 2.5, consecutiveCorrect: 0, forgotCount: 0,

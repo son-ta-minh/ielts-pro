@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { X, ScanLine, Image as ImageIcon, Mic, Library } from 'lucide-react';
 import { User } from '../../app/types';
@@ -14,7 +13,7 @@ interface Props {
 }
 
 export const ToolsModal: React.FC<Props> = ({ isOpen, onClose, user }) => {
-    const [activeTab, setActiveTab] = useState<'OCR' | 'IMAGES' | 'AUDIO' | 'WORD_LIBRARY'>('OCR');
+    const [activeTab, setActiveTab] = useState<'OCR' | 'IMAGES' | 'AUDIO' | 'WORD_LIBRARY'>('WORD_LIBRARY');
 
     if (!isOpen) return null;
 

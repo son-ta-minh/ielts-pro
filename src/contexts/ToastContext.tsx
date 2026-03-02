@@ -1,6 +1,7 @@
 
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 
 export type ToastType = 'success' | 'error' | 'info';
 
@@ -40,29 +41,34 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 w-full max-w-sm px-4 pointer-events-none">
-        {toasts.map(toast => (
-          <div 
-            key={toast.id} 
-            className={`
-              pointer-events-auto flex items-center justify-between p-4 rounded-2xl shadow-xl border backdrop-blur-md animate-in slide-in-from-top-2 fade-in duration-300
-              ${toast.type === 'success' ? 'bg-neutral-900/90 text-white border-neutral-800' : ''}
-              ${toast.type === 'error' ? 'bg-red-500/90 text-white border-red-600' : ''}
-              ${toast.type === 'info' ? 'bg-white/90 text-neutral-900 border-neutral-200' : ''}
-            `}
-          >
-            <div className="flex items-center gap-3">
-              {toast.type === 'success' && <CheckCircle2 size={20} className="text-green-400" />}
-              {toast.type === 'error' && <AlertCircle size={20} className="text-white" />}
-              {toast.type === 'info' && <Info size={20} className="text-blue-500" />}
-              <span className="text-sm font-bold leading-tight">{toast.message}</span>
-            </div>
-            <button onClick={() => removeToast(toast.id)} className="p-1 hover:opacity-70 transition-opacity ml-4">
-              <X size={16} />
-            </button>
+      {createPortal(
+        <div className="fixed inset-0 z-[2147483647] pointer-events-none flex flex-col items-center pt-6">
+          <div className="flex flex-col gap-2 w-full max-w-sm px-4">
+            {toasts.map(toast => (
+              <div 
+                key={toast.id} 
+                className={`
+                  pointer-events-auto flex items-center justify-between p-4 rounded-2xl shadow-xl border backdrop-blur-md animate-in slide-in-from-top-2 fade-in duration-300
+                  ${toast.type === 'success' ? 'bg-neutral-900/90 text-white border-neutral-800' : ''}
+                  ${toast.type === 'error' ? 'bg-red-500/90 text-white border-red-600' : ''}
+                  ${toast.type === 'info' ? 'bg-white/90 text-neutral-900 border-neutral-200' : ''}
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  {toast.type === 'success' && <CheckCircle2 size={20} className="text-green-400" />}
+                  {toast.type === 'error' && <AlertCircle size={20} className="text-white" />}
+                  {toast.type === 'info' && <Info size={20} className="text-blue-500" />}
+                  <span className="text-sm font-bold leading-tight">{toast.message}</span>
+                </div>
+                <button onClick={() => removeToast(toast.id)} className="p-1 hover:opacity-70 transition-opacity ml-4">
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>,
+        document.body
+      )}
     </ToastContext.Provider>
   );
 };
