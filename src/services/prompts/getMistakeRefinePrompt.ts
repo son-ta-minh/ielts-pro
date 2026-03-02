@@ -25,9 +25,12 @@ export function getMistakeRefinePrompt(rows: MistakeRow[], userInput?: string, m
     3. "explanation" must be concise and specific: explain exactly what is wrong and why.
     4. "correction" must provide the best corrected form. If useful, include 1-2 valid alternatives separated by " / ".
     5. Remove low-quality rows (empty or duplicated meaning).
-    6. **EXPANSION**: If the table is short, add 2-3 additional high-frequency IELTS-relevant mistakes.
-    7. Every mistake must be presented in a minimal complete, natural IELTS-style sentence. Avoid isolated fragments. The learner must have enough context to logically detect the error.
-    8. ${outputRule}
+    6. **DEDUPLICATION REQUIRED**: Automatically detect and merge duplicated or overlapping mistakes (e.g., the same uncountable noun error appearing twice). Keep only ONE focused item per unique error type.
+    7. If two rows contain multiple issues, split or refine them so each row targets ONE primary error only.
+    8. **EXPANSION**: If the table is short after deduplication, add 2-3 additional high-frequency IELTS-relevant mistakes.
+    9. Mistakes may be either a minimal complete sentence OR a minimal self-contained phrase (e.g., “higher educations”) if the error can be clearly detected without additional context. Do not add unnecessary words.
+    10. Only require time markers when the PRIMARY error is tense-related. Do NOT add unnecessary time context for logic, collocation, word form, or noun errors. If tense is the target error, include clear time markers (e.g., “in 2010”, “between 2000 and 2010”) so the error can be detected independently.
+    11. ${outputRule}
 
     METADATA RULES:
     1. **title**: Concept-driven, short title (MAX 5 WORDS).
