@@ -212,7 +212,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         <UniversalAiModal
           isOpen={!!aiModalMode}
           onClose={() => setAiModalMode(null)}
-          type="REFINE_UNIT"
+          type="GENERATE_LESSON"
           title={aiModalMode.format === 'intensity' ? "Refine Intensity Scale" : aiModalMode.format === 'comparison' ? "Refine Word Contrast" : aiModalMode.format === 'mistake' ? "Refine Mistake Table" : (content ? "Refine Lesson" : "Generate Lesson")}
           description={aiModalMode.format === 'intensity' ? "AI will complete the intensity scale." : aiModalMode.format === 'comparison' ? "AI will complete the comparison pairs with nuances." : aiModalMode.format === 'mistake' ? "AI will complete and improve your mistake-correction rows." : `Enter instructions for the AI.`}
           initialData={{ ...user.lessonPreferences, format: aiModalMode.format }}

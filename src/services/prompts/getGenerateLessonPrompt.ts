@@ -16,10 +16,15 @@ export function getGenerateLessonPrompt(params: LessonGenerationParams): string 
   const styleInstruction = isListeningMode 
     ? `STYLE: NATURAL SPOKEN AUDIO SCRIPT
        - Structure the content as a natural spoken narrative or conversation.
-       - **EVERY SENTENCE** must be wrapped in audio tags.
+       - **EVERY SENTENCE** must be wrapped in audio tags, closed audio tag is [/]
        - **AUDIO STRATEGY (CRITICAL)**: 
          1. **NO MIXED LANGUAGES**: Do NOT put English words inside ${explanationAudioTag} tags. Split them out into [Audio-EN] tags.
-       - No Markdown headers (###).
+         2. **NO nested tags**: Do NOT nest audio tags. Each sentence or phrase should be in its own tag.
+         3. **SAME SENTENCE CONTINUITY**: If a sentence contains both English and Vietnamese, keep them on the SAME LINE with adjacent tags. Do NOT insert line breaks between tags that belong to the same sentence.
+            Correct: [Audio-EN]The Sun[/][Audio-VN]không chỉ là một ngôi sao...[/]
+            Incorrect: [Audio-EN]The Sun[/]
+               [Audio-VN]không chỉ là một ngôi sao...[/]
+         - No Markdown headers (###).
        - Use specific visual cues for the speaker (e.g. [Pause], [Excited]).`
     : `STYLE: COMPACT RICH ARTICLE (READING)
        - **COMPACT FORMAT**: Minimize vertical space. **NO double newlines (\n\n)**. **NO horizontal rules (---)**. Keep the layout dense.
