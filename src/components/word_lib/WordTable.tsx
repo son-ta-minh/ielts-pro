@@ -162,21 +162,46 @@ const WordTable: React.FC<Props> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (initialFilter) {
-      const refinedFilterValues: RefinedFilter[] = ['raw', 'refined', 'verified', 'failed', 'not_refined'];
-      if (refinedFilterValues.includes(initialFilter as RefinedFilter)) {
-        // It's a quality filter. Set the refinedFilter state and reset the type filter.
+    useEffect(() => {
+    if (!initialFilter) return;
+
+    const refinedFilterValues: RefinedFilter[] = [
+        'raw',
+        'refined',
+        'verified',
+        'failed',
+        'not_refined'
+    ];
+
+    const statusValues: StatusFilter[] = [
+        'new',
+        'forgot',
+        'hard',
+        'easy',
+        'learned'
+    ];
+
+    if (refinedFilterValues.includes(initialFilter as RefinedFilter)) {
+        // Quality filter
         setRefinedFilter(initialFilter as RefinedFilter);
         setActiveFilters(new Set(['all']));
-      } else {
-        // It's a type filter (idiom, vocab, etc.). Set the type filter and reset the quality filter.
+        setStatusFilter('all');
+    } 
+    else if (statusValues.includes(initialFilter as StatusFilter)) {
+        // Learned status filter
+        setStatusFilter(initialFilter as StatusFilter);
+        setActiveFilters(new Set(['all']));
+        setRefinedFilter('all');
+    } 
+    else {
+        // Type filter (idiom, vocab, etc.)
         setActiveFilters(new Set([initialFilter as FilterType]));
         setRefinedFilter('all');
-      }
-      setIsFilterMenuOpen(true);
+        setStatusFilter('all');
     }
-  }, [initialFilter]);
+
+    setIsFilterMenuOpen(true);
+    }, [initialFilter]);
 
   useEffect(() => {
     if (forceExpandAdd) {

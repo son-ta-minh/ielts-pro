@@ -237,11 +237,15 @@ const VocabularyCenterPanel: React.FC<{
     masteredCount: number;
     rawCount: number;
     refinedCount: number;
+    forgottenCount: number;
+    hardCount: number;
+    easyCount: number;
     onStartNew: () => void;
     onStartDue: () => void;
     onRefineRaw: () => void;
     onVerifyRefined: () => void;
-}> = ({ stats, totalCount, newCount, studyingCount, masteredCount, rawCount, refinedCount, onStartNew, onStartDue, onRefineRaw, onVerifyRefined }) => {
+    onFilterStatus: (filter: string) => void;
+}> = ({ stats, totalCount, newCount, studyingCount, masteredCount, rawCount, refinedCount, forgottenCount, hardCount, easyCount, onStartNew, onStartDue, onRefineRaw, onVerifyRefined, onFilterStatus }) => {
     const newPercent = totalCount > 0 ? (newCount / totalCount) * 100 : 0;
     const studyingPercent = totalCount > 0 ? (studyingCount / totalCount) * 100 : 0;
     const masteredPercent = totalCount > 0 ? (masteredCount / totalCount) * 100 : 0;
@@ -285,6 +289,26 @@ const VocabularyCenterPanel: React.FC<{
                             <div className="w-2 h-2 rounded-full bg-neutral-300" />
                             <span className="text-[10px] font-bold text-neutral-600">New ({newCount})</span>
                         </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+                        <button
+                            onClick={() => onFilterStatus('easy')}
+                            className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 hover:bg-emerald-100 transition-all"
+                        >
+                            Easy Words ({easyCount})
+                        </button>
+                        <button
+                            onClick={() => onFilterStatus('hard')}
+                            className="px-3 py-2 rounded-xl bg-orange-50 text-orange-700 text-[10px] font-bold border border-orange-200 hover:bg-orange-100 transition-all"
+                        >
+                            Hard Words ({hardCount})
+                        </button>
+                        <button
+                            onClick={() => onFilterStatus('forgot')}
+                            className="px-3 py-2 rounded-xl bg-red-50 text-red-700 text-[10px] font-bold border border-red-200 hover:bg-red-100 transition-all"
+                        >
+                            Forgotten ({forgottenCount})
+                        </button>
                     </div>
                 </div>
 
@@ -633,10 +657,14 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                 masteredCount={reviewStats.mastered} 
                 rawCount={rawCount}
                 refinedCount={refinedCount}
+                forgottenCount={reviewStats.statusForgot}
+                hardCount={reviewStats.statusHard}
+                easyCount={reviewStats.statusEasy}
                 onStartNew={onStartNewLearn} 
                 onStartDue={onStartDueReview} 
                 onRefineRaw={() => onNavigateToWordList('raw')}
                 onVerifyRefined={() => onNavigateToWordList('refined')}
+                onFilterStatus={(filter) => onNavigateToWordList(filter)}
               />
               <StudyNowPanel stats={studyStats} isLoading={isStatsLoading} onAction={(action) => onAction(action)} />
           </div>
