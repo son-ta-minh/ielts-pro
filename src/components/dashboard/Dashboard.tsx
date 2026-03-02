@@ -21,6 +21,7 @@ interface Props {
   onNavigateToWordList: (filter: string) => void;
   onStartDueReview: () => void;
   onStartNewLearn: () => void;
+  onStartStatusReview: (status: 'hard' | 'forgot') => void;
   isWotdComposed?: boolean;
   onComposeWotd?: (word: VocabularyItem) => void;
   onRandomizeWotd?: () => void;
@@ -235,6 +236,7 @@ const Dashboard: React.FC<Props> = ({
     onNavigateToWordList: restProps.onNavigateToWordList,
     onStartDueReview: restProps.onStartDueReview,
     onStartNewLearn: restProps.onStartNewLearn,
+    onStartStatusReview: restProps.onStartStatusReview,
     lastBackupTime: restProps.lastBackupTime,
     onBackup: handleBackupClick,
     onRestore: handleRestoreClick,

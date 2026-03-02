@@ -789,6 +789,43 @@ export const useAppController = () => {
         startSession(dueWords, 'due'); 
     }, [currentUser, startSession, showToast]);
 
+    const startStatusReviewSession = useCallback(async (status: 'hard' | 'forgot') => {
+        console.log(`[Session] Starting ${status} review session...`);
+        if (!currentUser) return;
+
+        // Use dataStore for consistency with stats
+        const allWords = dataStore.getAllWords();
+
+        const filteredWords = allWords
+            .filter(w => {
+                if (w.isPassive) return false;
+
+                if (status === 'hard') {
+                    return w.lastGrade === 'HARD';
+                }
+
+                if (status === 'forgot') {
+                    return w.lastGrade === 'FORGOT';
+                }
+
+                return false;
+            })
+            .sort((a, b) => a.createdAt - b.createdAt)
+            .slice(0, 30);
+
+        if (filteredWords.length === 0) {
+            showToast(
+                status === 'hard'
+                    ? "No hard words to review!"
+                    : "No forgotten words to review!",
+                "success"
+            );
+            return;
+        }
+
+        startSession(filteredWords, status);
+    }, [currentUser, startSession, showToast]);
+
     const startNewLearnSession = useCallback(async () => { 
         if (!currentUser) return; 
         // Use dataStore for consistency with stats
@@ -883,7 +920,7 @@ export const useAppController = () => {
         updateWord: updateWordAndNotify, deleteWord, bulkDeleteWords, bulkUpdateWords: bulkUpdateWordsAndNotify,
         handleNavigateToList, openAddWordLibrary, clearSessionState, handleRetrySession,
         gainExperienceAndLevelUp, recalculateXpAndLevelUp, xpGained, xpToNextLevel,
-        startDueReviewSession, startNewLearnSession, lastMasteryScoreUpdateTimestamp,
+        startDueReviewSession, startNewLearnSession, startStatusReviewSession, lastMasteryScoreUpdateTimestamp,
         writingContextWord, handleComposeWithWord, consumeWritingContext,
         targetLessonId, setTargetLessonId, consumeTargetLessonId, 
         targetLessonTag, consumeTargetLessonTag, 

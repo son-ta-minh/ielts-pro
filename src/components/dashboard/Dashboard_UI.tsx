@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  RotateCw, 
+  RotateCw, AlertCircle, Flame,
   Download, History, BookCopy, Sparkles, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
   Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain, AlertTriangle,
   CloudUpload, Percent, MessagesSquare, Scale, Dumbbell
@@ -69,6 +69,7 @@ export interface DashboardUIProps {
     onNavigate: (view: AppView) => void;
     onNavigateToWordList: (filter: string) => void;
     onStartDueReview: () => void;
+    onStartStatusReview: (status: 'hard' | 'forgot') => void;
     onStartNewLearn: () => void;
     lastBackupTime: number | null;
     onBackup: (mode: 'server' | 'file') => void;
@@ -242,10 +243,14 @@ const VocabularyCenterPanel: React.FC<{
     easyCount: number;
     onStartNew: () => void;
     onStartDue: () => void;
+    onStartStatusReview: (status: 'hard' | 'forgot') => void;
     onRefineRaw: () => void;
     onVerifyRefined: () => void;
     onFilterStatus: (filter: string) => void;
-}> = ({ stats, totalCount, newCount, studyingCount, masteredCount, rawCount, refinedCount, forgottenCount, hardCount, easyCount, onStartNew, onStartDue, onRefineRaw, onVerifyRefined, onFilterStatus }) => {
+}> = ({
+    stats, totalCount, newCount, studyingCount, masteredCount, rawCount, refinedCount, forgottenCount, hardCount, easyCount,
+    onStartNew, onStartDue, onStartStatusReview, onRefineRaw, onVerifyRefined, onFilterStatus
+}) => {
     const newPercent = totalCount > 0 ? (newCount / totalCount) * 100 : 0;
     const studyingPercent = totalCount > 0 ? (studyingCount / totalCount) * 100 : 0;
     const masteredPercent = totalCount > 0 ? (masteredCount / totalCount) * 100 : 0;
@@ -312,12 +317,72 @@ const VocabularyCenterPanel: React.FC<{
                     </div>
                 </div>
 
-                {/* Actions - 2 Columns (2x2 Grid) */}
+                {/* Actions - 2 Columns (3x2 Grid) */}
                 <div className="lg:col-span-2 grid grid-cols-2 gap-3">
-                    <NavButton label="Learn New" subLabel={`${stats ? stats.vocab.new : '-'} words ready`} icon={Sparkles} color="text-indigo-600" bg="bg-indigo-50" onClick={onStartNew} disabled={!stats || stats.vocab.new === 0} />
-                    <NavButton label="Review" subLabel={`${stats ? stats.vocab.due : '-'} words due`} icon={RotateCw} color="text-amber-600" bg="bg-amber-50" onClick={onStartDue} disabled={!stats || stats.vocab.due === 0} />
-                    <NavButton label="Refine" subLabel={`${rawCount} raw words`} icon={Wand2} color="text-purple-600" bg="bg-purple-50" onClick={onRefineRaw} disabled={rawCount === 0} />
-                    <NavButton label="Verify" subLabel={`${refinedCount} pending`} icon={ShieldCheck} color="text-emerald-600" bg="bg-emerald-50" onClick={onVerifyRefined} disabled={refinedCount === 0} />
+
+                    {/* Row 1 */}
+                    <NavButton 
+                        label="Learn New" 
+                        subLabel={`${stats ? stats.vocab.new : '-'} words ready`} 
+                        icon={Sparkles} 
+                        color="text-indigo-600" 
+                        bg="bg-indigo-50" 
+                        onClick={onStartNew} 
+                        disabled={!stats || stats.vocab.new === 0} 
+                    />
+
+                    <NavButton 
+                        label="Review Due" 
+                        subLabel={`${stats ? stats.vocab.due : '-'} words due`} 
+                        icon={RotateCw} 
+                        color="text-amber-600" 
+                        bg="bg-amber-50" 
+                        onClick={onStartDue} 
+                        disabled={!stats || stats.vocab.due === 0} 
+                    />
+
+                    {/* Row 2 */}
+                    <NavButton 
+                        label="Review Forgot" 
+                        subLabel={`${forgottenCount} words`} 
+                        icon={AlertCircle} 
+                        color="text-red-600" 
+                        bg="bg-red-50" 
+                        onClick={() => onStartStatusReview('forgot')} 
+                        disabled={forgottenCount === 0} 
+                    />
+
+                    <NavButton 
+                        label="Review Hard" 
+                        subLabel={`${hardCount} words`} 
+                        icon={Flame} 
+                        color="text-orange-600" 
+                        bg="bg-orange-50" 
+                        onClick={() => onStartStatusReview('hard')} 
+                        disabled={hardCount === 0} 
+                    />
+
+                    {/* Row 3 */}
+                    <NavButton 
+                        label="Refine" 
+                        subLabel={`${rawCount} raw words`} 
+                        icon={Wand2} 
+                        color="text-purple-600" 
+                        bg="bg-purple-50" 
+                        onClick={onRefineRaw} 
+                        disabled={rawCount === 0} 
+                    />
+
+                    <NavButton 
+                        label="Verify" 
+                        subLabel={`${refinedCount} pending`} 
+                        icon={ShieldCheck} 
+                        color="text-emerald-600" 
+                        bg="bg-emerald-50" 
+                        onClick={onVerifyRefined} 
+                        disabled={refinedCount === 0} 
+                    />
+
                 </div>
              </div>
         </div>
@@ -559,7 +624,7 @@ const BackupStatus: React.FC<{
 export const DashboardUI: React.FC<DashboardUIProps> = ({
   onNavigate, totalCount, newCount, rawCount, refinedCount, reviewStats,
   lastBackupTime, onBackup, onRestore,
-  serverStatus, onAction, onStartNewLearn, onStartDueReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats,
+  serverStatus, onAction, onStartNewLearn, onStartDueReview, onStartStatusReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats,
   studyStats, isStatsLoading,
   onViewWord,
   serverUrl,
@@ -662,6 +727,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                 easyCount={reviewStats.statusEasy}
                 onStartNew={onStartNewLearn} 
                 onStartDue={onStartDueReview} 
+                onStartStatusReview={onStartStatusReview}
                 onRefineRaw={() => onNavigateToWordList('raw')}
                 onVerifyRefined={() => onNavigateToWordList('refined')}
                 onFilterStatus={(filter) => onNavigateToWordList(filter)}
