@@ -19,6 +19,7 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
     const [parsedWords, setParsedWords] = useState<ParsedWord[]>([]);
     const [loading, setLoading] = useState(false);
     const [targetField, setTargetField] = useState<"meaningVi" | "example" | "note">("note");
+    const [statusMap, setStatusMap] = useState<Record<string, "create" | "update" | "checking">>({});
 
     const parseText = () => {
         const lines = rawText
@@ -39,6 +40,29 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
             .filter((item): item is ParsedWord => item !== null);
 
         setParsedWords(result);
+        checkStatuses(result);
+    };
+
+    const checkStatuses = async (words: ParsedWord[]) => {
+        const newStatus: Record<string, "create" | "update" | "checking"> = {};
+
+        for (const item of words) {
+            const text = item.word.trim();
+            if (!text) continue;
+
+            newStatus[text] = "checking";
+        }
+
+        setStatusMap(newStatus);
+
+        for (const item of words) {
+            const text = item.word.trim();
+            if (!text) continue;
+
+            const existing = await dataStore.findWordByText(user.id, text);
+            newStatus[text] = existing ? "update" : "create";
+            setStatusMap({ ...newStatus });
+        }
     };
 
     const updateWord = (index: number, field: keyof ParsedWord, value: string) => {
@@ -150,6 +174,7 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
                         <thead className="bg-neutral-100">
                             <tr>
                                 <th className="border px-2 py-1 text-left">Word</th>
+                                <th className="border px-2 py-1 text-center w-28">Status</th>
                                 <th className="border px-2 py-1 text-left">
                                     {targetField === "meaningVi"
                                         ? "Meaning (Vietnamese)"
@@ -170,6 +195,17 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
                                             }
                                             className="w-full outline-none"
                                         />
+                                    </td>
+                                    <td className="border px-2 py-1 text-center text-xs">
+                                        {statusMap[item.word?.trim()] === "update" && (
+                                            <span className="text-blue-600 font-medium">To be updated</span>
+                                        )}
+                                        {statusMap[item.word?.trim()] === "create" && (
+                                            <span className="text-green-600 font-medium">To be created</span>
+                                        )}
+                                        {(!statusMap[item.word?.trim()] || statusMap[item.word?.trim()] === "checking") && (
+                                            <span className="text-neutral-500">Checking...</span>
+                                        )}
                                     </td>
                                     <td className="border px-2 py-1">
                                         <input
