@@ -265,7 +265,13 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     ) : (
                                         <MasteryScoreCalculator word={currentWord} />
                                     )}
-                                    <button onClick={(e) => { e.stopPropagation(); speak(currentWord.word); }} className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce">
+                                </div>
+                                <div className="flex items-center justify-center gap-4">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); speak(currentWord.word); }}
+                                        className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                        title="Pronounce"
+                                    >
                                         <Volume2 size={22} />
                                     </button>
                                     <button
@@ -275,7 +281,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     >
                                         <Mic size={20} />
                                     </button>
-                                    <div className="relative group">
+                                    <div className="relative group/book">
                                         <button
                                             onClick={() => speak(vietnameseMeaning, false, 'vi')}
                                             className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-amber-600 rounded-full transition-colors"
@@ -283,7 +289,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                         >
                                             <BookOpen size={20} />
                                         </button>
-                                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 whitespace-nowrap max-w-[240px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none text-center leading-snug z-10">
+                                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 whitespace-nowrap max-w-[240px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/book:opacity-100 transition-opacity pointer-events-none text-center leading-snug z-20">
                                             {vietnameseMeaning}
                                             <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
                                         </span>
