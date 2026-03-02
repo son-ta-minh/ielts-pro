@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic } from 'lucide-react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditWordModal from '../word_lib/EditWordModal';
@@ -177,6 +177,14 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     ? currentWord.word
     : currentWord.ipaUs || currentWord.word;
     const vietnameseMeaning = currentWord.meaningVi?.trim() || currentWord.meaning?.trim() || 'No Vietnamese meaning available';
+    const visiblePrepositions = (currentWord.prepositions || []).filter(p => !p.isIgnored);
+    const visibleCollocations = (currentWord.collocationsArray || []).filter(c => !c.isIgnored);
+    const visibleParaphrases = (currentWord.paraphrases || []).filter(p => !p.isIgnored);
+    const visibleIdioms = (currentWord.idiomsList || []).filter(i => !i.isIgnored);
+    const prepositionTooltip = visiblePrepositions.slice(0, 6).map(p => `${p.prep}${p.usage ? ` - ${p.usage}` : ''}`).join('\n');
+    const collocationTooltip = visibleCollocations.slice(0, 6).map(c => c.text).join('\n');
+    const paraphraseTooltip = visibleParaphrases.slice(0, 6).map(p => `${p.word}${p.context ? ` - ${p.context}` : ''}`).join('\n');
+    const idiomTooltip = visibleIdioms.slice(0, 6).map(i => `${i.text}${i.d ? ` - ${i.d}` : ''}`).join('\n');
 
     const isIpa = !isNewWord && !!currentWord.ipaUs;
     const hasRetryableFailedTests = React.useMemo(() => {
@@ -294,6 +302,62 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                             <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
                                         </span>
                                     </div>
+                                    {visiblePrepositions.length > 0 && (
+                                        <div className="relative group/prep">
+                                            <button
+                                                className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-orange-600 rounded-full transition-colors"
+                                                title="Prepositions"
+                                            >
+                                                <AtSign size={20} />
+                                            </button>
+                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/prep:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line">
+                                                {prepositionTooltip}
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                            </span>
+                                        </div>
+                                    )}
+                                    {visibleCollocations.length > 0 && (
+                                        <div className="relative group/col">
+                                            <button
+                                                className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
+                                                title="Collocations"
+                                            >
+                                                <Combine size={20} />
+                                            </button>
+                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/col:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line">
+                                                {collocationTooltip}
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                            </span>
+                                        </div>
+                                    )}
+                                    {visibleParaphrases.length > 0 && (
+                                        <div className="relative group/para">
+                                            <button
+                                                className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-cyan-600 rounded-full transition-colors"
+                                                title="Paraphrases"
+                                            >
+                                                <Zap size={20} />
+                                            </button>
+                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/para:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line">
+                                                {paraphraseTooltip}
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                            </span>
+                                        </div>
+                                    )}
+                                    {visibleIdioms.length > 0 && (
+                                        <div className="relative group/idiom">
+                                            <button
+                                                className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-emerald-600 rounded-full transition-colors"
+                                                title="Idioms"
+                                            >
+                                                <MessageSquare size={20} />
+                                            </button>
+                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/idiom:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line">
+                                                {idiomTooltip}
+                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></span>
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
