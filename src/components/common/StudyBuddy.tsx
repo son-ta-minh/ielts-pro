@@ -551,13 +551,28 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 newItem.masteryScore = calculateMasteryScore(newItem);
                 newItem.gameEligibility = calculateGameEligibility(newItem);
             } else {
-                newItem = { 
-                    ...createNewWord(selectedText, '', '', '', '', ['coach-added'], false, false, false, false, selectedText.includes(' ')), 
-                    userId: user.id, 
-                    quality: WordQuality.RAW 
+                const baseItem = await createNewWord(
+                    selectedText,
+                    '',
+                    '',
+                    '',
+                    '',
+                    ['coach-added'],
+                    false,
+                    false,
+                    false,
+                    false,
+                    selectedText.includes(' ')
+                );
+
+                newItem = {
+                    ...baseItem,
+                    userId: user.id,
+                    quality: WordQuality.RAW
                 };
                 newItem.isPassive = false;
             }
+            console.log("Adding to library:", newItem);
             await dataStore.saveWord(newItem);
             showToast(`"${selectedText}" added!`, 'success');
             setIsAlreadyInLibrary(true);

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw } from 'lucide-react';
+import { Check, X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone, WordFamily } from '../../app/types';
 import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
@@ -210,9 +210,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const viewMenuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-      console.log('=== ViewWordModalUI LOAD ===');
-      console.log('word.id:', word?.id);
-      console.log('lastTestResults:', word?.lastTestResults);
+    //   console.log('=== ViewWordModalUI LOAD ===');
+    //   console.log('word.id:', word?.id);
+    //   console.log('lastTestResults:', word?.lastTestResults);
     }, [word]);
 
     const handlePronounceWithCoachLookup = (targetWord: string) => {
@@ -367,7 +367,8 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
     const lessonUsageHtml = useMemo(() => word.lesson?.essay ? parseMarkdown(word.lesson.essay) : null, [word.lesson?.essay]);
     const lessonTestHtml = useMemo(() => word.lesson?.test ? parseMarkdown(word.lesson.test) : null, [word.lesson?.test]);
-
+    const hasUsage = Boolean(lessonUsageHtml?.trim());
+    const hasTest = Boolean(lessonTestHtml?.trim());
     return (
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
             <div className="bg-white w-full max-w-6xl rounded-2xl sm:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
@@ -421,9 +422,46 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                 </header>
 
                 <nav className="px-4 sm:px-8 border-b border-neutral-100 bg-white flex items-center gap-4 sm:gap-6 shrink-0 overflow-x-auto no-scrollbar">
-                    <button onClick={() => setActiveTab('OVERVIEW')} className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${activeTab === 'OVERVIEW' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}>Overview</button>
-                    <button onClick={() => setActiveTab('USAGE')} className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'USAGE' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}><BookText size={14}/> Usage</button>
-                    <button onClick={() => setActiveTab('TEST')} className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${activeTab === 'TEST' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}><ClipboardList size={14}/> Practice Test</button>
+                
+                    <button
+                        onClick={() => setActiveTab('OVERVIEW')}
+                        className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${
+                        activeTab === 'OVERVIEW'
+                            ? 'border-neutral-900 text-neutral-900'
+                            : 'border-transparent text-neutral-400 hover:text-neutral-600'
+                        }`}
+                    >
+                        Overview
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab('USAGE')}
+                        className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1 ${
+                        activeTab === 'USAGE'
+                            ? 'border-indigo-600 text-indigo-600'
+                            : 'border-transparent text-neutral-400 hover:text-neutral-600'
+                        }`}
+                    >
+                        Usage
+                        {hasUsage && (
+                        <Check size={12} strokeWidth={3} className="text-emerald-500" />
+                        )}
+                    </button>
+
+                    <button
+                        onClick={() => setActiveTab('TEST')}
+                        className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1 ${
+                        activeTab === 'TEST'
+                            ? 'border-emerald-600 text-emerald-600'
+                            : 'border-transparent text-neutral-400 hover:text-neutral-600'
+                        }`}
+                    >
+                        Practice Test
+                        {hasTest && (
+                        <Check size={12} strokeWidth={3} className="text-emerald-500" />
+                        )}
+                    </button>
+
                 </nav>
 
                 <div className="flex-1 overflow-auto no-scrollbar px-4 sm:px-6 pt-4 pb-8 bg-neutral-50/20">

@@ -133,73 +133,79 @@ export async function createNewWord(
   isCollocation = false, isStandardPhrase = false, isPassive = false, source: WordSource = 'manual'
 ): Promise<VocabularyItem> {
   let finalIpaUs = ipaUs.trim();
-
   let finalMeaningVi = meaningVi.trim();
 
-  // Auto-translate meaning if empty (EN → VI)
+  // Prepare async fetch tasks
+  const tasks: Promise<void>[] = [];
+
+  // 1. Auto-translate meaning if empty (EN → VI)
   if (!finalMeaningVi) {
-    try {
-      const cleanedWord = word.trim();
-      const res = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanedWord)}&langpair=en|vi`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.responseData?.translatedText) {
-          finalMeaningVi = data.responseData.translatedText;
-          console.log('[createNewWord] Auto meaning from MyMemory:', finalMeaningVi);
-        }
-      }
-    } catch (err) {
-      console.error('[createNewWord] Meaning auto-translate failed:', err);
-    }
-  }
-
-  if (!finalIpaUs) {
-    try {
-      const cleaned = word.trim().toLowerCase();
-      const config = getConfig();
-      const serverUrl = getServerUrl(config);
-
-      // 1. Try Cambridge simple lookup (exact headword, US)
-      const cambridgeRes = await fetch(
-        `${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(cleaned)}`,
-        { cache: 'no-store' }
-      );
-      if (cambridgeRes.ok) {
-        const cambridgeData = await cambridgeRes.json();
-        if (cambridgeData?.exists && Array.isArray(cambridgeData?.pronunciations)) {
-          const usPron = cambridgeData.pronunciations.find((p: any) => p?.ipaUs);
-          if (usPron?.ipaUs) {
-            finalIpaUs = usPron.ipaUs;
-            console.log('[createNewWord] IPA from Cambridge:', finalIpaUs);
-          }
-        }
-      }
-
-      // 2. Fallback to server IPA converter if still empty
-      if (!finalIpaUs) {
-        const fallbackRes = await fetch(
-          `${serverUrl}/api/convert/ipa?text=${encodeURIComponent(cleaned)}&mode=2`
+    tasks.push((async () => {
+      try {
+        const cleanedWord = word.trim();
+        const res = await fetch(
+          `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanedWord)}&langpair=en|vi`
         );
-        if (fallbackRes.ok) {
-          const fallbackData = await fallbackRes.json();
-          if (fallbackData?.ipa) {
-            finalIpaUs = fallbackData.ipa;
-            console.log('[createNewWord] IPA from fallback convert:', finalIpaUs);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.responseData?.translatedText) {
+            finalMeaningVi = data.responseData.translatedText;
           }
         }
+      } catch (err) {
+        console.error('[createNewWord] Meaning auto-translate failed:', err);
       }
-
-      console.log('[createNewWord] Final auto IPA result:', finalIpaUs);
-      // Ensure IPA is wrapped with slashes, e.g. /ˈkæmpsaɪt/
-      if (finalIpaUs && !finalIpaUs.startsWith('/')) {
-        finalIpaUs = `/${finalIpaUs.replace(/^\/+|\/+$/g, '')}/`;
-      }
-    } catch (err) {
-      console.error('[createNewWord] IPA fetch failed:', err);
-    }
+    })());
   }
+
+  // 2. Auto-fetch IPA if empty
+  if (!finalIpaUs) {
+    tasks.push((async () => {
+      try {
+        const cleaned = word.trim().toLowerCase();
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+
+        // Try Cambridge first
+        const cambridgeRes = await fetch(
+          `${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(cleaned)}`,
+          { cache: 'no-store' }
+        );
+        if (cambridgeRes.ok) {
+          const cambridgeData = await cambridgeRes.json();
+          if (cambridgeData?.exists && Array.isArray(cambridgeData?.pronunciations)) {
+            const usPron = cambridgeData.pronunciations.find((p: any) => p?.ipaUs);
+            if (usPron?.ipaUs) {
+              finalIpaUs = usPron.ipaUs;
+            }
+          }
+        }
+
+        // Fallback if still empty
+        if (!finalIpaUs) {
+          const fallbackRes = await fetch(
+            `${serverUrl}/api/convert/ipa?text=${encodeURIComponent(cleaned)}&mode=2`
+          );
+          if (fallbackRes.ok) {
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData?.ipa) {
+              finalIpaUs = fallbackData.ipa;
+            }
+          }
+        }
+
+        // Normalize IPA format
+        if (finalIpaUs && !finalIpaUs.startsWith('/')) {
+          finalIpaUs = `/${finalIpaUs.replace(/^\/+|\/+$/g, '')}/`;
+        }
+      } catch (err) {
+        console.error('[createNewWord] IPA fetch failed:', err);
+      }
+    })());
+  }
+
+  // Wait for all async fetch tasks to complete BEFORE creating the item
+  await Promise.all(tasks);
 
   const now = Date.now();
   const newItem: VocabularyItem = {
