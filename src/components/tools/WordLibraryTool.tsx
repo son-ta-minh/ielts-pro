@@ -39,7 +39,6 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
             .filter((item): item is ParsedWord => item !== null);
 
         setParsedWords(result);
-        console.log("[WordLibraryTool] Parsed words:", result);
     };
 
     const updateWord = (index: number, field: keyof ParsedWord, value: string) => {
@@ -116,7 +115,7 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
             {/* Raw Input */}
             <div className="flex flex-col gap-2">
                 <label className="font-semibold text-neutral-700">
-                    Paste raw text (format: word: meaning)
+                    Paste raw text (format: word: field_content)
                 </label>
                 <textarea
                     value={rawText}
@@ -158,7 +157,6 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
                                         ? "Example"
                                         : "Note"}
                                 </th>
-                                <th className="border px-2 py-1 text-center w-20">Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -181,14 +179,6 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
                                             }
                                             className="w-full outline-none"
                                         />
-                                    </td>
-                                    <td className="border px-2 py-1 text-center">
-                                        <button
-                                            onClick={() => deleteWord(index)}
-                                            className="text-red-600 hover:underline"
-                                        >
-                                            Delete
-                                        </button>
                                     </td>
                                 </tr>
                             ))}
