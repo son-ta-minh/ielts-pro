@@ -141,6 +141,19 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const { current: currentIndex, max: maxIndexVisited } = progress;
     const isQuickFire = sessionType === 'random_test';
     const [mimicTarget, setMimicTarget] = React.useState<string | null>(null);
+    const touchStartX = React.useRef<number | null>(null);
+    const hasRetryableFailedTests = React.useMemo(() => {
+        if (!currentWord) return false;
+        const history = normalizeTestResultKeys(currentWord.lastTestResults || {});
+        const validKeys = getAllValidTestKeys(currentWord);
+        const validBaseTypes = new Set(Array.from(validKeys).map(key => key.split(':')[0]));
+        return Object.entries(history).some(([key, value]) => {
+            if (value !== false) return false;
+            if (validKeys.has(key)) return true;
+            const baseType = key.split(':')[0];
+            return validBaseTypes.has(baseType);
+        });
+    }, [currentWord]);
 
     const handleEditRequest = (word: VocabularyItem) => {
       setWordInModal(null);
@@ -187,20 +200,6 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const idiomTooltip = visibleIdioms.slice(0, 6).map(i => i.text).join('\n');
 
     const isIpa = !isNewWord && !!currentWord.ipaUs;
-    const hasRetryableFailedTests = React.useMemo(() => {
-        const history = normalizeTestResultKeys(currentWord.lastTestResults || {});
-        const validKeys = getAllValidTestKeys(currentWord);
-        const validBaseTypes = new Set(Array.from(validKeys).map(key => key.split(':')[0]));
-        return Object.entries(history).some(([key, value]) => {
-            if (value !== false) return false;
-            if (validKeys.has(key)) return true;
-            const baseType = key.split(':')[0];
-            return validBaseTypes.has(baseType);
-        });
-    }, [currentWord]);
-
-    // --- Mobile Swipe Support ---
-    const touchStartX = React.useRef<number | null>(null);
 
     const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
         touchStartX.current = e.touches[0].clientX;
@@ -331,6 +330,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     {visibleCollocations.length > 0 && (
                                         <div className="relative group/col">
                                             <button
+                                                onClick={() => speak(collocationTooltip.replace(/\n/g, ', '))}
                                                 className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
                                             >
                                                 <Combine size={20} />
@@ -355,6 +355,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     {visibleParaphrases.length > 0 && (
                                         <div className="relative group/para">
                                             <button
+                                                onClick={() => speak(paraphraseTooltip.replace(/\n/g, ', '))}
                                                 className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-cyan-600 rounded-full transition-colors"
                                             >
                                                 <Zap size={20} />
@@ -379,6 +380,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     {visibleIdioms.length > 0 && (
                                         <div className="relative group/idiom">
                                             <button
+                                                onClick={() => speak(idiomTooltip.replace(/\n/g, ', '))}
                                                 className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-emerald-600 rounded-full transition-colors"
                                             >
                                                 <MessageSquare size={20} />
