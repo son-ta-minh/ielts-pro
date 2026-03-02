@@ -15,6 +15,8 @@ export const PronunciationChallenge: React.FC<Props> = ({ challenge, onAnswer, i
     const [isRecording, setIsRecording] = useState(false);
     const [transcript, setTranscript] = useState('');
     const recognitionManager = useRef<SpeechRecognitionManager | null>(null);
+    const didAutoSubmit = useRef(false);
+    const [localResult, setLocalResult] = useState<ChallengeResult | null>(null);
 
     useEffect(() => {
         try {
@@ -28,15 +30,36 @@ export const PronunciationChallenge: React.FC<Props> = ({ challenge, onAnswer, i
         };
     }, []);
 
+    useEffect(() => {
+        setLocalResult(result);
+    }, [result]);
+
     const startNewRecording = () => {
         if (!recognitionManager.current) return;
         setTranscript(''); 
         setIsRecording(true);
+        didAutoSubmit.current = false;
         recognitionManager.current.start(
-            (final, interim) => setTranscript(final + interim),
+            (final, interim) => {
+                if (didAutoSubmit.current) return;
+                const combined = (final + interim).trim();
+                setTranscript(combined);
+
+                if (
+                    combined.toLowerCase() === challenge.word.word.trim().toLowerCase()
+                ) {
+                    didAutoSubmit.current = true;
+                    setLocalResult(true);
+                    recognitionManager.current?.stop();
+                    setIsRecording(false);
+                    onAnswer(combined);
+                }
+            },
             (finalTranscript) => {
                 setIsRecording(false);
-                onAnswer(finalTranscript);
+                if (!didAutoSubmit.current) {
+                    onAnswer(finalTranscript);
+                }
             }
         );
     };
@@ -53,7 +76,8 @@ export const PronunciationChallenge: React.FC<Props> = ({ challenge, onAnswer, i
         }
     };
     
-    const isCorrect = result === true;
+    const isCorrect = localResult === true;
+    const hasResult = localResult !== null;
     
     return (
         <div ref={containerRef} className="text-center space-y-8 animate-in fade-in duration-300 flex flex-col items-center">
@@ -73,10 +97,14 @@ export const PronunciationChallenge: React.FC<Props> = ({ challenge, onAnswer, i
                 {transcript || '...'}
             </div>
 
-            {isFinishing && (
+            {hasResult && (
                 <div className={`flex items-center gap-2 font-bold text-lg animate-in fade-in slide-in-from-bottom-2 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                     {isCorrect ? <CheckCircle size={20} /> : <XCircle size={20} />}
-                    <span>{isCorrect ? 'Correct!' : `Not quite. The word was "${challenge.word.word}".`}</span>
+                    <span>
+                        {isCorrect
+                            ? 'Correct!'
+                            : `Not quite. The word was "${challenge.word.word}".`}
+                    </span>
                 </div>
             )}
         </div>

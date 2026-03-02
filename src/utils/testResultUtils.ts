@@ -25,8 +25,8 @@ const SHORT_TO_LONG_TYPE: Record<string, string> = {
 const RESULT_GROUPS: Record<string, string[]> = {
   collocation: ['COLLOCATION_QUIZ', 'COLLOCATION_CONTEXT_QUIZ', 'COLLOCATION_MULTICHOICE_QUIZ'],
   paraphrase: ['PARAPHRASE_QUIZ', 'PARAPHRASE_CONTEXT_QUIZ'],
-  idiom: ['IDIOM_QUIZ', 'IDIOM_CONTEXT_QUIZ'],
-  pronunciation: ['PRONUNCIATION', 'IPA_QUIZ']
+  idiom: ['IDIOM_QUIZ', 'IDIOM_CONTEXT_QUIZ']
+  // pronunciation intentionally NOT grouped → PRONUNCIATION and IPA_QUIZ are independent
 };
 
 const TYPE_TO_GROUP: Record<string, string> = Object.fromEntries(
@@ -72,4 +72,3 @@ export const mergeTestResultsByGroup = (existing?: TestResultMap, incoming?: Tes
 
   return { ...cleanedExisting, ...normalizedIncoming };
 };
-
