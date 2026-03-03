@@ -115,6 +115,7 @@ export interface User {
   adventureLastDailyStar?: string;
   isAdmin?: boolean;
   lessonPreferences?: LessonPreferences;
+  note?: string;
 }
 
 export interface PrepositionPattern {

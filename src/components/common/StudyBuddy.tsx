@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
-import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square } from 'lucide-react';
+import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
@@ -130,6 +130,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     
     // Tools Modal State
     const [isToolsModalOpen, setIsToolsModalOpen] = useState(false);
+    const [isNoteOnlyMode, setIsNoteOnlyMode] = useState(false);
 
     const commandBoxRef = useRef<HTMLDivElement>(null);
     const messageBoxRef = useRef<HTMLDivElement>(null);
@@ -647,6 +648,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const handleOpenTools = () => {
         setIsOpen(false);
         setMenuPos(null);
+        setIsNoteOnlyMode(false);
+        setIsToolsModalOpen(true);
+    };
+
+    const handleOpenNote = () => {
+        setIsOpen(false);
+        setMenuPos(null);
+        setIsNoteOnlyMode(true);
         setIsToolsModalOpen(true);
     };
 
@@ -654,6 +663,16 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
         if (!selectedText) return;
         const queryText = `Example in English sentence for "${selectedText}"`;
+        const query = encodeURIComponent(queryText);
+        window.open(`https://www.google.com/search?q=${query}`, '_blank');
+        setIsOpen(false);
+        setMenuPos(null);
+    };
+
+    const handleVietnameseExplanation = () => {
+        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
+        if (!selectedText) return;
+        const queryText = `Giải thích và ví dụ "${selectedText}"`;
         const query = encodeURIComponent(queryText);
         window.open(`https://www.google.com/search?q=${query}`, '_blank');
         setIsOpen(false);
@@ -727,7 +746,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const CommandBox = () => (
         <div ref={commandBoxRef} className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200">
             {/* Using a 6-column grid allows us to have col-span-2 buttons that are perfectly equal in width */}
-            <div className="grid grid-cols-6 gap-1">
+            <div className="grid grid-cols-8 gap-1">
                 {/* TOP ROW (3 buttons, 2 columns each) */}
                 <button type="button" onClick={handleTranslateSelection} className="col-span-2 aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" title="Tiếng Việt">VI</button>
                 {!isAlreadyInLibrary ? (
@@ -736,11 +755,21 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                     <button type="button" onClick={handleViewWord} disabled={isAnyModalOpen} className="col-span-2 aspect-square bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center hover:bg-sky-100 transition-all active:scale-90 shadow-sm" title="View Word Details"><Eye size={15}/></button>
                 )}
                 <button type="button" onClick={handleReadAndIpa} className="col-span-2 aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="Read & Phonetics (EN)"><Volume2 size={15}/></button>
+                <button type="button" onClick={handleOpenNote} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Open Note"><PenTool size={15}/></button>
 
                 {/* BOTTOM ROW (3 buttons, 2 columns each) */}
                 <button type="button" onClick={handleSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
                 <button type="button" onClick={handleOpenTools} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Coach Tools"><Wrench size={15}/></button>
                 <button type="button" onClick={handleGoogleExampleSearch} className="col-span-2 aspect-square bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shadow-sm" title="Search Google Examples"><Search size={15}/></button>
+                <button
+                    type="button"
+                    onClick={handleVietnameseExplanation}
+                    className="col-span-2 aspect-square bg-red-600 text-yellow-300 rounded-2xl flex items-center justify-center hover:bg-red-700 transition-all active:scale-95 shadow-sm"
+                    title="Giải thích bằng Tiếng Việt"
+                >
+                    <Star size={15} fill="currentColor" />
+                </button>
+
             </div>
         </div>
     );
@@ -1087,7 +1116,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 </div>
             </div>
             {mimicTarget !== null && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
-            <ToolsModal user={user}isOpen={isToolsModalOpen} onClose={() => setIsToolsModalOpen(false)} />
+            <ToolsModal
+                user={user}
+                isOpen={isToolsModalOpen}
+                onClose={() => setIsToolsModalOpen(false)}
+                noteOnly={isNoteOnlyMode}
+            />
         </>
     );
 };
