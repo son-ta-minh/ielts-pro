@@ -39,7 +39,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const [isAutoPlaying, setIsAutoPlaying] = useState(false);
     const [playSpeed, setPlaySpeed] = useState<number>(() => {
         const saved = localStorage.getItem('mimic_play_speed');
-        return saved ? Number(saved) : 1;
+        return saved ? Number(saved) : 1.5;
     });
     const autoPlayRef = useRef<any>(null);
 
@@ -189,9 +189,16 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 await startRecording();
                 setIsRecording(true);
                 isRecordingRef.current = true;
+
+                // Auto start word highlight after 0.5s when recording begins
+                setTimeout(() => {
+                    if (isRecordingRef.current) {
+                        handleAutoPlay();
+                    }
+                }, 500);
                 
                 resetActivity();
-                startSilenceCountdown(''); 
+                startSilenceCountdown('');
 
                 recognitionManager.current.start(
                     (final, interim) => {

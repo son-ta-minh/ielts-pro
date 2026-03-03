@@ -136,7 +136,7 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
     const [isAutoPlaying, setIsAutoPlaying] = useState(false);
     const [playSpeed, setPlaySpeed] = useState<number>(() => {
         const saved = localStorage.getItem('mimic_play_speed');
-        return saved ? Number(saved) : 1;
+        return saved ? Number(saved) : 1.5;
     });
     const autoPlayRef = useRef<any>(null);
     const textContainerRef = useRef<HTMLDivElement>(null);
@@ -166,6 +166,20 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
     useEffect(() => {
         localStorage.setItem('mimic_play_speed', String(playSpeed));
     }, [playSpeed]);
+
+    // Auto start highlight 0.5s after recording begins
+    useEffect(() => {
+        if (!isRecording) return;
+        if (!targetText) return;
+
+        const timer = setTimeout(() => {
+            if (!isAutoPlaying) {
+                handleAutoPlay();
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [isRecording]);  
 
     const estimateSyllables = (word: string) => {
         const clean = word.toLowerCase().replace(/[^a-z]/g, '');
@@ -210,7 +224,10 @@ export const MimicPracticeUI: React.FC<MimicPracticeUIProps> = ({
             autoPlayRef.current = setTimeout(playNext, duration);
         };
 
-        playNext();
+        // delay 0.5s before starting highlight
+        autoPlayRef.current = setTimeout(() => {
+            playNext();
+        }, 500);
     };
 
     if (isEmpty) {
