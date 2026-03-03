@@ -17,24 +17,10 @@ export const FreeNoteTool: React.FC<FreeNoteToolProps> = ({ user }) => {
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
     useEffect(() => {
-        const captureSelection = () => {
-            const text = window.getSelection()?.toString();
-            if (text && text.trim().length > 0) {
-                setSelectedText(text);
-            }
-        };
-
-        // Capture immediately when component mounts
-        captureSelection();
-
-        // Capture whenever user selects text anywhere
-        document.addEventListener("mouseup", captureSelection);
-        document.addEventListener("keyup", captureSelection);
-
-        return () => {
-            document.removeEventListener("mouseup", captureSelection);
-            document.removeEventListener("keyup", captureSelection);
-        };
+        const text = window.getSelection()?.toString();
+        if (text && text.trim().length > 0) {
+            setSelectedText(text);
+        }
     }, []);
 
     // Remove effect that sets content from user prop
@@ -74,15 +60,6 @@ export const FreeNoteTool: React.FC<FreeNoteToolProps> = ({ user }) => {
 
     const handleTextareaSelect = () => {
         if (!textareaRef.current) return;
-
-        const textarea = textareaRef.current;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-
-        if (start !== end) {
-            const text = content.substring(start, end);
-            // Todo
-        }
     };
 
     const handleInsertSelected = () => {
@@ -107,7 +84,7 @@ export const FreeNoteTool: React.FC<FreeNoteToolProps> = ({ user }) => {
         }, 0);
     };
 
-    const handleAction = (type: "Compare" | "Explain" | "Study") => {
+    const handleAction = (type: "Compare" | "Explain" | "Mistake") => {
         const newLine = content.trim().length === 0
             ? `- [${type}] `
             : `${content}\n- [${type}] `;
@@ -135,10 +112,10 @@ export const FreeNoteTool: React.FC<FreeNoteToolProps> = ({ user }) => {
                 </button>
                 <button
                     type="button"
-                    onClick={() => handleAction("Study")}
+                    onClick={() => handleAction("Mistake")}
                     className="px-3 py-1 rounded-md bg-amber-100 text-amber-700 hover:bg-amber-200 transition"
                 >
-                    Study
+                    Mistake
                 </button>
                 <div className="flex items-center gap-2 ml-4">
                     <span className="text-xs font-medium text-neutral-500">Selected text:</span>
@@ -159,8 +136,6 @@ export const FreeNoteTool: React.FC<FreeNoteToolProps> = ({ user }) => {
                     ref={textareaRef}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    onSelect={handleTextareaSelect}
-                    onKeyUp={handleTextareaSelect}
                     className="w-full flex-1 border border-neutral-300 rounded-md p-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
             </div>            
