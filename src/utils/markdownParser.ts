@@ -197,6 +197,24 @@ const parseTable = (lines: string[]): { html: string; consumed: number } | null 
 };
 
 /**
+ * Process dynamic custom badges like [Compare], [Explain], [Study], etc.
+ * Allows external renderer via window.renderMarkdownBadge(tag: string): string
+ */
+const processDynamicBadges = (text: string): string => {
+    return text.replace(/\[(\w+)\]/g, (_, tag) => {
+        if (typeof window !== 'undefined') {
+            const renderer = (window as any).renderMarkdownBadge;
+            if (typeof renderer === 'function') {
+                const result = renderer(tag);
+                if (typeof result === 'string') return result;
+            }
+        }
+        // Default fallback badge style
+        return `<span class="inline-flex items-center px-2 py-0.5 bg-neutral-200 text-neutral-700 rounded-md text-xs font-bold mr-1">${tag}</span>`;
+    });
+};
+
+/**
  * Process [HIDDEN: content] into inline reveal buttons
  */
 const processSpoilers = (text: string): string => {
@@ -453,8 +471,11 @@ export const parseMarkdown = (text: string): string => {
     // This handles cases where the AI outputs a string literal '\n' instead of a newline char
     const normalized = text.replace(/\\n/g, '\n');
 
-    // 1. Process Audio and Spoilers first (as they can be inline)
-    let processed = processAudioBlocks(normalized);
+    // 1. Process dynamic badges first
+    let processed = processDynamicBadges(normalized);
+
+    // 2. Process Audio and Spoilers
+    processed = processAudioBlocks(processed);
     processed = processWordAudioBlocks(processed);
     processed = processNavTags(processed);
     processed = processSound(processed);
