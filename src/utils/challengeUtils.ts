@@ -234,13 +234,12 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
             const word = challenge.word;
             const validParaphrases = (word.paraphrases || [])
                 .filter(p => !p.isIgnored && p.context && p.context.trim())
-                .sort(() => Math.random() - 0.5)
-                .slice(0, 5); // Take up to 5 pairs
-    
+                .sort(() => Math.random() - 0.5); // No limit
+
             if (validParaphrases.length >= 2) {
                 const contextItems: ParaphraseContextQuizItem[] = [];
                 const paraphraseItems: ParaphraseContextQuizItem[] = [];
-    
+
                 validParaphrases.forEach((p, index) => {
                     const pairId = `${word.id}-${index}`;
                     contextItems.push({ id: `context-${pairId}`, text: p.context!, pairId, tone: p.tone });
@@ -258,8 +257,7 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
             const word = challenge.word;
             const validCollocs = (word.collocationsArray || [])
                 .filter(c => !c.isIgnored && c.d && c.d.trim())
-                .sort(() => Math.random() - 0.5)
-                .slice(0, 5); // Take up to 5 pairs
+                .sort(() => Math.random() - 0.5); // No limit
 
             if (validCollocs.length >= 2) {
                 const contextItems: CollocationContextQuizItem[] = [];
@@ -282,8 +280,7 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
             const word = challenge.word;
             const validIdioms = (word.idiomsList || [])
                 .filter(i => !i.isIgnored && i.d && i.d.trim())
-                .sort(() => Math.random() - 0.5)
-                .slice(0, 5); // Take up to 5 pairs
+                .sort(() => Math.random() - 0.5); // No limit
 
             if (validIdioms.length >= 2) {
                 const contextItems: IdiomContextQuizItem[] = [];
