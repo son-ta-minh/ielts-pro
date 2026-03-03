@@ -644,14 +644,14 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   }, [activeTab]);
   
   return (
-    <div className="space-y-4 animate-in fade-in duration-500">
-      <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-4 mb-4">
+    <div className="space-y-2 animate-in fade-in duration-500">
+      <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-3">
         <div>
             <div className="flex items-baseline gap-2">
                 <h2 className="text-3xl font-black text-neutral-900 tracking-tight">IELTS Vocab Pro</h2>
                 <span className="text-[10px] font-bold text-neutral-400 font-mono tracking-tighter bg-neutral-100 px-1.5 py-0.5 rounded-md border border-neutral-200">{version}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-2 mt-2">
+            <div className="flex flex-wrap items-center gap-2 mt-1">
                  {serverStatus === 'connected' ? (
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
