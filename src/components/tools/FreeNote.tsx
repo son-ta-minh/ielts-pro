@@ -16,6 +16,7 @@ export const FreeNoteTool: React.FC<FreeNoteToolProps> = ({ user }) => {
     const [selectedText, setSelectedText] = useState<string>("");
     const [mode, setMode] = useState<'raw' | 'md'>('raw');
     const actionRef = useRef<HTMLDivElement | null>(null);
+    const [isActionOpen, setIsActionOpen] = useState(false);
 
     const previewHtml = useMemo(() => {
         return parseMarkdown(content);
@@ -113,10 +114,42 @@ export const FreeNoteTool: React.FC<FreeNoteToolProps> = ({ user }) => {
     };
 
     const handleAction = (type: "Compare" | "Explain" | "Mistake") => {
-        const newLine = content.trim().length === 0
-            ? `- [${type}] `
-            : `${content}\n- [${type}] `;
-        setContent(newLine);
+        if (!textareaRef.current) return;
+
+        const textarea = textareaRef.current;
+        const cursor = textarea.selectionStart;
+
+        // Find current line end
+        const currentLineEnd = content.indexOf("\n", cursor);
+
+        const insertLine = `- [${type}] `;
+
+        let insertPosition: number;
+        let prefix: string;
+        let suffix: string;
+
+        if (currentLineEnd === -1) {
+            // Cursor is on last line
+            insertPosition = content.length;
+            prefix = content.endsWith("\n") ? content : content + "\n";
+            suffix = "";
+        } else {
+            // Insert AFTER current line
+            insertPosition = currentLineEnd + 1;
+            prefix = content.substring(0, insertPosition);
+            suffix = content.substring(insertPosition);
+        }
+
+        const newValue = prefix + insertLine + "\n" + suffix;
+
+        setContent(newValue);
+
+        // Move cursor to end of inserted action line (before its newline)
+        setTimeout(() => {
+            textarea.focus();
+            const newCursor = prefix.length + insertLine.length;
+            textarea.setSelectionRange(newCursor, newCursor);
+        }, 0);
     };
 
     return (
@@ -125,44 +158,50 @@ export const FreeNoteTool: React.FC<FreeNoteToolProps> = ({ user }) => {
             <div className="flex items-center gap-3 pb-3 flex-wrap">
                 <div
                     ref={actionRef}
-                    className="relative group"
+                    className="relative"
                 >
                     <button
                         type="button"
+                        onClick={() => setIsActionOpen(prev => !prev)}
                         className="px-3 py-1 rounded-md bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition"
                     >
                         Actions ▾
                     </button>
 
-                    <div className="absolute left-0 top-full z-20 w-40 bg-white border border-neutral-200 rounded-md shadow-lg py-1 hidden group-hover:block">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                handleAction("Compare");
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 text-indigo-700"
-                        >
-                            Compare
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                handleAction("Explain");
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 text-green-700"
-                        >
-                            Explain
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                handleAction("Mistake");
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 text-amber-700"
-                        >
-                            Mistake
-                        </button>
-                    </div>
+                    {isActionOpen && (
+                        <div className="absolute left-0 top-full z-20 w-40 bg-white border border-neutral-200 rounded-md shadow-lg py-1">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    handleAction("Compare");
+                                    setIsActionOpen(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 text-indigo-700"
+                            >
+                                Compare
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    handleAction("Explain");
+                                    setIsActionOpen(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 text-green-700"
+                            >
+                                Explain
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    handleAction("Mistake");
+                                    setIsActionOpen(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 text-amber-700"
+                            >
+                                Mistake
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {selectedText && (
