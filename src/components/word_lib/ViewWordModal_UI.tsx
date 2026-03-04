@@ -449,14 +449,14 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 )}
 
                                 {word.img && word.img.length > 0 && (
-                                    <div className="relative inline-block">
+                                    <div className="relative inline-block group">
                                         <button
-                                            className="peer p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                            className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
                                         >
                                             <Image size={18} />
                                         </button>
-                                        <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-96 max-h-96 overflow-auto p-4 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 peer-hover:opacity-100 transition-opacity z-20">
-                                            <div className="grid grid-cols-2 gap-2">
+                                        <div className="absolute top-full left-0 -translate-x-10 mt-2 w-max max-w-[28rem] overflow-x-hidden overflow-y-hidden p-4 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-20">
+                                            <div className="flex flex-wrap gap-3">
                                                 {word.img.map((raw, idx) => {
                                                     let caption: string | null = null;
                                                     let imageUrl = raw;
@@ -469,7 +469,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                     }
 
                                                     return (
-                                                        <div key={idx} className="flex flex-col gap-1">
+                                                        <div key={idx} className="basis-1/2 sm:flex-none sm:w-48 flex flex-col gap-1">
                                                             <img
                                                                 src={imageUrl}
                                                                 alt={`word-img-${idx}`}
