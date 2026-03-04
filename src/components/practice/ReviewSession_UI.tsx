@@ -11,6 +11,7 @@ import { generateAvailableChallenges } from '../../utils/challengeUtils';
 import { ChallengeType, Challenge, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge, PrepositionQuizChallenge } from './TestModalTypes';
 import { calculateMasteryScore, getAllValidTestKeys } from '../../utils/srs';
 import { normalizeTestResultKeys } from '../../utils/testResultUtils';
+import { getServerUrl, getConfig } from '../../app/settingsManager';
 
 export interface ReviewSessionUIProps {
   user: User;
@@ -142,6 +143,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const isQuickFire = sessionType === 'random_test';
     const [mimicTarget, setMimicTarget] = React.useState<string | null>(null);
     const touchStartX = React.useRef<number | null>(null);
+    const serverUrl = getServerUrl(getConfig());
     const hasRetryableFailedTests = React.useMemo(() => {
         if (!currentWord) return false;
         const history = normalizeTestResultKeys(currentWord.lastTestResults || {});
@@ -299,7 +301,9 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                                         return (
                                                             <div key={idx} className="flex flex-col gap-1">
                                                                 <img
-                                                                    src={imageUrl}
+                                                                    src={imageUrl.startsWith('http')
+                                                                        ? imageUrl
+                                                                        : `${serverUrl}${imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`}`}
                                                                     alt={`preview-${idx}`}
                                                                     className="w-full h-32 object-cover rounded-lg border border-neutral-100"
                                                                 />

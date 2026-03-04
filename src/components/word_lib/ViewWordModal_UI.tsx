@@ -204,6 +204,8 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     onGenerateLesson
 }) => {
     const [viewSettings, setViewSettings] = useState(() => getStoredJSON('ielts_pro_word_view_settings', { showHidden: false, highlightFailed: true, isLearnView: true }));
+
+    const serverUrl = getServerUrl(getConfig());
     const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'USAGE' | 'TEST'>(initialTab as any);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -471,7 +473,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                     return (
                                                         <div key={idx} className="basis-1/2 sm:flex-none sm:w-48 flex flex-col gap-1">
                                                             <img
-                                                                src={imageUrl}
+                                                                src={imageUrl.startsWith('http')
+                                                                    ? imageUrl
+                                                                    : `${serverUrl}${imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`}`}
                                                                 alt={`word-img-${idx}`}
                                                                 className="w-full h-36 object-cover rounded-lg border border-neutral-100"
                                                             />

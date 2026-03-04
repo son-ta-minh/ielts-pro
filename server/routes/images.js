@@ -1,10 +1,11 @@
-
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { FOLDER_MAPPINGS_FILE } = require('../config');
+const https = require('https');
+const http = require('http');
 
 // Load mappings (shared with Audio/Reading)
 let folderMappings = {};
@@ -174,6 +175,64 @@ router.delete('/images/file', (req, res) => {
         }
     } else {
         res.status(404).json({ error: 'File not found' });
+    }
+});
+
+// Cache Remote Image to local mapped "Image" folder
+router.post('/images/cache', express.json(), async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) return res.status(400).json({ error: 'URL is required' });
+
+        // Reload mappings
+        if (fs.existsSync(FOLDER_MAPPINGS_FILE())) {
+            folderMappings = JSON.parse(fs.readFileSync(FOLDER_MAPPINGS_FILE(), 'utf8'));
+        }
+
+        const targetDir = folderMappings['Image'];
+        if (!targetDir) {
+            return res.status(404).json({ error: 'Image mapping not found' });
+        }
+
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+
+        const parsedUrl = new URL(url);
+        const ext = path.extname(parsedUrl.pathname) || '.jpg';
+        const safeName = path.basename(parsedUrl.pathname)
+            .replace(/[^a-zA-Z0-9.\-_]/g, '_') || `img_${Date.now()}${ext}`;
+
+        const filename = `${Date.now()}_${safeName}`;
+        const fullPath = path.join(targetDir, filename);
+
+        const protocol = parsedUrl.protocol === 'https:' ? https : http;
+
+        const fileStream = fs.createWriteStream(fullPath);
+
+        protocol.get(url, response => {
+            if (response.statusCode !== 200) {
+                const reason = `Remote server responded with ${response.statusCode} ${response.statusMessage || ''}`.trim();
+                fs.unlink(fullPath, () => {});
+                return res.status(400).json({ error: reason });
+            }
+
+            response.pipe(fileStream);
+
+            fileStream.on('finish', () => {
+                fileStream.close();
+                res.json({
+                    success: true,
+                    url: `/api/images/stream/Image/${filename}`
+                });
+            });
+        }).on('error', err => {
+            fs.unlink(fullPath, () => {});
+            res.status(500).json({ error: err.message });
+        });
+    } catch (err) {
+        console.error('[Images] Cache error:', err);
+        res.status(500).json({ error: 'Failed to cache image' });
     }
 });
 

@@ -8,6 +8,7 @@ import { useToast } from '../../contexts/ToastContext';
 import UniversalAiModal from '../common/UniversalAiModal';
 import LearningSuggestionModal from '../common/LearningSuggestionModal';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 type FormState = VocabularyItem & {
     groupsString: string;
@@ -87,6 +88,8 @@ interface Props {
 }
 
 const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchToView }) => {
+  const config = getConfig();
+  const serverUrl = getServerUrl(config);
   const { showToast } = useToast();
   
   const [formData, dispatch] = useReducer(formReducer, word, (initialWord) => {
@@ -235,6 +238,69 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
   const collocList = createListHandler('collocationsArray');
   const idiomList = createListHandler('idiomsList');
   const paraList = createListHandler('paraphrases');
+
+  const handleCacheImages = async () => {
+    console.log('Caching images for URLs:', formData.img);
+    if (!formData.img || !formData.img.length) return;
+
+    try {
+      const updatedUrls = await Promise.all(
+        formData.img.map(async (url: string) => {
+          if (!url) return url;
+
+          // Separate caption and actual URL if format is "Caption:actual_url"
+          let caption = '';
+          let cleanUrl = url;
+
+          const httpIndex = url.indexOf('http');
+          if (httpIndex > 0) {
+            caption = url.substring(0, httpIndex).trim();
+            cleanUrl = url.substring(httpIndex).trim();
+          }
+
+          // If not an external URL (no http/https), do NOT cache
+          if (!cleanUrl.startsWith('http')) {
+            return caption ? `${caption}${cleanUrl}` : cleanUrl;
+          }
+
+          // If already local server URL, skip caching
+          if (cleanUrl.includes('localhost') || cleanUrl.startsWith(`${serverUrl}`)) {
+            return caption ? `${caption}${cleanUrl}` : cleanUrl;
+          }
+
+          const res = await fetch(`${serverUrl}/api/images/cache`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: cleanUrl })
+          });
+
+          if (!res.ok) {
+            let errorMessage = 'Image cache failed';
+            try {
+              const errData = await res.json();
+              if (errData?.error) errorMessage = errData.error;
+            } catch {}
+
+            showToast(errorMessage, 'error');
+            return caption ? `${caption}${cleanUrl}` : cleanUrl;
+          }
+
+          const data = await res.json();
+          const finalUrl = data.url || cleanUrl;
+          return caption ? `${caption}${finalUrl}` : finalUrl;
+        })
+      );
+
+      dispatch({
+        type: 'SET_FIELD',
+        payload: { field: 'img', value: updatedUrls }
+      });
+      showToast('Images cached successfully!', 'success');
+    } catch (err: any) {
+      console.error('Cache image error:', err);
+      showToast(err?.message || 'Unexpected cache error', 'error');
+    }
+  };
   
   return (
     <>
@@ -253,6 +319,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         onOpenAiRefine={() => setIsAiModalOpen(true)}
         onSuggestLearn={handleSuggestLearn}
         hasSuggestions={!!learningSuggestions}
+        handleCacheImages={handleCacheImages}
       />
       <LearningSuggestionModal
         isOpen={isSuggestionModalOpen}
