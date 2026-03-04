@@ -5,7 +5,9 @@ import {
     Challenge, ChallengeResult, 
     PrepositionQuizChallenge, 
     ParaphraseContextQuizItem,
-    PronunciationChallenge as PronunciationChallengeType
+    PronunciationChallenge as PronunciationChallengeType,
+    IpaMatchChallenge,
+    IpaQuizChallenge
 } from './TestModalTypes';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 
@@ -327,6 +329,24 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
                 onAnswer={(val) => handleAnswerChange(currentChallengeIndex, val)}
                 isFinishing={isFinishing}
                 result={isCorrect}
+                showHint={showHint}
+            />
+        );
+      }
+      case 'IPA_MATCH': {
+        const challenge = currentChallenge as IpaMatchChallenge;
+        const correctOption = challenge.options.find(o => o.label === 'US')?.ipa;
+
+        return (
+            <MultipleChoiceChallenge
+                containerRef={containerRef}
+                word={word}
+                title="Match IPA (US vs UK)"
+                options={challenge.options.map(o => o.ipa)}
+                answer={correctOption}
+                selected={userAnswers[currentChallengeIndex]}
+                onAnswer={(val) => handleAnswerChange(currentChallengeIndex, val)}
+                isFinishing={isFinishing}
                 showHint={showHint}
             />
         );

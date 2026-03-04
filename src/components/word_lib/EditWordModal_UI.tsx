@@ -66,7 +66,7 @@ export interface EditWordModalUIProps {
   hasSuggestions: boolean;
 }
 
-type Tab = 'MAIN' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
+type Tab = 'MAIN' | 'SOUND' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
 
 const ListEditorSection: React.FC<{
     title: string;
@@ -112,10 +112,11 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
   const TABS: { id: Tab, label: string, icon: React.ElementType }[] = [
-    { id: 'MAIN', label: 'Main', icon: Book },
-    { id: 'DETAILS', label: 'Details', icon: Info },
-    { id: 'CONNECTIONS', label: 'Links', icon: LinkIcon },
-    { id: 'USAGE', label: 'Usage & Test', icon: BookText }
+    { id: 'MAIN', label: 'Core', icon: Book },
+    { id: 'CONNECTIONS', label: 'Advanced', icon: LinkIcon },
+    { id: 'SOUND', label: 'Sound', icon: MessageSquare },
+    { id: 'USAGE', label: 'Usage & Test', icon: BookText },
+    { id: 'DETAILS', label: 'Manage', icon: Info }
   ];
 
   const qualityOptions = [
@@ -195,37 +196,138 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Headword</label>
                             <input type="text" value={formData.word} onChange={(e) => setFormData('word', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
-                        <div className="space-y-2">
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Primary IPA / US</label>
-                                <input type="text" value={formData.ipaUs || ''} onChange={(e) => setFormData('ipaUs', e.target.value)} placeholder="/.../" className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">IPA UK (Optional)</label>
-                                <input type="text" value={formData.ipaUk || ''} onChange={(e) => setFormData('ipaUk', e.target.value)} placeholder="/.../" className="w-full px-4 py-2 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Pronunciation Similarity</label>
-                                <div className="flex bg-neutral-100 p-1 rounded-xl w-full">
-                                    {(['same', 'near', 'different'] as const).map(sim => (
-                                        <button
-                                            key={sim}
-                                            type="button"
-                                            onClick={() => setFormData('pronSim', sim)}
-                                            className={`flex-1 px-4 py-2 text-xs font-black rounded-lg transition-all flex items-center justify-center gap-2 ${formData.pronSim === sim ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-800'}`}>
-                                            {sim.charAt(0).toUpperCase() + sim.slice(1)}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                        <div className="md:col-span-2 space-y-1">
+                        <div className="space-y-1">
                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Definition / Meaning</label>
                             <input type="text" value={formData.meaningVi} onChange={(e) => setFormData('meaningVi', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-base font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
                         <div className="md:col-span-2 space-y-1">
                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Examples</label>
                             <textarea rows={5} value={formData.example} onChange={(e) => setFormData('example', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                        </div>
+                        {/* Prepositions / Patterns */}
+                        <div className="md:col-span-2 space-y-2">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center">
+                                <AtSign size={10} className="mr-1"/> Prepositions / Patterns
+                            </label>
+                            <div className="space-y-2 p-3 bg-white border border-neutral-200 rounded-2xl">
+                                {formData.prepositionsList.map((item: PrepositionPattern, index: number) => (
+                                    <div key={index} className={`flex items-center gap-2 transition-opacity ${item.isIgnored ? 'opacity-40' : ''}`}>
+                                        <input
+                                            type="text"
+                                            value={item.prep}
+                                            onChange={e => prepList.update(index, { prep: e.target.value })}
+                                            placeholder="Prep"
+                                            className="w-24 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-bold focus:bg-white focus:ring-1 focus:ring-neutral-900 outline-none"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={item.usage}
+                                            onChange={e => prepList.update(index, { usage: e.target.value })}
+                                            placeholder="Usage Context"
+                                            className="flex-1 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-medium focus:bg-white focus:ring-1 focus:ring-neutral-900 outline-none"
+                                        />
+                                        <button type="button" onClick={() => prepList.toggleIgnore(index)} className="p-2 text-neutral-400 hover:text-neutral-700 rounded-lg hover:bg-neutral-100">
+                                            {item.isIgnored ? <EyeOff size={14} /> : <Eye size={14} />}
+                                        </button>
+                                        <button type="button" onClick={() => prepList.remove(index)} className="p-2 text-neutral-400 hover:text-red-500 rounded-lg hover:bg-red-50">
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => prepList.add({ prep: '', usage: '', isIgnored: false })}
+                                    className="w-full text-center py-2 bg-neutral-50 hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border border-neutral-200 shadow-sm"
+                                >
+                                    <Plus size={12}/> Add Pattern
+                                </button>
+                            </div>
+                        </div>
+                        {/* Private Note */}
+                        <div className="md:col-span-2 space-y-2">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center">
+                                <StickyNote size={10} className="mr-1"/> Private Note
+                            </label>
+
+                            {/* Badge Quick Insert */}
+                            <div className="flex flex-wrap gap-2 px-1">
+                                {['Definition', 'Caution', 'Tip', 'Important', 'Compare'].map(tag => (
+                                    <button
+                                        key={tag}
+                                        type="button"
+                                        onClick={() => {
+                                            const current = formData.note || '';
+                                            const insertText = `[${tag}] `;
+                                            const newValue = current
+                                                ? current.endsWith('\n') 
+                                                    ? current + insertText 
+                                                    : current + '\n' + insertText
+                                                : insertText;
+                                            setFormData('note', newValue);
+                                        }}
+                                        className="px-2 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors"
+                                    >
+                                        [{tag}]
+                                    </button>
+                                ))}
+                            </div>
+
+                            <textarea
+                                rows={3}
+                                value={formData.note}
+                                onChange={(e) => setFormData('note', e.target.value)}
+                                className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-600 resize-y focus:ring-1 focus:ring-neutral-900 outline-none"
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'SOUND' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-300">
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Primary IPA / US</label>
+                                <input type="text" value={formData.ipaUs || ''} onChange={(e) => setFormData('ipaUs', e.target.value)} placeholder="/.../" className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">IPA UK (Optional)</label>
+                                    <input type="text" value={formData.ipaUk || ''} onChange={(e) => setFormData('ipaUk', e.target.value)} placeholder="/.../" className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">IPA Mistakes (comma or semicolon separated)</label>
+                                <input
+                                    type="text"
+                                    value={(formData.ipaMistakes || []).join(', ')}
+                                    onChange={(e) => {
+                                        const raw = e.target.value;
+                                        const arr = raw
+                                            .split(/[;,]/)
+                                            .map((s: string) => s.trim())
+                                            .filter((s: string) => s.length > 0);
+                                        setFormData('ipaMistakes', arr);
+                                    }}
+                                    placeholder="e.g. /ˈmæskjʊlɪn/; /ˈmɑːskjʊlaɪn/"
+                                    className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl font-mono text-sm text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">UK/US Similarity</label>
+                                <div className="flex bg-neutral-100 p-1 rounded-xl w-full">
+                                    {(['same', 'near', 'different'] as const).map(sim => (
+                                        <button
+                                            key={sim}
+                                            type="button"
+                                            onClick={() => setFormData('pronSim', sim)}
+                                            className={`flex-1 px-3 py-3 text-xs font-black rounded-lg transition-all flex items-center justify-center ${formData.pronSim === sim ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-800'}`}>
+                                            {sim.charAt(0).toUpperCase() + sim.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -253,8 +355,7 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                                 </div>
                             </div>
                         </div>
-                        <div className="space-y-2"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center"><AtSign size={10} className="mr-1"/> Prepositions / Patterns</label><div className="space-y-2 p-3 bg-white border border-neutral-200 rounded-2xl">{formData.prepositionsList.map((item: PrepositionPattern, index: number) => (<div key={index} className={`flex items-center gap-2 transition-opacity ${item.isIgnored ? 'opacity-40' : ''}`}><input type="text" value={item.prep} onChange={e => prepList.update(index, { prep: e.target.value })} placeholder="Prep" className="w-24 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-bold focus:bg-white focus:ring-1 focus:ring-neutral-900 outline-none"/><input type="text" value={item.usage} onChange={e => prepList.update(index, { usage: e.target.value })} placeholder="Usage Context" className="flex-1 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-medium focus:bg-white focus:ring-1 focus:ring-neutral-900 outline-none"/><button type="button" onClick={() => prepList.toggleIgnore(index)} className="p-2 text-neutral-400 hover:text-neutral-700 rounded-lg hover:bg-neutral-100">{item.isIgnored ? <EyeOff size={14} /> : <Eye size={14} />}</button><button type="button" onClick={() => prepList.remove(index)} className="p-2 text-neutral-400 hover:text-red-500 rounded-lg hover:bg-red-50"><X size={14} /></button></div>))}<button type="button" onClick={() => prepList.add({ prep: '', usage: '', isIgnored: false })} className="w-full text-center py-2 bg-neutral-50 hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border border-neutral-200 shadow-sm"><Plus size={12}/> Add Pattern</button></div></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center"><StickyNote size={10} className="mr-1"/> Private Note</label><textarea rows={3} value={formData.note} onChange={(e) => setFormData('note', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-600 resize-y focus:ring-1 focus:ring-neutral-900 outline-none"/></div>
+                        {/* Removed Prepositions / Patterns and Private Note from DETAILS tab */}
                     </div>
                 )}
 

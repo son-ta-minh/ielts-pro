@@ -95,7 +95,7 @@ const KNOWLEDGE_GROUPS: KnowledgeGroup[] = [
         border: 'border-blue-100',
         areas: [
             { id: 'spelling', label: 'Spelling', icon: Type, types: ['SPELLING'] },
-            { id: 'sound', label: 'Sound', icon: Volume2, types: ['PRONUNCIATION', 'IPA_QUIZ', 'HETERONYM_QUIZ'] },
+            { id: 'sound', label: 'Sound', icon: Volume2, types: ['PRONUNCIATION', 'IPA_MATCH'] },
             { id: 'meaning', label: 'Meaning', icon: BookOpen, types: ['MEANING_QUIZ'] },
             { id: 'preposition', label: 'Prep.', icon: AtSign, types: ['PREPOSITION_QUIZ'] },
         ]
@@ -139,6 +139,7 @@ const LABELS: Record<string, string> = {
     'IDIOM_CONTEXT_QUIZ': 'Match',
     'PRONUNCIATION': 'Speak',
     'IPA_QUIZ': 'IPA',
+    'IPA_MATCH': 'Match',
     'HETERONYM_QUIZ': 'Match',
     'SPELLING': 'Dictation',
     'SENTENCE_SCRAMBLE': 'Build',

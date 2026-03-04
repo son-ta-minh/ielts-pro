@@ -208,6 +208,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'USAGE' | 'TEST'>(initialTab as any);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const viewMenuRef = useRef<HTMLDivElement>(null);
+    const [badgeReady, setBadgeReady] = useState(false);
 
     useEffect(() => {
     //   console.log('=== ViewWordModalUI LOAD ===');
@@ -233,6 +234,37 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
             speak(text, false, lang);
         };
         return () => { delete (window as any).handleLessonSpeak; };
+    }, []);
+
+    useEffect(() => {
+        (window as any).renderMarkdownBadge = (tag: string) => {
+            const base =
+                "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium mr-1 border";
+
+            if (tag === 'Definition') {
+                return `<span class="${base} bg-blue-50 text-blue-600 border-blue-100">Definition</span>`;
+            }
+            if (tag === 'Caution') {
+                return `<span class="${base} bg-rose-50 text-rose-600 border-rose-100">Caution</span>`;
+            }
+            if (tag === 'Tip') {
+                return `<span class="${base} bg-emerald-50 text-emerald-600 border-emerald-100">Tip</span>`;
+            }
+            if (tag === 'Important') {
+                return `<span class="${base} bg-amber-50 text-amber-700 border-amber-100">Important</span>`;
+            }
+            if (tag === 'Compare') {
+                return `<span class="${base} bg-indigo-50 text-indigo-600 border-indigo-100">Compare</span>`;
+            }
+
+            return undefined;
+        };
+
+        setBadgeReady(true);
+
+        return () => {
+            delete (window as any).renderMarkdownBadge;
+        };
     }, []);
 
     const toggleGroupExpansion = (group: string) => { setExpandedGroups(prev => { const next = new Set(prev); if (next.has(group)) next.delete(group); else next.add(group); return next; }); };
@@ -359,17 +391,29 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
     const lessonUsageHtml = useMemo(() => word.lesson?.essay ? parseMarkdown(word.lesson.essay) : null, [word.lesson?.essay]);
     const lessonTestHtml = useMemo(() => word.lesson?.test ? parseMarkdown(word.lesson.test) : null, [word.lesson?.test]);
+    const noteHtml = useMemo(
+        () => word.note ? parseMarkdown(word.note) : null,
+        [word.note, badgeReady]
+    );
     const hasUsage = Boolean(lessonUsageHtml?.trim());
     const hasTest = Boolean(lessonTestHtml?.trim());
     return (
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
             <div className="bg-white w-full max-w-6xl rounded-2xl sm:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
                 <header className="px-4 sm:px-8 py-4 border-b border-neutral-100 bg-neutral-50/30 flex flex-col gap-2 shrink-0">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start w-full gap-4">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-start w-full gap-4">
                         <div className="flex-1 w-full">
                             <div className="flex items-center gap-2">
                                 <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
                                 {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
+                                {word.pronSim === 'different' && (
+                                    <div className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-md">
+                                        <Volume2 size={12} className="text-indigo-600" />
+                                        <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600">
+                                            US ≠ UK
+                                        </span>
+                                    </div>
+                                )}
                                 {!word.isPassive && (
                                     <>
                                         <button onClick={(e) => { e.stopPropagation(); handlePronounceWithCoachLookup(word.word); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce"><Volume2 size={18} /></button>
@@ -380,7 +424,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     <button
                                         onClick={(e) => { e.stopPropagation(); speak(word.meaningVi, false, 'vi'); }}
                                         className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                        title="Read Vietnamese meaning"
                                     >
                                         <BookOpen size={18} />
                                     </button>
@@ -389,19 +432,24 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 <MasteryScoreCalculator word={word} />
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end w-full sm:w-auto">
+                        <div className="flex items-center gap-2 flex-wrap justify-start md:justify-end w-full md:w-auto">
                             <StatusDropdown options={learnStatusOptions} selectedId={currentLearnStatus} onSelect={handleLearnStatusSelect} buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200" disabled={isViewOnly}/>
-                            <div className="relative" ref={viewMenuRef}>
-                                <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className={`p-2 rounded-lg transition-colors ${isViewMenuOpen ? 'bg-neutral-900 text-white shadow-sm' : 'bg-white border border-neutral-200 text-neutral-400 hover:text-neutral-900'}`} title="View Options"><Eye size={16} /></button>
-                                {isViewMenuOpen && (
-                                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-xl border border-neutral-100 z-50 p-2 overflow-hidden animate-in fade-in zoom-in-95 flex flex-col gap-1">
-                                        <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50">View Options</div>
-                                        <button onClick={() => handleSettingChange('isLearnView', !viewSettings.isLearnView)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-neutral-50 text-xs font-bold text-neutral-700 transition-colors"><span>Learn View</span>{viewSettings.isLearnView ? <CheckCircle2 size={14} className="text-green-500" /> : <div className="w-4 h-4 rounded-full border border-neutral-200"></div>}</button>
-                                        <button onClick={() => handleSettingChange('showHidden', !viewSettings.showHidden)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-neutral-50 text-xs font-bold text-neutral-700 transition-colors"><span>Show Ignored Items</span>{viewSettings.showHidden ? <CheckCircle2 size={14} className="text-green-500" /> : <div className="w-4 h-4 rounded-full border border-neutral-200"></div>}</button>
-                                        <button onClick={() => handleSettingChange('highlightFailed', !viewSettings.highlightFailed)} className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-neutral-50 text-xs font-bold text-neutral-700 transition-colors"><span>Highlight Failed</span>{viewSettings.highlightFailed ? <CheckCircle2 size={14} className="text-green-500" /> : <div className="w-4 h-4 rounded-full border border-neutral-200"></div>}</button>
-                                    </div>
-                                )}
-                            </div>
+                            <StatusDropdown
+                                label="Quality"
+                                options={qualityStatusOptions}
+                                selectedId={word.quality}
+                                onSelect={(id) => onUpdate({ ...word, quality: id as WordQuality })}
+                                buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200"
+                                disabled={isViewOnly}
+                            />
+                            {!word.isPassive && (
+                                <div className="flex items-center gap-1.5 px-3 py-2 bg-white border border-neutral-200 rounded-lg text-xs font-bold text-neutral-500 shadow-sm" title={`Next Review: ${reviewStatus.label}`}>
+                                    <Clock size={14} />
+                                    <span className={`text-[11px] font-black uppercase ${reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'}`}>
+                                        {reviewStatus.label}
+                                    </span>
+                                </div>
+                            )}
                             {!isViewOnly && (
                                 <>
                                     <button onClick={onChallengeRequest} className="p-2 bg-amber-100 text-amber-600 hover:text-amber-900 rounded-lg hover:bg-amber-200 transition-colors" title="Practice"><BrainCircuit size={16} /></button>
@@ -459,48 +507,180 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                 <div className="flex-1 overflow-auto no-scrollbar px-4 sm:px-6 pt-4 pb-8 bg-neutral-50/20">
                     {activeTab === 'OVERVIEW' && (
                         <div className="space-y-6 animate-in fade-in duration-300">
-                            {/* DETAILS ROW */}
-                            <div className="px-2 py-3 bg-white border border-neutral-100 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm">
-                                <div className="flex items-center gap-4 flex-wrap">
-                                    <div className="flex flex-col">
-                                        <p className={`px-2 py-1 bg-neutral-50 rounded-lg text-sm font-mono font-medium border border-neutral-200 text-neutral-500`}>{word.ipaUs || '/?/'}</p>
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <RegisterBadge register={word.register} />
-                                        {(!word.register || word.register === 'raw') && <span className="px-2 py-1 bg-neutral-100 text-neutral-400 rounded-lg text-[10px] font-black uppercase tracking-tighter border border-neutral-200">Neutral</span>}
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-4">
-                                    <StatusDropdown
-                                        label="Quality"
-                                        options={qualityStatusOptions}
-                                        selectedId={word.quality}
-                                        onSelect={(id) => onUpdate({ ...word, quality: id as WordQuality })}
-                                        buttonClass="flex items-center gap-2 p-1.5 bg-neutral-50 border border-neutral-200 hover:bg-neutral-100 rounded-xl transition-all"
-                                        disabled={isViewOnly}
-                                    />
-                                    {!word.isPassive && (
-                                        <div className="flex flex-col items-end">
-                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-bold text-neutral-500" title={`Next Review: ${reviewStatus.label}`}>
-                                                <Clock size={12} />
-                                                <span className={`text-[11px] font-black uppercase ${reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'}`}>
-                                                    {reviewStatus.label}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                {word.note && <div className="md:col-span-4"><p className="text-sm text-neutral-700 bg-yellow-50/50 p-4 rounded-xl border border-yellow-100 italic leading-relaxed whitespace-pre-wrap">{word.note}</p></div>}
-                                <Section title="Examples" icon={Quote} className="md:col-span-4">{word.example ? <div className="flex flex-col gap-2">{word.example.split('\n').filter(line => line.trim() !== '').map((sentence, index) => (<div key={index} className="flex items-start gap-2 px-3 py-2 bg-neutral-50 border border-neutral-100 rounded-xl group hover:border-neutral-200 transition-all"><span className="text-sm font-medium text-neutral-700 leading-relaxed flex-1 select-text cursor-text">{sentence}</span><button onClick={() => speak(sentence)} className="p-1.5 text-neutral-400 hover:text-indigo-500 hover:bg-white rounded-lg transition-all shrink-0"><Volume2 size={14} /></button></div>))}</div> : <div className="text-[10px] text-neutral-300 italic px-1">No examples added.</div>}</Section>
-                                <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><AtSign size={10}/> Prepositions</label>{displayedPreps.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-100 p-3 rounded-xl shadow-sm">{displayedPreps.map((p, i) => { const specificKey = `PREPOSITION_QUIZ:${p.prep}`; const specificResult = word.lastTestResults?.[specificKey]; const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PREPOSITION_QUIZ'] === false)) && !p.isIgnored; return (<div key={i} className={`flex items-center justify-between gap-3 p-2 rounded-lg border transition-colors ${isFailed ? 'bg-red-50 border-red-200' : 'bg-neutral-50/30 border-neutral-100'} ${p.isIgnored ? 'opacity-50' : ''}`}><div className="flex items-center gap-2 min-w-0">{isFailed && <AlertCircle size={10} className="text-red-500 shrink-0" />}<span className={`font-bold text-xs shrink-0 ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${p.isIgnored ? 'line-through' : ''}`}>{p.prep}</span><span className={`font-medium text-[10px] truncate ${isFailed ? 'text-red-400' : 'text-neutral-500'}`}>{p.usage}</span></div>{p.usage && (<button onClick={() => speak(p.usage)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-1 shrink-0"><Volume2 size={12}/></button>)}</div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No prepositions.</div>)}</div>
-                                <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Network size={10}/> Word Family</label><div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100">{!hasAnyFamilyData ? (<span className="text-[10px] text-neutral-300 italic">No family data available.</span>) : (<div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{renderFamilyCardGroup("Nouns", word.wordFamily?.nouns, "blue", "nouns")}{renderFamilyCardGroup("Verbs", word.wordFamily?.verbs, "green", "verbs")}{renderFamilyCardGroup("Adjectives", word.wordFamily?.adjs, "orange", "adjs")}{renderFamilyCardGroup("Adverbs", word.wordFamily?.advs, "purple", "advs")}</div>)}</div></div>
-                                <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Combine size={10}/> Collocations</label>{displayedCollocs.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-200 p-3 rounded-xl">{displayedCollocs.map((c, i) => { const isExisting = existingVariants.has(c.text.toLowerCase()); let isFailed = false; if (viewSettings.highlightFailed && !c.isIgnored) { const types = ['COLLOCATION_QUIZ', 'COLLOCATION_CONTEXT_QUIZ', 'COLLOCATION_MULTICHOICE_QUIZ']; if (hasSpecificFailure(types, c.text)) isFailed = true; else if (!types.some(type => getResult(`${type}:${c.text}`) !== undefined) && hasGroupFailure(types)) isFailed = true; } let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900"; if (isFailed) containerClass = "bg-red-50 border-red-200 text-red-700"; else if (c.isIgnored) containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400"; return (<div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}><div className="flex-1 overflow-hidden">{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className={`truncate ${c.isIgnored ? 'line-through' : ''}`} title={c.text}>{c.text}</span>{c.d && !c.isIgnored && (<div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>)}</div><button onClick={() => speak(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No collocations.</div>)}</div>
-                                <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><Zap size={10} className="text-amber-500"/> Variations</label>{displayedParas.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">{displayedParas.map((para, idx) => { const isExisting = existingVariants.has(para.word.toLowerCase()); const types = ['PARAPHRASE_QUIZ', 'PARAPHRASE_CONTEXT_QUIZ']; const hasSpecific = types.some(type => getResult(`${type}:${para.word}`) !== undefined); const isFailed = viewSettings.highlightFailed && !para.isIgnored && (hasSpecificFailure(types, para.word) || (!hasSpecific && hasGroupFailure(types))); const isIgnored = para.isIgnored; return (<div key={idx} className={`flex items-start justify-between gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-200'}`}><div className="flex-1 overflow-hidden"><div className="flex justify-between items-center mb-1">{renderParaphraseBadge(para.tone)}{isFailed && <AlertCircle size={12} className="text-red-500 fill-red-100"/>}</div><div className="flex items-center gap-1"><div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div><button onClick={() => speak(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button></div><div className={`text-[10px] italic truncate ${isFailed ? 'text-red-400' : 'text-neutral-400'}`} title={para.context}>{para.context}</div></div></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic">No variations available.</div>)}</div>
-                                <div className="space-y-1 md:col-span-4"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1"><MessageSquare size={10}/> Related Idioms</label>{displayedIdioms.length > 0 ? (<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-200 p-3 rounded-xl">{displayedIdioms.map((idiom, i) => { const isExisting = existingVariants.has(idiom.text.toLowerCase()); let isFailed = false; if (viewSettings.highlightFailed && !idiom.isIgnored) { const types = ['IDIOM_QUIZ', 'IDIOM_CONTEXT_QUIZ']; if (hasSpecificFailure(types, idiom.text)) isFailed = true; else if (!types.some(type => getResult(`${type}:${idiom.text}`) !== undefined) && hasGroupFailure(types)) isFailed = true; } let containerClass = "bg-amber-50/50 border-amber-100 text-amber-900"; if (isFailed) containerClass = "bg-red-50 border-red-200 text-red-700"; else if (idiom.isIgnored) containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400"; return (<div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}><div className="flex-1 overflow-hidden"><div className="flex items-center gap-2">{isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}<span className={`truncate ${idiom.isIgnored ? 'line-through' : ''}`} title={idiom.text}>{idiom.text}</span><button onClick={() => speak(idiom.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button></div>{idiom.d && !idiom.isIgnored && (<div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{idiom.d}</div>)}</div></div>); })}</div>) : (<div className="text-[10px] text-neutral-300 italic px-1">No related idioms found.</div>)}</div>
+                                {noteHtml && (
+                                    <div className="md:col-span-4">
+                                        <div
+                                            className="text-sm font-medium text-neutral-700 leading-relaxed bg-neutral-50 border border-neutral-100 rounded-xl px-3 py-2"
+                                            dangerouslySetInnerHTML={{ __html: noteHtml }}
+                                        />
+                                    </div>
+                                )}
+                                {word.example && (
+                                    <Section title="Examples" icon={Quote} className="md:col-span-4">
+                                        <div className="flex flex-col gap-2">
+                                            {word.example
+                                                .split('\n')
+                                                .filter(line => line.trim() !== '')
+                                                .map((sentence, index) => (
+                                                    <div key={index} className="flex items-start gap-2 px-3 py-2 bg-neutral-50 border border-neutral-100 rounded-xl group hover:border-neutral-200 transition-all">
+                                                        <span className="text-sm font-medium text-neutral-700 leading-relaxed flex-1 select-text cursor-text">
+                                                            {sentence}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => speak(sentence)}
+                                                            className="p-1.5 text-neutral-400 hover:text-indigo-500 hover:bg-white rounded-lg transition-all shrink-0"
+                                                        >
+                                                            <Volume2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </Section>
+                                )}
+                                {displayedPreps.length > 0 && (
+                                    <div className="space-y-1 md:col-span-4">
+                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                            <AtSign size={10}/> Prepositions
+                                        </label>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-100 p-3 rounded-xl shadow-sm">
+                                            {displayedPreps.map((p, i) => {
+                                                const specificKey = `PREPOSITION_QUIZ:${p.prep}`;
+                                                const specificResult = word.lastTestResults?.[specificKey];
+                                                const isFailed = viewSettings.highlightFailed && (specificResult === false || (specificResult === undefined && word.lastTestResults?.['PREPOSITION_QUIZ'] === false)) && !p.isIgnored;
+                                                return (
+                                                    <div key={i} className={`flex items-center justify-between gap-3 p-2 rounded-lg border transition-colors ${isFailed ? 'bg-red-50 border-red-200' : 'bg-neutral-50/30 border-neutral-100'} ${p.isIgnored ? 'opacity-50' : ''}`}>
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            {isFailed && <AlertCircle size={10} className="text-red-500 shrink-0" />}
+                                                            <span className={`font-bold text-xs shrink-0 ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${p.isIgnored ? 'line-through' : ''}`}>{p.prep}</span>
+                                                            <span className={`font-medium text-[10px] truncate ${isFailed ? 'text-red-400' : 'text-neutral-500'}`}>{p.usage}</span>
+                                                        </div>
+                                                        {p.usage && (
+                                                            <button onClick={() => speak(p.usage)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-1 shrink-0">
+                                                                <Volume2 size={12}/>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                                {hasAnyFamilyData && (
+                                    <div className="space-y-1 md:col-span-4">
+                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                            <Network size={10}/> Word Family
+                                        </label>
+                                        <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100">
+                                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                                {renderFamilyCardGroup("Nouns", word.wordFamily?.nouns, "blue", "nouns")}
+                                                {renderFamilyCardGroup("Verbs", word.wordFamily?.verbs, "green", "verbs")}
+                                                {renderFamilyCardGroup("Adjectives", word.wordFamily?.adjs, "orange", "adjs")}
+                                                {renderFamilyCardGroup("Adverbs", word.wordFamily?.advs, "purple", "advs")}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                {displayedCollocs.length > 0 && (
+                                    <div className="space-y-1 md:col-span-4">
+                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                            <Combine size={10}/> Collocations
+                                        </label>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-200 p-3 rounded-xl">
+                                            {displayedCollocs.map((c, i) => {
+                                                const isExisting = existingVariants.has(c.text.toLowerCase());
+                                                let isFailed = false;
+                                                if (viewSettings.highlightFailed && !c.isIgnored) {
+                                                    const types = ['COLLOCATION_QUIZ', 'COLLOCATION_CONTEXT_QUIZ', 'COLLOCATION_MULTICHOICE_QUIZ'];
+                                                    if (hasSpecificFailure(types, c.text)) isFailed = true;
+                                                    else if (!types.some(type => getResult(`${type}:${c.text}`) !== undefined) && hasGroupFailure(types)) isFailed = true;
+                                                }
+                                                let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900";
+                                                if (isFailed) containerClass = "bg-red-50 border-red-200 text-red-700";
+                                                else if (c.isIgnored) containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400";
+                                                return (
+                                                    <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}>
+                                                        <div className="flex-1 overflow-hidden">
+                                                            {isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}
+                                                            <span className={`truncate ${c.isIgnored ? 'line-through' : ''}`} title={c.text}>{c.text}</span>
+                                                            {c.d && !c.isIgnored && (
+                                                                <div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>
+                                                            )}
+                                                        </div>
+                                                        <button onClick={() => speak(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                                {displayedParas.length > 0 && (
+                                    <div className="space-y-1 md:col-span-4">
+                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                            <Zap size={10} className="text-amber-500"/> Variations
+                                        </label>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                                            {displayedParas.map((para, idx) => {
+                                                const isExisting = existingVariants.has(para.word.toLowerCase());
+                                                const types = ['PARAPHRASE_QUIZ', 'PARAPHRASE_CONTEXT_QUIZ'];
+                                                const hasSpecific = types.some(type => getResult(`${type}:${para.word}`) !== undefined);
+                                                const isFailed = viewSettings.highlightFailed && !para.isIgnored && (hasSpecificFailure(types, para.word) || (!hasSpecific && hasGroupFailure(types)));
+                                                const isIgnored = para.isIgnored;
+                                                return (
+                                                    <div key={idx} className={`flex items-start justify-between gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-200'}`}>
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                {renderParaphraseBadge(para.tone)}
+                                                                {isFailed && <AlertCircle size={12} className="text-red-500 fill-red-100"/>}
+                                                            </div>
+                                                            <div className="flex items-center gap-1">
+                                                                <div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div>
+                                                                <button onClick={() => speak(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
+                                                            </div>
+                                                            <div className={`text-[10px] italic truncate ${isFailed ? 'text-red-400' : 'text-neutral-400'}`} title={para.context}>{para.context}</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                                {displayedIdioms.length > 0 && (
+                                    <div className="space-y-1 md:col-span-4">
+                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                            <MessageSquare size={10}/> Related Idioms
+                                        </label>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-200 p-3 rounded-xl">
+                                            {displayedIdioms.map((idiom, i) => {
+                                                const isExisting = existingVariants.has(idiom.text.toLowerCase());
+                                                let isFailed = false;
+                                                if (viewSettings.highlightFailed && !idiom.isIgnored) {
+                                                    const types = ['IDIOM_QUIZ', 'IDIOM_CONTEXT_QUIZ'];
+                                                    if (hasSpecificFailure(types, idiom.text)) isFailed = true;
+                                                    else if (!types.some(type => getResult(`${type}:${idiom.text}`) !== undefined) && hasGroupFailure(types)) isFailed = true;
+                                                }
+                                                let containerClass = "bg-amber-50/50 border-amber-100 text-amber-900";
+                                                if (isFailed) containerClass = "bg-red-50 border-red-200 text-red-700";
+                                                else if (idiom.isIgnored) containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400";
+                                                return (
+                                                    <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}>
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <div className="flex items-center gap-2">
+                                                                {isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}
+                                                                <span className={`truncate ${idiom.isIgnored ? 'line-through' : ''}`} title={idiom.text}>{idiom.text}</span>
+                                                                <button onClick={() => speak(idiom.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
+                                                            </div>
+                                                            {idiom.d && !idiom.isIgnored && (
+                                                                <div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{idiom.d}</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

@@ -1,7 +1,6 @@
-
 import { VocabularyItem, ParaphraseTone, ReviewGrade } from '../../app/types';
 
-export type ChallengeType = 'SPELLING' | 'IPA_QUIZ' | 'PREPOSITION_QUIZ' | 'WORD_FAMILY' | 'MEANING_QUIZ' | 'PARAPHRASE_QUIZ' | 'SENTENCE_SCRAMBLE' | 'HETERONYM_QUIZ' | 'PRONUNCIATION' | 'COLLOCATION_QUIZ' | 'IDIOM_QUIZ' | 'PARAPHRASE_CONTEXT_QUIZ' | 'COLLOCATION_CONTEXT_QUIZ' | 'COLLOCATION_MULTICHOICE_QUIZ' | 'IDIOM_CONTEXT_QUIZ';
+export type ChallengeType = 'SPELLING' | 'IPA_QUIZ' | 'IPA_MATCH' | 'PREPOSITION_QUIZ' | 'WORD_FAMILY' | 'MEANING_QUIZ' | 'PARAPHRASE_QUIZ' | 'SENTENCE_SCRAMBLE' | 'HETERONYM_QUIZ' | 'PRONUNCIATION' | 'COLLOCATION_QUIZ' | 'IDIOM_QUIZ' | 'PARAPHRASE_CONTEXT_QUIZ' | 'COLLOCATION_CONTEXT_QUIZ' | 'COLLOCATION_MULTICHOICE_QUIZ' | 'IDIOM_CONTEXT_QUIZ';
 
 export interface BaseChallenge {
   type: ChallengeType;
@@ -12,6 +11,12 @@ export interface BaseChallenge {
 export interface SpellingChallenge extends BaseChallenge { type: 'SPELLING'; }
 export interface PronunciationChallenge extends BaseChallenge { type: 'PRONUNCIATION'; }
 export interface IpaQuizChallenge extends BaseChallenge { type: 'IPA_QUIZ'; options: string[]; answer: string; }
+export interface IpaMatchChallenge extends BaseChallenge {
+  type: 'IPA_MATCH';
+  usIpa: string;
+  ukIpa: string;
+  options: { label: 'US' | 'UK'; ipa: string }[];
+}
 export interface PrepositionQuizChallenge extends BaseChallenge { type: 'PREPOSITION_QUIZ'; example: string; answer: string; }
 export interface WordFamilyChallenge extends BaseChallenge { type: 'WORD_FAMILY'; }
 export interface MeaningQuizChallenge extends BaseChallenge { type: 'MEANING_QUIZ'; options: string[]; answer: string; }
@@ -87,7 +92,7 @@ export interface IdiomContextQuizChallenge extends BaseChallenge {
     idioms: IdiomContextQuizItem[];
 }
 
-export type Challenge = SpellingChallenge | IpaQuizChallenge | PrepositionQuizChallenge | WordFamilyChallenge | MeaningQuizChallenge | ParaphraseQuizChallenge | SentenceScrambleChallenge | HeteronymQuizChallenge | PronunciationChallenge | CollocationQuizChallenge | CollocationMultichoiceQuizChallenge | IdiomQuizChallenge | ParaphraseContextQuizChallenge | CollocationContextQuizChallenge | IdiomContextQuizChallenge;
+export type Challenge = SpellingChallenge | IpaQuizChallenge | IpaMatchChallenge | PrepositionQuizChallenge | WordFamilyChallenge | MeaningQuizChallenge | ParaphraseQuizChallenge | SentenceScrambleChallenge | HeteronymQuizChallenge | PronunciationChallenge | CollocationQuizChallenge | CollocationMultichoiceQuizChallenge | IdiomQuizChallenge | ParaphraseContextQuizChallenge | CollocationContextQuizChallenge | IdiomContextQuizChallenge;
 
 export type ChallengeResult = boolean | {
     correct: boolean;

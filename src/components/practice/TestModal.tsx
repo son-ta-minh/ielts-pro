@@ -25,7 +25,7 @@ interface Props {
 }
 
 const SHORT_TYPE_MAP: Record<string, string> = {
-    'SPELLING': 'sp', 'IPA_QUIZ': 'iq', 'PREPOSITION_QUIZ': 'pq',
+    'SPELLING': 'sp', 'IPA_MATCH': 'im', 'IPA_QUIZ': 'iq', 'PREPOSITION_QUIZ': 'pq',
     'WORD_FAMILY': 'wf', 'MEANING_QUIZ': 'mq', 'PARAPHRASE_QUIZ': 'prq',
     'SENTENCE_SCRAMBLE': 'sc', 'HETERONYM_QUIZ': 'hq', 'PRONUNCIATION': 'p',
     'COLLOCATION_QUIZ': 'cq', 'IDIOM_QUIZ': 'idq',
@@ -372,8 +372,21 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
 
       // 5. Random from Pool (IPA, Family, Idiom)
       const randomPool: ChallengeType[] = [];
-      if (availableTypes.has('IPA_QUIZ')) randomPool.push('IPA_QUIZ');
-      if (availableTypes.has('WORD_FAMILY')) randomPool.push('WORD_FAMILY');
+
+      const hasDistinctIpa =
+          word.ipaUs &&
+          word.ipaUk &&
+          word.pronSim === 'different';
+
+      if (availableTypes.has('IPA_MATCH') && hasDistinctIpa) {
+          randomPool.push('IPA_MATCH');
+      } else if (availableTypes.has('IPA_QUIZ')) {
+          randomPool.push('IPA_QUIZ');
+      }
+
+      if (availableTypes.has('WORD_FAMILY')) {
+          randomPool.push('WORD_FAMILY');
+      }
       
       // Find best available idiom type to add to random pool
       for (const t of PRIORITIES.idiom.easy) {
@@ -443,6 +456,7 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
           else if (challenge.type === 'PRONUNCIATION') keys.push('PRONUNCIATION');
           else if (challenge.type === 'MEANING_QUIZ') keys.push('MEANING_QUIZ');
           else if (challenge.type === 'IPA_QUIZ') keys.push('IPA_QUIZ');
+          else if (challenge.type === 'IPA_MATCH') keys.push('IPA_MATCH');
           else if (challenge.type === 'WORD_FAMILY') keys.push('WORD_FAMILY'); 
           else if (challenge.type === 'SENTENCE_SCRAMBLE') keys.push('SENTENCE_SCRAMBLE'); // Logical unit 'context' maps here
 
