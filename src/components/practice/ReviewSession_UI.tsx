@@ -163,6 +163,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const handleSaveEdit = (word: VocabularyItem) => {
       onUpdate(word);
       setEditingWordInModal(null);
+      setWordInModal(word);
     };
 
     if (initialWords.length === 0) {

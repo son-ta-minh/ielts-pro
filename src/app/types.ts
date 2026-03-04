@@ -176,6 +176,7 @@ export interface VocabularyItem {
   isPassive?: boolean;
   quality: WordQuality;
   source?: WordSource;
+  img?: string;
   nextReview: number; 
   interval: number; 
   easeFactor: number; 

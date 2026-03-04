@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { Ear, Check, X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw, LayoutDashboard } from 'lucide-react';
+import { Ear, Check, X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw, Image, LayoutDashboard } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone, WordFamily } from '../../app/types';
 import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
@@ -448,6 +448,27 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     </>
                                 )}
 
+                                {word.img && word.img.length > 0 && (
+                                    <div className="relative inline-block">
+                                        <button
+                                            className="peer p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                        >
+                                            <Image size={18} />
+                                        </button>
+                                        <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 max-h-64 overflow-auto p-3 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 peer-hover:opacity-100 transition-opacity z-20">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {word.img.map((url, idx) => (
+                                                    <img
+                                                        key={idx}
+                                                        src={url}
+                                                        alt={`word-img-${idx}`}
+                                                        className="w-full h-24 object-cover rounded-lg border border-neutral-100"
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                                 <MasteryScoreCalculator word={word} />
                             </div>
 

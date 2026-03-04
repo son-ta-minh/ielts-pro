@@ -279,6 +279,22 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                                 className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-600 resize-y focus:ring-1 focus:ring-neutral-900 outline-none"
                             />
                         </div>
+                        <div className="md:col-span-2 space-y-1">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">
+                                Image URLs (one per line)
+                            </label>
+                            <textarea
+                                rows={3}
+                                value={(formData.img || []).join('\n')}
+                                onChange={(e) => {
+                                    const raw = e.target.value;
+                                    const arr = raw.split(/\r?\n/);
+                                    setFormData('img', arr);
+                                }}
+                                placeholder="https://...\nhttps://..."
+                                className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none"
+                            />
+                        </div>
                     </div>
                 )}
 
