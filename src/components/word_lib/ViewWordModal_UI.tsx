@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { Ear, Check, X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw } from 'lucide-react';
+import { Ear, Check, X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw, LayoutDashboard } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone, WordFamily } from '../../app/types';
 import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
@@ -406,34 +406,26 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     return (
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
             <div className="bg-white w-full max-w-6xl rounded-2xl sm:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
-                <header className="px-4 sm:px-8 py-4 border-b border-neutral-100 bg-neutral-50/30 flex flex-col gap-2 shrink-0">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-start w-full gap-4">
-                        <div className="flex-1 w-full">
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2">
-                                    <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
-                                    {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
+                <header className="px-4 sm:px-8 pt-4 pb-0 border-b border-neutral-100 bg-neutral-50/30 flex flex-col gap-1 shrink-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                        
+                        {/* ROW 1 - LEFT: WORD + ACTION ICONS */}
+                        <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>
+                                    {word.word}
+                                </h2>
+                                {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
 
-                                    <div className="flex items-center gap-2 ml-3">
-                                        {!word.isPassive && (
-                                            <>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handlePronounceWithCoachLookup(word.word); }}
-                                                    className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                                    title="Pronounce"
-                                                >
-                                                    <Volume2 size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onMimicRequest(); }}
-                                                    className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                                    title="Mimic"
-                                                >
-                                                    <Mic size={18} />
-                                                </button>
-                                            </>
-                                        )}
-
+                                {!word.isPassive && (
+                                    <>
+                                        <button
+                                            onClick={() => handlePronounceWithCoachLookup(word.word)}
+                                            className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                        >
+                                            <Volume2 size={18} />
+                                        </button>
+                                        {/* BEGIN: VI MEANING AUDIO BUTTON */}
                                         <div className="relative group">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); speak(word.meaningVi, false, 'vi'); }}
@@ -446,42 +438,31 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
                                             </div>
                                         </div>
-
-                                        <MasteryScoreCalculator word={word} />
-                                    </div>
-                                </div>
-                                {(word.register || word.pronSim) && (
-                                    <div className="flex items-center gap-2">
-                                        {word.register && (
-                                            <RegisterBadge register={word.register} />
-                                        )}
-                                        {word.pronSim && (
-                                            <div
-                                                className={`flex items-center gap-1 px-2 py-0.5 border rounded-md ${
-                                                isIpaFailed
-                                                    ? 'bg-red-50 border-red-200'
-                                                    : 'bg-indigo-50 border-indigo-100'
-                                                }`}
-                                            >
-                                                <Ear
-                                                    size={12}
-                                                    className={isIpaFailed ? 'text-red-600' : 'text-indigo-600'}
-                                                />
-                                                <span
-                                                    className={`text-[9px] font-black uppercase tracking-wider ${
-                                                        isIpaFailed ? 'text-red-600' : 'text-indigo-600'
-                                                    }`}
-                                                >
-                                                    {word.pronSim === 'different' ? 'US ≠ UK' : 'US = UK'}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
+                                        {/* END: VI MEANING AUDIO BUTTON */}
+                                        <button
+                                            onClick={onMimicRequest}
+                                            className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                        >
+                                            <Mic size={18} />
+                                        </button>
+                                    </>
                                 )}
+
+                                <MasteryScoreCalculator word={word} />
                             </div>
+
+                            
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap justify-start md:justify-end w-full md:w-auto">
-                            <StatusDropdown options={learnStatusOptions} selectedId={currentLearnStatus} onSelect={handleLearnStatusSelect} buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200" disabled={isViewOnly}/>
+
+                        {/* ROW 1 - RIGHT: STATUS + ACTIONS */}
+                        <div className="flex items-start justify-start md:justify-end gap-2 flex-wrap">
+                            <StatusDropdown
+                                options={learnStatusOptions}
+                                selectedId={currentLearnStatus}
+                                onSelect={handleLearnStatusSelect}
+                                buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200"
+                                disabled={isViewOnly}
+                            />
                             <StatusDropdown
                                 label="Quality"
                                 options={qualityStatusOptions}
@@ -491,7 +472,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 disabled={isViewOnly}
                             />
                             {!word.isPassive && (
-                                <div className="flex items-center gap-1.5 px-3 py-2 bg-white border border-neutral-200 rounded-lg text-xs font-bold text-neutral-500 shadow-sm" title={`Next Review: ${reviewStatus.label}`}>
+                                <div className="flex items-center gap-1.5 px-3 py-2 bg-white border border-neutral-200 rounded-lg text-xs font-bold text-neutral-500 shadow-sm">
                                     <Clock size={14} />
                                     <span className={`text-[11px] font-black uppercase ${reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'}`}>
                                         {reviewStatus.label}
@@ -500,62 +481,90 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                             )}
                             {!isViewOnly && (
                                 <>
-                                    <button onClick={onChallengeRequest} className="p-2 bg-amber-100 text-amber-600 hover:text-amber-900 rounded-lg hover:bg-amber-200 transition-colors" title="Practice"><BrainCircuit size={16} /></button>
-                                    <button onClick={onEditRequest} className="p-2 bg-neutral-100 text-neutral-600 hover:text-neutral-900 rounded-lg hover:bg-neutral-200 transition-colors"><Edit3 size={16} /></button>
+                                    <button onClick={onChallengeRequest} className="p-2 bg-amber-100 text-amber-600 hover:text-amber-900 rounded-lg hover:bg-amber-200 transition-colors">
+                                        <BrainCircuit size={16} />
+                                    </button>
+                                    <button onClick={onEditRequest} className="p-2 bg-neutral-100 text-neutral-600 hover:text-neutral-900 rounded-lg hover:bg-neutral-200 transition-colors">
+                                        <Edit3 size={16} />
+                                    </button>
                                 </>
                             )}
-                            <button onClick={onClose} className="p-2 bg-white border border-neutral-200 text-neutral-400 hover:text-neutral-900 rounded-lg transition-colors"><X size={16} /></button>
+                            <button onClick={onClose} className="p-2 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-lg transition-colors">
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* ROW 2 - LEFT: REGISTER + PRON */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {word.register && <RegisterBadge register={word.register} />}
+
+                            {word.pronSim && (
+                                <div
+                                    className={`flex items-center gap-1 px-2 py-0.5 border rounded-md ${
+                                        isIpaFailed ? 'bg-red-50 border-red-200' : 'bg-indigo-50 border-indigo-100'
+                                    }`}
+                                >
+                                    <Ear size={12} className={isIpaFailed ? 'text-red-600' : 'text-indigo-600'} />
+                                    <span
+                                        className={`text-[9px] font-black uppercase tracking-wider ${
+                                            isIpaFailed ? 'text-red-600' : 'text-indigo-600'
+                                        }`}
+                                    >
+                                        {word.pronSim === 'different' ? 'US ≠ UK' : 'US = UK'}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ROW 2 - RIGHT: TABS (bottom-right of header) */}
+                        <div className="flex items-center justify-start md:justify-end gap-1 py-1">
+                            <button
+                                onClick={() => setActiveTab('OVERVIEW')}
+                                className={`w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
+                                    activeTab === 'OVERVIEW'
+                                        ? 'bg-blue-600 text-white shadow-lg transform scale-[1.02]'
+                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                }`}
+                            >
+                                <LayoutDashboard size={16} />
+                                Overview
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('USAGE')}
+                                className={`w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
+                                    activeTab === 'USAGE'
+                                        ? 'bg-blue-600 text-white shadow-lg transform scale-[1.02]'
+                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                }`}
+                            >
+                                <BookText size={16} />
+                                Usage
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('TEST')}
+                                className={`w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
+                                    activeTab === 'TEST'
+                                        ? 'bg-blue-600 text-white shadow-lg transform scale-[1.02]'
+                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                                }`}
+                            >
+                                <ClipboardList size={16} />
+                                Practice
+                            </button>
                         </div>
                     </div>
                 </header>
 
-                <nav className="px-4 sm:px-8 border-b border-neutral-100 bg-white flex items-center gap-4 sm:gap-6 shrink-0 overflow-x-auto no-scrollbar">
-                
-                    <button
-                        onClick={() => setActiveTab('OVERVIEW')}
-                        className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all ${
-                        activeTab === 'OVERVIEW'
-                            ? 'border-neutral-900 text-neutral-900'
-                            : 'border-transparent text-neutral-400 hover:text-neutral-600'
-                        }`}
-                    >
-                        Overview
-                    </button>
-
-                    <button
-                        onClick={() => setActiveTab('USAGE')}
-                        className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1 ${
-                        activeTab === 'USAGE'
-                            ? 'border-indigo-600 text-indigo-600'
-                            : 'border-transparent text-neutral-400 hover:text-neutral-600'
-                        }`}
-                    >
-                        Usage
-                        {hasUsage && (
-                        <Check size={12} strokeWidth={3} className="text-emerald-500" />
-                        )}
-                    </button>
-
-                    <button
-                        onClick={() => setActiveTab('TEST')}
-                        className={`py-3 px-1 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-1 ${
-                        activeTab === 'TEST'
-                            ? 'border-emerald-600 text-emerald-600'
-                            : 'border-transparent text-neutral-400 hover:text-neutral-600'
-                        }`}
-                    >
-                        Practice Test
-                        {hasTest && (
-                        <Check size={12} strokeWidth={3} className="text-emerald-500" />
-                        )}
-                    </button>
-
-                </nav>
-
                 <div className="flex-1 overflow-auto no-scrollbar px-4 sm:px-6 pt-4 pb-8 bg-neutral-50/20">
                     {activeTab === 'OVERVIEW' && (
                         <div className="space-y-6 animate-in fade-in duration-300">
-
+                            {!word || word.quality === 'RAW' ? (
+                                <div className="py-10 text-center text-sm font-semibold text-neutral-400">
+                                    There is no data to display. Please refine word.
+                                </div>
+                            ) : (
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                 {noteHtml && (
                                     <div className="md:col-span-4">
@@ -730,10 +739,17 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     </div>
                                 )}
                             </div>
+                            )}
                         </div>
                     )}
                     {activeTab === 'USAGE' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 flex flex-col h-full space-y-8">
+                            {!word || Object.keys(word).length === 0 ? (
+                                <div className="py-10 text-center text-sm font-semibold text-neutral-400">
+                                    Please refine word.
+                                </div>
+                            ) : (
+                            <>
                             {lessonUsageHtml ? (
                                 <div className="prose prose-sm max-w-none prose-headings:font-black prose-headings:text-neutral-900 prose-p:text-neutral-600 prose-p:leading-relaxed prose-img:rounded-xl prose-img:shadow-md prose-strong:text-neutral-900 prose-a:text-indigo-600 overflow-x-auto" dangerouslySetInnerHTML={{ __html: lessonUsageHtml }} />
                             ) : (
@@ -756,10 +772,18 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     </button>
                                 </div>
                             )}
+                            </>
+                            )}
                         </div>
                     )}
                     {activeTab === 'TEST' && (
                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 flex flex-col h-full space-y-8">
+                            {!word || Object.keys(word).length === 0 ? (
+                                <div className="py-10 text-center text-sm font-semibold text-neutral-400">
+                                    Please refine word.
+                                </div>
+                            ) : (
+                            <>
                             {lessonTestHtml ? (
                                 <div className="prose prose-sm max-w-none prose-headings:font-black prose-headings:text-neutral-900 prose-p:text-neutral-600 prose-p:leading-relaxed prose-img:rounded-xl prose-img:shadow-md prose-strong:text-neutral-900 prose-a:text-indigo-600" dangerouslySetInnerHTML={{ __html: lessonTestHtml }} />
                             ) : (
@@ -781,6 +805,8 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         <RefreshCw size={12}/> <span>Regenerate Test</span>
                                     </button>
                                 </div>
+                            )}
+                            </>
                             )}
                         </div>
                     )}
