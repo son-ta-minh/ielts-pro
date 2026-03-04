@@ -455,7 +455,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         >
                                             <Image size={18} />
                                         </button>
-                                        <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 max-h-64 overflow-auto p-3 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 peer-hover:opacity-100 transition-opacity z-20">
+                                        <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-96 max-h-96 overflow-auto p-4 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 peer-hover:opacity-100 transition-opacity z-20">
                                             <div className="grid grid-cols-2 gap-2">
                                                 {word.img.map((raw, idx) => {
                                                     let caption: string | null = null;
@@ -473,7 +473,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                             <img
                                                                 src={imageUrl}
                                                                 alt={`word-img-${idx}`}
-                                                                className="w-full h-24 object-cover rounded-lg border border-neutral-100"
+                                                                className="w-full h-36 object-cover rounded-lg border border-neutral-100"
                                                             />
                                                             {caption && (
                                                                 <div className="text-[10px] font-semibold text-neutral-600 text-center truncate">

@@ -281,7 +281,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                                 <Image size={18} />
                                             </button>
 
-                                            <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-3 w-56 max-h-56 overflow-auto p-3 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 group-hover/img:opacity-100 transition-opacity z-30">
+                                            <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-3 w-80 max-h-80 overflow-auto p-4 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 group-hover/img:opacity-100 transition-opacity z-30">
                                                 <div className="grid grid-cols-2 gap-2">
                                                     {currentWord.img.slice(0, 4).map((raw, idx) => {
                                                         let caption: string | null = null;
@@ -298,7 +298,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                                                 <img
                                                                     src={imageUrl}
                                                                     alt={`preview-${idx}`}
-                                                                    className="w-full h-20 object-cover rounded-lg border border-neutral-100"
+                                                                    className="w-full h-32 object-cover rounded-lg border border-neutral-100"
                                                                 />
                                                                 {caption && (
                                                                     <div className="text-[9px] font-semibold text-neutral-600 text-center truncate">
