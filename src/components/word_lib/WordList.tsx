@@ -382,7 +382,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
           <EditWordModal 
             user={user} 
             word={editingWord} 
-            onSave={handleSaveEdit} 
+            onSave={(w) => { handleSaveEdit(w); setViewingWord(w); }}
             onClose={() => setEditingWord(null)} 
             onSwitchToView={(w) => { setEditingWord(null); setViewingWord(w); }} 
           />
