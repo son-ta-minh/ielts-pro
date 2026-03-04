@@ -63,7 +63,7 @@ const UniversalAiModal: React.FC<Props> = ({
   const [lessonTopic, setLessonTopic] = useState('');
   const [lessonAudience, setLessonAudience] = useState<'Kid' | 'Adult'>('Adult');
   const [lessonLang, setLessonLang] = useState<'English'|'Vietnamese'>('English');
-  const [lessonTone, setLessonTone] = useState<'friendly_elementary'|'professional_professor'>('friendly_elementary');
+  const [lessonTone, setLessonTone] = useState<'friendly_elementary'|'professional_professor'>('professional_professor');
 
   // Plan Gen State
   const [planRequest, setPlanRequest] = useState('');
@@ -103,7 +103,7 @@ const UniversalAiModal: React.FC<Props> = ({
             setLessonTopic('');
             setLessonAudience(initialData?.targetAudience || 'Adult');
             setLessonLang(initialData?.language || 'English');
-            setLessonTone(initialData?.tone || 'friendly_elementary');
+            setLessonTone(initialData?.tone || 'professional_professor');
         }
 
         setJsonInput('');
@@ -249,8 +249,8 @@ const UniversalAiModal: React.FC<Props> = ({
                 onChange={(e) => setLessonTone(e.target.value as any)}
                 className="w-full px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none appearance-none cursor-pointer"
             >
-                <option value="friendly_elementary">Friendly</option>
                 <option value="professional_professor">Professional</option>
+                <option value="friendly_elementary">Friendly</option>
             </select>
           </div>
       </div>
