@@ -457,14 +457,32 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         </button>
                                         <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 max-h-64 overflow-auto p-3 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 peer-hover:opacity-100 transition-opacity z-20">
                                             <div className="grid grid-cols-2 gap-2">
-                                                {word.img.map((url, idx) => (
-                                                    <img
-                                                        key={idx}
-                                                        src={url}
-                                                        alt={`word-img-${idx}`}
-                                                        className="w-full h-24 object-cover rounded-lg border border-neutral-100"
-                                                    />
-                                                ))}
+                                                {word.img.map((raw, idx) => {
+                                                    let caption: string | null = null;
+                                                    let imageUrl = raw;
+
+                                                    // Support format: "text:url"
+                                                    const firstColonIndex = raw.indexOf(':');
+                                                    if (firstColonIndex > -1 && raw.startsWith('http') === false) {
+                                                        caption = raw.slice(0, firstColonIndex).trim();
+                                                        imageUrl = raw.slice(firstColonIndex + 1).trim();
+                                                    }
+
+                                                    return (
+                                                        <div key={idx} className="flex flex-col gap-1">
+                                                            <img
+                                                                src={imageUrl}
+                                                                alt={`word-img-${idx}`}
+                                                                className="w-full h-24 object-cover rounded-lg border border-neutral-100"
+                                                            />
+                                                            {caption && (
+                                                                <div className="text-[10px] font-semibold text-neutral-600 text-center truncate">
+                                                                    {caption}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     </div>

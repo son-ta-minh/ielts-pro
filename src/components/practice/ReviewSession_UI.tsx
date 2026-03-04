@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare } from 'lucide-react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Image } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditWordModal from '../word_lib/EditWordModal';
@@ -266,8 +266,53 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 w-full text-center space-y-6 sm:space-y-8">
-                                <div className="flex items-center gap-4">
-                                    <h2 className={`font-black text-neutral-900 tracking-tight text-3xl sm:text-4xl break-words ${isIpa ? 'font-serif' : ''}`}>{displayText}</h2>
+                                <div className="flex items-center gap-4 flex-wrap justify-center">
+                                    <h2 className={`font-black text-neutral-900 tracking-tight text-3xl sm:text-4xl break-words ${isIpa ? 'font-serif' : ''}`}>
+                                        {displayText}
+                                    </h2>
+
+                                    {currentWord.img && currentWord.img.length > 0 && (
+                                        <div className="relative group/img">
+                                            <button
+                                                onClick={() => onOpenWordDetails(currentWord)}
+                                                className="p-2 bg-neutral-50 text-neutral-400 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
+                                                title="View Images"
+                                            >
+                                                <Image size={18} />
+                                            </button>
+
+                                            <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-3 w-56 max-h-56 overflow-auto p-3 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 group-hover/img:opacity-100 transition-opacity z-30">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {currentWord.img.slice(0, 4).map((raw, idx) => {
+                                                        let caption: string | null = null;
+                                                        let imageUrl = raw;
+
+                                                        const firstColonIndex = raw.indexOf(':');
+                                                        if (firstColonIndex > -1 && !raw.startsWith('http')) {
+                                                            caption = raw.slice(0, firstColonIndex).trim();
+                                                            imageUrl = raw.slice(firstColonIndex + 1).trim();
+                                                        }
+
+                                                        return (
+                                                            <div key={idx} className="flex flex-col gap-1">
+                                                                <img
+                                                                    src={imageUrl}
+                                                                    alt={`preview-${idx}`}
+                                                                    className="w-full h-20 object-cover rounded-lg border border-neutral-100"
+                                                                />
+                                                                {caption && (
+                                                                    <div className="text-[9px] font-semibold text-neutral-600 text-center truncate">
+                                                                        {caption}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {isNewWord ? (
                                         <ComplexityIndicator complexity={currentWord.complexity ?? 0} />
                                     ) : (
