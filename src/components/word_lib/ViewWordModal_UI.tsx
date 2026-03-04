@@ -371,7 +371,13 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const hasSpecificFailure = (types: string[], token: string) => types.some(type => getResult(`${type}:${token}`) === false);
     const hasGroupFailure = (types: string[]) => types.some(type => getResult(type) === false);
     const isSpellingFailed = viewSettings.highlightFailed && word.lastTestResults?.['SPELLING'] === false;
-    const isIpaFailed = viewSettings.highlightFailed && (word.lastTestResults?.['IPA_QUIZ'] === false || word.lastTestResults?.['PRONUNCIATION'] === false);
+    const isIpaFailed =
+      viewSettings.highlightFailed &&
+      (
+        word.lastTestResults?.['IPA_MATCH'] === false ||
+        word.lastTestResults?.['IPA_QUIZ'] === false ||
+        word.lastTestResults?.['PRONUNCIATION'] === false
+      );
 
     const wordFamilyItems = useMemo(() => {
         if (!word.wordFamily) return [];
@@ -407,13 +413,26 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
                                 {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
                                 {word.pronSim === 'different' && (
-                                    <div className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-md">
-                                        <Volume2 size={12} className="text-indigo-600" />
-                                        <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600">
-                                            US ≠ UK
+                                    <div
+                                        className={`flex items-center gap-1 px-2 py-0.5 border rounded-md ${
+                                        isIpaFailed
+                                            ? 'bg-red-50 border-red-200'
+                                            : 'bg-indigo-50 border-indigo-100'
+                                        }`}
+                                    >
+                                        <Volume2
+                                        size={12}
+                                        className={isIpaFailed ? 'text-red-600' : 'text-indigo-600'}
+                                        />
+                                        <span
+                                        className={`text-[9px] font-black uppercase tracking-wider ${
+                                            isIpaFailed ? 'text-red-600' : 'text-indigo-600'
+                                        }`}
+                                        >
+                                        US ≠ UK
                                         </span>
                                     </div>
-                                )}
+                                    )}
                                 {!word.isPassive && (
                                     <>
                                         <button onClick={(e) => { e.stopPropagation(); handlePronounceWithCoachLookup(word.word); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce"><Volume2 size={18} /></button>

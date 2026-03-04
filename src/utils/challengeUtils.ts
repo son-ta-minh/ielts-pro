@@ -25,6 +25,21 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
       list.push({ type: 'IPA_QUIZ', title: 'IPA Multi Choice', options: shuffleArray([word.ipaUs, ...word.ipaMistakes]), answer: word.ipaUs, word });
     }
 
+    // IPA Match (US vs UK) – only when both exist and pronunciation differs
+    if (
+        word.ipaUs &&
+        word.ipaUk &&
+        word.pronSim === 'different'
+    ) {
+        list.push({
+            type: 'IPA_MATCH',
+            title: 'IPA Match (US vs UK)',
+            word,
+            contexts: [],
+            items: []
+        } as Challenge);
+    }
+
     if (word.collocationsArray && word.collocationsArray.length > 0) {
         // Individual Collocation Challenges
         const activeCollocs = word.collocationsArray.filter(c => !c.isIgnored && c.d);
@@ -299,6 +314,27 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
                 } as IdiomContextQuizChallenge);
             }
         }
+        else if (challenge.type === 'IPA_MATCH') {
+            const word = challenge.word;
+
+            if (word.ipaUs && word.ipaUk && word.pronSim === 'different') {
+                const contexts = [
+                    { id: `context-${word.id}-us`, text: 'US Pronunciation', pairId: 'us' },
+                    { id: `context-${word.id}-uk`, text: 'UK Pronunciation', pairId: 'uk' }
+                ];
+
+                const items = shuffleArray([
+                    { id: `ipa-${word.id}-us`, text: word.ipaUs, pairId: 'us' },
+                    { id: `ipa-${word.id}-uk`, text: word.ipaUk, pairId: 'uk' }
+                ]);
+
+                finalChallenges.push({
+                    ...challenge,
+                    contexts,
+                    items
+                } as any);
+            }
+        }
         else {
             finalChallenges.push(challenge);
         }
@@ -315,6 +351,36 @@ export function gradeChallenge(challenge: Challenge, answer: any): ChallengeResu
             return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.word.word);
         case 'IPA_QUIZ':
             return answer === challenge.answer; // Not text input
+        case 'IPA_MATCH': {
+            const ch = challenge as any;
+
+            if (!(answer instanceof Map) || answer.size === 0) {
+                return { correct: false, details: {} };
+            }
+
+            const details: Record<string, boolean> = {};
+            let correctCount = 0;
+
+            ch.contexts.forEach((context: any) => {
+                const selectedId = answer.get(context.id);
+                if (selectedId) {
+                    const selectedItem = ch.items.find((i: any) => i.id === selectedId);
+                    if (selectedItem && selectedItem.pairId === context.pairId) {
+                        details[context.id] = true;
+                        correctCount++;
+                    } else {
+                        details[context.id] = false;
+                    }
+                } else {
+                    details[context.id] = false;
+                }
+            });
+
+            return {
+                correct: correctCount === ch.contexts.length,
+                details
+            };
+        }
         case 'PREPOSITION_QUIZ':
             return normalizeAnswerForGrading(answer || '') === normalizeAnswerForGrading(challenge.answer);
         case 'MEANING_QUIZ':
