@@ -451,7 +451,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                     )}
                 </div>
             </div>
-            {wordInModal && <ViewWordModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={async () => 0} isViewOnly={true} />}
+            {wordInModal && <ViewWordModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={async () => 0} isViewOnly={false} />}
             {editingWordInModal && <EditWordModal user={user} word={editingWordInModal} onSave={handleSaveEdit} onClose={() => setEditingWordInModal(null)} onSwitchToView={(word) => { setEditingWordInModal(null); setWordInModal(editingWordInModal); }} />}
             {isTesting && currentWord && <TestModal word={currentWord} isQuickFire={isQuickFire} sessionPosition={isQuickFire ? { current: currentIndex + 1, total: sessionWords.length } : undefined} onPrevWord={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} onClose={() => { if (isQuickFire) onComplete(); else setIsTesting(false); }} onComplete={handleTestComplete} skipSetup={isQuickReviewMode} />}
             {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
