@@ -97,7 +97,9 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
                         updatedAt: now,
                     } as any;
 
-                    updatedItem[targetField] = item.meaning.trim();
+                    const value = item.meaning.trim();
+                    updatedItem[targetField] =
+                        targetField === "note" ? `[Definition] ${value}` : value;
                     itemsToSave.push(updatedItem);
                 } else {
                     const newItem = await createNewWord(
@@ -117,7 +119,9 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
 
                     newItem.userId = user.id;
                     newItem.updatedAt = now;
-                    (newItem as any)[targetField] = item.meaning.trim();
+                    const value = item.meaning.trim();
+                    (newItem as any)[targetField] =
+                        targetField === "note" ? `[Definition] ${value}` : value;
 
                     itemsToSave.push(newItem);
                 }
@@ -167,7 +171,6 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
                         >
                             <option value="note">Note</option>
                             <option value="meaningVi">Meaning (Vietnamese)</option>
-                            <option value="example">Example</option>
                         </select>
                     </div>
                     <table className="w-full border border-neutral-300 text-sm">
@@ -176,11 +179,7 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
                                 <th className="border px-2 py-1 text-left">Word</th>
                                 <th className="border px-2 py-1 text-center w-28">Status</th>
                                 <th className="border px-2 py-1 text-left">
-                                    {targetField === "meaningVi"
-                                        ? "Meaning (Vietnamese)"
-                                        : targetField === "example"
-                                        ? "Example"
-                                        : "Note"}
+                                    {targetField === "meaningVi" ? "Meaning (Vietnamese)" : "Note"}
                                 </th>
                             </tr>
                         </thead>
