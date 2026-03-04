@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { Check, X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw } from 'lucide-react';
+import { Ear, Check, X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone, WordFamily } from '../../app/types';
 import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
@@ -59,9 +59,9 @@ const MasteryScoreCalculator: React.FC<{ word: VocabularyItem }> = ({ word }) =>
 };
 
 const RegisterBadge: React.FC<{ register?: 'academic' | 'casual' | 'neutral' | 'raw' }> = ({ register }) => {
-    if (!register || register === 'neutral' || register === 'raw') return null;
-    const styles = { academic: 'bg-purple-100 text-purple-800 border-purple-200', casual: 'bg-sky-100 text-sky-800 border-sky-200' };
-    const text = { academic: 'ACADEMIC', casual: 'CASUAL' };
+    if (!register || register === 'raw') return null;
+    const styles = { academic: 'bg-purple-100 text-purple-800 border-purple-200', casual: 'bg-sky-100 text-sky-800 border-sky-200', neutral: 'bg-neutral-100 text-neutral-800 border-neutral-200' };
+    const text = { academic: 'ACADEMIC', casual: 'CASUAL', neutral: 'NEUTRAL' };
     return <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${styles[register]}`}>{text[register]}</span>;
 };
 
@@ -409,46 +409,75 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                 <header className="px-4 sm:px-8 py-4 border-b border-neutral-100 bg-neutral-50/30 flex flex-col gap-2 shrink-0">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-start w-full gap-4">
                         <div className="flex-1 w-full">
-                            <div className="flex items-center gap-2">
-                                <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
-                                {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
-                                {word.pronSim === 'different' && (
-                                    <div
-                                        className={`flex items-center gap-1 px-2 py-0.5 border rounded-md ${
-                                        isIpaFailed
-                                            ? 'bg-red-50 border-red-200'
-                                            : 'bg-indigo-50 border-indigo-100'
-                                        }`}
-                                    >
-                                        <Volume2
-                                        size={12}
-                                        className={isIpaFailed ? 'text-red-600' : 'text-indigo-600'}
-                                        />
-                                        <span
-                                        className={`text-[9px] font-black uppercase tracking-wider ${
-                                            isIpaFailed ? 'text-red-600' : 'text-indigo-600'
-                                        }`}
-                                        >
-                                        US ≠ UK
-                                        </span>
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                    <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>{word.word}</h2>
+                                    {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
+
+                                    <div className="flex items-center gap-2 ml-3">
+                                        {!word.isPassive && (
+                                            <>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handlePronounceWithCoachLookup(word.word); }}
+                                                    className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                                    title="Pronounce"
+                                                >
+                                                    <Volume2 size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onMimicRequest(); }}
+                                                    className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                                    title="Mimic"
+                                                >
+                                                    <Mic size={18} />
+                                                </button>
+                                            </>
+                                        )}
+
+                                        <div className="relative group">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); speak(word.meaningVi, false, 'vi'); }}
+                                                className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                            >
+                                                <BookOpen size={18} />
+                                            </button>
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs px-3 py-2 bg-neutral-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                                {word.meaningVi}
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+                                            </div>
+                                        </div>
+
+                                        <MasteryScoreCalculator word={word} />
                                     </div>
-                                    )}
-                                {!word.isPassive && (
-                                    <>
-                                        <button onClick={(e) => { e.stopPropagation(); handlePronounceWithCoachLookup(word.word); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Pronounce"><Volume2 size={18} /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onMimicRequest(); }} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors" title="Mimic"><Mic size={18} /></button>
-                                    </>
-                                )}
-                                <div className="relative group">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); speak(word.meaningVi, false, 'vi'); }}
-                                        className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                    >
-                                        <BookOpen size={18} />
-                                    </button>
-                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs px-3 py-2 bg-neutral-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">{word.meaningVi}<div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div></div>
                                 </div>
-                                <MasteryScoreCalculator word={word} />
+                                {(word.register || word.pronSim) && (
+                                    <div className="flex items-center gap-2">
+                                        {word.register && (
+                                            <RegisterBadge register={word.register} />
+                                        )}
+                                        {word.pronSim && (
+                                            <div
+                                                className={`flex items-center gap-1 px-2 py-0.5 border rounded-md ${
+                                                isIpaFailed
+                                                    ? 'bg-red-50 border-red-200'
+                                                    : 'bg-indigo-50 border-indigo-100'
+                                                }`}
+                                            >
+                                                <Ear
+                                                    size={12}
+                                                    className={isIpaFailed ? 'text-red-600' : 'text-indigo-600'}
+                                                />
+                                                <span
+                                                    className={`text-[9px] font-black uppercase tracking-wider ${
+                                                        isIpaFailed ? 'text-red-600' : 'text-indigo-600'
+                                                    }`}
+                                                >
+                                                    {word.pronSim === 'different' ? 'US ≠ UK' : 'US = UK'}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap justify-start md:justify-end w-full md:w-auto">
