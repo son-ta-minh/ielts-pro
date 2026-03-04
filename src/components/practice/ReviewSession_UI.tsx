@@ -257,7 +257,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                     <div
                         onTouchStart={handleTouchStart}
                         onTouchEnd={handleTouchEnd}
-                        className="w-full max-w-xl h-full bg-white rounded-3xl sm:rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col relative overflow-hidden group select-none touch-pan-y"
+                        className="w-full max-w-xl h-full bg-white rounded-3xl sm:rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col relative group select-none touch-pan-y"
                     >
                         {isQuickFire ? (
                             <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 w-full text-center space-y-4">
@@ -287,10 +287,11 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                                         let caption: string | null = null;
                                                         let imageUrl = raw;
 
-                                                        const firstColonIndex = raw.indexOf(':');
-                                                        if (firstColonIndex > -1 && !raw.startsWith('http')) {
-                                                            caption = raw.slice(0, firstColonIndex).trim();
-                                                            imageUrl = raw.slice(firstColonIndex + 1).trim();
+                                                        const httpIndex = raw.search(/https?:\/\//);
+
+                                                        if (httpIndex > 0) {
+                                                            caption = raw.slice(0, httpIndex).replace(/[:\-–—]\s*$/, '').trim();
+                                                            imageUrl = raw.slice(httpIndex).trim();
                                                         }
 
                                                         return (
