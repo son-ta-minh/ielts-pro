@@ -774,9 +774,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                     if (hasSpecificFailure(types, idiom.text)) isFailed = true;
                                                     else if (!types.some(type => getResult(`${type}:${idiom.text}`) !== undefined) && hasGroupFailure(types)) isFailed = true;
                                                 }
-                                                let containerClass = "bg-amber-50/50 text-amber-900";
-                                                if (isFailed) containerClass = "bg-red-50 text-red-700";
-                                                else if (idiom.isIgnored) containerClass = "bg-neutral-50 text-neutral-400";
+                                                let containerClass = "bg-amber-50/50 border border-amber-100 text-amber-900";
+                                                if (isFailed) containerClass = "bg-red-50 border border-red-200 text-red-700";
+                                                else if (idiom.isIgnored) containerClass = "bg-neutral-50 border border-neutral-100 text-neutral-400";
                                                 return (
                                                     <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
                                                         <div className="flex-1 overflow-hidden">
