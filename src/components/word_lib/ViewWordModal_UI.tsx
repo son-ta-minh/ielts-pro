@@ -754,7 +754,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                                 {renderParaphraseBadge(para.tone)}
                                                             </div>
                                                             <div className="flex items-center gap-1">
-                                                                <div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div>
+                                                                <div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-indigo-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div>
                                                             </div>
                                                             <div className={`text-[10px] italic truncate text-neutral-400`} title={para.context}>{para.context}</div>
                                                         </div>
