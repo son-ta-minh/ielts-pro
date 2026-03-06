@@ -701,7 +701,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                             <Combine size={10}/> Collocations
                                         </label>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-200 p-3 rounded-xl">
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white p-3 rounded-xl">
                                             {displayedCollocs.map((c, i) => {
                                                 const isExisting = existingVariants.has(c.text.toLowerCase());
                                                 let isFailed = false;
@@ -765,7 +765,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                             <MessageSquare size={10}/> Related Idioms
                                         </label>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-200 p-3 rounded-xl">
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white p-3 rounded-xl">
                                             {displayedIdioms.map((idiom, i) => {
                                                 const isExisting = existingVariants.has(idiom.text.toLowerCase());
                                                 let isFailed = false;
