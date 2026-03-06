@@ -35,6 +35,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   const [existingVariants, setExistingVariants] = useState<Set<string>>(new Set());
   const [isChallenging, setIsChallenging] = useState(false);
   const [isMimicOpen, setIsMimicOpen] = useState(false);
+  const [usageQuery, setUsageQuery] = useState<string | null>(null);
 
   useEffect(() => {
     const normalizedResults = normalizeTestResultKeys(word.lastTestResults);
@@ -168,6 +169,84 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       });
   };
 
+  const handleDisplayUsage = (text: string, matchThreshold: number = 1) => {
+    // Collect possible text sources (example field + usage essay)
+    const sources: string[] = [];
+    if ((currentWord as any).example) sources.push((currentWord as any).example);
+    if (currentWord.lesson?.essay) sources.push(currentWord.lesson.essay);
+
+    const keyword = text.toLowerCase();
+
+    // Break the query into tokens for fuzzy matching (e.g., "in hindsight, I should have")
+    const queryTokens = keyword
+      .replace(/[^a-z0-9\s]/g, '')
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const foundSentences: string[] = [];
+
+    for (const src of sources) {
+      // Handle markdown tables (Usage tab content)
+      if (src.includes("|")) {
+        const lines = src.split("\n");
+        lines.forEach(line => {
+          if (!line.includes("|")) return;
+
+          const cells = line.split("|").map(c => c.trim()).filter(Boolean);
+          if (cells.length < 2) return;
+
+          const exampleCell = cells[cells.length - 1];
+
+          const exampleLower = exampleCell.toLowerCase();
+          const exampleTokens = exampleLower
+            .replace(/[^a-z0-9\s]/g, '')
+            .split(/\s+/)
+            .filter(Boolean);
+
+          const overlap = queryTokens.filter(t => exampleTokens.includes(t)).length;
+          const ratio = queryTokens.length ? overlap / queryTokens.length : 0;
+
+          // Accept if most words match (e.g., 4/5 tokens)
+          if (ratio >= matchThreshold || exampleLower.includes(keyword)) {
+            const cleaned = exampleCell.trim();
+            if (cleaned && !foundSentences.includes(cleaned)) {
+              foundSentences.push(cleaned);
+            }
+          }
+        });
+      } else {
+        // Normal text essay
+        const sentences = src.split(/(?<=[.!?])\s+/);
+        sentences.forEach(s => {
+          const sentenceLower = s.toLowerCase();
+          const sentenceTokens = sentenceLower
+            .replace(/[^a-z0-9\s]/g, '')
+            .split(/\s+/)
+            .filter(Boolean);
+
+          const overlap = queryTokens.filter(t => sentenceTokens.includes(t)).length;
+          const ratio = queryTokens.length ? overlap / queryTokens.length : 0;
+
+          if (ratio >= matchThreshold || sentenceLower.includes(keyword)) {
+            const cleaned = s.trim();
+            if (cleaned && !foundSentences.includes(cleaned)) {
+              foundSentences.push(cleaned);
+            }
+          }
+        });
+      }
+    }
+
+    const messages = foundSentences.length > 0 ? foundSentences : [text];
+
+    // Ask StudyBuddy to show the example sentence list
+    window.dispatchEvent(
+      new CustomEvent('studybuddy-show-message', {
+        detail: { text: messages, iconType: 'example' }
+      })
+    );
+  };
+
   // --- AI Lesson Creation Logic ---
   const [aiModalMode, setAiModalMode] = useState<'ESSAY' | 'TEST' | null>(null);
 
@@ -230,6 +309,8 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       isViewOnly={isViewOnly}
       initialTab={initialTab}
       onGenerateLesson={handleOpenAiModal}
+      displayUsage={handleDisplayUsage}
+      usageQuery={usageQuery}
     />
 
     {aiModalMode && (

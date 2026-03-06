@@ -27,6 +27,7 @@ interface Props {
 
 interface Message {
     text?: string;
+    texts?: string[];
     action?: string;
     actionLabel?: string;
     actionUrl?: string;
@@ -45,12 +46,22 @@ interface CambridgePronunciation {
     audioUk?: string | null;
 }
 
+
 interface CambridgeSimpleResult {
     exists: boolean;
     url?: string;
     word?: string;
     pronunciations?: CambridgePronunciation[];
 }
+
+// External helper to show any message in StudyBuddy
+export const showStudyBuddyMessage = (text: string, iconType: 'example' | 'info' = 'info') => {
+    window.dispatchEvent(
+        new CustomEvent('studybuddy-show-message', {
+            detail: { text, iconType }
+        })
+    );
+};
 
 const normalizeCambridgePronunciations = (items?: CambridgePronunciation[]): CambridgePronunciation[] => {
     if (!Array.isArray(items) || items.length === 0) return [];
@@ -121,6 +132,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [markedTime, setMarkedTime] = useState<number>(0);
     const [isOpen, setIsOpen] = useState(false);
     const [message, setMessage] = useState<Message | null>(null);
+    const [messageIndex, setMessageIndex] = useState(0);
     const [isThinking, setIsThinking] = useState(false);
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
     const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
@@ -283,10 +295,34 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             lastCoachLookupRef.current = { word: normalizedWord, at: Date.now() };
             setIsOpen(true);
         };
+
+        const handleExternalStudyBuddyMessage = (event: Event) => {
+            const custom = event as CustomEvent<{ text?: string; iconType?: 'example' | 'info' }>;
+            const text = custom.detail?.text;
+            const texts = Array.isArray(text) ? text : undefined;
+            const iconType = custom.detail?.iconType;
+            if (!text) return;
+
+            setIsThinking(false);
+            setMenuPos(null);
+
+            setMessageIndex(0);
+
+            setMessage({
+                text: texts ? texts[0] : text,
+                texts: texts,
+                icon: iconType === 'example'
+                    ? <MessageSquare size={18} className="text-emerald-500" />
+                    : <MessageSquare size={18} className="text-blue-500" />
+            });
+
+            setIsOpen(true);
+        };
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
         window.addEventListener('coach-cambridge-lookup-request', handleCoachLookupRequest as EventListener);
         window.addEventListener('coach-ipa-fallback-request', handleCoachIpaFallbackRequest as EventListener);
+        window.addEventListener('studybuddy-show-message', handleExternalStudyBuddyMessage as EventListener);
         
         // Initial check
         setIsAudioPlaying(getIsSpeaking());
@@ -307,6 +343,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             window.removeEventListener('audio-status-changed', handleAudioStatus);
             window.removeEventListener('coach-cambridge-lookup-request', handleCoachLookupRequest as EventListener);
             window.removeEventListener('coach-ipa-fallback-request', handleCoachIpaFallbackRequest as EventListener);
+            window.removeEventListener('studybuddy-show-message', handleExternalStudyBuddyMessage as EventListener);
             if (cambridgeAudioRef.current) {
                 cambridgeAudioRef.current.pause();
                 cambridgeAudioRef.current = null;
@@ -959,7 +996,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                                   </div>
                                                 ) : (
                                                     (() => {
-                                                        const rawText = message.text || '';
+                                                        const rawText = (message.texts && message.texts.length > 0)
+                                                            ? message.texts[messageIndex] || ''
+                                                            : (message.text || '');
                                                         const isIPA = rawText.startsWith('IPA:');
                                                         const ipaContent = isIPA ? rawText.replace(/^IPA:\s*/, '') : rawText;
                                                         return (
@@ -977,6 +1016,27 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                                                         )
                                                                     }}
                                                                 />
+                                                                {message.texts && message.texts.length > 1 && (
+                                                                    <div className="flex items-center gap-2 pt-2">
+                                                                        <button
+                                                                            onClick={() => setMessageIndex(i => Math.max(0, i - 1))}
+                                                                            disabled={messageIndex === 0}
+                                                                            className="px-2 py-1 text-[10px] font-bold rounded bg-neutral-100 hover:bg-neutral-200 disabled:opacity-40"
+                                                                        >
+                                                                            Back
+                                                                        </button>
+                                                                        <span className="text-[10px] text-neutral-500">
+                                                                            {messageIndex + 1} / {message.texts.length}
+                                                                        </span>
+                                                                        <button
+                                                                            onClick={() => setMessageIndex(i => Math.min(message.texts!.length - 1, i + 1))}
+                                                                            disabled={messageIndex === message.texts.length - 1}
+                                                                            className="px-2 py-1 text-[10px] font-bold rounded bg-neutral-100 hover:bg-neutral-200 disabled:opacity-40"
+                                                                        >
+                                                                            Next
+                                                                        </button>
+                                                                    </div>
+                                                                )}
                                                             </>
                                                         );
                                                     })()

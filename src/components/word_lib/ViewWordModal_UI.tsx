@@ -196,12 +196,13 @@ export interface ViewWordModalUIProps {
     appliedAccent?: 'US' | 'UK';
     initialTab?: 'OVERVIEW' | 'USAGE' | 'TEST';
     onGenerateLesson?: (mode: 'ESSAY' | 'TEST') => void;
+    displayUsage?: (text: string, matchThreshold?: number) => void;
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
     word, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onNavigateToWord, onAddVariantToLibrary, addingVariant, existingVariants, isViewOnly = false, appliedAccent, initialTab = 'OVERVIEW',
-    onGenerateLesson
+    onGenerateLesson, displayUsage
 }) => {
     const [viewSettings, setViewSettings] = useState(() => getStoredJSON('ielts_pro_word_view_settings', { showHidden: false, highlightFailed: true, isLearnView: true }));
 
@@ -581,7 +582,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                                 }`}
                             >
-                                <BookText size={16} />
+                                    <BookText size={16} />
                                 Usage
                             </button>
 
@@ -593,7 +594,11 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                                 }`}
                             >
-                                <ClipboardList size={16} />
+                                    <ClipboardList size={16} />
+                                    {hasTest && (
+                                        <CheckCircle2 size={12} className="absolute -top-1 -right-2 text-emerald-500 fill-emerald-100" />
+                                    )}
+                                </div>
                                 Practice
                             </button>
                         </div>
@@ -659,7 +664,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                         {p.usage && (
                                                             <button onClick={() => speak(p.usage)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-1 shrink-0">
                                                                 <Volume2 size={12}/>
-                                                            </button>
+                                                                </button>
                                                         )}
                                                     </div>
                                                 );
@@ -701,13 +706,13 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 else if (c.isIgnored) containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400";
                                                 return (
                                                     <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}>
-                                                        <div className="flex-1 overflow-hidden">
+                                                                <div className="flex-1 overflow-hidden">
                                                             {isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}
                                                             <span className={`truncate ${c.isIgnored ? 'line-through' : ''}`} title={c.text}>{c.text}</span>
-                                                            {c.d && !c.isIgnored && (
-                                                                <div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>
-                                                            )}
-                                                        </div>
+                                                                    {c.d && !c.isIgnored && (
+                                                                        <div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>
+                                                                    )}
+                                                                </div>
                                                         <button onClick={() => speak(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
                                                     </div>
                                                 );
