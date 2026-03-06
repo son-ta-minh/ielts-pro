@@ -139,9 +139,20 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
       });
     }
 
-    if (word.example && word.example.trim().length > 5) {
-        // Split by newline first, then by punctuation for robustness. This handles both formats.
-        const sentences = word.example.trim()
+if (word.example && word.example.trim().length > 5) {
+        // Clean markdown tags, badges, html and bullet markers before generating sentences
+        let cleaned = word.example;
+
+        // Remove custom markdown tags like [Collocation], [Prep], [Paraphrase], etc.
+        cleaned = cleaned.replace(/\[(Collocation|Prep|Paraphrase|Word Family|Idiom|Definition|Tip|Important|Compare|Caution)\]/gi, '');
+
+        // Remove HTML tags if any were rendered
+        cleaned = cleaned.replace(/<[^>]+>/g, '');
+
+        // Remove bullet markers (- * • – — 1.)
+        cleaned = cleaned.replace(/^[\s]*([\-*•–—]|\d+\.)\s*/gm, '');
+
+        const sentences = cleaned.trim()
             .split('\n')
             .flatMap(line => line.split(/(?<=[.?!])\s+/))
             .map(s => s.trim())

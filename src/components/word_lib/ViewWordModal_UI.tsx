@@ -204,6 +204,37 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     onNavigateToWord, onAddVariantToLibrary, addingVariant, existingVariants, isViewOnly = false, appliedAccent, initialTab = 'OVERVIEW',
     onGenerateLesson, displayUsage
 }) => {
+    // Helper to render examples with badge replacements
+    const renderExample = (text: string) => {
+        if (!text) return { __html: "" };
+
+        let html = parseMarkdown(text);
+
+        // Replace [Tag] with custom badge renderer if available
+        html = html.replace(/\[([^\]]+)\]/g, (_match, tag) => {
+            const renderer = (window as any).renderMarkdownBadge;
+            if (renderer) {
+                const rendered = renderer(tag.trim());
+                if (rendered) return rendered;
+            }
+
+            // fallback styles for example-specific tags
+            const badgeMap: Record<string, string> = {
+                Collocation: "bg-indigo-50 text-indigo-700 border-indigo-200",
+                Prep: "bg-blue-50 text-blue-700 border-blue-200",
+                Paraphrase: "bg-purple-50 text-purple-700 border-purple-200",
+                "Word Family": "bg-green-50 text-green-700 border-green-200",
+                Idiom: "bg-orange-50 text-orange-700 border-orange-200",
+            };
+
+            const style = badgeMap[tag];
+            if (!style) return tag;
+
+            return `<span class="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-md border ${style} mr-1">${tag}</span>`;
+        });
+
+        return { __html: html };
+    };
     const [viewSettings, setViewSettings] = useState(() => getStoredJSON('ielts_pro_word_view_settings', { showHidden: false, highlightFailed: true, isLearnView: true }));
 
     const serverUrl = getServerUrl(getConfig());
@@ -258,6 +289,25 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
             }
             if (tag === 'Compare') {
                 return `<span class="${base} bg-indigo-50 text-indigo-600 border-indigo-100">Compare</span>`;
+            }
+            if (tag === 'Collocation') {
+                return `<span class="${base} bg-indigo-50 text-indigo-600 border-indigo-100">Collocation</span>`;
+            }
+
+            if (tag === 'Prep' || tag === 'Preposition') {
+                return `<span class="${base} bg-sky-50 text-sky-600 border-sky-100">Prep</span>`;
+            }
+
+            if (tag === 'Paraphrase') {
+             return `<span class="${base} bg-purple-50 text-purple-600 border-purple-100">Paraphrase</span>`;
+            }
+
+            if (tag === 'Word Family') {
+                return `<span class="${base} bg-teal-50 text-teal-600 border-teal-100">Word Family</span>`;
+            }
+
+            if (tag === 'Idiom') {
+                return `<span class="${base} bg-pink-50 text-pink-600 border-pink-100">Idiom</span>`;
             }
 
             return undefined;
@@ -826,27 +876,16 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         </div>
                                     </div>
                                 )}
-                                {word.example && (
-                                    <Section title="Examples" icon={Quote} className="md:col-span-4">
-                                        <div className="flex flex-col gap-2">
-                                            {word.example
-                                                .split('\n')
-                                                .filter(line => line.trim() !== '')
-                                                .map((sentence, index) => (
-                                                    <div key={index} className="flex items-start gap-2 px-3 py-2 bg-neutral-50 border border-neutral-100 rounded-xl group hover:border-neutral-200 transition-all">
-                                                        <span className="text-sm font-medium text-neutral-700 leading-relaxed flex-1 select-text cursor-text">
-                                                            {sentence}
-                                                        </span>
-                                                        <button
-                                                            onClick={() => speak(sentence)}
-                                                            className="p-1.5 text-neutral-400 hover:text-indigo-500 hover:bg-white rounded-lg transition-all shrink-0"
-                                                        >
-                                                            <Volume2 size={14} />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                        </div>
-                                    </Section>
+                                {word.example && (                                        
+                                    <div className="md:col-span-4">
+                                        <label className="mb-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                            <AtSign size={10}/> Examples
+                                        </label>
+                                        <div
+                                            className="w-full text-sm leading-relaxed text-neutral-700"
+                                            dangerouslySetInnerHTML={renderExample(word.example)}
+                                        />
+                                    </div>
                                 )}
                             </div>
                             )}

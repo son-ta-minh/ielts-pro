@@ -35,8 +35,19 @@ export const SentenceScramble: React.FC<Props> = ({ words, onComplete, onExit })
     const [insertionIndex, setInsertionIndex] = useState(0);
 
     const getFirstSentence = (text: string): string => {
-        const match = text.match(/.*?[.!?](?:\s|$)/);
-        return match ? match[0].trim() : text.trim();
+        if (!text) return "";
+
+        // Remove markdown tags like [Collocation], [Prep], etc.
+        let cleaned = text.replace(/\[[^\]]+\]/g, "");
+
+        // Remove common bullet markers at line starts
+        cleaned = cleaned.replace(/^[\s]*([\-*•–—]|\d+\.)\s*/gm, "");
+
+        // Collapse newlines to spaces so sentence detection works
+        cleaned = cleaned.replace(/\n+/g, " ");
+
+        const match = cleaned.match(/.*?[.!?](?:\s|$)/);
+        return match ? match[0].trim() : cleaned.trim();
     };
 
     const chunkify = (sentence: string, diff: Difficulty): string[] => {
