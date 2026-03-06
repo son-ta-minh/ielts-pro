@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { Ear, Check, X, Mic, Quote, Combine, MessageSquare, Plus, CheckCircle2, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Loader2, BookText, ClipboardList, Sparkles, RefreshCw, Image, LayoutDashboard, Eye as EyeLucide } from 'lucide-react';
-import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone, WordFamily } from '../../app/types';
+import { Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image } from 'lucide-react';
+import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, WordQuality, ParaphraseTone, WordFamily } from '../../app/types';
 import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
@@ -189,20 +189,17 @@ export interface ViewWordModalUIProps {
     relatedWords: Record<string, VocabularyItem[]>;
     relatedByGroup: Record<string, VocabularyItem[]>;
     onNavigateToWord: (word: VocabularyItem) => void;
-    onAddVariantToLibrary: (variant: { word: string, ipa: string }, sourceType?: 'family' | 'paraphrase' | 'idiom' | 'collocation') => void;
-    addingVariant: string | null;
     existingVariants: Set<string>;
     isViewOnly?: boolean;
     appliedAccent?: 'US' | 'UK';
-    initialTab?: 'OVERVIEW' | 'USAGE' | 'TEST';
-    onGenerateLesson?: (mode: 'ESSAY' | 'TEST') => void;
     displayUsage?: (text: string, matchThreshold?: number) => void;
+    onAddAIExample?: () => void;
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
     word, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
-    onNavigateToWord, onAddVariantToLibrary, addingVariant, existingVariants, isViewOnly = false, appliedAccent, initialTab = 'OVERVIEW',
-    onGenerateLesson, displayUsage
+    onNavigateToWord, existingVariants, isViewOnly = false,
+    displayUsage, onAddAIExample
 }) => {
     // Helper to render examples with badge replacements
     const renderExample = (text: string) => {
@@ -239,7 +236,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
     const serverUrl = getServerUrl(getConfig());
     const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'USAGE' | 'TEST'>(initialTab as any);
+    const activeTab: 'OVERVIEW' = 'OVERVIEW';
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const viewMenuRef = useRef<HTMLDivElement>(null);
     const [badgeReady, setBadgeReady] = useState(false);
@@ -631,55 +628,11 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                             )}
                         </div>
 
-                        {/* ROW 2 - RIGHT: TABS (bottom-right of header) */}
-                        <div className="flex items-center justify-start md:justify-end gap-1 py-1">
-                            <button
-                                onClick={() => setActiveTab('OVERVIEW')}
-                                className={`w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
-                                    activeTab === 'OVERVIEW'
-                                        ? 'bg-blue-600 text-white shadow-lg transform scale-[1.02]'
-                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                                }`}
-                            >
-                                <LayoutDashboard size={16} />
-                                Overview
-                            </button>
-
-                            <button
-                                onClick={() => setActiveTab('USAGE')}
-                                className={`relative w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
-                                    activeTab === 'USAGE'
-                                        ? 'bg-blue-600 text-white shadow-lg transform scale-[1.02]'
-                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                                }`}
-                            >
-                                <BookText size={16} />
-                                {hasUsage && (
-                                    <CheckCircle2 size={12} className="absolute top-2 right-1 text-emerald-500 fill-emerald-100" />
-                                )}
-                                Usage
-                            </button>
-
-                            <button
-                                onClick={() => setActiveTab('TEST')}
-                                className={`relative w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
-                                    activeTab === 'TEST'
-                                        ? 'bg-blue-600 text-white shadow-lg transform scale-[1.02]'
-                                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-                                }`}
-                            >
-                                <ClipboardList size={16} />
-                                {hasTest && (
-                                    <CheckCircle2 size={12} className="absolute top-2 right-1 text-emerald-500 fill-emerald-100" />
-                                )}
-                                Practice
-                            </button>
-                        </div>
                     </div>
                 </header>
 
                 <div className="flex-1 overflow-auto no-scrollbar px-4 sm:px-6 pt-4 pb-8 bg-neutral-50/20">
-                    {activeTab === 'OVERVIEW' && (
+                    {(
                         <div className="space-y-6 animate-in fade-in duration-300">
                             {!word || word.quality === 'RAW' ? (
                                 <div className="py-10 text-center text-sm font-semibold text-neutral-400">
@@ -878,9 +831,20 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 )}
                                 {word.example && (                                        
                                     <div className="md:col-span-4">
-                                        <label className="mb-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                                            <AtSign size={10}/> Examples
-                                        </label>
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                                <AtSign size={10}/> Examples
+                                            </label>
+                                            {onAddAIExample && (
+                                                <button
+                                                    onClick={() => onAddAIExample()}
+                                                    className="flex items-center justify-center w-5 h-5 rounded-md bg-neutral-100 hover:bg-indigo-100 text-neutral-500 hover:text-indigo-600 transition-colors"
+                                                    title="Add AI Example"
+                                                >
+                                                    <Plus size={12}/>
+                                                </button>
+                                            )}
+                                        </div>
                                         <div
                                             className="w-full text-sm leading-relaxed text-neutral-700"
                                             dangerouslySetInnerHTML={renderExample(word.example)}
@@ -888,74 +852,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     </div>
                                 )}
                             </div>
-                            )}
-                        </div>
-                    )}
-                    {activeTab === 'USAGE' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 flex flex-col h-full space-y-8">
-                            {!word || Object.keys(word).length === 0 ? (
-                                <div className="py-10 text-center text-sm font-semibold text-neutral-400">
-                                    Please refine word.
-                                </div>
-                            ) : (
-                            <>
-                            {lessonUsageHtml ? (
-                                <div className="prose prose-sm max-w-none prose-headings:font-black prose-headings:text-neutral-900 prose-p:text-neutral-600 prose-p:leading-relaxed prose-img:rounded-xl prose-img:shadow-md prose-strong:text-neutral-900 prose-a:text-indigo-600 overflow-x-auto" dangerouslySetInnerHTML={{ __html: lessonUsageHtml }} />
-                            ) : (
-                                <div className="flex flex-col items-center justify-center py-20 bg-white border-2 border-dashed border-neutral-200 rounded-[2.5rem] space-y-4">
-                                    <div className="p-4 bg-indigo-50 rounded-full text-indigo-600"><BookText size={32} /></div>
-                                    <div className="text-center">
-                                        <p className="font-black text-neutral-900">No Usage Guide</p>
-                                        <p className="text-xs text-neutral-400 font-medium">Generate a structural guide with tables and examples.</p>
-                                    </div>
-                                    {!isViewOnly && (
-                                        <button onClick={() => onGenerateLesson?.('ESSAY')} className="px-6 py-3 bg-neutral-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-neutral-800 transition-all active:scale-95 shadow-lg"><Sparkles size={16}/> Generate Usage Guide</button>
-                                    )}
-                                </div>
-                            )}
-                            
-                            {lessonUsageHtml && !isViewOnly && (
-                                <div className="flex justify-center border-t border-neutral-100 pt-6">
-                                     <button onClick={() => onGenerateLesson?.('ESSAY')} className="flex items-center gap-2 px-4 py-2 bg-neutral-50 text-neutral-500 hover:text-indigo-600 hover:bg-indigo-50 border border-neutral-200 hover:border-indigo-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
-                                        <RefreshCw size={12}/> <span>Refresh Usage Guide</span>
-                                    </button>
-                                </div>
-                            )}
-                            </>
-                            )}
-                        </div>
-                    )}
-                    {activeTab === 'TEST' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 flex flex-col h-full space-y-8">
-                            {!word || Object.keys(word).length === 0 ? (
-                                <div className="py-10 text-center text-sm font-semibold text-neutral-400">
-                                    Please refine word.
-                                </div>
-                            ) : (
-                            <>
-                            {lessonTestHtml ? (
-                                <div className="prose prose-sm max-w-none prose-headings:font-black prose-headings:text-neutral-900 prose-p:text-neutral-600 prose-p:leading-relaxed prose-img:rounded-xl prose-img:shadow-md prose-strong:text-neutral-900 prose-a:text-indigo-600" dangerouslySetInnerHTML={{ __html: lessonTestHtml }} />
-                            ) : (
-                                <div className="flex flex-col items-center justify-center py-20 bg-white border-2 border-dashed border-neutral-200 rounded-[2.5rem] space-y-4">
-                                    <div className="p-4 bg-emerald-50 rounded-full text-emerald-600"><ClipboardList size={32} /></div>
-                                    <div className="text-center">
-                                        <p className="font-black text-neutral-900">No Practice Test</p>
-                                        <p className="text-xs text-neutral-400 font-medium">Create an interactive test based on this word&apos;s usage.</p>
-                                    </div>
-                                    {!isViewOnly && (
-                                        <button onClick={() => onGenerateLesson?.('TEST')} className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-neutral-800 transition-all active:scale-95 shadow-lg"><Sparkles size={16}/> Generate Test</button>
-                                    )}
-                                </div>
-                            )}
-
-                            {lessonTestHtml && !isViewOnly && (
-                                <div className="flex justify-center border-t border-neutral-100 pt-6">
-                                     <button onClick={() => onGenerateLesson?.('TEST')} className="flex items-center gap-2 px-4 py-2 bg-neutral-50 text-neutral-500 hover:text-emerald-600 hover:bg-emerald-50 border border-neutral-200 hover:border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
-                                        <RefreshCw size={12}/> <span>Regenerate Test</span>
-                                    </button>
-                                </div>
-                            )}
-                            </>
                             )}
                         </div>
                     )}

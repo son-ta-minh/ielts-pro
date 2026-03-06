@@ -4,12 +4,9 @@ import { findWordByText, saveWord, getUnitsContainingWord, getAllWords } from '.
 import { ViewWordModalUI } from './ViewWordModal_UI';
 import { createNewWord, calculateMasteryScore } from '../../utils/srs';
 import TestModal from '../practice/TestModal';
-/* Fix: Import UniversalAiModal which was missing */
-import UniversalAiModal from '../common/UniversalAiModal';
-import { getConfig } from '../../app/settingsManager';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
-import { getGenerateWordLessonEssayPrompt, getGenerateWordLessonTestPrompt } from '../../services/promptService';
 import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
+import { getConfig } from '../../app/settingsManager';
 
 interface Props {
   word: VocabularyItem;
@@ -19,11 +16,9 @@ interface Props {
   onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => Promise<number>;
   onUpdate: (word: VocabularyItem) => void;
   isViewOnly?: boolean;
-  /* Fix: Type corrected from 'ESSAY' to 'USAGE' */
-  initialTab?: 'OVERVIEW' | 'USAGE' | 'TEST';
 }
 
-const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEditRequest, onUpdate, onGainXp, isViewOnly = false, initialTab = 'OVERVIEW' }) => {
+const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEditRequest, onUpdate, onGainXp, isViewOnly = false }) => {
   const [currentWord, setCurrentWord] = useState<VocabularyItem>({
     ...word,
     lastTestResults: normalizeTestResultKeys(word.lastTestResults)
@@ -35,7 +30,6 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   const [existingVariants, setExistingVariants] = useState<Set<string>>(new Set());
   const [isChallenging, setIsChallenging] = useState(false);
   const [isMimicOpen, setIsMimicOpen] = useState(false);
-  const [usageQuery, setUsageQuery] = useState<string | null>(null);
 
   useEffect(() => {
     const normalizedResults = normalizeTestResultKeys(word.lastTestResults);
@@ -82,9 +76,6 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       }
       setExistingVariants(found);
       
-      const units = await getUnitsContainingWord(currentWord.userId, currentWord.id);
-      setLinkedUnits(units);
-
       const allWordsInStore = getAllWords();
       const relatedData: Record<string, VocabularyItem[]> = {};
       const groupsToProcess = (currentWord.groups || []).filter(g => g.toLowerCase() !== 'ielts');
@@ -115,18 +106,6 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     };
     loadDependencies();
   }, [currentWord]);
-
-  const handleAddVariantToLibrary = async (variant: { word: string, ipa: string }, sourceType: 'family' | 'paraphrase' | 'idiom' | 'collocation' = 'family') => {
-    if (!variant.word || addingVariant || existingVariants.has(variant.word.toLowerCase())) return;
-    setAddingVariant(variant.word);
-    try {
-      const note = `From ${sourceType} of "${currentWord.word}"`;
-      const groups = [...(currentWord.groups || []), `word-${sourceType}`];
-      const newItem = { ...createNewWord(variant.word, variant.ipa || '', `Added from ${sourceType}`, '', note, groups), userId: currentWord.userId };
-      await saveWord(newItem);
-      setExistingVariants(prev => new Set(prev).add(variant.word.toLowerCase()));
-    } finally { setAddingVariant(null); }
-  };
   
   const handleChallengeComplete = async (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => {
     const updated = { ...currentWord };
@@ -247,41 +226,6 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     );
   };
 
-  // --- AI Lesson Creation Logic ---
-  const [aiModalMode, setAiModalMode] = useState<'ESSAY' | 'TEST' | null>(null);
-
-  const handleOpenAiModal = (mode: 'ESSAY' | 'TEST') => {
-      setAiModalMode(mode);
-  };
-
-  const handleGeneratePrompt = (inputs: any) => {
-      /* Retrieve coach name for prompts */
-      const config = getConfig();
-      const activeType = config.audioCoach.activeCoach;
-      const coachName = config.audioCoach.coaches[activeType].name;
-      
-      if (aiModalMode === 'ESSAY') {
-          return getGenerateWordLessonEssayPrompt(currentWord, inputs, coachName);
-      } else {
-          return getGenerateWordLessonTestPrompt(currentWord, inputs, coachName);
-      }
-  };
-
-  const handleJsonReceived = (data: any) => {
-      const { result } = data;
-      const cleanResult = result || data;
-      const updated = { ...currentWord, lesson: { ...(currentWord.lesson || {}) } };
-
-      if (aiModalMode === 'ESSAY') {
-          updated.lesson!.essay = cleanResult.content;
-      } else {
-          updated.lesson!.test = cleanResult.content;
-      }
-      
-      handleLocalUpdate(updated);
-      setAiModalMode(null);
-  };
-
   const config = getConfig();
   const appliedAccent = config.audio.appliedAccent;
 
@@ -302,35 +246,11 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       relatedWords={relatedWords}
       relatedByGroup={relatedByGroup}
       onNavigateToWord={onNavigateToWord}
-      onAddVariantToLibrary={handleAddVariantToLibrary}
       addingVariant={addingVariant}
       existingVariants={existingVariants}
       appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}
-      initialTab={initialTab}
-      onGenerateLesson={handleOpenAiModal}
-      displayUsage={handleDisplayUsage}
-      usageQuery={usageQuery}
     />
-
-    {aiModalMode && (
-        <div className="z-[2000]">
-             {/* Fix: Removed spacer hack that used invalid zIndex prop */}
-             <div className="relative z-[500]">
-                <UniversalAiModal 
-                    isOpen={!!aiModalMode} 
-                    onClose={() => setAiModalMode(null)} 
-                    type="GENERATE_WORD_LESSON"
-                    title={aiModalMode === 'ESSAY' ? `Generate Usage Guide: ${currentWord.word}` : `Generate Practice Test: ${currentWord.word}`}
-                    description={aiModalMode === 'ESSAY' ? "AI will create a structured usage guide with tables and examples." : "AI will design an interactive test for this word."}
-                    initialData={{}}
-                    onGeneratePrompt={handleGeneratePrompt}
-                    onJsonReceived={handleJsonReceived}
-                    closeOnSuccess={true}
-                />
-             </div>
-        </div>
-    )}
     </>
   );
 };
