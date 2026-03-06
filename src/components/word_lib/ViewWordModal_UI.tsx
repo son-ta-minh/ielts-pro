@@ -406,6 +406,13 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     );
     const hasUsage = Boolean(lessonUsageHtml?.trim());
     const hasTest = Boolean(lessonTestHtml?.trim());
+
+    useEffect(() => {
+      console.log('Usage debug:', {
+        lessonUsageHtml,
+        hasUsage
+      });
+    }, [lessonUsageHtml]);
     return (
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
             <div className="bg-white w-full max-w-6xl rounded-2xl sm:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
@@ -576,19 +583,22 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
                             <button
                                 onClick={() => setActiveTab('USAGE')}
-                                className={`w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
+                                className={`relative w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
                                     activeTab === 'USAGE'
                                         ? 'bg-blue-600 text-white shadow-lg transform scale-[1.02]'
                                         : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                                 }`}
                             >
-                                    <BookText size={16} />
+                                <BookText size={16} />
+                                {hasUsage && (
+                                    <CheckCircle2 size={12} className="absolute top-2 right-1 text-emerald-500 fill-emerald-100" />
+                                )}
                                 Usage
                             </button>
 
                             <button
                                 onClick={() => setActiveTab('TEST')}
-                                className={`w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
+                                className={`relative w-28 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
                                     activeTab === 'TEST'
                                         ? 'bg-blue-600 text-white shadow-lg transform scale-[1.02]'
                                         : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
@@ -596,7 +606,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                             >
                                 <ClipboardList size={16} />
                                 {hasTest && (
-                                    <CheckCircle2 size={12} className="absolute -top-1 -right-2 text-emerald-500 fill-emerald-100" />
+                                    <CheckCircle2 size={12} className="absolute top-2 right-1 text-emerald-500 fill-emerald-100" />
                                 )}
                                 Practice
                             </button>
