@@ -701,7 +701,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                             <Combine size={10}/> Collocations
                                         </label>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white p-3 rounded-xl">
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedCollocs.map((c, i) => {
                                                 const isExisting = existingVariants.has(c.text.toLowerCase());
                                                 let isFailed = false;
@@ -710,11 +710,11 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                     if (hasSpecificFailure(types, c.text)) isFailed = true;
                                                     else if (!types.some(type => getResult(`${type}:${c.text}`) !== undefined) && hasGroupFailure(types)) isFailed = true;
                                                 }
-                                                let containerClass = "bg-indigo-50/50 border-indigo-100 text-indigo-900";
-                                                if (isFailed) containerClass = "bg-red-50 border-red-200 text-red-700";
-                                                else if (c.isIgnored) containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400";
+                                                let containerClass = "bg-indigo-50/50 text-indigo-900";
+                                                if (isFailed) containerClass = "bg-red-50 text-red-700";
+                                                else if (c.isIgnored) containerClass = "bg-neutral-50 text-neutral-400";
                                                 return (
-                                                    <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}>
+                                                    <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
                                                                 <div className="flex-1 overflow-hidden">
                                                             {isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}
                                                             <span className={`truncate ${c.isIgnored ? 'line-through' : ''}`} title={c.text}>{c.text}</span>
@@ -765,7 +765,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                             <MessageSquare size={10}/> Related Idioms
                                         </label>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white p-3 rounded-xl">
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedIdioms.map((idiom, i) => {
                                                 const isExisting = existingVariants.has(idiom.text.toLowerCase());
                                                 let isFailed = false;
@@ -774,11 +774,11 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                     if (hasSpecificFailure(types, idiom.text)) isFailed = true;
                                                     else if (!types.some(type => getResult(`${type}:${idiom.text}`) !== undefined) && hasGroupFailure(types)) isFailed = true;
                                                 }
-                                                let containerClass = "bg-amber-50/50 border-amber-100 text-amber-900";
-                                                if (isFailed) containerClass = "bg-red-50 border-red-200 text-red-700";
-                                                else if (idiom.isIgnored) containerClass = "bg-neutral-50 border-neutral-100 text-neutral-400";
+                                                let containerClass = "bg-amber-50/50 text-amber-900";
+                                                if (isFailed) containerClass = "bg-red-50 text-red-700";
+                                                else if (idiom.isIgnored) containerClass = "bg-neutral-50 text-neutral-400";
                                                 return (
-                                                    <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${containerClass}`}>
+                                                    <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
                                                         <div className="flex-1 overflow-hidden">
                                                             <div className="flex items-center gap-2">
                                                                 {isFailed && <AlertCircle size={12} className="text-red-500 shrink-0" />}
