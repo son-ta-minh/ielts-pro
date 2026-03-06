@@ -645,28 +645,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         />
                                     </div>
                                 )}
-                                {word.example && (
-                                    <Section title="Examples" icon={Quote} className="md:col-span-4">
-                                        <div className="flex flex-col gap-2">
-                                            {word.example
-                                                .split('\n')
-                                                .filter(line => line.trim() !== '')
-                                                .map((sentence, index) => (
-                                                    <div key={index} className="flex items-start gap-2 px-3 py-2 bg-neutral-50 border border-neutral-100 rounded-xl group hover:border-neutral-200 transition-all">
-                                                        <span className="text-sm font-medium text-neutral-700 leading-relaxed flex-1 select-text cursor-text">
-                                                            {sentence}
-                                                        </span>
-                                                        <button
-                                                            onClick={() => speak(sentence)}
-                                                            className="p-1.5 text-neutral-400 hover:text-indigo-500 hover:bg-white rounded-lg transition-all shrink-0"
-                                                        >
-                                                            <Volume2 size={14} />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                        </div>
-                                    </Section>
-                                )}
                                 {displayedPreps.length > 0 && (
                                     <div className="space-y-1 md:col-span-4">
                                         <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
@@ -847,6 +825,28 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             })}
                                         </div>
                                     </div>
+                                )}
+                                {word.example && (
+                                    <Section title="Examples" icon={Quote} className="md:col-span-4">
+                                        <div className="flex flex-col gap-2">
+                                            {word.example
+                                                .split('\n')
+                                                .filter(line => line.trim() !== '')
+                                                .map((sentence, index) => (
+                                                    <div key={index} className="flex items-start gap-2 px-3 py-2 bg-neutral-50 border border-neutral-100 rounded-xl group hover:border-neutral-200 transition-all">
+                                                        <span className="text-sm font-medium text-neutral-700 leading-relaxed flex-1 select-text cursor-text">
+                                                            {sentence}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => speak(sentence)}
+                                                            className="p-1.5 text-neutral-400 hover:text-indigo-500 hover:bg-white rounded-lg transition-all shrink-0"
+                                                        >
+                                                            <Volume2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </Section>
                                 )}
                             </div>
                             )}
