@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Eye, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image } from 'lucide-react';
+import { Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, WordQuality, ParaphraseTone, WordFamily } from '../../app/types';
 import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
@@ -189,17 +189,15 @@ export interface ViewWordModalUIProps {
     relatedWords: Record<string, VocabularyItem[]>;
     relatedByGroup: Record<string, VocabularyItem[]>;
     onNavigateToWord: (word: VocabularyItem) => void;
-    existingVariants: Set<string>;
     isViewOnly?: boolean;
     appliedAccent?: 'US' | 'UK';
-    handleDisplayUsage?: (text: string, matchThreshold?: number) => void;
     onAddAIExample?: () => void;
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
     word, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
-    onNavigateToWord, existingVariants, isViewOnly = false,
-    handleDisplayUsage, onAddAIExample
+    onNavigateToWord, isViewOnly = false,
+    onAddAIExample
 }) => {
     // Helper to render examples with badge replacements
     const renderExample = (text: string) => {
@@ -356,10 +354,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
         return (
             <div className="space-y-1">
-                <span className={`text-[8px] font-black uppercase text-${color}-600 tracking-widest ml-1`}>{label}</span>
+                <span className={`text-[8px] text-indigo-900 font-black uppercase text-${color}-600 tracking-widest ml-1`}>{label}</span>
                 <div className="flex flex-col gap-1">
                     {visibleMembers.map((member, idx) => {
-                        const isExisting = existingVariants.has(member.word.toLowerCase());
                         const normalizedWord = member.word.toLowerCase().trim();
                         const specificKeys = [
                             `WORD_FAMILY:${typeKey}:${normalizedWord}`,
@@ -390,7 +387,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                             <div key={idx} className={`relative flex items-start px-2 py-1.5 rounded-lg border group transition-colors ${containerClass}`}>
                                 <div className="flex-1 overflow-hidden">
                                     <div className="flex items-center gap-1.5">
-                                        <span className={`text-[10px] font-bold truncate ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${isIgnored ? 'line-through decoration-neutral-400' : ''}`}>
+                                        <span className={`text-[10px] font-bold truncate ${isFailed ? 'text-red-700' : 'text-indigo-900'} ${isIgnored ? 'line-through decoration-neutral-400' : ''}`}>
                                             {member.word}
                                         </span>
                                     </div>
@@ -401,12 +398,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
                                     >
                                         <Volume2 size={10}/>
-                                    </button>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleDisplayUsage?.(member.word); }}
-                                        className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
-                                    >
-                                        <Eye size={10}/>
                                     </button>
                                 </div>
                             </div>
@@ -687,12 +678,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                                 >
                                                                     <Volume2 size={10}/>
                                                                 </button>
-                                                                <button
-                                                                    onClick={() => handleDisplayUsage?.(p.usage, 0.6)}
-                                                                    className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
-                                                                >
-                                                                    <Eye size={10}/>
-                                                                </button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -723,7 +708,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         </label>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedCollocs.map((c, i) => {
-                                                const isExisting = existingVariants.has(c.text.toLowerCase());
                                                 let isFailed = false;
                                                 if (viewSettings.highlightFailed && !c.isIgnored) {
                                                     const types = ['COLLOCATION_QUIZ', 'COLLOCATION_CONTEXT_QUIZ', 'COLLOCATION_MULTICHOICE_QUIZ'];
@@ -745,9 +729,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                             <button onClick={() => speak(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5">
                                                                 <Volume2 size={10}/>
                                                             </button>
-                                                            <button onClick={() => handleDisplayUsage?.(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5">
-                                                                <Eye size={10}/>
-                                                            </button>
                                                         </div>
                                                     </div>
                                                 );
@@ -762,7 +743,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         </label>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedParas.map((para, idx) => {
-                                                const isExisting = existingVariants.has(para.word.toLowerCase());
                                                 const types = ['PARAPHRASE_QUIZ', 'PARAPHRASE_CONTEXT_QUIZ'];
                                                 const hasSpecific = types.some(type => getResult(`${type}:${para.word}`) !== undefined);
                                                 const isFailed = viewSettings.highlightFailed && !para.isIgnored && (hasSpecificFailure(types, para.word) || (!hasSpecific && hasGroupFailure(types)));
@@ -776,11 +756,10 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                             <div className="flex items-center gap-1">
                                                                 <div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div>
                                                             </div>
-                                                            <div className={`text-[10px] italic truncate ${isFailed ? 'text-red-400' : 'text-neutral-400'}`} title={para.context}>{para.context}</div>
+                                                            <div className={`text-[10px] italic truncate text-neutral-400`} title={para.context}>{para.context}</div>
                                                         </div>
                                                         <div className="absolute top-1 right-1 flex items-center gap-1">
                                                             <button onClick={() => speak(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
-                                                            <button onClick={() => handleDisplayUsage?.(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Eye size={10}/></button>
                                                         </div>
                                                     </div>
                                                 );
@@ -795,7 +774,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         </label>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedIdioms.map((idiom, i) => {
-                                                const isExisting = existingVariants.has(idiom.text.toLowerCase());
                                                 let isFailed = false;
                                                 if (viewSettings.highlightFailed && !idiom.isIgnored) {
                                                     const types = ['IDIOM_QUIZ', 'IDIOM_CONTEXT_QUIZ'];
@@ -818,9 +796,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                         <div className="absolute top-1 right-1 flex items-center gap-1">
                                                             <button onClick={() => speak(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
                                                                 <Volume2 size={10}/>
-                                                            </button>
-                                                            <button onClick={() => handleDisplayUsage?.(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
-                                                                <Eye size={10}/>
                                                             </button>
                                                         </div>
                                                     </div>

@@ -23,7 +23,6 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     ...word,
     lastTestResults: normalizeTestResultKeys(word.lastTestResults)
   });
-  const [existingVariants, setExistingVariants] = useState<Set<string>>(new Set());
   const [isChallenging, setIsChallenging] = useState(false);
   const [isMimicOpen, setIsMimicOpen] = useState(false);
 
@@ -168,7 +167,6 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       onEditRequest={() => onEditRequest(currentWord)}
       onUpdate={handleLocalUpdate}
       onNavigateToWord={onNavigateToWord}
-      existingVariants={existingVariants}
       appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}
     />
