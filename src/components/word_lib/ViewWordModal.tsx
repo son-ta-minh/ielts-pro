@@ -18,15 +18,11 @@ interface Props {
   isViewOnly?: boolean;
 }
 
-const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEditRequest, onUpdate, onGainXp, isViewOnly = false }) => {
+const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEditRequest, onUpdate, isViewOnly = false }) => {
   const [currentWord, setCurrentWord] = useState<VocabularyItem>({
     ...word,
     lastTestResults: normalizeTestResultKeys(word.lastTestResults)
   });
-  const [linkedUnits, setLinkedUnits] = useState<Unit[]>([]);
-  const [relatedWords, setRelatedWords] = useState<Record<string, VocabularyItem[]>>({});
-  const [relatedByGroup, setRelatedByGroup] = useState<Record<string, VocabularyItem[]>>({});
-  const [addingVariant, setAddingVariant] = useState<string | null>(null);
   const [existingVariants, setExistingVariants] = useState<Set<string>>(new Set());
   const [isChallenging, setIsChallenging] = useState(false);
   const [isMimicOpen, setIsMimicOpen] = useState(false);
@@ -35,77 +31,6 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     const normalizedResults = normalizeTestResultKeys(word.lastTestResults);
     setCurrentWord({ ...word, lastTestResults: normalizedResults });
   }, [word]);
-
-  useEffect(() => {
-    const loadDependencies = async () => {
-      if (!currentWord) return;
-
-      const membersToCheck: string[] = [];
-      const family = currentWord.wordFamily;
-      if (family) {
-        membersToCheck.push(
-          ...(family.nouns || []).map(m => m.word.toLowerCase().trim()),
-          ...(family.verbs || []).map(m => m.word.toLowerCase().trim()),
-          ...(family.adjs || []).map(m => m.word.toLowerCase().trim()),
-          ...(family.advs || []).map(m => m.word.toLowerCase().trim())
-        );
-      }
-      
-      const paraphrases = currentWord.paraphrases;
-      if (paraphrases) {
-          membersToCheck.push(...paraphrases.map(p => p.word.toLowerCase().trim()));
-      }
-
-      const idioms = currentWord.idiomsList;
-      if (idioms) {
-        membersToCheck.push(...idioms.map(i => i.text.toLowerCase().trim()));
-      }
-
-      const collocations = currentWord.collocationsArray;
-      if (collocations) {
-          membersToCheck.push(...collocations.map(c => c.text.toLowerCase().trim()));
-      }
-
-      const uniqueMembers = [...new Set(membersToCheck.filter(Boolean))];
-      
-      const found = new Set<string>();
-      for (const memberWord of uniqueMembers) {
-        if (!memberWord) continue;
-        const exists = await findWordByText(currentWord.userId, memberWord);
-        if (exists) found.add(memberWord);
-      }
-      setExistingVariants(found);
-      
-      const allWordsInStore = getAllWords();
-      const relatedData: Record<string, VocabularyItem[]> = {};
-      const groupsToProcess = (currentWord.groups || []).filter(g => g.toLowerCase() !== 'ielts');
-      groupsToProcess.forEach(group => {
-          const wordsForGroup = allWordsInStore.filter(w => 
-              w.userId === currentWord.userId && 
-              w.id !== currentWord.id && 
-              w.groups?.includes(group)
-          );
-          if (wordsForGroup.length > 0) {
-              relatedData[group] = wordsForGroup;
-          }
-      });
-      setRelatedWords(relatedData);
-      
-      const relatedGroupData: Record<string, VocabularyItem[]> = {};
-      (currentWord.groups || []).forEach(group => {
-          const wordsForGroup = allWordsInStore.filter(w => 
-              w.userId === currentWord.userId && 
-              w.id !== currentWord.id && 
-              w.groups?.includes(group)
-          );
-          if (wordsForGroup.length > 0) {
-              relatedGroupData[group] = wordsForGroup;
-          }
-      });
-      setRelatedByGroup(relatedGroupData);
-    };
-    loadDependencies();
-  }, [currentWord]);
   
   const handleChallengeComplete = async (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => {
     const updated = { ...currentWord };
@@ -242,11 +167,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       onMimicRequest={() => setIsMimicOpen(true)}
       onEditRequest={() => onEditRequest(currentWord)}
       onUpdate={handleLocalUpdate}
-      linkedUnits={linkedUnits}
-      relatedWords={relatedWords}
-      relatedByGroup={relatedByGroup}
       onNavigateToWord={onNavigateToWord}
-      addingVariant={addingVariant}
       existingVariants={existingVariants}
       appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}

@@ -192,14 +192,14 @@ export interface ViewWordModalUIProps {
     existingVariants: Set<string>;
     isViewOnly?: boolean;
     appliedAccent?: 'US' | 'UK';
-    displayUsage?: (text: string, matchThreshold?: number) => void;
+    handleDisplayUsage?: (text: string, matchThreshold?: number) => void;
     onAddAIExample?: () => void;
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
     word, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onNavigateToWord, existingVariants, isViewOnly = false,
-    displayUsage, onAddAIExample
+    handleDisplayUsage, onAddAIExample
 }) => {
     // Helper to render examples with badge replacements
     const renderExample = (text: string) => {
@@ -403,7 +403,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         <Volume2 size={10}/>
                                     </button>
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); displayUsage?.(member.word); }}
+                                        onClick={(e) => { e.stopPropagation(); handleDisplayUsage?.(member.word); }}
                                         className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
                                     >
                                         <Eye size={10}/>
@@ -688,7 +688,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                                     <Volume2 size={10}/>
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => displayUsage?.(p.usage, 0.6)}
+                                                                    onClick={() => handleDisplayUsage?.(p.usage, 0.6)}
                                                                     className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
                                                                 >
                                                                     <Eye size={10}/>
@@ -745,7 +745,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                             <button onClick={() => speak(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5">
                                                                 <Volume2 size={10}/>
                                                             </button>
-                                                            <button onClick={() => displayUsage?.(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5">
+                                                            <button onClick={() => handleDisplayUsage?.(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5">
                                                                 <Eye size={10}/>
                                                             </button>
                                                         </div>
@@ -780,7 +780,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                         </div>
                                                         <div className="absolute top-1 right-1 flex items-center gap-1">
                                                             <button onClick={() => speak(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
-                                                            <button onClick={() => displayUsage?.(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Eye size={10}/></button>
+                                                            <button onClick={() => handleDisplayUsage?.(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Eye size={10}/></button>
                                                         </div>
                                                     </div>
                                                 );
@@ -819,7 +819,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                             <button onClick={() => speak(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
                                                                 <Volume2 size={10}/>
                                                             </button>
-                                                            <button onClick={() => displayUsage?.(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
+                                                            <button onClick={() => handleDisplayUsage?.(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
                                                                 <Eye size={10}/>
                                                             </button>
                                                         </div>
