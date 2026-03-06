@@ -340,12 +340,27 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                         else if (isIgnored) containerClass = 'bg-neutral-50/50 border-neutral-100 opacity-60';
 
                         return (
-                            <div key={idx} className={`flex items-center justify-between px-2 py-1.5 rounded-lg border group transition-colors ${containerClass}`}>
-                                <div className="flex flex-col overflow-hidden">
+                            <div key={idx} className={`relative flex items-start px-2 py-1.5 rounded-lg border group transition-colors ${containerClass}`}>
+                                <div className="flex-1 overflow-hidden">
                                     <div className="flex items-center gap-1.5">
-                                        <span className={`text-[10px] font-bold truncate ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${isIgnored ? 'line-through decoration-neutral-400' : ''}`}>{member.word}</span>
-                                        <button onClick={(e) => { e.stopPropagation(); speak(member.word); }} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
+                                        <span className={`text-[10px] font-bold truncate ${isFailed ? 'text-red-700' : 'text-neutral-900'} ${isIgnored ? 'line-through decoration-neutral-400' : ''}`}>
+                                            {member.word}
+                                        </span>
                                     </div>
+                                </div>
+                                <div className="absolute top-1 right-1 flex items-center gap-1">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); speak(member.word); }}
+                                        className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
+                                    >
+                                        <Volume2 size={10}/>
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); displayUsage?.(member.word); }}
+                                        className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
+                                    >
+                                        <Eye size={10}/>
+                                    </button>
                                 </div>
                             </div>
                         );
@@ -665,7 +680,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 return (
                                                     <div
                                                         key={i}
-                                                        className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                                                        className={`relative flex items-start gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
                                                             isFailed ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-white border border-neutral-100 text-indigo-900'
                                                         } ${p.isIgnored ? 'opacity-50' : ''}`}
                                                     >
@@ -684,7 +699,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                         </div>
 
                                                         {p.usage && (
-                                                            <>
+                                                            <div className="absolute top-1 right-1 flex items-center gap-1">
                                                                 <button
                                                                     onClick={() => speak(p.usage)}
                                                                     className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
@@ -692,12 +707,12 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                                     <Volume2 size={10}/>
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => displayUsage?.(p.prep, 0.6)}
+                                                                    onClick={() => displayUsage?.(p.usage, 0.6)}
                                                                     className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
                                                                 >
                                                                     <Eye size={10}/>
                                                                 </button>
-                                                            </>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 );
@@ -738,14 +753,14 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 if (isFailed) containerClass = "bg-red-50 border border-red-200 text-red-700";
                                                 else if (c.isIgnored) containerClass = "bg-neutral-50 border border-neutral-100 text-neutral-400";
                                                 return (
-                                                    <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
+                                                    <div key={i} className={`relative flex items-start gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
                                                         <div className="flex-1 overflow-hidden">
                                                             <span className={`truncate ${c.isIgnored ? 'line-through' : ''}`} title={c.text}>{c.text}</span>
                                                             {c.d && !c.isIgnored && (
                                                                 <div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>
                                                             )}
                                                         </div>
-                                                        <div className="flex items-center gap-1">
+                                                        <div className="absolute top-1 right-1 flex items-center gap-1">
                                                             <button onClick={() => speak(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5">
                                                                 <Volume2 size={10}/>
                                                             </button>
@@ -772,17 +787,19 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 const isFailed = viewSettings.highlightFailed && !para.isIgnored && (hasSpecificFailure(types, para.word) || (!hasSpecific && hasGroupFailure(types)));
                                                 const isIgnored = para.isIgnored;
                                                 return (
-                                                    <div key={idx} className={`flex items-start justify-between gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-200'}`}>
+                                                    <div key={idx} className={`relative flex items-start gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-200'}`}>
                                                         <div className="flex-1 overflow-hidden">
                                                             <div className="flex justify-between items-center mb-1">
                                                                 {renderParaphraseBadge(para.tone)}
                                                             </div>
                                                             <div className="flex items-center gap-1">
                                                                 <div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-neutral-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div>
-                                                                <button onClick={() => speak(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
-                                                                <button onClick={() => displayUsage?.(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Eye size={10}/></button>
                                                             </div>
                                                             <div className={`text-[10px] italic truncate ${isFailed ? 'text-red-400' : 'text-neutral-400'}`} title={para.context}>{para.context}</div>
+                                                        </div>
+                                                        <div className="absolute top-1 right-1 flex items-center gap-1">
+                                                            <button onClick={() => speak(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
+                                                            <button onClick={() => displayUsage?.(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Eye size={10}/></button>
                                                         </div>
                                                     </div>
                                                 );
@@ -808,22 +825,22 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 if (isFailed) containerClass = "bg-red-50 border border-red-200 text-red-700";
                                                 else if (idiom.isIgnored) containerClass = "bg-neutral-50 border border-neutral-100 text-neutral-400";
                                                 return (
-                                                    <div key={i} className={`flex items-start justify-between gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
+                                                    <div key={i} className={`relative flex items-start gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
                                                         <div className="flex-1 overflow-hidden">
                                                             <div className="flex items-center gap-2">
                                                                 <span className={`truncate ${idiom.isIgnored ? 'line-through' : ''}`} title={idiom.text}>{idiom.text}</span>
-                                                                <div className="flex items-center gap-1">
-                                                                    <button onClick={() => speak(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
-                                                                        <Volume2 size={10}/>
-                                                                    </button>
-                                                                    <button onClick={() => displayUsage?.(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
-                                                                        <Eye size={10}/>
-                                                                    </button>
-                                                                </div>
                                                             </div>
                                                             {idiom.d && !idiom.isIgnored && (
                                                                 <div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{idiom.d}</div>
                                                             )}
+                                                        </div>
+                                                        <div className="absolute top-1 right-1 flex items-center gap-1">
+                                                            <button onClick={() => speak(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
+                                                                <Volume2 size={10}/>
+                                                            </button>
+                                                            <button onClick={() => displayUsage?.(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
+                                                                <Eye size={10}/>
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 );
