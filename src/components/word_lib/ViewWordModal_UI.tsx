@@ -594,11 +594,10 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                                 }`}
                             >
-                                    <ClipboardList size={16} />
-                                    {hasTest && (
-                                        <CheckCircle2 size={12} className="absolute -top-1 -right-2 text-emerald-500 fill-emerald-100" />
-                                    )}
-                                </div>
+                                <ClipboardList size={16} />
+                                {hasTest && (
+                                    <CheckCircle2 size={12} className="absolute -top-1 -right-2 text-emerald-500 fill-emerald-100" />
+                                )}
                                 Practice
                             </button>
                         </div>
