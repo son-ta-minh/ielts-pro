@@ -8,6 +8,8 @@ import ViewWordModal from '../../components/word_lib/ViewWordModal';
 import WordTable from '../../components/word_lib/WordTable';
 import { EssayReader } from './EssayReader';
 import { speak } from '../../utils/audio';
+import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 interface TooltipState { word: VocabularyItem; rect: DOMRect; }
 type LinkedFileContent =
@@ -15,6 +17,124 @@ type LinkedFileContent =
   | { state: 'error'; message: string }
   | { state: 'text'; title: string; text: string; fileName: string; extension?: string }
   | { state: 'binary'; title: string; fileUrl: string; fileName: string; extension?: string; mimeType?: string };
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
+const PdfJsViewer: React.FC<{ fileUrl: string }> = ({ fileUrl }) => {
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [renderVersion, setRenderVersion] = useState(0);
+
+    useEffect(() => {
+        let isCancelled = false;
+        const textLayers: TextLayer[] = [];
+        let loadingTask: ReturnType<typeof getDocument> | null = null;
+
+        const renderPdf = async () => {
+            setIsLoading(true);
+            setError(null);
+
+            try {
+                loadingTask = getDocument({ url: fileUrl });
+                const pdf = await loadingTask.promise;
+                if (isCancelled) return;
+
+                const container = document.getElementById(`pdfjs-viewer-${renderVersion}`);
+                if (!container) return;
+                container.innerHTML = '';
+
+                for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
+                    if (isCancelled) return;
+                    const page = await pdf.getPage(pageNo);
+                    const viewport = page.getViewport({ scale: 1.35 });
+
+                    const pageWrap = document.createElement('div');
+                    pageWrap.className = 'relative mx-auto mb-4 bg-white';
+                    pageWrap.style.width = `${viewport.width}px`;
+                    pageWrap.style.height = `${viewport.height}px`;
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.floor(viewport.width);
+                    canvas.height = Math.floor(viewport.height);
+                    canvas.style.width = `${viewport.width}px`;
+                    canvas.style.height = `${viewport.height}px`;
+
+                    const textLayerDiv = document.createElement('div');
+                    textLayerDiv.className = 'pdfjs-text-layer absolute inset-0';
+
+                    pageWrap.appendChild(canvas);
+                    pageWrap.appendChild(textLayerDiv);
+                    container.appendChild(pageWrap);
+
+                    await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
+                    const textContent = await page.getTextContent();
+                    const textLayer = new TextLayer({
+                        textContentSource: textContent,
+                        container: textLayerDiv,
+                        viewport
+                    });
+                    textLayers.push(textLayer);
+                    await textLayer.render();
+                }
+
+                if (!isCancelled) setIsLoading(false);
+            } catch (_e) {
+                if (!isCancelled) {
+                    setError('Failed to render PDF with pdf.js.');
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        renderPdf();
+
+        return () => {
+            isCancelled = true;
+            if (loadingTask) loadingTask.destroy();
+            textLayers.forEach(layer => layer.cancel());
+        };
+    }, [fileUrl, renderVersion]);
+
+    return (
+        <div className="relative min-h-[60vh] p-3 bg-neutral-50/40">
+            <style>{`
+                .pdfjs-text-layer {
+                    line-height: 1;
+                    user-select: text;
+                    cursor: text;
+                }
+                .pdfjs-text-layer span,
+                .pdfjs-text-layer br {
+                    color: transparent;
+                    position: absolute;
+                    white-space: pre;
+                    transform-origin: 0% 0%;
+                }
+                .pdfjs-text-layer ::selection {
+                    background: rgba(56, 189, 248, 0.35);
+                }
+            `}</style>
+            {isLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center text-neutral-500 bg-white/60 backdrop-blur-[1px]">
+                    <Loader2 size={20} className="animate-spin" />
+                </div>
+            )}
+            {error ? (
+                <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 text-center p-8">
+                    <p className="text-sm font-semibold text-rose-600">{error}</p>
+                    <button
+                        onClick={() => setRenderVersion(v => v + 1)}
+                        className="px-3 py-1.5 rounded-lg border border-neutral-200 bg-white text-xs font-bold text-neutral-700 hover:bg-neutral-50"
+                    >
+                        Retry
+                    </button>
+                </div>
+            ) : (
+                <div id={`pdfjs-viewer-${renderVersion}`} className="min-h-[60vh] overflow-auto" />
+            )}
+        </div>
+    );
+};
 
 const ComprehensionCheckModal: React.FC<{
     isOpen: boolean;
@@ -149,6 +269,7 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
   const isLinkedFileUnit = unit.readingSourceType === 'server_file_pair';
   const [activeTab, setActiveTab] = useState<'ESSAY' | 'ANSWER' | 'VOCAB'>('ESSAY');
+  const [pdfRenderMode, setPdfRenderMode] = useState<'iframe' | 'pdfjs'>('iframe');
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
@@ -174,6 +295,10 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
     setEditingWord(null);
   };
 
+  const isPdfBinary = (content: LinkedFileContent): boolean =>
+    content.state === 'binary' && (content.mimeType?.toLowerCase().includes('pdf') || content.extension?.toLowerCase() === 'pdf');
+  const hasPdfLinkedContent = isPdfBinary(essayFileContent) || isPdfBinary(answerFileContent);
+
   useEffect(() => {
     if (isLinkedFileUnit && activeTab === 'VOCAB') {
       setActiveTab('ESSAY');
@@ -198,8 +323,10 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
     if (content.state === 'binary') {
       return (
         <div className="min-h-[60vh] flex flex-col">
-          {content.mimeType?.includes('pdf') ? (
-            <iframe src={content.fileUrl} className="w-full min-h-[60vh] border-0 rounded-b-[2.5rem]" title={content.title} />
+          {isPdfBinary(content) ? (
+            pdfRenderMode === 'pdfjs'
+              ? <PdfJsViewer fileUrl={content.fileUrl} />
+              : <iframe src={content.fileUrl} className="w-full min-h-[60vh] border-0 rounded-b-[2.5rem]" title={content.title} />
           ) : (
             <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 p-8 text-center">
               <FileText size={26} className="text-neutral-400" />
@@ -273,7 +400,8 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
         </div>
 
         {/* --- TABS --- */}
-        <div className="flex p-1 bg-neutral-100 rounded-xl w-full sm:w-fit">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex p-1 bg-neutral-100 rounded-xl w-full sm:w-fit">
             <button 
                 onClick={() => setActiveTab('ESSAY')}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'ESSAY' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
@@ -293,6 +421,16 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
             >
                 <LayoutList size={14} /> Vocabulary
             </button>
+          </div>
+          {hasPdfLinkedContent && (
+            <button
+              onClick={() => setPdfRenderMode(mode => mode === 'iframe' ? 'pdfjs' : 'iframe')}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${pdfRenderMode === 'pdfjs' ? 'bg-cyan-100 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'}`}
+              title="Switch PDF render mode"
+            >
+              {pdfRenderMode === 'pdfjs' ? 'pdf.js' : 'iframe'}
+            </button>
+          )}
         </div>
 
         {/* --- CONTENT AREA --- */}
