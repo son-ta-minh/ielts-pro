@@ -427,7 +427,7 @@ const WordTable: React.FC<Props> = ({
                     itemsToSave.push(mergedItem);
                 } else {
                     // Fix: createNewWord expects 12 arguments if source is refined. Added 'false' for isPassive.
-                    const newItem = createNewWord(suggestedHeadword, '', '', '', '', [], false, false, false, false, false, 'refine');
+                    const newItem = await createNewWord(suggestedHeadword, '', '', '', '', [], false, false, false, false, false, 'refine');
                     newItem.userId = originalItem.userId;
                     const finalNewItem = mergeAiResultIntoWord(newItem, rawAiResult);
                     itemsToSave.push(finalNewItem);

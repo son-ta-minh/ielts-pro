@@ -298,7 +298,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
         } else {
             // Manual Creation (RAW)
             // Updated signature: groups is passed instead of tags
-            newItem = createNewWord(
+            newItem = await createNewWord(
                 word, '', '', '', '', [], 
                 isIdiom, isPhrasalVerb, 
                 isCollocation, isStandardPhrase, isPassive

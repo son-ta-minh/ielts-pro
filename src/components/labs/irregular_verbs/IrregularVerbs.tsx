@@ -284,7 +284,7 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
     const newWords: VocabularyItem[] = [];
     for (const verb of selectedVerbs) {
       if (!libraryWords.has(verb.v1.toLowerCase())) {
-        const newItem = createNewWord(verb.v1, '', '', '', '', ['irregular-verb']);
+        const newItem = await createNewWord(verb.v1, '', '', '', '', ['irregular-verb']);
         newItem.userId = user.id;
         newItem.isIrregular = true;
         // Fix: Removed assignments of v2 and v3 as they do not exist on VocabularyItem type

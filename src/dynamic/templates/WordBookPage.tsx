@@ -375,7 +375,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
         setAddingWord(wordText);
         try {
             const isPhrase = wordText.includes(' ');
-            const newItem = createNewWord(wordText, '', definition, '', `Added from Word Book: ${activeBook?.topic}`, [], false, false, false, false, isPhrase);
+            const newItem = await createNewWord(wordText, '', definition, '', `Added from Word Book: ${activeBook?.topic}`, [], false, false, false, false, isPhrase);
             newItem.userId = user.id;
             await dataStore.saveWord(newItem);
             showToast(`"${wordText}" added to library.`, "success");

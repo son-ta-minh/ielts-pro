@@ -193,7 +193,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
             wordIdToAdd = existingWord.id;
         } else {
             const isPhrase = rawText.includes(' ');
-            wordToAdd = createNewWord(rawText, '', '', '', '', ['ielts'], false, false, false, false, isPhrase);
+            wordToAdd = await createNewWord(rawText, '', '', '', '', ['ielts'], false, false, false, false, isPhrase);
             wordToAdd.userId = user.id;
             wordIdToAdd = wordToAdd.id;
         }
