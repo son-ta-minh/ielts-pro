@@ -291,11 +291,11 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                                         let caption: string | null = null;
                                                         let imageUrl = raw;
 
-                                                        const httpIndex = raw.search(/https?:\/\//);
-
-                                                        if (httpIndex > 0) {
-                                                            caption = raw.slice(0, httpIndex).replace(/[:\-–—]\s*$/, '').trim();
-                                                            imageUrl = raw.slice(httpIndex).trim();
+                                                        // Support format: "caption:url"
+                                                        const firstColonIndex = raw.indexOf(':');
+                                                        if (firstColonIndex > -1 && raw.startsWith('http') === false) {
+                                                            caption = raw.slice(0, firstColonIndex).trim();
+                                                            imageUrl = raw.slice(firstColonIndex + 1).trim();
                                                         }
 
                                                         return (

@@ -25,7 +25,10 @@ export function getLearningSuggestionsPrompt(word: VocabularyItem, user: User): 
     1.  Analyze all components of the vocabulary item (word family, collocations, idioms, paraphrases).
     2.  Based on the USER PROFILE, decide whether each component is essential to learn ('learn') or can be ignored for now ('ignore').
     3.  Provide a concise, sharp 'reason' for each decision. Your reasoning is the most important part.
-    4.  Be strict. For an IELTS learner, prioritize academic, high-impact, and flexible vocabulary. For a beginner, prioritize core meanings and common usage.
+    4.  Components to be marked 'learn' must be:
+        - Natural and used by native speakers in order
+        - Useful for paraphrasing in natural spoken or written English to avoid repetition
+    5. Informal expressions can still be marked "learn" if they are common in natural speech.
 
     EXAMPLE REASONING:
     - For an IELTS goal, if a paraphrase is "the process of a liquid turning into a gas," you should suggest 'ignore' and reason: "This is too descriptive and wordy for IELTS. A single academic term like 'evaporation' is more effective and scores higher for lexical resource."
