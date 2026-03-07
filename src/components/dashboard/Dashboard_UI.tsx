@@ -497,6 +497,11 @@ const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({
                     subLabel="Spot mistakes, reveal fixes, then self-evaluate."
                     largeSub icon={AlertTriangle} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('MISTAKE_RECOGNITION')}
                  />
+                 <NavButton
+                    label="Register Pick"
+                    subLabel="Classify words as Academic, Casual, or Neutral."
+                    largeSub icon={Sparkles} color="text-amber-600" bg="bg-amber-50" onClick={() => onAction('REGISTER_PICK')}
+                 />
              </div>
         </div>
     );
