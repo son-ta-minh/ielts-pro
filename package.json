@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.34.0",
+    "docx-preview": "^0.3.7",
     "firebase": "^12.9.0",
     "lucide-react": "^0.462.0",
     "pdfjs-dist": "^4.10.38",

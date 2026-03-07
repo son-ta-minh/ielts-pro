@@ -10,6 +10,7 @@ import { EssayReader } from './EssayReader';
 import { speak } from '../../utils/audio';
 import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { renderAsync } from 'docx-preview';
 
 interface TooltipState { word: VocabularyItem; rect: DOMRect; }
 type LinkedFileContent =
@@ -54,10 +55,15 @@ const PdfJsViewer: React.FC<{ fileUrl: string }> = ({ fileUrl }) => {
                     pageWrap.style.height = `${viewport.height}px`;
 
                     const canvas = document.createElement('canvas');
-                    canvas.width = Math.floor(viewport.width);
-                    canvas.height = Math.floor(viewport.height);
+                    const context = canvas.getContext('2d')!;
+                    const outputScale = window.devicePixelRatio || 1;
+
+                    canvas.width = Math.floor(viewport.width * outputScale);
+                    canvas.height = Math.floor(viewport.height * outputScale);
                     canvas.style.width = `${viewport.width}px`;
                     canvas.style.height = `${viewport.height}px`;
+
+                    context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
 
                     const textLayerDiv = document.createElement('div');
                     textLayerDiv.className = 'pdfjs-text-layer absolute inset-0';
@@ -66,7 +72,7 @@ const PdfJsViewer: React.FC<{ fileUrl: string }> = ({ fileUrl }) => {
                     pageWrap.appendChild(textLayerDiv);
                     container.appendChild(pageWrap);
 
-                    await page.render({ canvasContext: canvas.getContext('2d')!, viewport }).promise;
+                    await page.render({ canvasContext: context, viewport }).promise;
                     const textContent = await page.getTextContent();
                     const textLayer = new TextLayer({
                         textContentSource: textContent,
@@ -96,7 +102,7 @@ const PdfJsViewer: React.FC<{ fileUrl: string }> = ({ fileUrl }) => {
     }, [fileUrl, renderVersion]);
 
     return (
-        <div className="relative min-h-[60vh] p-3 bg-neutral-50/40">
+        <div className="relative h-[75vh] max-h-[75vh] p-3 bg-neutral-50/40 overflow-hidden">
             <style>{`
                 .pdfjs-text-layer {
                     line-height: 1;
@@ -130,8 +136,56 @@ const PdfJsViewer: React.FC<{ fileUrl: string }> = ({ fileUrl }) => {
                     </button>
                 </div>
             ) : (
-                <div id={`pdfjs-viewer-${renderVersion}`} className="min-h-[60vh] overflow-auto" />
+                <div
+                  id={`pdfjs-viewer-${renderVersion}`}
+                  className="h-full w-full overflow-auto pr-2"
+                  style={{ overscrollBehavior: 'contain' }}
+                />
             )}
+        </div>
+    );
+};
+
+const DocxViewer: React.FC<{ fileUrl: string; title?: string }> = ({ fileUrl }) => {
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const load = async () => {
+            try {
+                const res = await fetch(fileUrl);
+                const blob = await res.blob();
+                if (cancelled) return;
+
+                const container = document.getElementById('docx-viewer-container');
+                if (!container) return;
+                container.innerHTML = '';
+
+                await renderAsync(blob, container);
+            } catch (e) {
+                if (!cancelled) setError('Failed to render DOCX file.');
+            }
+        };
+
+        load();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [fileUrl]);
+
+    if (error) {
+        return (
+            <div className="min-h-[60vh] flex items-center justify-center text-rose-600 font-semibold text-sm">
+                {error}
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-[60vh] overflow-auto bg-white p-6">
+            <div id="docx-viewer-container" className="prose max-w-none" />
         </div>
     );
 };
@@ -269,7 +323,7 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
   const isLinkedFileUnit = unit.readingSourceType === 'server_file_pair';
   const [activeTab, setActiveTab] = useState<'ESSAY' | 'ANSWER' | 'VOCAB'>('ESSAY');
-  const [pdfRenderMode, setPdfRenderMode] = useState<'iframe' | 'pdfjs'>('iframe');
+  const [pdfRenderMode, setPdfRenderMode] = useState<'iframe' | 'pdfjs'>('pdfjs');
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
@@ -321,12 +375,17 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
       );
     }
     if (content.state === 'binary') {
+      const ext = content.extension?.toLowerCase();
+      const isOfficeDoc = ext === 'doc' || ext === 'docx';
+
       return (
         <div className="min-h-[60vh] flex flex-col">
           {isPdfBinary(content) ? (
             pdfRenderMode === 'pdfjs'
               ? <PdfJsViewer fileUrl={content.fileUrl} />
               : <iframe src={content.fileUrl} className="w-full min-h-[60vh] border-0 rounded-b-[2.5rem]" title={content.title} />
+          ) : isOfficeDoc ? (
+            <DocxViewer fileUrl={content.fileUrl} title={content.title} />
           ) : (
             <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 p-8 text-center">
               <FileText size={26} className="text-neutral-400" />
@@ -425,10 +484,10 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
           {hasPdfLinkedContent && (
             <button
               onClick={() => setPdfRenderMode(mode => mode === 'iframe' ? 'pdfjs' : 'iframe')}
-              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${pdfRenderMode === 'pdfjs' ? 'bg-cyan-100 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'}`}
+              className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${pdfRenderMode === 'pdfjs' ? 'bg-cyan-100 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'}`}
               title="Switch PDF render mode"
             >
-              {pdfRenderMode === 'pdfjs' ? 'pdf.js' : 'iframe'}
+              {pdfRenderMode === 'pdfjs' ? 'App Render' : 'System Render'}
             </button>
           )}
         </div>
