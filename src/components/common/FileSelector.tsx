@@ -7,8 +7,15 @@ interface FileSelectorProps {
     isOpen: boolean;
     onClose: () => void;
     onSelect: (fileData: any) => void; 
-    type: 'audio' | 'reading' | 'planning';
+    type: 'audio' | 'reading' | 'planning' | 'reading_pair';
     title: string;
+}
+
+interface ReadingPairPick {
+    mapName: string;
+    relativePath: string;
+    fileName: string;
+    extension: string;
 }
 
 export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onSelect, type, title }) => {
@@ -25,6 +32,8 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
     // Updated type definition to include displayName and tags
     const [fileList, setFileList] = useState<{name: string, type: 'file' | 'directory' | 'unit' | 'plan', displayName?: string, transcript?: string, transcriptTitle?: string, data?: any, tags?: string[]}[]>([]);
     const [loading, setLoading] = useState(false);
+    const [selectedEssayFile, setSelectedEssayFile] = useState<ReadingPairPick | null>(null);
+    const [selectedAnswerFile, setSelectedAnswerFile] = useState<ReadingPairPick | null>(null);
 
     // Tag Search State
     const [tagQuery, setTagQuery] = useState('');
@@ -39,11 +48,16 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
             setFileList([]);
             setTagQuery('');
             setShowTagSuggestions(false);
+            setSelectedEssayFile(null);
+            setSelectedAnswerFile(null);
 
             // Reading and Planning default to Master Library
             if (type === 'reading' || type === 'planning') {
                 setMode('master');
                 fetchMasterLibrary();
+            } else if (type === 'reading_pair') {
+                setMode('folders');
+                fetchMappings(true);
             } else {
                 setMode('folders');
                 fetchMappings();
@@ -62,12 +76,20 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const fetchMappings = async () => {
+    const fetchMappings = async (autoOpenReadingMap = false) => {
         setLoading(true);
         try {
             const res = await fetch(`${serverUrl}/api/audio/mappings`); // Mappings are shared
             if (res.ok) {
-                setMappings(await res.json());
+                const fetchedMappings = await res.json();
+                setMappings(fetchedMappings);
+                if (autoOpenReadingMap) {
+                    const readingMap = Object.keys(fetchedMappings).find(key => key.toLowerCase() === 'reading');
+                    if (readingMap) {
+                        setCurrentMap(readingMap);
+                        fetchFiles(readingMap, '');
+                    }
+                }
             } else {
                 showToast("Failed to connect to server", "error");
             }
@@ -153,6 +175,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
     };
 
     const handleModeChange = (newMode: 'folders' | 'master') => {
+        if (type === 'reading_pair' && newMode === 'master') return;
         setMode(newMode);
         setCurrentMap(null);
         setCurrentPath('');
@@ -196,6 +219,25 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
 
         if (!currentMap) return;
 
+        if (type === 'reading_pair') {
+            const pathPart = currentPath ? `${currentPath}/${item.name}` : item.name;
+            const ext = (item.name.split('.').pop() || '').toLowerCase();
+            const pickData: ReadingPairPick = {
+                mapName: currentMap,
+                relativePath: pathPart,
+                fileName: item.name,
+                extension: ext,
+            };
+            if (!selectedEssayFile) {
+                setSelectedEssayFile(pickData);
+            } else if (!selectedAnswerFile) {
+                setSelectedAnswerFile(pickData);
+            } else {
+                setSelectedAnswerFile(pickData);
+            }
+            return;
+        }
+
         if (type === 'audio') {
              const pathPart = currentPath ? `${currentPath}/${item.name}` : item.name;
              const url = `${serverUrl}/api/audio/stream/${currentMap}/${pathPart}`;
@@ -221,6 +263,18 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                 setLoading(false);
             }
         }
+    };
+
+    const handleConfirmReadingPair = () => {
+        if (!selectedEssayFile || !selectedAnswerFile) {
+            showToast("Please select Essay file and Answer file.", "info");
+            return;
+        }
+        onSelect({
+            essayFile: selectedEssayFile,
+            answerFile: selectedAnswerFile
+        });
+        onClose();
     };
 
     // --- Filtering Logic ---
@@ -310,6 +364,10 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                                  </div>
                              )}
                         </div>
+                    ) : type === 'reading_pair' ? (
+                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 font-medium">
+                            Select 2 files from mapped folder <strong>Reading</strong>: first for Essay, second for Answer.
+                        </div>
                     ) : (
                         <div className="flex bg-neutral-100 p-1 rounded-xl">
                             <button 
@@ -337,6 +395,16 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                 )}
 
                 <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                    {type === 'reading_pair' && (
+                        <div className="mb-3 grid grid-cols-1 gap-2">
+                            <div className={`p-2 rounded-lg border text-xs ${selectedEssayFile ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-neutral-50 border-neutral-200 text-neutral-500'}`}>
+                                Essay: {selectedEssayFile ? selectedEssayFile.fileName : 'Not selected'}
+                            </div>
+                            <div className={`p-2 rounded-lg border text-xs ${selectedAnswerFile ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-neutral-50 border-neutral-200 text-neutral-500'}`}>
+                                Answer: {selectedAnswerFile ? selectedAnswerFile.fileName : 'Not selected'}
+                            </div>
+                        </div>
+                    )}
                     {loading ? (
                         <div className="flex justify-center py-10"><Loader2 size={24} className="animate-spin text-neutral-300"/></div>
                     ) : mode === 'folders' && !currentMap ? (
@@ -413,6 +481,19 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                     )}
                 </main>
             </div>
+            {type === 'reading_pair' && (
+                <div className="absolute bottom-7 left-1/2 -translate-x-1/2 w-[calc(100%-4rem)] max-w-lg pointer-events-none">
+                    <div className="pointer-events-auto bg-white border border-neutral-200 rounded-2xl p-3 shadow-lg">
+                        <button
+                            onClick={handleConfirmReadingPair}
+                            disabled={!selectedEssayFile || !selectedAnswerFile}
+                            className="w-full py-2.5 rounded-xl bg-neutral-900 text-white text-xs font-black uppercase tracking-wider disabled:bg-neutral-300 disabled:cursor-not-allowed"
+                        >
+                            Import File Pair
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen, Tag, HelpCircle, X, Check, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText } from 'lucide-react';
+import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen, Tag, HelpCircle, X, Check, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
 import EditWordModal from '../../components/word_lib/EditWordModal';
@@ -10,6 +10,11 @@ import { EssayReader } from './EssayReader';
 import { speak } from '../../utils/audio';
 
 interface TooltipState { word: VocabularyItem; rect: DOMRect; }
+type LinkedFileContent =
+  | { state: 'idle' | 'loading' }
+  | { state: 'error'; message: string }
+  | { state: 'text'; title: string; text: string; fileName: string; extension?: string }
+  | { state: 'binary'; title: string; fileUrl: string; fileName: string; extension?: string; mimeType?: string };
 
 const ComprehensionCheckModal: React.FC<{
     isOpen: boolean;
@@ -134,13 +139,16 @@ export interface ReadingStudyViewUIProps {
     onComprehensionAnswerChange: (index: number, value: string) => void;
     comprehensionResults: Record<number, 'correct' | 'incorrect' | null>;
     onComprehensionResultChange: (index: number, result: 'correct' | 'incorrect') => void;
+    essayFileContent: LinkedFileContent;
+    answerFileContent: LinkedFileContent;
 }
 
 export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => {
-  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, handleExportUnit, isComprehensionModalOpen, onOpenComprehensionModal, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange } = props;
+  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, handleExportUnit, isComprehensionModalOpen, onOpenComprehensionModal, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange, essayFileContent, answerFileContent } = props;
   
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
-  const [activeTab, setActiveTab] = useState<'ESSAY' | 'VOCAB'>('ESSAY');
+  const isLinkedFileUnit = unit.readingSourceType === 'server_file_pair';
+  const [activeTab, setActiveTab] = useState<'ESSAY' | 'ANSWER' | 'VOCAB'>('ESSAY');
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
@@ -166,6 +174,52 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
     setEditingWord(null);
   };
 
+  useEffect(() => {
+    if (isLinkedFileUnit && activeTab === 'VOCAB') {
+      setActiveTab('ESSAY');
+    }
+  }, [isLinkedFileUnit, activeTab]);
+
+  const renderLinkedFile = (content: LinkedFileContent) => {
+    if (content.state === 'loading' || content.state === 'idle') {
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center text-neutral-400">
+          <Loader2 size={22} className="animate-spin" />
+        </div>
+      );
+    }
+    if (content.state === 'error') {
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center p-8">
+          <p className="text-sm text-rose-600 font-semibold">{content.message}</p>
+        </div>
+      );
+    }
+    if (content.state === 'binary') {
+      return (
+        <div className="min-h-[60vh] flex flex-col">
+          {content.mimeType?.includes('pdf') ? (
+            <iframe src={content.fileUrl} className="w-full min-h-[60vh] border-0 rounded-b-[2.5rem]" title={content.title} />
+          ) : (
+            <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 p-8 text-center">
+              <FileText size={26} className="text-neutral-400" />
+              <p className="text-sm text-neutral-600 font-medium">Inline preview is limited for this file type.</p>
+              <a href={content.fileUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-neutral-900 text-white text-xs font-black uppercase tracking-wider">
+                Open File
+                <ExternalLink size={14} />
+              </a>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return (
+      <div className="min-h-[60vh] p-6 md:p-8 overflow-auto">
+        <pre className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-neutral-800">{content.text}</pre>
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="max-w-5xl mx-auto space-y-5 pb-24 relative animate-in fade-in duration-300">
@@ -174,7 +228,7 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <button onClick={onBack} className="flex items-center space-x-2 text-sm font-bold text-neutral-400 hover:text-neutral-900 transition-colors"><ArrowLeft size={16} /><span>Back to Library</span></button>
             <div className="flex items-center gap-3">
-                {activeTab === 'ESSAY' && (
+                {activeTab === 'ESSAY' && !isLinkedFileUnit && (
                     <button onClick={() => setIsPracticeMode(!isPracticeMode)} className={`px-4 py-2 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest border transition-all ${isPracticeMode ? 'bg-amber-100 text-amber-700 border-amber-200 shadow-inner' : 'bg-white text-neutral-600 border-neutral-200'}`}>
                         <BrainCircuit size={16} /><span>Context Recall</span>
                     </button>
@@ -227,8 +281,15 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
                 <BookText size={14} /> Essay
             </button>
             <button 
+                onClick={() => setActiveTab('ANSWER')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'ANSWER' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'} ${!isLinkedFileUnit ? 'hidden' : ''}`}
+            >
+                <FileText size={14} /> Answer
+            </button>
+            <button 
                 onClick={() => setActiveTab('VOCAB')}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'VOCAB' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                style={{ display: isLinkedFileUnit ? 'none' : 'flex' }}
             >
                 <LayoutList size={14} /> Vocabulary
             </button>
@@ -238,25 +299,35 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
         <div className="min-h-[500px]">
             {activeTab === 'ESSAY' && (
                 <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white overflow-hidden flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    {isPracticeMode && (
+                    {!isLinkedFileUnit && isPracticeMode && (
                         <div className="absolute top-4 right-6 z-20 flex items-center gap-2 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full border border-amber-200 animate-in fade-in slide-in-from-top-2 shadow-sm">
                             <BrainCircuit size={12} />
                             <span className="text-[10px] font-black uppercase tracking-tighter">Active Recall</span>
                         </div>
                     )}
-                    <EssayReader 
-                        className="min-h-[60vh]"
-                        text={unit.essay || ''} 
-                        vocabString={unit.customVocabString} 
-                        wordsByText={wordsByText} 
-                        onHoverWord={handleHoverWord} 
-                        onWordAction={onWordAction} 
-                        isPracticeMode={isPracticeMode} 
-                    />
+                    {isLinkedFileUnit ? (
+                        renderLinkedFile(essayFileContent)
+                    ) : (
+                        <EssayReader 
+                            className="min-h-[60vh]"
+                            text={unit.essay || ''} 
+                            vocabString={unit.customVocabString} 
+                            wordsByText={wordsByText} 
+                            onHoverWord={handleHoverWord} 
+                            onWordAction={onWordAction} 
+                            isPracticeMode={isPracticeMode} 
+                        />
+                    )}
                 </div>
             )}
 
-            {activeTab === 'VOCAB' && (
+            {activeTab === 'ANSWER' && isLinkedFileUnit && (
+                <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white overflow-hidden flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {renderLinkedFile(answerFileContent)}
+                </div>
+            )}
+
+            {activeTab === 'VOCAB' && !isLinkedFileUnit && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <WordTable 
                         user={user}

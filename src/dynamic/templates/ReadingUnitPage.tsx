@@ -39,6 +39,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null);
   const [showRefineAiModal, setShowRefineAiModal] = useState(false);
   const [showFileSelector, setShowFileSelector] = useState(false);
+  const [showFilePairSelector, setShowFilePairSelector] = useState(false);
   
   // List View Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -154,6 +155,53 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       }
   };
 
+  const handleImportFilePairFromServer = async (fileData: any) => {
+      const essayFile = fileData?.essayFile;
+      const answerFile = fileData?.answerFile;
+      if (!essayFile || !answerFile) {
+          showToast("Please choose both Essay and Answer files.", "error");
+          return;
+      }
+
+      const essayTitle = String(essayFile.fileName || 'Imported Essay').replace(/\.[^/.]+$/, '');
+
+      const newUnit: Unit = {
+          id: generateId(),
+          userId: user.id,
+          name: essayTitle,
+          description: "Imported from server files.",
+          wordIds: [],
+          customVocabString: '',
+          essay: '',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          path: '/',
+          readingSourceType: 'server_file_pair',
+          essayFileLink: {
+              mapName: essayFile.mapName,
+              relativePath: essayFile.relativePath,
+              fileName: essayFile.fileName,
+              extension: essayFile.extension
+          },
+          answerFileLink: {
+              mapName: answerFile.mapName,
+              relativePath: answerFile.relativePath,
+              fileName: answerFile.fileName,
+              extension: answerFile.extension
+          }
+      };
+
+      try {
+          await dataStore.saveUnit(newUnit);
+          showToast(`Imported "${newUnit.name}" successfully!`, 'success');
+          await loadData();
+          setActiveUnit(newUnit);
+          setViewMode('READ');
+      } catch (_e) {
+          showToast("Failed to save imported file pair.", "error");
+      }
+  };
+
   const handleDeleteUnit = async () => {
       if (!unitToDelete) return;
       await db.deleteUnit(unitToDelete.id);
@@ -251,7 +299,8 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                 browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); setIsGroupBrowserOpen(false); } }}
                 addActions={[
                     { label: 'AI Unit', icon: Sparkles, onClick: () => setShowRefineAiModal(true) },
-                    { label: 'Add from Server', icon: Download, onClick: () => setShowFileSelector(true) },
+                    { label: 'Import File from Server', icon: Download, onClick: () => setShowFilePairSelector(true) },
+                    { label: 'Import Unit from Server', icon: Download, onClick: () => setShowFileSelector(true) },
                     { label: 'New Unit', icon: Plus, onClick: handleCreateEmptyUnit }
                 ]}
             />
@@ -336,6 +385,13 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
           onSelect={handleImportFromServer}
           type="reading"
           title="Import Reading from Server"
+      />
+      <FileSelector 
+          isOpen={showFilePairSelector}
+          onClose={() => setShowFilePairSelector(false)}
+          onSelect={handleImportFilePairFromServer}
+          type="reading_pair"
+          title="Import File Pair from Server"
       />
     </>
   );

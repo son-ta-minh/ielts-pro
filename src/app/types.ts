@@ -215,6 +215,19 @@ export interface Unit {
     question: string;
     answer: string;
   }[];
+  readingSourceType?: 'inline' | 'server_file_pair';
+  essayFileLink?: {
+    mapName: string;
+    relativePath: string;
+    fileName: string;
+    extension?: string;
+  };
+  answerFileLink?: {
+    mapName: string;
+    relativePath: string;
+    fileName: string;
+    extension?: string;
+  };
   focusColor?: FocusColor;
   isFocused?: boolean;
 }

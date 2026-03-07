@@ -9,6 +9,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { stringToWordArray } from '../../utils/text';
 import { filterItem } from '../../app/db';
 import { exportUnitsToJson } from '../../utils/dataHandler';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 interface Props {
   user: User;
@@ -21,7 +22,14 @@ interface Props {
   onUpdateUser: (user: User) => Promise<void>;
 }
 
+type LinkedFileContent =
+  | { state: 'idle' | 'loading' }
+  | { state: 'error'; message: string }
+  | { state: 'text'; title: string; text: string; fileName: string; extension?: string }
+  | { state: 'binary'; title: string; fileUrl: string; fileName: string; extension?: string; mimeType?: string };
+
 export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onDataChange, onStartSession, onUpdateUser, ...props }) => {
+  const serverUrl = getServerUrl(getConfig());
   const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
   const [isPracticeMode, setIsPracticeMode] = useState(false);
@@ -48,6 +56,8 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
   const [isComprehensionModalOpen, setIsComprehensionModalOpen] = useState(false);
   const [comprehensionAnswers, setComprehensionAnswers] = useState<Record<number, string>>({});
   const [comprehensionResults, setComprehensionResults] = useState<Record<number, 'correct' | 'incorrect' | null>>({});
+  const [essayFileContent, setEssayFileContent] = useState<LinkedFileContent>({ state: 'idle' });
+  const [answerFileContent, setAnswerFileContent] = useState<LinkedFileContent>({ state: 'idle' });
 
   const wordsById = useMemo(() => new Map(allWords.map(w => [w.id, w])), [allWords]);
   const { showToast } = useToast();
@@ -60,6 +70,61 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
       window.removeEventListener('datastore-updated', onDataChange);
     };
   }, [onDataChange]);
+
+  useEffect(() => {
+    const encodePathForApi = (relativePath: string) => relativePath.split('/').map(part => encodeURIComponent(part)).join('/');
+
+    const loadLinkedFile = async (
+      link: Unit['essayFileLink'] | undefined,
+      setState: React.Dispatch<React.SetStateAction<LinkedFileContent>>
+    ) => {
+      if (!link?.mapName || !link.relativePath) {
+        setState({ state: 'idle' });
+        return;
+      }
+
+      setState({ state: 'loading' });
+      try {
+        const encodedPath = encodePathForApi(link.relativePath);
+        const res = await fetch(`${serverUrl}/api/reading/content/${encodeURIComponent(link.mapName)}/${encodedPath}`);
+        if (!res.ok) {
+          setState({ state: 'error', message: 'Failed to load file.' });
+          return;
+        }
+        const data = await res.json();
+        if (data.contentType === 'binary') {
+          const absoluteUrl = String(data.fileUrl || '').startsWith('http') ? data.fileUrl : `${serverUrl}${data.fileUrl}`;
+          setState({
+            state: 'binary',
+            title: data.title || link.fileName,
+            fileUrl: absoluteUrl,
+            fileName: link.fileName,
+            extension: link.extension,
+            mimeType: data.mimeType
+          });
+        } else {
+          setState({
+            state: 'text',
+            title: data.title || link.fileName,
+            text: data.essay || '',
+            fileName: link.fileName,
+            extension: link.extension
+          });
+        }
+      } catch (_e) {
+        setState({ state: 'error', message: 'Connection error while loading file.' });
+      }
+    };
+
+    if (unit.readingSourceType !== 'server_file_pair') {
+      setEssayFileContent({ state: 'idle' });
+      setAnswerFileContent({ state: 'idle' });
+      return;
+    }
+
+    loadLinkedFile(unit.essayFileLink, setEssayFileContent);
+    loadLinkedFile(unit.answerFileLink, setAnswerFileContent);
+  }, [serverUrl, unit.readingSourceType, unit.essayFileLink, unit.answerFileLink]);
 
   const handleQueryChange = useCallback((query: string) => {
     setUnitTableQuery(query);
@@ -265,6 +330,8 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
       onComprehensionAnswerChange={(index, value) => setComprehensionAnswers(prev => ({...prev, [index]: value}))}
       comprehensionResults={comprehensionResults}
       onComprehensionResultChange={(index, result) => setComprehensionResults(prev => ({...prev, [index]: result}))}
+      essayFileContent={essayFileContent}
+      answerFileContent={answerFileContent}
     />
   );
 }

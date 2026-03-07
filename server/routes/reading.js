@@ -78,7 +78,7 @@ router.get('/reading/files/:mapName', (req, res) => {
 
     try {
         const dirents = fs.readdirSync(targetDir, { withFileTypes: true });
-        const validExtensions = ['.txt', '.md', '.json'];
+        const validExtensions = ['.txt', '.md', '.json', '.pdf', '.doc', '.docx'];
         
         const items = dirents.map(dirent => {
             const item = {
@@ -147,8 +147,25 @@ router.get('/reading/content/:mapName/*', (req, res) => {
 
     try {
         const ext = path.extname(fullPath).toLowerCase();
-        const rawContent = fs.readFileSync(fullPath, 'utf8');
         const filename = path.basename(fullPath, ext);
+        const encodePathForApi = (p) => p.split('/').map(seg => encodeURIComponent(seg)).join('/');
+        const rawFileUrl = `/api/reading/raw/${encodeURIComponent(mapName)}/${encodePathForApi(filePathRel)}`;
+
+        if (['.pdf', '.doc', '.docx'].includes(ext)) {
+            const mimeMap = {
+                '.pdf': 'application/pdf',
+                '.doc': 'application/msword',
+                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            };
+            return res.json({
+                title: filename.replace(/_/g, ' '),
+                contentType: 'binary',
+                fileUrl: rawFileUrl,
+                mimeType: mimeMap[ext] || 'application/octet-stream'
+            });
+        }
+
+        const rawContent = fs.readFileSync(fullPath, 'utf8');
 
         if (ext === '.json') {
             try {
@@ -157,7 +174,8 @@ router.get('/reading/content/:mapName/*', (req, res) => {
                     title: json.name || json.title || filename,
                     essay: json.essay || json.content || '',
                     // Support both new 'customVocabString' and legacy/generic 'words'
-                    words: json.customVocabString || json.words || json.vocab || ''
+                    words: json.customVocabString || json.words || json.vocab || '',
+                    contentType: 'text'
                 });
             } catch (e) {
                 return res.status(500).json({ error: 'Invalid JSON file' });
@@ -182,13 +200,29 @@ router.get('/reading/content/:mapName/*', (req, res) => {
             res.json({
                 title: filename.replace(/_/g, ' '),
                 essay: rawContent,
-                words: words
+                words: words,
+                contentType: 'text'
             });
         }
     } catch (e) {
         console.error(`[Reading] Failed to read file ${fullPath}:`, e);
         res.status(500).json({ error: 'Failed to read file' });
     }
+});
+
+router.get('/reading/raw/:mapName/*', (req, res) => {
+    loadMappings();
+    const { mapName } = req.params;
+    const filePathRel = req.params[0];
+
+    const rootDir = folderMappings[mapName];
+    if (!rootDir) return res.status(404).json({ error: 'Mapping not found' });
+
+    const fullPath = path.join(rootDir, filePathRel);
+    if (!fullPath.startsWith(rootDir)) return res.status(403).json({ error: 'Access denied' });
+    if (!fs.existsSync(fullPath)) return res.status(404).json({ error: 'File not found' });
+
+    return res.sendFile(fullPath);
 });
 
 module.exports = router;
