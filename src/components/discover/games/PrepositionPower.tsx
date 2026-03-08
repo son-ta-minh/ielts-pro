@@ -54,6 +54,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
         const pool: PrepositionItem[] = [];
 
         words.forEach(w => {
+            if (!w.lastReview) return; // Only include learned/reviewed words.
             if (!w.prepositions || w.prepositions.length === 0) return;
 
             w.prepositions.forEach((prep, prepIndex) => {
@@ -101,6 +102,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
         let mastered = 0;
 
         words.forEach(word => {
+            if (!word.lastReview) return; // Keep stats aligned with playable pool.
             (word.prepositions || []).forEach(prep => {
                 if (prep.isIgnored || !prep.prep?.trim()) return;
                 total += 1;

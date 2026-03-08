@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Play, Sparkles } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
+import * as dataStore from '../../../app/dataStore';
+import { useToast } from '../../../contexts/ToastContext';
 
 interface Props {
     words: VocabularyItem[];
@@ -10,6 +12,7 @@ interface Props {
 
 type RegisterLabel = 'academic' | 'casual' | 'neutral';
 type GameState = 'SETUP' | 'PLAYING';
+type GameMode = 'MASTER' | 'TOTAL';
 
 interface RegisterQuestion {
     id: string;
@@ -40,6 +43,7 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export const RegisterPickGame: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const [gameState, setGameState] = useState<GameState>('SETUP');
+    const [gameMode, setGameMode] = useState<GameMode>('MASTER');
     const [sessionSize, setSessionSize] = useState(10);
     const [queue, setQueue] = useState<RegisterQuestion[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -47,10 +51,12 @@ export const RegisterPickGame: React.FC<Props> = ({ words, onComplete, onExit })
     const [selected, setSelected] = useState<RegisterLabel | null>(null);
     const [isChecked, setIsChecked] = useState(false);
     const [isCorrect, setIsCorrect] = useState(false);
+    const { showToast } = useToast();
 
     const questionPool = useMemo(() => {
         const unique = new Map<string, RegisterQuestion>();
         words.forEach((word) => {
+            if (!word.lastReview) return; // Only include learned/reviewed words.
             const register = normalizeRegister(word.register);
             if (!register) return;
             const key = `${word.word.toLowerCase()}::${register}`;
@@ -65,11 +71,31 @@ export const RegisterPickGame: React.FC<Props> = ({ words, onComplete, onExit })
         return Array.from(unique.values());
     }, [words]);
 
+    const masteredCount = useMemo(
+        () => questionPool.filter(q => dataStore.getWordById(q.id)?.lastTestResults?.REGISTER_PICK === true).length,
+        [questionPool]
+    );
+
+    const currentPool = useMemo(() => {
+        if (gameMode === 'TOTAL') return questionPool;
+        return questionPool.filter(q => dataStore.getWordById(q.id)?.lastTestResults?.REGISTER_PICK !== true);
+    }, [questionPool, gameMode]);
+
     const currentQuestion = queue[currentIndex] || null;
     const progress = queue.length > 0 ? Math.round(((currentIndex + 1) / queue.length) * 100) : 0;
 
     const startGame = () => {
-        const picked = shuffleArray(questionPool).slice(0, Math.min(sessionSize, questionPool.length));
+        if (currentPool.length === 0) {
+            if (gameMode === 'MASTER') {
+                showToast('All register items mastered! Switching to Total mode.', 'success');
+                setGameMode('TOTAL');
+            } else {
+                showToast('No register-labeled words found.', 'error');
+            }
+            return;
+        }
+
+        const picked = shuffleArray(currentPool).slice(0, Math.min(sessionSize, currentPool.length));
         setQueue(picked);
         setCurrentIndex(0);
         setScore(0);
@@ -87,6 +113,18 @@ export const RegisterPickGame: React.FC<Props> = ({ words, onComplete, onExit })
         if (correct) {
             setScore((prev) => prev + 10);
         }
+
+        const word = dataStore.getWordById(currentQuestion.id);
+        if (word) {
+            dataStore.saveWord({
+                ...word,
+                lastTestResults: {
+                    ...(word.lastTestResults || {}),
+                    REGISTER_PICK: correct
+                },
+                updatedAt: Date.now()
+            });
+        }
     };
 
     const nextQuestion = () => {
@@ -101,7 +139,7 @@ export const RegisterPickGame: React.FC<Props> = ({ words, onComplete, onExit })
     };
 
     if (gameState === 'SETUP') {
-        const availableCount = questionPool.length;
+        const availableCount = currentPool.length;
         const canStart = availableCount >= 5;
 
         return (
@@ -122,7 +160,28 @@ export const RegisterPickGame: React.FC<Props> = ({ words, onComplete, onExit })
                     <div className="bg-neutral-50 rounded-2xl p-4 text-left space-y-1">
                         <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Eligible Words</p>
                         <p className="text-2xl font-black text-neutral-900">{availableCount}</p>
-                        <p className="text-xs text-neutral-500">Only words with `VocabularyItem.register` = `academic`, `casual`, or `neutral`.</p>
+                        <p className="text-xs text-neutral-500">Only learned words with `VocabularyItem.register` = `academic`, `casual`, or `neutral`.</p>
+                    </div>
+
+                    <div className="bg-neutral-50 rounded-2xl p-4 text-left space-y-3">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Mastered</p>
+                                <p className="text-xl font-black text-emerald-600">{masteredCount}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Total</p>
+                                <p className="text-xl font-black text-neutral-900">{questionPool.length}</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setGameMode('MASTER')} className={`p-2.5 rounded-xl border-2 text-[10px] font-bold transition-all ${gameMode === 'MASTER' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-white border-neutral-200 text-neutral-600 hover:border-neutral-300'}`}>
+                                Master
+                            </button>
+                            <button onClick={() => setGameMode('TOTAL')} className={`p-2.5 rounded-xl border-2 text-[10px] font-bold transition-all ${gameMode === 'TOTAL' ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-white border-neutral-200 text-neutral-600 hover:border-neutral-300'}`}>
+                                Total
+                            </button>
+                        </div>
                     </div>
 
                     <div className="text-left space-y-2">
@@ -151,7 +210,7 @@ export const RegisterPickGame: React.FC<Props> = ({ words, onComplete, onExit })
                         Start
                     </button>
                     {!canStart && (
-                        <p className="text-xs text-rose-500">Need at least 5 words with register labels to start.</p>
+                        <p className="text-xs text-rose-500">Need at least 5 eligible words in selected mode to start.</p>
                     )}
                 </div>
             </div>
