@@ -20,6 +20,16 @@ function getNextReviewTimestamp(baseTimestamp: number, daysToAdd: number): numbe
     return reviewDate.getTime();
 }
 
+function isSameLocalDay(timestampA: number, timestampB: number): boolean {
+  const a = new Date(timestampA);
+  const b = new Date(timestampB);
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 /**
  * Enhanced SRS algorithm with Overdue Bonus (Elastic Scheduling).
  */
@@ -27,11 +37,15 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
   const config = getConfig().srs;
   const newItem = { ...item };
   const now = Date.now();
+  const hasStatusChangedToday = !!item.lastReview && isSameLocalDay(item.lastReview, now);
+  const shouldUpdateSchedule = !hasStatusChangedToday;
   
   if (grade === ReviewGrade.LEARNED) {
-    newItem.consecutiveCorrect = 1;
-    newItem.interval = config.initialHard;
-    newItem.nextReview = getNextReviewTimestamp(now, config.initialHard);
+    if (shouldUpdateSchedule) {
+      newItem.consecutiveCorrect = 1;
+      newItem.interval = config.initialHard;
+      newItem.nextReview = getNextReviewTimestamp(now, config.initialHard);
+    }
   } else {
     let currentInterval = item.interval || 0;
     let nextInterval = 1;
@@ -76,8 +90,10 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
       newItem.consecutiveCorrect += 1;
     }
     
-    newItem.interval = Math.round(nextInterval);
-    newItem.nextReview = getNextReviewTimestamp(now, newItem.interval);
+    if (shouldUpdateSchedule) {
+      newItem.interval = Math.round(nextInterval);
+      newItem.nextReview = getNextReviewTimestamp(now, newItem.interval);
+    }
   }
 
   newItem.lastGrade = grade;
