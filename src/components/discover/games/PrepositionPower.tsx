@@ -2,6 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Play, Check, ChevronRight, Zap, Search } from 'lucide-react';
 import { VocabularyItem } from '../../../app/types';
+import * as dataStore from '../../../app/dataStore';
+import { useToast } from '../../../contexts/ToastContext';
 
 interface Props {
     words: VocabularyItem[];
@@ -11,11 +13,15 @@ interface Props {
 
 interface PrepositionItem {
     id: string;
+    wordId: string;
+    prepIndex: number;
     word: string;
     example: string;
     answer: string;
     meaning: string;
 }
+
+type GameMode = 'MASTER' | 'TOTAL';
 
 const COMMON_PREPOSITIONS = [
     'in', 'on', 'at', 'to', 'for', 'with', 'of', 'from', 'by', 'about', 
@@ -26,6 +32,9 @@ const COMMON_PREPOSITIONS = [
 export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const [gameState, setGameState] = useState<'SETUP' | 'PLAYING'>('SETUP');
     const [sessionSize, setSessionSize] = useState(10);
+    const [gameMode, setGameMode] = useState<GameMode>('MASTER');
+    const [totalItems, setTotalItems] = useState(0);
+    const [masteredItems, setMasteredItems] = useState(0);
     const [queue, setQueue] = useState<PrepositionItem[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [userGuess, setUserGuess] = useState('');
@@ -39,50 +48,101 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
 
     const inputRef = useRef<HTMLInputElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const { showToast } = useToast();
+
+    const buildQuestionPool = (mode: GameMode): PrepositionItem[] => {
+        const pool: PrepositionItem[] = [];
+
+        words.forEach(w => {
+            if (!w.prepositions || w.prepositions.length === 0) return;
+
+            w.prepositions.forEach((prep, prepIndex) => {
+                if (prep.isIgnored || !prep.prep) return;
+                if (mode === 'MASTER' && prep.lastResult === 'correct') return;
+
+                const headword = w.word;
+                const prepText = prep.prep.trim();
+                const usage = (prep.usage || '').trim();
+                let exampleWithBlank = '';
+
+                // If usage already contains headword (full context), blank the preposition in-place.
+                if (usage && usage.toLowerCase().includes(headword.toLowerCase())) {
+                    const prepRegex = new RegExp(`\\b${prepText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+                    if (prepRegex.test(usage)) {
+                        exampleWithBlank = usage.replace(prepRegex, '___');
+                    } else {
+                        exampleWithBlank = `${usage} [___]`;
+                    }
+                } else if (usage) {
+                    // Usage is likely the tail after "word + prep"
+                    exampleWithBlank = `${headword} ___ ${usage}`;
+                } else {
+                    // Final fallback when no context exists
+                    exampleWithBlank = `${headword} ___`;
+                }
+
+                pool.push({
+                    id: `${w.id}-${prep.prep}-${prepIndex}`,
+                    wordId: w.id,
+                    prepIndex,
+                    word: w.word,
+                    example: exampleWithBlank,
+                    answer: prep.prep.toLowerCase(),
+                    meaning: w.meaningVi
+                });
+            });
+        });
+
+        return pool;
+    };
+
+    useEffect(() => {
+        let total = 0;
+        let mastered = 0;
+
+        words.forEach(word => {
+            (word.prepositions || []).forEach(prep => {
+                if (prep.isIgnored || !prep.prep?.trim()) return;
+                total += 1;
+                if (prep.lastResult === 'correct') mastered += 1;
+            });
+        });
+
+        setTotalItems(total);
+        setMasteredItems(mastered);
+    }, [words, gameState]);
+
+    const saveResult = async (wasCorrect: boolean) => {
+        const current = queue[currentIndex];
+        if (!current) return;
+
+        const word = dataStore.getWordById(current.wordId) || words.find(w => w.id === current.wordId);
+        if (!word?.prepositions || !word.prepositions[current.prepIndex]) return;
+
+        const updatedPrepositions = word.prepositions.map((p, idx) =>
+            idx === current.prepIndex ? { ...p, lastResult: wasCorrect ? 'correct' as const : 'incorrect' as const } : p
+        );
+
+        await dataStore.saveWord({
+            ...word,
+            prepositions: updatedPrepositions,
+            updatedAt: Date.now()
+        });
+    };
 
     const handleStartGame = () => {
-        const candidates = words.filter(w => w.prepositions && w.prepositions.some(p => !p.isIgnored) && w.example);
-        if (candidates.length < 3) {
-            alert("Not enough vocabulary with prepositions and examples found in your library.");
-            return;
-        }
-
-        const shuffled = [...candidates].sort(() => Math.random() - 0.5);
-        const newQueue: PrepositionItem[] = [];
-
-        for (const w of shuffled) {
-            if (newQueue.length >= sessionSize) break;
-            
-            const activePreps = w.prepositions!.filter(p => !p.isIgnored);
-            const shuffledPreps = [...activePreps].sort(() => Math.random() - 0.5);
-            
-            for (const prep of shuffledPreps) {
-                const escapedWord = w.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`\\b${escapedWord}\\s+${prep.prep}\\b`, 'i');
-                
-                if (regex.test(w.example)) {
-                    // Truncate at first period
-                    const truncatedExample = w.example.split('.')[0] + '.';
-                    // Double check regex still works in truncated part
-                    if (regex.test(truncatedExample)) {
-                        const exampleWithBlank = truncatedExample.replace(regex, `${w.word} ___`);
-                        newQueue.push({ 
-                            id: `${w.id}-${prep.prep}`, 
-                            word: w.word, 
-                            example: exampleWithBlank, 
-                            answer: prep.prep.toLowerCase(),
-                            meaning: w.meaningVi
-                        });
-                        break; 
-                    }
-                }
+        const pool = buildQuestionPool(gameMode);
+        if (pool.length === 0) {
+            if (gameMode === 'MASTER') {
+                showToast("All preposition items mastered! Switching to Total mode.", "success");
+                setGameMode('TOTAL');
+            } else {
+                showToast("No preposition context found in your library.", "error");
             }
-        }
-
-        if (newQueue.length < 1) {
-            alert("Could not generate questions from existing data.");
             return;
         }
+
+        const newQueue = [...pool].sort(() => Math.random() - 0.5).slice(0, sessionSize);
 
         setQueue(newQueue);
         setGameState('PLAYING');
@@ -100,7 +160,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
         }
     }, [currentIndex, gameState]);
 
-    const handleCheck = (overrideValue?: string) => {
+    const handleCheck = async (overrideValue?: string) => {
         if (!currentItem || isCorrect === true) return;
         
         const finalGuess = (overrideValue !== undefined ? overrideValue : userGuess).trim().toLowerCase();
@@ -111,6 +171,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
         
         if (correct) {
             setScore(s => s + 15);
+            await saveResult(true);
             setTimeout(() => {
                 if (currentIndex < queue.length - 1) {
                     setCurrentIndex(prev => prev + 1);
@@ -142,7 +203,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (!showDropdown) {
-            if (e.key === 'Enter') handleCheck();
+            if (e.key === 'Enter') void handleCheck();
             return;
         }
 
@@ -161,7 +222,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
                 const selected = suggestions[selectedIndex];
                 setUserGuess(selected);
                 setShowDropdown(false);
-                handleCheck(selected);
+                void handleCheck(selected);
                 break;
             }
             case 'Escape':
@@ -182,6 +243,31 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
                 </div>
 
                 <div className="w-full max-w-sm bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm space-y-6">
+                    <div className="flex justify-between items-center bg-neutral-50 p-3 rounded-2xl">
+                        <div className="text-center flex-1 border-r border-neutral-200">
+                            <p className="text-2xl font-black text-emerald-500">{masteredItems}</p>
+                            <p className="text-[10px] font-bold text-neutral-400 uppercase">Mastered</p>
+                        </div>
+                        <div className="text-center flex-1">
+                            <p className="text-2xl font-black text-neutral-900">{totalItems}</p>
+                            <p className="text-[10px] font-bold text-neutral-400 uppercase">Total</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Game Mode</p>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => setGameMode('MASTER')} className={`p-2.5 rounded-xl border-2 text-[10px] font-bold transition-all ${gameMode === 'MASTER' ? 'bg-violet-50 border-violet-500 text-violet-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
+                                Master
+                                <p className="text-[8px] font-normal opacity-70 mt-0.5">Weak items only</p>
+                            </button>
+                            <button onClick={() => setGameMode('TOTAL')} className={`p-2.5 rounded-xl border-2 text-[10px] font-bold transition-all ${gameMode === 'TOTAL' ? 'bg-violet-50 border-violet-500 text-violet-700' : 'bg-white border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}>
+                                Total
+                                <p className="text-[8px] font-normal opacity-70 mt-0.5">All items</p>
+                            </button>
+                        </div>
+                    </div>
+
                     <div className="space-y-4">
                          <div className="flex justify-between items-center px-1">
                             <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Question Count</span>
@@ -258,7 +344,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
                                                         onClick={() => {
                                                             setUserGuess(suggestion);
                                                             setShowDropdown(false);
-                                                            handleCheck(suggestion);
+                                                            void handleCheck(suggestion);
                                                         }}
                                                         className={`w-full px-4 py-2.5 text-sm font-bold text-left transition-colors ${selectedIndex === sIdx ? 'bg-violet-500 text-white' : 'text-neutral-600 hover:bg-neutral-50'}`}
                                                     >
@@ -276,7 +362,8 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
 
                 <div className="flex gap-4 shrink-0">
                     <button 
-                        onClick={() => {
+                        onClick={async () => {
+                            await saveResult(false);
                             if (currentIndex < queue.length - 1) {
                                 setCurrentIndex(prev => prev + 1);
                                 setUserGuess('');
@@ -291,7 +378,7 @@ export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit })
                     </button>
 
                     <button 
-                        onClick={() => handleCheck()}
+                        onClick={() => void handleCheck()}
                         disabled={userGuess.trim().length === 0 || isCorrect === true}
                         className="px-12 py-4 bg-neutral-900 text-white font-black text-sm uppercase tracking-widest rounded-2xl hover:bg-neutral-800 transition-all shadow-xl active:scale-95 disabled:opacity-30 flex items-center gap-2"
                     >

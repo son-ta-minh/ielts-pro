@@ -113,8 +113,15 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
             right.push({ id: `r-${pairId}`, text: pair.d, cueId: pairId, pairId, state: 'default', type: 'meaning' });
         });
 
-        setCards(shuffleArray(newCards));
-        setMatchCardsLeft(shuffleArray(left));
+        // Sort matrix cards A-Z so users can scan words faster
+        const sortedMatrixCards = [...newCards].sort((a, b) =>
+            a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
+        );
+        setCards(sortedMatrixCards);
+        // Sort words A-Z for easier searching
+        const sortedLeft = [...left].sort((a, b) => a.text.localeCompare(b.text, undefined, { sensitivity: 'base' }));
+
+        setMatchCardsLeft(sortedLeft);
         setMatchCardsRight(shuffleArray(right));
         setCues(shuffleArray(newCues));
         setCurrentCueIndex(0);
@@ -123,7 +130,7 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
         setSelectedLeftId(null);
         setSelectedRightId(null);
         
-    }, [gameState, sessionSize, words, sources]);
+    }, [gameState, sessionSize, sources]);
 
     // Game over check
     useEffect(() => {

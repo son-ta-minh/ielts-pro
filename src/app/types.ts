@@ -122,6 +122,7 @@ export interface PrepositionPattern {
   prep: string;
   usage: string;
   isIgnored?: boolean;
+  lastResult?: 'correct' | 'incorrect';
 }
 
 export type ParaphraseTone = 'intensified' | 'softened' | 'synonym' | 'academic' | 'casual';

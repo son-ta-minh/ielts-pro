@@ -74,8 +74,8 @@ export const calculateGameEligibility = (item: VocabularyItem): string[] => {
         eligible.push('DICTATION');
     }
 
-    // PREPOSITION_POWER: Needs prepositions AND an example sentence
-    if (item.example && item.prepositions && item.prepositions.some(p => !p.isIgnored)) {
+    // PREPOSITION_POWER: Needs at least one active preposition pattern
+    if (item.prepositions && item.prepositions.some(p => !p.isIgnored && p.prep && p.prep.trim().length > 0)) {
         eligible.push('PREPOSITION_POWER');
     }
 
