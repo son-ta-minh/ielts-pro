@@ -21,7 +21,7 @@ type LinkedFileContent =
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-const PdfJsViewer: React.FC<{ fileUrl: string }> = ({ fileUrl }) => {
+const PdfJsViewer: React.FC<{ fileUrl: string; viewportHeight: number }> = ({ fileUrl, viewportHeight }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [renderVersion, setRenderVersion] = useState(0);
@@ -102,7 +102,10 @@ const PdfJsViewer: React.FC<{ fileUrl: string }> = ({ fileUrl }) => {
     }, [fileUrl, renderVersion]);
 
     return (
-        <div className="relative h-[75vh] max-h-[75vh] p-3 bg-neutral-50/40 overflow-hidden">
+        <div
+          className="relative p-3 bg-neutral-50/40 overflow-hidden"
+          style={{ height: `${viewportHeight}vh`, maxHeight: `${viewportHeight}vh` }}
+        >
             <style>{`
                 .pdfjs-text-layer {
                     line-height: 1;
@@ -324,6 +327,7 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
   const isLinkedFileUnit = unit.readingSourceType === 'server_file_pair';
   const [activeTab, setActiveTab] = useState<'ESSAY' | 'ANSWER' | 'VOCAB'>('ESSAY');
   const [pdfRenderMode, setPdfRenderMode] = useState<'iframe' | 'pdfjs'>('pdfjs');
+  const [pdfViewportHeight, setPdfViewportHeight] = useState(90);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
@@ -382,7 +386,7 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
         <div className="min-h-[60vh] flex flex-col">
           {isPdfBinary(content) ? (
             pdfRenderMode === 'pdfjs'
-              ? <PdfJsViewer fileUrl={content.fileUrl} />
+              ? <PdfJsViewer fileUrl={content.fileUrl} viewportHeight={pdfViewportHeight} />
               : <iframe src={content.fileUrl} className="w-full min-h-[60vh] border-0 rounded-b-[2.5rem]" title={content.title} />
           ) : isOfficeDoc ? (
             <DocxViewer fileUrl={content.fileUrl} title={content.title} />
@@ -482,13 +486,34 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
             </button>
           </div>
           {hasPdfLinkedContent && (
-            <button
-              onClick={() => setPdfRenderMode(mode => mode === 'iframe' ? 'pdfjs' : 'iframe')}
-              className={`ml-auto px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${pdfRenderMode === 'pdfjs' ? 'bg-cyan-100 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'}`}
-              title="Switch PDF render mode"
-            >
-              {pdfRenderMode === 'pdfjs' ? 'App Render' : 'System Render'}
-            </button>
+            <>
+              <div className="ml-auto flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-neutral-200 shadow-sm">
+                <button
+                  onClick={() => setPdfViewportHeight(h => Math.max(40, h - 5))}
+                  className="px-2 py-0.5 text-[10px] font-black text-neutral-600 hover:bg-neutral-100 rounded"
+                  title="Decrease viewer height"
+                >
+                  −
+                </button>
+                <span className="text-[10px] font-bold text-neutral-500 w-10 text-center">
+                  {pdfViewportHeight}vh
+                </span>
+                <button
+                  onClick={() => setPdfViewportHeight(h => Math.min(120, h + 5))}
+                  className="px-2 py-0.5 text-[10px] font-black text-neutral-600 hover:bg-neutral-100 rounded"
+                  title="Increase viewer height"
+                >
+                  +
+                </button>
+              </div>
+              <button
+                onClick={() => setPdfRenderMode(mode => mode === 'iframe' ? 'pdfjs' : 'iframe')}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${pdfRenderMode === 'pdfjs' ? 'bg-cyan-100 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'}`}
+                title="Switch PDF render mode"
+              >
+                {pdfRenderMode === 'pdfjs' ? 'App Render' : 'System Render'}
+              </button>
+            </>
           )}
         </div>
 
