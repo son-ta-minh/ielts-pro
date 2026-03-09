@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, ScanLine, Image as ImageIcon, Mic, Library, PenTool } from 'lucide-react';
+import { X, ScanLine, Image as ImageIcon, Mic, Library, PenTool, Sparkles } from 'lucide-react';
 import { User } from '../../app/types';
 import { OCRTool } from './OCRTool';
 import { AudioTool } from './AudioTool';
 import { ImageManager } from './ImageManager';
 import { WordLibraryTool } from './WordLibraryTool';
 import { FreeNoteTool } from './FreeNote';
+import { PromptHelperTool } from './PromptHelperTool';
 
 interface Props {
     isOpen: boolean;
@@ -15,11 +16,12 @@ interface Props {
 }
 
 export const ToolsModal: React.FC<Props> = ({ isOpen, onClose, user, noteOnly = false }) => {
-    const [activeTab, setActiveTab] = useState<'OCR' | 'IMAGES' | 'AUDIO' | 'WORD_LIBRARY' | 'FREE_NOTE'>('FREE_NOTE');
+    const [activeTab, setActiveTab] = useState<'OCR' | 'IMAGES' | 'AUDIO' | 'WORD_LIBRARY' | 'FREE_NOTE' | 'PROMPT_HELPER'>('FREE_NOTE');
 
     const allTabs = [
         { id: 'FREE_NOTE', label: 'Note', icon: PenTool },
         { id: 'WORD_LIBRARY', label: 'Word Library', icon: Library },
+        { id: 'PROMPT_HELPER', label: 'Prompt Helper', icon: Sparkles },
         { id: 'OCR', label: 'Image to Text', icon: ScanLine },
         { id: 'IMAGES', label: 'Image Manager', icon: ImageIcon },
         { id: 'AUDIO', label: 'Audio Tool', icon: Mic },
@@ -69,6 +71,7 @@ export const ToolsModal: React.FC<Props> = ({ isOpen, onClose, user, noteOnly = 
                 <main className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
                     {activeTab === 'FREE_NOTE' && <FreeNoteTool user={user} />}
                     {activeTab === 'WORD_LIBRARY' && <WordLibraryTool user={user} />}
+                    {activeTab === 'PROMPT_HELPER' && <PromptHelperTool />}
                     {activeTab === 'OCR' && <OCRTool />}
                     {activeTab === 'IMAGES' && <ImageManager />}
                     {activeTab === 'AUDIO' && <AudioTool />}

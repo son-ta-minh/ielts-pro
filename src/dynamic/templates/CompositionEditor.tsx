@@ -15,6 +15,7 @@ interface Props {
 
 export const CompositionEditor: React.FC<Props> = ({ controller, user, initialComposition, onSave, onCancel }) => {
     const [title, setTitle] = useState('');
+    const [prompt, setPrompt] = useState('');
     const [path, setPath] = useState('');
     const [tagsInput, setTagsInput] = useState('');
     const [content, setContent] = useState('');
@@ -42,6 +43,7 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
 
         if (initialComposition) {
             setTitle(initialComposition.title || '');
+            setPrompt(initialComposition.prompt || '');
             
             // Migration-on-edit logic for tags and path
             if (initialComposition.path === undefined) {
@@ -68,6 +70,7 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
             }
         } else {
             setTitle('');
+            setPrompt('');
             setPath('/');
             setTagsInput('');
             setContent('');
@@ -86,13 +89,14 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
         } else {
             setIsDirty(
                 title !== (initialComposition.title || '') ||
+                prompt !== (initialComposition.prompt || '') ||
                 content !== initialComposition.content ||
                 note !== (initialComposition.note || '') ||
                 tagsInput !== (initialComposition.tags || []).join(', ') ||
                 path !== (initialComposition.path || '/')
             );
         }
-    }, [title, content, note, tagsInput, path, initialComposition]);
+    }, [title, prompt, content, note, tagsInput, path, initialComposition]);
 
     useEffect(() => {
         if (controller?.setHasWritingUnsavedChanges) {
@@ -188,6 +192,7 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
                 id: initialComposition?.id || `comp-${now}-${Math.random()}`,
                 userId: user.id,
                 title: title.trim(),
+                prompt: prompt.trim(),
                 label: 'Free Write', // Legacy label, tags are primary
                 path: path.trim(),
                 tags: finalTags,
@@ -230,6 +235,8 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
         <CompositionEditorUI
             title={title}
             setTitle={setTitle}
+            prompt={prompt}
+            setPrompt={setPrompt}
             path={path}
             setPath={setPath}
             tagsInput={tagsInput}

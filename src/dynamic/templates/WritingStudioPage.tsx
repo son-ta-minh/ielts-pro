@@ -528,7 +528,7 @@ export const WritingStudioPage: React.FC<Props> = ({ controller, user, initialCo
                                     }
                                     footer={comp.linkedWordIds.length > 0 && (<div className="text-[10px] font-bold text-neutral-400">{comp.linkedWordIds.length} words linked</div>)}
                                 >
-                                    {viewSettings.showDetails && <p className="line-clamp-4">{comp.content}</p>}
+                                    {viewSettings.showDetails && <p className="line-clamp-4">{comp.prompt || comp.content}</p>}
                                 </UniversalCard>
                              );
                         })

@@ -8,6 +8,8 @@ import { parseMarkdown } from '../../utils/markdownParser';
 export interface CompositionEditorUIProps {
     title: string;
     setTitle: (v: string) => void;
+    prompt: string;
+    setPrompt: (v: string) => void;
     path: string;
     setPath: (v: string) => void;
     tagsInput: string;
@@ -40,7 +42,7 @@ export interface CompositionEditorUIProps {
 }
 
 export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
-    title, setTitle, path, setPath, tagsInput, setTagsInput, content, setContent, note, setNote,
+    title, setTitle, prompt, setPrompt, path, setPath, tagsInput, setTagsInput, content, setContent, note, setNote,
     linkedWords, wordCount, aiFeedback, isFeedbackOpen, setIsFeedbackOpen,
     isSaving, onCancel, onSave, onAutoLink, onRemoveLink,
     isWordSelectorOpen, setIsWordSelectorOpen, allWords, handleManualLink,
@@ -158,6 +160,16 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                                     onChange={(e) => setTitle(e.target.value)}
                                     placeholder="My Awesome Essay"
                                     className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Prompt</label>
+                                <textarea
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    placeholder="Enter the prompt..."
+                                    rows={3}
+                                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none resize-y"
                                 />
                             </div>
                             <div className="space-y-1">

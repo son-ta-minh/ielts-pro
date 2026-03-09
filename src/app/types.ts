@@ -275,10 +275,12 @@ export interface Composition {
   id: string;
   userId: string;
   title?: string;
+  prompt?: string;
   label: CompositionLabel; 
   path?: string;
   tags?: string[];
   content: string;
+  note?: string;
   linkedWordIds: string[]; 
   aiFeedback?: string; 
   createdAt: number;

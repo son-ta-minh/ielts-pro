@@ -24,6 +24,7 @@ interface Props {
     value: 'append' | 'replace';
     onChange: (mode: 'append' | 'replace') => void;
   };
+  copyOnly?: boolean;
 }
 
 const getShorterPromptVersion = (text: string): string =>
@@ -46,7 +47,8 @@ const UniversalAiModal: React.FC<Props> = ({
   
   hidePrimaryInput = false,
   closeOnSuccess = false,
-  contentModeOptions
+  contentModeOptions,
+  copyOnly = false
 }) => {
   // --- Dynamic Input States ---
   const [wordListInput, setWordListInput] = useState('');
@@ -159,7 +161,9 @@ const UniversalAiModal: React.FC<Props> = ({
     await copyToClipboard(finalPrompt);
     setPromptCopied(true);
     setTimeout(() => setPromptCopied(false), 2000);
-    setTimeout(() => jsonInputRef.current?.focus(), 100);
+    if (!copyOnly) {
+      setTimeout(() => jsonInputRef.current?.focus(), 100);
+    }
   };
 
   const handleProcess = async () => {
@@ -378,33 +382,39 @@ const UniversalAiModal: React.FC<Props> = ({
                     </button>
                 </div>
 
-                <div className={`relative flex items-start gap-2 p-1.5 rounded-2xl border-2 transition-all ${
-                    error ? 'border-red-100 bg-red-50/30' : 
-                    isSuccess ? 'border-green-200 bg-green-50' :
-                    'border-neutral-100 bg-white focus-within:border-neutral-900 focus-within:shadow-md'
-                }`}>
-                    <div className="pl-3 py-3 shrink-0">
-                        {isSuccess ? <Check size={18} className="text-green-600" /> : <Bot size={18} className={error ? "text-red-400" : "text-neutral-400"} />}
+                {copyOnly ? (
+                    <div className="px-3 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 text-[11px] font-semibold text-neutral-500">
+                        Copy the prompt and run it in your AI tool. No JSON response is required here.
                     </div>
-                    <textarea
-                        ref={jsonInputRef}
-                        value={isSuccess ? "Data applied! Success." : jsonInput}
-                        onChange={(e) => { setJsonInput(e.target.value); setError(null); }}
-                        onKeyDown={handleKeyDown}
-                        disabled={isProcessing || isSuccess}
-                        placeholder={isProcessing ? "Processing data..." : "Step 2: Paste AI response..."}
-                        className={`w-full bg-transparent border-none text-xs font-medium placeholder:text-neutral-400 focus:ring-0 outline-none resize-none min-h-[70px] p-2 ${isSuccess ? 'text-green-700 font-bold' : 'text-neutral-800'}`}
-                        rows={3}
-                        autoComplete="off"
-                    />
-                    <button 
-                        onClick={handleProcess}
-                        disabled={!jsonInput.trim() || isProcessing}
-                        className={`p-2.5 rounded-xl transition-all shadow-md active:scale-90 flex items-center justify-center w-10 h-10 self-end bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-20 disabled:scale-95`}
-                    >
-                        {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <CornerDownLeft size={16} />}
-                    </button>
-                </div>
+                ) : (
+                    <div className={`relative flex items-start gap-2 p-1.5 rounded-2xl border-2 transition-all ${
+                        error ? 'border-red-100 bg-red-50/30' : 
+                        isSuccess ? 'border-green-200 bg-green-50' :
+                        'border-neutral-100 bg-white focus-within:border-neutral-900 focus-within:shadow-md'
+                    }`}>
+                        <div className="pl-3 py-3 shrink-0">
+                            {isSuccess ? <Check size={18} className="text-green-600" /> : <Bot size={18} className={error ? "text-red-400" : "text-neutral-400"} />}
+                        </div>
+                        <textarea
+                            ref={jsonInputRef}
+                            value={isSuccess ? "Data applied! Success." : jsonInput}
+                            onChange={(e) => { setJsonInput(e.target.value); setError(null); }}
+                            onKeyDown={handleKeyDown}
+                            disabled={isProcessing || isSuccess}
+                            placeholder={isProcessing ? "Processing data..." : "Step 2: Paste AI response..."}
+                            className={`w-full bg-transparent border-none text-xs font-medium placeholder:text-neutral-400 focus:ring-0 outline-none resize-none min-h-[70px] p-2 ${isSuccess ? 'text-green-700 font-bold' : 'text-neutral-800'}`}
+                            rows={3}
+                            autoComplete="off"
+                        />
+                        <button 
+                            onClick={handleProcess}
+                            disabled={!jsonInput.trim() || isProcessing}
+                            className={`p-2.5 rounded-xl transition-all shadow-md active:scale-90 flex items-center justify-center w-10 h-10 self-end bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-20 disabled:scale-95`}
+                        >
+                            {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <CornerDownLeft size={16} />}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
       </div>
