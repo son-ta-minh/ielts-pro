@@ -637,7 +637,23 @@ export const useAppController = () => {
         hasCheckedAutoRestore.current = false;
         if (currentUser && currentUser.id !== DEFAULT_USER_ID) {
              showToast("Syncing current profile...", "info");
-             try { await performAutoBackup(currentUser.id, currentUser, true); } catch { showToast("Backup failed, proceeding...", "error"); }
+             try {
+                await performAutoBackup(currentUser.id, currentUser, true);
+             } catch (e: any) {
+                if (e?.code === 'SYNC_RISK_CONFIRM_REQUIRED') {
+                    const detail = e.detail || {};
+                    const confirmed = window.confirm(
+                        `[SYNC WARNING]\n${detail.identifier || currentUser.name}: local ${detail.localWordCount ?? 0} words vs server ${detail.serverWordCount ?? 0} words.\n\nSync anyway and overwrite server data?`
+                    );
+                    if (confirmed) {
+                        await performAutoBackup(currentUser.id, currentUser, true, true);
+                    } else {
+                        showToast("Sync cancelled to prevent possible data loss.", "info");
+                    }
+                } else {
+                    showToast("Backup failed, proceeding...", "error");
+                }
+             }
         }
         try {
             await dataStore.clearVocabularyOnly();
@@ -650,7 +666,31 @@ export const useAppController = () => {
     const handleSyncPush = async () => {
         if (!currentUser) return;
         setIsSyncing(true);
-        try { await performAutoBackup(currentUser.id, currentUser, true); showToast("Cloud backup updated!", "success"); setSyncPrompt(null); } catch { showToast("Push failed.", "error"); } finally { setIsSyncing(false); }
+        try {
+            await performAutoBackup(currentUser.id, currentUser, true);
+            showToast("Cloud backup updated!", "success");
+            setSyncPrompt(null);
+        } catch (e: any) {
+            if (e?.code === 'SYNC_RISK_CONFIRM_REQUIRED') {
+                const detail = e.detail || {};
+                const confirmed = window.confirm(
+                    `[SYNC WARNING]\n${detail.identifier || currentUser.name}: local ${detail.localWordCount ?? 0} words vs server ${detail.serverWordCount ?? 0} words.\n\nSync anyway and overwrite server data?`
+                );
+                if (confirmed) {
+                    try {
+                        await performAutoBackup(currentUser.id, currentUser, true, true);
+                        showToast("Cloud backup updated after confirmation.", "success");
+                        setSyncPrompt(null);
+                    } catch {
+                        showToast("Push failed.", "error");
+                    }
+                } else {
+                    showToast("Sync cancelled to prevent possible data loss.", "info");
+                }
+            } else {
+                showToast("Push failed.", "error");
+            }
+        } finally { setIsSyncing(false); }
     };
 
     const handleSyncRestore = async () => {
@@ -688,15 +728,29 @@ export const useAppController = () => {
              }
          };
 
+         const onBackupRiskWarning = (e: Event) => {
+             const customEvent = e as CustomEvent<{ identifier?: string; localWordCount?: number; serverWordCount?: number }>;
+             const identifier = customEvent.detail?.identifier || 'unknown';
+             const localWordCount = customEvent.detail?.localWordCount ?? 0;
+             const serverWordCount = customEvent.detail?.serverWordCount ?? 0;
+             showToast(
+                 `[SYNC WARNING] ${identifier}: local ${localWordCount} words vs server ${serverWordCount}. Please verify selected user before syncing.`,
+                 "error",
+                 9000
+             );
+         };
+
          window.addEventListener('datastore-updated', onDataUpdate);
          window.addEventListener('vocab-pro-restore-complete', onRestoreComplete);
          window.addEventListener('backup-scheduled', onBackupScheduled);
          window.addEventListener('backup-complete', onBackupComplete);
+         window.addEventListener('backup-risk-warning', onBackupRiskWarning as EventListener);
          return () => {
             window.removeEventListener('datastore-updated', onDataUpdate);
             window.removeEventListener('vocab-pro-restore-complete', onRestoreComplete);
             window.removeEventListener('backup-scheduled', onBackupScheduled);
             window.removeEventListener('backup-complete', onBackupComplete);
+            window.removeEventListener('backup-risk-warning', onBackupRiskWarning as EventListener);
          };
     }, [refreshBackupTime, showToast]);
 
@@ -735,7 +789,23 @@ export const useAppController = () => {
         dataStore.cancelPendingBackup();
         setHasUnsavedChanges(false);
         setNextAutoBackupTime(null);
-        await performAutoBackup(currentUser.id, currentUser, true);
+        try {
+            await performAutoBackup(currentUser.id, currentUser, true);
+        } catch (e: any) {
+            if (e?.code === 'SYNC_RISK_CONFIRM_REQUIRED') {
+                const detail = e.detail || {};
+                const confirmed = window.confirm(
+                    `[SYNC WARNING]\n${detail.identifier || currentUser.name}: local ${detail.localWordCount ?? 0} words vs server ${detail.serverWordCount ?? 0} words.\n\nSync anyway and overwrite server data?`
+                );
+                if (confirmed) {
+                    await performAutoBackup(currentUser.id, currentUser, true, true);
+                } else {
+                    showToast("Sync cancelled to prevent possible data loss.", "info");
+                }
+            } else {
+                throw e;
+            }
+        }
     };
 
     const handleBackupWrapper = async () => { if (serverStatus === 'connected' && currentUser) await triggerServerBackup(); else await handleBackup(); };

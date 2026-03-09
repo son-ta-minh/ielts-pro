@@ -14,6 +14,7 @@ interface Props {
 
 type Difficulty = 'EASY' | 'HARD';
 type ContentSource = 'LIBRARY' | 'SERVER' | 'VOCABULARY';
+type VocabularyMode = 'MASTER' | 'TOTAL';
 
 interface DictationItem {
     id: string;
@@ -60,6 +61,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const [sessionSize, setSessionSize] = useState(10);
     const [difficulty, setDifficulty] = useState<Difficulty>('EASY');
     const [contentSource, setContentSource] = useState<ContentSource>('LIBRARY');
+    const [vocabularyMode, setVocabularyMode] = useState<VocabularyMode>('MASTER');
     const [vocabularySources, setVocabularySources] = useState({
         headword: true,
         collocation: false,
@@ -77,6 +79,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         return new Set(saved);
     });
     const [hoverPreview, setHoverPreview] = useState(() => getStoredJSON<boolean>('dictation_hover_preview', true));
+    const [randomVoiceFromPool, setRandomVoiceFromPool] = useState(() => getStoredJSON<boolean>('dictation_random_voice_pool', true));
 
     // Gameplay State
     const [queue, setQueue] = useState<DictationItem[]>([]);
@@ -88,6 +91,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const [hardInput, setHardInput] = useState('');
     const [isChecked, setIsChecked] = useState(false);
     const [isCorrect, setIsCorrect] = useState(false);
+    const [itemOutcomes, setItemOutcomes] = useState<Record<string, 'CORRECT' | 'WRONG' | 'SKIPPED'>>({});
 
     // Refs
     const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
@@ -101,6 +105,10 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     useEffect(() => {
         setStoredJSON('dictation_hover_preview', hoverPreview);
     }, [hoverPreview]);
+
+    useEffect(() => {
+        setStoredJSON('dictation_random_voice_pool', randomVoiceFromPool);
+    }, [randomVoiceFromPool]);
 
     // Cleanup audio on unmount & Load Voices
     useEffect(() => {
@@ -181,7 +189,10 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const getRandomVoice = (): string | undefined => {
         const voiceArray = Array.from(selectedVoices);
         if (voiceArray.length === 0) return undefined;
-        const randomChoice = voiceArray[Math.floor(Math.random() * voiceArray.length)];
+        const choice = randomVoiceFromPool
+            ? voiceArray[Math.floor(Math.random() * voiceArray.length)]
+            : voiceArray[0];
+        const randomChoice = choice;
         return randomChoice === 'System' ? undefined : randomChoice;
     };
 
@@ -196,8 +207,16 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
 
     const collectVocabularyPool = (): string[] => {
         const pool = new Set<string>();
+        const isMasteredWord = (word: VocabularyItem) => {
+            if (typeof word.masteryScore === 'number') return word.masteryScore >= 80;
+            return (word.consecutiveCorrect || 0) >= 3;
+        };
 
         words.forEach(word => {
+            if (vocabularyMode === 'MASTER' && isMasteredWord(word)) {
+                return;
+            }
+
             if (vocabularySources.headword && word.word?.trim()) {
                 pool.add(word.word.trim());
             }
@@ -241,7 +260,12 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         } else if (contentSource === 'VOCABULARY') {
             const vocabPool = collectVocabularyPool();
             if (vocabPool.length === 0) {
-                showToast("No vocabulary items found for selected source options.", "error");
+                showToast(
+                    vocabularyMode === 'MASTER'
+                        ? "No unmastered vocabulary found for selected source options."
+                        : "No vocabulary items found for selected source options.",
+                    "error"
+                );
                 return;
             }
             rawData = [...vocabPool].sort(() => Math.random() - 0.5).slice(0, sessionSize);
@@ -307,6 +331,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         setHardInput('');
         setIsChecked(false);
         setIsCorrect(false);
+        setItemOutcomes({});
         
         // Speak first item
         setTimeout(() => {
@@ -330,6 +355,9 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     };
 
     const handleSkip = () => {
+        if (currentItem) {
+            setItemOutcomes(prev => ({ ...prev, [currentItem.id]: 'SKIPPED' }));
+        }
         handleNext();
     };
 
@@ -355,6 +383,9 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
 
         setIsCorrect(correct);
         setIsChecked(true);
+        if (currentItem) {
+            setItemOutcomes(prev => ({ ...prev, [currentItem.id]: correct ? 'CORRECT' : 'WRONG' }));
+        }
         if (correct) {
             const multiplier = currentItem.mode === 'HARD' ? 25 : 15;
             setScore(s => s + multiplier);
@@ -374,9 +405,19 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
                 speak(formatForSpeech(nextItem.originalSentence), false, 'en', nextItem.voice, undefined, undefined, true);
             }, 500);
         } else {
-            onComplete(score);
+            if (contentSource === 'SERVER' || contentSource === 'VOCABULARY') {
+                setGameState('SUMMARY');
+            } else {
+                onComplete(score);
+            }
         }
     };
+
+    const sourceLabel = contentSource === 'SERVER'
+        ? 'Phrase'
+        : (contentSource === 'VOCABULARY'
+            ? `Vocabulary (${vocabularyMode === 'MASTER' ? 'Master' : 'Total'})`
+            : 'Sentence');
 
     const toggleVoice = (voiceName: string) => {
         setSelectedVoices(prev => {
@@ -487,6 +528,21 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
 
                     {contentSource === 'VOCABULARY' ? (
                         <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm space-y-3 flex flex-col justify-center">
+                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Vocabulary Mode</span>
+                            <div className="flex bg-neutral-100 p-1 rounded-xl shadow-sm">
+                                <button
+                                    onClick={() => setVocabularyMode('MASTER')}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${vocabularyMode === 'MASTER' ? 'bg-white text-cyan-700 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
+                                >
+                                    <Zap size={10} /> Master
+                                </button>
+                                <button
+                                    onClick={() => setVocabularyMode('TOTAL')}
+                                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${vocabularyMode === 'TOTAL' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
+                                >
+                                    <Book size={10} /> Total Vocabulary
+                                </button>
+                            </div>
                             <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Vocabulary Sources</span>
                             <div className="grid grid-cols-2 gap-2">
                                 <button onClick={() => toggleVocabularySource('headword')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.headword ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Headword</button>
@@ -494,6 +550,9 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
                                 <button onClick={() => toggleVocabularySource('paraphrase')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.paraphrase ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Paraphrase</button>
                                 <button onClick={() => toggleVocabularySource('wordFamily')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.wordFamily ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Word Family</button>
                             </div>
+                            <p className="text-[9px] font-bold text-neutral-400 text-left px-1">
+                                {vocabularyMode === 'MASTER' ? 'Master mode focuses on unmastered words.' : 'Total Vocabulary mode uses your full vocabulary pool.'}
+                            </p>
                             <p className="text-[9px] font-bold text-neutral-400 text-left px-1">Headword is enabled by default. At least one source must stay selected.</p>
                         </div>
                     ) : (
@@ -513,12 +572,20 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
                          <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2">
                              <Volume2 size={12}/> Voice Pool
                          </span>
-                         <label className="flex items-center gap-2 cursor-pointer group">
-                             <span className="text-[9px] font-bold text-neutral-400 group-hover:text-cyan-600 transition-colors">Hover to hear</span>
-                             <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${hoverPreview ? 'bg-cyan-500' : 'bg-neutral-200'}`} onClick={() => setHoverPreview(!hoverPreview)}>
-                                 <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${hoverPreview ? 'translate-x-4' : 'translate-x-0'}`} />
-                             </div>
-                         </label>
+                         <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <span className="text-[9px] font-bold text-neutral-400 group-hover:text-cyan-600 transition-colors">Hover to hear</span>
+                                <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${hoverPreview ? 'bg-cyan-500' : 'bg-neutral-200'}`} onClick={() => setHoverPreview(!hoverPreview)}>
+                                    <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${hoverPreview ? 'translate-x-4' : 'translate-x-0'}`} />
+                                </div>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <span className="text-[9px] font-bold text-neutral-400 group-hover:text-cyan-600 transition-colors">Random voice</span>
+                                <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${randomVoiceFromPool ? 'bg-cyan-500' : 'bg-neutral-200'}`} onClick={() => setRandomVoiceFromPool(!randomVoiceFromPool)}>
+                                    <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${randomVoiceFromPool ? 'translate-x-4' : 'translate-x-0'}`} />
+                                </div>
+                            </label>
+                         </div>
                      </div>
                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar p-1">
                         <button 
@@ -546,6 +613,77 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
                     <button onClick={handleExit} className="px-8 py-3 bg-white border border-neutral-200 text-neutral-500 font-bold rounded-xl hover:bg-neutral-50 transition-all text-xs">Back</button>
                     <button onClick={startGame} disabled={isServerLoading} className="px-10 py-3 bg-cyan-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-cyan-700 transition-all shadow-xl active:scale-95 flex items-center gap-2">
                         {isServerLoading ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="white"/>} Start
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (gameState === 'SUMMARY') {
+        const correctCount = Object.values(itemOutcomes).filter(v => v === 'CORRECT').length;
+        const doneCount = Object.keys(itemOutcomes).length;
+        const accuracy = doneCount > 0 ? Math.round((correctCount / doneCount) * 100) : 0;
+
+        return (
+            <div className="max-w-3xl mx-auto py-8 text-center animate-in zoom-in-95 duration-300">
+                <div className="mb-6">
+                    <div className="mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-4 bg-cyan-100 text-cyan-700">
+                        <Keyboard size={38} />
+                    </div>
+                    <h2 className="text-3xl font-black text-neutral-900">Dictation Recap</h2>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-neutral-400 mt-2">
+                        Source: {sourceLabel}
+                    </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                    <div className="bg-white border border-neutral-200 rounded-2xl p-4">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Score</p>
+                        <p className="text-2xl font-black text-neutral-900 mt-1">{score}</p>
+                    </div>
+                    <div className="bg-white border border-neutral-200 rounded-2xl p-4">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Correct</p>
+                        <p className="text-2xl font-black text-emerald-600 mt-1">{correctCount}/{queue.length}</p>
+                    </div>
+                    <div className="bg-white border border-neutral-200 rounded-2xl p-4">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Accuracy</p>
+                        <p className="text-2xl font-black text-cyan-600 mt-1">{accuracy}%</p>
+                    </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm mb-6 overflow-hidden">
+                    <div className="max-h-[38vh] overflow-y-auto pr-2 custom-scrollbar grid grid-cols-1 gap-2 p-2 text-left">
+                        {queue.map(item => {
+                            const outcome = itemOutcomes[item.id];
+                            const badgeClass = outcome === 'CORRECT'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : outcome === 'WRONG'
+                                    ? 'bg-rose-100 text-rose-700'
+                                    : 'bg-neutral-100 text-neutral-500';
+                            return (
+                                <div key={item.id} className="flex items-center justify-between bg-neutral-50 border border-neutral-100 rounded-xl px-3 py-2">
+                                    <span className="text-xs font-bold text-neutral-700 truncate pr-3">{item.originalSentence}</span>
+                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${badgeClass}`}>
+                                        {outcome || 'SKIPPED'}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="flex justify-center gap-4">
+                    <button
+                        onClick={() => setGameState('SETUP')}
+                        className="px-7 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-bold text-xs hover:bg-neutral-50 transition-all"
+                    >
+                        Play Again
+                    </button>
+                    <button
+                        onClick={() => onComplete(score)}
+                        className="px-8 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-neutral-800 transition-all"
+                    >
+                        Finish
                     </button>
                 </div>
             </div>

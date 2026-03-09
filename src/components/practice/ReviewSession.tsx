@@ -137,7 +137,9 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     }
 
     const snapshot = Array.from(sessionUpdatesRef.current.values());
-    if (snapshot.length === 0) return Promise.resolve();
+    if (snapshot.length === 0) {
+      return Promise.resolve();
+    }
 
     // Remove snapshot from queue before awaiting network/db write so new updates can continue queuing.
     setSessionUpdates(prev => {
@@ -161,6 +163,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
           return next;
         });
         showToast('Auto-save failed, will retry.', 'error');
+        console.error('commitSessionResults failed', e);
       } finally {
         isSavingRef.current = false;
         savePromiseRef.current = null;
@@ -213,7 +216,8 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
             window.clearTimeout(autosaveTimerRef.current);
             autosaveTimerRef.current = null;
         }
-        if (!sessionFinishedRef.current && sessionUpdatesRef.current.size > 0) {
+        // Always flush pending updates on unmount, including when session just finished.
+        if (sessionUpdatesRef.current.size > 0) {
             commitSessionResults();
         }
     };
@@ -255,6 +259,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     }
 
     let updated = updateSRS(currentWord, grade);
+    updated.lastReviewSessionType = sessionType;
     if (latestTestResults) {
       updated = { ...updated, lastTestResults: latestTestResults, masteryScore: latestMasteryScore };
     }
@@ -308,6 +313,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         setSessionOutcomes(prev => ({...prev, [currentWord.id]: autoGrade}));
         
         const updated = updateSRS(wordWithUpdatedFlags, autoGrade);
+        updated.lastReviewSessionType = sessionType;
 
         if (testResults) {
             updated.lastTestResults = lastTestResultsRef.current;
@@ -328,6 +334,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       setSessionOutcomes(prev => ({...prev, [currentWord.id]: outcomeStatus}));
 
       const updated = updateSRS(wordWithUpdatedFlags, grade);
+      updated.lastReviewSessionType = sessionType;
 
       if (testResults) {
           updated.lastTestResults = lastTestResultsRef.current;
@@ -374,6 +381,11 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     latestWordStatesRef.current.set(updatedWord.id, updatedWord);
     setSessionUpdates(prev => new Map(prev).set(updatedWord.id, updatedWord));
   }, [onUpdate]);
+
+  const handleCompleteWithFlush = useCallback(async () => {
+    await commitSessionResults();
+    onComplete();
+  }, [commitSessionResults, onComplete]);
   
   return (
     <ReviewSessionUI
@@ -396,7 +408,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       currentWord={currentWord}
       isNewWord={isNewWord}
       onUpdate={handleUpdateWordFromModal}
-      onComplete={onComplete}
+      onComplete={() => { void handleCompleteWithFlush(); }}
       nextItem={nextItem}
       handleReview={handleReview}
       handleTestComplete={handleTestComplete}

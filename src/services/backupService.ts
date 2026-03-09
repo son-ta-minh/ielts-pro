@@ -22,7 +22,31 @@ const FULL_SCOPE: DataScope = {
 
 let _isSyncing = false;
 
-export const performAutoBackup = async (userId: string, user: User, force: boolean = false) => {
+const fetchExistingBackupWordCount = async (serverUrl: string, identifier: string): Promise<number | null> => {
+    try {
+        const res = await fetch(`${serverUrl}/api/backup/${encodeURIComponent(identifier)}?app=vocab&t=${Date.now()}`, {
+            method: 'GET',
+            headers: { 'Cache-Control': 'no-cache' },
+            signal: AbortSignal.timeout(12000)
+        });
+        if (!res.ok) return null;
+        const data = await res.json().catch(() => null);
+        if (!data || typeof data !== 'object') return null;
+        const vocab = Array.isArray((data as any).vocab)
+            ? (data as any).vocab
+            : (Array.isArray((data as any).vocabulary) ? (data as any).vocabulary : null);
+        return Array.isArray(vocab) ? vocab.length : null;
+    } catch {
+        return null;
+    }
+};
+
+export const performAutoBackup = async (
+    userId: string,
+    user: User,
+    force: boolean = false,
+    allowRiskOverwrite: boolean = false
+) => {
     // CRITICAL SAFETY: Never backup if we are in restoration mode or already syncing
     if ((window as any).isRestoring || _isSyncing) {
         return;
@@ -36,6 +60,35 @@ export const performAutoBackup = async (userId: string, user: User, force: boole
 
     try {
         const payloadObj = await getFullExportData(userId, user);
+        const localWordCount = Array.isArray((payloadObj as any).vocab) ? (payloadObj as any).vocab.length : 0;
+        const identifier = user.name || userId;
+
+        // Safety warning: large drop in vocab count vs existing server backup.
+        if (force && identifier) {
+            const serverWordCount = await fetchExistingBackupWordCount(serverUrl, identifier);
+            const dangerThreshold = Math.max(300, Math.floor((serverWordCount || 0) * 0.3));
+            if (
+                serverWordCount !== null &&
+                serverWordCount >= 1000 &&
+                localWordCount > 0 &&
+                localWordCount <= dangerThreshold
+            ) {
+                const riskDetail = {
+                    identifier,
+                    localWordCount,
+                    serverWordCount
+                };
+                window.dispatchEvent(new CustomEvent('backup-risk-warning', { detail: riskDetail }));
+                console.warn(`[Backup] Risk warning for ${identifier}: local=${localWordCount}, server=${serverWordCount}`);
+                if (!allowRiskOverwrite) {
+                    const err: any = new Error('Sync risk confirmation required');
+                    err.code = 'SYNC_RISK_CONFIRM_REQUIRED';
+                    err.detail = riskDetail;
+                    throw err;
+                }
+            }
+        }
+
         // Server sync/backup should stay compact to reduce transfer + storage size.
         const payloadString = JSON.stringify(payloadObj);
         const sizeInMB = (new Blob([payloadString]).size / (1024 * 1024)).toFixed(2);
@@ -64,6 +117,7 @@ export const performAutoBackup = async (userId: string, user: User, force: boole
     } catch (e) {
         console.warn("[Backup] Upload failed:", e);
         window.dispatchEvent(new CustomEvent('backup-complete', { detail: { success: false } }));
+        throw e;
     } finally {
         _isSyncing = false;
     }
