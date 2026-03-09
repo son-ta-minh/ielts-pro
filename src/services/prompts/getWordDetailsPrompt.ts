@@ -31,7 +31,6 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - ipa_us: Primary IPA transcription (General American).
     - ipa_uk: Received Pronunciation (UK) IPA. (Omit if "pron_sim" is "same").
     - pron_sim: Similarity between US and UK pronunciation. MUST be: "same", "near", or "different".
-    - ipa_m: Array of 2-4 common mispronunciation transcriptions (to test the user).
     - m: Definition of the headword in ${nativeLanguage}.
     - reg: Register. MUST be one of: "academic", "casual", or "neutral".
     - ex: A high-quality example sentence using the headword.
@@ -50,7 +49,6 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
       "hw": "unhappy",
       "ipa_us": "/ʌnˈhæpi/",
       "pron_sim": "same",
-      "ipa_m": ["/ʌnˈhepi/"],
       "m": "không vui, buồn",
       "reg": "neutral",
       "ex": "She was unhappy with the results of the experiment.",

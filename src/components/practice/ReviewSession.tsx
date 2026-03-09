@@ -365,6 +365,15 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   const handleEndSession = () => {
     setSessionFinished(true);
   };
+
+  const handleUpdateWordFromModal = useCallback((updatedWord: VocabularyItem) => {
+    // Persist to global store first.
+    onUpdate(updatedWord);
+
+    // Keep review session state in sync with the latest edited data.
+    latestWordStatesRef.current.set(updatedWord.id, updatedWord);
+    setSessionUpdates(prev => new Map(prev).set(updatedWord.id, updatedWord));
+  }, [onUpdate]);
   
   return (
     <ReviewSessionUI
@@ -386,7 +395,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       setIsTesting={setIsTesting}
       currentWord={currentWord}
       isNewWord={isNewWord}
-      onUpdate={onUpdate}
+      onUpdate={handleUpdateWordFromModal}
       onComplete={onComplete}
       nextItem={nextItem}
       handleReview={handleReview}

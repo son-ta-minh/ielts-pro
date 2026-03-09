@@ -20,7 +20,7 @@ const DEFAULT_TEMPLATES: PromptTemplate[] = [
 Word: #Input
 
 Task:
-1. Return ONLY incorrect IPA distractors that learners commonly confuse with this word.
+1. Return ONLY 1 - 2 incorrect IPA distractors that learners commonly confuse with this word.
 2. Do NOT include the correct pronunciation.
 3. Use Cambridge-style IPA notation (slashes and stress marks).
 4. Focus on realistic learner errors (vowel shifts, stress misplacement, consonant substitution, syllable reduction).
@@ -28,7 +28,7 @@ Task:
 6. Output must be compact and single-line.
 
 Output format:
-/.../, /.../, /.../.`
+/.../, /.../`
     },
     {
         id: 'distinguish_words',
