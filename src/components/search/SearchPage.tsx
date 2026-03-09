@@ -31,7 +31,14 @@ const collectTextNodes = (value: unknown, path: string, output: SearchHit[]) => 
   }
 
   if (value && typeof value === 'object') {
-    Object.entries(value as Record<string, unknown>).forEach(([key, child]) => {
+    const obj = value as Record<string, unknown>;
+
+    // skip ignored items (used in collocations, word family, paraphrases, etc.)
+    if ('isIgnored' in obj && obj.isIgnored === true) {
+      return;
+    }
+
+    Object.entries(obj).forEach(([key, child]) => {
       const nextPath = path ? `${path}.${key}` : key;
       collectTextNodes(child, nextPath, output);
     });
@@ -88,6 +95,23 @@ const getFriendlyPathLabel = (path: string) => {
     return 'Collocation';
   }
 
+  if (lower.startsWith('wordfamily')) {
+    const parts = lower.split('.');
+    if (parts.length > 1) {
+      const posRaw = parts[1].split('[')[0];
+      const posMap: Record<string, string> = {
+        noun: 'Word Family (Noun)',
+        verb: 'Word Family (Verb)',
+        adjective: 'Word Family (Adjective)',
+        adj: 'Word Family (Adjective)',
+        adverb: 'Word Family (Adverb)',
+        adv: 'Word Family (Adverb)'
+      };
+      return posMap[posRaw] || 'Word Family';
+    }
+    return 'Word Family';
+  }
+
   if (lower.startsWith('meaning')) {
     return 'Meaning';
   }
@@ -140,6 +164,11 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
         const hits = entries.filter(entry => {
           const pathLower = entry.path.toLowerCase();
 
+          // skip headword itself (already shown as the title)
+          if (pathLower === 'word') {
+            return false;
+          }
+
           // ignore raw collocations
           if (pathLower === 'collocations' || pathLower.startsWith('collocations.')) {
             return false;
@@ -171,7 +200,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-neutral-900">Global Search</h1>
-            <p className="text-sm text-neutral-500 mt-1">Search across word, meaning, example, collocation context, paraphrase, context, and all text fields in the JSON structure.</p>
+            <p className="text-sm text-neutral-500 mt-1">Search across word, meaning, example, collocation context, paraphrase, context, and all text fields.</p>
           </div>
           <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
             <input
