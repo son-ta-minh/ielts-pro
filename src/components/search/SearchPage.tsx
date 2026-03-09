@@ -73,6 +73,44 @@ const renderWithHighlight = (text: string, query: string) => {
   );
 };
 
+const getFriendlyPathLabel = (path: string) => {
+  const lower = path.toLowerCase();
+
+  if (!path) return 'General';
+
+  if (lower.startsWith('collocationsarray')) {
+    if (lower.endsWith('.text')) {
+      return 'Collocation Text';
+    }
+    if (lower.endsWith('.d')) {
+      return 'Collocation Context';
+    }
+    return 'Collocation';
+  }
+
+  if (lower.startsWith('meaning')) {
+    return 'Meaning';
+  }
+
+  if (lower.startsWith('example')) {
+    return 'Example';
+  }
+
+  if (lower.startsWith('paraphrase')) {
+    return 'Paraphrase';
+  }
+
+  if (lower.startsWith('context')) {
+    return 'Context';
+  }
+
+  if (lower.startsWith('lesson')) {
+    return 'Lesson Content';
+  }
+
+  return 'Text';
+};
+
 export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
   const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
   const [query, setQuery] = useState('');
@@ -99,7 +137,21 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
       .map(word => {
         const entries: SearchHit[] = [];
         collectTextNodes(word, '', entries);
-        const hits = entries.filter(entry => entry.value.toLowerCase().includes(normalizedQuery));
+        const hits = entries.filter(entry => {
+          const pathLower = entry.path.toLowerCase();
+
+          // ignore raw collocations
+          if (pathLower === 'collocations' || pathLower.startsWith('collocations.')) {
+            return false;
+          }
+
+          // ignore lesson content
+          if (pathLower.startsWith('lesson')) {
+            return false;
+          }
+
+          return entry.value.toLowerCase().includes(normalizedQuery);
+        });
 
         if (hits.length === 0) return null;
 
@@ -119,7 +171,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-neutral-900">Global Search</h1>
-            <p className="text-sm text-neutral-500 mt-1">Search in `word`, `meaning`, `example`, `collocation`, `paraphrase`, `context` và mọi field text trong JSON.</p>
+            <p className="text-sm text-neutral-500 mt-1">Search across word, meaning, example, collocation context, paraphrase, context, and all text fields in the JSON structure.</p>
           </div>
           <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
             <input
@@ -149,7 +201,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
         {!normalizedQuery && (
           <div className="text-center py-12 text-neutral-500">
             <FileText size={24} className="mx-auto mb-3 text-neutral-300" />
-            <p className="font-semibold text-sm">Nhập keyword để bắt đầu tìm kiếm trong toàn bộ dữ liệu từ vựng.</p>
+            <p className="font-semibold text-sm">Type a keyword to start searching across your entire vocabulary database.</p>
           </div>
         )}
 
@@ -186,7 +238,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
                       <div key={`${result.word.id}-${hit.path}-${index}`} className="text-sm text-neutral-600 leading-relaxed">
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wide mr-2">
                           <Hash size={11} />
-                          {hit.path || 'root'}
+                          {getFriendlyPathLabel(hit.path)}
                         </span>
                         <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
                       </div>
@@ -201,4 +253,3 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
     </div>
   );
 };
-
