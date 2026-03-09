@@ -236,7 +236,6 @@ export const RegisterPickGame: React.FC<Props> = ({ words, onComplete, onExit })
                     <div className="text-center space-y-2">
                         <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Word</p>
                         <h2 className="text-3xl font-black text-neutral-900">{currentQuestion?.word}</h2>
-                        {currentQuestion?.meaning && <p className="text-sm text-neutral-500">{currentQuestion.meaning}</p>}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

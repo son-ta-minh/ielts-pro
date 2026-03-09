@@ -360,7 +360,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
                             className={`w-28 text-center px-2 py-1.5 rounded-lg border-b-2 font-bold text-sm outline-none transition-all ${isChecked ? (isItemCorrect ? 'bg-green-50 border-green-500 text-green-700' : 'bg-red-50 border-red-500 text-red-700') : 'bg-neutral-50 border-neutral-300 focus:bg-white focus:border-indigo-600'}`}
                             autoComplete="off"
                         />
-                        {isChecked && !isItemCorrect && <div className="absolute -bottom-5 text-[10px] font-black text-green-600 uppercase whitespace-nowrap">{cleanAns}</div>}
+                        {isChecked && !isItemCorrect && <div className="absolute -bottom-5 text-[10px] font-black text-green-600 whitespace-nowrap">{cleanAns}</div>}
                     </div>
                 );
             })}

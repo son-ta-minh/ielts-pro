@@ -1,7 +1,7 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
-  Menu, X, BookCopy, Loader2, AlertTriangle, Users
+  Menu, X, BookCopy, Loader2, AlertTriangle, Users, Search
 } from 'lucide-react';
 import { AppView, VocabularyItem } from './types';
 import { useAppController } from './useAppController';
@@ -27,6 +27,7 @@ const PlanningPage = React.lazy(() => import('../dynamic/templates/PlanningPage'
 const ExpressionPage = React.lazy(() => import('../dynamic/templates/SpeakingCardPage').then(module => ({ default: module.SpeakingCardPage })));
 const WordBookPage = React.lazy(() => import('../dynamic/templates/WordBookPage').then(module => ({ default: module.WordBookPage })));
 const CourseList = React.lazy(() => import('../components/courses/CourseList').then(module => ({ default: module.CourseList })));
+const SearchPage = React.lazy(() => import('../components/search/SearchPage').then(module => ({ default: module.SearchPage })));
 
 type AppController = ReturnType<typeof useAppController>;
 
@@ -39,6 +40,7 @@ const navItems = [
   { id: 'BROWSE', view: 'BROWSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png", label: 'Word Library' },
   { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Knowledge Library' },
   { id: 'COURSE', view: 'COURSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Graduation%20Cap.png", label: 'Course' },
+  { id: 'SEARCH', view: 'SEARCH', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Magnifying%20Glass%20Tilted%20Left.png", label: 'Search' },
   { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },
   { id: 'SPEAKING', view: 'SPEAKING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png", label: 'Speaking - Listening' },
   { id: 'WRITING', view: 'WRITING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png", label: 'Writing' }
@@ -107,6 +109,7 @@ const Sidebar: React.FC<AppLayoutProps & {
              <button onClick={() => onNavigate('SETTINGS')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Settings"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Gear.png" alt="Settings" className="w-6 h-6 object-contain" /></button>
              <button onClick={() => onNavigate('PLANNING')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Study Plan"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Spiral%20Calendar.png" alt="Planning" className="w-6 h-6 object-contain" /></button>
              <button onClick={() => onNavigate('DISCOVER')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Games & Discover"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Activities/Video%20Game.png" alt="Games" className="w-6 h-6 object-contain" /></button>
+             <button onClick={() => onNavigate('SEARCH')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100 text-neutral-700 hover:text-neutral-900" title="Search"><Search size={22} /></button>
              {serverStatus === 'connected' && (
                  <button 
                     onClick={() => handleBackup()} 
@@ -161,6 +164,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'BROWSE': return <WordList user={currentUser} onDelete={async (id) => await deleteWord(id)} onBulkDelete={async (ids) => await bulkDeleteWords(ids)} onUpdate={updateWord} onStartSession={(words) => startSession(words, 'custom')} initialFilter={initialListFilter} onInitialFilterApplied={() => setInitialListFilter(null)} forceExpandAdd={forceExpandAdd} onExpandAddConsumed={() => setForceExpandAdd(false)} onNavigate={setView} />;
     case 'LESSON': return <KnowledgeLibrary user={currentUser} onStartSession={(words) => startSession(words, 'custom')} onExit={() => setView('DASHBOARD')} onNavigate={setView} onUpdateUser={handleUpdateUser} initialLessonId={controller.targetLessonId} onConsumeLessonId={controller.consumeTargetLessonId} initialTag={controller.targetLessonTag} onConsumeTag={controller.consumeTargetLessonTag} initialType={controller.targetLessonType} onConsumeType={controller.consumeTargetLessonType} />;
     case 'COURSE': return <CourseList initialCourseId={targetCourseId} onConsumeInitialCourseId={consumeTargetCourseId} />;
+    case 'SEARCH': return <SearchPage user={currentUser} onViewWord={setGlobalViewWord} />;
     case 'UNIT_LIBRARY': return <ReadingUnitPage user={currentUser} onStartSession={(words) => startSession(words, 'new_study')} onUpdateUser={handleUpdateUser} />;
     case 'SETTINGS': return <SettingsView user={currentUser} onUpdateUser={handleUpdateUser} onRefresh={refreshGlobalStats} onNuke={handleLibraryReset} apiUsage={apiUsage} />;
     case 'DISCOVER': return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} onRecalculateXp={recalculateXpAndLevelUp} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} lastMasteryScoreUpdateTimestamp={lastMasteryScoreUpdateTimestamp} onBulkUpdate={bulkUpdateWords} initialGameMode={targetGameMode} onConsumeGameMode={consumeTargetGameMode} />;
