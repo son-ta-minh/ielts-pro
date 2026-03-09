@@ -354,12 +354,12 @@ export const prefetchSpeech = async (text: string, forcedLang?: 'en' | 'vi'): Pr
     return null;
 };
 
-const playBlob = (blob: Blob, meta?: { source?: string; word?: string; isSingleWord?: boolean }): Promise<boolean> => {
+const playBlob = (blob: Blob, meta?: { source?: string; word?: string; isSingleWord?: boolean; suppressCoachLookup?: boolean }): Promise<boolean> => {
     stopSpeakingInternal(true);
     const sessionId = ++playbackSerial;
     isAudioPaused = false;
     // Auto trigger CoachLookup for any single English word playback (same behavior as playSound)
-    pendingCoachLookupWord = (meta?.isSingleWord && meta?.word)
+    pendingCoachLookupWord = (!meta?.suppressCoachLookup && meta?.isSingleWord && meta?.word)
         ? meta.word
         : null;
     isSingleWordPlayback = !!meta?.isSingleWord;
@@ -408,7 +408,14 @@ const playBlob = (blob: Blob, meta?: { source?: string; word?: string; isSingleW
     });
 };
 
-const speakViaServer = async (text: string, language: 'en' | 'vi', accent: string, voice: string, urlOverride?: string) => {
+const speakViaServer = async (
+    text: string,
+    language: 'en' | 'vi',
+    accent: string,
+    voice: string,
+    urlOverride?: string,
+    suppressCoachLookup?: boolean
+) => {
     stopSpeakingInternal(true); 
     const requestId = ++speakRequestSerial;
     const singleWord = language === 'en' && isSingleWordText(text);
@@ -438,7 +445,7 @@ const speakViaServer = async (text: string, language: 'en' | 'vi', accent: strin
             const source = res.headers.get('X-TTS-Source') || undefined;
             const word = res.headers.get('X-TTS-Word') || undefined;
             const fallbackWord = singleWord ? normalizeLookupWord(text) : undefined;
-            return await playBlob(blob, { source, word: word || fallbackWord, isSingleWord: singleWord });
+            return await playBlob(blob, { source, word: word || fallbackWord, isSingleWord: singleWord, suppressCoachLookup: !!suppressCoachLookup });
         } else {
             if (requestId !== speakRequestSerial) return true;
             isSingleWordPlayback = false;
@@ -505,7 +512,15 @@ const cleanTextForTts = (text: string): string => {
         .trim();
 };
 
-export const speak = async (text: string, isDialogue = false, forcedLang?: 'en' | 'vi', voiceOverride?: string, accentOverride?: string, preloadedBlob?: Blob) => {
+export const speak = async (
+    text: string,
+    isDialogue = false,
+    forcedLang?: 'en' | 'vi',
+    voiceOverride?: string,
+    accentOverride?: string,
+    preloadedBlob?: Blob,
+    suppressCoachLookup = false
+) => {
   if (typeof window === 'undefined' || !text) return;
   const cleanedText = cleanTextForTts(text);
   if (!cleanedText) return;
@@ -537,7 +552,7 @@ export const speak = async (text: string, isDialogue = false, forcedLang?: 'en' 
   const accentCode = accentOverride !== undefined ? accentOverride : (lang === 'vi' ? coach.viAccent : coach.enAccent);
 
   try {
-      await speakViaServer(cleanedText, lang, accentCode, voiceName, serverUrl);
+      await speakViaServer(cleanedText, lang, accentCode, voiceName, serverUrl, suppressCoachLookup);
       return; 
   } catch (e) {
       await speakViaBrowser(cleanedText, voiceName, lang);

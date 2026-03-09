@@ -13,7 +13,7 @@ interface Props {
 }
 
 type Difficulty = 'EASY' | 'HARD';
-type ContentSource = 'LIBRARY' | 'SERVER';
+type ContentSource = 'LIBRARY' | 'SERVER' | 'VOCABULARY';
 
 interface DictationItem {
     id: string;
@@ -60,6 +60,12 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const [sessionSize, setSessionSize] = useState(10);
     const [difficulty, setDifficulty] = useState<Difficulty>('EASY');
     const [contentSource, setContentSource] = useState<ContentSource>('LIBRARY');
+    const [vocabularySources, setVocabularySources] = useState({
+        headword: true,
+        collocation: false,
+        paraphrase: false,
+        wordFamily: false
+    });
     const [isServerLoading, setIsServerLoading] = useState(false);
     
     // Voice State
@@ -179,6 +185,51 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         return randomChoice === 'System' ? undefined : randomChoice;
     };
 
+    const toggleVocabularySource = (key: keyof typeof vocabularySources) => {
+        setVocabularySources(prev => {
+            const next = { ...prev, [key]: !prev[key] };
+            const hasAny = Object.values(next).some(Boolean);
+            if (!hasAny) return prev;
+            return next;
+        });
+    };
+
+    const collectVocabularyPool = (): string[] => {
+        const pool = new Set<string>();
+
+        words.forEach(word => {
+            if (vocabularySources.headword && word.word?.trim()) {
+                pool.add(word.word.trim());
+            }
+
+            if (vocabularySources.collocation) {
+                (word.collocationsArray || [])
+                    .filter(item => !item.isIgnored && item.text?.trim())
+                    .forEach(item => pool.add(item.text.trim()));
+            }
+
+            if (vocabularySources.paraphrase) {
+                (word.paraphrases || [])
+                    .filter(item => !item.isIgnored && item.word?.trim())
+                    .forEach(item => pool.add(item.word.trim()));
+            }
+
+            if (vocabularySources.wordFamily && word.wordFamily) {
+                const familyMembers = [
+                    ...(word.wordFamily.nouns || []),
+                    ...(word.wordFamily.verbs || []),
+                    ...(word.wordFamily.adjs || []),
+                    ...(word.wordFamily.advs || [])
+                ];
+                familyMembers
+                    .filter(item => !item.isIgnored && item.word?.trim())
+                    .forEach(item => pool.add(item.word.trim()));
+            }
+        });
+
+        return Array.from(pool).filter(Boolean);
+    };
+
     const startGame = async () => {
         let rawData: string[];
 
@@ -187,6 +238,13 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
             rawData = await fetchServerData(sessionSize);
             setIsServerLoading(false);
             if (rawData.length === 0) return;
+        } else if (contentSource === 'VOCABULARY') {
+            const vocabPool = collectVocabularyPool();
+            if (vocabPool.length === 0) {
+                showToast("No vocabulary items found for selected source options.", "error");
+                return;
+            }
+            rawData = [...vocabPool].sort(() => Math.random() - 0.5).slice(0, sessionSize);
         } else {
             const candidates = words.filter(w => w.example && w.example.trim().split(/\s+/).length >= 4);
             if (candidates.length === 0) {
@@ -253,7 +311,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         // Speak first item
         setTimeout(() => {
             const firstItem = newQueue[0];
-            speak(formatForSpeech(firstItem.originalSentence), false, 'en', firstItem.voice);
+            speak(formatForSpeech(firstItem.originalSentence), false, 'en', firstItem.voice, undefined, undefined, true);
         }, 600);
     };
 
@@ -267,7 +325,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
 
     const handlePlayAudio = () => {
         if (currentItem) {
-            speak(formatForSpeech(currentItem.originalSentence), false, 'en', currentItem.voice);
+            speak(formatForSpeech(currentItem.originalSentence), false, 'en', currentItem.voice, undefined, undefined, true);
         }
     };
 
@@ -313,7 +371,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
             
             const nextItem = queue[currentIndex + 1];
             setTimeout(() => {
-                speak(formatForSpeech(nextItem.originalSentence), false, 'en', nextItem.voice);
+                speak(formatForSpeech(nextItem.originalSentence), false, 'en', nextItem.voice, undefined, undefined, true);
             }, 500);
         } else {
             onComplete(score);
@@ -336,7 +394,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         if (!hoverPreview) return;
         stopSpeaking();
         const voiceId = voiceName === 'System' ? undefined : voiceName;
-        speak("Voice preview.", false, 'en', voiceId);
+        speak("Voice preview.", false, 'en', voiceId, undefined, undefined, true);
     };
 
     const renderEasyMode = () => (
@@ -418,8 +476,20 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
                             <div className="grid grid-cols-2 gap-2">
                                 <button onClick={() => setContentSource('LIBRARY')} className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${contentSource === 'LIBRARY' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500'}`}><Book size={16} className="mb-1"/><span className="text-[9px] font-black uppercase">Sentence</span></button>
                                 <button onClick={() => setContentSource('SERVER')} className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${contentSource === 'SERVER' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500'}`}><Server size={16} className="mb-1"/><span className="text-[9px] font-black uppercase">Phrase</span></button>
+                                <button onClick={() => setContentSource('VOCABULARY')} className={`col-span-2 flex flex-col items-center p-2 rounded-xl border-2 transition-all ${contentSource === 'VOCABULARY' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500'}`}><Book size={16} className="mb-1"/><span className="text-[9px] font-black uppercase">Vocabulary</span></button>
                             </div>
                         </div>
+                        {contentSource === 'VOCABULARY' && (
+                            <div className="space-y-2">
+                                <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left">Vocabulary Sources</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => toggleVocabularySource('headword')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.headword ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Headword</button>
+                                    <button onClick={() => toggleVocabularySource('collocation')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.collocation ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Collocation</button>
+                                    <button onClick={() => toggleVocabularySource('paraphrase')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.paraphrase ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Paraphrase</button>
+                                    <button onClick={() => toggleVocabularySource('wordFamily')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.wordFamily ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Word Family</button>
+                                </div>
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <div className="flex justify-between items-center"><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Session Size</span><span className="text-sm font-black text-cyan-600">{sessionSize}</span></div>
                             <input type="range" min="5" max="30" step="5" value={sessionSize} onChange={e => setSessionSize(parseInt(e.target.value))} className="w-full h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-cyan-500" />
