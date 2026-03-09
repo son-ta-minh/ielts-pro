@@ -128,9 +128,9 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
         };
     }, []);
 
-    // Enforce HARD mode for 'SERVER' (Phrase) source
+    // Enforce HARD mode for 'SERVER' and 'VOCABULARY' sources
     useEffect(() => {
-        if (contentSource === 'SERVER') {
+        if (contentSource === 'SERVER' || contentSource === 'VOCABULARY') {
             setDifficulty('HARD');
         }
     }, [contentSource]);
@@ -479,30 +479,32 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
                                 <button onClick={() => setContentSource('VOCABULARY')} className={`col-span-2 flex flex-col items-center p-2 rounded-xl border-2 transition-all ${contentSource === 'VOCABULARY' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-neutral-100 text-neutral-500'}`}><Book size={16} className="mb-1"/><span className="text-[9px] font-black uppercase">Vocabulary</span></button>
                             </div>
                         </div>
-                        {contentSource === 'VOCABULARY' && (
-                            <div className="space-y-2">
-                                <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left">Vocabulary Sources</span>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => toggleVocabularySource('headword')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.headword ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Headword</button>
-                                    <button onClick={() => toggleVocabularySource('collocation')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.collocation ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Collocation</button>
-                                    <button onClick={() => toggleVocabularySource('paraphrase')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.paraphrase ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Paraphrase</button>
-                                    <button onClick={() => toggleVocabularySource('wordFamily')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.wordFamily ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Word Family</button>
-                                </div>
-                            </div>
-                        )}
                         <div className="space-y-2">
                             <div className="flex justify-between items-center"><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Session Size</span><span className="text-sm font-black text-cyan-600">{sessionSize}</span></div>
                             <input type="range" min="5" max="30" step="5" value={sessionSize} onChange={e => setSessionSize(parseInt(e.target.value))} className="w-full h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-cyan-500" />
                         </div>
                     </div>
 
-                    <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm space-y-2 flex flex-col justify-center">
-                        <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Difficulty</span>
-                        <div className="grid grid-cols-1 gap-2">
-                            <DiffButton id="EASY" label="Easy" icon={Zap} desc="Type in missing words. Numbers are always masked." disabled={contentSource === 'SERVER'} />
-                            <DiffButton id="HARD" label="Hard" icon={Brain} desc="Transcribe the full sentence from scratch." />
+                    {contentSource === 'VOCABULARY' ? (
+                        <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm space-y-3 flex flex-col justify-center">
+                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Vocabulary Sources</span>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button onClick={() => toggleVocabularySource('headword')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.headword ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Headword</button>
+                                <button onClick={() => toggleVocabularySource('collocation')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.collocation ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Collocation</button>
+                                <button onClick={() => toggleVocabularySource('paraphrase')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.paraphrase ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Paraphrase</button>
+                                <button onClick={() => toggleVocabularySource('wordFamily')} className={`px-2 py-2 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${vocabularySources.wordFamily ? 'bg-cyan-50 text-cyan-700 border-cyan-200' : 'bg-white text-neutral-500 border-neutral-100'}`}>Word Family</button>
+                            </div>
+                            <p className="text-[9px] font-bold text-neutral-400 text-left px-1">Headword is enabled by default. At least one source must stay selected.</p>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm space-y-2 flex flex-col justify-center">
+                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block text-left px-1">Difficulty</span>
+                            <div className="grid grid-cols-1 gap-2">
+                                <DiffButton id="EASY" label="Easy" icon={Zap} desc="Type in missing words. Numbers are always masked." disabled={contentSource === 'SERVER'} />
+                                <DiffButton id="HARD" label="Hard" icon={Brain} desc="Transcribe the full sentence from scratch." />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Voice Selection */}
