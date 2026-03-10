@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AppView, User, VocabularyItem } from '../../app/types';
+import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import * as db from '../../app/db';
 import { DashboardUI, DashboardUIProps, StudyStats } from './Dashboard_UI';
@@ -51,6 +51,8 @@ const Dashboard: React.FC<Props> = ({
   const [rawCount, setRawCount] = useState(0);
   const [refinedCount, setRefinedCount] = useState(0);
   const [dayProgress, setDayProgress] = useState({ learned: 0, reviewed: 0, learnedWords: [], reviewedWords: [] });
+  const [dailyStreaks, setDailyStreaks] = useState<DailyStreakSnapshot[]>([]);
+  const [dailyGoalHistory, setDailyGoalHistory] = useState<DailyGoalSnapshot[]>([]);
   const [reviewStats, setReviewStats] = useState({ learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 });
   const [goalStats, setGoalStats] = useState({ totalTasks: 0, completedTasks: 0 });
   
@@ -155,6 +157,8 @@ const Dashboard: React.FC<Props> = ({
       if (stats.dayProgress) {
         setDayProgress(stats.dayProgress);
       }
+      setDailyStreaks(dataStore.getDailyStreakSnapshots(userId));
+      setDailyGoalHistory(dataStore.getDailyGoalHistory(userId));
 
       setRawCount(stats.dashboardStats.rawCount || 0);
       setRefinedCount(stats.dashboardStats.refinedCount || 0);
@@ -241,6 +245,8 @@ const Dashboard: React.FC<Props> = ({
     onBackup: handleBackupClick,
     onRestore: handleRestoreClick,
     dayProgress,
+    dailyStreaks,
+    dailyGoalHistory,
     dailyGoals,
     serverStatus,
     serverUrl,

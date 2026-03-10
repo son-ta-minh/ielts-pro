@@ -99,6 +99,18 @@ export interface LessonPreferences {
   tone: 'friendly_elementary' | 'professional_professor';
 }
 
+export interface DailyStreakSnapshot {
+  date: string; // YYYY-MM-DD
+  learned: number;
+  reviewed: number;
+}
+
+export interface DailyGoalSnapshot {
+  date: string; // YYYY-MM-DD
+  learn: number;
+  review: number;
+}
+
 export interface User {
   id: string;
   name: string;

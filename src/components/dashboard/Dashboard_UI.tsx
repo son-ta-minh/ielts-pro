@@ -3,10 +3,10 @@ import {
   RotateCw, AlertCircle, Flame,
   Download, History, BookCopy, Sparkles, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
   Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain, AlertTriangle,
-  CloudUpload, Percent, MessagesSquare, Scale, Dumbbell
+  CloudUpload, Percent, MessagesSquare, Scale, Dumbbell, Crown
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
-import { AppView, User, VocabularyItem } from '../../app/types';
+import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
 
 const getFormattedBuildDate = () => {
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
@@ -76,6 +76,8 @@ export interface DashboardUIProps {
     onRestore: (mode: 'server' | 'file') => void;
     dayProgress: { learned: number; reviewed: number; learnedWords: VocabularyItem[]; reviewedWords: VocabularyItem[]; };
     dailyGoals: { max_learn_per_day: number; max_review_per_day: number; };
+    dailyStreaks: DailyStreakSnapshot[];
+    dailyGoalHistory: DailyGoalSnapshot[];
     serverStatus: 'connected' | 'disconnected';
     serverUrl?: string;
     activeServerMode?: 'home' | 'public' | null;
@@ -428,6 +430,157 @@ const StudyNowPanel: React.FC<{
     );
 };
 
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const buildDateRange = (year: number, month: number | 'all') => {
+    if (month === 'all') {
+        const start = new Date(year, 0, 1);
+        const end = new Date(year, 11, 31);
+        const days: string[] = [];
+        const current = new Date(start);
+        while (current <= end) {
+            days.push(current.toISOString().split('T')[0]);
+            current.setDate(current.getDate() + 1);
+        }
+        return days;
+    }
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month + 1, 0);
+    const days: string[] = [];
+    const current = new Date(start);
+    while (current <= end) {
+        days.push(current.toISOString().split('T')[0]);
+        current.setDate(current.getDate() + 1);
+    }
+    return days;
+};
+
+const DailyStreakChart: React.FC<{
+    streaks: DailyStreakSnapshot[];
+    goals: DailyGoalSnapshot[];
+}> = ({ streaks, goals }) => {
+    const today = new Date();
+    const availableYears = useMemo(() => {
+        const years = new Set<number>();
+        streaks.forEach(s => years.add(Number(s.date.slice(0, 4))));
+        if (years.size === 0) years.add(today.getFullYear());
+        return Array.from(years).sort((a, b) => a - b);
+    }, [streaks, today]);
+
+    const [selectedYear, setSelectedYear] = useState<number>(() => {
+        const currentYear = today.getFullYear();
+        return availableYears.includes(currentYear) ? currentYear : availableYears[availableYears.length - 1];
+    });
+    const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(() => today.getMonth());
+
+    useEffect(() => {
+        if (!availableYears.includes(selectedYear)) {
+            setSelectedYear(availableYears[availableYears.length - 1]);
+        }
+    }, [availableYears, selectedYear]);
+
+    const streakMap = useMemo(() => new Map(streaks.map(s => [s.date, s])), [streaks]);
+    const goalMap = useMemo(() => new Map(goals.map(g => [g.date, g])), [goals]);
+
+    const dateRange = useMemo(() => buildDateRange(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
+    const dailyRows = useMemo(() => dateRange.map(date => {
+        const snapshot = streakMap.get(date);
+        const goal = goalMap.get(date);
+        const learned = snapshot?.learned ?? 0;
+        const reviewed = snapshot?.reviewed ?? 0;
+        return {
+            date,
+            learned,
+            reviewed,
+            total: learned + reviewed,
+            goal,
+            hasCrown: !!goal && learned >= goal.learn && reviewed >= goal.review
+        };
+    }), [dateRange, streakMap, goalMap]);
+
+    const maxValue = Math.max(
+        1,
+        ...dailyRows.map(r => r.total),
+        ...dailyRows.map(r => (r.goal ? r.goal.learn + r.goal.review : 0))
+    );
+    const average = dailyRows.length > 0 ? dailyRows.reduce((sum, r) => sum + r.total, 0) / dailyRows.length : 0;
+    const averagePercent = (average / maxValue) * 100;
+
+    const labelStep = selectedMonth === 'all' ? 15 : 3;
+
+    return (
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h3 className="text-base font-black text-neutral-900 tracking-tight">Daily Streak</h3>
+                    <p className="text-[10px] font-medium text-neutral-400">Learned + Reviewed per day with goal crowns.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                        className="px-3 py-2 text-[10px] font-bold rounded-xl border border-neutral-200 bg-white"
+                    >
+                        {availableYears.map(year => (
+                            <option key={year} value={year}>{year}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={selectedMonth === 'all' ? 'all' : String(selectedMonth)}
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            setSelectedMonth(value === 'all' ? 'all' : Number(value));
+                        }}
+                        className="px-3 py-2 text-[10px] font-bold rounded-xl border border-neutral-200 bg-white"
+                    >
+                        <option value="all">All Months</option>
+                        {MONTH_LABELS.map((label, idx) => (
+                            <option key={label} value={idx}>{label}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-[10px] font-bold text-neutral-500">
+                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Learned</div>
+                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-sky-500" /> Reviewed</div>
+                <div className="flex items-center gap-1.5"><span className="w-2 h-0.5 bg-neutral-400" /> Avg</div>
+            </div>
+
+            <div className="relative">
+                <div className="absolute left-0 right-0 border-t border-dashed border-neutral-300" style={{ bottom: `${averagePercent}%` }}>
+                    <span className="absolute -top-2 right-0 text-[9px] font-bold text-neutral-400 bg-white px-1">avg {average.toFixed(1)}</span>
+                </div>
+                <div className="flex items-end gap-1 overflow-x-auto pb-4">
+                    {dailyRows.map((row, index) => {
+                        const reviewedHeight = (row.reviewed / maxValue) * 100;
+                        const learnedHeight = (row.learned / maxValue) * 100;
+                        const showLabel = index % labelStep === 0 || index === dailyRows.length - 1;
+                        const dateObj = new Date(row.date);
+                        const label = selectedMonth === 'all'
+                            ? (dateObj.getDate() === 1 ? MONTH_LABELS[dateObj.getMonth()] : '')
+                            : String(dateObj.getDate());
+                        return (
+                            <div key={row.date} className="flex flex-col items-center justify-end w-6 shrink-0">
+                                {row.hasCrown && (
+                                    <Crown size={12} className="text-amber-500 mb-1" />
+                                )}
+                                <div className="w-full h-32 flex flex-col justify-end rounded-md overflow-hidden bg-neutral-100 border border-neutral-200">
+                                    <div style={{ height: `${reviewedHeight}%` }} className="bg-sky-500/90" />
+                                    <div style={{ height: `${learnedHeight}%` }} className="bg-emerald-500/90" />
+                                </div>
+                                <div className="text-[9px] font-semibold text-neutral-400 mt-1 h-3">
+                                    {showLabel ? label : ''}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({ onAction }) => {
     return (
         <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-3">
@@ -629,7 +782,7 @@ const BackupStatus: React.FC<{
 export const DashboardUI: React.FC<DashboardUIProps> = ({
   onNavigate, totalCount, newCount, rawCount, refinedCount, reviewStats,
   lastBackupTime, onBackup, onRestore,
-  serverStatus, onAction, onStartNewLearn, onStartDueReview, onStartStatusReview, dayProgress, dailyGoals, onNavigateToWordList, goalStats,
+  serverStatus, onAction, onStartNewLearn, onStartDueReview, onStartStatusReview, dayProgress, dailyGoals, dailyStreaks, dailyGoalHistory, onNavigateToWordList, goalStats,
   studyStats, isStatsLoading,
   onViewWord,
   serverUrl,
@@ -790,6 +943,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                       reviewedWords={dayProgress.reviewedWords}
                       onViewWord={onViewWord}
                     />
+                    <DailyStreakChart streaks={dailyStreaks} goals={dailyGoalHistory} />
                   </div>
                 );
               })()}

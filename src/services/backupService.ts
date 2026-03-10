@@ -1,10 +1,12 @@
 
 import { processJsonImport, ImportResult, _mapToShortKeys, _mapUserToShortKeys } from '../utils/dataHandler';
-import { User, DataScope, VocabularyItem } from '../app/types';
+import { User, DataScope, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
 import * as dataStore from '../app/dataStore';
 import * as db from '../app/db';
 import { _mapToLongKeys } from '../utils/dataHandler';
+import { getDailyGoalHistoryKey, getDailyStreakKey } from '../utils/dailyStreaks';
+import { getStoredJSON } from '../utils/storage';
 
 // Scope for auto backup - usually everything
 const FULL_SCOPE: DataScope = {
@@ -259,11 +261,13 @@ async function getFullExportData(userId: string, user: User) {
         db.getPlanningGoalsByUserId(userId)
      ]);
 
-     const mimicQueueData = localStorage.getItem('vocab_pro_mimic_practice_queue');
-     const customChapters = localStorage.getItem('vocab_pro_adventure_chapters');
-     const customBadges = localStorage.getItem('vocab_pro_custom_badges');
-     const readingShelves = localStorage.getItem('reading_books_shelves');
-     const systemConfig = localStorage.getItem('vocab_pro_system_config');
+    const mimicQueueData = localStorage.getItem('vocab_pro_mimic_practice_queue');
+    const customChapters = localStorage.getItem('vocab_pro_adventure_chapters');
+    const customBadges = localStorage.getItem('vocab_pro_custom_badges');
+    const readingShelves = localStorage.getItem('reading_books_shelves');
+    const systemConfig = localStorage.getItem('vocab_pro_system_config');
+    const dailyStreaks = getStoredJSON<DailyStreakSnapshot[]>(getDailyStreakKey(userId), []);
+    const dailyGoalHistory = getStoredJSON<DailyGoalSnapshot[]>(getDailyGoalHistoryKey(userId), []);
 
      return {
         v: 8,
@@ -293,6 +297,8 @@ async function getFullExportData(userId: string, user: User) {
             b: customBadges ? JSON.parse(customBadges) : null
         },
         readingShelves: readingShelves ? JSON.parse(readingShelves) : null,
-        settings: systemConfig ? JSON.parse(systemConfig) : null
+        settings: systemConfig ? JSON.parse(systemConfig) : null,
+        ds: dailyStreaks,
+        dgh: dailyGoalHistory
      };
 }

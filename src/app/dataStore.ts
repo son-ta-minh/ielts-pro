@@ -1,10 +1,11 @@
-import { VocabularyItem, User, Unit, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem } from './types';
+import { VocabularyItem, User, Unit, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
 import { calculateGameEligibility } from '../utils/gameEligibility';
 import { performAutoBackup } from '../services/backupService';
 import { getConfig } from './settingsManager';
+import { readDailyGoalHistory, readDailyStreaks, writeDailyGoalHistory, writeDailyStreaks } from '../utils/dailyStreaks';
 
 // --- Store State ---
 let _isInitialized = false;
@@ -153,6 +154,30 @@ function _recalculateStats(userId: string) {
         dashboardStats: { categories, refinedCount, rawCount },
         dayProgress: { learned: todayLearnedWords.length, reviewed: todayReviewedWords.length, learnedWords: todayLearnedWords, reviewedWords: todayReviewedWords }
     };
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const streaks = readDailyStreaks(userId);
+    const streakIndex = streaks.findIndex(s => s.date === dateStr);
+    const streakSnapshot: DailyStreakSnapshot = {
+        date: dateStr,
+        learned: todayLearnedWords.length,
+        reviewed: todayReviewedWords.length
+    };
+    if (streakIndex >= 0) streaks[streakIndex] = streakSnapshot;
+    else streaks.push(streakSnapshot);
+    writeDailyStreaks(userId, streaks);
+
+    const goals = readDailyGoalHistory(userId);
+    const dailyGoals = getConfig().dailyGoals;
+    const goalIndex = goals.findIndex(g => g.date === dateStr);
+    const goalSnapshot: DailyGoalSnapshot = {
+        date: dateStr,
+        learn: dailyGoals.max_learn_per_day,
+        review: dailyGoals.max_review_per_day
+    };
+    if (goalIndex >= 0) goals[goalIndex] = goalSnapshot;
+    else goals.push(goalSnapshot);
+    writeDailyGoalHistory(userId, goals);
 }
 
 let _notifyTimeout: number | null = null;
@@ -347,6 +372,8 @@ export function getBookWordIds(): Set<string> { return _bookWordIds; }
 export function getStats() { return _statsCache; }
 export function getAllWords(): VocabularyItem[] { return Array.from(_allWords.values()); }
 export function getWordById(id: string): VocabularyItem | undefined { return _allWords.get(id); }
+export function getDailyStreakSnapshots(userId: string): DailyStreakSnapshot[] { return readDailyStreaks(userId); }
+export function getDailyGoalHistory(userId: string): DailyGoalSnapshot[] { return readDailyGoalHistory(userId); }
 
 export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', sourceFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = ''): { words: VocabularyItem[], totalCount: number } {
     const allItems = Array.from(_allWords.values()).filter(w => w.userId === userId);

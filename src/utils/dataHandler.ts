@@ -3,11 +3,13 @@
  * Uses short keys to reduce JSON size for storage and transfer.
  */
 
-import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem, FreeTalkItem } from '../app/types';
+import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, WordSource, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../app/types';
 import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getPlanningGoalsByUserId, bulkSavePlanningGoals, getConversationItemsByUserId, bulkSaveConversationItems, getFreeTalkItemsByUserId, bulkSaveFreeTalkItems } from '../app/db';
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
+import { getDailyGoalHistoryKey, getDailyStreakKey } from './dailyStreaks';
+import { getStoredJSON, setStoredJSON } from './storage';
 
 const keyMap: { [key: string]: string } = {
     // VocabularyItem top-level - 'ipa' removed, 'ipaUs' uses 'i_us'
@@ -461,6 +463,8 @@ export const processJsonImport = async (
 
                 const incomingAdventure: any | undefined = Array.isArray(rawJson) ? undefined : (rawJson.customAdventure || rawJson.adv);
                 const incomingSettings: any | undefined = Array.isArray(rawJson) ? undefined : (rawJson.settings || rawJson.sys);
+                const incomingDailyStreaks: DailyStreakSnapshot[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.dailyStreaks || rawJson.ds);
+                const incomingDailyGoalHistory: DailyGoalSnapshot[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.dailyGoalHistory || rawJson.dgh);
 
                 if (!Array.isArray(incomingItems)) throw new Error("Invalid JSON: 'vocabulary' array missing.");
 
@@ -549,6 +553,12 @@ export const processJsonImport = async (
                     localStorage.setItem('vocab_pro_system_config', JSON.stringify(incomingSettings));
                     window.dispatchEvent(new Event('config-updated'));
                 }
+                if (incomingDailyStreaks) {
+                    setStoredJSON(getDailyStreakKey(importedUserId), incomingDailyStreaks);
+                }
+                if (incomingDailyGoalHistory) {
+                    setStoredJSON(getDailyGoalHistoryKey(importedUserId), incomingDailyGoalHistory);
+                }
 
                 resolve({ 
                     type: 'success', 
@@ -591,6 +601,8 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
     const customBadges = localStorage.getItem('vocab_pro_custom_badges');
     const readingShelves = localStorage.getItem('reading_books_shelves');
     const systemConfig = localStorage.getItem('vocab_pro_system_config');
+    const dailyStreaks = getStoredJSON<DailyStreakSnapshot[]>(getDailyStreakKey(userId), []);
+    const dailyGoalHistory = getStoredJSON<DailyGoalSnapshot[]>(getDailyGoalHistoryKey(userId), []);
 
      return {
         v: 8,
@@ -619,7 +631,9 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
             b: customBadges ? JSON.parse(customBadges) : null
         },
         readingShelves: readingShelves ? JSON.parse(readingShelves) : null,
-        settings: systemConfig ? JSON.parse(systemConfig) : null
+        settings: systemConfig ? JSON.parse(systemConfig) : null,
+        ds: dailyStreaks,
+        dgh: dailyGoalHistory
      };
 }
 
