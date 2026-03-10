@@ -1,11 +1,11 @@
 
 import { processJsonImport, ImportResult, _mapToShortKeys, _mapUserToShortKeys } from '../utils/dataHandler';
-import { User, DataScope, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../app/types';
+import { User, DataScope, VocabularyItem, DailyStreakSnapshot } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
 import * as dataStore from '../app/dataStore';
 import * as db from '../app/db';
 import { _mapToLongKeys } from '../utils/dataHandler';
-import { getDailyGoalHistoryKey, getDailyStreakKey } from '../utils/dailyStreaks';
+import { readDailyStreaks } from '../utils/dailyStreaks';
 import { getStoredJSON } from '../utils/storage';
 
 // Scope for auto backup - usually everything
@@ -266,8 +266,7 @@ async function getFullExportData(userId: string, user: User) {
     const customBadges = localStorage.getItem('vocab_pro_custom_badges');
     const readingShelves = localStorage.getItem('reading_books_shelves');
     const systemConfig = localStorage.getItem('vocab_pro_system_config');
-    const dailyStreaks = getStoredJSON<DailyStreakSnapshot[]>(getDailyStreakKey(userId), []);
-    const dailyGoalHistory = getStoredJSON<DailyGoalSnapshot[]>(getDailyGoalHistoryKey(userId), []);
+    const dailyStreaks = readDailyStreaks(userId);
 
      return {
         v: 8,
@@ -298,7 +297,6 @@ async function getFullExportData(userId: string, user: User) {
         },
         readingShelves: readingShelves ? JSON.parse(readingShelves) : null,
         settings: systemConfig ? JSON.parse(systemConfig) : null,
-        ds: dailyStreaks,
-        dgh: dailyGoalHistory
+        ds: dailyStreaks
      };
 }

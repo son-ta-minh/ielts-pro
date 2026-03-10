@@ -103,6 +103,8 @@ export interface DailyStreakSnapshot {
   date: string; // YYYY-MM-DD
   learned: number;
   reviewed: number;
+  learnGoal?: number;
+  reviewGoal?: number;
 }
 
 export interface DailyGoalSnapshot {

@@ -8,7 +8,7 @@ import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, b
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
-import { getDailyGoalHistoryKey, getDailyStreakKey } from './dailyStreaks';
+import { getDailyGoalHistoryKey, getDailyStreakKey, readDailyStreaks } from './dailyStreaks';
 import { getStoredJSON, setStoredJSON } from './storage';
 
 const keyMap: { [key: string]: string } = {
@@ -553,11 +553,23 @@ export const processJsonImport = async (
                     localStorage.setItem('vocab_pro_system_config', JSON.stringify(incomingSettings));
                     window.dispatchEvent(new Event('config-updated'));
                 }
-                if (incomingDailyStreaks) {
-                    setStoredJSON(getDailyStreakKey(importedUserId), incomingDailyStreaks);
-                }
-                if (incomingDailyGoalHistory) {
-                    setStoredJSON(getDailyGoalHistoryKey(importedUserId), incomingDailyGoalHistory);
+                if (incomingDailyStreaks || incomingDailyGoalHistory) {
+                    const merged = new Map<string, DailyStreakSnapshot>();
+
+                    (incomingDailyStreaks || []).forEach(s => {
+                        merged.set(s.date, { ...s });
+                    });
+
+                    (incomingDailyGoalHistory || []).forEach(g => {
+                        const existing = merged.get(g.date);
+                        if (existing) merged.set(g.date, { ...existing, learnGoal: g.learn, reviewGoal: g.review });
+                        else merged.set(g.date, { date: g.date, learned: 0, reviewed: 0, learnGoal: g.learn, reviewGoal: g.review });
+                    });
+
+                    if (merged.size > 0) {
+                        setStoredJSON(getDailyStreakKey(importedUserId), Array.from(merged.values()));
+                        setStoredJSON(getDailyGoalHistoryKey(importedUserId), []);
+                    }
                 }
 
                 resolve({ 
@@ -601,8 +613,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
     const customBadges = localStorage.getItem('vocab_pro_custom_badges');
     const readingShelves = localStorage.getItem('reading_books_shelves');
     const systemConfig = localStorage.getItem('vocab_pro_system_config');
-    const dailyStreaks = getStoredJSON<DailyStreakSnapshot[]>(getDailyStreakKey(userId), []);
-    const dailyGoalHistory = getStoredJSON<DailyGoalSnapshot[]>(getDailyGoalHistoryKey(userId), []);
+    const dailyStreaks = readDailyStreaks(userId);
 
      return {
         v: 8,
@@ -632,8 +643,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         },
         readingShelves: readingShelves ? JSON.parse(readingShelves) : null,
         settings: systemConfig ? JSON.parse(systemConfig) : null,
-        ds: dailyStreaks,
-        dgh: dailyGoalHistory
+        ds: dailyStreaks
      };
 }
 

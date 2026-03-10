@@ -5,7 +5,7 @@ import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
 import { calculateGameEligibility } from '../utils/gameEligibility';
 import { performAutoBackup } from '../services/backupService';
 import { getConfig } from './settingsManager';
-import { readDailyGoalHistory, readDailyStreaks, writeDailyGoalHistory, writeDailyStreaks } from '../utils/dailyStreaks';
+import { readDailyGoalHistory, readDailyStreaks, writeDailyStreaks } from '../utils/dailyStreaks';
 
 // --- Store State ---
 let _isInitialized = false;
@@ -158,26 +158,23 @@ function _recalculateStats(userId: string) {
     const dateStr = new Date().toISOString().split('T')[0];
     const streaks = readDailyStreaks(userId);
     const streakIndex = streaks.findIndex(s => s.date === dateStr);
-    const streakSnapshot: DailyStreakSnapshot = {
+
+    const dailyGoals = getConfig().dailyGoals;
+    const baseLearnGoal = Math.min(dailyGoals.max_learn_per_day, newCount);
+    const baseReviewGoal = Math.min(dailyGoals.max_review_per_day, due);
+    const learnGoal = Math.max(baseLearnGoal, todayLearnedWords.length);
+    const reviewGoal = Math.max(baseReviewGoal, todayReviewedWords.length);
+
+    const streakWithGoal: DailyStreakSnapshot = {
         date: dateStr,
         learned: todayLearnedWords.length,
-        reviewed: todayReviewedWords.length
+        reviewed: todayReviewedWords.length,
+        learnGoal,
+        reviewGoal
     };
-    if (streakIndex >= 0) streaks[streakIndex] = streakSnapshot;
-    else streaks.push(streakSnapshot);
+    if (streakIndex >= 0) streaks[streakIndex] = streakWithGoal;
+    else streaks.push(streakWithGoal);
     writeDailyStreaks(userId, streaks);
-
-    const goals = readDailyGoalHistory(userId);
-    const dailyGoals = getConfig().dailyGoals;
-    const goalIndex = goals.findIndex(g => g.date === dateStr);
-    const goalSnapshot: DailyGoalSnapshot = {
-        date: dateStr,
-        learn: dailyGoals.max_learn_per_day,
-        review: dailyGoals.max_review_per_day
-    };
-    if (goalIndex >= 0) goals[goalIndex] = goalSnapshot;
-    else goals.push(goalSnapshot);
-    writeDailyGoalHistory(userId, goals);
 }
 
 let _notifyTimeout: number | null = null;

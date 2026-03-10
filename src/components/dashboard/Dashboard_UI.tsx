@@ -455,6 +455,141 @@ const buildDateRange = (year: number, month: number | 'all') => {
     return days;
 };
 
+const Legend: React.FC<{ items: { label: string; color: string }[] }> = ({ items }) => (
+  <div className="flex flex-wrap items-center gap-4 text-[10px] font-bold text-neutral-500">
+    {items.map(item => (
+      <div key={item.label} className="flex items-center gap-1.5">
+        <span className={`w-2 h-2 rounded-full ${item.color}`} /> {item.label}
+      </div>
+    ))}
+  </div>
+);
+
+const LineStreakChart: React.FC<{
+  rows: {
+    date: string;
+    learned: number;
+    reviewed: number;
+    learnGoal: number;
+    reviewGoal: number;
+    metLearn: boolean;
+    metReview: boolean;
+  }[];
+  maxValue: number;
+  avgLearned: number;
+  avgReviewed: number;
+  labelStep: number;
+  selectedMonth: number | 'all';
+}> = ({ rows, maxValue, avgLearned, avgReviewed, labelStep, selectedMonth }) => {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  if (rows.length === 0) return <div className="text-[11px] text-neutral-400">No data yet.</div>;
+
+  const paddingX = 20;
+  const paddingBottom = 24;
+  const chartHeight = 180;
+  const width = Math.max(320, paddingX * 2 + (rows.length - 1) * 32);
+  const step = rows.length > 1 ? (width - paddingX * 2) / (rows.length - 1) : 0;
+
+  const yFor = (value: number) => chartHeight - (value / (maxValue || 1)) * chartHeight;
+  const pointsLearned = rows.map((r, i) => `${paddingX + i * step},${yFor(r.learned)}`);
+  const pointsReviewed = rows.map((r, i) => `${paddingX + i * step},${yFor(r.reviewed)}`);
+
+  const xPositions = rows.map((_, i) => paddingX + i * step);
+
+  const tooltipIndex = hoverIndex ?? null;
+  const tooltipRow = tooltipIndex !== null ? rows[tooltipIndex] : null;
+  const tooltipX = tooltipIndex !== null ? xPositions[tooltipIndex] : 0;
+  const tooltipY = tooltipRow ? Math.min(yFor(tooltipRow.learned), yFor(tooltipRow.reviewed)) - 8 : 0;
+
+  return (
+    <div className="relative overflow-x-auto pb-4">
+      <div className="min-w-full" style={{ minWidth: width }}>
+        <svg
+          width={width}
+          height={chartHeight + paddingBottom}
+          viewBox={`0 0 ${width} ${chartHeight + paddingBottom}`}
+          className="overflow-visible"
+        >
+          {/* grid lines */}
+          {[0.25, 0.5, 0.75, 1].map((p) => {
+            const y = chartHeight * p;
+            return <line key={p} x1={paddingX} x2={width - paddingX} y1={y} y2={y} stroke="#e5e7eb" strokeDasharray="3 4" strokeWidth={1} />;
+          })}
+
+          {/* average lines */}
+          <line x1={paddingX} x2={width - paddingX} y1={yFor(avgLearned)} y2={yFor(avgLearned)} stroke="#6ee7b7" strokeDasharray="6 4" strokeWidth={2} />
+          <line x1={paddingX} x2={width - paddingX} y1={yFor(avgReviewed)} y2={yFor(avgReviewed)} stroke="#7dd3fc" strokeDasharray="6 4" strokeWidth={2} />
+
+          {/* learned path */}
+          <polyline points={pointsLearned.join(' ')} fill="none" stroke="#10b981" strokeWidth={2.5} />
+          {/* reviewed path */}
+          <polyline points={pointsReviewed.join(' ')} fill="none" stroke="#0ea5e9" strokeWidth={2.5} />
+
+          {/* dots */}
+          {rows.map((row, i) => {
+            const x = xPositions[i];
+            const learnedY = yFor(row.learned);
+            const reviewedY = yFor(row.reviewed);
+            const learnedColor = row.learnGoal ? (row.metLearn ? '#10b981' : '#f59e0b') : '#9ca3af';
+            const reviewColor = row.reviewGoal ? (row.metReview ? '#10b981' : '#f59e0b') : '#9ca3af';
+            return (
+              <g key={row.date}>
+                <circle cx={x} cy={learnedY} r={4} fill={learnedColor} stroke="white" strokeWidth={1.5} onMouseEnter={() => setHoverIndex(i)} onMouseLeave={() => setHoverIndex(null)} />
+                <circle cx={x} cy={reviewedY} r={4} fill={reviewColor} stroke="white" strokeWidth={1.5} onMouseEnter={() => setHoverIndex(i)} onMouseLeave={() => setHoverIndex(null)} />
+                <rect
+                  x={x - step / 2}
+                  y={0}
+                  width={Math.max(step, 12)}
+                  height={chartHeight + paddingBottom}
+                  fill="transparent"
+                  onMouseEnter={() => setHoverIndex(i)}
+                  onMouseLeave={() => setHoverIndex(null)}
+                />
+              </g>
+            );
+          })}
+
+          {/* x-axis labels */}
+          {rows.map((row, i) => {
+            const showLabel = i % labelStep === 0 || i === rows.length - 1;
+            if (!showLabel) return null;
+            const dateObj = new Date(row.date);
+            const label = selectedMonth === 'all'
+              ? (dateObj.getDate() === 1 ? MONTH_LABELS[dateObj.getMonth()] : '')
+              : String(dateObj.getDate());
+            if (!label) return null;
+            return (
+              <text key={row.date} x={xPositions[i]} y={chartHeight + 14} textAnchor="middle" className="text-[9px] font-semibold fill-neutral-400">
+                {label}
+              </text>
+            );
+          })}
+        </svg>
+      </div>
+
+      {tooltipRow && (
+        <div
+          className="pointer-events-none absolute z-10 bg-white border border-neutral-200 shadow-lg rounded-lg px-3 py-2 text-[10px] font-semibold text-neutral-700"
+          style={{
+            left: tooltipX,
+            top: Math.max(8, tooltipY),
+            transform: 'translate(-50%, -100%)'
+          }}
+        >
+          <div className="text-[9px] font-bold text-neutral-500">{tooltipRow.date}</div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" /> Learned {tooltipRow.learned} / {tooltipRow.learnGoal || '-'}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-sky-500" /> Reviewed {tooltipRow.reviewed} / {tooltipRow.reviewGoal || '-'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DailyStreakChart: React.FC<{
     streaks: DailyStreakSnapshot[];
     goals: DailyGoalSnapshot[];
@@ -485,26 +620,34 @@ const DailyStreakChart: React.FC<{
     const dateRange = useMemo(() => buildDateRange(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
     const dailyRows = useMemo(() => dateRange.map(date => {
         const snapshot = streakMap.get(date);
-        const goal = goalMap.get(date);
+        const legacyGoal = goalMap.get(date);
         const learned = snapshot?.learned ?? 0;
         const reviewed = snapshot?.reviewed ?? 0;
+        const learnGoal = snapshot?.learnGoal ?? legacyGoal?.learn ?? 0;
+        const reviewGoal = snapshot?.reviewGoal ?? legacyGoal?.review ?? 0;
+        const metLearn = learnGoal ? learned >= learnGoal : false;
+        const metReview = reviewGoal ? reviewed >= reviewGoal : false;
         return {
             date,
             learned,
             reviewed,
-            total: learned + reviewed,
-            goal,
-            hasCrown: !!goal && learned >= goal.learn && reviewed >= goal.review
+            learnGoal,
+            reviewGoal,
+            metLearn,
+            metReview
         };
     }), [dateRange, streakMap, goalMap]);
 
     const maxValue = Math.max(
         1,
-        ...dailyRows.map(r => r.total),
-        ...dailyRows.map(r => (r.goal ? r.goal.learn + r.goal.review : 0))
+        ...dailyRows.map(r => r.learned),
+        ...dailyRows.map(r => r.reviewed),
+        ...dailyRows.map(r => r.learnGoal),
+        ...dailyRows.map(r => r.reviewGoal)
     );
-    const average = dailyRows.length > 0 ? dailyRows.reduce((sum, r) => sum + r.total, 0) / dailyRows.length : 0;
-    const averagePercent = (average / maxValue) * 100;
+
+    const avgLearned = dailyRows.length > 0 ? dailyRows.reduce((sum, r) => sum + r.learned, 0) / dailyRows.length : 0;
+    const avgReviewed = dailyRows.length > 0 ? dailyRows.reduce((sum, r) => sum + r.reviewed, 0) / dailyRows.length : 0;
 
     const labelStep = selectedMonth === 'all' ? 15 : 3;
 
@@ -541,42 +684,23 @@ const DailyStreakChart: React.FC<{
                 </div>
             </div>
 
-            <div className="flex items-center gap-4 text-[10px] font-bold text-neutral-500">
-                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Learned</div>
-                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-sky-500" /> Reviewed</div>
-                <div className="flex items-center gap-1.5"><span className="w-2 h-0.5 bg-neutral-400" /> Avg</div>
-            </div>
+            <Legend
+              items={[
+                { label: 'Learned', color: 'bg-emerald-500' },
+                { label: 'Reviewed', color: 'bg-sky-500' },
+                { label: 'Avg Learned', color: 'bg-emerald-300' },
+                { label: 'Avg Reviewed', color: 'bg-sky-300' }
+              ]}
+            />
 
-            <div className="relative">
-                <div className="absolute left-0 right-0 border-t border-dashed border-neutral-300" style={{ bottom: `${averagePercent}%` }}>
-                    <span className="absolute -top-2 right-0 text-[9px] font-bold text-neutral-400 bg-white px-1">avg {average.toFixed(1)}</span>
-                </div>
-                <div className="flex items-end gap-1 overflow-x-auto pb-4">
-                    {dailyRows.map((row, index) => {
-                        const reviewedHeight = (row.reviewed / maxValue) * 100;
-                        const learnedHeight = (row.learned / maxValue) * 100;
-                        const showLabel = index % labelStep === 0 || index === dailyRows.length - 1;
-                        const dateObj = new Date(row.date);
-                        const label = selectedMonth === 'all'
-                            ? (dateObj.getDate() === 1 ? MONTH_LABELS[dateObj.getMonth()] : '')
-                            : String(dateObj.getDate());
-                        return (
-                            <div key={row.date} className="flex flex-col items-center justify-end w-6 shrink-0">
-                                {row.hasCrown && (
-                                    <Crown size={12} className="text-amber-500 mb-1" />
-                                )}
-                                <div className="w-full h-32 flex flex-col justify-end rounded-md overflow-hidden bg-neutral-100 border border-neutral-200">
-                                    <div style={{ height: `${reviewedHeight}%` }} className="bg-sky-500/90" />
-                                    <div style={{ height: `${learnedHeight}%` }} className="bg-emerald-500/90" />
-                                </div>
-                                <div className="text-[9px] font-semibold text-neutral-400 mt-1 h-3">
-                                    {showLabel ? label : ''}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+            <LineStreakChart
+              rows={dailyRows}
+              maxValue={maxValue}
+              avgLearned={avgLearned}
+              avgReviewed={avgReviewed}
+              labelStep={labelStep}
+              selectedMonth={selectedMonth}
+            />
         </div>
     );
 };
