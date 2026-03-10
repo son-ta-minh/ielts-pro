@@ -479,17 +479,19 @@ const LineStreakChart: React.FC<{
   labelStep: number;
   selectedMonth: number | 'all';
 }> = ({ rows, maxValue, labelStep, selectedMonth }) => {
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [hoverPoint, setHoverPoint] = useState<{ index: number; type: 'learned' | 'reviewed' } | null>(null);
 
   if (rows.length === 0) return <div className="text-[11px] text-neutral-400">No data yet.</div>;
 
-  const paddingX = 20;
-  const paddingBottom = 24;
-  const chartHeight = 180;
+  const paddingX = 24;
+  const paddingTop = 16;
+  const paddingBottom = 32;
+  const chartHeight = 160;
   const width = Math.max(320, paddingX * 2 + (rows.length - 1) * 32);
   const step = rows.length > 1 ? (width - paddingX * 2) / (rows.length - 1) : 0;
 
-  const yFor = (value: number) => chartHeight - (value / (maxValue || 1)) * chartHeight;
+  const yFor = (value: number) =>
+    paddingTop + (chartHeight - (value / (maxValue || 1)) * chartHeight);
   const xPositions = rows.map((_, i) => paddingX + i * step);
 
   const learnedRows = rows.filter(r => r.learned != null);
@@ -503,27 +505,68 @@ const LineStreakChart: React.FC<{
     return `${paddingX + i * step},${yFor(r.reviewed as number)}`;
   });
 
+  // Trend line: only use daily goals for the current day; past days without activity remain 0
   let cumLearn = 0;
   let cumReview = 0;
   const trendLearnPoints: string[] = [];
   const trendReviewPoints: string[] = [];
+
+  const today = new Date().toISOString().slice(0, 10);
+  // --- DEBUG LOGGING for today's row and trend values ---
+  const todayRow = rows.find(r => r.date === today);
+  console.log("[DailyStreak Debug] today =", today);
+  console.log("[DailyStreak Debug] todayRow =", todayRow);
+  // -----------------------------------------------------
+
   rows.forEach((r, i) => {
-    cumLearn += r.learned ?? 0;
-    cumReview += r.reviewed ?? 0;
+    const isToday = r.date === today;
+
+    let learnValue: number;
+    let reviewValue: number;
+
+    if (isToday) {
+      // if today has no real activity yet (0), project using goal
+      learnValue = r.learned && r.learned > 0 ? r.learned : (r.learnGoal ?? 0);
+      reviewValue = r.reviewed && r.reviewed > 0 ? r.reviewed : (r.reviewGoal ?? 0);
+    } else {
+      // past days: keep actual value (0 means no study)
+      learnValue = r.learned ?? 0;
+      reviewValue = r.reviewed ?? 0;
+    }
+
+    // --- DEBUG LOGGING for trend calculation values ---
+    if (isToday) {
+      console.log("[DailyStreak Debug] trend today values", {
+        learned: r.learned,
+        review: r.reviewed,
+        learnGoal: r.learnGoal,
+        reviewGoal: r.reviewGoal,
+        learnValue,
+        reviewValue
+      });
+    }
+    // -------------------------------------------------
+
+    cumLearn += learnValue;
+    cumReview += reviewValue;
+
     const count = i + 1;
+
     trendLearnPoints.push(`${paddingX + i * step},${yFor(cumLearn / count)}`);
     trendReviewPoints.push(`${paddingX + i * step},${yFor(cumReview / count)}`);
   });
 
-  const tooltipIndex = hoverIndex ?? null;
-  const tooltipRow = tooltipIndex !== null ? rows[tooltipIndex] : null;
-  const tooltipX = tooltipIndex !== null ? xPositions[tooltipIndex] : 0;
+  const tooltipRow = hoverPoint ? rows[hoverPoint.index] : null;
+  const tooltipX = hoverPoint ? xPositions[hoverPoint.index] : 0;
   const tooltipY = (() => {
-    if (!tooltipRow) return 0;
-    const ys: number[] = [];
-    if (tooltipRow.learned != null) ys.push(yFor(tooltipRow.learned));
-    if (tooltipRow.reviewed != null) ys.push(yFor(tooltipRow.reviewed));
-    return (ys.length ? Math.min(...ys) : chartHeight) - 8;
+    if (!hoverPoint || !tooltipRow) return 0;
+    if (hoverPoint.type === 'learned' && tooltipRow.learned != null) {
+      return yFor(tooltipRow.learned) - 8;
+    }
+    if (hoverPoint.type === 'reviewed' && tooltipRow.reviewed != null) {
+      return yFor(tooltipRow.reviewed) - 8;
+    }
+    return 0;
   })();
 
   return (
@@ -531,13 +574,13 @@ const LineStreakChart: React.FC<{
       <div className="min-w-full" style={{ minWidth: width }}>
         <svg
           width={width}
-          height={chartHeight + paddingBottom}
-          viewBox={`0 0 ${width} ${chartHeight + paddingBottom}`}
+          height={chartHeight + paddingTop + paddingBottom}
+          viewBox={`0 0 ${width} ${chartHeight + paddingTop + paddingBottom}`}
           className="overflow-visible"
         >
           {/* grid lines */}
           {[0.25, 0.5, 0.75, 1].map((p) => {
-            const y = chartHeight * p;
+            const y = paddingTop + chartHeight * p;
             return <line key={p} x1={paddingX} x2={width - paddingX} y1={y} y2={y} stroke="#e5e7eb" strokeDasharray="3 4" strokeWidth={1} />;
           })}
 
@@ -558,20 +601,29 @@ const LineStreakChart: React.FC<{
             return (
               <g key={row.date}>
                 {learnedY != null && (
-                  <circle cx={x - 3} cy={learnedY} r={4} fill={learnedColor} stroke="white" strokeWidth={1.5} onMouseEnter={() => setHoverIndex(i)} onMouseLeave={() => setHoverIndex(null)} />
+                  <circle
+                    cx={x - 3}
+                    cy={learnedY}
+                    r={4}
+                    fill={learnedColor}
+                    stroke="white"
+                    strokeWidth={1.5}
+                    onMouseEnter={() => setHoverPoint({ index: i, type: 'learned' })}
+                    onMouseLeave={() => setHoverPoint(null)}
+                  />
                 )}
                 {reviewedY != null && (
-                  <circle cx={x + 3} cy={reviewedY} r={4} fill={reviewColor} stroke="white" strokeWidth={1.5} onMouseEnter={() => setHoverIndex(i)} onMouseLeave={() => setHoverIndex(null)} />
+                  <circle
+                    cx={x + 3}
+                    cy={reviewedY}
+                    r={4}
+                    fill={reviewColor}
+                    stroke="white"
+                    strokeWidth={1.5}
+                    onMouseEnter={() => setHoverPoint({ index: i, type: 'reviewed' })}
+                    onMouseLeave={() => setHoverPoint(null)}
+                  />
                 )}
-                <rect
-                  x={x - step / 2}
-                  y={0}
-                  width={Math.max(step, 12)}
-                  height={chartHeight + paddingBottom}
-                  fill="transparent"
-                  onMouseEnter={() => setHoverIndex(i)}
-                  onMouseLeave={() => setHoverIndex(null)}
-                />
               </g>
             );
           })}
@@ -586,7 +638,7 @@ const LineStreakChart: React.FC<{
               : String(dateObj.getDate());
             if (!label) return null;
             return (
-              <text key={row.date} x={xPositions[i]} y={chartHeight + 14} textAnchor="middle" className="text-[9px] font-semibold fill-neutral-400">
+              <text key={row.date} x={xPositions[i]} y={paddingTop + chartHeight + 14} textAnchor="middle" className="text-[9px] font-semibold fill-neutral-400">
                 {label}
               </text>
             );
@@ -599,17 +651,25 @@ const LineStreakChart: React.FC<{
           className="pointer-events-none absolute z-10 bg-white border border-neutral-200 shadow-lg rounded-lg px-3 py-2 text-[10px] font-semibold text-neutral-700"
           style={{
             left: tooltipX,
-            top: Math.max(8, tooltipY),
-            transform: 'translate(-50%, -100%)'
+            top: tooltipY,
+            transform: tooltipY < paddingTop + 40
+              ? 'translate(-50%, 8px)'
+              : 'translate(-50%, -100%)'
           }}
         >
           <div className="text-[9px] font-bold text-neutral-500">{tooltipRow.date}</div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" /> Learned {tooltipRow.learned ?? '-'} / {tooltipRow.learnGoal ?? '-'}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-sky-500" /> Reviewed {tooltipRow.reviewed ?? '-'} / {tooltipRow.reviewGoal ?? '-'}
-          </div>
+          {hoverPoint?.type === 'learned' && (
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Learned {tooltipRow.learned ?? '-'} / {tooltipRow.learnGoal ?? '-'}
+            </div>
+          )}
+          {hoverPoint?.type === 'reviewed' && (
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-sky-500" />
+              Reviewed {tooltipRow.reviewed ?? '-'} / {tooltipRow.reviewGoal ?? '-'}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -679,13 +739,13 @@ const DailyStreakChart: React.FC<{
     const labelStep = selectedMonth === 'all' ? 15 : 3;
 
     return (
-        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4">
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h3 className="text-base font-black text-neutral-900 tracking-tight">Daily Streak</h3>
+                    <h3 className="text-base font-black text-neutral-900 tracking-tight">DAILY STREAK</h3>
                     <p className="text-[10px] font-medium text-neutral-400">Learned + Reviewed per day with goal crowns.</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                     <select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(Number(e.target.value))}
