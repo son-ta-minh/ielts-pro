@@ -468,19 +468,17 @@ const Legend: React.FC<{ items: { label: string; color: string }[] }> = ({ items
 const LineStreakChart: React.FC<{
   rows: {
     date: string;
-    learned: number;
-    reviewed: number;
-    learnGoal: number;
-    reviewGoal: number;
+    learned: number | undefined;
+    reviewed: number | undefined;
+    learnGoal: number | undefined;
+    reviewGoal: number | undefined;
     metLearn: boolean;
     metReview: boolean;
   }[];
   maxValue: number;
-  avgLearned: number;
-  avgReviewed: number;
   labelStep: number;
   selectedMonth: number | 'all';
-}> = ({ rows, maxValue, avgLearned, avgReviewed, labelStep, selectedMonth }) => {
+}> = ({ rows, maxValue, labelStep, selectedMonth }) => {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   if (rows.length === 0) return <div className="text-[11px] text-neutral-400">No data yet.</div>;
@@ -492,15 +490,41 @@ const LineStreakChart: React.FC<{
   const step = rows.length > 1 ? (width - paddingX * 2) / (rows.length - 1) : 0;
 
   const yFor = (value: number) => chartHeight - (value / (maxValue || 1)) * chartHeight;
-  const pointsLearned = rows.map((r, i) => `${paddingX + i * step},${yFor(r.learned)}`);
-  const pointsReviewed = rows.map((r, i) => `${paddingX + i * step},${yFor(r.reviewed)}`);
-
   const xPositions = rows.map((_, i) => paddingX + i * step);
+
+  const learnedRows = rows.filter(r => r.learned != null);
+  const reviewedRows = rows.filter(r => r.reviewed != null);
+  const pointsLearned = learnedRows.map(r => {
+    const i = rows.indexOf(r);
+    return `${paddingX + i * step},${yFor(r.learned as number)}`;
+  });
+  const pointsReviewed = reviewedRows.map(r => {
+    const i = rows.indexOf(r);
+    return `${paddingX + i * step},${yFor(r.reviewed as number)}`;
+  });
+
+  let cumLearn = 0;
+  let cumReview = 0;
+  const trendLearnPoints: string[] = [];
+  const trendReviewPoints: string[] = [];
+  rows.forEach((r, i) => {
+    cumLearn += r.learned ?? 0;
+    cumReview += r.reviewed ?? 0;
+    const count = i + 1;
+    trendLearnPoints.push(`${paddingX + i * step},${yFor(cumLearn / count)}`);
+    trendReviewPoints.push(`${paddingX + i * step},${yFor(cumReview / count)}`);
+  });
 
   const tooltipIndex = hoverIndex ?? null;
   const tooltipRow = tooltipIndex !== null ? rows[tooltipIndex] : null;
   const tooltipX = tooltipIndex !== null ? xPositions[tooltipIndex] : 0;
-  const tooltipY = tooltipRow ? Math.min(yFor(tooltipRow.learned), yFor(tooltipRow.reviewed)) - 8 : 0;
+  const tooltipY = (() => {
+    if (!tooltipRow) return 0;
+    const ys: number[] = [];
+    if (tooltipRow.learned != null) ys.push(yFor(tooltipRow.learned));
+    if (tooltipRow.reviewed != null) ys.push(yFor(tooltipRow.reviewed));
+    return (ys.length ? Math.min(...ys) : chartHeight) - 8;
+  })();
 
   return (
     <div className="relative overflow-x-auto pb-4">
@@ -517,26 +541,28 @@ const LineStreakChart: React.FC<{
             return <line key={p} x1={paddingX} x2={width - paddingX} y1={y} y2={y} stroke="#e5e7eb" strokeDasharray="3 4" strokeWidth={1} />;
           })}
 
-          {/* average lines */}
-          <line x1={paddingX} x2={width - paddingX} y1={yFor(avgLearned)} y2={yFor(avgLearned)} stroke="#6ee7b7" strokeDasharray="6 4" strokeWidth={2} />
-          <line x1={paddingX} x2={width - paddingX} y1={yFor(avgReviewed)} y2={yFor(avgReviewed)} stroke="#7dd3fc" strokeDasharray="6 4" strokeWidth={2} />
-
           {/* learned path */}
-          <polyline points={pointsLearned.join(' ')} fill="none" stroke="#10b981" strokeWidth={2.5} />
-          {/* reviewed path */}
-          <polyline points={pointsReviewed.join(' ')} fill="none" stroke="#0ea5e9" strokeWidth={2.5} />
+          {pointsLearned.length > 0 && <polyline points={pointsLearned.join(' ')} fill="none" stroke="#10b981" strokeWidth={2.5} />} 
+          {pointsReviewed.length > 0 && <polyline points={pointsReviewed.join(' ')} fill="none" stroke="#0ea5e9" strokeWidth={2.5} />} 
+          {/* trend lines */}
+          {trendLearnPoints.length > 1 && <polyline points={trendLearnPoints.join(' ')} fill="none" stroke="#6ee7b7" strokeWidth={1.8} strokeDasharray="6 4" />} 
+          {trendReviewPoints.length > 1 && <polyline points={trendReviewPoints.join(' ')} fill="none" stroke="#7dd3fc" strokeWidth={1.8} strokeDasharray="6 4" />} 
 
           {/* dots */}
           {rows.map((row, i) => {
             const x = xPositions[i];
-            const learnedY = yFor(row.learned);
-            const reviewedY = yFor(row.reviewed);
+            const learnedY = row.learned != null ? yFor(row.learned) : null;
+            const reviewedY = row.reviewed != null ? yFor(row.reviewed) : null;
             const learnedColor = row.learnGoal ? (row.metLearn ? '#10b981' : '#f59e0b') : '#9ca3af';
             const reviewColor = row.reviewGoal ? (row.metReview ? '#10b981' : '#f59e0b') : '#9ca3af';
             return (
               <g key={row.date}>
-                <circle cx={x} cy={learnedY} r={4} fill={learnedColor} stroke="white" strokeWidth={1.5} onMouseEnter={() => setHoverIndex(i)} onMouseLeave={() => setHoverIndex(null)} />
-                <circle cx={x} cy={reviewedY} r={4} fill={reviewColor} stroke="white" strokeWidth={1.5} onMouseEnter={() => setHoverIndex(i)} onMouseLeave={() => setHoverIndex(null)} />
+                {learnedY != null && (
+                  <circle cx={x - 3} cy={learnedY} r={4} fill={learnedColor} stroke="white" strokeWidth={1.5} onMouseEnter={() => setHoverIndex(i)} onMouseLeave={() => setHoverIndex(null)} />
+                )}
+                {reviewedY != null && (
+                  <circle cx={x + 3} cy={reviewedY} r={4} fill={reviewColor} stroke="white" strokeWidth={1.5} onMouseEnter={() => setHoverIndex(i)} onMouseLeave={() => setHoverIndex(null)} />
+                )}
                 <rect
                   x={x - step / 2}
                   y={0}
@@ -579,10 +605,10 @@ const LineStreakChart: React.FC<{
         >
           <div className="text-[9px] font-bold text-neutral-500">{tooltipRow.date}</div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" /> Learned {tooltipRow.learned} / {tooltipRow.learnGoal || '-'}
+            <span className="w-2 h-2 rounded-full bg-emerald-500" /> Learned {tooltipRow.learned ?? '-'} / {tooltipRow.learnGoal ?? '-'}
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-sky-500" /> Reviewed {tooltipRow.reviewed} / {tooltipRow.reviewGoal || '-'}
+            <span className="w-2 h-2 rounded-full bg-sky-500" /> Reviewed {tooltipRow.reviewed ?? '-'} / {tooltipRow.reviewGoal ?? '-'}
           </div>
         </div>
       )}
@@ -621,12 +647,13 @@ const DailyStreakChart: React.FC<{
     const dailyRows = useMemo(() => dateRange.map(date => {
         const snapshot = streakMap.get(date);
         const legacyGoal = goalMap.get(date);
-        const learned = snapshot?.learned ?? 0;
-        const reviewed = snapshot?.reviewed ?? 0;
-        const learnGoal = snapshot?.learnGoal ?? legacyGoal?.learn ?? 0;
-        const reviewGoal = snapshot?.reviewGoal ?? legacyGoal?.review ?? 0;
-        const metLearn = learnGoal ? learned >= learnGoal : false;
-        const metReview = reviewGoal ? reviewed >= reviewGoal : false;
+        const learned = snapshot?.learned;
+        const reviewed = snapshot?.reviewed;
+        const learnGoal = snapshot?.learnGoal ?? legacyGoal?.learn;
+        const reviewGoal = snapshot?.reviewGoal ?? legacyGoal?.review;
+        const metLearn = learnGoal != null && learned != null ? learned >= learnGoal : false;
+        const metReview = reviewGoal != null && reviewed != null ? reviewed >= reviewGoal : false;
+        const hasData = learned != null || reviewed != null || learnGoal != null || reviewGoal != null;
         return {
             date,
             learned,
@@ -634,20 +661,20 @@ const DailyStreakChart: React.FC<{
             learnGoal,
             reviewGoal,
             metLearn,
-            metReview
+            metReview,
+            hasData
         };
     }), [dateRange, streakMap, goalMap]);
 
+    const plottedRows = useMemo(() => dailyRows.filter(r => r.learned != null || r.reviewed != null), [dailyRows]);
+
     const maxValue = Math.max(
         1,
-        ...dailyRows.map(r => r.learned),
-        ...dailyRows.map(r => r.reviewed),
-        ...dailyRows.map(r => r.learnGoal),
-        ...dailyRows.map(r => r.reviewGoal)
+        ...plottedRows.map(r => r.learned ?? 0),
+        ...plottedRows.map(r => r.reviewed ?? 0),
+        ...plottedRows.map(r => r.learnGoal ?? 0),
+        ...plottedRows.map(r => r.reviewGoal ?? 0)
     );
-
-    const avgLearned = dailyRows.length > 0 ? dailyRows.reduce((sum, r) => sum + r.learned, 0) / dailyRows.length : 0;
-    const avgReviewed = dailyRows.length > 0 ? dailyRows.reduce((sum, r) => sum + r.reviewed, 0) / dailyRows.length : 0;
 
     const labelStep = selectedMonth === 'all' ? 15 : 3;
 
@@ -688,16 +715,14 @@ const DailyStreakChart: React.FC<{
               items={[
                 { label: 'Learned', color: 'bg-emerald-500' },
                 { label: 'Reviewed', color: 'bg-sky-500' },
-                { label: 'Avg Learned', color: 'bg-emerald-300' },
-                { label: 'Avg Reviewed', color: 'bg-sky-300' }
+                { label: 'Trend Learned', color: 'bg-emerald-300' },
+                { label: 'Trend Reviewed', color: 'bg-sky-300' }
               ]}
             />
 
             <LineStreakChart
-              rows={dailyRows}
+              rows={plottedRows}
               maxValue={maxValue}
-              avgLearned={avgLearned}
-              avgReviewed={avgReviewed}
               labelStep={labelStep}
               selectedMonth={selectedMonth}
             />
