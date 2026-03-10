@@ -38,7 +38,8 @@ export const MultiFillChallenge: React.FC<Props> = ({
                     const correctForms = (forms?.[type as keyof typeof forms] || []).filter(f => !f.isIgnored).map(f => f.word);
                     if (correctForms.length === 0) return null;
                     
-                    const label = { nouns: 'Noun', verbs: 'Verb', adjs: 'Adjective', advs: 'Adverb' }[type];
+                    const baseLabel = { nouns: 'Noun', verbs: 'Verb', adjs: 'Adjective', advs: 'Adverb' }[type];
+                    const label = correctForms.length > 1 ? `${baseLabel} (${correctForms.length})` : baseLabel;
                     const val = answer[type] || '';
                     // resultDetails keys are 'nouns', 'verbs' etc because TestModal logic maps them so? 
                     // Actually, TestModal might map specific members. Let's rely on passed resultDetails.
