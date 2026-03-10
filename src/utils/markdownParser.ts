@@ -201,7 +201,7 @@ const parseTable = (lines: string[]): { html: string; consumed: number } | null 
  * Allows external renderer via window.renderMarkdownBadge(tag: string): string
  */
 const processDynamicBadges = (text: string): string => {
-    return text.replace(/\[(?!NAV\b)(\w+)\]/g, (_, tag) => {
+    return text.replace(/\[(?!(?:NAV|W_AUDIO)\b)(\w+)\]/g, (_, tag) => {
         if (typeof window !== 'undefined') {
             const renderer = (window as any).renderMarkdownBadge;
             if (typeof renderer === 'function') {
