@@ -49,6 +49,47 @@ Example style:
   - collocations: plentiful resources, plentiful evidence, plentiful supply
 - **ample**: more than enough for a specific need or purpose
   - collocations: ample time, ample opportunity, ample space`
+    },
+    {
+        id: 'vocab_infographic',
+        name: 'generate vocab infographic prompt',
+        template: `Create a clean educational vocabulary infographic illustrating words related to this theme: #Input.
+
+The vocabulary may include objects, natural features, environments, weather phenomena, human actions, facial expressions, or abstract concepts.
+
+Requirements:
+
+- Do NOT include any title or header text.
+- Do NOT include any Vietnamese or non-English text.
+- All labels must be in English only.
+- Use lowercase headword/base form for labels.
+- Include 10–14 labeled vocabulary items.
+- Each concept must have a thin pointer line connecting the illustration to its label.
+- If the concept is not a physical object (for example weather, emotion, or action), illustrate a clear visual scene that represents it.
+
+Examples of acceptable vocabulary types:
+- geographical features (estuary, mangrove forest, glacier)
+- weather events (blizzard, thunderstorm, drought)
+- human actions (frown, whisper, shrug)
+- environments (wetland, coral reef)
+- processes or phenomena (erosion, evaporation)
+
+Design style:
+- clean educational infographic
+- minimalist composition
+- light neutral background
+- soft lighting
+- clear spacing
+- consistent sans-serif labels
+- thin pointer lines
+- realistic illustrations or scenes
+
+If any label sounds unnatural or like a direct translation, replace it with a natural English headword.
+
+After generating the image, output a vocabulary list of all labeled items in this exact format:
+
+Word list (comma separated):
+word1, word2, word3, word4, word5`
     }
 ];
 

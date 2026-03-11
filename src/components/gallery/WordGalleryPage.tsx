@@ -20,11 +20,27 @@ const keyForUser = (userId: string) => `${STORAGE_KEY}_${userId}`;
 
 const buildImageUrl = (path: string) => {
   if (!path) return '';
+
+  // Absolute URL
   if (path.startsWith('http')) return path;
+
   const config = getConfig();
   const baseUrl = getServerUrl(config);
+
+  // If user only provided a filename (no slash), assume Gallery image
+  if (!path.includes('/')) {
+    const hasExt = /\.[a-zA-Z0-9]+$/.test(path);
+    const fileName = hasExt ? path : `${path}.png`;
+    return `${baseUrl}/api/images/stream/Gallery/${fileName}`;
+  }
+
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-  if (!cleanPath.startsWith('api/')) return `${baseUrl}/api/audio/stream/${cleanPath}`;
+
+  // Legacy audio-style paths
+  if (!cleanPath.startsWith('api/')) {
+    return `${baseUrl}/api/audio/stream/${cleanPath}`;
+  }
+
   return `${baseUrl}/${cleanPath}`;
 };
 
@@ -153,14 +169,24 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
     return (
       <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="cursor-pointer" onClick={() => setShowDetail(item)}>
-          <img src={imageUrl} alt={item.title} className="w-full h-48 object-cover" />
+          <img
+            src={imageUrl}
+            alt={item.title}
+            className="w-full h-48 object-cover"
+            onError={(e) => {
+              const img = e.currentTarget;
+              if (img.src.endsWith('.png')) {
+                img.src = img.src.replace('.png', '.jpg');
+              }
+            }}
+          />
         </div>
       </div>
     );
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="pt-3 px-6 pb-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-bold text-neutral-400 uppercase">Collections</p>
@@ -175,18 +201,16 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
             <Search size={14} className="text-neutral-400" />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title or word" className="text-sm outline-none" />
           </div>
+          <button
+            onClick={() => setShowForm(v => !v)}
+            className="px-4 py-2 rounded-xl bg-neutral-900 text-white text-sm font-bold flex items-center gap-2"
+          >
+            <Plus size={16} />
+            {showForm ? 'Hide Add Image' : 'Add Image'}
+          </button>
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <button
-          onClick={() => setShowForm(v => !v)}
-          className="px-4 py-2 rounded-xl bg-neutral-900 text-white text-sm font-bold flex items-center gap-2"
-        >
-          <Plus size={16} />
-          {showForm ? 'Hide Add Image' : 'Add Image'}
-        </button>
-      </div>
 
       {showForm && (
         <form onSubmit={handleSave} className="bg-white border border-dashed border-neutral-300 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4 shadow-sm">
@@ -223,7 +247,17 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-4 relative" onClick={(e) => e.stopPropagation()}>
             <button className="absolute top-3 right-3 p-2 rounded-full bg-neutral-100" onClick={() => setShowDetail(null)}><X size={16}/></button>
             <div className="flex flex-col gap-3">
-              <img src={buildImageUrl(showDetail.imagePath)} alt={showDetail.title} className="w-full max-h-[480px] object-contain rounded-xl border border-neutral-200" />
+              <img
+                src={buildImageUrl(showDetail.imagePath)}
+                alt={showDetail.title}
+                className="w-full max-h-[480px] object-contain rounded-xl border border-neutral-200"
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (img.src.endsWith('.png')) {
+                    img.src = img.src.replace('.png', '.jpg');
+                  }
+                }}
+              />
               <div className="flex flex-wrap gap-2">
                 {showDetail.words.map(w => {
                   const status = getWordStatus(w);
