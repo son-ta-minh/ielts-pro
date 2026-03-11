@@ -1,9 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Plus, Image as ImageIcon, Tag, Edit2, Link as LinkIcon, X, Search, FolderOpen, Trash2 } from 'lucide-react';
-import { User } from '../../app/types';
+import { User, ReviewGrade } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import ConfirmationModal from '../common/ConfirmationModal';
+import * as dataStore from '../../app/dataStore';
 
 type GalleryItem = {
   id: string;
@@ -39,6 +40,39 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const [showForm, setShowForm] = useState(false);
   const [formState, setFormState] = useState({ title: '', collection: '', imagePath: '', words: '', note: '' });
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const wordMap = useMemo(() => {
+    const map = new Map<string, any>();
+    dataStore.getAllWords().filter(w => w.userId === user.id).forEach(w => map.set(w.word.toLowerCase(), w));
+    return map;
+  }, [user.id, items]);
+
+  type WordStatus = 'learned' | 'new' | 'forgot' | 'hard' | 'easy' | 'missing';
+
+  const getWordStatus = (word: string): WordStatus => {
+    const entry = wordMap.get(word.toLowerCase());
+    if (!entry) return 'missing';
+    if (!entry.lastReview) return 'new';
+    switch (entry.lastGrade) {
+      case ReviewGrade.LEARNED: return 'learned';
+      case ReviewGrade.FORGOT: return 'forgot';
+      case ReviewGrade.HARD: return 'hard';
+      case ReviewGrade.EASY: return 'easy';
+      default: return 'new';
+    }
+  };
+
+  const getWordStyles = (status: WordStatus) => {
+    switch (status) {
+      case 'learned': return { badge: 'bg-cyan-100 text-cyan-800 border border-cyan-200', dot: 'bg-cyan-500' };
+      case 'new': return { badge: 'bg-blue-100 text-blue-800 border border-blue-200', dot: 'bg-blue-500' };
+      case 'forgot': return { badge: 'bg-rose-100 text-rose-800 border border-rose-200', dot: 'bg-rose-500' };
+      case 'hard': return { badge: 'bg-orange-100 text-orange-800 border border-orange-200', dot: 'bg-orange-500' };
+      case 'easy': return { badge: 'bg-green-100 text-green-800 border border-green-200', dot: 'bg-green-500' };
+      case 'missing':
+      default:
+        return { badge: 'bg-neutral-100 text-neutral-700 border border-neutral-200', dot: 'bg-neutral-400' };
+    }
+  };
 
   useEffect(() => { saveItems(user.id, items); }, [items, user.id]);
 
@@ -70,14 +104,22 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
     });
   }, [items, filter, query]);
 
-  const resetForm = () => setEditing(null);
+  const resetForm = () => {
+    setEditing(null);
+    setShowForm(false);
+  };
 
   const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const title = formState.title.trim();
     const collection = (formState.collection || 'Unsorted').trim() || 'Unsorted';
     const imagePath = formState.imagePath.trim();
-    const words = formState.words ? formState.words.split(',').map(w => w.trim()).filter(Boolean) : [];
+    const words = formState.words
+      ? formState.words
+          .split(',')
+          .map(w => w.trim().toLowerCase())
+          .filter(Boolean)
+      : [];
     const note = formState.note.trim();
 
     const payload: GalleryItem = editing ? { ...editing, title, collection, imagePath, words, note } : {
@@ -95,6 +137,8 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
 
   const handleEdit = (item: GalleryItem) => {
     setEditing(item);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = (id: string) => {
@@ -181,7 +225,16 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
             <div className="flex flex-col gap-3">
               <img src={buildImageUrl(showDetail.imagePath)} alt={showDetail.title} className="w-full max-h-[480px] object-contain rounded-xl border border-neutral-200" />
               <div className="flex flex-wrap gap-2">
-                {showDetail.words.map(w => <span key={w} className="px-2 py-1 rounded-full bg-neutral-900 text-white text-xs font-bold">{w}</span>)}
+                {showDetail.words.map(w => {
+                  const status = getWordStatus(w);
+                  const style = getWordStyles(status);
+                  return (
+                    <span key={w} className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${style.badge}`}>
+                      <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+                      {w}
+                    </span>
+                  );
+                })}
               </div>
               {showDetail.note && <p className="text-sm text-neutral-600 leading-relaxed">{showDetail.note}</p>}
               <div className="flex items-center justify-between text-xs text-neutral-500">
