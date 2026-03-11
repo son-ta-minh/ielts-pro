@@ -142,7 +142,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
         <div>
           <p className="text-xs font-bold text-neutral-400 uppercase">Collections</p>
           <h1 className="text-2xl font-black text-neutral-900">Word Gallery</h1>
-          <p className="text-sm text-neutral-500">Chọn ảnh, gắn bộ sưu tập và liên kết các từ vựng xuất hiện trong từng hình.</p>
+          <p className="text-sm text-neutral-500">Select an image, assign it to a collection, and link vocabulary words that appear in the picture.</p>
         </div>
         <div className="flex items-center gap-2">
           <select value={filter} onChange={(e) => setFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-neutral-200 text-sm font-bold">
@@ -216,8 +216,8 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
 
       <ConfirmationModal
         isOpen={!!confirmId}
-        title="Delete image?"
-        message="Hành động này sẽ xoá ảnh và liên kết từ vựng của nó."
+        title="Delete Image"
+        message="This action will permanently delete the image and its linked vocabulary words."
         confirmText="Delete"
         cancelText="Cancel"
         onCancel={() => setConfirmId(null)}
