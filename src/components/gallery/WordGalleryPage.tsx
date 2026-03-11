@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Tag, Edit2, Link as LinkIcon, X, Search, FolderOpen } from 'lucide-react';
+import { Plus, Image as ImageIcon, Tag, Edit2, Link as LinkIcon, X, Search, FolderOpen, Trash2 } from 'lucide-react';
 import { User } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
+import ConfirmationModal from '../common/ConfirmationModal';
 
 type GalleryItem = {
   id: string;
@@ -35,8 +36,26 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<GalleryItem | null>(null);
   const [showDetail, setShowDetail] = useState<GalleryItem | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [formState, setFormState] = useState({ title: '', collection: '', imagePath: '', words: '', note: '' });
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   useEffect(() => { saveItems(user.id, items); }, [items, user.id]);
+
+  useEffect(() => {
+    if (editing) {
+      setFormState({
+        title: editing.title,
+        collection: editing.collection,
+        imagePath: editing.imagePath,
+        words: editing.words.join(', '),
+        note: editing.note || ''
+      });
+      setShowForm(true);
+    } else {
+      setFormState({ title: '', collection: '', imagePath: '', words: '', note: '' });
+    }
+  }, [editing]);
 
   const collections = useMemo(() => {
     const set = new Set(items.map(i => i.collection || 'Unsorted'));
@@ -55,14 +74,11 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
 
   const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    const title = (formData.get('title') as string || '').trim();
-    const collection = (formData.get('collection') as string || 'Unsorted').trim() || 'Unsorted';
-    const imagePath = (formData.get('imagePath') as string || '').trim();
-    const wordsStr = (formData.get('words') as string || '').trim();
-    const words = wordsStr ? wordsStr.split(',').map(w => w.trim()).filter(Boolean) : [];
-    const note = (formData.get('note') as string || '').trim();
+    const title = formState.title.trim();
+    const collection = (formState.collection || 'Unsorted').trim() || 'Unsorted';
+    const imagePath = formState.imagePath.trim();
+    const words = formState.words ? formState.words.split(',').map(w => w.trim()).filter(Boolean) : [];
+    const note = formState.note.trim();
 
     const payload: GalleryItem = editing ? { ...editing, title, collection, imagePath, words, note } : {
       id: `wg-${Date.now()}`,
@@ -75,7 +91,6 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
 
     setItems(prev => editing ? prev.map(i => i.id === payload.id ? payload : i) : [payload, ...prev]);
     resetForm();
-    form.reset();
   };
 
   const handleEdit = (item: GalleryItem) => {
@@ -85,6 +100,8 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const handleDelete = (id: string) => {
     setItems(prev => prev.filter(i => i.id !== id));
     if (showDetail?.id === id) setShowDetail(null);
+    if (editing?.id === id) resetForm();
+    setConfirmId(null);
   };
 
   const renderCard = (item: GalleryItem) => {
@@ -112,7 +129,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
           {item.note && <p className="text-xs text-neutral-500 leading-relaxed line-clamp-2">{item.note}</p>}
           <div className="flex items-center justify-between text-[11px] text-neutral-500">
             <span className="flex items-center gap-1"><LinkIcon size={12}/> {item.words.length} words</span>
-            <button className="text-rose-500 font-bold" onClick={() => handleDelete(item.id)}>Delete</button>
+            <button className="text-rose-500 font-bold" onClick={() => setConfirmId(item.id)}>Delete</button>
           </div>
         </div>
       </div>
@@ -138,20 +155,37 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="bg-white border border-dashed border-neutral-300 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-bold text-neutral-700">
-          <ImageIcon size={16} /> {editing ? 'Edit Image' : 'Add Image'}
-        </div>
-        <div className="flex items-center justify-end gap-2">
-          {editing && <button type="button" onClick={resetForm} className="px-3 py-1.5 rounded-lg text-xs font-bold text-neutral-500 border border-neutral-200">Cancel</button>}
-          <button type="submit" className="px-4 py-2 rounded-lg text-xs font-black bg-neutral-900 text-white flex items-center gap-2"><Plus size={14}/> {editing ? 'Update' : 'Add'}</button>
-        </div>
-        <input name="title" defaultValue={editing?.title} placeholder="Title" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
-        <input name="collection" defaultValue={editing?.collection} placeholder="Collection" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
-        <input name="imagePath" defaultValue={editing?.imagePath} placeholder="Image path or URL (server path works like [IMG])" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-mono" required />
-        <input name="words" defaultValue={editing?.words?.join(', ')} placeholder="Words (comma separated)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
-        <textarea name="note" defaultValue={editing?.note} placeholder="Notes (optional)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium md:col-span-2" rows={2} />
-      </form>
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowForm(v => !v)}
+          className="px-4 py-2 rounded-xl bg-neutral-900 text-white text-sm font-bold flex items-center gap-2"
+        >
+          <Plus size={16} />
+          {showForm ? 'Hide Add Image' : 'Add Image'}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleSave} className="bg-white border border-dashed border-neutral-300 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4 shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-bold text-neutral-700">
+            <ImageIcon size={16} /> {editing ? 'Edit Image' : 'Add Image'}
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            {editing && (
+              <>
+                <button type="button" onClick={() => setConfirmId(editing.id)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 border border-rose-200 flex items-center gap-1"><Trash2 size={12}/>Delete</button>
+                <button type="button" onClick={resetForm} className="px-3 py-1.5 rounded-lg text-xs font-bold text-neutral-500 border border-neutral-200">Cancel</button>
+              </>
+            )}
+            <button type="submit" className="px-4 py-2 rounded-lg text-xs font-black bg-neutral-900 text-white flex items-center gap-2"><Plus size={14}/> {editing ? 'Update' : 'Add'}</button>
+          </div>
+          <input name="title" value={formState.title} onChange={(e) => setFormState(f => ({ ...f, title: e.target.value }))} placeholder="Title" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
+          <input name="collection" value={formState.collection} onChange={(e) => setFormState(f => ({ ...f, collection: e.target.value }))} placeholder="Collection" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
+          <input name="imagePath" value={formState.imagePath} onChange={(e) => setFormState(f => ({ ...f, imagePath: e.target.value }))} placeholder="Image path or URL (server path works like [IMG])" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-mono" required />
+          <input name="words" value={formState.words} onChange={(e) => setFormState(f => ({ ...f, words: e.target.value }))} placeholder="Words (comma separated)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
+          <textarea name="note" value={formState.note} onChange={(e) => setFormState(f => ({ ...f, note: e.target.value }))} placeholder="Notes (optional)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium md:col-span-2" rows={2} />
+        </form>
+      )}
 
       {visibleItems.length === 0 ? (
         <div className="border border-neutral-200 rounded-2xl p-6 text-center text-neutral-500 bg-white shadow-sm">No images yet. Add one above.</div>
@@ -179,6 +213,16 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={!!confirmId}
+        title="Delete image?"
+        message="Hành động này sẽ xoá ảnh và liên kết từ vựng của nó."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onCancel={() => setConfirmId(null)}
+        onConfirm={() => confirmId && handleDelete(confirmId)}
+      />
     </div>
   );
 };
