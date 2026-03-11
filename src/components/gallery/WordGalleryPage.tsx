@@ -2,7 +2,6 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Plus, Image as ImageIcon, Tag, Edit2, Link as LinkIcon, X, Search, FolderOpen, Trash2 } from 'lucide-react';
 import { User, ReviewGrade } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
-import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import ConfirmationModal from '../common/ConfirmationModal';
 import * as dataStore from '../../app/dataStore';
 
@@ -14,9 +13,6 @@ type GalleryItem = {
   words: string[];
   note?: string;
 };
-
-const STORAGE_KEY = 'vocab_pro_word_gallery_items';
-const keyForUser = (userId: string) => `${STORAGE_KEY}_${userId}`;
 
 const buildImageUrl = (path: string) => {
   if (!path) return '';
@@ -44,23 +40,48 @@ const buildImageUrl = (path: string) => {
   return `${baseUrl}/${cleanPath}`;
 };
 
-const loadItems = (userId: string): GalleryItem[] => getStoredJSON<GalleryItem[]>(keyForUser(userId), []);
-const saveItems = (userId: string, items: GalleryItem[]) => setStoredJSON(keyForUser(userId), items);
-
 export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
-  const [items, setItems] = useState<GalleryItem[]>(loadItems(user.id));
+  const [items, setItems] = useState<GalleryItem[]>([]);
   const [filter, setFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<GalleryItem | null>(null);
   const [showDetail, setShowDetail] = useState<GalleryItem | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formState, setFormState] = useState({ title: '', collection: '', imagePath: '', words: '', note: '' });
+  const [formState, setFormState] = useState({ collection: '', imagePath: '', words: '' });
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const wordMap = useMemo(() => {
     const map = new Map<string, any>();
     dataStore.getAllWords().filter(w => w.userId === user.id).forEach(w => map.set(w.word.toLowerCase(), w));
     return map;
   }, [user.id, items]);
+
+  const baseUrl = useMemo(() => getServerUrl(getConfig()), []);
+
+  const fileNameFromPath = (p: string) => {
+    if (!p) return 'Untitled';
+    const parts = p.split(/[/\\]/);
+    return parts[parts.length - 1] || 'Untitled';
+  };
+
+  const loadFromServer = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${baseUrl}/api/gallery`);
+      if (!res.ok) throw new Error(`Load failed (${res.status})`);
+      const data = await res.json();
+      if (Array.isArray(data)) setItems(data);
+    } catch (e: any) {
+      setError(e.message || 'Failed to load gallery');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => { loadFromServer(); }, []);
 
   type WordStatus = 'learned' | 'new' | 'forgot' | 'hard' | 'easy' | 'missing';
 
@@ -90,20 +111,16 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
     }
   };
 
-  useEffect(() => { saveItems(user.id, items); }, [items, user.id]);
-
   useEffect(() => {
     if (editing) {
       setFormState({
-        title: editing.title,
         collection: editing.collection,
         imagePath: editing.imagePath,
-        words: editing.words.join(', '),
-        note: editing.note || ''
+        words: editing.words.join(', ')
       });
       setShowForm(true);
     } else {
-      setFormState({ title: '', collection: '', imagePath: '', words: '', note: '' });
+      setFormState({ collection: '', imagePath: '', words: '' });
     }
   }, [editing]);
 
@@ -125,9 +142,8 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
     setShowForm(false);
   };
 
-  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const title = formState.title.trim();
     const collection = (formState.collection || 'Unsorted').trim() || 'Unsorted';
     const imagePath = formState.imagePath.trim();
     const words = formState.words
@@ -136,19 +152,39 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
           .map(w => w.trim().toLowerCase())
           .filter(Boolean)
       : [];
-    const note = formState.note.trim();
+    const note = '';
 
-    const payload: GalleryItem = editing ? { ...editing, title, collection, imagePath, words, note } : {
-      id: `wg-${Date.now()}`,
-      title: title || 'Untitled',
-      collection,
-      imagePath,
-      words,
-      note
-    };
+    if (!imagePath) return;
 
-    setItems(prev => editing ? prev.map(i => i.id === payload.id ? payload : i) : [payload, ...prev]);
-    resetForm();
+    setIsSaving(true);
+    setError(null);
+    try {
+      const body = { collection, imagePath, words, note, title: fileNameFromPath(imagePath) };
+      if (editing) {
+        const res = await fetch(`${baseUrl}/api/gallery/${editing.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error(`Update failed (${res.status})`);
+        const updated = await res.json();
+        setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+      } else {
+        const res = await fetch(`${baseUrl}/api/gallery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error(`Create failed (${res.status})`);
+        const created = await res.json();
+        setItems(prev => [created, ...prev]);
+      }
+      resetForm();
+    } catch (err: any) {
+      setError(err.message || 'Save failed');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEdit = (item: GalleryItem) => {
@@ -157,11 +193,21 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = (id: string) => {
-    setItems(prev => prev.filter(i => i.id !== id));
-    if (showDetail?.id === id) setShowDetail(null);
-    if (editing?.id === id) resetForm();
-    setConfirmId(null);
+  const handleDelete = async (id: string) => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`${baseUrl}/api/gallery/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+      setItems(prev => prev.filter(i => i.id !== id));
+      if (showDetail?.id === id) setShowDetail(null);
+      if (editing?.id === id) resetForm();
+    } catch (err: any) {
+      setError(err.message || 'Delete failed');
+    } finally {
+      setIsSaving(false);
+      setConfirmId(null);
+    }
   };
 
   const renderCard = (item: GalleryItem) => {
@@ -211,6 +257,8 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
         </div>
       </div>
 
+      {error && <div className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold">{error}</div>}
+
 
       {showForm && (
         <form onSubmit={handleSave} className="bg-white border border-dashed border-neutral-300 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4 shadow-sm">
@@ -226,15 +274,15 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
             )}
             <button type="submit" className="px-4 py-2 rounded-lg text-xs font-black bg-neutral-900 text-white flex items-center gap-2"><Plus size={14}/> {editing ? 'Update' : 'Add'}</button>
           </div>
-          <input name="title" value={formState.title} onChange={(e) => setFormState(f => ({ ...f, title: e.target.value }))} placeholder="Title" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
           <input name="collection" value={formState.collection} onChange={(e) => setFormState(f => ({ ...f, collection: e.target.value }))} placeholder="Collection" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
           <input name="imagePath" value={formState.imagePath} onChange={(e) => setFormState(f => ({ ...f, imagePath: e.target.value }))} placeholder="Image path or URL (server path works like [IMG])" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-mono" required />
-          <input name="words" value={formState.words} onChange={(e) => setFormState(f => ({ ...f, words: e.target.value }))} placeholder="Words (comma separated)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
-          <textarea name="note" value={formState.note} onChange={(e) => setFormState(f => ({ ...f, note: e.target.value }))} placeholder="Notes (optional)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium md:col-span-2" rows={2} />
+          <input name="words" value={formState.words} onChange={(e) => setFormState(f => ({ ...f, words: e.target.value }))} placeholder="Words (comma separated)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium md:col-span-2" />
         </form>
       )}
 
-      {visibleItems.length === 0 ? (
+      {isLoading ? (
+        <div className="border border-neutral-200 rounded-2xl p-6 text-center text-neutral-500 bg-white shadow-sm">Loading gallery...</div>
+      ) : visibleItems.length === 0 ? (
         <div className="border border-neutral-200 rounded-2xl p-6 text-center text-neutral-500 bg-white shadow-sm">No images yet. Add one above.</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -270,7 +318,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
                   );
                 })}
               </div>
-              {showDetail.note && <p className="text-sm text-neutral-600 leading-relaxed">{showDetail.note}</p>}
+              {/* note removed */}
               <div className="flex items-center justify-between text-xs text-neutral-500">
                 <span className="flex items-center gap-2"><Tag size={12}/> {showDetail.collection}</span>
                 <button className="text-emerald-600 font-bold" onClick={() => { handleEdit(showDetail); setShowDetail(null); }}>Edit</button>

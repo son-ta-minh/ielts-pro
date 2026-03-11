@@ -78,6 +78,7 @@ const FOLDER_MAPPINGS_FILE = () => path.join(__dirname, 'folder_mappings.json');
 const MASTER_LIBRARY_FILE = () => path.join(CLOUD_CONFIG_DIR, 'master_library.json');
 const MASTER_READING_FILE = () => path.join(CLOUD_CONFIG_DIR, 'master_reading.json');
 const MASTER_PLANNING_FILE = () => path.join(CLOUD_CONFIG_DIR, 'master_planning.json');
+const MASTER_GALLERY_FILE = () => path.join(CLOUD_CONFIG_DIR, 'master_gallery.json');
 
 // --- Initialization Logic: Create files if missing ---
 try {
@@ -85,7 +86,8 @@ try {
         { path: FOLDER_MAPPINGS_FILE(), defaultContent: '{}', label: 'Mappings' },
         { path: MASTER_LIBRARY_FILE(), defaultContent: '[]', label: 'Master Library' },
         { path: MASTER_READING_FILE(), defaultContent: '[]', label: 'Master Reading' },
-        { path: MASTER_PLANNING_FILE(), defaultContent: '[]', label: 'Master Planning' }
+        { path: MASTER_PLANNING_FILE(), defaultContent: '[]', label: 'Master Planning' },
+        { path: MASTER_GALLERY_FILE(), defaultContent: '[]', label: 'Master Gallery' }
     ];
 
     filesToInit.forEach(f => {
@@ -160,5 +162,6 @@ module.exports = {
     FOLDER_MAPPINGS_FILE,
     MASTER_LIBRARY_FILE,
     MASTER_READING_FILE,
-    MASTER_PLANNING_FILE
+    MASTER_PLANNING_FILE,
+    MASTER_GALLERY_FILE
 };

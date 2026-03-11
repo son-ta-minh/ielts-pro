@@ -86,6 +86,7 @@ const coursesModule = require('./routes/courses');
 app.use('/api', coursesModule.router);
 app.use('/api', require('./routes/audio'));
 app.use('/api', require('./routes/images')); // New Image Route
+app.use('/api', require('./routes/gallery'));
 // IMPORTANT: Ensure this line exists to activate the reading routes
 app.use('/api', require('./routes/reading'));
 app.use('/api', require('./routes/planning')); // Registered Planning Route
