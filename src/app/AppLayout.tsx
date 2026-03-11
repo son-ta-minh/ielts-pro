@@ -21,6 +21,7 @@ const Discover = React.lazy(() => import('../components/discover/Discover'));
 const WritingStudioPage = React.lazy(() => import('../dynamic/templates/WritingStudioPage').then(module => ({ default: module.WritingStudioPage })));
 const IrregularVerbs = React.lazy(() => import('../components/labs/irregular_verbs/IrregularVerbs'));
 const MimicPractice = React.lazy(() => import('../components/labs/MimicPractice').then(module => ({ default: module.MimicPractice })));
+const WordGalleryPage = React.lazy(() => import('../components/gallery/WordGalleryPage').then(module => ({ default: module.WordGalleryPage })));
 // const ListeningCardPage = React.lazy(() => import('../dynamic/templates/ListeningCardPage').then(module => ({ default: module.ListeningCardPage })));
 const KnowledgeLibrary = React.lazy(() => import('../dynamic/templates/LessonLibraryV2').then(module => ({ default: module.LessonLibraryV2 })));
 const PlanningPage = React.lazy(() => import('../dynamic/templates/PlanningPage').then(module => ({ default: module.PlanningPage })));
@@ -43,7 +44,8 @@ const navItems = [
   { id: 'COURSE', view: 'COURSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Graduation%20Cap.png", label: 'Course' },
   { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },
   { id: 'SPEAKING', view: 'SPEAKING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png", label: 'Speaking - Listening' },
-  { id: 'WRITING', view: 'WRITING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png", label: 'Writing' }
+  { id: 'WRITING', view: 'WRITING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png", label: 'Writing' },
+  { id: 'WORD_GALLERY', view: 'WORD_GALLERY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Framed%20Picture.png", label: 'Word Gallery' }
 ] as const;
 
 const Sidebar: React.FC<AppLayoutProps & { 
@@ -172,6 +174,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'WRITING': return <WritingStudioPage controller={controller} user={currentUser} initialContextWord={writingContextWord} onConsumeContext={consumeWritingContext} />;
     case 'IRREGULAR_VERBS': return <IrregularVerbs user={currentUser} onGlobalViewWord={setGlobalViewWord} />;
     case 'MIMIC': return <MimicPractice />;
+    case 'WORD_GALLERY': return <WordGalleryPage user={currentUser} />;
     default: return <div>Unknown view: {view}</div>;
   }
 };
