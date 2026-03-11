@@ -107,30 +107,9 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const renderCard = (item: GalleryItem) => {
     const imageUrl = buildImageUrl(item.imagePath);
     return (
-      <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        <div className="relative cursor-pointer" onClick={() => setShowDetail(item)}>
-          <img src={imageUrl} alt={item.title} className="w-full h-44 object-cover" />
-          <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1">
-            {item.words.map(word => (
-              <span key={word} className="px-2 py-1 text-[10px] font-bold bg-neutral-900/80 text-white rounded-full backdrop-blur shadow">{word}</span>
-            ))}
-          </div>
-        </div>
-        <div className="p-4 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-neutral-400 font-bold flex items-center gap-2"><FolderOpen size={12}/> {item.collection || 'Unsorted'}</p>
-              <h3 className="font-black text-neutral-900 text-sm">{item.title}</h3>
-            </div>
-            <button onClick={() => handleEdit(item)} className="p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-500" title="Edit">
-              <Edit2 size={14} />
-            </button>
-          </div>
-          {item.note && <p className="text-xs text-neutral-500 leading-relaxed line-clamp-2">{item.note}</p>}
-          <div className="flex items-center justify-between text-[11px] text-neutral-500">
-            <span className="flex items-center gap-1"><LinkIcon size={12}/> {item.words.length} words</span>
-            <button className="text-rose-500 font-bold" onClick={() => setConfirmId(item.id)}>Delete</button>
-          </div>
+      <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="cursor-pointer" onClick={() => setShowDetail(item)}>
+          <img src={imageUrl} alt={item.title} className="w-full h-48 object-cover" />
         </div>
       </div>
     );
@@ -219,8 +198,8 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
         title="Delete Image"
         message="This action will permanently delete the image and its linked vocabulary words."
         confirmText="Delete"
-        cancelText="Cancel"
-        onCancel={() => setConfirmId(null)}
+        isProcessing={false}
+        onClose={() => setConfirmId(null)}
         onConfirm={() => confirmId && handleDelete(confirmId)}
       />
     </div>
