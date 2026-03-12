@@ -195,12 +195,12 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const displayText = isNewWord
     ? currentWord.word
     : currentWord.ipaUs || currentWord.word;
-    const vietnameseMeaning = currentWord.meaningVi?.trim() || currentWord.meaning?.trim() || 'No Vietnamese meaning available';
+    const vietnameseMeaning = currentWord.meaningVi?.trim() || 'No Vietnamese meaning available';
     const visiblePrepositions = (currentWord.prepositions || []).filter(p => !p.isIgnored);
     const visibleCollocations = (currentWord.collocationsArray || []).filter(c => !c.isIgnored);
     const visibleParaphrases = (currentWord.paraphrases || []).filter(p => !p.isIgnored);
     const visibleIdioms = (currentWord.idiomsList || []).filter(i => !i.isIgnored);
-    const prepositionTooltip = visiblePrepositions.slice(0, 6).map(p => p.prep).join('\n');
+    const prepositionTooltip = visiblePrepositions.slice(0, 6).map(p => p.usage || p.prep).join('\n');
     const collocationTooltip = visibleCollocations.slice(0, 6).map(c => c.text).join('\n');
     const paraphraseTooltip = visibleParaphrases.slice(0, 6).map(p => p.word).join('\n');
     const idiomTooltip = visibleIdioms.slice(0, 6).map(i => i.text).join('\n');
@@ -373,6 +373,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     {visiblePrepositions.length > 0 && (
                                         <div className="relative group/prep">
                                             <button
+                                                onClick={() => speak(prepositionTooltip.replace(/\n/g, ', '))}
                                                 className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-orange-600 rounded-full transition-colors"
                                             >
                                                 <AtSign size={20} />
