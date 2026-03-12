@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Image } from 'lucide-react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Image } from 'lucide-react';
 import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditWordModal from '../word_lib/EditWordModal';
@@ -142,6 +142,9 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const { current: currentIndex, max: maxIndexVisited } = progress;
     const isQuickFire = sessionType === 'random_test';
     const [mimicTarget, setMimicTarget] = React.useState<string | null>(null);
+    const [showSpellBox, setShowSpellBox] = React.useState(false);
+    const [spellInput, setSpellInput] = React.useState('');
+    const [spellResult, setSpellResult] = React.useState<'correct' | 'wrong' | null>(null);
     const touchStartX = React.useRef<number | null>(null);
     const serverUrl = getServerUrl(getConfig());
     const hasRetryableFailedTests = React.useMemo(() => {
@@ -266,7 +269,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                 <Loader2 className="animate-spin text-neutral-200" size={32} />
                                 <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading Next Test...</p>
                             </div>
-                        ) : (
+                        ) : (<>
                             <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 w-full text-center space-y-6 sm:space-y-8">
                                 <div className="flex items-center gap-4 flex-wrap justify-center">
                                     <h2 className={`font-black text-neutral-900 tracking-tight text-3xl sm:text-4xl break-words ${isIpa ? 'font-serif' : ''}`}>
@@ -327,20 +330,31 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     )}
                                 </div>
                                 <div className="flex items-center justify-center gap-4">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); speak(currentWord.word); }}
-                                        className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                        title="Pronounce"
-                                    >
-                                        <Volume2 size={22} />
-                                    </button>
-                                    <button
-                                        onClick={() => setMimicTarget(currentWord.word)}
-                                        className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
-                                        title="Simple Mimic"
-                                    >
-                                        <Mic size={20} />
-                                    </button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); speak(currentWord.word); }}
+                                    className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                    title="Pronounce"
+                                >
+                                    <Volume2 size={22} />
+                                </button>
+                                <button
+                                    onClick={() => setMimicTarget(currentWord.word)}
+                                    className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
+                                    title="Simple Mimic"
+                                >
+                                    <Mic size={20} />
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setSpellInput('');
+                                        setSpellResult(null);
+                                        setShowSpellBox(v => !v);
+                                    }}
+                                    className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-purple-600 rounded-full transition-colors"
+                                    title="Check Spelling"
+                                >
+                                    <Keyboard size={20} />
+                                </button>
                                     <div className="relative group/book">
                                         <button
                                             onClick={() => speak(vietnameseMeaning, false, 'vi')}
@@ -472,7 +486,50 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                     </button>
                                 </div>
                             </div>
-                        )}
+                            {showSpellBox && (
+                                <div className="absolute bottom-24 left-1/2 -translate-x-1/2 w-[280px] bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in">
+                                    <div className="text-[10px] font-black uppercase tracking-wider text-neutral-500 mb-2">
+                                        Spell the word
+                                    </div>
+
+                                    <input
+                                        value={spellInput}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            setSpellInput(value);
+
+                                            const correct = value.trim().toLowerCase() === currentWord.word.toLowerCase();
+                                            if (correct) {
+                                                setSpellResult('correct');
+                                                setTimeout(() => {
+                                                    setShowSpellBox(false);
+                                                    setSpellInput('');
+                                                    setSpellResult(null);
+                                                }, 1000);
+                                            } else {
+                                                setSpellResult(value.length > 0 ? 'wrong' : null);
+                                            }
+                                        }}
+                                        placeholder="Type spelling..."
+                                        className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
+                                    />
+
+                                    <div className="mt-2"></div>
+
+                                    {spellResult === 'correct' && (
+                                        <div className="mt-2 text-[10px] font-black text-green-600 uppercase">
+                                            Correct ✓
+                                        </div>
+                                    )}
+
+                                    {spellResult === 'wrong' && (
+                                        <div className="mt-2 text-[10px] font-black text-red-600 uppercase">
+                                            Incorrect
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </>)}
                     </div>
                     
                     <button 
