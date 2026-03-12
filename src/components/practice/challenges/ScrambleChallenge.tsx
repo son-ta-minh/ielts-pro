@@ -19,19 +19,21 @@ export const ScrambleChallenge: React.FC<Props> = ({
 }) => {
     const [insertionIndex, setInsertionIndex] = React.useState(0);
     const currentSelection = userAnswer || [];
+    const cleanToken = (token: string) => token.replace(/[\[\]]/g, '');
     
     // Calculate used indices based on current selection
     const usedIndices = new Set<number>();
     currentSelection.forEach(wordStr => {
-        // Find first unused instance of this word in shuffled array
-        const idx = shuffled.findIndex((w, i) => w === wordStr && !usedIndices.has(i));
+        // Compare against cleaned tokens so phrases like [one go-around] match correctly
+        const idx = shuffled.findIndex((w, i) => cleanToken(w) === wordStr && !usedIndices.has(i));
         if (idx !== -1) usedIndices.add(idx);
     });
 
     const handleToggleWord = (wordStr: string) => {
         if (isFinishing) return;
         const next = [...currentSelection];
-        next.splice(insertionIndex, 0, wordStr);
+        const cleaned = cleanToken(wordStr);
+        next.splice(insertionIndex, 0, cleaned);
         onAnswer(next);
         setInsertionIndex(prev => prev + 1);
     };
@@ -92,7 +94,7 @@ export const ScrambleChallenge: React.FC<Props> = ({
                   const isUsed = usedIndices.has(i);
                   return (
                       <button key={i} onClick={() => handleToggleWord(w)} disabled={isUsed || isFinishing} className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 ${isUsed ? 'bg-neutral-100 text-neutral-300 border-transparent cursor-default' : 'bg-white border-2 border-neutral-100 text-neutral-700 hover:border-neutral-900 hover:text-neutral-900 shadow-sm'}`}>
-                          {w}
+                          {cleanToken(w)}
                       </button>
                   );
               })}
