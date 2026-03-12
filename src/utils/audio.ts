@@ -21,7 +21,19 @@ let speakRequestSerial = 0;
 let currentPlaybackRate = 1;
 
 // Cache the successfully connected base URL
+
 let cachedBaseUrl: string | null = null;
+
+/**
+ * Cache server voice list so we do not refetch repeatedly.
+ */
+
+let cachedServerVoices: ServerVoicesResponse | null = null;
+
+/**
+ * Random voice chosen once per page load when "Random" mode is used.
+ */
+let sessionRandomVoice: string | null = null;
 
 // --- Helper: WAV Encoder for combining audio ---
 export function bufferToWav(abuffer: AudioBuffer) {
@@ -151,6 +163,7 @@ export const fetchServerVoices = async (urlOverride?: string): Promise<ServerVoi
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        cachedServerVoices = data;
         return data;
     } catch (e: any) {
         return null;
@@ -426,7 +439,61 @@ const speakViaServer = async (
     try {
         const baseUrl = await getBaseUrl(urlOverride);
         const url = `${baseUrl}/speak`;
-        const payload = { text, language, accent, voice }; 
+
+        let selectedVoice = voice;
+
+        // Resolve Random voice locally so the server never receives "Random"
+        // If Random voice is requested but cache is empty, fetch voices once
+        if (voice === 'Random' && !cachedServerVoices) {
+            try {
+                const fetched = await fetchServerVoices(baseUrl);
+                if (!fetched) {
+                    console.warn('[TTS] fetchServerVoices returned null');
+                }
+            } catch (err) {
+                console.warn('[TTS] failed to fetch server voices', err);
+            }
+        }
+        if (voice === 'Random') {
+            // If we already chose a random voice for this session, reuse it without showing toast again
+            if (sessionRandomVoice) {
+                selectedVoice = sessionRandomVoice;
+            } else {
+                let candidates: VoiceDefinition[] = [];
+
+                if (cachedServerVoices?.voices?.length) {
+                    candidates = cachedServerVoices.voices.filter(v => {
+                        if (v.language !== language) return false;
+                        const name = (v.name || '').toLowerCase();
+                        return name.includes('enhanced') || name.includes('premium');
+                    });
+
+                    // Fallback: if no enhanced/premium voices found
+                    if (candidates.length === 0) {
+                        console.warn('[TTS] no Enhanced/Premium voices found, falling back to all voices');
+                        candidates = cachedServerVoices.voices.filter(v => v.language === language);
+                    }
+                }
+
+                if (candidates.length > 0) {
+                    const randomVoice = candidates[Math.floor(Math.random() * candidates.length)];
+                    sessionRandomVoice = randomVoice.name;
+                    selectedVoice = randomVoice.name;
+
+                    // Notify UI layer (React) to show a toast
+                    window.dispatchEvent(
+                        new CustomEvent('tts-random-voice-selected', {
+                            detail: { name: randomVoice.name }
+                        })
+                    );
+                } else {
+                    console.warn('[TTS] random requested but no cached voices available; falling back to default voice');
+                    selectedVoice = '';
+                }
+            }
+        }
+
+        const payload = { text, language, accent, voice: selectedVoice };
 
         const res = await fetch(url, {
             method: 'POST',

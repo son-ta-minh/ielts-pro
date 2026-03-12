@@ -59,6 +59,13 @@ const VoiceSelector: React.FC<{
             return;
         }
 
+        if (voiceName === 'Random') {
+            const defaultAccent = langCode === 'en' ? 'en_US' : 'vi_VN';
+            // Keep the same value as the <option> so the combobox remains selected
+            onChange('Random', defaultAccent);
+            return;
+        }
+
         // Search in the original full list to ensure we find it even if filtered out visually (edge case)
         const foundVoice = serverData.voices.find(v => v.name === voiceName);
         if (foundVoice) {
@@ -86,6 +93,8 @@ const VoiceSelector: React.FC<{
                     className="w-full appearance-none bg-white border border-neutral-200 rounded-xl px-4 py-3 pr-10 text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none transition-all"
                 >
                     <option value="">Default System Voice</option>
+                    <option value="Random">Random High Quality Voice</option>
+
                     {(Object.entries(accentsMap) as [string, VoiceDefinition[]][]).map(([accentCode, voices]) => (
                         <optgroup key={accentCode} label={accentCode.replace(/[_]/g, ' ').toUpperCase()}>
                             {voices.map(v => (

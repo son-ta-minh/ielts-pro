@@ -740,17 +740,24 @@ export const useAppController = () => {
              );
          };
 
+         const onRandomVoiceSelected = (e: any) => {
+             const voiceName = e?.detail?.name || e?.detail || 'Random voice';
+             showToast(`🎙 Voice selected: ${voiceName}`, "success", 2000);
+         };
+
          window.addEventListener('datastore-updated', onDataUpdate);
          window.addEventListener('vocab-pro-restore-complete', onRestoreComplete);
          window.addEventListener('backup-scheduled', onBackupScheduled);
          window.addEventListener('backup-complete', onBackupComplete);
          window.addEventListener('backup-risk-warning', onBackupRiskWarning as EventListener);
+         window.addEventListener('tts-random-voice-selected', onRandomVoiceSelected);
          return () => {
             window.removeEventListener('datastore-updated', onDataUpdate);
             window.removeEventListener('vocab-pro-restore-complete', onRestoreComplete);
             window.removeEventListener('backup-scheduled', onBackupScheduled);
             window.removeEventListener('backup-complete', onBackupComplete);
             window.removeEventListener('backup-risk-warning', onBackupRiskWarning as EventListener);
+            window.removeEventListener('tts-random-voice-selected', onRandomVoiceSelected);
          };
     }, [refreshBackupTime, showToast]);
 
