@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot } from './types';
+import { VocabularyItem, User, Unit, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
@@ -574,6 +574,23 @@ export async function deleteConversationItem(id: string) {
     if (!canWrite()) return;
     _updateLocalLastModified();
     await db.deleteConversationItem(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+// --- QA Item Wrappers ---
+export async function saveQAItem(item: QAItem) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveQAItem(item);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteQAItem(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteQAItem(id);
     _triggerBackup();
     _notifyChanges();
 }

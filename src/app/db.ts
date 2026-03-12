@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -17,6 +17,7 @@ const LISTENING_STORE = 'listening_items';
 const NATIVE_SPEAK_STORE = 'native_speak_items';
 const CONVERSATION_STORE = 'conversation_items';
 const FREE_TALK_STORE = 'free_talk_items'; // New Store
+const QA_CARD_STORE = 'qa_items';
 const COMPOSITIONS_STORE = 'compositions';
 const WORDBOOK_STORE = 'word_books';
 const READING_BOOK_STORE = 'reading_books';
@@ -26,7 +27,7 @@ const SPEAKING_BOOK_STORE = 'speaking_books';
 const WRITING_BOOK_STORE = 'writing_books';
 const PLANNING_STORE = 'planning_goals';
 
-const DB_VERSION = 27; // Bumped version for global migration
+const DB_VERSION = 29; // Bumped version to force migration for QA store
 
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -279,6 +280,13 @@ const openDB = (): Promise<IDBDatabase> => {
              if (!db.objectStoreNames.contains(FREE_TALK_STORE)) {
                  const ftStore = db.createObjectStore(FREE_TALK_STORE, { keyPath: 'id' });
                  ftStore.createIndex('userId', 'userId', { unique: false });
+             }
+        }
+
+        if (event.oldVersion < 29) {
+             if (!db.objectStoreNames.contains(QA_CARD_STORE)) {
+                 const qaStore = db.createObjectStore(QA_CARD_STORE, { keyPath: 'id' });
+                 qaStore.createIndex('userId', 'userId', { unique: false });
              }
         }
 
@@ -804,6 +812,13 @@ export const getFreeTalkItemsByUserId = async (): Promise<FreeTalkItem[]> => awa
 export const deleteFreeTalkItem = async (id: string): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => tx.objectStore(FREE_TALK_STORE).delete(id)); };
 export const bulkSaveFreeTalkItems = async (items: FreeTalkItem[]): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => { const store = tx.objectStore(FREE_TALK_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteFreeTalkItems = async (ids: string[]): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => { const store = tx.objectStore(FREE_TALK_STORE); ids.forEach(id => store.delete(id)); }); };
+
+// --- QA Card Feature ---
+export const saveQAItem = async (item: QAItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(QA_CARD_STORE, tx => tx.objectStore(QA_CARD_STORE).put(item)); };
+export const getQAItemsByUserId = async (): Promise<QAItem[]> => await crudTemplate(QA_CARD_STORE, tx => tx.objectStore(QA_CARD_STORE).getAll(), 'readonly');
+export const deleteQAItem = async (id: string): Promise<void> => { await crudTemplate(QA_CARD_STORE, tx => tx.objectStore(QA_CARD_STORE).delete(id)); };
+export const bulkSaveQAItems = async (items: QAItem[]): Promise<void> => { await crudTemplate(QA_CARD_STORE, tx => { const store = tx.objectStore(QA_CARD_STORE); items.forEach(i => store.put(i)); }); };
+export const bulkDeleteQAItems = async (ids: string[]): Promise<void> => { await crudTemplate(QA_CARD_STORE, tx => { const store = tx.objectStore(QA_CARD_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- Writing Feature ---
 export const saveWritingLog = async (log: WritingLog): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).put(log)); };

@@ -435,6 +435,20 @@ export interface NativeSpeakItem {
     bestScore?: number;
 }
 
+export interface QAItem {
+  id: string;
+  userId: string;
+  title: string;
+  content: string; // markdown or numbered list of Q&A
+  path?: string;
+  tags?: string[];
+  createdAt: number;
+  updatedAt: number;
+  focusColor?: FocusColor;
+  isFocused?: boolean;
+  bestScore?: number;
+}
+
 export interface ConversationSpeaker {
     name: string;
     sex: 'male' | 'female';
