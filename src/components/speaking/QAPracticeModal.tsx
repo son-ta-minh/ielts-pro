@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, Mic, Square, Play, Eye, EyeOff, Shuffle, ChevronRight } from 'lucide-react';
+import { speak } from '../../utils/audio';
 
 export interface QAItem {
   id: string;
@@ -41,25 +42,21 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
 
   const current = qaList[index];
   const qaPairs = React.useMemo(() => {
-    if (!current?.a) return [];
+    const raw = current?.a || current?.q || '';
+    if (!raw) return [];
 
-    const qMatches = [...current.a.matchAll(/\[Q\](.*?)\[\/Q\]/gs)].map(m => m[1].trim());
-    const aMatches = [...current.a.matchAll(/\[A\](.*?)\[\/A\]/gs)].map(m => m[1].trim());
+    const pairMatches = [...raw.matchAll(/\[Q\]([\s\S]*?)\[\/Q\]\s*\[A\]([\s\S]*?)\[\/A\]/g)];
 
-    return qMatches.map((q, i) => ({
-      q,
-      a: aMatches[i] || ''
+    return pairMatches.map(m => ({
+      q: m[1].trim(),
+      a: m[2].trim()
     }));
   }, [current]);
 
   const speakQuestion = () => {
     const text = qaPairs.length > 0 ? qaPairs[pairIndex]?.q : current?.q;
     if (!text) return;
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-    speechSynthesis.speak(utterance);
+    speak(text);
   };
 
   const reshuffle = () => {
@@ -98,7 +95,7 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
     if (isRecording) return;
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
+    const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
 
     mediaRecorderRef.current = recorder;
     chunksRef.current = [];
@@ -110,7 +107,8 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
     };
 
     recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      const mime = recorder.mimeType || 'audio/webm';
+      const blob = new Blob(chunksRef.current, { type: mime });
       const url = URL.createObjectURL(blob);
       setAudioURL(url);
 
@@ -159,7 +157,7 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
           {/* Question Card */}
           <div className="p-6 bg-white border border-neutral-200 rounded-3xl shadow-sm">
             <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-2">
-              Question {index + 1} / {qaList.length}
+              Question {qaPairs.length > 0 ? pairIndex + 1 : index + 1} / {qaPairs.length > 0 ? qaPairs.length : qaList.length}
             </div>
 
             {showQuestion ? (
@@ -167,22 +165,21 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
                 {qaPairs.length > 0 ? qaPairs[pairIndex]?.q : current.q}
               </p>
             ) : (
-              <p className="text-sm text-neutral-400 italic">Question hidden. Reveal when ready.</p>
+              <p className="text-sm text-neutral-400 italic">Question hidden</p>
             )}
 
             <div className="flex items-center gap-2 mt-3">
-              <button
-                onClick={() => setShowQuestion((s) => !s)}
-                className="px-3 py-1.5 text-xs font-bold border border-neutral-200 rounded-lg hover:bg-neutral-100"
-              >
-                {showQuestion ? "Hide Question" : "Reveal Question"}
-              </button>
-
               <button
                 onClick={speakQuestion}
                 className="px-3 py-1.5 text-xs font-bold border border-neutral-200 rounded-lg flex items-center gap-1 hover:bg-neutral-100"
               >
                 <Play size={12} /> Speak
+              </button>
+              <button
+                onClick={() => setShowQuestion((s) => !s)}
+                className="px-3 py-1.5 text-xs font-bold border border-neutral-200 rounded-lg hover:bg-neutral-100"
+              >
+                {showQuestion ? "Hide Question" : "Reveal Question"}
               </button>
             </div>
           </div>
@@ -232,7 +229,17 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
               )}
 
               {audioURL && (
-                <audio controls src={audioURL} />
+                <div className="flex items-center gap-3">
+                  <audio controls src={audioURL} />
+
+                  <a
+                    href={audioURL}
+                    download={`speaking-answer-${Date.now()}.webm`}
+                    className="px-3 py-1.5 text-xs font-bold border border-neutral-200 rounded-lg hover:bg-neutral-100"
+                  >
+                    Save
+                  </a>
+                </div>
               )}
 
             </div>
