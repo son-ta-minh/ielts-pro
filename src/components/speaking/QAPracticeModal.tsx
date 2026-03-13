@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { X, Mic, Square, Play, Eye, EyeOff, Shuffle, ChevronRight } from 'lucide-react';
 import { speak } from '../../utils/audio';
+import SoundAnalyzer from '../../components/common/SoundAnalyzer';
 
 export interface QAItem {
   id: string;
@@ -23,22 +24,110 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
 
   const [isRecording, setIsRecording] = useState(false);
   const [audioURL, setAudioURL] = useState<string | null>(null);
+  const [inputLevel, setInputLevel] = useState(0);
+  const [waveform, setWaveform] = useState<number[]>([]);
+  const [transcript, setTranscript] = useState<string>("");
+  const [wpm, setWpm] = useState<number | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
+  const recognitionRef = useRef<any>(null);
 
-  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
-  const chunksRef = React.useRef<Blob[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playbackCtxRef = useRef<AudioContext | null>(null);
+  const playbackAnalyserRef = useRef<AnalyserNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || waveform.length === 0) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const barWidth = canvas.width / waveform.length;
+      const mid = canvas.height / 2;
+
+      ctx.fillStyle = "#9ca3af";
+
+      waveform.forEach((v, i) => {
+        const h = v * canvas.height * 0.9;
+        ctx.fillRect(
+          i * barWidth,
+          mid - h / 2,
+          barWidth * 0.9,
+          h
+        );
+      });
+
+      if (audioRef.current) {
+        const audio = audioRef.current;
+        const progress =
+          audio.currentTime / (audio.duration || 1);
+
+        const x = progress * canvas.width;
+
+        ctx.strokeStyle = "#3b82f6";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+
+      animationRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      if (animationRef.current)
+        cancelAnimationFrame(animationRef.current);
+    };
+  }, [waveform]);
 
   useEffect(() => {
     if (isOpen) {
-      const shuffled = [...data].sort(() => Math.random() - 0.5);
-      setQaList(shuffled);
+      // keep original order when opening
+      setQaList([...data]);
       setIndex(0);
       setShowAnswer(false);
       setShowQuestion(false);
       setPairIndex(0);
       setAudioURL(null);
       setIsRecording(false);
+      setWaveform([]);
+      setTranscript("");
+      setWpm(null);
+      setAudioDuration(null);
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
     }
   }, [isOpen, data]);
+
+  useEffect(() => {
+    if (isRecording) return;
+    if (!audioDuration || !transcript) return;
+
+    const words = transcript.trim().split(/\s+/).filter(Boolean).length;
+    const minutes = audioDuration / 60;
+
+    if (minutes > 0) {
+      const calculatedWpm = Math.round(words / minutes);
+      setWpm(calculatedWpm);
+    }
+  }, [audioDuration, transcript, isRecording]);
 
   const current = qaList[index];
   const qaPairs = React.useMemo(() => {
@@ -60,13 +149,22 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
   };
 
   const reshuffle = () => {
-    const shuffled = [...qaList].sort(() => Math.random() - 0.5);
+    const shuffled = [...data].sort(() => Math.random() - 0.5);
     setQaList(shuffled);
     setIndex(0);
     setShowAnswer(false);
     setShowQuestion(false);
     setPairIndex(0);
     setAudioURL(null);
+    setWaveform([]);
+    setTranscript("");
+    setWpm(null);
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
   };
 
   const next = () => {
@@ -80,6 +178,16 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
       setShowAnswer(false);
       setShowQuestion(false);
       setAudioURL(null);
+      setWaveform([]);
+      setTranscript("");
+      setWpm(null);
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
       return;
     }
 
@@ -89,12 +197,106 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
     setShowAnswer(false);
     setShowQuestion(false);
     setAudioURL(null);
+    setWaveform([]);
+    setTranscript("");
+    setWpm(null);
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
   };
 
   const startRecording = async () => {
     if (isRecording) return;
+    setAudioURL(null);
+    setWaveform([]);
+    setTranscript("");
+    setWpm(null);
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      recognition.onresult = (event: any) => {
+        let text = "";
+        for (let i = 0; i < event.results.length; i++) {
+          text += event.results[i][0].transcript + " ";
+        }
+        setTranscript(text.trim());
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    }
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    streamRef.current = stream;
+    // create audio context for waveform / level detection
+    const audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    audioContextRef.current = audioContext;
+    analyserRef.current = analyser;
+
+    const bufferLength = analyser.fftSize;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const drawWaveform = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        animationRef.current = requestAnimationFrame(drawWaveform);
+        return;
+      }
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        animationRef.current = requestAnimationFrame(drawWaveform);
+        return;
+      }
+
+      analyser.getByteTimeDomainData(dataArray);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#10b981";
+      ctx.beginPath();
+
+      const sliceWidth = canvas.width / bufferLength;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = (v * canvas.height) / 2;
+
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+
+        x += sliceWidth;
+      }
+
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+
+      animationRef.current = requestAnimationFrame(drawWaveform);
+    };
+
+    drawWaveform();
+
     const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
 
     mediaRecorderRef.current = recorder;
@@ -112,23 +314,106 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
       const url = URL.createObjectURL(blob);
       setAudioURL(url);
 
-      // stop microphone tracks to release the mic
-      stream.getTracks().forEach((track) => track.stop());
+      generateWaveform(blob);
+
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (audioContextRef.current) audioContextRef.current.close();
+      setInputLevel(0);
+      mediaRecorderRef.current = null;
+      chunksRef.current = [];
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
     };
 
-    recorder.start();
-    setIsRecording(true);
+    // small delay so user has time before speaking
+    setTimeout(() => {
+      recorder.start();
+      setIsRecording(true);
+    }, 300);
   };
 
   const stopRecording = () => {
     const recorder = mediaRecorderRef.current;
-    if (!recorder) return;
-
-    if (recorder.state !== 'inactive') {
-      recorder.stop();
-    }
 
     setIsRecording(false);
+
+    // stop speech recognition immediately (Chrome keeps mic if only abort is used)
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {}
+
+      recognitionRef.current = null;
+    }
+
+    // stop waveform animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+
+    // stop audio context used for mic visualization
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+      } catch {}
+      audioContextRef.current = null;
+    }
+
+    // force stop microphone tracks
+    if (streamRef.current) {
+      const tracks = streamRef.current.getTracks();
+
+      tracks.forEach((track, i) => {
+        try {
+          track.enabled = false;
+          track.stop();
+        } catch (e) {
+        }
+      });
+
+      streamRef.current = null;
+    }
+
+    // then stop recorder (finalize blob)
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.stop();
+      } catch {}
+    }
+  };
+
+  const generateWaveform = async (blob: Blob) => {
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioCtx = new AudioContext();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+    const raw = audioBuffer.getChannelData(0);
+    const samples = 120; // number of bars
+    const blockSize = Math.floor(raw.length / samples);
+    const peaks: number[] = [];
+
+    for (let i = 0; i < samples; i++) {
+      let sum = 0;
+      const start = i * blockSize;
+      for (let j = 0; j < blockSize; j++) {
+        sum += Math.abs(raw[start + j] || 0);
+      }
+      peaks.push(sum / blockSize);
+    }
+
+    // normalize peaks so waveform uses full vertical space
+    const max = Math.max(...peaks) || 1;
+    const normalized = peaks.map(p => p / max);
+
+    setWaveform(normalized);
   };
 
   if (!isOpen || qaList.length === 0) return null;
@@ -136,8 +421,7 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
 
-      <div className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col h-[85vh]">
-
+      <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl border border-neutral-200 flex flex-col h-[85vh]">
         <header className="px-8 py-6 border-b border-neutral-100 flex justify-between items-start shrink-0">
           <div>
             <h3 className="text-xl font-black text-neutral-900">Speaking Practice</h3>
@@ -230,7 +514,30 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
 
               {audioURL && (
                 <div className="flex items-center gap-3">
-                  <audio controls src={audioURL} />
+                  <audio
+                    ref={audioRef}
+                    controls
+                    src={audioURL}
+                    onLoadedMetadata={() => {
+                      if (!audioRef.current) return;
+
+                      const audio = audioRef.current;
+
+                      const tryReadDuration = () => {
+                        const d = audio.duration;
+                        if (!Number.isNaN(d) && d > 0 && d !== Infinity) {
+                          setAudioDuration(d);
+                        }
+                      };
+
+                      // sometimes duration is NaN on first read (common with webm)
+                      tryReadDuration();
+
+                      // try again shortly after metadata load
+                      setTimeout(tryReadDuration, 100);
+                      setTimeout(tryReadDuration, 300);
+                    }}
+                  />
 
                   <a
                     href={audioURL}
@@ -243,6 +550,35 @@ export const QAPracticeModal: React.FC<Props> = ({ isOpen, onClose, data }) => {
               )}
 
             </div>
+
+            {transcript && (
+              <div className="text-xs text-neutral-600 bg-neutral-100 rounded-lg p-3">
+                <div className="font-bold mb-1 text-neutral-500 uppercase tracking-wider text-[10px]">
+                  Speech to text
+                </div>
+                <div>{transcript}</div>
+              </div>
+            )}
+            {!audioURL && (
+              <div className="w-full h-24 bg-neutral-900/90 rounded-xl overflow-hidden flex items-center">
+                <canvas
+                  ref={canvasRef}
+                  width={600}
+                  height={90}
+                  className="w-full h-full"
+                />
+              </div>
+            )}
+
+            {audioURL && (
+              <div className="pt-2">
+                <SoundAnalyzer
+                  audioUrl={audioURL}
+                  audioRef={audioRef}
+                  wpm={wpm ?? undefined}
+                />
+              </div>
+            )}
 
           </div>
 
