@@ -23,6 +23,7 @@ type FormAction =
     | { type: 'SET_FIELD', payload: { field: keyof FormState, value: any } }
     | { type: 'SET_FLAG', payload: { flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' } }
     | { type: 'SET_LIST_ITEM', payload: { list: 'wordFamily' | 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases', data: any } }
+    | { type: 'ADD_LIST_ITEM', payload: { list: 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases', item: any } }
     | { type: 'APPLY_AI_MERGE', payload: any };
 
 function formReducer(state: FormState, action: FormAction): FormState {
@@ -58,6 +59,10 @@ function formReducer(state: FormState, action: FormAction): FormState {
             return newState;
         case 'SET_LIST_ITEM':
              return { ...state, [action.payload.list]: action.payload.data };
+        case 'ADD_LIST_ITEM':
+            const listName = action.payload.list as keyof FormState;
+            const current = (state[listName] as any[]) || [];
+            return { ...state, [listName]: [...current, action.payload.item] };
         case 'APPLY_AI_MERGE':
             const merged = mergeAiResultIntoWord(state, action.payload);
             return {
@@ -219,7 +224,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
           update: (index: number, changes: object) => dispatch({ type: 'SET_LIST_ITEM', payload: { list, data: [...currentList].map((item, i) => i === index ? { ...item, ...changes } : item) } }),
           toggleIgnore: (index: number) => dispatch({ type: 'SET_LIST_ITEM', payload: { list, data: [...currentList].map((item, i) => i === index ? { ...item, isIgnored: !item.isIgnored } : item) } }),
           remove: (index: number) => dispatch({ type: 'SET_LIST_ITEM', payload: { list, data: currentList.filter((_, i) => i !== index) } }),
-          add: (newItem: object) => dispatch({ type: 'SET_LIST_ITEM', payload: { list, data: [...currentList, newItem] } })
+          add: (newItem: object) => dispatch({ type: 'ADD_LIST_ITEM', payload: { list: list as any, item: newItem } })
       };
   };
 

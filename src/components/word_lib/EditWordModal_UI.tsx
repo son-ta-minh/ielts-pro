@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Save, Sparkles, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, BookText, ClipboardList } from 'lucide-react';
 import { VocabularyItem, WordFamily, WordFamilyMember, ReviewGrade, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
 
@@ -113,6 +113,72 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
   } = props;
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchType, setBatchType] = useState<'collocations' | 'idioms' | 'paraphrases' | 'prepositions'>('collocations');
+  const [batchText, setBatchText] = useState('');
+
+  const parseBatchLines = (text: string) => {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const results: { text: string; desc?: string }[] = [];
+
+    for (let line of lines) {
+      // remove leading bullets / special chars
+      line = line.replace(/^[-*•|>\s]+/, '').trim();
+
+      // remove markdown bold if present
+      line = line.replace(/\*\*(.*?)\*\*/g, '$1');
+
+      // split by first colon
+      const idx = line.indexOf(':');
+      if (idx === -1) continue;
+
+      let left = line.slice(0, idx).trim();
+      const right = line.slice(idx + 1).trim();
+
+      // final cleanup for markdown artifacts like **word** or word**
+      left = left.replace(/^[*_`]+/, '').replace(/[*_`]+$/, '').trim();
+
+      if (left) {
+        results.push({ text: left, desc: right });
+      }
+    }
+
+    return results;
+  };
+
+  const applyBatchImport = () => {
+    const items = parseBatchLines(batchText);
+    if (!items.length) return;
+
+    if (batchType === 'collocations') {
+      const payload = items.map(it => ({ text: it.text, d: it.desc || '', isIgnored: false }));
+      payload.forEach(item => collocList.add(item));
+    }
+    if (batchType === 'idioms') {
+      const payload = items.map(it => ({ text: it.text, d: it.desc || '', isIgnored: false }));
+      payload.forEach(item => idiomList.add(item));
+    }
+    if (batchType === 'paraphrases') {
+      const payload = items.map(it => ({
+        word: it.text,
+        context: it.desc || '',
+        tone: 'synonym',
+        isIgnored: false
+      }));
+      payload.forEach(item => paraList.add(item));
+    }
+    if (batchType === 'prepositions') {
+      const payload = items.map(it => ({
+        prep: it.text.split(/\s+/)[0],
+        usage: it.desc || '',
+        isIgnored: false
+      }));
+      payload.forEach(item => prepList.add(item));
+    }
+
+    setBatchText('');
+    setBatchOpen(false);
+  };
   const TABS: { id: Tab, label: string, icon: React.ElementType }[] = [
     { id: 'MAIN', label: 'Core', icon: Book },
     { id: 'CONNECTIONS', label: 'Advanced', icon: LinkIcon },
@@ -150,6 +216,14 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                     <h3 className="font-black text-lg text-neutral-900 leading-none">Edit Word</h3>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setBatchOpen(v => !v)}
+                        className="px-3 py-2 bg-white border border-neutral-200 text-neutral-600 rounded-lg font-black text-[10px] flex items-center justify-center space-x-1.5 hover:bg-neutral-50 active:scale-95 transition-all shadow-sm"
+                    >
+                        <Combine size={12} />
+                        <span>Batch</span>
+                    </button>
                     <button 
                         type="button" 
                         onClick={onSuggestLearn} 
@@ -192,6 +266,36 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
         {/* CONTENT */}
         <div className="flex-1 overflow-y-auto no-scrollbar bg-neutral-50/50">
             <div className="p-6 space-y-6">
+                {batchOpen && (
+                  <div className="p-4 bg-white border border-neutral-200 rounded-2xl space-y-3">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={batchType}
+                        onChange={(e) => setBatchType(e.target.value as any)}
+                        className="px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-bold"
+                      >
+                        <option value="collocations">Collocations</option>
+                        <option value="idioms">Related Idioms</option>
+                        <option value="paraphrases">Paraphrases</option>
+                        <option value="prepositions">Prepositions</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={applyBatchImport}
+                        className="px-3 py-2 bg-neutral-900 text-white rounded-lg text-xs font-black"
+                      >
+                        Import
+                      </button>
+                    </div>
+                    <textarea
+                      value={batchText}
+                      onChange={(e) => setBatchText(e.target.value)}
+                      rows={6}
+                      placeholder="- **preventive measures**: actions taken to stop a problem..."
+                      className="w-full p-3 bg-neutral-50 border border-neutral-200 rounded-xl font-mono text-xs"
+                    />
+                  </div>
+                )}
                 {activeTab === 'MAIN' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 animate-in fade-in duration-300">
                         <div className="space-y-1">
