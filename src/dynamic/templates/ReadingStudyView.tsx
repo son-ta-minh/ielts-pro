@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Unit, VocabularyItem, User } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
@@ -33,6 +33,9 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
   const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
   const [isPracticeMode, setIsPracticeMode] = useState(false);
+  const [note, setNote] = useState(unit.note ?? '');
+  const noteSaveRef = useRef(unit.note ?? '');
+  const noteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const [unitTablePage, setUnitTablePage] = useState(0);
   const [unitTablePageSize, setUnitTablePageSize] = useState(10);
@@ -70,6 +73,33 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
       window.removeEventListener('datastore-updated', onDataChange);
     };
   }, [onDataChange]);
+
+  useEffect(() => {
+    setNote(unit.note ?? '');
+    noteSaveRef.current = unit.note ?? '';
+  }, [unit.note]);
+
+  useEffect(() => {
+    if (note === noteSaveRef.current) return;
+    if (noteSaveTimerRef.current) {
+      clearTimeout(noteSaveTimerRef.current);
+      noteSaveTimerRef.current = null;
+    }
+    noteSaveTimerRef.current = setTimeout(async () => {
+      noteSaveRef.current = note;
+      noteSaveTimerRef.current = null;
+      const updatedUnit = { ...unit, note, updatedAt: Date.now() };
+      await dataStore.saveUnit(updatedUnit);
+      onDataChange();
+    }, 600);
+
+    return () => {
+      if (noteSaveTimerRef.current) {
+        clearTimeout(noteSaveTimerRef.current);
+        noteSaveTimerRef.current = null;
+      }
+    };
+  }, [note, unit, onDataChange]);
 
   useEffect(() => {
     const encodePathForApi = (relativePath: string) => relativePath.split('/').map(part => encodeURIComponent(part)).join('/');
@@ -332,6 +362,8 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
       onComprehensionResultChange={(index, result) => setComprehensionResults(prev => ({...prev, [index]: result}))}
       essayFileContent={essayFileContent}
       answerFileContent={answerFileContent}
+      note={note}
+      onNoteChange={setNote}
     />
   );
 }

@@ -245,6 +245,7 @@ export interface Unit {
   };
   focusColor?: FocusColor;
   isFocused?: boolean;
+  note?: string;
 }
 
 export interface SpeakingTopic {

@@ -11,6 +11,7 @@ import { speak } from '../../utils/audio';
 import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { renderAsync } from 'docx-preview';
+import { parseMarkdown } from '../../utils/markdownParser';
 
 interface TooltipState { word: VocabularyItem; rect: DOMRect; }
 type LinkedFileContent =
@@ -318,14 +319,17 @@ export interface ReadingStudyViewUIProps {
     onComprehensionResultChange: (index: number, result: 'correct' | 'incorrect') => void;
     essayFileContent: LinkedFileContent;
     answerFileContent: LinkedFileContent;
+    note: string;
+    onNoteChange: (value: string) => void;
 }
 
 export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => {
-  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, handleExportUnit, isComprehensionModalOpen, onOpenComprehensionModal, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange, essayFileContent, answerFileContent } = props;
-  
+  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, handleExportUnit, isComprehensionModalOpen, onOpenComprehensionModal, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange, essayFileContent, answerFileContent, note, onNoteChange } = props;
+  const [noteMode, setNoteMode] = useState<'edit' | 'preview'>('edit');
+  const previewHtml = useMemo(() => parseMarkdown(note), [note]);
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
   const isLinkedFileUnit = unit.readingSourceType === 'server_file_pair';
-  const [activeTab, setActiveTab] = useState<'ESSAY' | 'ANSWER' | 'VOCAB'>('ESSAY');
+  const [activeTab, setActiveTab] = useState<'ESSAY' | 'ANSWER' | 'VOCAB' | 'NOTE'>('ESSAY');
   const [pdfRenderMode, setPdfRenderMode] = useState<'iframe' | 'pdfjs'>('pdfjs');
   const [pdfViewportHeight, setPdfViewportHeight] = useState(90);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
@@ -484,6 +488,12 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
             >
                 <LayoutList size={14} /> Vocabulary
             </button>
+            <button
+                onClick={() => setActiveTab('NOTE')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'NOTE' ? 'bg-white text-teal-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+            >
+                <Tag size={14} /> Note
+            </button>
           </div>
           {hasPdfLinkedContent && (
             <>
@@ -573,6 +583,53 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
                         settingsKey="ielts_pro_unit_table_settings" 
                         context="unit" 
                     />
+                </div>
+            )}
+
+            {activeTab === 'NOTE' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white p-6 space-y-5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-[0.3em] text-neutral-400">Note</p>
+                                <h3 className="text-lg font-bold text-neutral-900">Markdown jotter</h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setNoteMode('edit')}
+                                    className={`px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-[0.3em] transition ${noteMode === 'edit' ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}
+                                >
+                                    Raw
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setNoteMode('preview')}
+                                    className={`px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-[0.3em] transition ${noteMode === 'preview' ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}
+                                >
+                                    Preview
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex flex-col flex-1">
+                            {noteMode === 'edit' ? (
+                                <textarea
+                                    value={note}
+                                    onChange={(event) => onNoteChange(event.target.value)}
+                                    placeholder="Write your Markdown note here..."
+                                    className="w-full flex-1 border border-neutral-300 rounded-md p-2 resize-none focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                                />
+                            ) : (
+                                <div className="w-full flex-1 border border-neutral-300 rounded-md px-4 pb-4 pt-2 overflow-auto bg-neutral-50 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 prose-headings:mt-2 prose-headings:mb-2 text-sm text-neutral-800">
+                                    {previewHtml ? (
+                                        <div className="text-neutral-900" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                                    ) : (
+                                        <p className="text-xs text-neutral-500">Markdown preview will appear here while you type.</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
