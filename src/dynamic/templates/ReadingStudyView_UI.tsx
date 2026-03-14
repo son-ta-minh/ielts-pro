@@ -587,12 +587,11 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
             )}
 
             {activeTab === 'NOTE' && (
-                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white p-6 space-y-5">
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col min-h-[calc(100vh-260px)]">
+                    <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white p-6 space-y-5 flex flex-col flex-1">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <p className="text-xs font-black uppercase tracking-[0.3em] text-neutral-400">Note</p>
-                                <h3 className="text-lg font-bold text-neutral-900">Markdown jotter</h3>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
@@ -611,16 +610,16 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
                                 </button>
                             </div>
                         </div>
-                        <div className="flex flex-col flex-1">
+                        <div className="flex flex-col flex-1 min-h-0">
                             {noteMode === 'edit' ? (
                                 <textarea
                                     value={note}
                                     onChange={(event) => onNoteChange(event.target.value)}
                                     placeholder="Write your Markdown note here..."
-                                    className="w-full flex-1 border border-neutral-300 rounded-md p-2 resize-none focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                                    className="w-full flex-1 h-full min-h-[300px] border border-neutral-300 rounded-md p-3 resize-none focus:outline-none focus:ring-2 focus:ring-neutral-900"
                                 />
                             ) : (
-                                <div className="w-full flex-1 border border-neutral-300 rounded-md px-4 pb-4 pt-2 overflow-auto bg-neutral-50 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 prose-headings:mt-2 prose-headings:mb-2 text-sm text-neutral-800">
+                                <div className="w-full flex-1 min-h-[300px] border border-neutral-300 rounded-md px-4 pb-4 pt-2 overflow-auto bg-neutral-50 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 prose-headings:mt-2 prose-headings:mb-2 text-sm text-neutral-800">
                                     {previewHtml ? (
                                         <div className="text-neutral-900" dangerouslySetInnerHTML={{ __html: previewHtml }} />
                                     ) : (
