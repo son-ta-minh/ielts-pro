@@ -42,6 +42,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         return saved ? Number(saved) : 1.5;
     });
     const autoPlayRef = useRef<any>(null);
+    const audioPlaybackRef = useRef<AudioContext | null>(null);
 
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const silenceTimerRef = useRef<any>(null);
@@ -166,9 +167,22 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         };
     }, []);
 
+    const stopPlayback = useCallback(() => {
+        if (audioPlaybackRef.current) {
+            audioPlaybackRef.current.close().catch(() => {});
+            audioPlaybackRef.current = null;
+        }
+    }, []);
+
     useEffect(() => {
         localStorage.setItem('mimic_play_speed', String(playSpeed));
     }, [playSpeed]);
+
+    useEffect(() => {
+        return () => {
+            stopPlayback();
+        };
+    }, [stopPlayback]);
 
     const handleToggleRecord = async () => {
         if (!editedTarget) return; // Cannot record without a target
@@ -236,12 +250,37 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         }
     };
 
-    const handlePlayUserAudio = () => {
-        if (userAudio) {
-            const audio = new Audio(`data:${userAudio.mimeType};base64,${userAudio.base64}`);
-            audio.play();
+    const handlePlayUserAudio = useCallback(async () => {
+        if (!userAudio) return;
+        stopPlayback();
+
+        try {
+            const raw = atob(userAudio.base64);
+            const arrayBuffer = new ArrayBuffer(raw.length);
+            const view = new Uint8Array(arrayBuffer);
+            for (let i = 0; i < raw.length; i++) {
+                view[i] = raw.charCodeAt(i);
+            }
+
+            const audioCtx = new AudioContext();
+            audioPlaybackRef.current = audioCtx;
+            const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+            const source = audioCtx.createBufferSource();
+            source.buffer = decoded;
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.value = 1.8;
+            source.connect(gainNode).connect(audioCtx.destination);
+            source.start();
+
+            source.onended = () => {
+                source.disconnect();
+                gainNode.disconnect();
+                stopPlayback();
+            };
+        } catch (_e) {
+            console.error('Failed to play recorded audio', _e);
         }
-    };
+    }, [userAudio, stopPlayback]);
 
     const handleAddToQueue = () => {
         if (!editedTarget) return;
