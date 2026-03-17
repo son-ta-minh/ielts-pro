@@ -43,6 +43,7 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const [viewMode, setViewMode] = useState<'MATRIX' | 'MATCH'>('MATRIX');
     const [sessionSize, setSessionSize] = useState(12);
     const [sources, setSources] = useState({ library: true, collocations: true, idioms: true });
+    const [endlessMode, setEndlessMode] = useState(false);
 
     // Gameplay State
     const [cards, setCards] = useState<Card[]>([]);
@@ -130,14 +131,58 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
         setSelectedLeftId(null);
         setSelectedRightId(null);
         
-    }, [gameState, sessionSize, sources]);
+    }, [gameState, sessionSize, sources, endlessMode]);
 
     // Game over check
     useEffect(() => {
-        if (gameState === 'PLAYING' && sessionSize > 0 && answeredCueIds.size === sessionSize) {
+        if (!endlessMode && gameState === 'PLAYING' && sessionSize > 0 && answeredCueIds.size === sessionSize) {
              setTimeout(() => onComplete(score), 800);
         }
-    }, [gameState, answeredCueIds, sessionSize, score, onComplete]);
+    }, [gameState, answeredCueIds, sessionSize, score, onComplete, endlessMode]);
+    // Endless mode refill helper
+    const refillIfNeeded = () => {
+        if (!endlessMode) return;
+
+        const remaining = sessionSize - answeredCueIds.size;
+        if (remaining > sessionSize / 2) return;
+
+        const allPairs: { text: string; d: string; cueId: string; }[] = [];
+        words.forEach(word => {
+            if (sources.library && word.meaningVi && word.meaningVi.trim()) {
+                allPairs.push({ text: word.word, d: word.meaningVi, cueId: `cue-${word.id}-word` });
+            }
+            if (sources.collocations) {
+                (word.collocationsArray || [])
+                    .filter(c => !c.isIgnored && c.d && c.d.trim())
+                    .forEach((c, index) => {
+                        allPairs.push({ text: c.text, d: c.d!, cueId: `cue-${word.id}-col-${index}` });
+                    });
+            }
+            if (sources.idioms) {
+                (word.idiomsList || [])
+                    .filter(i => !i.isIgnored && i.d && i.d.trim())
+                    .forEach((i, index) => {
+                        allPairs.push({ text: i.text, d: i.d!, cueId: `cue-${word.id}-idm-${index}` });
+                    });
+            }
+        });
+
+        const unused = allPairs.filter(p => !answeredCueIds.has(p.cueId));
+        const shuffled = shuffleArray(unused).slice(0, Math.floor(sessionSize / 2));
+
+        const newCues: Cue[] = shuffled.map(p => ({ id: p.cueId, text: p.d }));
+        const newCards: Card[] = shuffled.map(p => ({
+            id: `card-${p.cueId}`,
+            text: p.text,
+            cueId: p.cueId,
+            pairId: p.cueId,
+            state: 'default',
+            type: 'word'
+        }));
+
+        setCues(prev => shuffleArray([...prev.filter(c => !answeredCueIds.has(c.id)), ...newCues]));
+        setCards(prev => shuffleArray([...prev.filter(c => !answeredCueIds.has(c.cueId)), ...newCards]));
+    };
 
     const handleMatrixCardClick = (clickedCard: Card) => {
         const currentCue = cues[currentCueIndex];
@@ -152,6 +197,8 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
             setTimeout(() => {
                 const newAnsweredIds = new Set(answeredCueIds).add(currentCue.id);
                 setAnsweredCueIds(newAnsweredIds);
+
+                refillIfNeeded();
 
                 let nextUnansweredIndex = -1;
                 for (let i = currentCueIndex + 1; i < cues.length; i++) {
@@ -206,6 +253,8 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
             setScore(s => s + 10);
             const nextAnswered = new Set(answeredCueIds).add(left.pairId);
             setAnsweredCueIds(nextAnswered);
+
+            refillIfNeeded();
 
             setMatchCardsLeft(prev => prev.map(c => c.id === leftId ? {...c, state: 'correct'} : c));
             setMatchCardsRight(prev => prev.map(c => c.id === rightId ? {...c, state: 'correct'} : c));
@@ -292,6 +341,15 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
                             <CheckboxOption label="Library Definitions" checked={sources.library} onChange={() => setSources(s => ({ ...s, library: !s.library }))} />
                             <CheckboxOption label="Collocations" checked={sources.collocations} onChange={() => setSources(s => ({ ...s, collocations: !s.collocations }))} />
                             <CheckboxOption label="Idioms" checked={sources.idioms} onChange={() => setSources(s => ({ ...s, idioms: !s.idioms }))} />
+                            <label className="flex items-center justify-between p-3 rounded-2xl bg-neutral-50 border-2 border-transparent hover:border-fuchsia-100 cursor-pointer transition-all">
+                                <span className="font-bold text-xs text-neutral-800">Endless Mode</span>
+                                <input
+                                    type="checkbox"
+                                    checked={endlessMode}
+                                    onChange={() => setEndlessMode(e => !e)}
+                                    className="accent-fuchsia-500"
+                                />
+                            </label>
                         </div>
                     </div>
                 </div>
