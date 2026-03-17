@@ -87,6 +87,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     }, []);
 
     const normalizeAudioUrl = (rawUrl: string) => {
+        if (!rawUrl) return '';
         if (rawUrl.startsWith('blob:')) return rawUrl;
         try {
             const config = getConfig();
@@ -104,6 +105,17 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
             console.warn('[FreeTalkPracticeModal] URL normalization failed:', err);
             return rawUrl;
         }
+    };
+
+    const buildDownloadUrl = (rawUrl?: string) => {
+        if (!rawUrl) return '';
+        const normalized = normalizeAudioUrl(rawUrl);
+        const marker = '/api/audio/stream/';
+        const index = normalized.indexOf(marker);
+        if (index === -1) {
+            return normalized;
+        }
+        return `${normalized.substring(0, index)}/api/audio/download/${normalized.substring(index + marker.length)}`;
     };
 
     const ensureMp3Extension = (name: string, fallback: string) => {
@@ -126,6 +138,10 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     };
 
     const downloadAudioFromUrl = async (href: string, filename: string) => {
+        if (!href) {
+            showToast('Unable to download audio.', 'error');
+            return;
+        }
         try {
             const res = await fetch(href, {
                 method: 'GET',
@@ -151,16 +167,16 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     };
 
     const handleDownloadReferenceAudio = async (sourceUrl: string) => {
-        const resolved = normalizeAudioUrl(sourceUrl);
+        const downloadUrl = buildDownloadUrl(sourceUrl);
         const filename = deriveDownloadFilename(sourceUrl, 'reference.mp3');
-        await downloadAudioFromUrl(resolved, filename);
+        await downloadAudioFromUrl(downloadUrl, filename);
     };
 
     const handleDownloadRecording = async (rec: UserRecording) => {
-        const resolved = normalizeAudioUrl(rec.url);
-        const fallback = rec.filename || 'recording';
+        const downloadUrl = buildDownloadUrl(rec.url);
+        const fallback = rec.filename || rec.url;
         const filename = deriveDownloadFilename(fallback, 'recording.mp3');
-        await downloadAudioFromUrl(resolved, filename);
+        await downloadAudioFromUrl(downloadUrl, filename);
     };
 
     const stopAllAudio = () => {

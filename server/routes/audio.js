@@ -4,8 +4,18 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { spawn } = require('child_process');
 const multer = require('multer');
 const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
+let FFMPEG_COMMAND = process.env.FFMPEG_PATH || 'ffmpeg';
+try {
+    const ffmpegStatic = require('ffmpeg-static');
+    if (ffmpegStatic) {
+        FFMPEG_COMMAND = ffmpegStatic;
+    }
+} catch (err) {
+    console.warn('[Audio] ffmpeg-static not installed, falling back to system ffmpeg');
+}
 
 // Folder Mappings State
 let folderMappings = {};
@@ -160,6 +170,65 @@ router.get('/audio/stream/:mapName/*', (req, res) => {
     } else {
         res.status(404).send('File not found');
     }
+});
+
+router.get('/audio/download/:mapName/*', (req, res) => {
+    const { mapName } = req.params;
+    const filePathRel = req.params[0] || '';
+
+    const rootDir = folderMappings[mapName];
+    if (!rootDir) return res.status(404).send('Mapping not found');
+
+    const safeRel = filePathRel.replace(/^([\.\/\\])+/, '').replace(/(\.\.(\/|\\|$))+/g, '');
+    const fullPath = path.join(rootDir, safeRel);
+
+    if (!fullPath.startsWith(rootDir)) {
+        return res.status(403).send('Access denied');
+    }
+
+    if (!fs.existsSync(fullPath)) {
+        return res.status(404).send('File not found');
+    }
+
+    const downloadName = `${path.basename(fullPath, path.extname(fullPath))}.mp3`;
+    const safeDownloadName = downloadName.replace(/"/g, '');
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeDownloadName}"`);
+    res.setHeader('Cache-Control', 'no-cache');
+
+    let ffmpegError = false;
+    const ffmpeg = spawn(FFMPEG_COMMAND, ['-y', '-i', fullPath, '-f', 'mp3', '-q:a', '2', 'pipe:1'], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+    ffmpeg.stdout.pipe(res);
+
+    ffmpeg.stderr.on('data', chunk => {
+        console.debug(`[Audio] ffmpeg: ${chunk.toString('utf8')}`);
+    });
+
+    ffmpeg.on('error', err => {
+        console.error('[Audio] ffmpeg spawn failed', err);
+        ffmpegError = true;
+        if (!res.headersSent) {
+            res.status(500).send('Failed to convert audio');
+        } else {
+            res.end();
+        }
+    });
+
+    const cleanup = () => {
+        if (!ffmpeg.killed) {
+            ffmpeg.kill('SIGKILL');
+        }
+    };
+
+    res.on('close', cleanup);
+    req.on('close', cleanup);
+
+    ffmpeg.on('close', (code) => {
+        if (!ffmpegError && code !== 0 && !res.writableEnded) {
+            res.end();
+        }
+    });
 });
 
 router.get('/audio/files/:mapName', (req, res) => {
