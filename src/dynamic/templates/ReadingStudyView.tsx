@@ -222,7 +222,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
     }
     const updatedUnit = { ...unit, wordIds: unit.wordIds.filter(id => id !== wordId), customVocabString: newVocabString, updatedAt: Date.now() };
     await dataStore.saveUnit(updatedUnit);
-    onDataChange();
+    await onDataChange();
   };
 
   const handleBulkRemoveWordsFromUnit = async (wordIds: Set<string>) => {
@@ -239,14 +239,14 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
   
     const updatedUnit = { ...unit, wordIds: unit.wordIds.filter(id => !idsToRemove.includes(id)), customVocabString: newVocabString, updatedAt: Date.now() };
     await dataStore.saveUnit(updatedUnit);
-    onDataChange();
+    await onDataChange();
   };
 
   const handleHardDeleteWord = async (wordToDelete: VocabularyItem) => {
     await handleRemoveWordFromUnit(wordToDelete.id);
     await dataStore.deleteWord(wordToDelete.id);
     showToast(`"${wordToDelete.word}" permanently deleted.`, 'success');
-    onDataChange();
+    await onDataChange();
   };
 
   const handleBulkHardDeleteRawWords = async (wordIds: Set<string>) => {

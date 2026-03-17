@@ -175,6 +175,7 @@ router.get('/reading/from-url', async (req, res) => {
         // --- Primary extraction using Mozilla Readability (like Firefox Reader Mode) ---
         let essay = '';
         let title = '';
+        let readerAvailable = false;
 
         try {
             const dom = new JSDOM(html, { url: targetUrl });
@@ -184,6 +185,7 @@ router.get('/reading/from-url', async (req, res) => {
             if (article && article.textContent && article.textContent.length > 200) {
                 essay = normalizeText(article.textContent);
                 title = normalizeText(article.title);
+                readerAvailable = true;
             }
         } catch (e) {
             console.warn('[Reading] Readability failed, falling back to cheerio:', e.message);
@@ -208,6 +210,7 @@ router.get('/reading/from-url', async (req, res) => {
 
             essay = candidates.sort((a, b) => b.length - a.length)[0] || normalizeText($('body').text());
             title = normalizeText($('title').text());
+            readerAvailable = readerAvailable || false;
         }
 
         if (!essay) essay = '';
@@ -217,7 +220,7 @@ router.get('/reading/from-url', async (req, res) => {
             essay = essay.slice(0, 8000) + '...';
         }
 
-        res.json({ title, essay });
+        res.json({ title, essay, readerAvailable });
     } catch (error) {
         console.error('[Reading] Failed to fetch URL', targetUrl, error);
         res.status(500).json({ error: 'Could not fetch the URL' });

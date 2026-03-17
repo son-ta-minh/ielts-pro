@@ -612,6 +612,20 @@ const WordTable: React.FC<Props> = ({
     }
   };
 
+  const handleConfirmHardDelete = async () => {
+    if (!onHardDelete || !wordToHardDelete) return;
+    setIsHardDeleting(true);
+    try {
+      await onHardDelete(wordToHardDelete);
+      setNotification({ type: 'success', message: `Permanently deleted "${wordToHardDelete.word}".` });
+      setWordToHardDelete(null);
+    } catch (e) {
+      setNotification({ type: 'error', message: 'Failed to delete raw word.' });
+    } finally {
+      setIsHardDeleting(false);
+    }
+  };
+
   const uiProps: Omit<WordTableUIProps, 'viewingWord' | 'setViewingWord' | 'editingWord' | 'setEditingWord'> = {
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
     onPractice, context, onDelete,
@@ -666,6 +680,19 @@ const WordTable: React.FC<Props> = ({
         confirmButtonClass={context === 'unit' ? "bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" : "bg-red-600 text-white hover:bg-red-700 shadow-red-200"}
         icon={context === 'unit' ? <Unlink size={40} className="text-orange-50"/> : <Trash2 size={40} className="text-red-500"/>}
       />
+      {onHardDelete && (
+        <ConfirmationModal
+          isOpen={!!wordToHardDelete}
+          title="Delete Raw Word?"
+          message={`Permanently delete "${wordToHardDelete?.word}" from your entire library? This action cannot be undone.`}
+          confirmText="DELETE RAW"
+          isProcessing={isHardDeleting}
+          onConfirm={handleConfirmHardDelete}
+          onClose={() => setWordToHardDelete(null)}
+          confirmButtonClass="bg-red-600 text-white hover:bg-red-700 shadow-red-200"
+          icon={<Trash2 size={40} className="text-red-500"/>}
+        />
+      )}
       {/* Bulk delete modal */}
       {onBulkDelete && <ConfirmationModal 
         isOpen={isBulkDeleteModalOpen}

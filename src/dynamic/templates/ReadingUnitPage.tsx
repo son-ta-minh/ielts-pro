@@ -45,6 +45,8 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   const [importUrl, setImportUrl] = useState('');
   const [isImportingUrl, setIsImportingUrl] = useState(false);
   const [importUrlError, setImportUrlError] = useState<string | null>(null);
+  const [pendingImportData, setPendingImportData] = useState<{ title: string; essay: string; description: string } | null>(null);
+  const [needsReaderConfirm, setNeedsReaderConfirm] = useState(false);
   
   // List View Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,6 +81,17 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       setLoading(false);
     }
   }, [user.id]);
+
+  const refreshActiveUnit = useCallback(async () => {
+    const sorted = await loadData();
+    if (activeUnit) {
+      const updated = sorted.find(u => u.id === activeUnit.id);
+      if (updated) {
+        setActiveUnit(updated);
+      }
+    }
+    return sorted;
+  }, [activeUnit, loadData]);
 
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { setPage(0); }, [selectedTag, focusFilter, colorFilter, pageSize, searchQuery]);
@@ -135,6 +148,19 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
     await loadData();
     setActiveUnit(newUnit);
     setViewMode('EDIT');
+  };
+
+  const resetUrlImportState = () => {
+    setImportUrl('');
+    setImportUrlError(null);
+    setPendingImportData(null);
+    setNeedsReaderConfirm(false);
+    setIsImportingUrl(false);
+  };
+
+  const openUrlImporter = () => {
+    resetUrlImportState();
+    setShowUrlImporter(true);
   };
 
   const handleImportFromServer = async (fileData: any) => {
@@ -210,12 +236,6 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       }
   };
 
-  const openUrlImporter = () => {
-      setImportUrl('');
-      setImportUrlError(null);
-      setShowUrlImporter(true);
-  };
-
   const handleImportFromUrl = async () => {
       if (!importUrl.trim()) {
           setImportUrlError('Please enter a URL to import.');
@@ -233,27 +253,21 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
           }
           const data = await response.json();
 
-          const newUnit: Unit = {
-              id: generateId(),
-              userId: user.id,
-              name: data.title || 'Imported Article',
-              description: `Imported from ${importUrl.trim()}`,
-              wordIds: [],
-              customVocabString: '',
+          const payload = {
+              title: data.title || 'Imported Article',
               essay: data.essay || data.content || '',
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-              path: '/'
+              description: `Imported from ${importUrl.trim()}`
           };
 
-          await dataStore.saveUnit(newUnit);
-          showToast(`Imported "${newUnit.name}" successfully!`, 'success');
-          await loadData();
-          setActiveUnit(newUnit);
-          setViewMode('EDIT');
-          setShowUrlImporter(false);
-          setImportUrl('');
-          setImportUrlError(null);
+          if (data.readerAvailable === false) {
+              setPendingImportData(payload);
+              setNeedsReaderConfirm(true);
+              setImportUrlError('Reader-mode content was not detected. Confirm to proceed.');
+              setIsImportingUrl(false);
+              return;
+          }
+
+          await finalizeUrlImport(payload);
       } catch (e) {
           console.error(e);
           showToast('Failed to import article from URL.', 'error');
@@ -263,6 +277,34 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       } finally {
           setIsImportingUrl(false);
       }
+  };
+
+  const finalizeUrlImport = async (payload: { title: string; essay: string; description: string }) => {
+      const newUnit: Unit = {
+          id: generateId(),
+          userId: user.id,
+          name: payload.title,
+          description: payload.description,
+          wordIds: [],
+          customVocabString: '',
+          essay: payload.essay,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          path: '/'
+      };
+
+      await dataStore.saveUnit(newUnit);
+      showToast(`Imported "${newUnit.name}" successfully!`, 'success');
+      await loadData();
+      setActiveUnit(newUnit);
+      setViewMode('EDIT');
+      resetUrlImportState();
+      setShowUrlImporter(false);
+  };
+
+  const handleConfirmReaderImport = async () => {
+      if (!pendingImportData) return;
+      await finalizeUrlImport(pendingImportData);
   };
 
   const handleDeleteUnit = async () => {
@@ -302,7 +344,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
           setViewMode('LIST'); 
           setActiveUnit(null); 
           loadData(); 
-      }} onDataChange={loadData} onStartSession={onStartSession} onSwitchToEdit={() => setViewMode('EDIT')} onUpdateUser={onUpdateUser} />;
+      }} onDataChange={refreshActiveUnit} onStartSession={onStartSession} onSwitchToEdit={() => setViewMode('EDIT')} onUpdateUser={onUpdateUser} />;
   }
 
   if (viewMode === 'EDIT' && activeUnit) {
@@ -474,7 +516,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                           <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">URL Import</p>
                           <h3 className="text-lg font-bold text-neutral-900">Add Reading from URL</h3>
                       </div>
-                      <button className="p-2 text-neutral-400 hover:text-neutral-900" onClick={() => setShowUrlImporter(false)}>
+                      <button className="p-2 text-neutral-400 hover:text-neutral-900" onClick={() => { setShowUrlImporter(false); resetUrlImportState(); }}>
                           <X size={18} />
                       </button>
                   </div>
@@ -486,20 +528,32 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                       className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-300"
                   />
                   {importUrlError && <p className="text-xs text-rose-600">{importUrlError}</p>}
+                  {needsReaderConfirm && (
+                      <p className="text-xs text-amber-600">Reader-mode content was not detected. The fetched text may be messy—confirm to import anyway.</p>
+                  )}
                   <div className="flex justify-end gap-3">
                       <button
-                          onClick={() => setShowUrlImporter(false)}
+                          onClick={() => { setShowUrlImporter(false); resetUrlImportState(); }}
                           className="px-4 py-2 rounded-xl border border-neutral-200 text-neutral-600 text-xs font-black uppercase tracking-widest hover:bg-neutral-50"
                       >
                           Cancel
                       </button>
-                      <button
-                          onClick={handleImportFromUrl}
-                          disabled={isImportingUrl}
-                          className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest transition-all hover:bg-indigo-500 disabled:opacity-50"
-                      >
-                          {isImportingUrl ? 'Importing...' : 'Import Reading'}
-                      </button>
+                      {needsReaderConfirm ? (
+                          <button
+                              onClick={handleConfirmReaderImport}
+                              className="px-4 py-2 rounded-xl bg-amber-500 text-white text-xs font-black uppercase tracking-widest transition-all hover:bg-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+                          >
+                              Import Anyway
+                          </button>
+                      ) : (
+                          <button
+                              onClick={handleImportFromUrl}
+                              disabled={isImportingUrl}
+                              className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest transition-all hover:bg-indigo-500 disabled:opacity-50"
+                          >
+                              {isImportingUrl ? 'Importing...' : 'Import Reading'}
+                          </button>
+                      )}
                   </div>
               </div>
           </div>
