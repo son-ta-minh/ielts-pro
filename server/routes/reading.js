@@ -1,10 +1,11 @@
-
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
 const cheerio = require('cheerio');
+const { JSDOM } = require('jsdom');
+const { Readability } = require('@mozilla/readability');
 const { FOLDER_MAPPINGS_FILE } = require('../config');
 const { getReadingUnits } = require('../libraryManager');
 
@@ -45,15 +46,123 @@ router.get('/reading/from-url', async (req, res) => {
         const response = await fetch(targetUrl, {
             headers: {
                 'User-Agent':
-                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36',
+                'Accept':
+                    'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Upgrade-Insecure-Requests': '1',
+                'Referer': 'https://www.google.com/',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
                 'Connection': 'keep-alive'
-            }
+            },
+            redirect: 'follow'
         });
 
         if (!response.ok) {
-            return res.status(response.status).json({ error: `Failed to fetch URL: ${response.statusText}` });
+            // --- First fallback: textise mirror (often bypasses bot protection like DataDome) ---
+            try {
+                const textiseUrl = `https://textise.net/showtext.aspx?strURL=${encodeURIComponent(targetUrl)}`;
+                console.warn('[Reading] Primary fetch blocked. Trying textise mirror:', textiseUrl);
+
+                const mirrorResponse = await fetch(textiseUrl, {
+                    headers: {
+                        'User-Agent':
+                            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                    },
+                    redirect: 'follow'
+                });
+
+                if (mirrorResponse.ok) {
+                    console.log('[Reading] textise fallback succeeded');
+                    const mirrorHtml = await mirrorResponse.text();
+
+                    const dom = new JSDOM(mirrorHtml, { url: targetUrl });
+                    const reader = new Readability(dom.window.document);
+                    const article = reader.parse();
+
+                    if (article && article.textContent && article.textContent.length > 200) {
+                        const essay = normalizeText(article.textContent).slice(0, 8000);
+                        const title = normalizeText(article.title) || parsedUrl.hostname;
+                        return res.json({ title, essay });
+                    }
+
+                    // secondary extraction if Readability fails
+                    const $ = cheerio.load(mirrorHtml);
+                    $('script, style, noscript').remove();
+                    const text = normalizeText($('body').text()).slice(0, 8000);
+                    if (text.length > 200) {
+                        return res.json({ title: parsedUrl.hostname, essay: text });
+                    }
+                }
+            } catch (mirrorError) {
+                console.warn('[Reading] textise fallback failed:', mirrorError.message);
+            }
+
+            // --- Second fallback: AMP version (some sites allow it) ---
+            if (parsedUrl.hostname.includes('reuters.com')) {
+                try {
+                    const ampUrl = targetUrl.includes('?')
+                        ? `${targetUrl}&outputType=amp`
+                        : `${targetUrl}?outputType=amp`;
+
+                    console.warn('[Reading] Trying AMP fallback:', ampUrl);
+
+                    const ampResponse = await fetch(ampUrl, {
+                        headers: {
+                            'User-Agent':
+                                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36',
+                            'Accept':
+                                'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                            'Accept-Language': 'en-US,en;q=0.9',
+                            'Referer': 'https://www.google.com/'
+                        },
+                        redirect: 'follow'
+                    });
+
+                    if (ampResponse.ok) {
+                        console.log('[Reading] AMP fallback succeeded');
+                        const ampHtml = await ampResponse.text();
+
+                        const dom = new JSDOM(ampHtml, { url: targetUrl });
+                        const reader = new Readability(dom.window.document);
+                        const article = reader.parse();
+
+                        if (article && article.textContent && article.textContent.length > 200) {
+                            const essay = normalizeText(article.textContent).slice(0, 8000);
+                            const title = normalizeText(article.title) || parsedUrl.hostname;
+                            return res.json({ title, essay });
+                        }
+                    }
+                } catch (ampError) {
+                    console.warn('[Reading] AMP fallback failed:', ampError.message);
+                }
+            }
+
+            let bodyPreview = '';
+            try {
+                const clone = response.clone();
+                const text = await clone.text();
+                bodyPreview = text.slice(0, 500);
+            } catch (e) {
+                bodyPreview = '[unable to read body]';
+            }
+
+            console.error('[Reading] Upstream fetch failed:', {
+                url: targetUrl,
+                status: response.status,
+                statusText: response.statusText,
+                headers: Object.fromEntries(response.headers.entries()),
+                bodyPreview
+            });
+
+            return res.status(response.status).json({
+                error: `Failed to fetch URL`,
+                status: response.status,
+                statusText: response.statusText
+            });
         }
 
         const contentType = response.headers.get('content-type') || '';
@@ -62,30 +171,52 @@ router.get('/reading/from-url', async (req, res) => {
         }
 
         const html = await response.text();
-        const $ = cheerio.load(html);
-        $('script, style, noscript, nav, footer, header, form').remove();
 
-        const selectors = ['article', 'main', '[role=main]', 'body'];
-        const candidates = [];
+        // --- Primary extraction using Mozilla Readability (like Firefox Reader Mode) ---
+        let essay = '';
+        let title = '';
 
-        selectors.forEach(selector => {
-            $(selector).each((_, element) => {
-                const text = normalizeText($(element).text());
-                if (text.length > 200) {
-                    candidates.push(text);
-                }
-            });
-        });
+        try {
+            const dom = new JSDOM(html, { url: targetUrl });
+            const reader = new Readability(dom.window.document);
+            const article = reader.parse();
 
-        let essay = candidates.sort((a, b) => b.length - a.length)[0] || normalizeText($('body').text());
+            if (article && article.textContent && article.textContent.length > 200) {
+                essay = normalizeText(article.textContent);
+                title = normalizeText(article.title);
+            }
+        } catch (e) {
+            console.warn('[Reading] Readability failed, falling back to cheerio:', e.message);
+        }
+
+        // --- Fallback extraction using cheerio if Readability fails ---
         if (!essay) {
-            essay = '';
-        }
-        if (essay.length > 5000) {
-            essay = essay.slice(0, 5000) + '...';
+            const $ = cheerio.load(html);
+            $('script, style, noscript, nav, footer, header, form').remove();
+
+            const selectors = ['article', 'main', '[role=main]', 'body'];
+            const candidates = [];
+
+            selectors.forEach(selector => {
+                $(selector).each((_, element) => {
+                    const text = normalizeText($(element).text());
+                    if (text.length > 200) {
+                        candidates.push(text);
+                    }
+                });
+            });
+
+            essay = candidates.sort((a, b) => b.length - a.length)[0] || normalizeText($('body').text());
+            title = normalizeText($('title').text());
         }
 
-        const title = normalizeText($('title').text()) || parsedUrl.hostname;
+        if (!essay) essay = '';
+        if (!title) title = parsedUrl.hostname;
+
+        if (essay.length > 8000) {
+            essay = essay.slice(0, 8000) + '...';
+        }
+
         res.json({ title, essay });
     } catch (error) {
         console.error('[Reading] Failed to fetch URL', targetUrl, error);

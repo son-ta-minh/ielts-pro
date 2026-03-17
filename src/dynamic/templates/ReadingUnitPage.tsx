@@ -71,8 +71,10 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
         db.getUnitsByUserId(user.id),
         db.getAllWordsForExport(user.id)
       ]);
-      setUnits(userUnits.sort((a,b) => b.createdAt - a.createdAt));
+      const sorted = userUnits.sort((a,b) => b.createdAt - a.createdAt);
+      setUnits(sorted);
       setAllWords(userWords);
+      return sorted;
     } finally {
       setLoading(false);
     }
@@ -283,6 +285,15 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       setUnits(prev => prev.map(u => u.id === unit.id ? newData : u));
       await dataStore.saveUnit(newData);
   };
+
+  const handlePostEditSave = async () => {
+      const refreshedUnits = await loadData();
+      if (activeUnit) {
+          const updatedUnit = refreshedUnits?.find(u => u.id === activeUnit.id);
+          setActiveUnit(updatedUnit || activeUnit);
+      }
+      setViewMode('READ');
+  };
   
   // --- Render Views ---
 
@@ -301,7 +312,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
           setViewMode('LIST'); 
           setActiveUnit(null); 
           loadData(); 
-      }} onSave={() => { loadData(); setViewMode('READ'); }} />;
+      }} onSave={handlePostEditSave} />;
   }
   
   // --- List View (Default) ---
