@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const { URL } = require('url');
+const cheerio = require('cheerio');
 const { FOLDER_MAPPINGS_FILE } = require('../config');
 const { getReadingUnits } = require('../libraryManager');
 
@@ -21,6 +23,75 @@ function loadMappings() {
     }
 }
 loadMappings();
+
+const normalizeText = (value) => {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+};
+
+router.get('/reading/from-url', async (req, res) => {
+    const targetUrl = req.query.url;
+    if (!targetUrl) {
+        return res.status(400).json({ error: 'URL is required' });
+    }
+
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(targetUrl);
+    } catch (e) {
+        return res.status(400).json({ error: 'Invalid URL' });
+    }
+
+    try {
+        const response = await fetch(targetUrl, {
+            headers: {
+                'User-Agent':
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Connection': 'keep-alive'
+            }
+        });
+
+        if (!response.ok) {
+            return res.status(response.status).json({ error: `Failed to fetch URL: ${response.statusText}` });
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('text/html')) {
+            return res.status(400).json({ error: 'URL did not return HTML content' });
+        }
+
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        $('script, style, noscript, nav, footer, header, form').remove();
+
+        const selectors = ['article', 'main', '[role=main]', 'body'];
+        const candidates = [];
+
+        selectors.forEach(selector => {
+            $(selector).each((_, element) => {
+                const text = normalizeText($(element).text());
+                if (text.length > 200) {
+                    candidates.push(text);
+                }
+            });
+        });
+
+        let essay = candidates.sort((a, b) => b.length - a.length)[0] || normalizeText($('body').text());
+        if (!essay) {
+            essay = '';
+        }
+        if (essay.length > 5000) {
+            essay = essay.slice(0, 5000) + '...';
+        }
+
+        const title = normalizeText($('title').text()) || parsedUrl.hostname;
+        res.json({ title, essay });
+    } catch (error) {
+        console.error('[Reading] Failed to fetch URL', targetUrl, error);
+        res.status(500).json({ error: 'Could not fetch the URL' });
+    }
+});
 
 // --- API ---
 

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Unit, VocabularyItem, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
-import { Edit3, Trash2, BookOpen, Plus, Sparkles, FolderTree, Tag, Target, Download, Search } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Plus, Sparkles, FolderTree, Tag, Target, Download, Search, ExternalLink, X } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import ReadingStudyView from './ReadingStudyView';
@@ -17,6 +17,7 @@ import { TagBrowser } from '../../components/common/TagBrowser';
 import { UniversalCard } from '../../components/common/UniversalCard';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { FileSelector } from '../../components/common/FileSelector';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 interface Props {
   user: User;
@@ -40,6 +41,10 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   const [showRefineAiModal, setShowRefineAiModal] = useState(false);
   const [showFileSelector, setShowFileSelector] = useState(false);
   const [showFilePairSelector, setShowFilePairSelector] = useState(false);
+  const [showUrlImporter, setShowUrlImporter] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [isImportingUrl, setIsImportingUrl] = useState(false);
+  const [importUrlError, setImportUrlError] = useState<string | null>(null);
   
   // List View Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,6 +60,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, { showDesc: true, compact: false }));
   
   const { showToast } = useToast();
+  const serverUrl = getServerUrl(getConfig());
 
   useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
 
@@ -202,6 +208,61 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       }
   };
 
+  const openUrlImporter = () => {
+      setImportUrl('');
+      setImportUrlError(null);
+      setShowUrlImporter(true);
+  };
+
+  const handleImportFromUrl = async () => {
+      if (!importUrl.trim()) {
+          setImportUrlError('Please enter a URL to import.');
+          return;
+      }
+      setImportUrlError(null);
+      setIsImportingUrl(true);
+
+      try {
+          const encoded = encodeURIComponent(importUrl.trim());
+          const response = await fetch(`${serverUrl}/api/reading/from-url?url=${encoded}`);
+          if (!response.ok) {
+              const errMsg = await response.text();
+              throw new Error(errMsg || 'Failed to fetch article');
+          }
+          const data = await response.json();
+
+          const newUnit: Unit = {
+              id: generateId(),
+              userId: user.id,
+              name: data.title || 'Imported Article',
+              description: `Imported from ${importUrl.trim()}`,
+              wordIds: [],
+              customVocabString: '',
+              essay: data.essay || data.content || '',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              path: '/'
+          };
+
+          await dataStore.saveUnit(newUnit);
+          showToast(`Imported "${newUnit.name}" successfully!`, 'success');
+          await loadData();
+          setActiveUnit(newUnit);
+          setViewMode('EDIT');
+          setShowUrlImporter(false);
+          setImportUrl('');
+          setImportUrlError(null);
+      } catch (e) {
+          console.error(e);
+          showToast('Failed to import article from URL.', 'error');
+          if (typeof e === 'object' && e && 'message' in e) {
+              setImportUrlError((e as any).message);
+          }
+      } finally {
+          setIsImportingUrl(false);
+      }
+  };
+
   const handleDeleteUnit = async () => {
       if (!unitToDelete) return;
       await db.deleteUnit(unitToDelete.id);
@@ -266,7 +327,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
             </>
         }
         actions={
-            <ResourceActions
+                <ResourceActions
                 viewMenu={
                     <ViewMenu 
                         isOpen={isViewMenuOpen}
@@ -301,6 +362,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                     { label: 'AI Unit', icon: Sparkles, onClick: () => setShowRefineAiModal(true) },
                     { label: 'Import File from Server', icon: Download, onClick: () => setShowFilePairSelector(true) },
                     { label: 'Import Unit from Server', icon: Download, onClick: () => setShowFileSelector(true) },
+                    { label: 'Add from URL', icon: ExternalLink, onClick: openUrlImporter },
                     { label: 'New Unit', icon: Plus, onClick: handleCreateEmptyUnit }
                 ]}
             />
@@ -393,6 +455,44 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
           type="reading_pair"
           title="Import File Pair from Server"
       />
+      {showUrlImporter && (
+          <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40">
+              <div className="bg-white rounded-[2rem] border border-neutral-200 shadow-2xl p-6 w-full max-w-lg space-y-4">
+                  <div className="flex items-center justify-between">
+                      <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">URL Import</p>
+                          <h3 className="text-lg font-bold text-neutral-900">Add Reading from URL</h3>
+                      </div>
+                      <button className="p-2 text-neutral-400 hover:text-neutral-900" onClick={() => setShowUrlImporter(false)}>
+                          <X size={18} />
+                      </button>
+                  </div>
+                  <p className="text-sm text-neutral-500">Paste the public article URL and we’ll extract the reading content for a new unit.</p>
+                  <input
+                      value={importUrl}
+                      onChange={(e) => setImportUrl(e.target.value)}
+                      placeholder="https://example.com/long-read"
+                      className="w-full border border-neutral-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-300"
+                  />
+                  {importUrlError && <p className="text-xs text-rose-600">{importUrlError}</p>}
+                  <div className="flex justify-end gap-3">
+                      <button
+                          onClick={() => setShowUrlImporter(false)}
+                          className="px-4 py-2 rounded-xl border border-neutral-200 text-neutral-600 text-xs font-black uppercase tracking-widest hover:bg-neutral-50"
+                      >
+                          Cancel
+                      </button>
+                      <button
+                          onClick={handleImportFromUrl}
+                          disabled={isImportingUrl}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest transition-all hover:bg-indigo-500 disabled:opacity-50"
+                      >
+                          {isImportingUrl ? 'Importing...' : 'Import Reading'}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </>
   );
 };
