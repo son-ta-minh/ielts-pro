@@ -599,8 +599,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                     false,
                     false,
                     false,
-                    false,
-                    selectedText.includes(' ')
+                    selectedText.includes(' '),
+                    false
                 );
 
                 newItem = {

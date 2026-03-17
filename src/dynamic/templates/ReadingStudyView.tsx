@@ -244,6 +244,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
 
   const handleHardDeleteWord = async (wordToDelete: VocabularyItem) => {
     await handleRemoveWordFromUnit(wordToDelete.id);
+    await new Promise((resolve) => setTimeout(resolve, 1100));
     await dataStore.deleteWord(wordToDelete.id);
     showToast(`"${wordToDelete.word}" permanently deleted.`, 'success');
     await onDataChange();
@@ -288,7 +289,19 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
             wordIdToAdd = existingWord.id;
         } else {
             const isPhrase = rawText.includes(' ');
-            wordToAdd = await createNewWord(rawText, '', '', '', '', ['ielts'], false, false, false, false, isPhrase);
+            wordToAdd = await createNewWord(
+              rawText,
+              '',
+              '',
+              '',
+              '',
+              ['ielts'],
+              false,
+              false,
+              false,
+              isPhrase,
+              false
+            );
             wordToAdd.userId = user.id;
             wordIdToAdd = wordToAdd.id;
         }
