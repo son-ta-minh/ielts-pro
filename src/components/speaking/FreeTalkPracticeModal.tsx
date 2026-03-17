@@ -5,7 +5,7 @@ import { startRecording, stopRecording, speak, stopSpeaking, playSound, getAudio
 import * as dataStore from '../../app/dataStore';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
-import { Mic, Play, Square, Pause, Trash2, Calendar, FileAudio, Mic2, X, BookText, Loader2, RotateCcw, Check, Edit3 } from 'lucide-react';
+import { Mic, Play, Square, Pause, Trash2, Calendar, FileAudio, Mic2, X, BookText, Loader2, RotateCcw, Check, Edit3, ArrowDownCircle } from 'lucide-react';
 import ConfirmationModal from '../common/ConfirmationModal';
 import { AudioTrimmer } from '../common/AudioTrimmer';
 import { InteractiveTranscript } from '../common/InteractiveTranscript';
@@ -86,6 +86,83 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
         };
     }, []);
 
+    const normalizeAudioUrl = (rawUrl: string) => {
+        if (rawUrl.startsWith('blob:')) return rawUrl;
+        try {
+            const config = getConfig();
+            const currentBase = getServerUrl(config);
+            let normalized = rawUrl;
+            if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+                const parsed = new URL(normalized);
+                normalized = `${parsed.pathname}${parsed.search}`;
+            }
+            if (normalized.startsWith('/')) {
+                normalized = `${currentBase}${normalized}`;
+            }
+            return normalized;
+        } catch (err) {
+            console.warn('[FreeTalkPracticeModal] URL normalization failed:', err);
+            return rawUrl;
+        }
+    };
+
+    const ensureMp3Extension = (name: string, fallback: string) => {
+        const trimmed = name.trim();
+        if (!trimmed) return fallback;
+
+        // Remove existing audio extensions before adding .mp3
+        const cleaned = trimmed.replace(/\.(webm|wav|ogg|m4a)$/i, '');
+
+        return cleaned.toLowerCase().endsWith('.mp3') ? cleaned : `${cleaned}.mp3`;
+    };
+
+    const deriveDownloadFilename = (rawValue: string | undefined, fallback = 'audio.mp3') => {
+        if (!rawValue) return ensureMp3Extension(fallback, fallback);
+        const cleaned = rawValue.split(/[?#]/)[0];
+        const segments = cleaned.split('/');
+        const lastSegment = segments[segments.length - 1] ?? fallback;
+        const decoded = decodeURIComponent(lastSegment.replace(/\s+/g, '_'));
+        return ensureMp3Extension(decoded || fallback, fallback);
+    };
+
+    const downloadAudioFromUrl = async (href: string, filename: string) => {
+        try {
+            const res = await fetch(href, {
+                method: 'GET',
+                headers: {
+                    Accept: 'audio/mpeg,audio/*;q=0.9,*/*;q=0.8'
+                }
+            });
+            if (!res.ok) throw new Error('Network response was not ok');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+            showToast('Download started', 'success');
+        } catch (err) {
+            console.error('[FreeTalkPracticeModal] download failed', err);
+            showToast('Unable to download audio.', 'error');
+        }
+    };
+
+    const handleDownloadReferenceAudio = async (sourceUrl: string) => {
+        const resolved = normalizeAudioUrl(sourceUrl);
+        const filename = deriveDownloadFilename(sourceUrl, 'reference.mp3');
+        await downloadAudioFromUrl(resolved, filename);
+    };
+
+    const handleDownloadRecording = async (rec: UserRecording) => {
+        const resolved = normalizeAudioUrl(rec.url);
+        const fallback = rec.filename || 'recording';
+        const filename = deriveDownloadFilename(fallback, 'recording.mp3');
+        await downloadAudioFromUrl(resolved, filename);
+    };
+
     const stopAllAudio = () => {
         if (audioRef.current) {
             audioRef.current.pause();
@@ -103,27 +180,8 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
     // Unified Audio Player logic
     const playAudio = (url: string, refId: string | null, userId: string | null, startTime?: number, duration?: number) => {
-        const isBlobSource = url.startsWith('blob:');
-        // Normalize host: if URL already contains a host, replace it with current server host
-        if (!isBlobSource) {
-            try {
-                const config = getConfig();
-                const currentBase = getServerUrl(config); // e.g. https://macm2.local:3000
-
-                // If absolute URL -> strip old origin
-                if (url.startsWith('http://') || url.startsWith('https://')) {
-                    const parsed = new URL(url);
-                    url = parsed.pathname + parsed.search;
-                }
-
-                // If relative path -> prefix with current server
-                if (url.startsWith('/')) {
-                    url = `${currentBase}${url}`;
-                }
-            } catch (err) {
-                console.warn('[FreeTalkPracticeModal] URL normalization failed:', err);
-            }
-        }
+        const normalizedUrl = normalizeAudioUrl(url);
+        const isBlobSource = normalizedUrl.startsWith('blob:');
 
         // Playback/Reference audio should be controlled by shared Coach media control.
         if (!isBlobSource) {
@@ -137,7 +195,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
             setPlaybackTime(0);
             setPlaybackDuration(0);
             stopAtTimeRef.current = null;
-            playSound(url, startTime, duration).then(() => {
+            playSound(normalizedUrl, startTime, duration).then(() => {
                 setCurrentPlayingRef(null);
                 setCurrentPlayingUser(null);
                 setPlaybackTime(0);
@@ -160,7 +218,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
         stopAllAudio();
         
-        const audio = new Audio(url);
+        const audio = new Audio(normalizedUrl);
         audioRef.current = audio;
         
         // Setup events
@@ -636,6 +694,9 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                                                     {decodeURIComponent(url.split('/').pop() || `Track ${idx + 1}`)}
                                                                 </span>
                                                             </div>
+                                                            <button onClick={() => void handleDownloadReferenceAudio(url)} className="p-2 text-neutral-500 hover:text-emerald-600 transition-colors rounded-lg" title="Download MP3">
+                                                                <ArrowDownCircle size={18} />
+                                                            </button>
                                                         </div>
                                                         {isPlaying && (
                                                              <div className="flex items-center gap-2 px-4 pb-3 pt-0 animate-in fade-in slide-in-from-top-1">
@@ -669,24 +730,29 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                                  const isPlaying = currentPlayingUser === rec.id;
                                                  return (
                                                      <div key={rec.id} className="flex flex-col bg-white rounded-2xl border border-neutral-200 shadow-sm hover:border-neutral-300 transition-colors overflow-hidden">
-                                                         <div className="flex items-center justify-between p-3 gap-3">
-                                                             <div className="flex items-center gap-3 min-w-0">
-                                                                 <button onClick={() => {
-                                                                     const config = getConfig();
-                                                                     const baseUrl = getServerUrl(config);
-                                                                     playAudio(`${baseUrl}${rec.url}`, null, rec.id);
-                                                                 }} className={`w-12 h-12 rounded-full transition-all flex-shrink-0 flex items-center justify-center ${isPlaying ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
-                                                                     {isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}
-                                                                 </button>
-                                                                 <div className="min-w-0">
-                                                                     <p className={`text-sm font-bold truncate ${isPlaying ? 'text-indigo-800' : 'text-neutral-800'}`}>{new Date(rec.timestamp).toLocaleString()}</p>
-                                                                     <p className="text-xs font-medium text-neutral-500">{formatTime(rec.duration || 0)}</p>
-                                                                 </div>
-                                                             </div>
-                                                             <button onClick={() => setRecToDelete(rec)} className="p-2.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all flex-shrink-0">
-                                                                 <Trash2 size={18} />
-                                                             </button>
-                                                         </div>
+                                                        <div className="flex items-center justify-between p-3 gap-3">
+                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                <button onClick={() => {
+                                                                    const config = getConfig();
+                                                                    const baseUrl = getServerUrl(config);
+                                                                    playAudio(`${baseUrl}${rec.url}`, null, rec.id);
+                                                                }} className={`w-12 h-12 rounded-full transition-all flex-shrink-0 flex items-center justify-center ${isPlaying ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+                                                                    {isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}
+                                                                </button>
+                                                                <div className="min-w-0">
+                                                                    <p className={`text-sm font-bold truncate ${isPlaying ? 'text-indigo-800' : 'text-neutral-800'}`}>{new Date(rec.timestamp).toLocaleString()}</p>
+                                                                    <p className="text-xs font-medium text-neutral-500">{formatTime(rec.duration || 0)}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <button onClick={() => void handleDownloadRecording(rec)} className="p-2 text-neutral-500 hover:text-emerald-600 rounded-lg transition-colors" title="Download MP3">
+                                                                    <ArrowDownCircle size={18} />
+                                                                </button>
+                                                                <button onClick={() => setRecToDelete(rec)} className="p-2.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all flex-shrink-0">
+                                                                    <Trash2 size={18} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                          
                                                          {isPlaying && (
                                                              <div className="flex items-center gap-2 px-4 pb-3 pt-0 animate-in fade-in slide-in-from-top-1 bg-white">
