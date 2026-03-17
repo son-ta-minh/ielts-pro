@@ -13,7 +13,7 @@ import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { ToolsModal } from '../tools/ToolsModal';
 
 const MAX_READ_LENGTH = 1000;
-const MAX_MIMIC_LENGTH = 300;
+const MAX_MIMIC_LENGTH = 1600;
 
 interface Props {
     user: User;

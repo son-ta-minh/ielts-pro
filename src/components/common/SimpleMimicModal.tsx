@@ -43,6 +43,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     });
     const autoPlayRef = useRef<any>(null);
     const audioPlaybackRef = useRef<AudioContext | null>(null);
+    const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const silenceTimerRef = useRef<any>(null);
@@ -172,6 +173,14 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             audioPlaybackRef.current.close().catch(() => {});
             audioPlaybackRef.current = null;
         }
+        if (audioElementRef.current) {
+            audioElementRef.current.pause();
+            audioElementRef.current.currentTime = 0;
+            if (audioElementRef.current.src.startsWith('blob:')) {
+                URL.revokeObjectURL(audioElementRef.current.src);
+            }
+            audioElementRef.current = null;
+        }
     }, []);
 
     useEffect(() => {
@@ -264,21 +273,39 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
 
             const audioCtx = new AudioContext();
             audioPlaybackRef.current = audioCtx;
-            const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+            const buffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
             const source = audioCtx.createBufferSource();
-            source.buffer = decoded;
+            source.buffer = buffer;
             const gainNode = audioCtx.createGain();
             gainNode.gain.value = 1.8;
             source.connect(gainNode).connect(audioCtx.destination);
+            await audioCtx.resume();
             source.start();
-
             source.onended = () => {
                 source.disconnect();
                 gainNode.disconnect();
                 stopPlayback();
             };
         } catch (_e) {
-            console.error('Failed to play recorded audio', _e);
+            console.error('Failed to play recorded audio via AudioContext, trying fallback', _e);
+            try {
+                const raw = atob(userAudio.base64);
+                const view = new Uint8Array(raw.length);
+                for (let i = 0; i < raw.length; i++) {
+                    view[i] = raw.charCodeAt(i);
+                }
+                const blob = new Blob([view.buffer], { type: userAudio.mimeType });
+                const url = URL.createObjectURL(blob);
+                const audioEl = new Audio(url);
+                audioElementRef.current = audioEl;
+                audioEl.onended = () => {
+                    URL.revokeObjectURL(url);
+                    audioElementRef.current = null;
+                };
+                await audioEl.play();
+            } catch (fallbackError) {
+                console.error('Fallback playback also failed', fallbackError);
+            }
         }
     }, [userAudio, stopPlayback]);
 
