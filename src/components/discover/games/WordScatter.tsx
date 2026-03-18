@@ -42,6 +42,7 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const [gameState, setGameState] = useState<'SETUP' | 'PLAYING'>('SETUP');
     const [viewMode, setViewMode] = useState<'MATRIX' | 'MATCH'>('MATRIX');
     const [sessionSize, setSessionSize] = useState(12);
+    const [maxSize, setMaxSize] = useState(sessionSize);
     const [sources, setSources] = useState({ library: true, collocations: true, idioms: true });
     const [endlessMode, setEndlessMode] = useState(false);
 
@@ -53,6 +54,7 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const [currentCueIndex, setCurrentCueIndex] = useState(0);
     const [score, setScore] = useState(0);
     const [answeredCueIds, setAnsweredCueIds] = useState<Set<string>>(new Set());
+    const [completedCount, setCompletedCount] = useState(0);
 
     // Matching State (Split view)
     const [selectedLeftId, setSelectedLeftId] = useState<string | null>(null);
@@ -65,6 +67,11 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
             .filter(cue => !answeredCueIds.has(cue.id));
     }, [cues, answeredCueIds]);
     
+    // Update maxSize whenever a new game starts or sessionSize changes
+    useEffect(() => {
+        setMaxSize(sessionSize);
+    }, [gameState, sessionSize]);
+
     // Game setup
     useEffect(() => {
         if (gameState !== 'PLAYING') return;
@@ -128,6 +135,7 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
         setCurrentCueIndex(0);
         setScore(0);
         setAnsweredCueIds(new Set());
+        setCompletedCount(0);
         setSelectedLeftId(null);
         setSelectedRightId(null);
         
@@ -139,49 +147,57 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
              setTimeout(() => onComplete(score), 800);
         }
     }, [gameState, answeredCueIds, sessionSize, score, onComplete, endlessMode]);
-    // Endless mode refill helper
-    const refillIfNeeded = () => {
+    // Endless mode refill helper:
+    // keep active board size fixed at maxSize and refill when remaining <= half of maxSize.
+    const refillIfNeeded = (answered: Set<string>) => {
         if (!endlessMode) return;
 
-        const remaining = sessionSize - answeredCueIds.size;
-        if (remaining > sessionSize / 2) return;
+        const remaining = cues.length - answered.size;
+        const refillThreshold = Math.max(1, Math.floor(maxSize / 2));
 
-        const allPairs: { text: string; d: string; cueId: string; }[] = [];
+        if (remaining > refillThreshold) return;
+
+        const allPairs: { text: string; d: string; cueId: string }[] = [];
         words.forEach(word => {
-            if (sources.library && word.meaningVi && word.meaningVi.trim()) {
-                allPairs.push({ text: word.word, d: word.meaningVi, cueId: `cue-${word.id}-word` });
-            }
-            if (sources.collocations) {
-                (word.collocationsArray || [])
-                    .filter(c => !c.isIgnored && c.d && c.d.trim())
-                    .forEach((c, index) => {
-                        allPairs.push({ text: c.text, d: c.d!, cueId: `cue-${word.id}-col-${index}` });
-                    });
-            }
-            if (sources.idioms) {
-                (word.idiomsList || [])
-                    .filter(i => !i.isIgnored && i.d && i.d.trim())
-                    .forEach((i, index) => {
-                        allPairs.push({ text: i.text, d: i.d!, cueId: `cue-${word.id}-idm-${index}` });
-                    });
-            }
+            if (sources.library && word.meaningVi?.trim()) allPairs.push({ text: word.word, d: word.meaningVi, cueId: `cue-${word.id}-word` });
+            (word.collocationsArray || []).filter(c => !c.isIgnored && c.d?.trim()).forEach((c, i) => allPairs.push({ text: c.text, d: c.d!, cueId: `cue-${word.id}-col-${i}` }));
+            (word.idiomsList || []).filter(i => !i.isIgnored && i.d?.trim()).forEach((i, idx) => allPairs.push({ text: i.text, d: i.d!, cueId: `cue-${word.id}-idm-${idx}` }));
         });
 
-        const unused = allPairs.filter(p => !answeredCueIds.has(p.cueId));
-        const shuffled = shuffleArray(unused).slice(0, Math.floor(sessionSize / 2));
+        const existingCueIds = new Set(cues.map(c => c.id));
+        const existingCardIds = new Set(cards.map(c => c.cueId));
+        const unused = allPairs.filter(p => !existingCueIds.has(p.cueId) && !existingCardIds.has(p.cueId));
+        if (!unused.length) return;
+
+        const addCount = Math.min(Math.max(0, maxSize - remaining), unused.length);
+        if (addCount <= 0) return;
+        const shuffled = shuffleArray(unused).slice(0, addCount);
 
         const newCues: Cue[] = shuffled.map(p => ({ id: p.cueId, text: p.d }));
-        const newCards: Card[] = shuffled.map(p => ({
-            id: `card-${p.cueId}`,
-            text: p.text,
-            cueId: p.cueId,
-            pairId: p.cueId,
-            state: 'default',
-            type: 'word'
-        }));
+        const newCards: Card[] = shuffled.map(p => ({ id: `card-${p.cueId}`, text: p.text, cueId: p.cueId, pairId: p.cueId, state: 'default', type: 'word' }));
 
-        setCues(prev => shuffleArray([...prev.filter(c => !answeredCueIds.has(c.id)), ...newCues]));
-        setCards(prev => shuffleArray([...prev.filter(c => !answeredCueIds.has(c.cueId)), ...newCards]));
+        setCues(prev => shuffleArray([...prev.filter(c => !answered.has(c.id)), ...newCues]));
+
+        const newLeft = shuffled.map(p => ({ id: `l-${p.cueId}`, text: p.text, cueId: p.cueId, pairId: p.cueId, state: 'default', type: 'word' }));
+        const newRight = shuffled.map(p => ({ id: `r-${p.cueId}`, text: p.d, cueId: p.cueId, pairId: p.cueId, state: 'default', type: 'meaning' }));
+
+        setMatchCardsLeft(prev =>
+            [...prev.filter(c => !answered.has(c.pairId)), ...newLeft].sort((a, b) =>
+                a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
+            )
+        );
+        setMatchCardsRight(prev => shuffleArray([...prev.filter(c => !answered.has(c.pairId)), ...newRight]));
+        setCards(prev =>
+            [...prev.filter(c => !answered.has(c.cueId)), ...newCards].sort((a, b) =>
+                a.text.localeCompare(b.text, undefined, { sensitivity: 'base' })
+            )
+        );
+        // Remove solved IDs from the answered set so recycled pairs can appear again in endless mode.
+        setAnsweredCueIds(prev => {
+            const next = new Set(prev);
+            answered.forEach(id => next.delete(id));
+            return next;
+        });
     };
 
     const handleMatrixCardClick = (clickedCard: Card) => {
@@ -197,8 +213,9 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
             setTimeout(() => {
                 const newAnsweredIds = new Set(answeredCueIds).add(currentCue.id);
                 setAnsweredCueIds(newAnsweredIds);
+                setCompletedCount(prev => prev + 1);
 
-                refillIfNeeded();
+                refillIfNeeded(newAnsweredIds);
 
                 let nextUnansweredIndex = -1;
                 for (let i = currentCueIndex + 1; i < cues.length; i++) {
@@ -253,8 +270,9 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
             setScore(s => s + 10);
             const nextAnswered = new Set(answeredCueIds).add(left.pairId);
             setAnsweredCueIds(nextAnswered);
+            setCompletedCount(prev => prev + 1);
 
-            refillIfNeeded();
+            refillIfNeeded(nextAnswered);
 
             setMatchCardsLeft(prev => prev.map(c => c.id === leftId ? {...c, state: 'correct'} : c));
             setMatchCardsRight(prev => prev.map(c => c.id === rightId ? {...c, state: 'correct'} : c));
@@ -376,12 +394,14 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
                         <button onClick={() => setViewMode('MATCH')} className={`p-2 rounded-lg transition-all ${viewMode === 'MATCH' ? 'bg-white shadow-sm text-fuchsia-600' : 'text-neutral-400 hover:text-neutral-600'}`} title="Match View"><Columns size={18}/></button>
                     </div>
                 </div>
-                <div className="flex flex-col items-center">
-                    <div className="text-neutral-400 font-black text-[10px] uppercase tracking-widest">Progress</div>
-                    <div className="h-1 w-32 bg-neutral-100 rounded-full mt-1.5 overflow-hidden">
-                        <div className="h-full bg-fuchsia-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+                {!endlessMode ? (
+                    <div className="flex flex-col items-center">
+                        <div className="text-neutral-400 font-black text-[10px] uppercase tracking-widest">Progress</div>
+                        <div className="h-1 w-32 bg-neutral-100 rounded-full mt-1.5 overflow-hidden">
+                            <div className="h-full bg-fuchsia-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+                        </div>
                     </div>
-                </div>
+                ) : <div />}
                 <div className="px-6 py-2 bg-neutral-900 text-white rounded-full font-black text-lg shadow-lg tracking-widest">{score}</div>
             </header>
 
@@ -501,7 +521,7 @@ export const WordScatter: React.FC<Props> = ({ words, onComplete, onExit }) => {
                     <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Matched</span>
                     <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-neutral-200"></div> Hidden</span>
                 </div>
-                <span>Completed: {answeredCueIds.size}</span>
+                <span>Completed: {endlessMode ? completedCount : answeredCueIds.size}</span>
             </footer>
         </div>
     );
