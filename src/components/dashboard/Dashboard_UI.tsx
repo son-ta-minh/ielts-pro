@@ -64,6 +64,7 @@ interface FocusTimerRecord {
     alarmAfterSeconds?: number;
     lastAlarmAtElapsedSeconds?: number | null;
     lastStart?: number | null;
+    lastActivatedAt?: number | null;
     status: FocusTimerStatus;
     createdAt: number;
 }
@@ -554,7 +555,14 @@ const FocusPeriodPanel: React.FC<FocusPeriodPanelProps> = ({
     onDeleteHistory,
     clockTick
 }) => {
-    const sortedTimers = useMemo(() => [...timers].sort((a, b) => b.createdAt - a.createdAt), [timers]);
+    const sortedTimers = useMemo(
+        () => [...timers].sort((a, b) => {
+            const aSort = a.lastActivatedAt ?? a.createdAt;
+            const bSort = b.lastActivatedAt ?? b.createdAt;
+            return bSort - aSort;
+        }),
+        [timers]
+    );
     const todayStops = useMemo(() => {
         const today = new Date();
         const y = today.getFullYear();
@@ -1585,6 +1593,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
       elapsedSeconds: 0,
       alarmAfterSeconds: alarmAfter,
       lastAlarmAtElapsedSeconds: null,
+      lastActivatedAt: null,
       status: 'idle',
       createdAt: now
     };
@@ -1604,6 +1613,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
           status: 'running',
           elapsedSeconds: resetElapsed,
           lastStart: now,
+          lastActivatedAt: now,
           lastAlarmAtElapsedSeconds: null
         };
       })
@@ -1625,7 +1635,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   const resumeTimer = (id: string) => {
     const now = Date.now();
     setFocusTimers(prev =>
-      prev.map(timer => (timer.id === id ? { ...timer, status: 'running', lastStart: now } : timer))
+      prev.map(timer => (timer.id === id ? { ...timer, status: 'running', lastStart: now, lastActivatedAt: now } : timer))
     );
   };
 
