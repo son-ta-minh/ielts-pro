@@ -373,12 +373,19 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
       // 5. Random from Pool (IPA, Family, Idiom)
       const randomPool: ChallengeType[] = [];
 
+      const hasAccentIpaMatch = availableChallenges.some(
+          c => c.type === 'IPA_MATCH' && (c as any).matchMode === 'ACCENT'
+      );
+      const hasWordClassIpaMatch = availableChallenges.some(
+          c => c.type === 'IPA_MATCH' && (c as any).matchMode === 'WORD_CLASS'
+      );
       const hasDistinctIpa =
           word.ipaUs &&
           word.ipaUk &&
           word.pronSim === 'different';
 
-      if (availableTypes.has('IPA_MATCH') && hasDistinctIpa) {
+      // pronSim check is only for US/UK accent matching.
+      if ((hasAccentIpaMatch && hasDistinctIpa) || hasWordClassIpaMatch) {
           randomPool.push('IPA_MATCH');
       } else if (availableTypes.has('IPA_QUIZ')) {
           randomPool.push('IPA_QUIZ');

@@ -1,11 +1,63 @@
 
 import { VocabularyItem, WordFamily, PrepositionPattern } from '../app/types';
-import { Challenge, ChallengeType, IpaQuizChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, ChallengeResult, HeteronymQuizChallenge, HeteronymForm, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseContextQuizChallenge, ParaphraseContextQuizItem, CollocationContextQuizChallenge, CollocationContextQuizItem, CollocationMultichoiceQuizChallenge, IdiomContextQuizChallenge, IdiomContextQuizItem } from '../components/practice/TestModalTypes';
+import { Challenge, ChallengeType, IpaQuizChallenge, IpaMatchChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, ChallengeResult, HeteronymQuizChallenge, HeteronymForm, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseContextQuizChallenge, ParaphraseContextQuizItem, CollocationContextQuizChallenge, CollocationContextQuizItem, CollocationMultichoiceQuizChallenge, IdiomContextQuizChallenge, IdiomContextQuizItem } from '../components/practice/TestModalTypes';
 import { getRandomMeanings } from '../app/db';
+import { getConfig, getServerUrl } from '../app/settingsManager';
 
 const shuffleArray = <T,>(array: T[]): T[] => [...array].sort(() => Math.random() - 0.5);
 const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export const normalizeAnswerForGrading = (str: string): string => str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+interface CambridgePronunciation {
+    partOfSpeech?: string | null;
+    ipaUs?: string | null;
+    ipaUk?: string | null;
+}
+
+interface CambridgeSimpleResult {
+    exists: boolean;
+    word?: string;
+    pronunciations?: CambridgePronunciation[];
+}
+
+const normalizeCambridgePronunciations = (items?: CambridgePronunciation[]): CambridgePronunciation[] => {
+    if (!Array.isArray(items) || items.length === 0) return [];
+    const byPos = new Map<string, CambridgePronunciation>();
+    const order: string[] = [];
+
+    const canonicalPos = (value?: string | null): string => {
+        const lower = String(value || '').toLowerCase();
+        if (/\bnoun\b/.test(lower)) return 'NOUN';
+        if (/\bverb\b/.test(lower)) return 'VERB';
+        if (/\badjective\b/.test(lower)) return 'ADJECTIVE';
+        if (/\badverb\b/.test(lower)) return 'ADVERB';
+        if (/\bpronoun\b/.test(lower)) return 'PRONOUN';
+        if (/\bpreposition\b/.test(lower)) return 'PREPOSITION';
+        if (/\bconjunction\b/.test(lower)) return 'CONJUNCTION';
+        if (/\binterjection\b/.test(lower)) return 'INTERJECTION';
+        const compact = String(value || '').replace(/\s+/g, ' ').trim().toUpperCase();
+        return compact || 'N/A';
+    };
+
+    for (const item of items) {
+        const pos = canonicalPos(item.partOfSpeech);
+        if (!byPos.has(pos)) {
+            byPos.set(pos, {
+                partOfSpeech: pos,
+                ipaUs: null,
+                ipaUk: null
+            });
+            order.push(pos);
+        }
+        const merged = byPos.get(pos)!;
+        if (!merged.ipaUs && item.ipaUs) merged.ipaUs = item.ipaUs;
+        if (!merged.ipaUk && item.ipaUk) merged.ipaUk = item.ipaUk;
+    }
+
+    return order
+        .map(pos => byPos.get(pos)!)
+        .filter(p => p.ipaUs || p.ipaUk);
+};
 
 
 /**
@@ -13,6 +65,15 @@ export const normalizeAnswerForGrading = (str: string): string => str.replace(/[
  */
 export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
     const list: Challenge[] = [];
+    const debugIpaMatch = word.word?.trim().toLowerCase() === 'rebel';
+
+    if (debugIpaMatch) {
+        console.log('[IPA_MATCH debug][generate] start', {
+            word: word.word,
+            hasWordFamily: !!word.wordFamily,
+            wordFamily: word.wordFamily
+        });
+    }
     
     list.push({ type: 'SPELLING', title: 'Spelling Fill', word });
     list.push({ type: 'PRONUNCIATION', title: 'Speak Out', word });
@@ -35,9 +96,75 @@ export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
             type: 'IPA_MATCH',
             title: 'IPA Match (US vs UK)',
             word,
+            matchMode: 'ACCENT',
             contexts: [],
             items: []
-        } as Challenge);
+        } as IpaMatchChallenge);
+        if (debugIpaMatch) {
+            console.log('[IPA_MATCH debug][generate] added accent IPA_MATCH');
+        }
+    } else if (debugIpaMatch) {
+        console.log('[IPA_MATCH debug][generate] no accent IPA_MATCH', {
+            ipaUs: word.ipaUs,
+            ipaUk: word.ipaUk,
+            pronSim: word.pronSim
+        });
+    }
+
+    // IPA Match (word-class homographs): same spelling appears in >=2 POS.
+    // IPA itself will be fetched from server later in prepareChallenges.
+    if (word.wordFamily) {
+        type FamilyBucket = { pos: 'noun' | 'verb' | 'adj' | 'adv'; text: string };
+        const bySpelling = new Map<string, FamilyBucket[]>();
+        const familySource: Array<{ key: keyof WordFamily; pos: FamilyBucket['pos'] }> = [
+            { key: 'nouns', pos: 'noun' },
+            { key: 'verbs', pos: 'verb' },
+            { key: 'adjs', pos: 'adj' },
+            { key: 'advs', pos: 'adv' }
+        ];
+
+        familySource.forEach(({ key, pos }) => {
+            (word.wordFamily?.[key] || []).forEach(member => {
+                if (member.isIgnored) return;
+                const spelling = (member.word || '').trim();
+                if (!spelling) return;
+                const normalized = spelling.toLowerCase();
+                if (!bySpelling.has(normalized)) bySpelling.set(normalized, []);
+                bySpelling.get(normalized)!.push({ pos, text: spelling });
+            });
+        });
+
+        bySpelling.forEach((entries, spellingKey) => {
+            const uniquePos = new Set(entries.map(e => e.pos));
+            if (debugIpaMatch) {
+                console.log('[IPA_MATCH debug][generate] candidate spelling', {
+                    spellingKey,
+                    entries,
+                    uniquePos: Array.from(uniquePos)
+                });
+            }
+            if (uniquePos.size < 2) {
+                if (debugIpaMatch) {
+                    console.log('[IPA_MATCH debug][generate] skip spelling due to <2 POS', { spellingKey });
+                }
+                return;
+            }
+
+            list.push({
+                type: 'IPA_MATCH',
+                title: `IPA Match (${entries[0].text})`,
+                word,
+                matchMode: 'WORD_CLASS',
+                targetWord: spellingKey,
+                contexts: [],
+                items: []
+            } as IpaMatchChallenge);
+            if (debugIpaMatch) {
+                console.log('[IPA_MATCH debug][generate] added WORD_CLASS placeholder', { spellingKey });
+            }
+        });
+    } else if (debugIpaMatch) {
+        console.log('[IPA_MATCH debug][generate] no wordFamily available');
     }
 
     if (word.collocationsArray && word.collocationsArray.length > 0) {
@@ -239,6 +366,14 @@ if (word.example && word.example.trim().length > 5) {
  */
 export async function prepareChallenges(challenges: Challenge[], word: VocabularyItem): Promise<Challenge[]> {
     const finalChallenges: Challenge[] = [];
+    const debugIpaMatch = word.word?.trim().toLowerCase() === 'rebel';
+    if (debugIpaMatch) {
+        console.log('[IPA_MATCH debug][prepare] start', {
+            word: word.word,
+            incomingIpaMatchCount: challenges.filter(c => c.type === 'IPA_MATCH').length,
+            incomingIpaMatches: challenges.filter(c => c.type === 'IPA_MATCH')
+        });
+    }
     for (const challenge of challenges) {
         if (challenge.type === 'MEANING_QUIZ') {
             const distractors = await getRandomMeanings(3, word.id);
@@ -326,9 +461,103 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
             }
         }
         else if (challenge.type === 'IPA_MATCH') {
-            const word = challenge.word;
+            const ipaChallenge = challenge as IpaMatchChallenge;
+            const word = ipaChallenge.word;
 
-            if (word.ipaUs && word.ipaUk && word.pronSim === 'different') {
+            if (ipaChallenge.matchMode === 'WORD_CLASS') {
+                const lookupWord = (ipaChallenge.targetWord || word.word || '').trim().toLowerCase();
+                if (!lookupWord) {
+                    if (debugIpaMatch) {
+                        console.log('[IPA_MATCH debug][prepare] skip WORD_CLASS due to empty lookupWord');
+                    }
+                    continue;
+                }
+                try {
+                    const serverUrl = getServerUrl(getConfig());
+                    const res = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(lookupWord)}`, {
+                        cache: 'no-store'
+                    });
+                    if (!res.ok) {
+                        if (debugIpaMatch) {
+                            console.log('[IPA_MATCH debug][prepare] cambridge request failed', {
+                                lookupWord,
+                                status: res.status
+                            });
+                        }
+                        continue;
+                    }
+                    const raw = await res.text();
+                    const data: CambridgeSimpleResult | null = raw ? JSON.parse(raw) : null;
+                    if (!data?.exists) {
+                        if (debugIpaMatch) {
+                            console.log('[IPA_MATCH debug][prepare] cambridge exists=false', { lookupWord, data });
+                        }
+                        continue;
+                    }
+
+                    const normalized = normalizeCambridgePronunciations(data.pronunciations);
+                    const byIpa = new Map<string, { pos: string; ipa: string }>();
+                    normalized.forEach(entry => {
+                        const ipa = String(entry.ipaUs || entry.ipaUk || '').trim();
+                        const pos = String(entry.partOfSpeech || '').trim();
+                        if (!ipa || !pos) return;
+                        const ipaKey = ipa.replace(/\s+/g, '').toLowerCase();
+                        if (!byIpa.has(ipaKey)) byIpa.set(ipaKey, { pos, ipa });
+                    });
+
+                    const pairs = Array.from(byIpa.values());
+                    if (debugIpaMatch) {
+                        console.log('[IPA_MATCH debug][prepare] cambridge normalized', {
+                            lookupWord,
+                            pronunciations: data.pronunciations,
+                            normalized,
+                            uniquePairs: pairs
+                        });
+                    }
+                    if (pairs.length < 2) {
+                        if (debugIpaMatch) {
+                            console.log('[IPA_MATCH debug][prepare] skip WORD_CLASS due to <2 unique IPA', {
+                                lookupWord,
+                                pairs
+                            });
+                        }
+                        continue;
+                    }
+
+                    const contexts = pairs.map((entry, idx) => ({
+                        id: `context-${word.id}-wf-${lookupWord}-${idx}`,
+                        text: `${lookupWord} (${entry.pos.toLowerCase()})`,
+                        pairId: `wf-${lookupWord}-${idx}`
+                    }));
+                    const items = shuffleArray(
+                        pairs.map((entry, idx) => ({
+                            id: `ipa-${word.id}-wf-${lookupWord}-${idx}`,
+                            text: entry.ipa,
+                            pairId: `wf-${lookupWord}-${idx}`
+                        }))
+                    );
+
+                    finalChallenges.push({
+                        ...ipaChallenge,
+                        title: `IPA Match (${lookupWord})`,
+                        targetWord: lookupWord,
+                        contexts,
+                        items
+                    } as IpaMatchChallenge);
+                    if (debugIpaMatch) {
+                        console.log('[IPA_MATCH debug][prepare] pushed WORD_CLASS IPA_MATCH', {
+                            lookupWord,
+                            contexts,
+                            items
+                        });
+                    }
+                } catch {
+                    if (debugIpaMatch) {
+                        console.log('[IPA_MATCH debug][prepare] exception during WORD_CLASS lookup', { lookupWord });
+                    }
+                    continue;
+                }
+            } else if (word.ipaUs && word.ipaUk && word.pronSim === 'different') {
                 const contexts = [
                     { id: `context-${word.id}-us`, text: 'US Pronunciation', pairId: 'us' },
                     { id: `context-${word.id}-uk`, text: 'UK Pronunciation', pairId: 'uk' }
@@ -340,15 +569,31 @@ export async function prepareChallenges(challenges: Challenge[], word: Vocabular
                 ]);
 
                 finalChallenges.push({
-                    ...challenge,
+                    ...ipaChallenge,
+                    matchMode: 'ACCENT',
                     contexts,
                     items
-                } as any);
+                } as IpaMatchChallenge);
+                if (debugIpaMatch) {
+                    console.log('[IPA_MATCH debug][prepare] pushed ACCENT IPA_MATCH');
+                }
+            } else if (debugIpaMatch) {
+                console.log('[IPA_MATCH debug][prepare] skip ACCENT IPA_MATCH due to missing ipa/pronSim', {
+                    ipaUs: word.ipaUs,
+                    ipaUk: word.ipaUk,
+                    pronSim: word.pronSim
+                });
             }
         }
         else {
             finalChallenges.push(challenge);
         }
+    }
+    if (debugIpaMatch) {
+        console.log('[IPA_MATCH debug][prepare] done', {
+            finalIpaMatchCount: finalChallenges.filter(c => c.type === 'IPA_MATCH').length,
+            finalIpaMatches: finalChallenges.filter(c => c.type === 'IPA_MATCH')
+        });
     }
     return finalChallenges;
 }

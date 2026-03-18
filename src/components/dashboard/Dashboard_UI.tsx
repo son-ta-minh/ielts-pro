@@ -10,7 +10,7 @@ import { DayProgress } from './DayProgress';
 import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
-import { ringBell } from '../../utils/audio';
+import { speak } from '../../utils/audio';
 
 const getFormattedBuildDate = () => {
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
@@ -1707,12 +1707,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
     dueTimers.forEach(timer => {
       const timerLabel = timer.name || `${timer.category} Focus`;
       showToast(`${timerLabel} reached alarm at ${formatDuration(timer.alarmAfterSeconds || 0)}. Stop or keep going.`, 'info');
-      // Play bell sound 3 times in sequence
-      for (let i = 0; i < 3; i++) {
-        setTimeout(() => {
-            ringBell()
-        }, i * 600);
-      }
+      speak(`Ting ting. ${timerLabel} hết giờ`, false, "vi");
     });
 
     const dueIds = new Set(dueTimers.map(timer => timer.id));

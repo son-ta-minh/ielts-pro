@@ -349,7 +349,11 @@ export const TestModalContent: React.FC<TestModalContentProps> = ({
                 result={results ? results[currentChallengeIndex] : null}
                 showHint={showHint}
                 itemLabel={() => null}
-                instructionText="Match each IPA to the correct accent (US vs UK)."
+                instructionText={
+                    challenge.matchMode === 'WORD_CLASS'
+                        ? 'Match each IPA to the correct word class for this spelling.'
+                        : 'Match each IPA to the correct accent (US vs UK).'
+                }
             />
         );
       }

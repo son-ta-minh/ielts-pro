@@ -13,9 +13,13 @@ export interface PronunciationChallenge extends BaseChallenge { type: 'PRONUNCIA
 export interface IpaQuizChallenge extends BaseChallenge { type: 'IPA_QUIZ'; options: string[]; answer: string; }
 export interface IpaMatchChallenge extends BaseChallenge {
   type: 'IPA_MATCH';
-  usIpa: string;
-  ukIpa: string;
-  options: { label: 'US' | 'UK'; ipa: string }[];
+  matchMode?: 'ACCENT' | 'WORD_CLASS';
+  targetWord?: string;
+  contexts: { id: string; text: string; pairId: string }[];
+  items: { id: string; text: string; pairId: string }[];
+  usIpa?: string;
+  ukIpa?: string;
+  options?: { label: 'US' | 'UK'; ipa: string }[];
 }
 export interface PrepositionQuizChallenge extends BaseChallenge { type: 'PREPOSITION_QUIZ'; example: string; answer: string; }
 export interface WordFamilyChallenge extends BaseChallenge { type: 'WORD_FAMILY'; }
