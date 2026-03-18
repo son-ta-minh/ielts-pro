@@ -31,7 +31,7 @@ export enum ParaphraseMode {
   LESS_ACADEMIC = 'LESS_ACADEMIC'
 }
 
-export type WordTypeOption = 'vocab' | 'idiom' | 'phrasal' | 'collocation' | 'phrase' | 'archive' | 'duplicate';
+export type WordTypeOption = 'vocab' | 'idiom' | 'phrasal' | 'collocation' | 'phrase' | 'archive' | 'focus' | 'duplicate';
 
 export type SessionType = 'due' | 'new' | 'custom' | 'new_study' | 'random_test' | 'boss_battle' | null;
 
@@ -189,6 +189,7 @@ export interface VocabularyItem {
   isIrregular?: boolean; 
   isExampleLocked?: boolean;
   isPassive?: boolean;
+  isFocus?: boolean;
   quality: WordQuality;
   source?: WordSource;
   img?: string;

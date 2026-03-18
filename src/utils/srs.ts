@@ -228,6 +228,7 @@ export async function createNewWord(
     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
     userId: '', word: word.trim(), ipaUs: finalIpaUs, meaningVi: finalMeaningVi, example: example.trim(), note, groups,
     isIdiom, isPhrasalVerb, isCollocation, isStandardPhrase, isPassive,
+    isFocus: false,
     register: 'raw', quality: WordQuality.RAW, source, isExampleLocked: false,
     createdAt: now, updatedAt: now, nextReview: now, interval: 0, easeFactor: 2.5, consecutiveCorrect: 0, forgotCount: 0,
     lastTestResults: {}

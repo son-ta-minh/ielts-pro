@@ -663,7 +663,7 @@ export const filterItem = (
     const isAll = filterTypes.includes('all') || filterTypes.length === 0;
     if (isAll) return !item.isPassive; 
     for (const type of filterTypes) {
-        if ((type === 'archive' && item.isPassive) || (type === 'idiom' && item.isIdiom) || (type === 'phrasal' && item.isPhrasalVerb) || (type === 'colloc' && item.isCollocation) || (type === 'phrase' && item.isStandardPhrase) || (type === 'vocab' && !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase)) return true;
+        if ((type === 'archive' && item.isPassive) || (type === 'focus' && item.isFocus) || (type === 'idiom' && item.isIdiom) || (type === 'phrasal' && item.isPhrasalVerb) || (type === 'colloc' && item.isCollocation) || (type === 'phrase' && item.isStandardPhrase) || (type === 'vocab' && !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase)) return true;
     }
     return false;
 };

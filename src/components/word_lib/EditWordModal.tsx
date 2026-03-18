@@ -21,7 +21,7 @@ type FormState = VocabularyItem & {
 type FormAction =
     | { type: 'REINITIALIZE', payload: VocabularyItem }
     | { type: 'SET_FIELD', payload: { field: keyof FormState, value: any } }
-    | { type: 'SET_FLAG', payload: { flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' } }
+    | { type: 'SET_FLAG', payload: { flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' | 'isFocus' } }
     | { type: 'SET_LIST_ITEM', payload: { list: 'wordFamily' | 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases', data: any } }
     | { type: 'ADD_LIST_ITEM', payload: { list: 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases', item: any } }
     | { type: 'APPLY_AI_MERGE', payload: any };
@@ -40,6 +40,7 @@ function formReducer(state: FormState, action: FormAction): FormState {
                 prepositionsList: word.prepositions || [],
                 wordFamily: word.wordFamily || { nouns: [], verbs: [], adjs: [], advs: [] },
                 paraphrases: word.paraphrases || [],
+                isFocus: !!word.isFocus,
                 essayEdit: word.lesson?.essay || '',
                 testEdit: word.lesson?.test || '',
             };

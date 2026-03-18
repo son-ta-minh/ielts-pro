@@ -53,7 +53,7 @@ const Dashboard: React.FC<Props> = ({
   const [dayProgress, setDayProgress] = useState({ learned: 0, reviewed: 0, learnedWords: [], reviewedWords: [] });
   const [dailyStreaks, setDailyStreaks] = useState<DailyStreakSnapshot[]>([]);
   const [dailyGoalHistory, setDailyGoalHistory] = useState<DailyGoalSnapshot[]>([]);
-  const [reviewStats, setReviewStats] = useState({ learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0 });
+  const [reviewStats, setReviewStats] = useState({ learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0, statusFocus: 0 });
   const [goalStats, setGoalStats] = useState({ totalTasks: 0, completedTasks: 0 });
   
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
@@ -164,6 +164,9 @@ const Dashboard: React.FC<Props> = ({
       setRefinedCount(stats.dashboardStats.refinedCount || 0);
       
       if (stats.reviewCounts) {
+        const focusCount = dataStore.getAllWords().filter(
+          w => w.userId === userId && !w.isPassive && !!w.isFocus
+        ).length;
         setReviewStats({
             learned: stats.reviewCounts.learned || 0,
             mastered: stats.reviewCounts.mastered || 0,
@@ -171,6 +174,7 @@ const Dashboard: React.FC<Props> = ({
             statusHard: stats.reviewCounts.statusHard || 0,
             statusEasy: stats.reviewCounts.statusEasy || 0,
             statusLearned: stats.reviewCounts.statusLearned || 0,
+            statusFocus: focusCount,
         });
       }
     };

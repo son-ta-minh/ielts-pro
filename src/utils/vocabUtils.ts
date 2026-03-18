@@ -137,6 +137,7 @@ export const normalizeAiResponse = (shortData: any): any => {
         isIrregular: type ? typeFlags.isIrregular : (shortData.is_irr ?? shortData.isIrregular),
         
         isPassive: shortData.is_pas ?? shortData.isPassive,
+        isFocus: shortData.is_foc ?? shortData.isFocus ?? false,
         
         paraphrases: mapPara(shortData.para || shortData.paraphrases),
         wordFamily: shortData.fam ? {
@@ -258,6 +259,7 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
     updatedItem.isStandardPhrase = aiResult.isStandardPhrase !== undefined ? !!aiResult.isStandardPhrase : baseItem.isStandardPhrase;
     updatedItem.isIrregular = aiResult.isIrregular !== undefined ? !!aiResult.isIrregular : baseItem.isIrregular;
     updatedItem.isPassive = aiResult.isPassive !== undefined ? !!aiResult.isPassive : baseItem.isPassive;
+    updatedItem.isFocus = aiResult.isFocus !== undefined ? !!aiResult.isFocus : baseItem.isFocus;
     
     updatedItem.quality = WordQuality.REFINED;
     

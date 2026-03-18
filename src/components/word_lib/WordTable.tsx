@@ -273,6 +273,9 @@ const WordTable: React.FC<Props> = ({
                    removeGroupFromSet(next, GROUP_ATTRIBUTE);
                    next.add(type);
                }
+          } else if (type === 'focus') {
+              if (next.has(type)) next.delete(type);
+              else next.add(type);
           }
           return next;
       });

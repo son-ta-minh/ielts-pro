@@ -123,7 +123,7 @@ export interface DashboardUIProps {
     learnedCount: number;
     rawCount: number;
     refinedCount: number;
-    reviewStats: { learned: number; mastered: number; statusForgot: number; statusHard: number; statusEasy: number; statusLearned: number; };
+    reviewStats: { learned: number; mastered: number; statusForgot: number; statusHard: number; statusEasy: number; statusLearned: number; statusFocus: number; };
     wotd: VocabularyItem | null;
     isWotdComposed: boolean;
     onRandomizeWotd: () => void;
@@ -309,6 +309,7 @@ const VocabularyCenterPanel: React.FC<{
     forgottenCount: number;
     hardCount: number;
     easyCount: number;
+    focusedCount: number;
     onStartNew: () => void;
     onStartDue: () => void;
     onStartStatusReview: (status: 'hard' | 'forgot') => void;
@@ -316,7 +317,7 @@ const VocabularyCenterPanel: React.FC<{
     onVerifyRefined: () => void;
     onFilterStatus: (filter: string) => void;
 }> = ({
-    stats, totalCount, newCount, studyingCount, masteredCount, rawCount, refinedCount, forgottenCount, hardCount, easyCount,
+    stats, totalCount, newCount, studyingCount, masteredCount, rawCount, refinedCount, forgottenCount, hardCount, easyCount, focusedCount,
     onStartNew, onStartDue, onStartStatusReview, onRefineRaw, onVerifyRefined, onFilterStatus
 }) => {
     const newPercent = totalCount > 0 ? (newCount / totalCount) * 100 : 0;
@@ -363,7 +364,7 @@ const VocabularyCenterPanel: React.FC<{
                             <span className="text-[10px] font-bold text-neutral-600">New ({newCount})</span>
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mt-3">
                         <button
                             onClick={() => onFilterStatus('easy')}
                             className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 hover:bg-emerald-100 transition-all"
@@ -381,6 +382,12 @@ const VocabularyCenterPanel: React.FC<{
                             className="px-3 py-2 rounded-xl bg-red-50 text-red-700 text-[10px] font-bold border border-red-200 hover:bg-red-100 transition-all"
                         >
                             Forgotten ({forgottenCount})
+                        </button>
+                        <button
+                            onClick={() => onFilterStatus('focus')}
+                            className="px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-200 hover:bg-indigo-100 transition-all"
+                        >
+                            Focused ({focusedCount})
                         </button>
                     </div>
                 </div>
@@ -1802,6 +1809,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                 forgottenCount={reviewStats.statusForgot}
                 hardCount={reviewStats.statusHard}
                 easyCount={reviewStats.statusEasy}
+                focusedCount={reviewStats.statusFocus}
                 onStartNew={onStartNewLearn} 
                 onStartDue={onStartDueReview} 
                 onStartStatusReview={onStartStatusReview}

@@ -236,6 +236,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
     const isStandardPhrase = types.has('phrase');
 
     const isPassive = types.has('archive');
+    const isFocus = types.has('focus');
 
     // 1. Pre-fetch from Server Library for Quick Add
     let serverMap = new Map<string, VocabularyItem>();
@@ -258,6 +259,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
         updatedItem.isCollocation = isCollocation || existing.isCollocation;
         updatedItem.isStandardPhrase = isStandardPhrase || existing.isStandardPhrase;
         updatedItem.isPassive = isPassive; // Override passive status if explicitly adding to archive or not
+        updatedItem.isFocus = isFocus || !!existing.isFocus;
         updatedItem.updatedAt = Date.now();
         newItems.push(updatedItem); 
       } else {
@@ -289,7 +291,8 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
                  isPhrasalVerb: isPhrasalVerb || serverItem.isPhrasalVerb,
                  isCollocation: isCollocation || serverItem.isCollocation,
                  isStandardPhrase: isStandardPhrase || serverItem.isStandardPhrase,
-                 isPassive: isPassive
+                 isPassive: isPassive,
+                 isFocus: isFocus || !!serverItem.isFocus
              };
              // Recalc stats
              newItem.complexity = calculateComplexity(newItem);
@@ -304,6 +307,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
                 isCollocation, isStandardPhrase, isPassive
             );
             newItem.userId = userId;
+            newItem.isFocus = isFocus;
         }
         newItems.push(newItem);
       }

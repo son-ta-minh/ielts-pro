@@ -4,7 +4,7 @@ import { VocabularyItem, ReviewGrade, WordQuality, WordTypeOption, WordBook } fr
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
 
-export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'archive' | 'duplicate';
+export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'archive' | 'focus' | 'duplicate';
 export type RefinedFilter = 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined';
 export type StatusFilter = 'all' | 'new' | 'forgot' | 'hard' | 'easy' | 'learned';
 export type RegisterFilter = 'all' | 'academic' | 'casual' | 'neutral' | 'raw';
@@ -86,6 +86,7 @@ const TYPE_OPTIONS: { id: WordTypeOption; label: string; icon: React.ElementType
     { id: 'collocation', label: 'Collocation', icon: Combine },
     { id: 'phrase', label: 'Phrase', icon: MessageSquare },
     { id: 'archive', label: 'Archive', icon: Archive },
+    { id: 'focus', label: 'Focus', icon: Zap },
 ];
 
 const BookIcon: React.FC<{ icon: string; className?: string }> = ({ icon, className }) => {
@@ -378,7 +379,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest w-16 shrink-0">Type</span>
                     <div className="flex flex-wrap gap-2">
-                        {[ 'all', 'vocab', 'idiom', 'phrasal', 'colloc', 'phrase', 'archive', 'duplicate' ].map(id => {
+                        {[ 'all', 'vocab', 'idiom', 'phrasal', 'colloc', 'phrase', 'archive', 'focus', 'duplicate' ].map(id => {
                             const isActive = activeFilters.has(id as FilterType);
                             const isDuplicate = id === 'duplicate';
                             let buttonClass = 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300';
