@@ -3,7 +3,8 @@ import {
   RotateCw, AlertCircle, Flame,
   Download, History, BookCopy, Sparkles, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
   Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain, AlertTriangle,
-  CloudUpload, Percent, MessagesSquare, Scale, Dumbbell, Crown
+  CloudUpload, Percent, MessagesSquare, Scale, Dumbbell, Crown,
+  Timer, Plus, Play, Pause, StopCircle, Clock4, Trash2
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
 import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
@@ -48,6 +49,52 @@ export interface StudyStats {
     };
     writing: { completed: number, total: number };
 }
+
+type FocusTimerCategory = 'Vocabulary' | 'Grammar' | 'Idiom' | 'Speaking' | 'Listening' | 'Writing' | 'Reading' | 'Custom';
+
+type FocusTimerStatus = 'idle' | 'running' | 'paused' | 'completed';
+
+interface FocusTimerRecord {
+    id: string;
+    name: string;
+    category: FocusTimerCategory;
+    totalSeconds: number;
+    remainingSeconds: number;
+    status: FocusTimerStatus;
+    createdAt: number;
+}
+
+interface FocusTimerHistory {
+    id: string;
+    name: string;
+    category: FocusTimerCategory;
+    durationSeconds: number;
+    stoppedAt: number;
+}
+
+const FOCUS_TIMER_CATEGORIES: FocusTimerCategory[] = ['Vocabulary','Grammar','Idiom','Speaking','Listening','Writing','Reading','Custom'];
+
+const FOCUS_CATEGORY_BADGES: Record<FocusTimerCategory, { color: string; bg: string }> = {
+    Vocabulary: { color: 'text-blue-600', bg: 'bg-blue-50' },
+    Grammar: { color: 'text-purple-600', bg: 'bg-purple-50' },
+    Idiom: { color: 'text-orange-600', bg: 'bg-orange-50' },
+    Speaking: { color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    Listening: { color: 'text-cyan-600', bg: 'bg-cyan-50' },
+    Writing: { color: 'text-rose-600', bg: 'bg-rose-50' },
+    Reading: { color: 'text-amber-600', bg: 'bg-amber-50' },
+    Custom: { color: 'text-neutral-600', bg: 'bg-neutral-100' }
+};
+
+const formatDuration = (seconds: number) => {
+    if (seconds <= 0) return '00:00';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hrs > 0) {
+        return `${hrs.toString().padStart(2,'0')}:${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+    }
+    return `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+};
 
 export interface DashboardUIProps {
     user: User;
@@ -425,6 +472,190 @@ const StudyNowPanel: React.FC<{
                 <NavButton largeSub label="Word Intensity" subLabel="Master nuanced words by their scale." icon={Scale} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('LESSON_SCALE')} />
                 <NavButton largeSub label="Confusing Words" subLabel="Contrast and identify confusing pairs." icon={Split} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('LESSON_DIFF')} />
                 <NavButton largeSub label="Mistake Cards" subLabel="Review common mistakes and corrections." icon={AlertTriangle} color="text-rose-600" bg="bg-rose-50" onClick={() => onAction('LESSON_MISTAKE')} />
+            </div>
+        </div>
+    );
+};
+
+const FocusPeriodPanel: React.FC<{
+    timers: FocusTimerRecord[];
+    history: FocusTimerHistory[];
+    form: { name: string; category: FocusTimerCategory; hours: string; minutes: string };
+    error: string | null;
+    onFormChange: (field: 'hours' | 'minutes' | 'name' | 'category', value: string) => void;
+    onCreate: () => void;
+    onPause: (id: string) => void;
+    onResume: (id: string) => void;
+    onStop: (id: string) => void;
+    onRemove: (id: string) => void;
+    limitReached: boolean;
+}> = ({ timers, history, form, error, onFormChange, onCreate, onPause, onResume, onStop, onRemove, limitReached }) => (
+    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+                <h3 className="text-base font-black text-neutral-900 tracking-tight flex items-center gap-2">
+                    <Timer size={18} className="text-neutral-500" /> Focus Period
+                </h3>
+                <p className="text-[11px] text-neutral-500">Create up to 12 timers, pause/resume at will, then stop to store the session history.</p>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Insights will show in the chart below</span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="lg:col-span-2 space-y-3">
+                <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <select value={form.category} onChange={(e) => onFormChange('category', e.target.value)} className="w-full rounded-2xl border border-neutral-200 p-3 bg-white text-sm font-semibold">
+                            {FOCUS_TIMER_CATEGORIES.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                        <input
+                            type="text"
+                            value={form.name}
+                            onChange={(e) => onFormChange('name', e.target.value)}
+                            className="w-full rounded-2xl border border-neutral-200 p-3 text-sm"
+                            placeholder="Timer name"
+                        />
+                    </div>
+                    <div className="flex flex-wrap gap-2 items-end">
+                        <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
+                            Hours
+                            <input min="0" type="number" value={form.hours} onChange={(e) => onFormChange('hours', e.target.value)} className="w-24 rounded-2xl border border-neutral-200 p-2 text-sm" />
+                        </label>
+                        <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
+                            Minutes
+                            <input min="0" max="59" type="number" value={form.minutes} onChange={(e) => onFormChange('minutes', e.target.value)} className="w-24 rounded-2xl border border-neutral-200 p-2 text-sm" />
+                        </label>
+                        <button onClick={onCreate} disabled={limitReached} className="ml-auto py-2 px-4 rounded-2xl bg-neutral-900 text-white text-sm font-black uppercase tracking-wider transition hover:bg-neutral-800 disabled:opacity-50">
+                            <Plus size={12} /> Create Timer
+                        </button>
+                    </div>
+                    {error && <p className="text-[10px] text-rose-600 font-bold">{error}</p>}
+                    <p className="text-[10px] text-neutral-400">{limitReached ? 'Maximum 12 timers reached' : 'You can start multiple focus periods in parallel.'}</p>
+                </div>
+                <div className="space-y-3">
+                    {timers.length === 0 && (
+                        <div className="rounded-2xl border border-dashed border-neutral-200 p-4 text-sm text-neutral-400">No active timers yet.</div>
+                    )}
+                    {(() => {
+                        const sortedTimers = [...timers].sort((a,b) => b.createdAt - a.createdAt);
+                        return sortedTimers.map(timer => {
+                            const badge = FOCUS_CATEGORY_BADGES[timer.category];
+                            return (
+                                <div key={timer.id} className="rounded-2xl border border-neutral-200 p-4 bg-neutral-50/70">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black ${badge.color} ${badge.bg}`}>
+                                            {timer.category}
+                                        </div>
+                                        <p className="text-sm font-bold text-neutral-900 mt-2">{timer.name}</p>
+                                        <p className="text-[10px] text-neutral-500">{timer.status === 'completed' ? 'Stopped' : timer.status === 'paused' ? 'Paused' : 'Running'}</p>
+                                    </div>
+                                    <div className="text-lg font-black text-neutral-900">{formatDuration(timer.remainingSeconds)}</div>
+                                </div>
+                                <div className="flex flex-wrap gap-2 mt-4">
+                                    {timer.status === 'running' && (
+                                        <button onClick={() => onPause(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                            <Pause size={12} /> Pause
+                                        </button>
+                                    )}
+                                    {timer.status === 'paused' && (
+                                        <button onClick={() => onResume(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                            <Play size={12} /> Resume
+                                        </button>
+                                    )}
+                                    {(timer.status === 'running' || timer.status === 'paused') && (
+                                        <button onClick={() => onStop(timer.id)} className="px-3 py-1.5 rounded-full border border-rose-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-rose-600 bg-rose-50" title="Stop session">
+                                            <StopCircle size={12} /> Stop
+                                        </button>
+                                    )}
+                                    {timer.status === 'completed' && (
+                                        <button onClick={() => onRemove(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-500">
+                                            <Trash2 size={12} /> Remove
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                        })
+                    })()}
+                </div>
+            </div>
+            <div className="space-y-3">
+                <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400">Recent Stops</h4>
+                {history.length === 0 ? (
+                    <p className="text-sm text-neutral-400">Stopped timers will appear here once completed.</p>
+                ) : (
+                    history.slice(0, 5).map(entry => (
+                        <div key={entry.id} className="rounded-2xl border border-neutral-200 p-3 bg-white">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-bold text-neutral-900">{entry.name}</span>
+                                <span className="text-[10px] font-semibold uppercase text-neutral-400">{entry.category}</span>
+                            </div>
+                            <p className="text-[10px] text-neutral-500">{entry.category} · {formatDuration(entry.durationSeconds)}</p>
+                            <p className="text-[10px] text-neutral-400">{new Date(entry.stoppedAt).toLocaleString()}</p>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    </div>
+);
+
+const FocusPeriodInsights: React.FC<{ history: FocusTimerHistory[] }> = ({ history }) => {
+    const summary = useMemo(() => {
+        const totals: Record<FocusTimerCategory, number> = {
+            Vocabulary: 0,
+            Grammar: 0,
+            Idiom: 0,
+            Speaking: 0,
+            Listening: 0,
+            Writing: 0,
+            Reading: 0,
+            Custom: 0
+        };
+        history.forEach(entry => {
+            totals[entry.category] = (totals[entry.category] || 0) + entry.durationSeconds;
+        });
+        return totals;
+    }, [history]);
+    const maxMinutes = Math.max(...Object.values(summary).map(sec => sec / 60), 1);
+    const entries = Object.entries(summary).filter(([, seconds]) => seconds > 0) as [FocusTimerCategory, number][];
+    if (entries.length === 0) {
+        return (
+            <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm">
+                <div className="flex items-center gap-2 text-sm font-black text-neutral-900">
+                    <Clock4 size={16} className="text-neutral-400" /> Focus Period Insights
+                </div>
+                <p className="text-[10px] text-neutral-400 mt-3">Stop a timer to see minutes logged here.</p>
+            </div>
+        );
+    }
+    return (
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+                <div className="text-sm font-black text-neutral-900 flex items-center gap-2">
+                    <Clock4 size={16} className="text-neutral-400" /> Focus Period Insights
+                </div>
+                <span className="text-[10px] font-semibold text-neutral-400">Last updates</span>
+            </div>
+            <div className="space-y-3">
+                {entries.map(([category, seconds]) => {
+                    const minutes = Math.round(seconds / 60);
+                    const width = Math.min(100, (minutes / maxMinutes) * 100);
+                    const badge = FOCUS_CATEGORY_BADGES[category];
+                    return (
+                        <div key={category}>
+                            <div className="flex items-center justify-between">
+                                <span className={`text-[12px] font-bold ${badge.color}`}>{category}</span>
+                                <span className="text-[10px] font-semibold text-neutral-500">{minutes} min</span>
+                            </div>
+                            <div className="h-2 rounded-full bg-neutral-100 overflow-hidden">
+                                <div className="h-full bg-emerald-500" style={{ width: `${width}%` }} />
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
@@ -1009,6 +1240,127 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   useEffect(() => {
     sessionStorage.setItem('dashboard_active_tab', activeTab);
   }, [activeTab]);
+
+  const [focusTimers, setFocusTimers] = useState<FocusTimerRecord[]>([]);
+  const [focusHistory, setFocusHistory] = useState<FocusTimerHistory[]>([]);
+  const [focusForm, setFocusForm] = useState({ name: '', category: 'Vocabulary' as FocusTimerCategory, hours: '0', minutes: '25' });
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const storedTimers = window.localStorage.getItem('focus_period_timers');
+      if (storedTimers) setFocusTimers(JSON.parse(storedTimers));
+      const storedHistory = window.localStorage.getItem('focus_period_history');
+      if (storedHistory) setFocusHistory(JSON.parse(storedHistory));
+    } catch (err) {
+      console.error('[FocusPeriod] failed to restore timers', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('focus_period_timers', JSON.stringify(focusTimers));
+  }, [focusTimers]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('focus_period_history', JSON.stringify(focusHistory));
+  }, [focusHistory]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const interval = window.setInterval(() => {
+      const completed: FocusTimerHistory[] = [];
+      setFocusTimers(prev => prev.map(timer => {
+        if (timer.status !== 'running' || timer.remainingSeconds <= 0) return timer;
+        const next = timer.remainingSeconds - 1;
+        if (next <= 0) {
+          completed.push({
+            id: `${timer.id}-${Date.now()}`,
+            name: timer.name,
+            category: timer.category,
+            durationSeconds: timer.totalSeconds,
+            stoppedAt: Date.now()
+          });
+          return { ...timer, remainingSeconds: 0, status: 'completed' };
+        }
+        return { ...timer, remainingSeconds: next };
+      }));
+      if (completed.length) {
+        setFocusHistory(prev => [...completed, ...prev].slice(0, 100));
+      }
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const recordFocusHistory = (entry: FocusTimerHistory) => {
+    setFocusHistory(prev => [entry, ...prev].slice(0, 100));
+  };
+
+  const handleFormChange = (field: 'hours' | 'minutes' | 'name' | 'category', value: string) => {
+    setFocusForm(prev => ({ ...prev, [field]: value }));
+    if (formError) setFormError(null);
+  };
+
+  const handleCreateTimer = () => {
+    const hours = Number(focusForm.hours) || 0;
+    const minutes = Number(focusForm.minutes) || 0;
+    const totalSeconds = hours * 3600 + minutes * 60;
+    if (focusTimers.length >= 12) {
+      setFormError('You can create up to 12 timers only.');
+      return;
+    }
+    if (totalSeconds <= 0) {
+      setFormError('Set a duration greater than zero.');
+      return;
+    }
+    const now = Date.now();
+    const name = focusForm.name.trim() || `${focusForm.category} Focus`;
+    const newTimer: FocusTimerRecord = {
+      id: crypto.randomUUID?.() ?? `focus-${now}-${Math.random().toString(36).slice(2)}`,
+      name,
+      category: focusForm.category,
+      totalSeconds,
+      remainingSeconds: totalSeconds,
+      status: 'running',
+      createdAt: now
+    };
+    setFocusTimers(prev => [...prev, newTimer]);
+    setFocusForm({ name: '', category: focusForm.category, hours: '0', minutes: '25' });
+  };
+
+  const pauseTimer = (id: string) => {
+    setFocusTimers(prev => prev.map(timer => timer.id === id && timer.status === 'running' ? { ...timer, status: 'paused' } : timer));
+  };
+
+  const resumeTimer = (id: string) => {
+    setFocusTimers(prev => prev.map(timer => timer.id === id && timer.status === 'paused' && timer.remainingSeconds > 0 ? { ...timer, status: 'running' } : timer));
+  };
+
+  const stopTimer = (id: string) => {
+    let entry: FocusTimerHistory | null = null;
+    const now = Date.now();
+    setFocusTimers(prev => prev.map(timer => {
+      if (timer.id !== id) return timer;
+      const duration = Math.max(0, timer.totalSeconds - timer.remainingSeconds);
+      if (duration > 0) {
+        entry = {
+          id: `${timer.id}-${now}`,
+          name: timer.name,
+          category: timer.category,
+          durationSeconds: duration,
+          stoppedAt: now
+        };
+      }
+      return { ...timer, remainingSeconds: 0, status: 'completed' };
+    }));
+    if (entry) recordFocusHistory(entry);
+  };
+
+  const removeTimer = (id: string) => {
+    setFocusTimers(prev => prev.filter(timer => timer.id !== id));
+  };
   
   return (
     <div className="space-y-2 animate-in fade-in duration-500">
@@ -1100,6 +1452,19 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                 onFilterStatus={(filter) => onNavigateToWordList(filter)}
               />
               <StudyNowPanel stats={studyStats} isLoading={isStatsLoading} onAction={(action) => onAction(action)} />
+              <FocusPeriodPanel
+                  timers={focusTimers}
+                  history={focusHistory}
+                  form={focusForm}
+                  error={formError}
+                  onFormChange={handleFormChange}
+                  onCreate={handleCreateTimer}
+                  onPause={pauseTimer}
+                  onResume={resumeTimer}
+                  onStop={stopTimer}
+                  onRemove={removeTimer}
+                  limitReached={focusTimers.length >= 12}
+              />
           </div>
       )}
 
@@ -1120,6 +1485,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                        <GoalProgressPanel goalStats={goalStats} onAction={onAction} />
                    </div>
               </div>
+              <FocusPeriodInsights history={focusHistory} />
 
               {/* Row 2: Day Progress */}
               {(() => {
