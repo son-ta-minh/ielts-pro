@@ -5,7 +5,7 @@ import { startRecording, stopRecording, speak, stopSpeaking, playSound, getAudio
 import * as dataStore from '../../app/dataStore';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
-import { Mic, Play, Square, Pause, Trash2, Calendar, FileAudio, Mic2, X, BookText, Loader2, RotateCcw, Check, Edit3, ArrowDownCircle } from 'lucide-react';
+import { Mic, Play, Square, Pause, Trash2, Calendar, FileAudio, Mic2, X, BookText, Loader2, RotateCcw, Check, Edit3, ArrowDownCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import ConfirmationModal from '../common/ConfirmationModal';
 import { AudioTrimmer } from '../common/AudioTrimmer';
 import { InteractiveTranscript } from '../common/InteractiveTranscript';
@@ -22,12 +22,15 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     const { showToast } = useToast();
     const [mode, setMode] = useState<PracticeMode>('RECORDING');
     const [item, setItem] = useState<FreeTalkItem | null>(null);
+    const [scriptCursor, setScriptCursor] = useState(0);
 
     useEffect(() => {
         if (isOpen && initialItem) {
             setItem(initialItem);
+            setScriptCursor(0);
         } else if (!isOpen) {
             setItem(null);
+            setScriptCursor(0);
         }
     }, [isOpen, initialItem?.id]);
     
@@ -495,6 +498,10 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
     // --- Render ---
 
     if (!isOpen || !item) return null;
+    const scriptItems = item.scriptItems || [];
+    const hasScriptItems = scriptItems.length > 0;
+    const boundedScriptCursor = Math.min(scriptCursor, Math.max(0, scriptItems.length - 1));
+    const currentScriptItem = hasScriptItems ? scriptItems[boundedScriptCursor] : null;
 
     const formatTime = (seconds: number) => {
         if (!seconds || isNaN(seconds)) return "0:00";
@@ -642,25 +649,44 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                         <BookText size={14}/> Script & Notes
                                     </h4>
                                     
-                                    {item.scriptItems && item.scriptItems.length > 0 ? (
+                                    {hasScriptItems ? (
                                         <div className="space-y-4">
-                                            {item.scriptItems.map((scriptItem, idx) => (
-                                                <div 
-                                                    key={scriptItem.id || idx} 
+                                            <div className="flex items-center justify-between gap-3 bg-white px-3 py-2 rounded-xl border border-neutral-200">
+                                                <button
+                                                    onClick={() => setScriptCursor(prev => Math.max(0, prev - 1))}
+                                                    disabled={boundedScriptCursor === 0}
+                                                    className="px-3 py-1.5 rounded-lg border border-neutral-200 bg-neutral-50 text-[10px] font-black uppercase tracking-wider text-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100 transition-all flex items-center gap-1"
+                                                >
+                                                    <ChevronLeft size={14} /> Back
+                                                </button>
+                                                <div className="text-[10px] font-black uppercase tracking-wider text-neutral-500">
+                                                    Item {boundedScriptCursor + 1} / {scriptItems.length}
+                                                </div>
+                                                <button
+                                                    onClick={() => setScriptCursor(prev => Math.min(scriptItems.length - 1, prev + 1))}
+                                                    disabled={boundedScriptCursor === scriptItems.length - 1}
+                                                    className="px-3 py-1.5 rounded-lg border border-neutral-200 bg-neutral-50 text-[10px] font-black uppercase tracking-wider text-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100 transition-all flex items-center gap-1"
+                                                >
+                                                    Next <ChevronRight size={14} />
+                                                </button>
+                                            </div>
+                                            {currentScriptItem && (
+                                                <div
+                                                    key={currentScriptItem.id || boundedScriptCursor}
                                                     className={`rounded-3xl border shadow-sm transition-all overflow-hidden ${
-                                                        scriptItem.type === 'note' 
-                                                            ? 'bg-yellow-50/50 border-yellow-100 text-yellow-900 italic relative' 
+                                                        currentScriptItem.type === 'note'
+                                                            ? 'bg-yellow-50/50 border-yellow-100 text-yellow-900 italic relative'
                                                             : 'bg-white border-neutral-200 text-neutral-800'
                                                     }`}
                                                 >
-                                                    {scriptItem.type === 'note' && (
+                                                    {currentScriptItem.type === 'note' && (
                                                         <div className="absolute top-0 left-0 w-1 h-full bg-yellow-300/50"/>
                                                     )}
-                                                    
-                                                    {scriptItem.type === 'script' ? (
-                                                        <InteractiveTranscript 
-                                                            rawText={scriptItem.content}
-                                                            onUpdate={(newText) => handleScriptUpdate(idx, newText)}
+
+                                                    {currentScriptItem.type === 'script' ? (
+                                                        <InteractiveTranscript
+                                                            rawText={currentScriptItem.content}
+                                                            onUpdate={(newText) => handleScriptUpdate(boundedScriptCursor, newText)}
                                                             audioLinks={item.audioLinks || []}
                                                             onPlaySegment={handlePlaySegment}
                                                             showDash={true}
@@ -669,11 +695,11 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                                         />
                                                     ) : (
                                                         <div className="p-4 text-xs font-medium leading-relaxed whitespace-pre-wrap font-mono">
-                                                            {scriptItem.content}
+                                                            {currentScriptItem.content}
                                                         </div>
                                                     )}
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="bg-white p-4 rounded-3xl border border-neutral-200 shadow-sm">
