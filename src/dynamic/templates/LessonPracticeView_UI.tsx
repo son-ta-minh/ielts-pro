@@ -21,6 +21,24 @@ interface Chapter {
     content: string;
 }
 
+const PROSE_CLASS =
+    'prose prose-sm max-w-none prose-headings:font-black prose-headings:text-neutral-900 prose-p:text-neutral-600 prose-p:leading-relaxed prose-img:rounded-xl prose-img:shadow-md prose-strong:text-neutral-900 prose-a:text-indigo-600';
+
+const StaticMarkdownPanel: React.FC<{
+    html: string;
+    className?: string;
+}> = ({ html, className }) => {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (containerRef.current) {
+            containerRef.current.innerHTML = html;
+        }
+    }, [html]);
+
+    return <div ref={containerRef} className={className} />;
+};
+
 const splitContentIntoChapters = (markdown: string): Chapter[] => {
     if (!markdown) return [];
     
@@ -110,8 +128,8 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
     }, [chapters]);
 
     useEffect(() => {
-        setCurrentChapterIdx(0);
-    }, [activeTab]);
+        setCurrentChapterIdx(prev => Math.min(prev, Math.max(0, chapters.length - 1)));
+    }, [chapters.length]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -131,6 +149,7 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
             return parseMarkdown(chapter?.content || "");
         }
     }, [rawContent, viewMode, chapters, currentChapterIdx]);
+    const testContentHtml = useMemo(() => parseMarkdown(lesson.testContent || ''), [lesson.id, lesson.testContent]);
 
     const speechBlocks = useMemo(() => {
         if (!lesson.listeningContent) return [];
@@ -428,10 +447,20 @@ export const LessonPracticeViewUI: React.FC<Props> = ({ lesson, onComplete, onEd
                          <p className="font-bold text-neutral-400">No listening script available.</p>
                      </div>
                  ) : (
-                    <div 
-                        className="prose prose-sm max-w-none prose-headings:font-black prose-headings:text-neutral-900 prose-p:text-neutral-600 prose-p:leading-relaxed prose-img:rounded-xl prose-img:shadow-md prose-strong:text-neutral-900 prose-a:text-indigo-600"
-                        dangerouslySetInnerHTML={{ __html: contentHtml }}
-                    />
+                    <>
+                        {hasTest && (
+                            <StaticMarkdownPanel
+                                html={testContentHtml}
+                                className={`${activeTab === 'TEST' ? '' : 'hidden'} ${PROSE_CLASS}`}
+                            />
+                        )}
+                        {activeTab !== 'TEST' && (
+                            <div
+                                className={PROSE_CLASS}
+                                dangerouslySetInnerHTML={{ __html: contentHtml }}
+                            />
+                        )}
+                    </>
                  )}
             </div>
 
