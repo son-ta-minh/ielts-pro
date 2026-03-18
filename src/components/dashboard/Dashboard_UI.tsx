@@ -599,13 +599,14 @@ const FocusPeriodPanel: React.FC<FocusPeriodPanelProps> = ({
                             Alarm minutes
                             <input min="0" max="59" type="number" value={form.minutes} onChange={(e) => onFormChange('minutes', e.target.value)} className="w-24 rounded-2xl border border-neutral-200 p-2 text-sm" />
                         </label>
-                        <button
-                            onClick={onCreate}
-                            disabled={limitReached}
-                            className="ml-auto py-2 px-4 rounded-2xl bg-neutral-900 text-white text-sm font-black uppercase tracking-wider transition hover:bg-neutral-800 disabled:opacity-50"
-                        >
-                            <Plus size={12} /> {editingTimerId ? 'Update timer' : 'Create timer'}
-                        </button>
+                            <button
+                                onClick={onCreate}
+                                disabled={limitReached}
+                                className="ml-auto inline-flex items-center gap-2 py-2 px-4 rounded-2xl bg-neutral-900 text-white text-sm font-black uppercase tracking-wider transition hover:bg-neutral-800 disabled:opacity-50"
+                            >
+                                <Plus className="w-4 h-4 shrink-0" />
+                                <span className="whitespace-nowrap">{editingTimerId ? 'Update timer' : 'Create timer'}</span>
+                            </button>
                     </div>
                     {error && <p className="text-[10px] text-rose-600 font-bold">{error}</p>}
                     <p className="text-[10px] text-neutral-400">{limitReached ? `Maximum ${MAX_FOCUS_TIMERS} timers reached` : 'Timer type, name and Alarm After only appear when creating or editing a timer.'}</p>
