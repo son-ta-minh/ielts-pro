@@ -778,3 +778,37 @@ export const getAudioProgress = () => {
     }
     return null;
 };
+
+/**
+ * Play a simple bell sound using Web Audio API
+ */
+export function playBell() {
+  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  // Bell-like tone
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(1000, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.5);
+
+  // Smooth fade out
+  gain.gain.setValueAtTime(0.3, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start();
+  osc.stop(ctx.currentTime + 0.5);
+}
+
+/**
+ * Ring bell multiple times (default: 3)
+ */
+export function ringBell(times: number = 3, interval: number = 600) {
+  for (let i = 0; i < times; i++) {
+    setTimeout(() => playBell(), i * interval);
+  }
+}
