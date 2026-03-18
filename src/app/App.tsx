@@ -6,6 +6,7 @@ import { useAppController } from './useAppController';
 import { AppLayout } from './AppLayout';
 import { ToastProvider } from '../contexts/ToastContext';
 import { tryPersistStorage } from './db';
+import FocusTimerAlarmWatcher from './FocusTimerAlarmWatcher';
 
 const DbConnectionLostModal: React.FC = () => (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-neutral-950/90 backdrop-blur-md animate-in fade-in duration-500">
@@ -90,7 +91,12 @@ const AppInner: React.FC = () => {
     return <AuthView onLogin={handleLogin} />;
   }
 
-  return <AppLayout controller={controller} />;
+  return (
+    <>
+      <FocusTimerAlarmWatcher />
+      <AppLayout controller={controller} />
+    </>
+  );
 };
 
 const App: React.FC = () => {

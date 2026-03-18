@@ -10,7 +10,6 @@ import { DayProgress } from './DayProgress';
 import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
-import { speak } from '../../utils/audio';
 
 const getFormattedBuildDate = () => {
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
@@ -114,6 +113,7 @@ const formatDuration = (seconds: number) => {
 
 const FOCUS_PERIOD_TIMERS_KEY = 'focus_period_timers';
 const FOCUS_PERIOD_HISTORY_KEY = 'focus_period_history';
+const FOCUS_TIMERS_UPDATED_EVENT = 'focus-period-timers-updated';
 const MAX_FOCUS_TIMERS = 12;
 export interface DashboardUIProps {
     user: User;
@@ -1495,8 +1495,18 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
         try { setFocusHistory(JSON.parse(event.newValue)); } catch { setFocusHistory([]); }
       }
     };
+    const handleTimersUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<FocusTimerRecord[]>).detail;
+      if (Array.isArray(detail)) {
+        setFocusTimers(detail);
+      }
+    };
     window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    window.addEventListener(FOCUS_TIMERS_UPDATED_EVENT, handleTimersUpdated as EventListener);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(FOCUS_TIMERS_UPDATED_EVENT, handleTimersUpdated as EventListener);
+    };
   }, []);
 
   const [clockTick, setClockTick] = useState(Date.now());
@@ -1701,31 +1711,6 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
     );
     setElapsedEditorId(null);
   };
-
-  useEffect(() => {
-    const dueTimers = focusTimers.filter(timer => {
-      const alarmAfter = timer.alarmAfterSeconds || 0;
-      if (timer.status !== 'running' || alarmAfter <= 0) return false;
-      if (timer.lastAlarmAtElapsedSeconds === alarmAfter) return false;
-      return getEffectiveElapsed(timer) >= alarmAfter;
-    });
-    if (dueTimers.length === 0) return;
-
-    dueTimers.forEach(timer => {
-      const timerLabel = timer.name || `${timer.category} Focus`;
-      showToast(`${timerLabel} reached alarm at ${formatDuration(timer.alarmAfterSeconds || 0)}. Stop or keep going.`, 'info');
-      speak(`Ting ting. ${timerLabel} hết giờ`, false, "vi");
-    });
-
-    const dueIds = new Set(dueTimers.map(timer => timer.id));
-    setFocusTimers(prev =>
-      prev.map(timer =>
-        dueIds.has(timer.id)
-          ? { ...timer, lastAlarmAtElapsedSeconds: timer.alarmAfterSeconds || null }
-          : timer
-      )
-    );
-  }, [clockTick, focusTimers, showToast]);
 
   return (
     <div className="space-y-2 animate-in fade-in duration-500">
