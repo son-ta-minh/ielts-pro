@@ -512,7 +512,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-6xl rounded-[3rem] shadow-2xl border border-neutral-200 flex flex-col h-[85vh] overflow-hidden relative">
+            <div className="bg-white w-full max-w-6xl rounded-[3rem] shadow-2xl border border-neutral-200 flex flex-col h-[92vh] overflow-hidden relative">
                 
                 {/* Header Switcher */}
                 <div className="px-8 py-4 border-b border-neutral-100 flex items-center justify-between bg-white z-10">
@@ -529,11 +529,11 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
 
                 <div className="flex-1 overflow-hidden relative">
                     {mode === 'RECORDING' && (
-                        <div className="h-full flex flex-col p-8 overflow-y-auto custom-scrollbar bg-neutral-50/50">
+                        <div className="h-full flex flex-col p-6 overflow-y-auto custom-scrollbar bg-neutral-50/50">
                             {/* CLOSE BUTTON */}
                             <button onClick={onClose} className="absolute top-4 right-4 p-2 text-neutral-400 hover:bg-neutral-100 rounded-full z-50"><X size={20} /></button>
 
-                            <div className="max-w-5xl mx-auto w-full space-y-6 pb-20">
+                            <div className="max-w-5xl mx-auto w-full space-y-4 pb-10">
                                 
                                 {/* 1. RECORDER / REVIEW - COMPACT REDESIGN */}
                                 <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden transition-all">
@@ -644,7 +644,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                                 </div>
 
                                 {/* 2. SPEECH CONTENT (Script & Notes) */}
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                     <h4 className="text-[10px] font-black uppercase text-neutral-400 tracking-widest flex items-center gap-2">
                                         <BookText size={14}/> Script & Notes
                                     </h4>
@@ -714,7 +714,7 @@ export const FreeTalkPracticeModal: React.FC<Props> = ({ isOpen, onClose, item: 
                     )}
 
                     {mode === 'PLAYBACK' && (
-                        <div className="h-full flex flex-col p-8 overflow-y-auto custom-scrollbar bg-neutral-50/50">
+                        <div className="h-full flex flex-col p-6 overflow-y-auto custom-scrollbar bg-neutral-50/50">
                             <button onClick={onClose} className="absolute top-4 right-4 p-2 text-neutral-400 hover:bg-neutral-100 rounded-full z-50"><X size={20} /></button>
                             
                             <div className="max-w-5xl mx-auto w-full space-y-8 pb-20">
