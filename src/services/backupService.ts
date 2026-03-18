@@ -8,6 +8,9 @@ import { _mapToLongKeys } from '../utils/dataHandler';
 import { readDailyStreaks } from '../utils/dailyStreaks';
 import { getStoredJSON } from '../utils/storage';
 
+const FOCUS_PERIOD_TIMERS_KEY = 'focus_period_timers';
+const FOCUS_PERIOD_HISTORY_KEY = 'focus_period_history';
+
 // Scope for auto backup - usually everything
 const FULL_SCOPE: DataScope = {
     user: true,
@@ -267,6 +270,8 @@ async function getFullExportData(userId: string, user: User) {
     const readingShelves = localStorage.getItem('reading_books_shelves');
     const systemConfig = localStorage.getItem('vocab_pro_system_config');
     const dailyStreaks = readDailyStreaks(userId);
+    const focusTimersData = localStorage.getItem(FOCUS_PERIOD_TIMERS_KEY);
+    const focusHistoryData = localStorage.getItem(FOCUS_PERIOD_HISTORY_KEY);
 
      return {
         v: 8,
@@ -297,6 +302,8 @@ async function getFullExportData(userId: string, user: User) {
         },
         readingShelves: readingShelves ? JSON.parse(readingShelves) : null,
         settings: systemConfig ? JSON.parse(systemConfig) : null,
-        ds: dailyStreaks
+        ds: dailyStreaks,
+        focusTimers: focusTimersData ? JSON.parse(focusTimersData) : [],
+        focusHistory: focusHistoryData ? JSON.parse(focusHistoryData) : []
      };
 }

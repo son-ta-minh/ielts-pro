@@ -109,6 +109,9 @@ const FULL_SCOPE: DataScope = {
     planning: true
 };
 
+const FOCUS_PERIOD_TIMERS_KEY = 'focus_period_timers';
+const FOCUS_PERIOD_HISTORY_KEY = 'focus_period_history';
+
 // --- Export Helpers ---
 
 function _mapNestedArrayToShort(arr: any[] | undefined, outerKey: string): any[] | undefined {
@@ -465,6 +468,8 @@ export const processJsonImport = async (
                 const incomingSettings: any | undefined = Array.isArray(rawJson) ? undefined : (rawJson.settings || rawJson.sys);
                 const incomingDailyStreaks: DailyStreakSnapshot[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.dailyStreaks || rawJson.ds);
                 const incomingDailyGoalHistory: DailyGoalSnapshot[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.dailyGoalHistory || rawJson.dgh);
+                const incomingFocusTimers: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.focusTimers || rawJson.ft);
+                const incomingFocusHistory: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.focusHistory || rawJson.fh);
 
                 if (!Array.isArray(incomingItems)) throw new Error("Invalid JSON: 'vocabulary' array missing.");
 
@@ -493,11 +498,13 @@ export const processJsonImport = async (
                 }
                 
                 // --- READING ---
-                if (scope.reading) {
-                    if (incomingUnits) await bulkSaveUnits(incomingUnits.map(u => ({...u, userId: importedUserId}))); 
-                    if (incomingReadingBooks) await bulkSaveReadingBooks(incomingReadingBooks.map(b => ({ ...b, userId: importedUserId })));
-                    if (incomingReadingShelves) localStorage.setItem('reading_books_shelves', JSON.stringify(incomingReadingShelves));
-                }
+            if (scope.reading) {
+                if (incomingUnits) await bulkSaveUnits(incomingUnits.map(u => ({...u, userId: importedUserId}))); 
+                if (incomingReadingBooks) await bulkSaveReadingBooks(incomingReadingBooks.map(b => ({ ...b, userId: importedUserId })));
+                if (incomingReadingShelves) localStorage.setItem('reading_books_shelves', JSON.stringify(incomingReadingShelves));
+            }
+            if (incomingFocusTimers) localStorage.setItem(FOCUS_PERIOD_TIMERS_KEY, JSON.stringify(incomingFocusTimers));
+            if (incomingFocusHistory) localStorage.setItem(FOCUS_PERIOD_HISTORY_KEY, JSON.stringify(incomingFocusHistory));
                 
                 // --- LOGS ---
                 if (scope.lesson || scope.writing) {

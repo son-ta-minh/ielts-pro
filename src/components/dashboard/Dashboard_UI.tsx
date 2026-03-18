@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
 import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
+import { getStoredJSON, setStoredJSON } from '../../utils/storage';
+import { useToast } from '../../contexts/ToastContext';
 
 const getFormattedBuildDate = () => {
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
@@ -58,8 +60,10 @@ interface FocusTimerRecord {
     id: string;
     name: string;
     category: FocusTimerCategory;
-    totalSeconds: number;
-    remainingSeconds: number;
+    elapsedSeconds: number;
+    alarmAfterSeconds?: number;
+    lastAlarmAtElapsedSeconds?: number | null;
+    lastStart?: number | null;
     status: FocusTimerStatus;
     createdAt: number;
 }
@@ -85,6 +89,17 @@ const FOCUS_CATEGORY_BADGES: Record<FocusTimerCategory, { color: string; bg: str
     Custom: { color: 'text-neutral-600', bg: 'bg-neutral-100' }
 };
 
+const FOCUS_CATEGORY_STROKES: Record<FocusTimerCategory, string> = {
+    Vocabulary: '#2563eb',
+    Grammar: '#7c3aed',
+    Idiom: '#ea580c',
+    Speaking: '#059669',
+    Listening: '#0891b2',
+    Writing: '#e11d48',
+    Reading: '#d97706',
+    Custom: '#525252'
+};
+
 const formatDuration = (seconds: number) => {
     if (seconds <= 0) return '00:00';
     const hrs = Math.floor(seconds / 3600);
@@ -96,6 +111,9 @@ const formatDuration = (seconds: number) => {
     return `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
 };
 
+const FOCUS_PERIOD_TIMERS_KEY = 'focus_period_timers';
+const FOCUS_PERIOD_HISTORY_KEY = 'focus_period_history';
+const MAX_FOCUS_TIMERS = 12;
 export interface DashboardUIProps {
     user: User;
     totalCount: number;
@@ -477,32 +495,87 @@ const StudyNowPanel: React.FC<{
     );
 };
 
-const FocusPeriodPanel: React.FC<{
+interface FocusPeriodPanelProps {
     timers: FocusTimerRecord[];
     history: FocusTimerHistory[];
     form: { name: string; category: FocusTimerCategory; hours: string; minutes: string };
     error: string | null;
+    showForm: boolean;
+    editingTimerId: string | null;
+    elapsedEditorId: string | null;
+    elapsedInputs: Record<string, { hours: string; minutes: string }>;
+    limitReached: boolean;
     onFormChange: (field: 'hours' | 'minutes' | 'name' | 'category', value: string) => void;
+    onToggleForm: () => void;
     onCreate: () => void;
+    onStart: (id: string) => void;
     onPause: (id: string) => void;
     onResume: (id: string) => void;
     onStop: (id: string) => void;
     onRemove: (id: string) => void;
-    limitReached: boolean;
-}> = ({ timers, history, form, error, onFormChange, onCreate, onPause, onResume, onStop, onRemove, limitReached }) => (
-    <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-                <h3 className="text-base font-black text-neutral-900 tracking-tight flex items-center gap-2">
-                    <Timer size={18} className="text-neutral-500" /> Focus Period
-                </h3>
-                <p className="text-[11px] text-neutral-500">Create up to 12 timers, pause/resume at will, then stop to store the session history.</p>
+    onEdit: (timer: FocusTimerRecord) => void;
+    onToggleElapsedEditor: (id: string | null) => void;
+    onElapsedInputChange: (id: string, field: 'hours' | 'minutes', value: string) => void;
+    onSetElapsed: (id: string) => void;
+    onDeleteHistory: (id: string) => void;
+    clockTick: number;
+}
+
+const FocusPeriodPanel: React.FC<FocusPeriodPanelProps> = ({
+    timers,
+    history,
+    form,
+    error,
+    showForm,
+    editingTimerId,
+    elapsedEditorId,
+    elapsedInputs,
+    limitReached,
+    onFormChange,
+    onToggleForm,
+    onCreate,
+    onStart,
+    onPause,
+    onResume,
+    onStop,
+    onRemove,
+    onEdit,
+    onToggleElapsedEditor,
+    onElapsedInputChange,
+    onSetElapsed,
+    onDeleteHistory,
+    clockTick
+}) => {
+    const sortedTimers = useMemo(() => [...timers].sort((a, b) => b.createdAt - a.createdAt), [timers]);
+    const todayStops = useMemo(() => {
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = today.getMonth();
+        const d = today.getDate();
+        return history.filter(entry => {
+            const stopped = new Date(entry.stoppedAt);
+            return stopped.getFullYear() === y && stopped.getMonth() === m && stopped.getDate() === d;
+        });
+    }, [history]);
+    return (
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                    <h3 className="text-base font-black text-neutral-900 tracking-tight flex items-center gap-2">
+                        <Timer size={18} className="text-neutral-500" /> Focus Period
+                    </h3>
+                    <p className="text-[11px] text-neutral-500">Create up to 12 timers. Alarm After only triggers reminder toasts and never changes elapsed time.</p>
+                </div>
+                <button
+                    onClick={onToggleForm}
+                    className="px-3 py-1.5 rounded-full border border-neutral-200 uppercase text-[10px] font-black tracking-widest bg-white hover:border-neutral-300 transition"
+                >
+                    {showForm ? (editingTimerId ? 'Cancel edit' : 'Hide form') : (editingTimerId ? 'Cancel edit' : 'New timer')}
+                </button>
             </div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Insights will show in the chart below</span>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div className="lg:col-span-2 space-y-3">
-                <div className="space-y-2">
+
+            {showForm && (
+                <div className="rounded-3xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <select value={form.category} onChange={(e) => onFormChange('category', e.target.value)} className="w-full rounded-2xl border border-neutral-200 p-3 bg-white text-sm font-semibold">
                             {FOCUS_TIMER_CATEGORIES.map(cat => (
@@ -514,83 +587,138 @@ const FocusPeriodPanel: React.FC<{
                             value={form.name}
                             onChange={(e) => onFormChange('name', e.target.value)}
                             className="w-full rounded-2xl border border-neutral-200 p-3 text-sm"
-                            placeholder="Timer name"
+                            placeholder="Timer name (optional)"
                         />
                     </div>
                     <div className="flex flex-wrap gap-2 items-end">
                         <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
-                            Hours
+                            Alarm hours
                             <input min="0" type="number" value={form.hours} onChange={(e) => onFormChange('hours', e.target.value)} className="w-24 rounded-2xl border border-neutral-200 p-2 text-sm" />
                         </label>
                         <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
-                            Minutes
+                            Alarm minutes
                             <input min="0" max="59" type="number" value={form.minutes} onChange={(e) => onFormChange('minutes', e.target.value)} className="w-24 rounded-2xl border border-neutral-200 p-2 text-sm" />
                         </label>
-                        <button onClick={onCreate} disabled={limitReached} className="ml-auto py-2 px-4 rounded-2xl bg-neutral-900 text-white text-sm font-black uppercase tracking-wider transition hover:bg-neutral-800 disabled:opacity-50">
-                            <Plus size={12} /> Create Timer
+                        <button
+                            onClick={onCreate}
+                            disabled={limitReached}
+                            className="ml-auto py-2 px-4 rounded-2xl bg-neutral-900 text-white text-sm font-black uppercase tracking-wider transition hover:bg-neutral-800 disabled:opacity-50"
+                        >
+                            <Plus size={12} /> {editingTimerId ? 'Update timer' : 'Create timer'}
                         </button>
                     </div>
                     {error && <p className="text-[10px] text-rose-600 font-bold">{error}</p>}
-                    <p className="text-[10px] text-neutral-400">{limitReached ? 'Maximum 12 timers reached' : 'You can start multiple focus periods in parallel.'}</p>
+                    <p className="text-[10px] text-neutral-400">{limitReached ? `Maximum ${MAX_FOCUS_TIMERS} timers reached` : 'Timer type, name and Alarm After only appear when creating or editing a timer.'}</p>
                 </div>
-                <div className="space-y-3">
-                    {timers.length === 0 && (
-                        <div className="rounded-2xl border border-dashed border-neutral-200 p-4 text-sm text-neutral-400">No active timers yet.</div>
-                    )}
-                    {(() => {
-                        const sortedTimers = [...timers].sort((a,b) => b.createdAt - a.createdAt);
-                        return sortedTimers.map(timer => {
-                            const badge = FOCUS_CATEGORY_BADGES[timer.category];
-                            return (
-                                <div key={timer.id} className="rounded-2xl border border-neutral-200 p-4 bg-neutral-50/70">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black ${badge.color} ${badge.bg}`}>
-                                            {timer.category}
-                                        </div>
-                                        <p className="text-sm font-bold text-neutral-900 mt-2">{timer.name}</p>
-                                        <p className="text-[10px] text-neutral-500">{timer.status === 'completed' ? 'Stopped' : timer.status === 'paused' ? 'Paused' : 'Running'}</p>
+            )}
+
+            <div className="space-y-3">
+                {sortedTimers.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-neutral-200 p-4 text-sm text-neutral-400">No active timers yet.</div>
+                )}
+                {sortedTimers.map(timer => {
+                    const displayElapsed = timer.elapsedSeconds + (timer.status === 'running' && timer.lastStart ? Math.floor((clockTick - timer.lastStart) / 1000) : 0);
+                    const badge = FOCUS_CATEGORY_BADGES[timer.category];
+                    return (
+                        <div key={timer.id} className="rounded-2xl border border-neutral-200 p-4 bg-neutral-50/70">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black ${badge.color} ${badge.bg}`}>
+                                        {timer.category}
                                     </div>
-                                    <div className="text-lg font-black text-neutral-900">{formatDuration(timer.remainingSeconds)}</div>
+                                    <p className="text-sm font-bold text-neutral-900 mt-2">{timer.name || `${timer.category} Focus`}</p>
+                                    <p className="text-[10px] text-neutral-500">
+                                        {timer.status === 'completed' ? 'Stopped' : timer.status === 'paused' ? 'Paused' : timer.status === 'running' ? 'Running' : 'Ready'}
+                                    </p>
+                                    <p className="text-[10px] text-neutral-400 mt-0.5">
+                                        Alarm After: {timer.alarmAfterSeconds && timer.alarmAfterSeconds > 0 ? formatDuration(timer.alarmAfterSeconds) : 'Off'}
+                                    </p>
                                 </div>
-                                <div className="flex flex-wrap gap-2 mt-4">
-                                    {timer.status === 'running' && (
-                                        <button onClick={() => onPause(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
-                                            <Pause size={12} /> Pause
-                                        </button>
-                                    )}
-                                    {timer.status === 'paused' && (
-                                        <button onClick={() => onResume(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
-                                            <Play size={12} /> Resume
-                                        </button>
-                                    )}
-                                    {(timer.status === 'running' || timer.status === 'paused') && (
-                                        <button onClick={() => onStop(timer.id)} className="px-3 py-1.5 rounded-full border border-rose-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-rose-600 bg-rose-50" title="Stop session">
-                                            <StopCircle size={12} /> Stop
-                                        </button>
-                                    )}
-                                    {timer.status === 'completed' && (
-                                        <button onClick={() => onRemove(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-500">
-                                            <Trash2 size={12} /> Remove
-                                        </button>
-                                    )}
-                                </div>
+                                    <div className="text-lg font-black text-neutral-900">{formatDuration(displayElapsed)}</div>
                             </div>
-                        );
-                        })
-                    })()}
-                </div>
+                            <div className="flex flex-wrap gap-2 mt-4">
+                                {(timer.status === 'idle' || timer.status === 'completed') && (
+                                    <button onClick={() => onStart(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                        <Play size={12} /> {timer.status === 'completed' ? 'Restart' : 'Start'}
+                                    </button>
+                                )}
+                                {timer.status === 'running' && (
+                                    <button onClick={() => onPause(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                        <Pause size={12} /> Pause
+                                    </button>
+                                )}
+                                {timer.status === 'paused' && (
+                                    <button onClick={() => onResume(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                        <Play size={12} /> Resume
+                                    </button>
+                                )}
+                                {(timer.status === 'running' || timer.status === 'paused') && (
+                                    <button onClick={() => onStop(timer.id)} className="px-3 py-1.5 rounded-full border border-rose-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-rose-600 bg-rose-50" title="Stop session">
+                                        <StopCircle size={12} /> Stop
+                                    </button>
+                                )}
+                                <button onClick={() => onEdit(timer)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-600">
+                                    <PenLine size={12} /> Edit
+                                </button>
+                                <button onClick={() => onToggleElapsedEditor(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-600">
+                                    Set elapsed
+                                </button>
+                                {timer.status === 'completed' && (
+                                    <button onClick={() => onRemove(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-500">
+                                        <Trash2 size={12} /> Remove
+                                    </button>
+                                )}
+                            </div>
+                            {elapsedEditorId === timer.id && (
+                                <div className="flex flex-wrap items-end gap-2 mt-3 bg-white border border-dashed border-neutral-200 rounded-2xl p-3">
+                                    <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
+                                        Hours
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={elapsedInputs[timer.id]?.hours ?? Math.floor(timer.elapsedSeconds / 3600).toString()}
+                                            onChange={(e) => onElapsedInputChange(timer.id, 'hours', e.target.value)}
+                                            className="w-20 rounded-2xl border border-neutral-200 p-2 text-sm"
+                                        />
+                                    </label>
+                                    <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
+                                        Minutes
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="59"
+                                            value={elapsedInputs[timer.id]?.minutes ?? Math.floor((timer.elapsedSeconds % 3600) / 60).toString()}
+                                            onChange={(e) => onElapsedInputChange(timer.id, 'minutes', e.target.value)}
+                                            className="w-20 rounded-2xl border border-neutral-200 p-2 text-sm"
+                                        />
+                                    </label>
+                                    <button onClick={() => onSetElapsed(timer.id)} className="px-3 py-1.5 rounded-full bg-neutral-900 text-white text-[10px] font-black uppercase tracking-widest">Apply</button>
+                                    <button onClick={() => onToggleElapsedEditor(null)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest">Close</button>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
             <div className="space-y-3">
-                <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400">Recent Stops</h4>
-                {history.length === 0 ? (
-                    <p className="text-sm text-neutral-400">Stopped timers will appear here once completed.</p>
+                <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400">Recent Stops Today</h4>
+                {todayStops.length === 0 ? (
+                    <p className="text-sm text-neutral-400">No timer stopped today yet.</p>
                 ) : (
-                    history.slice(0, 5).map(entry => (
+                    todayStops.slice(0, 5).map(entry => (
                         <div key={entry.id} className="rounded-2xl border border-neutral-200 p-3 bg-white">
                             <div className="flex items-center justify-between gap-2">
                                 <span className="text-sm font-bold text-neutral-900">{entry.name}</span>
-                                <span className="text-[10px] font-semibold uppercase text-neutral-400">{entry.category}</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-semibold uppercase text-neutral-400">{entry.category}</span>
+                                    <button
+                                        onClick={() => onDeleteHistory(entry.id)}
+                                        className="px-2 py-1 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:border-neutral-300"
+                                        title="Delete this history item"
+                                    >
+                                        <Trash2 size={11} />
+                                    </button>
+                                </div>
                             </div>
                             <p className="text-[10px] text-neutral-500">{entry.category} · {formatDuration(entry.durationSeconds)}</p>
                             <p className="text-[10px] text-neutral-400">{new Date(entry.stoppedAt).toLocaleString()}</p>
@@ -599,11 +727,50 @@ const FocusPeriodPanel: React.FC<{
                 )}
             </div>
         </div>
-    </div>
-);
+    );
+}
 
 const FocusPeriodInsights: React.FC<{ history: FocusTimerHistory[] }> = ({ history }) => {
-    const summary = useMemo(() => {
+    const dailyRows = useMemo(() => {
+        const toDateKey = (value: number) => {
+            const d = new Date(value);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
+        const byDate = new Map<string, Record<FocusTimerCategory, number>>();
+        history.forEach(entry => {
+            const date = toDateKey(entry.stoppedAt);
+            if (!byDate.has(date)) {
+                byDate.set(date, {
+                    Vocabulary: 0,
+                    Grammar: 0,
+                    Idiom: 0,
+                    Speaking: 0,
+                    Listening: 0,
+                    Writing: 0,
+                    Reading: 0,
+                    Custom: 0
+                });
+            }
+            const current = byDate.get(date)!;
+            current[entry.category] += entry.durationSeconds / 60;
+        });
+        return Array.from(byDate.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([date, values]) => ({ date, values }));
+    }, [history]);
+
+    const activeCategories = useMemo(
+        () =>
+            FOCUS_TIMER_CATEGORIES.filter(category =>
+                dailyRows.some(row => row.values[category] > 0)
+            ),
+        [dailyRows]
+    );
+
+    const categoryTotals = useMemo(() => {
         const totals: Record<FocusTimerCategory, number> = {
             Vocabulary: 0,
             Grammar: 0,
@@ -615,13 +782,12 @@ const FocusPeriodInsights: React.FC<{ history: FocusTimerHistory[] }> = ({ histo
             Custom: 0
         };
         history.forEach(entry => {
-            totals[entry.category] = (totals[entry.category] || 0) + entry.durationSeconds;
+            totals[entry.category] += entry.durationSeconds / 60;
         });
         return totals;
     }, [history]);
-    const maxMinutes = Math.max(...Object.values(summary).map(sec => sec / 60), 1);
-    const entries = Object.entries(summary).filter(([, seconds]) => seconds > 0) as [FocusTimerCategory, number][];
-    if (entries.length === 0) {
+
+    if (dailyRows.length === 0 || activeCategories.length === 0) {
         return (
             <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm">
                 <div className="flex items-center gap-2 text-sm font-black text-neutral-900">
@@ -631,31 +797,72 @@ const FocusPeriodInsights: React.FC<{ history: FocusTimerHistory[] }> = ({ histo
             </div>
         );
     }
+
+    const maxMinutes = Math.max(
+        1,
+        ...dailyRows.flatMap(row => activeCategories.map(category => row.values[category]))
+    );
+    const paddingX = 24;
+    const paddingTop = 16;
+    const chartHeight = 170;
+    const width = Math.max(420, paddingX * 2 + (dailyRows.length - 1) * 36);
+    const step = dailyRows.length > 1 ? (width - paddingX * 2) / (dailyRows.length - 1) : 0;
+    const yFor = (value: number) => paddingTop + (chartHeight - (value / maxMinutes) * chartHeight);
+    const labelStep = dailyRows.length > 45 ? 10 : dailyRows.length > 20 ? 5 : 2;
+
     return (
-        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-3">
+        <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
                 <div className="text-sm font-black text-neutral-900 flex items-center gap-2">
                     <Clock4 size={16} className="text-neutral-400" /> Focus Period Insights
                 </div>
-                <span className="text-[10px] font-semibold text-neutral-400">Last updates</span>
+                <span className="text-[10px] font-semibold text-neutral-400">Full history by day</span>
             </div>
-            <div className="space-y-3">
-                {entries.map(([category, seconds]) => {
-                    const minutes = Math.round(seconds / 60);
-                    const width = Math.min(100, (minutes / maxMinutes) * 100);
-                    const badge = FOCUS_CATEGORY_BADGES[category];
-                    return (
-                        <div key={category}>
-                            <div className="flex items-center justify-between">
-                                <span className={`text-[12px] font-bold ${badge.color}`}>{category}</span>
-                                <span className="text-[10px] font-semibold text-neutral-500">{minutes} min</span>
-                            </div>
-                            <div className="h-2 rounded-full bg-neutral-100 overflow-hidden">
-                                <div className="h-full bg-emerald-500" style={{ width: `${width}%` }} />
-                            </div>
-                        </div>
-                    );
-                })}
+
+            <div className="flex flex-wrap items-center gap-3 text-[10px] font-semibold text-neutral-500">
+                {activeCategories.map(category => (
+                    <div key={category} className="inline-flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: FOCUS_CATEGORY_STROKES[category] }} />
+                        <span>{category}</span>
+                        <span className="text-neutral-400">({Math.round(categoryTotals[category])}m)</span>
+                    </div>
+                ))}
+            </div>
+
+            <div className="overflow-x-auto">
+                <svg width={width} height={chartHeight + 46} className="overflow-visible">
+                    {[0.25, 0.5, 0.75, 1].map(p => {
+                        const y = paddingTop + chartHeight * p;
+                        return <line key={p} x1={paddingX} x2={width - paddingX} y1={y} y2={y} stroke="#e5e7eb" strokeDasharray="3 4" strokeWidth={1} />;
+                    })}
+
+                    {activeCategories.map(category => {
+                        const points = dailyRows
+                            .map((row, idx) => `${paddingX + idx * step},${yFor(row.values[category])}`)
+                            .join(' ');
+                        return (
+                            <polyline
+                                key={category}
+                                points={points}
+                                fill="none"
+                                stroke={FOCUS_CATEGORY_STROKES[category]}
+                                strokeWidth={2.2}
+                            />
+                        );
+                    })}
+
+                    {dailyRows.map((row, idx) => {
+                        const showLabel = idx % labelStep === 0 || idx === dailyRows.length - 1;
+                        if (!showLabel) return null;
+                        const dt = new Date(`${row.date}T00:00:00`);
+                        const label = `${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getDate()).padStart(2, '0')}`;
+                        return (
+                            <text key={row.date} x={paddingX + idx * step} y={paddingTop + chartHeight + 14} textAnchor="middle" className="text-[9px] font-semibold fill-neutral-400">
+                                {label}
+                            </text>
+                        );
+                    })}
+                </svg>
             </div>
         </div>
     );
@@ -1240,62 +1447,79 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   useEffect(() => {
     sessionStorage.setItem('dashboard_active_tab', activeTab);
   }, [activeTab]);
-
+  
   const [focusTimers, setFocusTimers] = useState<FocusTimerRecord[]>([]);
   const [focusHistory, setFocusHistory] = useState<FocusTimerHistory[]>([]);
-  const [focusForm, setFocusForm] = useState({ name: '', category: 'Vocabulary' as FocusTimerCategory, hours: '0', minutes: '25' });
+  const [focusForm, setFocusForm] = useState({ name: '', category: 'Vocabulary' as FocusTimerCategory, hours: '0', minutes: '0' });
+  const [showFocusForm, setShowFocusForm] = useState(false);
+  const [editingTimerId, setEditingTimerId] = useState<string | null>(null);
+  const [elapsedEditorId, setElapsedEditorId] = useState<string | null>(null);
+  const [elapsedInputs, setElapsedInputs] = useState<Record<string, { hours: string; minutes: string }>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [isFocusStorageHydrated, setIsFocusStorageHydrated] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      const storedTimers = window.localStorage.getItem('focus_period_timers');
-      if (storedTimers) setFocusTimers(JSON.parse(storedTimers));
-      const storedHistory = window.localStorage.getItem('focus_period_history');
-      if (storedHistory) setFocusHistory(JSON.parse(storedHistory));
-    } catch (err) {
-      console.error('[FocusPeriod] failed to restore timers', err);
-    }
+    setFocusTimers(getStoredJSON<FocusTimerRecord[]>(FOCUS_PERIOD_TIMERS_KEY, []));
+    setFocusHistory(getStoredJSON<FocusTimerHistory[]>(FOCUS_PERIOD_HISTORY_KEY, []));
+    setIsFocusStorageHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('focus_period_timers', JSON.stringify(focusTimers));
-  }, [focusTimers]);
+    if (typeof window === 'undefined' || !isFocusStorageHydrated) return;
+    setStoredJSON(FOCUS_PERIOD_TIMERS_KEY, focusTimers);
+  }, [focusTimers, isFocusStorageHydrated]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isFocusStorageHydrated) return;
+    setStoredJSON(FOCUS_PERIOD_HISTORY_KEY, focusHistory);
+  }, [focusHistory, isFocusStorageHydrated]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem('focus_period_history', JSON.stringify(focusHistory));
-  }, [focusHistory]);
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === FOCUS_PERIOD_TIMERS_KEY && event.newValue) {
+        try { setFocusTimers(JSON.parse(event.newValue)); } catch { setFocusTimers([]); }
+      }
+      if (event.key === FOCUS_PERIOD_HISTORY_KEY && event.newValue) {
+        try { setFocusHistory(JSON.parse(event.newValue)); } catch { setFocusHistory([]); }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
+  const [clockTick, setClockTick] = useState(Date.now());
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const interval = window.setInterval(() => {
-      const completed: FocusTimerHistory[] = [];
-      setFocusTimers(prev => prev.map(timer => {
-        if (timer.status !== 'running' || timer.remainingSeconds <= 0) return timer;
-        const next = timer.remainingSeconds - 1;
-        if (next <= 0) {
-          completed.push({
-            id: `${timer.id}-${Date.now()}`,
-            name: timer.name,
-            category: timer.category,
-            durationSeconds: timer.totalSeconds,
-            stoppedAt: Date.now()
-          });
-          return { ...timer, remainingSeconds: 0, status: 'completed' };
-        }
-        return { ...timer, remainingSeconds: next };
-      }));
-      if (completed.length) {
-        setFocusHistory(prev => [...completed, ...prev].slice(0, 100));
-      }
+      setClockTick(Date.now());
     }, 1000);
     return () => window.clearInterval(interval);
   }, []);
 
+  const getEffectiveElapsed = (timer: FocusTimerRecord) => {
+    if (timer.status !== 'running' || !timer.lastStart) return timer.elapsedSeconds;
+    const delta = Math.floor((clockTick - timer.lastStart) / 1000);
+    return timer.elapsedSeconds + Math.max(0, delta);
+  };
+
   const recordFocusHistory = (entry: FocusTimerHistory) => {
     setFocusHistory(prev => [entry, ...prev].slice(0, 100));
+  };
+
+  const resetForm = () => {
+    setFocusForm({ name: '', category: focusForm.category, hours: '0', minutes: '0' });
+    setEditingTimerId(null);
+    setFormError(null);
+  };
+
+  const handleToggleForm = () => {
+    if (showFocusForm) {
+      resetForm();
+    }
+    setShowFocusForm(prev => !prev);
   };
 
   const handleFormChange = (field: 'hours' | 'minutes' | 'name' | 'category', value: string) => {
@@ -1303,65 +1527,196 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
     if (formError) setFormError(null);
   };
 
-  const handleCreateTimer = () => {
-    const hours = Number(focusForm.hours) || 0;
-    const minutes = Number(focusForm.minutes) || 0;
-    const totalSeconds = hours * 3600 + minutes * 60;
-    if (focusTimers.length >= 12) {
-      setFormError('You can create up to 12 timers only.');
+  const handleCreateOrUpdate = () => {
+    const hours = Math.max(0, Number(focusForm.hours) || 0);
+    const minutes = Math.max(0, Number(focusForm.minutes) || 0);
+    const alarmAfter = hours * 3600 + minutes * 60;
+    if (!editingTimerId && focusTimers.length >= MAX_FOCUS_TIMERS) {
+      setFormError(`You can create up to ${MAX_FOCUS_TIMERS} timers. Remove an old one first.`);
       return;
     }
-    if (totalSeconds <= 0) {
-      setFormError('Set a duration greater than zero.');
+    if (alarmAfter < 0) {
+      setFormError('Alarm time cannot be negative.');
+      return;
+    }
+    if (editingTimerId) {
+      setFocusTimers(prev =>
+        prev.map(timer =>
+          timer.id === editingTimerId
+            ? {
+                ...timer,
+                name: focusForm.name.trim(),
+                category: focusForm.category,
+                alarmAfterSeconds: alarmAfter,
+                lastAlarmAtElapsedSeconds: timer.alarmAfterSeconds !== alarmAfter ? null : timer.lastAlarmAtElapsedSeconds,
+                status: timer.status === 'completed' ? 'idle' : timer.status
+              }
+            : timer
+        )
+      );
+      setShowFocusForm(false);
+      resetForm();
       return;
     }
     const now = Date.now();
-    const name = focusForm.name.trim() || `${focusForm.category} Focus`;
     const newTimer: FocusTimerRecord = {
       id: crypto.randomUUID?.() ?? `focus-${now}-${Math.random().toString(36).slice(2)}`,
-      name,
+      name: focusForm.name.trim(),
       category: focusForm.category,
-      totalSeconds,
-      remainingSeconds: totalSeconds,
-      status: 'running',
+      elapsedSeconds: 0,
+      alarmAfterSeconds: alarmAfter,
+      lastAlarmAtElapsedSeconds: null,
+      status: 'idle',
       createdAt: now
     };
     setFocusTimers(prev => [...prev, newTimer]);
-    setFocusForm({ name: '', category: focusForm.category, hours: '0', minutes: '25' });
+    setShowFocusForm(false);
+    resetForm();
+  };
+
+  const startTimer = (id: string) => {
+    const now = Date.now();
+    setFocusTimers(prev =>
+      prev.map(timer => {
+        if (timer.id !== id) return timer;
+        const resetElapsed = timer.status === 'completed' ? 0 : timer.elapsedSeconds;
+        return {
+          ...timer,
+          status: 'running',
+          elapsedSeconds: resetElapsed,
+          lastStart: now,
+          lastAlarmAtElapsedSeconds: null
+        };
+      })
+    );
+    setElapsedEditorId(null);
   };
 
   const pauseTimer = (id: string) => {
-    setFocusTimers(prev => prev.map(timer => timer.id === id && timer.status === 'running' ? { ...timer, status: 'paused' } : timer));
+    const now = Date.now();
+    setFocusTimers(prev =>
+      prev.map(timer => {
+        if (timer.id !== id) return timer;
+        const extra = timer.lastStart ? Math.floor((now - timer.lastStart) / 1000) : 0;
+        return { ...timer, status: 'paused', elapsedSeconds: timer.elapsedSeconds + extra, lastStart: null };
+      })
+    );
   };
 
   const resumeTimer = (id: string) => {
-    setFocusTimers(prev => prev.map(timer => timer.id === id && timer.status === 'paused' && timer.remainingSeconds > 0 ? { ...timer, status: 'running' } : timer));
+    const now = Date.now();
+    setFocusTimers(prev =>
+      prev.map(timer => (timer.id === id ? { ...timer, status: 'running', lastStart: now } : timer))
+    );
   };
 
   const stopTimer = (id: string) => {
-    let entry: FocusTimerHistory | null = null;
     const now = Date.now();
-    setFocusTimers(prev => prev.map(timer => {
-      if (timer.id !== id) return timer;
-      const duration = Math.max(0, timer.totalSeconds - timer.remainingSeconds);
-      if (duration > 0) {
-        entry = {
-          id: `${timer.id}-${now}`,
-          name: timer.name,
-          category: timer.category,
-          durationSeconds: duration,
-          stoppedAt: now
-        };
-      }
-      return { ...timer, remainingSeconds: 0, status: 'completed' };
-    }));
-    if (entry) recordFocusHistory(entry);
+    const timer = focusTimers.find(t => t.id === id);
+    if (!timer) return;
+    const historyEntry: FocusTimerHistory = {
+      id: `${timer.id}-${now}`,
+      name: timer.name || `${timer.category} Focus`,
+      category: timer.category,
+      durationSeconds: getEffectiveElapsed(timer),
+      stoppedAt: now
+    };
+    setFocusTimers(prev =>
+      prev.map(t =>
+        t.id === id ? { ...t, status: 'completed', lastStart: null, elapsedSeconds: historyEntry.durationSeconds } : t
+      )
+    );
+    recordFocusHistory(historyEntry);
+    showToast(`${historyEntry.name} stopped after ${formatDuration(historyEntry.durationSeconds)}`, 'info');
   };
 
   const removeTimer = (id: string) => {
     setFocusTimers(prev => prev.filter(timer => timer.id !== id));
   };
-  
+
+  const deleteHistoryEntry = (id: string) => {
+    setFocusHistory(prev => prev.filter(entry => entry.id !== id));
+  };
+
+  const editTimer = (timer: FocusTimerRecord) => {
+    const alarmAfter = timer.alarmAfterSeconds || 0;
+    const hrs = Math.floor(alarmAfter / 3600).toString();
+    const mins = Math.floor((alarmAfter % 3600) / 60).toString();
+    setFocusForm({ name: timer.name, category: timer.category, hours: hrs, minutes: mins });
+    setEditingTimerId(timer.id);
+    if (!showFocusForm) setShowFocusForm(true);
+  };
+
+  const toggleElapsedEditor = (id: string | null) => {
+    setElapsedEditorId(id);
+    if (id) {
+      const timer = focusTimers.find(t => t.id === id);
+      if (timer) {
+        const hrs = Math.floor(timer.elapsedSeconds / 3600).toString();
+        const mins = Math.floor((timer.elapsedSeconds % 3600) / 60).toString();
+        setElapsedInputs(prev => ({ ...prev, [id]: { hours: hrs, minutes: mins } }));
+      }
+    }
+  };
+
+  const updateElapsedInput = (id: string, field: 'hours' | 'minutes', value: string) => {
+    setElapsedInputs(prev => ({
+      ...prev,
+      [id]: { ...(prev[id] || { hours: '0', minutes: '0' }), [field]: value }
+    }));
+  };
+
+  const applyElapsed = (id: string) => {
+    const input = elapsedInputs[id];
+    if (!input) {
+      setElapsedEditorId(null);
+      return;
+    }
+    const hours = Math.max(0, Number(input.hours) || 0);
+    const minutes = Math.max(0, Number(input.minutes) || 0);
+    const seconds = hours * 3600 + minutes * 60;
+    const now = Date.now();
+    setFocusTimers(prev =>
+      prev.map(timer =>
+        timer.id === id
+          ? {
+              ...timer,
+              elapsedSeconds: seconds,
+              lastAlarmAtElapsedSeconds: timer.alarmAfterSeconds && seconds < timer.alarmAfterSeconds
+                ? null
+                : timer.lastAlarmAtElapsedSeconds,
+              lastStart: timer.status === 'running' ? now : null
+            }
+          : timer
+      )
+    );
+    setElapsedEditorId(null);
+  };
+
+  useEffect(() => {
+    const dueTimers = focusTimers.filter(timer => {
+      const alarmAfter = timer.alarmAfterSeconds || 0;
+      if (timer.status !== 'running' || alarmAfter <= 0) return false;
+      if (timer.lastAlarmAtElapsedSeconds === alarmAfter) return false;
+      return getEffectiveElapsed(timer) >= alarmAfter;
+    });
+    if (dueTimers.length === 0) return;
+
+    dueTimers.forEach(timer => {
+      const timerLabel = timer.name || `${timer.category} Focus`;
+      showToast(`${timerLabel} reached alarm at ${formatDuration(timer.alarmAfterSeconds || 0)}. Stop or keep going.`, 'info');
+    });
+
+    const dueIds = new Set(dueTimers.map(timer => timer.id));
+    setFocusTimers(prev =>
+      prev.map(timer =>
+        dueIds.has(timer.id)
+          ? { ...timer, lastAlarmAtElapsedSeconds: timer.alarmAfterSeconds || null }
+          : timer
+      )
+    );
+  }, [clockTick, focusTimers, showToast]);
+
   return (
     <div className="space-y-2 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-3">
@@ -1457,13 +1812,25 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                   history={focusHistory}
                   form={focusForm}
                   error={formError}
+                  showForm={showFocusForm}
+                  editingTimerId={editingTimerId}
+                  elapsedEditorId={elapsedEditorId}
+                  elapsedInputs={elapsedInputs}
+                  limitReached={focusTimers.length >= MAX_FOCUS_TIMERS}
                   onFormChange={handleFormChange}
-                  onCreate={handleCreateTimer}
+                  onToggleForm={handleToggleForm}
+                  onCreate={handleCreateOrUpdate}
+                  onStart={startTimer}
                   onPause={pauseTimer}
                   onResume={resumeTimer}
                   onStop={stopTimer}
                   onRemove={removeTimer}
-                  limitReached={focusTimers.length >= 12}
+                  onEdit={editTimer}
+                  onToggleElapsedEditor={toggleElapsedEditor}
+                  onElapsedInputChange={updateElapsedInput}
+                  onSetElapsed={applyElapsed}
+                  onDeleteHistory={deleteHistoryEntry}
+                  clockTick={clockTick}
               />
           </div>
       )}
