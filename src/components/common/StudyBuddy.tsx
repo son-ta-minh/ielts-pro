@@ -690,6 +690,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         };
 
         const handleSelectionClick = (e: MouseEvent) => {
+            // Ignore if clicking inside chat panel
+            if (chatPanelRef.current && chatPanelRef.current.contains(e.target as Node)) {
+                return;
+            }
             if (isOpen) return;
 
             const selection = window.getSelection();
@@ -699,6 +703,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             if (!selectedText) return;
 
             const range = selection.getRangeAt(0);
+            // Ignore if selection is inside the chat panel
+            if (chatPanelRef.current && chatPanelRef.current.contains(range.commonAncestorContainer as Node)) {
+                return;
+            }
+
             const rect = range.getBoundingClientRect();
 
             const x = e.clientX;
@@ -717,6 +726,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
         const handleClickOutside = (e: MouseEvent) => {
             const target = e.target as Node;
+
+            // Prevent closing when interacting with the chat panel
+            if (chatPanelRef.current && chatPanelRef.current.contains(target)) {
+                return;
+            }
 
             const clickedOutsideCommand =
                 !commandBoxRef.current ||
@@ -1243,6 +1257,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const openCoachMenu = (e?: React.MouseEvent) => {
+        // Only open on hover if there is already a valid selection
+        if (!selectedRangeRef.current) return;
         // Do not trigger when hovering inside chat panel
         if (e && chatPanelRef.current && chatPanelRef.current.contains(e.target as Node)) {
             return;
@@ -1290,7 +1306,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     }, [isOpen, message]);
 
     const CommandBox = () => (
-        <div ref={commandBoxRef} className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200">
+        <div
+            ref={commandBoxRef}
+            onMouseDown={(e) => e.preventDefault()}
+            className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200"
+        >
             {/* Using a 6-column grid allows us to have col-span-2 buttons that are perfectly equal in width */}
             <div className="grid grid-cols-8 gap-1">
                 {/* TOP ROW (3 buttons, 2 columns each) */}
@@ -1379,10 +1399,26 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     return (
         <>
             {isOpen && menuPos && (
-                <div className="fixed z-[2147483647]" style={{ left: `${menuPos.x}px`, top: `${menuPos.y}px`, transform: menuPos.placement === 'top' ? 'translate(-50%, -100%) translateY(-10px)' : 'translate(-50%, 0) translateY(10px)' }}><CommandBox /></div>
+                <div
+                    className="fixed z-[2147483647]"
+                    onMouseDown={(e) => e.preventDefault()}
+                    style={{
+                        left: `${menuPos.x}px`,
+                        top: `${menuPos.y}px`,
+                        transform: menuPos.placement === 'top'
+                            ? 'translate(-50%, -100%) translateY(-10px)'
+                            : 'translate(-50%, 0) translateY(10px)'
+                    }}
+                >
+                    <CommandBox />
+                </div>
             )}
             <div className="fixed bottom-0 left-6 z-[2147483646] flex flex-col items-start pointer-events-none">
-                <div className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" onMouseEnter={(e) => openCoachMenu(e)} onMouseLeave={scheduleCloseCoachMenu}>
+                <div
+                    className="flex flex-col items-center pointer-events-auto group pb-0 pt-10"
+                    onMouseEnter={(e) => openCoachMenu(e)}
+                    onMouseLeave={scheduleCloseCoachMenu}
+                >
                     <div className="relative">
                         {isChatOpen && (
                             <div
