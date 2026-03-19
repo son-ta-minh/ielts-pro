@@ -619,7 +619,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                 <div className="flex-1 overflow-auto no-scrollbar px-4 sm:px-6 pt-4 pb-8 bg-neutral-50/20">
                     {(
                         <div className="space-y-6 animate-in fade-in duration-300">
-                            {!word || word.quality === 'RAW' ? (
+                            {!word ? (
                                 <div className="py-10 text-center text-sm font-semibold text-neutral-400">
                                     There is no data to display. Please refine word.
                                 </div>

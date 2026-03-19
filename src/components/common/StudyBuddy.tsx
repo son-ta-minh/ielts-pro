@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
-import { Bot, NotebookPen, ListCollapse, BringToFront, Blocks, X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star, Sparkles, Send, StopCircle } from 'lucide-react';
+import { User, AppView, WordQuality, VocabularyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, WordFamily } from '../../app/types';
+import { Bot, NotebookPen, ListCollapse, BringToFront, Blocks, X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star, Sparkles, Send, StopCircle, Save } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
@@ -67,6 +67,38 @@ interface ChatTurn {
     id: string;
     role: 'user' | 'assistant';
     content: string;
+    saveContext?: ChatSaveContext;
+}
+
+type ChatSaveSection = 'example' | 'preposition' | 'collocation' | 'paraphrase' | 'wordFamily';
+type ChatCoachActionKey = 'examples' | 'collocations' | 'paraphrase' | 'wordFamily';
+
+interface ChatSaveContext {
+    actionType?: ChatCoachActionKey;
+    targetWord?: string;
+    sourceSelection?: string;
+}
+
+interface ParsedPairItem {
+    item: string;
+    context: string;
+    register?: string;
+}
+
+interface ParsedWordFamilyItem {
+    word: string;
+    note: string;
+    bucket: keyof WordFamily;
+}
+
+interface ChatSaveDraft {
+    turnId: string;
+    sourceText: string;
+    targetWord: string;
+    suggestedSections: ChatSaveSection[];
+    selectedSection: ChatSaveSection;
+    parsedPairs: ParsedPairItem[];
+    parsedWordFamily: ParsedWordFamilyItem[];
 }
 
 interface ChatSpeechChunk {
@@ -243,6 +275,208 @@ const getStudyBuddySttLang = (draft: string, preferredUiLanguage: 'vi' | 'en'): 
 };
 
 const SENTENCE_ENDINGS = new Set(['.', '!', '?', '。', '！', '？']);
+const SAVE_SECTION_LABELS: Record<ChatSaveSection, string> = {
+    example: 'Example',
+    preposition: 'Preposition',
+    collocation: 'Collocation',
+    paraphrase: 'Paraphrase',
+    wordFamily: 'Word Family'
+};
+
+const COACH_ACTION_TO_SAVE_SECTION: Partial<Record<ChatCoachActionKey, ChatSaveSection>> = {
+    examples: 'example',
+    collocations: 'collocation',
+    paraphrase: 'paraphrase',
+    wordFamily: 'wordFamily'
+};
+
+const stripMarkdownForSave = (text: string): string =>
+    text
+        .replace(/```[a-zA-Z0-9_-]*\n?/g, '')
+        .replace(/```/g, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/__(.*?)__/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\r/g, '')
+        .trim();
+
+const normalizeSaveLine = (line: string): string =>
+    stripMarkdownForSave(line)
+        .replace(/^\s*[-*•]+\s*/, '')
+        .replace(/^\s*\d+\.\s*/, '')
+        .replace(/^\s*>\s*/, '')
+        .trim();
+
+const cleanExampleSentence = (line: string): string =>
+    normalizeSaveLine(line)
+        .replace(/^["'`]+/, '')
+        .replace(/["'`]+$/, '')
+        .trim();
+
+const normalizeParaphraseTone = (value?: string): ParaphraseOption['tone'] => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'academic') return 'academic';
+    if (normalized === 'casual') return 'casual';
+    if (normalized === 'intensified') return 'intensified';
+    if (normalized === 'softened') return 'softened';
+    return 'synonym';
+};
+
+const extractRegisterFromParaphraseLine = (item: string, context: string): {
+    item: string;
+    context: string;
+    register?: string;
+} => {
+    const patterns = [
+        /\((academic|casual|synonym)\)\s*$/i,
+        /\b(academic|casual|synonym)\b\s*$/i,
+        /^\((academic|casual|synonym)\)\s*/i,
+        /^(academic|casual|synonym)\b[\s-]*/i
+    ];
+
+    let nextItem = item.trim();
+    let nextContext = context.trim();
+    let register: string | undefined;
+
+    for (const pattern of patterns) {
+        if (!register) {
+            const match = nextItem.match(pattern);
+            if (match) {
+                register = match[1];
+                nextItem = nextItem.replace(pattern, '').trim();
+            }
+        }
+    }
+
+    for (const pattern of patterns) {
+        if (!register) {
+            const match = nextContext.match(pattern);
+            if (match) {
+                register = match[1];
+                nextContext = nextContext.replace(pattern, '').trim();
+            }
+        }
+    }
+
+    if (!register) {
+        const trailingContextMatch = nextContext.match(/[\s,;/-]*\(?\b(academic|casual|synonym)\b\)?\s*$/i);
+        if (trailingContextMatch) {
+            register = trailingContextMatch[1];
+            nextContext = nextContext.replace(/[\s,;/-]*\(?\b(academic|casual|synonym)\b\)?\s*$/i, '').trim();
+        }
+    }
+
+    return {
+        item: nextItem,
+        context: nextContext,
+        register
+    };
+};
+
+const detectWordFamilyBucketFromTag = (value?: string): keyof WordFamily | null => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized === 'noun' || normalized === 'nouns' || normalized === 'n') return 'nouns';
+    if (normalized === 'verb' || normalized === 'verbs' || normalized === 'v') return 'verbs';
+    if (normalized === 'adjective' || normalized === 'adjectives' || normalized === 'adj') return 'adjs';
+    if (normalized === 'adverb' || normalized === 'adverbs' || normalized === 'adv') return 'advs';
+    return null;
+};
+
+const parseStructuredPairs = (text: string): ParsedPairItem[] => {
+    const lines = stripMarkdownForSave(text).split('\n');
+    const items: ParsedPairItem[] = [];
+
+    for (const rawLine of lines) {
+        const line = normalizeSaveLine(rawLine);
+        if (!line) continue;
+        const colonIndex = line.indexOf(':');
+        if (colonIndex === -1) continue;
+        const left = line.slice(0, colonIndex).trim();
+        const context = line.slice(colonIndex + 1).trim();
+        const parsed = extractRegisterFromParaphraseLine(left, context);
+        if (!parsed.item) continue;
+        items.push(parsed);
+    }
+
+    return items;
+};
+
+const countLikelySentences = (text: string): number => {
+    const cleaned = stripMarkdownForSave(text);
+    const matches = cleaned.match(/[.!?](?=\s|$)/g);
+    return matches?.length || 0;
+};
+
+const inferWordFamilyBucket = (word: string, note: string): keyof WordFamily => {
+    const combined = `${word} ${note}`.toLowerCase();
+    if (/\badverb\b|\badv\b/.test(combined) || /ly$/.test(word.toLowerCase())) return 'advs';
+    if (/\badjective\b|\badj\b/.test(combined) || /(ous|ful|less|able|ible|ive|al|ic|ical|ish|ary)$/.test(word.toLowerCase())) return 'adjs';
+    if (/\bverb\b/.test(combined) || /(ate|fy|ise|ize|en)$/.test(word.toLowerCase())) return 'verbs';
+    return 'nouns';
+};
+
+const parseWordFamilyItems = (text: string): ParsedWordFamilyItem[] => {
+    const lines = stripMarkdownForSave(text).split('\n');
+    const items: ParsedWordFamilyItem[] = [];
+
+    for (const rawLine of lines) {
+        const line = normalizeSaveLine(rawLine);
+        if (!line) continue;
+        const colonIndex = line.indexOf(':');
+        const dashIndex = line.indexOf(' - ');
+        const splitIndex = colonIndex >= 0 ? colonIndex : dashIndex;
+        let word = line;
+        let note = '';
+        let bucketFromTag: keyof WordFamily | null = null;
+
+        if (splitIndex >= 0) {
+            word = line.slice(0, splitIndex).trim();
+            note = line.slice(splitIndex + (colonIndex >= 0 ? 1 : 3)).trim();
+        }
+
+        const tagMatch = word.match(/\(([^()]+)\)\s*$/);
+        if (tagMatch) {
+            bucketFromTag = detectWordFamilyBucketFromTag(tagMatch[1]);
+            word = word.replace(/\(([^()]+)\)\s*$/, '').trim();
+        }
+
+        word = word.replace(/\b(noun|verb|adjective|adverb|adj|adv)\b/gi, '').replace(/[()]/g, '').trim();
+        if (!word) continue;
+        items.push({
+            word,
+            note,
+            bucket: bucketFromTag || inferWordFamilyBucket(word, note)
+        });
+    }
+
+    return items;
+};
+
+const getSuggestedSaveSections = (text: string, context?: ChatSaveContext): ChatSaveSection[] => {
+    const suggestions: ChatSaveSection[] = [];
+    const actionSection = context?.actionType ? COACH_ACTION_TO_SAVE_SECTION[context.actionType] : undefined;
+    const parsedPairs = parseStructuredPairs(text);
+    const lineCount = stripMarkdownForSave(text).split('\n').map((line) => normalizeSaveLine(line)).filter(Boolean).length;
+    const sentenceCount = countLikelySentences(text);
+
+    if (actionSection) suggestions.push(actionSection);
+    if ((lineCount > 1 || sentenceCount > 1) && parsedPairs.length === 0) suggestions.push('example');
+    if (parsedPairs.length > 0) suggestions.push('collocation', 'paraphrase', 'preposition');
+    if ((context?.actionType === 'wordFamily' || lineCount > 1) && parseWordFamilyItems(text).length > 0) suggestions.push('wordFamily');
+    if (suggestions.length === 0) suggestions.push('example');
+
+    return Array.from(new Set(suggestions));
+};
+
+const mergeTextBlock = (current: string | undefined, incoming: string): string => {
+    const normalizedIncoming = stripMarkdownForSave(incoming);
+    if (!normalizedIncoming) return current || '';
+    const normalizedCurrent = stripMarkdownForSave(current || '');
+    if (!normalizedCurrent) return normalizedIncoming;
+    if (normalizedCurrent.toLowerCase().includes(normalizedIncoming.toLowerCase())) return current || normalizedCurrent;
+    return `${current?.trim() || normalizedCurrent}\n${normalizedIncoming}`.trim();
+};
 
 const splitSpeakableSentences = (text: string): { sentences: string[]; remainder: string } => {
     const sentences: string[] = [];
@@ -370,19 +604,41 @@ const splitMixedLanguageSegments = (text: string): Array<{ lang: 'vi' | 'en'; te
 const ChatHistoryList = React.memo(({
     chatHistory,
     isChatLoading,
+    onOpenSaveModal,
+    hasChatSelection,
 }: {
     chatHistory: ChatTurn[];
     isChatLoading: boolean;
+    onOpenSaveModal: (turn: ChatTurn) => void;
+    hasChatSelection: boolean;
 }) => (
     <>
         {chatHistory.map((turn) => (
             <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
+                <div className={`relative max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
                     turn.role === 'user'
                         ? 'bg-white border border-neutral-200 text-neutral-900 rounded-br-md'
                         : 'bg-white border border-neutral-200 text-neutral-900 rounded-bl-md'
                 }`}>
-                    <div className={`leading-relaxed break-words select-text text-neutral-900 ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
+                    {turn.role === 'assistant' && !!turn.content.trim() && (hasChatSelection || !!turn.saveContext?.targetWord) && (
+                        <button
+                            type="button"
+                            onClick={() => onOpenSaveModal(turn)}
+                            className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
+                            title="Save this response into a word"
+                        >
+                            <Save size={11} />
+                            Save
+                        </button>
+                    )}
+                    {turn.role === 'assistant' && turn.saveContext?.targetWord && (
+                        <div className="mb-2 flex items-center gap-2 pr-20">
+                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-blue-700">
+                                Target: {turn.saveContext.targetWord}
+                            </span>
+                        </div>
+                    )}
+                    <div className={`leading-relaxed break-words select-text text-neutral-900 ${turn.role === 'assistant' ? 'pr-20 [&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
                         <ReactMarkdown
                             components={{
                                 p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
@@ -467,6 +723,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [isChatListening, setIsChatListening] = useState(false);
     const [activeChatCoachAction, setActiveChatCoachAction] = useState<string | null>(null);
     const [coachSelectionText, setCoachSelectionText] = useState('');
+    const [hasChatTextSelection, setHasChatTextSelection] = useState(false);
+    const [chatSaveDraft, setChatSaveDraft] = useState<ChatSaveDraft | null>(null);
+    const [isSavingChatSnippet, setIsSavingChatSnippet] = useState(false);
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
     const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
     
@@ -557,6 +816,196 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         if (!word || !user.id) return;
         const exists = await dataStore.findWordByText(user.id, word);
         setIsAlreadyInLibrary(!!exists);
+    };
+
+    const getChatPanelSelectionText = () => {
+        if (typeof window === 'undefined') return '';
+        const selection = window.getSelection();
+        const text = selection?.toString().trim() || '';
+        if (!text) return '';
+        const anchorNode = selection?.anchorNode;
+        if (!anchorNode || !chatPanelRef.current?.contains(anchorNode)) return '';
+        return text;
+    };
+
+    const createWordForChatSave = async (targetWord: string): Promise<VocabularyItem> => {
+        const baseItem = await createNewWord(
+            targetWord,
+            '',
+            '',
+            '',
+            '',
+            ['coach-saved'],
+            false,
+            false,
+            false,
+            targetWord.includes(' '),
+            false
+        );
+
+        return {
+            ...baseItem,
+            userId: user.id,
+            quality: WordQuality.RAW,
+            source: 'manual',
+            isPassive: false
+        };
+    };
+
+    const openChatSaveModal = (turn: ChatTurn) => {
+        const selectedSnippet = getChatPanelSelectionText();
+        const sourceText = selectedSnippet && turn.content.includes(selectedSnippet)
+            ? selectedSnippet
+            : (turn.content || turn.saveContext?.sourceSelection || '').trim();
+
+        const suggestedSections = getSuggestedSaveSections(sourceText, turn.saveContext);
+        setChatSaveDraft({
+            turnId: turn.id,
+            sourceText,
+            targetWord: turn.saveContext?.targetWord || '',
+            suggestedSections,
+            selectedSection: suggestedSections[0] || 'example',
+            parsedPairs: parseStructuredPairs(sourceText),
+            parsedWordFamily: parseWordFamilyItems(sourceText)
+        });
+    };
+
+    const handleSaveChatSnippet = async () => {
+        if (!chatSaveDraft || isSavingChatSnippet) return;
+        const targetWord = chatSaveDraft.targetWord.trim();
+        const sourceText = stripMarkdownForSave(chatSaveDraft.sourceText);
+        if (!targetWord) {
+            showToast('Please enter a target word first.', 'error');
+            return;
+        }
+        if (!sourceText) {
+            showToast('No content available to save.', 'error');
+            return;
+        }
+
+        setIsSavingChatSnippet(true);
+        try {
+            let word = await dataStore.findWordByText(user.id, targetWord);
+            if (!word) {
+                word = await createWordForChatSave(targetWord);
+            }
+
+            const updatedWord: VocabularyItem = {
+                ...word,
+                updatedAt: Date.now()
+            };
+
+            if (chatSaveDraft.selectedSection === 'example') {
+                const cleanedExamples = sourceText
+                    .split('\n')
+                    .map((line) => cleanExampleSentence(line))
+                    .filter(Boolean)
+                    .join('\n');
+                updatedWord.example = mergeTextBlock(updatedWord.example, cleanedExamples);
+            }
+
+            if (chatSaveDraft.selectedSection === 'collocation') {
+                const nextItems = chatSaveDraft.parsedPairs.length > 0
+                    ? chatSaveDraft.parsedPairs
+                    : sourceText.split('\n').map((line) => ({ item: normalizeSaveLine(line), context: '' })).filter((item) => item.item);
+                const existing = [...(updatedWord.collocationsArray || [])];
+                nextItems.forEach(({ item, context }) => {
+                    const normalized = item.trim().toLowerCase();
+                    const index = existing.findIndex((entry) => entry.text.trim().toLowerCase() === normalized);
+                    const nextEntry: CollocationDetail = { text: item.trim(), d: context.trim(), isIgnored: false };
+                    if (index >= 0) {
+                        existing[index] = {
+                            ...existing[index],
+                            d: mergeTextBlock(existing[index].d, nextEntry.d || ''),
+                            isIgnored: false
+                        };
+                    } else {
+                        existing.push(nextEntry);
+                    }
+                });
+                updatedWord.collocationsArray = existing;
+                updatedWord.collocations = existing.map((item) => item.text).join('\n');
+            }
+
+            if (chatSaveDraft.selectedSection === 'paraphrase') {
+                const nextItems = chatSaveDraft.parsedPairs.length > 0
+                    ? chatSaveDraft.parsedPairs
+                    : sourceText.split('\n').map((line) => ({ item: normalizeSaveLine(line), context: '' })).filter((item) => item.item);
+                const existing = [...(updatedWord.paraphrases || [])];
+                nextItems.forEach(({ item, context, register }) => {
+                    const normalized = item.trim().toLowerCase();
+                    const index = existing.findIndex((entry) => entry.word.trim().toLowerCase() === normalized);
+                    const nextEntry: ParaphraseOption = {
+                        word: item.trim(),
+                        context: context.trim(),
+                        tone: normalizeParaphraseTone(register),
+                        isIgnored: false
+                    };
+                    if (index >= 0) {
+                        existing[index] = {
+                            ...existing[index],
+                            context: mergeTextBlock(existing[index].context, nextEntry.context || ''),
+                            tone: nextEntry.tone || existing[index].tone || 'synonym',
+                            isIgnored: false
+                        };
+                    } else {
+                        existing.push(nextEntry);
+                    }
+                });
+                updatedWord.paraphrases = existing;
+            }
+
+            if (chatSaveDraft.selectedSection === 'preposition') {
+                const nextItems = chatSaveDraft.parsedPairs.length > 0
+                    ? chatSaveDraft.parsedPairs
+                    : sourceText.split('\n').map((line) => ({ item: normalizeSaveLine(line), context: '' })).filter((item) => item.item);
+                const existing = [...(updatedWord.prepositions || [])];
+                nextItems.forEach(({ item, context }) => {
+                    const normalized = item.trim().toLowerCase();
+                    const index = existing.findIndex((entry) => entry.prep.trim().toLowerCase() === normalized);
+                    const nextEntry: PrepositionPattern = { prep: item.trim(), usage: context.trim(), isIgnored: false };
+                    if (index >= 0) {
+                        existing[index] = {
+                            ...existing[index],
+                            usage: mergeTextBlock(existing[index].usage, nextEntry.usage || ''),
+                            isIgnored: false
+                        };
+                    } else {
+                        existing.push(nextEntry);
+                    }
+                });
+                updatedWord.prepositions = existing;
+            }
+
+            if (chatSaveDraft.selectedSection === 'wordFamily') {
+                const existingFamily: WordFamily = updatedWord.wordFamily || { nouns: [], verbs: [], adjs: [], advs: [] };
+                const nextItems = chatSaveDraft.parsedWordFamily.length > 0
+                    ? chatSaveDraft.parsedWordFamily
+                    : sourceText.split('\n')
+                        .map((line) => normalizeSaveLine(line))
+                        .filter(Boolean)
+                        .map((word) => ({ word, note: '', bucket: inferWordFamilyBucket(word, '') as keyof WordFamily }));
+
+                nextItems.forEach(({ word: familyWord, bucket }) => {
+                    const list = [...(existingFamily[bucket] || [])];
+                    const exists = list.some((entry) => entry.word.trim().toLowerCase() === familyWord.trim().toLowerCase());
+                    if (!exists) {
+                        list.push({ word: familyWord.trim(), isIgnored: false });
+                        existingFamily[bucket] = list;
+                    }
+                });
+                updatedWord.wordFamily = existingFamily;
+            }
+
+            await dataStore.saveWord(updatedWord);
+            showToast(`Saved to ${targetWord}.`, 'success');
+            setChatSaveDraft(null);
+        } catch (error) {
+            console.error(error);
+            showToast('Failed to save this content.', 'error');
+        } finally {
+            setIsSavingChatSnippet(false);
+        }
     };
 
     const stopChatStream = () => {
@@ -711,6 +1160,16 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         if (!chatScrollRef.current) return;
         chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }, [chatHistory, isChatLoading, isChatOpen]);
+
+    useEffect(() => {
+        const handleSelectionChange = () => {
+            const text = getChatPanelSelectionText();
+            setHasChatTextSelection(!!text);
+        };
+
+        document.addEventListener('selectionchange', handleSelectionChange);
+        return () => document.removeEventListener('selectionchange', handleSelectionChange);
+    }, []);
 
     useEffect(() => {
         const shouldShow = isAudioPlaying && !isSingleWordAudio;
@@ -1507,7 +1966,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const handleChatCoachPromptToChat = async (
-        actionKey: 'examples' | 'collocations' | 'paraphrase',
+        actionKey: ChatCoachActionKey,
         promptLabel: string,
         promptBuilder: (selectedText: string) => string
     ) => {
@@ -1518,13 +1977,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         const userTurn = createChatTurn('user', `${promptLabel}: ${selectedText}`);
         const assistantId = `assistant-${actionKey}-${Date.now()}`;
         const aiUrl = getStudyBuddyAiUrl(config);
+        const saveContext: ChatSaveContext = {
+            actionType: actionKey,
+            targetWord: selectedText,
+            sourceSelection: selectedText
+        };
 
         setActiveChatCoachAction(actionKey);
         setIsChatLoading(true);
         setChatHistory((current) => [
             ...current,
             userTurn,
-            { id: assistantId, role: 'assistant', content: '' }
+            { id: assistantId, role: 'assistant', content: '', saveContext }
         ]);
 
         let controller: AbortController | undefined;
@@ -1562,7 +2026,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             const updateAssistant = (text: string) => {
                 setChatHistory((current) =>
                     current.map((turn) =>
-                        turn.id === assistantId ? { ...turn, content: text } : turn
+                        turn.id === assistantId ? { ...turn, content: text, saveContext } : turn
                     )
                 );
             };
@@ -1889,7 +2353,11 @@ ${baseRules}
         return `Give natural paraphrases for "${selectedText}".
 
 ${baseRules}
-- Each bullet = 1 paraphrase`;
+- Format: - **paraphrase**(Register): short explanation
+- Register must be one of: Academic, Casual, Synonym
+- Always put Register immediately after the paraphrase, before the colon
+- Do NOT put Register at the end of the explanation
+- If unsure, use Synonym`;
     };
 
     const ChatCoachActionBar = () => {
@@ -1974,7 +2442,7 @@ ${baseRules}
                     <button
                         type="button"
                         onClick={() => handleChatCoachPromptToChat(
-                            'paraphrase',
+                            'wordFamily',
                             'Word Family',
                             (selectedText) => `Give word family forms for "${selectedText}" (noun, verb, adjective, adverb if possible).
 
@@ -1982,13 +2450,14 @@ Rules:
 - English only
 - Very concise
 - Bullet list format (-)
-- Each line: word form + short meaning`
+- Each line: word form (part of speech): short meaning
+- Part of speech must be one of: noun, verb, adjective, adverb`
                         )}
                         disabled={!hasSelection || !!activeChatCoachAction}
                         className={`${baseButtonClass} bg-emerald-50 text-emerald-600 hover:bg-emerald-100`}
                         title="Word Family"
                     >
-                        <ListCollapse size={14} />
+                        {activeChatCoachAction === 'wordFamily' ? <Loader2 size={14} className="animate-spin" /> : <ListCollapse size={14} />}
                     </button>
                 </div>
             </div>
@@ -2243,7 +2712,7 @@ Rules:
                         {isChatOpen && (
                             <div
                                 ref={chatPanelRef}
-                                className="pointer-events-auto absolute bottom-20 left-0 z-50 w-[36rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200"
+                                className="pointer-events-auto absolute bottom-20 left-0 z-50 w-[36rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200 relative"
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onMouseEnter={(e) => e.stopPropagation()}
                             >
@@ -2310,7 +2779,12 @@ Rules:
                                     className="max-h-[24rem] overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)] select-text"
                                     onMouseDown={(e) => e.stopPropagation()}
                                 >
-                                    <ChatHistoryList chatHistory={chatHistory} isChatLoading={isChatLoading} />
+                                    <ChatHistoryList
+                                        chatHistory={chatHistory}
+                                        isChatLoading={isChatLoading}
+                                        onOpenSaveModal={openChatSaveModal}
+                                        hasChatSelection={hasChatTextSelection}
+                                    />
                                 </div>
 
                                 <ChatCoachActionBar />
@@ -2366,6 +2840,129 @@ Rules:
                                         </div>
                                     </div>
                                 </div>
+
+                                {chatSaveDraft && (
+                                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/75 p-4 backdrop-blur-sm">
+                                        <div className="w-full max-w-md rounded-[1.75rem] border border-neutral-200 bg-white p-5 shadow-2xl">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div>
+                                                    <p className="text-xs font-black uppercase tracking-[0.18em] text-neutral-500">Save To Word</p>
+                                                    <p className="mt-1 text-sm font-bold text-neutral-900">Chon phan de luu vao word</p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setChatSaveDraft(null)}
+                                                    className="rounded-xl p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+
+                                            <div className="mt-4 space-y-4">
+                                                <div>
+                                                    <label className="mb-2 block text-[11px] font-black uppercase tracking-wide text-neutral-500">
+                                                        Target Word
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={chatSaveDraft.targetWord}
+                                                        onChange={(e) => setChatSaveDraft((current) => current ? { ...current, targetWord: e.target.value } : current)}
+                                                        placeholder="Nhap word can luu vao"
+                                                        className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-900 outline-none transition-colors focus:border-neutral-900 focus:bg-white"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="mb-2 block text-[11px] font-black uppercase tracking-wide text-neutral-500">
+                                                        Save Section
+                                                    </label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {(Object.keys(SAVE_SECTION_LABELS) as ChatSaveSection[]).map((section) => {
+                                                            const isActive = chatSaveDraft.selectedSection === section;
+                                                            const isSuggested = chatSaveDraft.suggestedSections.includes(section);
+                                                            return (
+                                                                <button
+                                                                    key={section}
+                                                                    type="button"
+                                                                    onClick={() => setChatSaveDraft((current) => current ? { ...current, selectedSection: section } : current)}
+                                                                    className={`rounded-full border px-3 py-2 text-[11px] font-black uppercase tracking-wide transition-colors ${
+                                                                        isActive
+                                                                            ? 'border-neutral-900 bg-neutral-900 text-white'
+                                                                            : isSuggested
+                                                                                ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300'
+                                                                                : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900'
+                                                                    }`}
+                                                                >
+                                                                    {SAVE_SECTION_LABELS[section]}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <label className="mb-2 block text-[11px] font-black uppercase tracking-wide text-neutral-500">
+                                                        Preview
+                                                    </label>
+                                                    <div className="max-h-48 overflow-y-auto rounded-2xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-700">
+                                                        {chatSaveDraft.selectedSection === 'example' && (
+                                                            <p className="whitespace-pre-wrap leading-relaxed">{chatSaveDraft.sourceText}</p>
+                                                        )}
+                                                        {(chatSaveDraft.selectedSection === 'collocation' || chatSaveDraft.selectedSection === 'paraphrase' || chatSaveDraft.selectedSection === 'preposition') && (
+                                                            <div className="space-y-2">
+                                                                {(chatSaveDraft.parsedPairs.length > 0
+                                                                    ? chatSaveDraft.parsedPairs
+                                                                    : chatSaveDraft.sourceText.split('\n').map((line) => ({ item: normalizeSaveLine(line), context: '' })).filter((item) => item.item)
+                                                                ).map((item, index) => (
+                                                                    <div key={`${item.item}-${index}`} className="rounded-xl border border-neutral-200 bg-white px-3 py-2">
+                                                                        <p className="font-bold text-neutral-900">{item.item}</p>
+                                                                        {!!item.context && <p className="mt-1 text-neutral-600">{item.context}</p>}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        {chatSaveDraft.selectedSection === 'wordFamily' && (
+                                                            <div className="space-y-2">
+                                                                {(chatSaveDraft.parsedWordFamily.length > 0
+                                                                    ? chatSaveDraft.parsedWordFamily
+                                                                    : chatSaveDraft.sourceText.split('\n').map((line) => ({
+                                                                        word: normalizeSaveLine(line),
+                                                                        note: '',
+                                                                        bucket: inferWordFamilyBucket(normalizeSaveLine(line), '')
+                                                                    })).filter((item) => item.word)
+                                                                ).map((item, index) => (
+                                                                    <div key={`${item.word}-${index}`} className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-2">
+                                                                        <p className="font-bold text-neutral-900">{item.word}</p>
+                                                                        <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">{item.bucket}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setChatSaveDraft(null)}
+                                                        className="rounded-2xl border border-neutral-200 px-4 py-3 text-[11px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSaveChatSnippet}
+                                                        disabled={isSavingChatSnippet}
+                                                        className="inline-flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                                    >
+                                                        {isSavingChatSnippet ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                                                        Save
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                         {isOpen && !menuPos && (

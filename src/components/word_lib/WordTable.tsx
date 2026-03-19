@@ -15,6 +15,15 @@ import { TagTreeNode } from '../common/TagBrowser';
 import * as db from '../../app/db';
 import { runWordRefineWithRetry, WordRefineProgressSnapshot } from '../../services/wordRefineApi';
 
+const MAX_API_REFINE_HISTORY_ITEMS = 120;
+
+const compactRefineSnapshotForHistory = (snapshot: WordRefineProgressSnapshot): WordRefineProgressSnapshot => ({
+  ...snapshot,
+  rawText: snapshot.rawText
+    ? `${snapshot.rawText.slice(0, 800)}${snapshot.rawText.length > 800 ? '\n...[truncated]' : ''}`
+    : undefined
+});
+
 // Define interface for persisted filter settings to fix TypeScript inference errors
 interface PersistedFilters {
     query?: string;
@@ -140,6 +149,7 @@ const WordTable: React.FC<Props> = ({
   const [isApiRefining, setIsApiRefining] = useState(false);
   const [apiRefineProgress, setApiRefineProgress] = useState<WordRefineProgressSnapshot | null>(null);
   const [apiRefineHistory, setApiRefineHistory] = useState<WordRefineProgressSnapshot[]>([]);
+  const apiRefineFlushedCountRef = useRef(0);
   const [isApiRefineLogOpen, setIsApiRefineLogOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info', message: string} | null>(null);
   
@@ -522,6 +532,7 @@ const WordTable: React.FC<Props> = ({
     setApiRefineProgress(null);
     setApiRefineHistory([]);
     setIsApiRefineLogOpen(false);
+    apiRefineFlushedCountRef.current = 0;
     setNotification({ type: 'info', message: `Refining ${selectedWordsToRefine.length} word(s) by API...` });
 
     try {
@@ -532,13 +543,23 @@ const WordTable: React.FC<Props> = ({
           signal: controller.signal,
           onProgress: (snapshot) => {
             setApiRefineProgress(snapshot);
-            setApiRefineHistory((current) => [...current, snapshot]);
+            setApiRefineHistory((current) => {
+              const next = [...current, compactRefineSnapshotForHistory(snapshot)];
+              return next.length > MAX_API_REFINE_HISTORY_ITEMS
+                ? next.slice(next.length - MAX_API_REFINE_HISTORY_ITEMS)
+                : next;
+            });
           },
-          onWordValidated: async ({ word, results: wordResults, wordIndex, totalWords }) => {
+          onWordValidated: async ({ word, results: wordResults, totalWords }) => {
             await applyAiRefinementResults(wordResults, [word], {
               clearSelection: false,
               closeModal: false,
-              successMessage: `Flushed ${wordIndex + 1}/${totalWords}: "${word.word}".`
+              successMessage: (() => {
+                apiRefineFlushedCountRef.current += 1;
+                const flushed = apiRefineFlushedCountRef.current;
+                const remaining = Math.max(totalWords - flushed, 0);
+                return `Flushed ${flushed}/${totalWords}, remaining ${remaining}: "${word.word}".`;
+              })()
             });
           }
         }

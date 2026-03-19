@@ -19,6 +19,22 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - If the headword (hw) is a PHRASE, PHRASAL VERB, or IDIOM (e.g., "break the ice"):
       - DO NOT generate 'fam' (word family). Return an empty object {} or null.
       - DO NOT generate 'col' (collocations). Return an empty array [].
+    - A-MUST / IMPORTANT:
+      - 'reg' MUST be ONLY one of: "academic", "casual", "neutral".
+      - NEVER output any other register label such as "formal", "informal", "synonym", "professional", or "general".
+    - A-MUST / IMPORTANT:
+      - If the headword (hw) is a SINGLE WORD, 'col' MUST NOT be empty.
+      - For SINGLE-WORD headwords, always return at least 3 collocations in 'col'.
+      - Every collocation text MUST explicitly contain the exact headword itself.
+    - A-MUST / IMPORTANT:
+      - In 'para', 't' (tone) MUST be ONLY one of: "academic", "casual", "synonym".
+      - NEVER output any other tone labels.
+    - A-MUST / IMPORTANT:
+      - In 'prep', every usage/context example MUST explicitly contain the exact same preposition "p".
+      - Example: if "p" is "against", then "c" MUST contain the word "against".
+      - 'prep' items MUST include BOTH fields: "p" and "c". NEVER return only the preposition without context.
+      - If there is no natural dependent preposition with a usable context/example, return [].
+      - Do NOT paraphrase or omit the preposition inside the usage/context field.
     - Do NOT generate 'para' (paraphrase) for orthographic variants (e.g., space vs no space, hyphen vs no hyphen).
 
     RESPONSE OPTIMIZATION:
@@ -32,13 +48,14 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - ipa_uk: Received Pronunciation (UK) IPA. (Omit if "pron_sim" is "same").
     - pron_sim: Similarity between US and UK pronunciation. MUST be: "same", "near", or "different".
     - m: Definition of the headword in ${nativeLanguage}.
-    - reg: Register. MUST be one of: "academic", "casual", or "neutral".
+    - reg: Register. A-MUST / IMPORTANT: MUST be ONLY one of: "academic", "casual", or "neutral". NEVER output any other register label.
     - ex: A high-quality example sentence using the headword.
-    - col: Array of 3-5 collocations. ONLY for single-word headwords. Each "text" MUST be a natural collocation that explicitly contains the exact headword itself. Do NOT return synonyms, near-synonyms, or standalone adjectives/adverbs that do not include the headword. Items: {"text": "phrase containing the headword", "d": "minimal descriptive cue for recall (5-10 words)"}.
+    - col: Array of 3-5 collocations. ONLY for single-word headwords. A-MUST / IMPORTANT: for every single-word headword, "col" MUST NOT be empty. Each "text" MUST be a natural collocation that explicitly contains the exact headword itself. Do NOT return synonyms, near-synonyms, or standalone adjectives/adverbs that do not include the headword. Items: {"text": "phrase containing the headword", "d": "minimal descriptive cue for recall (5-10 words)"}.
     - idm: Array of 1-3 common idioms containing the headword (only if hw is a single word). Items: {"text": "phrase", "d": "descriptive cue"}.
-    - prep: Array of dependent prepositions. If the headword does NOT take a fixed preposition, return an empty array []. Format: [{"p": "preposition", "c": "short usage example"}]. The usage example in "c" MUST explicitly contain the exact preposition "p".
+    - prep: Array of dependent prepositions. If the headword does NOT take a fixed preposition, return an empty array []. Format: [{"p": "preposition", "c": "short usage example"}]. A-MUST / IMPORTANT: every item MUST include BOTH "p" and "c". The usage example in "c" MUST explicitly contain the exact same preposition "p". Example: if "p" = "against", then "c" must contain "against".
     - para: Controlled paraphrase system (max 5 items total). ONLY generate categories if a natural equivalent exists. Try to force all tone types but avoid unnatural versions.        - Each item MUST be an object: {"w": "word_or_phrase", "t": "tone_type", "c": "recall cue"}.
-        - 't' (tone) MUST be one of: "academic", "casual", "synonym" (no hypernyms or hyponyms)
+        - A-MUST / IMPORTANT: 't' (tone) MUST be ONLY one of: "academic", "casual", "synonym"
+        - NEVER output any other tone label
         - 'c' (context) = a short (2-5 words) situational recall cue (e.g., "job interview", "arguing with friend").
     - fam: Word family. ONLY for single-word headwords. 'n'=nouns, 'v'=verbs, 'j'=adjectives, 'adv'=adverbs. Format: [{"w": "word"}].
     - type: The grammatical classification. MUST be one of: "idiom", "phrasal_verb", "collocation", "phrase", "vocabulary", "irregular_verb".

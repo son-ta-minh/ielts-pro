@@ -84,9 +84,11 @@ const Sidebar: React.FC<AppLayoutProps & {
     return () => clearInterval(interval);
   }, [nextAutoBackupTime, serverStatus, triggerServerBackup, hasUnsavedChanges]);
 
-  const syncTooltip = nextAutoBackupTime 
-    ? `Auto-sync in ${timeLeft}s...` 
-    : (hasUnsavedChanges ? "Unsaved Changes - Sync Now" : "Sync to Server");
+  const syncTooltip = serverStatus !== 'connected'
+    ? 'Server disconnected'
+    : nextAutoBackupTime
+      ? `Auto-sync in ${timeLeft}s...`
+      : (hasUnsavedChanges ? "Unsaved Changes - Sync Now" : "Sync to Server");
 
   if (!currentUser) return null;
 
@@ -112,18 +114,27 @@ const Sidebar: React.FC<AppLayoutProps & {
              <button onClick={() => onNavigate('PLANNING')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Study Plan"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Spiral%20Calendar.png" alt="Planning" className="w-6 h-6 object-contain" /></button>
              <button onClick={() => onNavigate('DISCOVER')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100" title="Games & Discover"><img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Activities/Video%20Game.png" alt="Games" className="w-6 h-6 object-contain" /></button>
              {/* <button onClick={() => onNavigate('SEARCH')} className="p-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-all active:scale-90 border border-neutral-100 text-neutral-700 hover:text-neutral-900" title="Search"><Search size={22} /></button> */}
-             {serverStatus === 'connected' && (
-                 <button 
-                    onClick={() => handleBackup()} 
-                    className={`p-2 rounded-xl transition-all active:scale-90 border animate-in fade-in relative ${hasUnsavedChanges ? 'bg-orange-50 border-orange-200 shadow-[0_0_10px_rgba(249,115,22,0.4)]' : 'bg-neutral-50 border-neutral-100 hover:bg-neutral-100'}`} 
-                    title={syncTooltip}
-                >
-                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-6 h-6 object-contain" />
-                    {hasUnsavedChanges && (
-                         <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-400' : 'bg-orange-500 animate-pulse'}`}></span>
-                    )}
-                 </button>
-             )}
+             <button
+                onClick={() => {
+                  if (serverStatus === 'connected') {
+                    handleBackup();
+                  }
+                }}
+                disabled={serverStatus !== 'connected'}
+                className={`p-2 rounded-xl transition-all active:scale-90 border animate-in fade-in relative ${
+                  serverStatus !== 'connected'
+                    ? 'bg-neutral-50 border-neutral-100 opacity-45 cursor-not-allowed'
+                    : hasUnsavedChanges
+                      ? 'bg-orange-50 border-orange-200 shadow-[0_0_10px_rgba(249,115,22,0.4)]'
+                      : 'bg-neutral-50 border-neutral-100 hover:bg-neutral-100'
+                }`}
+                title={syncTooltip}
+            >
+                <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Symbols/Up%20Arrow.png" alt="Sync" className="w-6 h-6 object-contain" />
+                {serverStatus === 'connected' && hasUnsavedChanges && (
+                     <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white -mt-1 -mr-1 ${nextAutoBackupTime ? 'bg-green-400' : 'bg-orange-500 animate-pulse'}`}></span>
+                )}
+             </button>
            </div>
         </div>
         <nav className="flex-1 overflow-y-auto space-y-1">

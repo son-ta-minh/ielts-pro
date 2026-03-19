@@ -76,7 +76,7 @@ export const normalizeAiResponse = (shortData: any): any => {
         normalizedPrepsArray = mapPrep(shortData.prep);
     } 
 
-    const rawCollocs = shortData.col || shortData.collocations;
+    const rawCollocs = shortData.col || shortData.collocationsArray || shortData.collocations;
     let collocationsArray: CollocationDetail[] | undefined;
     let collocationsString: string | undefined;
 
@@ -89,13 +89,14 @@ export const normalizeAiResponse = (shortData: any): any => {
         collocationsString = rawCollocs;
     }
 
-    const rawIdioms = shortData.idm || shortData.idioms;
+    const rawIdioms = shortData.idm || shortData.idiomsList || shortData.idioms;
     let idiomsList: CollocationDetail[] | undefined;
     if (Array.isArray(rawIdioms)) {
         idiomsList = mapColloc(rawIdioms);
     }
 
-    const headword = shortData.hw || shortData.headword;
+    const original = shortData.og || shortData.original;
+    const headword = shortData.hw || shortData.headword || original;
     const pronSim = shortData.pron_sim || shortData.pronSim || shortData.ps;
     const ipaUs = shortData.ipa_us || shortData.ipaUs || shortData.ipa || shortData.i;
     
@@ -110,7 +111,7 @@ export const normalizeAiResponse = (shortData: any): any => {
     };
 
     return {
-        original: shortData.og || shortData.original || headword, // Default to headword if og omitted
+        original: original || headword, // Default to headword if og omitted
         headword: headword,
         ipaUs: ipaUs,
         // If ipa_uk omitted and pronSim is 'same', clone from ipaUs
