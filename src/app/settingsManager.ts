@@ -227,6 +227,21 @@ export const getServerUrl = (config: SystemConfig): string => {
     return `${protocol}://${config.server.host}:${config.server.port}`;
 };
 
+const STUDY_BUDDY_AI_PORT = 63392;
+
+export const getStudyBuddyAiUrl = (config: SystemConfig): string => {
+  if (config.server.useCustomUrl && config.server.customUrl) {
+    try {
+      const parsed = new URL(config.server.customUrl);
+      return `http://${parsed.hostname}:${STUDY_BUDDY_AI_PORT}`;
+    } catch {
+      // Fall through to host-based construction.
+    }
+  }
+
+  return `http://${config.server.host}:${STUDY_BUDDY_AI_PORT}`;
+};
+
 export function getConfig(): SystemConfig {
   const storedStr = localStorage.getItem(CONFIG_KEY);
   const storedJson = storedStr ? JSON.parse(storedStr) : null;

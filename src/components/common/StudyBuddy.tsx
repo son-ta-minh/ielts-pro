@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
-import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star } from 'lucide-react';
-import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
-import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage } from '../../utils/audio';
+import { X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star, Sparkles, Send, StopCircle } from 'lucide-react';
+import { getConfig, SystemConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
+import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
@@ -11,9 +11,11 @@ import { createNewWord, calculateComplexity, calculateMasteryScore } from '../..
 import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { ToolsModal } from '../tools/ToolsModal';
+import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
+const CHAT_AUDIO_PREFETCH_AHEAD = 2;
 
 interface Props {
     user: User;
@@ -52,6 +54,19 @@ interface CambridgeSimpleResult {
     url?: string;
     word?: string;
     pronunciations?: CambridgePronunciation[];
+}
+
+interface ChatTurn {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+}
+
+interface ChatSpeechChunk {
+    lang: 'vi' | 'en';
+    text: string;
+    preloadedBlob?: Blob | null;
+    prefetchPromise?: Promise<Blob | null> | null;
 }
 
 // External helper to show any message in StudyBuddy
@@ -119,6 +134,157 @@ const AVATAR_DEFINITIONS = {
     unicorn: { url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Unicorn.png', bg: 'bg-purple-100' },
 };
 
+const STUDY_BUDDY_SYSTEM_PROMPT = 'You are StudyBuddy, an IELTS and English learning coach. Give practical, concise help with clear examples. Prefer simple formatting and answer in Vietnamese when the learner writes in Vietnamese.';
+
+const createChatTurn = (role: ChatTurn['role'], content: string): ChatTurn => ({
+    id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role,
+    content
+});
+
+const escapeHtml = (text: string) =>
+    text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+const renderChatText = (text: string) =>
+    escapeHtml(text)
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br/>');
+
+const getStudyBuddySttLang = (draft: string, preferredUiLanguage: 'vi' | 'en'): string => {
+    const cleanDraft = draft.trim();
+    const detected = cleanDraft ? detectLanguage(cleanDraft) : preferredUiLanguage;
+    return detected === 'vi' ? 'vi-VN' : 'en-US';
+};
+
+const SENTENCE_ENDINGS = new Set(['.', '!', '?', '。', '！', '？']);
+
+const splitSpeakableSentences = (text: string): { sentences: string[]; remainder: string } => {
+    const sentences: string[] = [];
+    let segmentStart = 0;
+    let i = 0;
+
+    while (i < text.length) {
+        const char = text[i];
+        if (SENTENCE_ENDINGS.has(char)) {
+            let end = i + 1;
+            while (end < text.length && /["')\]]/.test(text[end])) end += 1;
+            if (end >= text.length || /\s/.test(text[end])) {
+                const sentence = text.slice(segmentStart, end).trim();
+                if (sentence) sentences.push(sentence);
+                segmentStart = end;
+                i = end;
+                continue;
+            }
+        } else if (char === '\n') {
+            const sentence = text.slice(segmentStart, i).trim();
+            if (sentence) sentences.push(sentence);
+            segmentStart = i + 1;
+        }
+        i += 1;
+    }
+
+    return {
+        sentences,
+        remainder: text.slice(segmentStart).trim()
+    };
+};
+
+const VIETNAMESE_CHAR_REGEX = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+const ENGLISH_CHAR_REGEX = /[a-z]/i;
+const SPECIAL_CHUNK_SPLIT_REGEX = /(\s*[()"'“”‘’.,!?;:]+\s*)/g;
+
+const detectSegmentLanguage = (chunk: string): 'vi' | 'en' | null => {
+    const normalized = chunk.trim();
+    if (!normalized) return null;
+    if (VIETNAMESE_CHAR_REGEX.test(normalized)) return 'vi';
+
+    const words = normalized.match(/[A-Za-zÀ-ỹĐđ]+(?:['’-][A-Za-zÀ-ỹĐđ]+)*/g) || [];
+    if (words.length === 0) return null;
+
+    let englishLikeCount = 0;
+    for (const word of words) {
+        if (ENGLISH_CHAR_REGEX.test(word)) {
+            englishLikeCount += 1;
+        }
+    }
+
+    const englishRatio = englishLikeCount / words.length;
+    if (englishRatio >= 0.6) return 'en';
+    if (englishLikeCount > 0) return 'vi';
+    return null;
+};
+
+const splitMixedLanguageSegments = (text: string): Array<{ lang: 'vi' | 'en'; text: string }> => {
+    const normalized = text
+        .replace(/\*\*/g, '')
+        .replace(/`/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!normalized) return [];
+
+    const tokens = normalized
+        .split(SPECIAL_CHUNK_SPLIT_REGEX)
+        .map((part) => part.trim())
+        .filter(Boolean);
+    const segments: Array<{ lang: 'vi' | 'en'; text: string }> = [];
+    let activeLang: 'vi' | 'en' | null = null;
+    let buffer = '';
+    let pendingDelimiter = '';
+
+    const flush = () => {
+        const clean = buffer.trim();
+        if (activeLang && clean) {
+            segments.push({ lang: activeLang, text: clean });
+        }
+        buffer = '';
+        activeLang = null;
+    };
+
+    for (const token of tokens) {
+        const tokenLang = detectSegmentLanguage(token);
+
+        if (!tokenLang) {
+            if (activeLang) {
+                buffer += `${buffer ? ' ' : ''}${token}`;
+            } else {
+                pendingDelimiter += `${pendingDelimiter ? ' ' : ''}${token}`;
+            }
+            continue;
+        }
+
+        if (!activeLang) {
+            activeLang = tokenLang;
+            buffer = `${pendingDelimiter}${pendingDelimiter ? ' ' : ''}${token}`.trim();
+            pendingDelimiter = '';
+            continue;
+        }
+
+        if (tokenLang === activeLang) {
+            buffer += `${buffer ? ' ' : ''}${token}`;
+            continue;
+        }
+
+        flush();
+        activeLang = tokenLang;
+        buffer = `${pendingDelimiter}${pendingDelimiter ? ' ' : ''}${token}`.trim();
+        pendingDelimiter = '';
+    }
+
+    if (pendingDelimiter && activeLang) {
+        buffer += `${buffer ? ' ' : ''}${pendingDelimiter}`;
+    }
+    flush();
+
+    return segments.length > 0
+        ? segments
+        : [{ lang: detectLanguage(normalized), text: normalized }];
+};
+
 export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }) => {
     const { showToast } = useToast();
     const [config, setConfig] = useState<SystemConfig>(getConfig());
@@ -134,6 +300,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [message, setMessage] = useState<Message | null>(null);
     const [messageIndex, setMessageIndex] = useState(0);
     const [isThinking, setIsThinking] = useState(false);
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [chatHistory, setChatHistory] = useState<ChatTurn[]>([
+        createChatTurn('assistant', 'Xin chao, minh la StudyBuddy AI. Ban co the hoi ve grammar, writing, speaking, hoac nho minh giai thich tu vung.')
+    ]);
+    const [chatInput, setChatInput] = useState('');
+    const [isChatLoading, setIsChatLoading] = useState(false);
+    const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
+    const [isChatListening, setIsChatListening] = useState(false);
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
     const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
     
@@ -146,6 +320,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     const commandBoxRef = useRef<HTMLDivElement>(null);
     const messageBoxRef = useRef<HTMLDivElement>(null);
+    const chatPanelRef = useRef<HTMLDivElement>(null);
+    const chatScrollRef = useRef<HTMLDivElement>(null);
+    const chatAbortRef = useRef<AbortController | null>(null);
+    const chatRecognitionRef = useRef<SpeechRecognitionManager | null>(null);
+    const chatDraftPrefixRef = useRef('');
+    const chatSpeechQueueRef = useRef<ChatSpeechChunk[]>([]);
+    const isChatSpeakingRef = useRef(false);
+    const isChatAudioEnabledRef = useRef(isChatAudioEnabled);
     const closeMenuTimeoutRef = useRef<number | null>(null);
     const audioStatusSettleTimeoutRef = useRef<number | null>(null);
     const playbackControlsHideTimeoutRef = useRef<number | null>(null);
@@ -175,9 +357,112 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setIsAlreadyInLibrary(!!exists);
     };
 
+    const stopChatStream = () => {
+        if (chatAbortRef.current) {
+            chatAbortRef.current.abort();
+            chatAbortRef.current = null;
+        }
+        setIsChatLoading(false);
+    };
+
+    const stopChatListening = () => {
+        chatRecognitionRef.current?.stop();
+        setIsChatListening(false);
+    };
+
+    const scheduleChatSpeechPrefetch = async () => {
+        if (!isChatAudioEnabledRef.current) return;
+        const upcoming = chatSpeechQueueRef.current.slice(0, CHAT_AUDIO_PREFETCH_AHEAD);
+        for (const chunk of upcoming) {
+            if (chunk.preloadedBlob || chunk.prefetchPromise) continue;
+            chunk.prefetchPromise = prefetchSpeech(chunk.text, chunk.lang)
+                .then((blob) => {
+                    chunk.preloadedBlob = blob;
+                    chunk.prefetchPromise = null;
+                    return blob;
+                })
+                .catch(() => {
+                    chunk.prefetchPromise = null;
+                    return null;
+                });
+        }
+    };
+
+    const processChatSpeechQueue = async () => {
+        if (isChatSpeakingRef.current || !isChatAudioEnabledRef.current) return;
+        const nextChunk = chatSpeechQueueRef.current.shift();
+        if (!nextChunk) return;
+
+        isChatSpeakingRef.current = true;
+        const voice = nextChunk.lang === 'vi' ? coach.viVoice : coach.enVoice;
+        const accent = nextChunk.lang === 'vi' ? coach.viAccent : coach.enAccent;
+
+        try {
+            const resolvedBlob = nextChunk.preloadedBlob ?? await nextChunk.prefetchPromise ?? undefined;
+            await speak(nextChunk.text, false, nextChunk.lang, voice, accent, resolvedBlob, true);
+        } catch {
+            // Silent fail; chat should continue even if TTS is unavailable.
+        } finally {
+            isChatSpeakingRef.current = false;
+            void scheduleChatSpeechPrefetch();
+            if (isChatAudioEnabledRef.current && chatSpeechQueueRef.current.length > 0) {
+                void processChatSpeechQueue();
+            }
+        }
+    };
+
+    const clearChatSpeechQueue = (stopCurrentAudio = false) => {
+        chatSpeechQueueRef.current = [];
+        if (stopCurrentAudio) {
+            stopSpeaking();
+            isChatSpeakingRef.current = false;
+        }
+    };
+
+    const queueChatSpeech = (text: string) => {
+        const segments = splitMixedLanguageSegments(text);
+        if (segments.length === 0 || !isChatAudioEnabledRef.current) return;
+        chatSpeechQueueRef.current.push(...segments);
+        void scheduleChatSpeechPrefetch();
+        void processChatSpeechQueue();
+    };
+
+    const openChatPanel = (prefill?: string) => {
+        if (prefill) {
+            setChatInput((current) => current.trim() ? current : prefill);
+        }
+        setMessage(null);
+        setMenuPos(null);
+        setIsOpen(false);
+        setIsChatOpen(true);
+    };
+
     useEffect(() => {
         isOpenRef.current = isOpen;
     }, [isOpen]);
+
+    useEffect(() => {
+        if (!chatRecognitionRef.current) {
+            chatRecognitionRef.current = new SpeechRecognitionManager();
+        }
+        return () => {
+            chatRecognitionRef.current?.stop();
+        };
+    }, []);
+
+    useEffect(() => {
+        isChatAudioEnabledRef.current = isChatAudioEnabled;
+        if (!isChatAudioEnabled) {
+            clearChatSpeechQueue(true);
+        } else {
+            void scheduleChatSpeechPrefetch();
+        }
+    }, [isChatAudioEnabled]);
+
+    useEffect(() => {
+        if (!chatScrollRef.current) return;
+        chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }, [chatHistory, isChatLoading, isChatOpen]);
 
     useEffect(() => {
         const shouldShow = isAudioPlaying && !isSingleWordAudio;
@@ -331,6 +616,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setPlaybackRateState(getPlaybackRate());
 
         return () => {
+            if (chatAbortRef.current) {
+                chatAbortRef.current.abort();
+                chatAbortRef.current = null;
+            }
             if (audioStatusSettleTimeoutRef.current) {
                 window.clearTimeout(audioStatusSettleTimeoutRef.current);
                 audioStatusSettleTimeoutRef.current = null;
@@ -349,6 +638,19 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 cambridgeAudioRef.current = null;
             }
         };
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutsidePanels = (e: MouseEvent) => {
+            const target = e.target as Node;
+            if (chatPanelRef.current && !chatPanelRef.current.contains(target)) {
+                stopChatListening();
+                setIsChatOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutsidePanels);
+        return () => document.removeEventListener('mousedown', handleClickOutsidePanels);
     }, []);
 
     useEffect(() => {
@@ -445,6 +747,205 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         user.id,
         isOpen
     ]);
+
+    const handleSendChat = async () => {
+        const prompt = chatInput.trim();
+        if (!prompt || isChatLoading) return;
+        stopChatListening();
+
+        const nextUserTurn = createChatTurn('user', prompt);
+        const assistantId = `assistant-${Date.now()}`;
+        const aiUrl = getStudyBuddyAiUrl(config);
+        const nextHistory = [...chatHistory, nextUserTurn];
+        let spokenCursor = 0;
+
+        setChatHistory([...nextHistory, { id: assistantId, role: 'assistant', content: '' }]);
+        setChatInput('');
+        setIsChatOpen(true);
+        setIsChatLoading(true);
+        setIsThinking(false);
+        clearChatSpeechQueue(true);
+
+        const controller = new AbortController();
+        chatAbortRef.current = controller;
+
+        const updateAssistantTurn = (content: string) => {
+            setChatHistory((current) =>
+                current.map((turn) => (turn.id === assistantId ? { ...turn, content } : turn))
+            );
+        };
+
+        try {
+            const res = await fetch(`${aiUrl}/v1/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: [
+                        { role: 'system', content: STUDY_BUDDY_SYSTEM_PROMPT },
+                        ...nextHistory.map((turn) => ({ role: turn.role, content: turn.content }))
+                    ],
+                    stream: true
+                }),
+                signal: controller.signal
+            });
+
+            if (!res.ok) {
+                throw new Error(`AI server error ${res.status}`);
+            }
+
+            if (!res.body) {
+                throw new Error('AI server did not return a stream.');
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffered = '';
+            let assistantText = '';
+
+            const appendDelta = (payload: any) => {
+                const delta = payload?.choices?.[0]?.delta?.content ?? payload?.choices?.[0]?.message?.content;
+                if (typeof delta === 'string') {
+                    assistantText += delta;
+                } else if (Array.isArray(delta)) {
+                    for (const part of delta) {
+                        if (typeof part?.text === 'string') assistantText += part.text;
+                    }
+                }
+                updateAssistantTurn(assistantText);
+                if (isChatAudioEnabledRef.current) {
+                    const pendingChunk = assistantText.slice(spokenCursor);
+                    const { sentences, remainder } = splitSpeakableSentences(pendingChunk);
+                    if (sentences.length > 0) {
+                        for (const sentence of sentences) {
+                            queueChatSpeech(sentence);
+                        }
+                        spokenCursor = assistantText.length - remainder.length;
+                    }
+                }
+            };
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffered += decoder.decode(value, { stream: true });
+                const events = buffered.split('\n\n');
+                buffered = events.pop() || '';
+
+                for (const eventBlock of events) {
+                    const lines = eventBlock
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean);
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data:')) continue;
+                        const raw = line.slice(5).trim();
+                        if (!raw || raw === '[DONE]') continue;
+                        try {
+                            appendDelta(JSON.parse(raw));
+                        } catch {
+                            // Ignore partial or non-JSON chunks.
+                        }
+                    }
+                }
+            }
+
+            buffered += decoder.decode();
+            if (buffered.trim()) {
+                for (const line of buffered.split('\n')) {
+                    const trimmed = line.trim();
+                    if (!trimmed.startsWith('data:')) continue;
+                    const raw = trimmed.slice(5).trim();
+                    if (!raw || raw === '[DONE]') continue;
+                    try {
+                        appendDelta(JSON.parse(raw));
+                    } catch {
+                        // Ignore final malformed chunk.
+                    }
+                }
+            }
+
+            if (!assistantText.trim()) {
+                updateAssistantTurn('AI server da ket noi, nhung chua tra ve noi dung.');
+            } else if (isChatAudioEnabledRef.current) {
+                const trailing = assistantText.slice(spokenCursor).trim();
+                if (trailing) {
+                    queueChatSpeech(trailing);
+                }
+            }
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId && !turn.content.trim()
+                            ? { ...turn, content: 'Da dung phan hoi.' }
+                            : turn
+                    )
+                );
+            } else {
+                console.error(error);
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, content: 'Khong the ket noi AI server. Kiem tra server AI o port 63392.' }
+                            : turn
+                    )
+                );
+                showToast('StudyBuddy AI connection failed.', 'error');
+            }
+        } finally {
+            if (chatAbortRef.current === controller) {
+                chatAbortRef.current = null;
+            }
+            setIsChatLoading(false);
+        }
+    };
+
+    const handleToggleChatMic = async () => {
+        if (isChatListening) {
+            stopChatListening();
+            return;
+        }
+
+        if (!chatRecognitionRef.current) {
+            chatRecognitionRef.current = new SpeechRecognitionManager();
+        }
+
+        const supported = typeof window !== 'undefined'
+            && (((window as any).SpeechRecognition) || ((window as any).webkitSpeechRecognition));
+        if (!supported) {
+            showToast('Speech-to-text is not supported in this browser.', 'error');
+            return;
+        }
+
+        const sttLang = getStudyBuddySttLang(chatInput, config.interface.studyBuddyLanguage);
+        chatDraftPrefixRef.current = chatInput.trim();
+
+        try {
+            setIsChatListening(true);
+            await chatRecognitionRef.current.start(
+                (final, interim) => {
+                    const combined = `${final}${interim}`.trim();
+                    const prefix = chatDraftPrefixRef.current;
+                    setChatInput(prefix ? `${prefix} ${combined}`.trim() : combined);
+                },
+                (finalTranscript) => {
+                    const prefix = chatDraftPrefixRef.current;
+                    const finalText = finalTranscript.trim();
+                    setChatInput(prefix ? `${prefix} ${finalText}`.trim() : finalText);
+                    setIsChatListening(false);
+                },
+                sttLang
+            );
+        } catch (error) {
+            console.error(error);
+            setIsChatListening(false);
+            showToast('Cannot start microphone input.', 'error');
+        }
+    };
 
     const handleTranslateSelection = async () => {
         const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
@@ -806,6 +1307,15 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 >
                     <Star size={15} fill="currentColor" />
                 </button>
+                <button
+                    type="button"
+                    onClick={() => openChatPanel(selectedTextRef.current || window.getSelection()?.toString().trim())}
+                    className="col-span-8 h-10 mt-0.5 bg-neutral-900 text-white rounded-2xl flex items-center justify-center gap-2 hover:bg-neutral-800 transition-all active:scale-[0.98] shadow-sm text-[11px] font-black uppercase tracking-wide"
+                    title="Chat with StudyBuddy AI"
+                >
+                    <Sparkles size={14} />
+                    AI Chat
+                </button>
 
             </div>
         </div>
@@ -865,6 +1375,114 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             <div className="fixed bottom-0 left-6 z-[2147483646] flex flex-col items-start pointer-events-none">
                 <div className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" onMouseEnter={openCoachMenu} onMouseLeave={scheduleCloseCoachMenu}>
                     <div className="relative">
+                        {isChatOpen && (
+                            <div ref={chatPanelRef} className="absolute bottom-20 left-0 z-50 w-[24rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 bg-neutral-50/70">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="w-10 h-10 rounded-2xl bg-neutral-900 text-white flex items-center justify-center shrink-0">
+                                            <Sparkles size={16} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-black text-neutral-900 uppercase tracking-wide">StudyBuddy AI</p>
+                                            <p className="text-[11px] text-neutral-500 truncate">Grammar, writing, speaking, tu vung</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsChatAudioEnabled((prev) => !prev)}
+                                            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                                                isChatAudioEnabled
+                                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                    : 'border-neutral-200 bg-white text-neutral-500'
+                                            }`}
+                                            title="Toggle chat audio"
+                                        >
+                                            <Volume2 size={12} />
+                                            Audio {isChatAudioEnabled ? 'On' : 'Off'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                stopChatStream();
+                                                stopChatListening();
+                                                setIsChatOpen(false);
+                                            }}
+                                            className="text-neutral-400 hover:text-neutral-900"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div ref={chatScrollRef} className="max-h-[24rem] overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)]">
+                                    {chatHistory.map((turn) => (
+                                        <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
+                                                turn.role === 'user'
+                                                    ? 'bg-neutral-900 text-white rounded-br-md'
+                                                    : 'bg-white border border-neutral-200 text-neutral-700 rounded-bl-md'
+                                            }`}>
+                                                <div
+                                                    className={`leading-relaxed whitespace-pre-wrap break-words ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}
+                                                    dangerouslySetInnerHTML={{ __html: renderChatText(turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')) }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="border-t border-neutral-100 p-3 bg-white">
+                                    <div className="flex items-end gap-2">
+                                        <textarea
+                                            value={chatInput}
+                                            onChange={(e) => setChatInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleSendChat();
+                                                }
+                                            }}
+                                            rows={3}
+                                            placeholder="Hoi StudyBuddy AI... Shift+Enter de xuong dong"
+                                            className="flex-1 resize-none rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-800 outline-none focus:border-neutral-900 focus:bg-white transition-colors"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleToggleChatMic}
+                                            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-colors ${
+                                                isChatListening
+                                                    ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
+                                                    : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100'
+                                            }`}
+                                            title={isChatListening ? 'Stop voice input' : 'Start voice input'}
+                                        >
+                                            <Mic size={18} className={isChatListening ? 'animate-pulse' : ''} />
+                                        </button>
+                                        {isChatLoading ? (
+                                            <button
+                                                type="button"
+                                                onClick={stopChatStream}
+                                                className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors"
+                                                title="Stop response"
+                                            >
+                                                <StopCircle size={18} />
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={handleSendChat}
+                                                disabled={!chatInput.trim()}
+                                                className="w-11 h-11 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shrink-0 transition-colors"
+                                                title="Send"
+                                            >
+                                                <Send size={18} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         {isOpen && !menuPos && (
                             <div className="absolute bottom-16 left-0 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
                                 {message ? (
@@ -1056,6 +1674,17 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 ) : <CommandBox />}
                             </div>
                         )}
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                openChatPanel();
+                            }}
+                            className="absolute -top-2 -right-2 w-8 h-8 rounded-xl bg-neutral-900 text-white border-2 border-white shadow-lg flex items-center justify-center pointer-events-auto hover:scale-105 transition-transform"
+                            title="Open StudyBuddy AI chat"
+                        >
+                            {isChatLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                        </button>
                         <button onClick={(e) => { if (showPlaybackControls) { e.stopPropagation(); stopSpeaking(); } }} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-10 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}>
                             {isThinking ? <Loader2 size={20} className="animate-spin text-neutral-400"/> : (
                                 <>

@@ -7,6 +7,7 @@ export class SpeechRecognitionManager {
     private finalTranscript: string = '';
     private onResultCallback: ((final: string, interim: string) => void) | null = null;
     private onEndCallback: ((finalTranscript: string) => void) | null = null;
+    private recognitionLang: string = 'en-US';
 
     constructor() {
         this.initBrowserRecognition();
@@ -18,7 +19,7 @@ export class SpeechRecognitionManager {
             this.recognition = new SpeechRecognition();
             this.recognition.continuous = true;
             this.recognition.interimResults = true;
-            this.recognition.lang = 'en-US';
+            this.recognition.lang = this.recognitionLang;
 
             this.recognition.onresult = (event: any) => {
                 let interimTranscript = '';
@@ -51,10 +52,25 @@ export class SpeechRecognitionManager {
         }
     }
 
-    async start(onResult: (final: string, interim: string) => void, onEnd: (finalTranscript: string) => void) {
+    setLanguage(lang: string) {
+        this.recognitionLang = lang || 'en-US';
+        if (this.recognition) {
+            this.recognition.lang = this.recognitionLang;
+        }
+    }
+
+    async start(
+        onResult: (final: string, interim: string) => void,
+        onEnd: (finalTranscript: string) => void,
+        lang?: string
+    ) {
         this.onResultCallback = onResult;
         this.onEndCallback = onEnd;
         this.finalTranscript = '';
+
+        if (lang) {
+            this.setLanguage(lang);
+        }
 
         if (!this.recognition) {
             console.error("Speech Recognition not supported in this browser.");
