@@ -12,6 +12,7 @@ import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { ToolsModal } from '../tools/ToolsModal';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
+import ReactMarkdown from 'react-markdown';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
@@ -141,18 +142,6 @@ const createChatTurn = (role: ChatTurn['role'], content: string): ChatTurn => ({
     role,
     content
 });
-
-const escapeHtml = (text: string) =>
-    text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-
-const renderChatText = (text: string) =>
-    escapeHtml(text)
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br/>');
 
 const getStudyBuddySttLang = (draft: string, preferredUiLanguage: 'vi' | 'en'): string => {
     const cleanDraft = draft.trim();
@@ -300,10 +289,60 @@ const ChatHistoryList = React.memo(({
                         ? 'bg-neutral-900 text-white rounded-br-md'
                         : 'bg-white border border-neutral-200 text-neutral-700 rounded-bl-md'
                 }`}>
-                    <div
-                        className={`leading-relaxed whitespace-pre-wrap break-words select-text ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}
-                        dangerouslySetInnerHTML={{ __html: renderChatText(turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')) }}
-                    />
+                    <div className={`leading-relaxed break-words select-text ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
+                        <ReactMarkdown
+                            components={{
+                                p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
+                                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-1 last:mb-0">{children}</ul>,
+                                ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-1 last:mb-0">{children}</ol>,
+                                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                h1: ({ children }) => <h1 className="mb-2 text-base font-black tracking-tight">{children}</h1>,
+                                h2: ({ children }) => <h2 className="mb-2 text-[15px] font-black tracking-tight">{children}</h2>,
+                                h3: ({ children }) => <h3 className="mb-2 text-sm font-black tracking-tight">{children}</h3>,
+                                blockquote: ({ children }) => (
+                                    <blockquote className="mb-2 border-l-4 border-neutral-300 bg-neutral-50/80 px-3 py-2 italic text-neutral-600 last:mb-0">
+                                        {children}
+                                    </blockquote>
+                                ),
+                                a: ({ href, children }) => (
+                                    <a href={href} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 underline underline-offset-2">
+                                        {children}
+                                    </a>
+                                ),
+                                table: ({ children }) => (
+                                    <div className="mb-2 overflow-x-auto rounded-2xl border border-neutral-200 last:mb-0">
+                                        <table className="min-w-full border-collapse text-left text-xs">{children}</table>
+                                    </div>
+                                ),
+                                thead: ({ children }) => <thead className="bg-neutral-100 text-neutral-700">{children}</thead>,
+                                th: ({ children }) => <th className="border-b border-neutral-200 px-3 py-2 font-black">{children}</th>,
+                                td: ({ children }) => <td className="border-b border-neutral-100 px-3 py-2 align-top">{children}</td>,
+                                code: ({ inline, className, children, ...props }: any) => {
+                                    const rawCode = String(children).replace(/\n$/, '');
+                                    const language = className?.replace('language-', '') || '';
+                                    if (inline) {
+                                        return (
+                                            <code className="rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.92em] text-rose-700" {...props}>
+                                                {children}
+                                            </code>
+                                        );
+                                    }
+                                    return (
+                                        <div className="mb-2 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-950 text-neutral-100 last:mb-0">
+                                            <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-400">
+                                                <span>{language || 'code'}</span>
+                                            </div>
+                                            <pre className="overflow-x-auto px-4 py-3 text-[12px] leading-6">
+                                                <code className={className} {...props}>{rawCode}</code>
+                                            </pre>
+                                        </div>
+                                    );
+                                },
+                            }}
+                        >
+                            {turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}
+                        </ReactMarkdown>
+                    </div>
                 </div>
             </div>
         ))}
@@ -327,8 +366,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [isThinking, setIsThinking] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [chatHistory, setChatHistory] = useState<ChatTurn[]>([
-        createChatTurn('assistant', 'Xin chao, minh la StudyBuddy AI. Ban co the hoi ve grammar, writing, speaking, hoac nho minh giai thich tu vung.')
-    ]);
+        createChatTurn('assistant', 'Xin chào. Tôi có thể trả lời bất cứ thứ gì về tiếng Anh')    ]);
     const [chatInput, setChatInput] = useState('');
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
@@ -1033,7 +1071,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                     { role: 'system', content: STUDY_BUDDY_SYSTEM_PROMPT },
                     { role: 'user', content: userPrompt }
                 ],
-                stream: false
+                stream: true
             })
         });
 
@@ -1088,26 +1126,111 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         const userPrompt = promptBuilder(selectedText);
         const userTurn = createChatTurn('user', `${promptLabel}: ${selectedText}`);
         const assistantId = `assistant-${actionKey}-${Date.now()}`;
+        const aiUrl = getStudyBuddyAiUrl(config);
 
         setActiveChatCoachAction(actionKey);
-        setChatHistory((current) => [...current, userTurn, { id: assistantId, role: 'assistant', content: '...' }]);
+        setIsChatLoading(true);
+        setChatHistory((current) => [
+            ...current,
+            userTurn,
+            { id: assistantId, role: 'assistant', content: '' }
+        ]);
 
+        let controller: AbortController | undefined;
         try {
-            const content = await requestStudyBuddyAiText(userPrompt);
-            setChatHistory((current) =>
-                current.map((turn) => turn.id === assistantId ? { ...turn, content } : turn)
-            );
-        } catch (error) {
-            console.error(error);
-            setChatHistory((current) =>
-                current.map((turn) =>
-                    turn.id === assistantId
-                        ? { ...turn, content: 'StudyBuddy AI khong tra ve duoc noi dung cho yeu cau nay.' }
-                        : turn
-                )
-            );
-            showToast('StudyBuddy AI request failed.', 'error');
+            controller = new AbortController();
+            chatAbortRef.current = controller;
+
+            const res = await fetch(`${aiUrl}/v1/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: [
+                        { role: 'system', content: STUDY_BUDDY_SYSTEM_PROMPT },
+                        { role: 'user', content: userPrompt }
+                    ],
+                    stream: true
+                }),
+                signal: controller.signal
+            });
+
+            if (!res.ok || !res.body) {
+                throw new Error('Streaming failed');
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+
+            let assistantText = '';
+            let buffered = '';
+
+            const updateAssistant = (text: string) => {
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId ? { ...turn, content: text } : turn
+                    )
+                );
+            };
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffered += decoder.decode(value, { stream: true });
+                const parts = buffered.split('\n\n');
+                buffered = parts.pop() || '';
+
+                for (const part of parts) {
+                    const lines = part.split('\n').map(l => l.trim()).filter(Boolean);
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data:')) continue;
+                        const raw = line.slice(5).trim();
+                        if (!raw || raw === '[DONE]') continue;
+
+                        try {
+                            const json = JSON.parse(raw);
+                            const delta = json?.choices?.[0]?.delta?.content;
+                            if (delta) {
+                                assistantText += delta;
+                                updateAssistant(assistantText);
+                            }
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+            }
+
+            if (!assistantText.trim()) {
+                updateAssistant('Khong co noi dung tra ve.');
+            }
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId && !turn.content.trim()
+                            ? { ...turn, content: 'Da dung phan hoi.' }
+                            : turn
+                    )
+                );
+            } else {
+                console.error(error);
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, content: 'Loi khi goi StudyBuddy AI.' }
+                            : turn
+                    )
+                );
+            }
         } finally {
+            if (chatAbortRef.current === controller) {
+                chatAbortRef.current = null;
+            }
+            setIsChatLoading(false);
             setActiveChatCoachAction(null);
         }
     };
@@ -1345,11 +1468,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     const ChatCoachActionBar = () => {
         const hasSelection = !!coachSelectionText;
-        const baseButtonClass = 'h-10 rounded-2xl flex items-center justify-center px-3 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+        const baseButtonClass = 'h-8 rounded-2xl flex items-center justify-center px-3 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
         return (
             <div
-                className="border-t border-neutral-100 bg-neutral-50/90 px-3 py-3"
+                className="border-t border-neutral-100 bg-neutral-50/90 px-0 py-0"
                 onMouseDown={(e) => {
                     e.preventDefault();
                     restoreSelectedRange();
@@ -1361,18 +1484,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         onClick={handleChatCoachTranslate}
                         disabled={!hasSelection || !!activeChatCoachAction}
                         className={`${baseButtonClass} bg-indigo-50 text-indigo-600 hover:bg-indigo-100`}
-                        title="Dịch tiếng Việt bằng AI"
+                        title="Translate to Vietnamese"
                     >
-                        {activeChatCoachAction === 'translate' ? <Loader2 size={14} className="animate-spin" /> : 'Dich VI'}
+                        {activeChatCoachAction === 'translate' ? <Loader2 size={14} className="animate-spin" /> : 'VI'}
                     </button>
                     <button
                         type="button"
                         onClick={handleReadAndIpa}
                         disabled={!hasSelection}
                         className={`${baseButtonClass} bg-purple-50 text-purple-600 hover:bg-purple-100`}
-                        title="Đọc tiếng Anh"
+                        title="Read in English"
                     >
-                        Read EN
+                        EN
                     </button>
                     {!isAlreadyInLibrary ? (
                         <button type="button" onClick={handleAddToLibrary} disabled={!hasSelection || isAddingToLibrary} className={`${baseButtonClass} bg-green-50 text-green-600 hover:bg-green-100`} title="Add to Library">
@@ -1388,7 +1511,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         onClick={() => handleChatCoachPromptToChat(
                             'examples',
                             'Examples',
-                            (selectedText) => `Give examples for "${selectedText}". Keep them natural, practical, and concise for an IELTS learner.`
+                            (selectedText) => `Give examples for "${selectedText}". Use English only. Do NOT translate into Vietnamese. Keep them natural, practical, and concise for an IELTS learner.`
                         )}
                         disabled={!hasSelection || !!activeChatCoachAction}
                         className={`${baseButtonClass} bg-blue-50 text-blue-600 hover:bg-blue-100`}
@@ -1401,7 +1524,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         onClick={() => handleChatCoachPromptToChat(
                             'collocations',
                             'Collocations',
-                            (selectedText) => `Give popular natural collocations for "${selectedText}". Keep the answer concise and learner-friendly.`
+                            (selectedText) => `Give popular natural collocations for "${selectedText}". Use English only. Do NOT translate into Vietnamese. Keep the answer concise and learner-friendly.`
                         )}
                         disabled={!hasSelection || !!activeChatCoachAction}
                         className={`${baseButtonClass} bg-amber-50 text-amber-600 hover:bg-amber-100`}
@@ -1414,7 +1537,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         onClick={() => handleChatCoachPromptToChat(
                             'paraphrase',
                             'Paraphrase',
-                            (selectedText) => `Natural Paraphrase for "${selectedText}". Give concise, natural alternatives suitable for IELTS speaking and writing.`
+                            (selectedText) => `Natural paraphrases for "${selectedText}". Use English only. Do NOT translate into Vietnamese. Give concise, natural alternatives suitable for IELTS speaking and writing.`
                         )}
                         disabled={!hasSelection || !!activeChatCoachAction}
                         className={`${baseButtonClass} bg-rose-50 text-rose-600 hover:bg-rose-100`}
@@ -1714,7 +1837,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         {isChatOpen && (
                             <div
                                 ref={chatPanelRef}
-                                className="pointer-events-auto absolute bottom-20 left-0 z-50 w-[24rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200"
+                                className="pointer-events-auto absolute bottom-20 left-0 z-50 w-[36rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200"
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onMouseEnter={(e) => e.stopPropagation()}
                             >
@@ -1781,38 +1904,40 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                             placeholder="Hoi StudyBuddy AI... Shift+Enter de xuong dong"
                                             className="flex-1 resize-none rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-800 outline-none focus:border-neutral-900 focus:bg-white transition-colors"
                                         />
-                                        <button
-                                            type="button"
-                                            onClick={handleToggleChatMic}
-                                            className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 transition-colors ${
-                                                isChatListening
-                                                    ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
-                                                    : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100'
-                                            }`}
-                                            title={isChatListening ? 'Stop voice input' : 'Start voice input'}
-                                        >
-                                            <Mic size={18} className={isChatListening ? 'animate-pulse' : ''} />
-                                        </button>
-                                        {isChatLoading ? (
+                                        <div className="flex flex-col gap-2">
                                             <button
                                                 type="button"
-                                                onClick={stopChatStream}
-                                                className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 flex items-center justify-center shrink-0 transition-colors"
-                                                title="Stop response"
+                                                onClick={handleToggleChatMic}
+                                                className={`w-11 h-9 rounded-2xl border flex items-center justify-center transition-colors ${
+                                                    isChatListening
+                                                        ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
+                                                        : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100'
+                                                }`}
+                                                title={isChatListening ? 'Stop voice input' : 'Start voice input'}
                                             >
-                                                <StopCircle size={18} />
+                                                <Mic size={18} className={isChatListening ? 'animate-pulse' : ''} />
                                             </button>
-                                        ) : (
-                                            <button
-                                                type="button"
-                                                onClick={handleSendChat}
-                                                disabled={!chatInput.trim()}
-                                                className="w-11 h-11 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shrink-0 transition-colors"
-                                                title="Send"
-                                            >
-                                                <Send size={18} />
-                                            </button>
-                                        )}
+                                            {isChatLoading ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={stopChatStream}
+                                                    className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 flex items-center justify-center transition-colors"
+                                                    title="Stop response"
+                                                >
+                                                    <StopCircle size={18} />
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSendChat}
+                                                    disabled={!chatInput.trim()}
+                                                    className="w-11 h-11 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                                                    title="Send"
+                                                >
+                                                    <Send size={18} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2014,12 +2139,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 e.stopPropagation();
                                 openChatPanel();
                             }}
-                            className="absolute -top-2 -right-2 w-8 h-8 rounded-xl bg-neutral-900 text-white border-2 border-white shadow-lg flex items-center justify-center pointer-events-auto hover:scale-105 transition-transform"
+                            className="absolute -top-2 -right-2 w-8 h-8 rounded-xl bg-neutral-900 text-white border-2 border-white shadow-lg flex items-center justify-center pointer-events-auto hover:scale-105 transition-transform z-30"
                             title="Open StudyBuddy AI chat"
                         >
                             {isChatLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                         </button>
-                        <button onClick={(e) => { if (showPlaybackControls) { e.stopPropagation(); stopSpeaking(); } }} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-10 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}>
+                        <button onClick={(e) => { if (showPlaybackControls) { e.stopPropagation(); stopSpeaking(); } }} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-0 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}>
                             {isThinking ? <Loader2 size={20} className="animate-spin text-neutral-400"/> : (
                                 <>
                                     <img src={avatarInfo.url} className={`w-10 h-10 object-contain ${showPlaybackControls ? 'opacity-30 scale-90 blur-[1px]' : ''}`} alt="Coach" />
