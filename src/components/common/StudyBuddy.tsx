@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, WordQuality, VocabularyItem } from '../../app/types';
-import { NotebookPen, ListCollapse, BringToFront, Blocks, X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star, Sparkles, Send, StopCircle } from 'lucide-react';
+import { Bot, NotebookPen, ListCollapse, BringToFront, Blocks, X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star, Sparkles, Send, StopCircle } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
@@ -1682,17 +1682,6 @@ Rules:
         setIsToolsModalOpen(true);
     };
 
-
-    const handleVietnameseExplanation = () => {
-        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
-        if (!selectedText) return;
-        const queryText = `Giải thích và ví dụ "${selectedText}"`;
-        const query = encodeURIComponent(queryText);
-        window.open(`https://www.google.com/search?q=${query}`, '_blank');
-        setIsOpen(false);
-        setMenuPos(null);
-    };
-
     const playCambridgeAudio = (url?: string) => {
         if (!url) {
             showToast("Audio not available.", "info");
@@ -1780,33 +1769,22 @@ Rules:
             onMouseEnter={restoreSelectedRange}
             className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200"
         >
-            {/* Using a 10-column grid allows us to have col-span-2 buttons that are perfectly equal in width for 5 per row */}
-            <div className="grid grid-cols-10 gap-1">
-                {/* TOP ROW (5 buttons, 2 columns each) */}
+            <div className="grid grid-cols-8 gap-1">
+                {/* TOP ROW (3 buttons, 2 columns each) */}
                 <button type="button" onClick={handleTranslateSelection} className="col-span-2 aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" title="Đọc Tiếng Việt">VI</button>
+                <button type="button" onClick={handleReadAndIpa} className="col-span-2 aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="Read English"><Volume2 size={15}/></button>
+                <button type="button" onClick={handleSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
+                {!isChatOpen && (
+                <button type="button" onClick={() => openChatPanel(selectedTextRef.current || undefined)} className="col-span-2 aspect-square bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shadow-sm" title="Ask AI"><Bot size={15}/></button>
+                )}
+                {/* BOTTOM ROW (3 buttons, 2 columns each) */}
                 {!isAlreadyInLibrary ? (
                     <button type="button" onClick={handleAddToLibrary} disabled={isAddingToLibrary} className="col-span-2 aspect-square bg-green-50 text-green-600 rounded-2xl flex items-center justify-center hover:bg-green-100 transition-all active:scale-90 shadow-sm" title="Add to Library">{isAddingToLibrary ? <Loader2 size={14} className="animate-spin"/> : <Plus size={15}/>}</button>
                 ) : (
                     <button type="button" onClick={handleViewWord} disabled={isAnyModalOpen} className="col-span-2 aspect-square bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center hover:bg-sky-100 transition-all active:scale-90 shadow-sm" title="View Word Details"><Eye size={15}/></button>
                 )}
-                <button type="button" onClick={handleReadAndIpa} className="col-span-2 aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="Read English"><Volume2 size={15}/></button>
                 <button type="button" onClick={handleOpenNote} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Open Note"><PenTool size={15}/></button>
-
-                {/* BOTTOM ROW (5 buttons, 2 columns each) */}
-                <button type="button" onClick={handleSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
                 <button type="button" onClick={handleOpenTools} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Tools"><Wrench size={15}/></button>
-                
-                {!isChatOpen && (
-                    <button
-                        type="button"
-                        onClick={() => openChatPanel(selectedTextRef.current || undefined)}
-                        className="col-span-10 h-10 mt-0.5 bg-neutral-900 text-white rounded-2xl flex items-center justify-center gap-2 hover:bg-neutral-800 transition-all active:scale-[0.98] shadow-sm text-[11px] font-black uppercase tracking-wide"
-                        title="Chat with StudyBuddy AI"
-                    >
-                        <Sparkles size={14} />
-                        AI Chat
-                    </button>
-                )}
             </div>
         </div>
     );
