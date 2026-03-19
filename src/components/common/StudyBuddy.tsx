@@ -285,6 +285,31 @@ const splitMixedLanguageSegments = (text: string): Array<{ lang: 'vi' | 'en'; te
         : [{ lang: detectLanguage(normalized), text: normalized }];
 };
 
+const ChatHistoryList = React.memo(({
+    chatHistory,
+    isChatLoading,
+}: {
+    chatHistory: ChatTurn[];
+    isChatLoading: boolean;
+}) => (
+    <>
+        {chatHistory.map((turn) => (
+            <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
+                    turn.role === 'user'
+                        ? 'bg-neutral-900 text-white rounded-br-md'
+                        : 'bg-white border border-neutral-200 text-neutral-700 rounded-bl-md'
+                }`}>
+                    <div
+                        className={`leading-relaxed whitespace-pre-wrap break-words select-text ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}
+                        dangerouslySetInnerHTML={{ __html: renderChatText(turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')) }}
+                    />
+                </div>
+            </div>
+        ))}
+    </>
+));
+
 export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }) => {
     const { showToast } = useToast();
     const [config, setConfig] = useState<SystemConfig>(getConfig());
@@ -308,6 +333,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
     const [isChatListening, setIsChatListening] = useState(false);
+    const [coachSelectionText, setCoachSelectionText] = useState('');
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
     const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
     
@@ -319,6 +345,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [isNoteOnlyMode, setIsNoteOnlyMode] = useState(false);
 
     const commandBoxRef = useRef<HTMLDivElement>(null);
+    const selectionMenuRef = useRef<HTMLDivElement>(null);
     const messageBoxRef = useRef<HTMLDivElement>(null);
     const chatPanelRef = useRef<HTMLDivElement>(null);
     const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -334,6 +361,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const isCoachHoveredRef = useRef(false);
     const selectedTextRef = useRef<string>('');
     const selectedRangeRef = useRef<Range | null>(null);
+    const shouldPreserveSelectionRef = useRef(false);
+    const selectionRestoreFrameRef = useRef<number | null>(null);
     const cambridgeAudioRef = useRef<HTMLAudioElement | null>(null);
     const isOpenRef = useRef(false);
     const messageRef = useRef<Message | null>(null);
@@ -349,6 +378,44 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
         return (AVATAR_DEFINITIONS as any)[avatarStr] || AVATAR_DEFINITIONS.woman_teacher;
     }
+
+    const restoreSelectedRange = () => {
+        const savedRange = selectedRangeRef.current;
+        if (!savedRange || typeof window === 'undefined') return;
+        const selection = window.getSelection();
+        if (!selection) return;
+
+        try {
+            selection.removeAllRanges();
+            selection.addRange(savedRange.cloneRange());
+            selectedTextRef.current = selection.toString().trim() || selectedTextRef.current;
+        } catch {
+            // Ignore restore failures from detached nodes or browser quirks.
+        }
+    };
+
+    const updateCoachSelection = (text: string, range?: Range | null, preserveSelection = false) => {
+        const normalized = text.trim();
+        selectedTextRef.current = normalized;
+        setCoachSelectionText(normalized);
+        if (range) {
+            selectedRangeRef.current = range.cloneRange();
+        }
+        shouldPreserveSelectionRef.current = preserveSelection;
+        if (normalized) {
+            void checkLibraryExistence(normalized);
+        } else {
+            setIsAlreadyInLibrary(false);
+        }
+    };
+
+    const disableSelectionPreservation = () => {
+        shouldPreserveSelectionRef.current = false;
+        if (selectionRestoreFrameRef.current !== null) {
+            window.cancelAnimationFrame(selectionRestoreFrameRef.current);
+            selectionRestoreFrameRef.current = null;
+        }
+    };
 
 
     const checkLibraryExistence = async (word: string) => {
@@ -428,6 +495,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const openChatPanel = (prefill?: string) => {
+        disableSelectionPreservation();
         if (prefill) {
             setChatInput((current) => current.trim() ? current : prefill);
         }
@@ -447,6 +515,36 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
         return () => {
             chatRecognitionRef.current?.stop();
+            disableSelectionPreservation();
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleSelectionChange = () => {
+            if (!shouldPreserveSelectionRef.current) return;
+            const selection = window.getSelection();
+            const selectedText = selection?.toString().trim() || '';
+            if (selectedText) return;
+            if (!selectedRangeRef.current) return;
+
+            if (selectionRestoreFrameRef.current !== null) {
+                window.cancelAnimationFrame(selectionRestoreFrameRef.current);
+            }
+
+            selectionRestoreFrameRef.current = window.requestAnimationFrame(() => {
+                selectionRestoreFrameRef.current = null;
+                if (!shouldPreserveSelectionRef.current) return;
+                restoreSelectedRange();
+            });
+        };
+
+        document.addEventListener('selectionchange', handleSelectionChange);
+        return () => {
+            document.removeEventListener('selectionchange', handleSelectionChange);
+            if (selectionRestoreFrameRef.current !== null) {
+                window.cancelAnimationFrame(selectionRestoreFrameRef.current);
+                selectionRestoreFrameRef.current = null;
+            }
         };
     }, []);
 
@@ -666,8 +764,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             const rect = range.getBoundingClientRect();
             const placement = rect.top > 250 ? 'top' : 'bottom';
 
-            selectedTextRef.current = selectedText;
-            selectedRangeRef.current = range; // ⚠ cần ref này ở component
+            updateCoachSelection(selectedText, range, true);
 
             setMenuPos({
                 x: rect.left + rect.width / 2,
@@ -677,8 +774,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
             setMessage(null);
             setIsOpen(true);
-
-            checkLibraryExistence(selectedText);
         };
 
         const handleContextMenu = (e: MouseEvent) => {
@@ -690,12 +785,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         };
 
         const handleSelectionClick = (e: MouseEvent) => {
-            // Ignore if clicking inside chat panel
-            if (chatPanelRef.current && chatPanelRef.current.contains(e.target as Node)) {
-                return;
-            }
-            if (isOpen) return;
-
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
 
@@ -703,10 +792,17 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             if (!selectedText) return;
 
             const range = selection.getRangeAt(0);
-            // Ignore if selection is inside the chat panel
             if (chatPanelRef.current && chatPanelRef.current.contains(range.commonAncestorContainer as Node)) {
+                updateCoachSelection(selectedText, range, false);
+                setIsOpen(false);
+                setMenuPos(null);
                 return;
             }
+
+            if (chatPanelRef.current && chatPanelRef.current.contains(e.target as Node)) {
+                return;
+            }
+            if (isOpen) return;
 
             const rect = range.getBoundingClientRect();
 
@@ -732,6 +828,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 return;
             }
 
+            if (selectionMenuRef.current && selectionMenuRef.current.contains(target)) {
+                return;
+            }
+
             const clickedOutsideCommand =
                 !commandBoxRef.current ||
                 !commandBoxRef.current.contains(target);
@@ -741,6 +841,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 !messageBoxRef.current.contains(target);
 
             if (clickedOutsideCommand && clickedOutsideMessage) {
+                disableSelectionPreservation();
+                updateCoachSelection('');
                 setIsOpen(false);
                 setMenuPos(null);
             }
@@ -1149,6 +1251,37 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
     };
 
+    const ChatCoachActionBar = () => {
+        if (!coachSelectionText) return null;
+
+        return (
+            <div
+                className="border-t border-neutral-100 bg-neutral-50/90 px-3 py-3"
+                onMouseDown={(e) => {
+                    e.preventDefault();
+                    restoreSelectedRange();
+                }}
+            >
+                <div className="grid grid-cols-6 gap-2">
+                    <button type="button" onClick={handleTranslateSelection} className="h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors text-[11px] font-black" title="Đọc Tiếng Việt">VI</button>
+                    {!isAlreadyInLibrary ? (
+                        <button type="button" onClick={handleAddToLibrary} disabled={isAddingToLibrary} className="h-10 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-100 transition-colors disabled:opacity-50" title="Add to Library">
+                            {isAddingToLibrary ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />}
+                        </button>
+                    ) : (
+                        <button type="button" onClick={handleViewWord} disabled={isAnyModalOpen} className="h-10 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center hover:bg-sky-100 transition-colors disabled:opacity-50" title="View Word Details">
+                            <Eye size={15} />
+                        </button>
+                    )}
+                    <button type="button" onClick={handleReadAndIpa} className="h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center hover:bg-purple-100 transition-colors" title="Read English"><Volume2 size={15} /></button>
+                    <button type="button" onClick={handleGoogleExampleSearch} className="h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-colors" title="Search Google Examples"><Search size={15} /></button>
+                    <button type="button" onClick={handleVietnameseExplanation} className="h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition-colors" title="Giải thích bằng Tiếng Việt"><Star size={15} fill="currentColor" /></button>
+                    <button type="button" onClick={() => updateCoachSelection('')} className="h-10 rounded-2xl bg-white text-neutral-500 border border-neutral-200 flex items-center justify-center hover:bg-neutral-100 transition-colors" title="Clear Selection"><X size={15} /></button>
+                </div>
+            </div>
+        );
+    };
+
     const handleCambridgeLookup = async () => {
         const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
         if (!selectedText) return;
@@ -1268,10 +1401,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         if (isChatOpen && !selectedTextRef.current) return;
 
         isCoachHoveredRef.current = true;
+        shouldPreserveSelectionRef.current = true;
         if (closeMenuTimeoutRef.current) {
             window.clearTimeout(closeMenuTimeoutRef.current);
             closeMenuTimeoutRef.current = null;
         }
+        restoreSelectedRange();
         setIsOpen(true);
     };
 
@@ -1281,6 +1416,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             window.clearTimeout(closeMenuTimeoutRef.current);
         }
         closeMenuTimeoutRef.current = window.setTimeout(() => {
+            disableSelectionPreservation();
             setIsOpen(false);
             closeMenuTimeoutRef.current = null;
         }, messageRef.current?.cambridge ? 3000 : 300);
@@ -1308,7 +1444,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const CommandBox = () => (
         <div
             ref={commandBoxRef}
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+                e.preventDefault();
+                restoreSelectedRange();
+            }}
+            onMouseEnter={restoreSelectedRange}
             className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200"
         >
             {/* Using a 6-column grid allows us to have col-span-2 buttons that are perfectly equal in width */}
@@ -1400,8 +1540,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         <>
             {isOpen && menuPos && (
                 <div
+                    ref={selectionMenuRef}
                     className="fixed z-[2147483647]"
-                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        restoreSelectedRange();
+                    }}
+                    onMouseEnter={() => openCoachMenu()}
+                    onMouseLeave={scheduleCloseCoachMenu}
                     style={{
                         left: `${menuPos.x}px`,
                         top: `${menuPos.y}px`,
@@ -1423,7 +1569,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         {isChatOpen && (
                             <div
                                 ref={chatPanelRef}
-                                className="absolute bottom-20 left-0 z-50 w-[24rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
+                                className="pointer-events-auto absolute bottom-20 left-0 z-50 w-[24rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onMouseEnter={(e) => e.stopPropagation()}
                             >
                                 <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 bg-neutral-50/70">
@@ -1464,22 +1611,15 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                     </div>
                                 </div>
 
-                                <div ref={chatScrollRef} className="max-h-[24rem] overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)]">
-                                    {chatHistory.map((turn) => (
-                                        <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            <div className={`max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
-                                                turn.role === 'user'
-                                                    ? 'bg-neutral-900 text-white rounded-br-md'
-                                                    : 'bg-white border border-neutral-200 text-neutral-700 rounded-bl-md'
-                                            }`}>
-                                                <div
-                                                    className={`leading-relaxed whitespace-pre-wrap break-words ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}
-                                                    dangerouslySetInnerHTML={{ __html: renderChatText(turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')) }}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
+                                <div
+                                    ref={chatScrollRef}
+                                    className="max-h-[24rem] overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)] select-text"
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    <ChatHistoryList chatHistory={chatHistory} isChatLoading={isChatLoading} />
                                 </div>
+
+                                <ChatCoachActionBar />
 
                                 <div className="border-t border-neutral-100 p-3 bg-white">
                                     <div className="flex items-end gap-2">
