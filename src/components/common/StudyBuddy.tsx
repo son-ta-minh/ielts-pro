@@ -333,6 +333,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
     const [isChatListening, setIsChatListening] = useState(false);
+    const [activeChatCoachAction, setActiveChatCoachAction] = useState<string | null>(null);
     const [coachSelectionText, setCoachSelectionText] = useState('');
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
     const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
@@ -1020,6 +1021,97 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
     };
 
+    const requestStudyBuddyAiText = async (userPrompt: string): Promise<string> => {
+        const aiUrl = getStudyBuddyAiUrl(config);
+        const res = await fetch(`${aiUrl}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    { role: 'system', content: STUDY_BUDDY_SYSTEM_PROMPT },
+                    { role: 'user', content: userPrompt }
+                ],
+                stream: false
+            })
+        });
+
+        if (!res.ok) {
+            throw new Error(`AI server error ${res.status}`);
+        }
+
+        const data = await res.json().catch(() => null);
+        const content = data?.choices?.[0]?.message?.content;
+        if (typeof content === 'string' && content.trim()) {
+            return content.trim();
+        }
+        throw new Error('AI server returned empty content.');
+    };
+
+    const handleChatCoachTranslate = async () => {
+        const selectedText = selectedTextRef.current.trim();
+        if (!selectedText) return;
+
+        setActiveChatCoachAction('translate');
+        setIsThinking(true);
+
+        try {
+            const translation = await requestStudyBuddyAiText(
+                `Translate this into natural Vietnamese for an IELTS learner. Keep it concise.\n\nText: ${selectedText}`
+            );
+
+            setMessage({
+                text: translation,
+                icon: <Languages size={18} className="text-blue-500" />
+            });
+            setMenuPos(null);
+            setIsOpen(true);
+            await speak(translation, false, 'vi', coach.viVoice, coach.viAccent);
+        } catch (error) {
+            console.error(error);
+            showToast('Cannot translate with StudyBuddy AI.', 'error');
+        } finally {
+            setIsThinking(false);
+            setActiveChatCoachAction(null);
+        }
+    };
+
+    const handleChatCoachPromptToChat = async (
+        actionKey: 'examples' | 'collocations' | 'paraphrase',
+        promptLabel: string,
+        promptBuilder: (selectedText: string) => string
+    ) => {
+        const selectedText = selectedTextRef.current.trim();
+        if (!selectedText) return;
+
+        const userPrompt = promptBuilder(selectedText);
+        const userTurn = createChatTurn('user', `${promptLabel}: ${selectedText}`);
+        const assistantId = `assistant-${actionKey}-${Date.now()}`;
+
+        setActiveChatCoachAction(actionKey);
+        setChatHistory((current) => [...current, userTurn, { id: assistantId, role: 'assistant', content: '...' }]);
+
+        try {
+            const content = await requestStudyBuddyAiText(userPrompt);
+            setChatHistory((current) =>
+                current.map((turn) => turn.id === assistantId ? { ...turn, content } : turn)
+            );
+        } catch (error) {
+            console.error(error);
+            setChatHistory((current) =>
+                current.map((turn) =>
+                    turn.id === assistantId
+                        ? { ...turn, content: 'StudyBuddy AI khong tra ve duoc noi dung cho yeu cau nay.' }
+                        : turn
+                )
+            );
+            showToast('StudyBuddy AI request failed.', 'error');
+        } finally {
+            setActiveChatCoachAction(null);
+        }
+    };
+
     const handleToggleChatMic = async () => {
         if (isChatListening) {
             stopChatListening();
@@ -1252,7 +1344,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const ChatCoachActionBar = () => {
-        if (!coachSelectionText) return null;
+        const hasSelection = !!coachSelectionText;
+        const baseButtonClass = 'h-10 rounded-2xl flex items-center justify-center px-3 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
         return (
             <div
@@ -1263,20 +1356,72 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 }}
             >
                 <div className="grid grid-cols-6 gap-2">
-                    <button type="button" onClick={handleTranslateSelection} className="h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 transition-colors text-[11px] font-black" title="Đọc Tiếng Việt">VI</button>
+                    <button
+                        type="button"
+                        onClick={handleChatCoachTranslate}
+                        disabled={!hasSelection || !!activeChatCoachAction}
+                        className={`${baseButtonClass} bg-indigo-50 text-indigo-600 hover:bg-indigo-100`}
+                        title="Dịch tiếng Việt bằng AI"
+                    >
+                        {activeChatCoachAction === 'translate' ? <Loader2 size={14} className="animate-spin" /> : 'Dich VI'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleReadAndIpa}
+                        disabled={!hasSelection}
+                        className={`${baseButtonClass} bg-purple-50 text-purple-600 hover:bg-purple-100`}
+                        title="Đọc tiếng Anh"
+                    >
+                        Read EN
+                    </button>
                     {!isAlreadyInLibrary ? (
-                        <button type="button" onClick={handleAddToLibrary} disabled={isAddingToLibrary} className="h-10 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center hover:bg-green-100 transition-colors disabled:opacity-50" title="Add to Library">
+                        <button type="button" onClick={handleAddToLibrary} disabled={!hasSelection || isAddingToLibrary} className={`${baseButtonClass} bg-green-50 text-green-600 hover:bg-green-100`} title="Add to Library">
                             {isAddingToLibrary ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />}
                         </button>
                     ) : (
-                        <button type="button" onClick={handleViewWord} disabled={isAnyModalOpen} className="h-10 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center hover:bg-sky-100 transition-colors disabled:opacity-50" title="View Word Details">
+                        <button type="button" onClick={handleViewWord} disabled={!hasSelection || isAnyModalOpen} className={`${baseButtonClass} bg-sky-50 text-sky-600 hover:bg-sky-100`} title="View Word Details">
                             <Eye size={15} />
                         </button>
                     )}
-                    <button type="button" onClick={handleReadAndIpa} className="h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center hover:bg-purple-100 transition-colors" title="Read English"><Volume2 size={15} /></button>
-                    <button type="button" onClick={handleGoogleExampleSearch} className="h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-100 transition-colors" title="Search Google Examples"><Search size={15} /></button>
-                    <button type="button" onClick={handleVietnameseExplanation} className="h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition-colors" title="Giải thích bằng Tiếng Việt"><Star size={15} fill="currentColor" /></button>
-                    <button type="button" onClick={() => updateCoachSelection('')} className="h-10 rounded-2xl bg-white text-neutral-500 border border-neutral-200 flex items-center justify-center hover:bg-neutral-100 transition-colors" title="Clear Selection"><X size={15} /></button>
+                    <button
+                        type="button"
+                        onClick={() => handleChatCoachPromptToChat(
+                            'examples',
+                            'Examples',
+                            (selectedText) => `Give examples for "${selectedText}". Keep them natural, practical, and concise for an IELTS learner.`
+                        )}
+                        disabled={!hasSelection || !!activeChatCoachAction}
+                        className={`${baseButtonClass} bg-blue-50 text-blue-600 hover:bg-blue-100`}
+                        title="Examples"
+                    >
+                        {activeChatCoachAction === 'examples' ? <Loader2 size={14} className="animate-spin" /> : 'Examples'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleChatCoachPromptToChat(
+                            'collocations',
+                            'Collocations',
+                            (selectedText) => `Give popular natural collocations for "${selectedText}". Keep the answer concise and learner-friendly.`
+                        )}
+                        disabled={!hasSelection || !!activeChatCoachAction}
+                        className={`${baseButtonClass} bg-amber-50 text-amber-600 hover:bg-amber-100`}
+                        title="Collocations"
+                    >
+                        {activeChatCoachAction === 'collocations' ? <Loader2 size={14} className="animate-spin" /> : 'Colloc'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleChatCoachPromptToChat(
+                            'paraphrase',
+                            'Paraphrase',
+                            (selectedText) => `Natural Paraphrase for "${selectedText}". Give concise, natural alternatives suitable for IELTS speaking and writing.`
+                        )}
+                        disabled={!hasSelection || !!activeChatCoachAction}
+                        className={`${baseButtonClass} bg-rose-50 text-rose-600 hover:bg-rose-100`}
+                        title="Paraphrase"
+                    >
+                        {activeChatCoachAction === 'paraphrase' ? <Loader2 size={14} className="animate-spin" /> : 'Para'}
+                    </button>
                 </div>
             </div>
         );
