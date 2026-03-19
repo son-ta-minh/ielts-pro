@@ -286,10 +286,10 @@ const ChatHistoryList = React.memo(({
             <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
                     turn.role === 'user'
-                        ? 'bg-neutral-900 text-white rounded-br-md'
-                        : 'bg-white border border-neutral-200 text-neutral-700 rounded-bl-md'
+                        ? 'bg-white border border-neutral-200 text-neutral-900 rounded-br-md'
+                        : 'bg-white border border-neutral-200 text-neutral-900 rounded-bl-md'
                 }`}>
-                    <div className={`leading-relaxed break-words select-text ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
+                    <div className={`leading-relaxed break-words select-text text-neutral-900 ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
                         <ReactMarkdown
                             components={{
                                 p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
@@ -328,8 +328,8 @@ const ChatHistoryList = React.memo(({
                                         );
                                     }
                                     return (
-                                        <div className="mb-2 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-950 text-neutral-100 last:mb-0">
-                                            <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-400">
+                                        <div className="mb-2 overflow-hidden rounded-2xl border border-neutral-200 bg-white text-neutral-900 last:mb-0">
+                                            <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">
                                                 <span>{language || 'code'}</span>
                                             </div>
                                             <pre className="overflow-x-auto px-4 py-3 text-[12px] leading-6">
@@ -535,9 +535,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     const openChatPanel = (prefill?: string) => {
         disableSelectionPreservation();
-        if (prefill) {
-            setChatInput((current) => current.trim() ? current : prefill);
-        }
+
+        // Always take latest selected text at click time if not explicitly provided
+        const latestSelection = (prefill ?? selectedTextRef.current) || window.getSelection()?.toString().trim() || '';
+
+        // Set chat input directly (do not preserve old input)
+        setChatInput(latestSelection);
+
         setMessage(null);
         setMenuPos(null);
         setIsOpen(false);
@@ -1059,7 +1063,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
     };
 
-    const requestStudyBuddyAiText = async (userPrompt: string): Promise<string> => {
+    const requestStudyBuddyAiText = async (userPrompt: string, isStreamed: boolean = true): Promise<string> => {
         const aiUrl = getStudyBuddyAiUrl(config);
         const res = await fetch(`${aiUrl}/v1/chat/completions`, {
             method: 'POST',
@@ -1071,7 +1075,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                     { role: 'system', content: STUDY_BUDDY_SYSTEM_PROMPT },
                     { role: 'user', content: userPrompt }
                 ],
-                stream: true
+                stream: isStreamed
             })
         });
 
@@ -1096,7 +1100,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
         try {
             const translation = await requestStudyBuddyAiText(
-                `Translate this into natural Vietnamese for an IELTS learner. Keep it concise.\n\nText: ${selectedText}`
+                `Translate this into natural Vietnamese for an IELTS learner. Keep it concise and compacted, minimal, focus on meaning, max 20 words, don't need extra example.\n\nText: ${selectedText}`,
+                false
             );
 
             setMessage({
@@ -1108,7 +1113,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             await speak(translation, false, 'vi', coach.viVoice, coach.viAccent);
         } catch (error) {
             console.error(error);
-            showToast('Cannot translate with StudyBuddy AI.', 'error');
+
+            // Fallback to old translate (MyMemory API)
+            await handleTranslateSelection();
         } finally {
             setIsThinking(false);
             setActiveChatCoachAction(null);
@@ -1466,6 +1473,39 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
     };
 
+    const buildCoachPrompt = (
+        selectedText: string,
+        type: 'examples' | 'collocations' | 'paraphrase'
+    ) => {
+        const baseRules = `Rules:
+- Use English only
+- Do NOT translate into Vietnamese
+- Keep concise, natural, IELTS-friendly
+- Output MUST be a Markdown code block
+- Use bullet list ONLY (-)
+- Do NOT use {}, numbers, or any other symbols
+- Follow the format STRICTLY`;
+
+        if (type === 'examples') {
+            return `Give max 3 example sentences for "${selectedText}".
+
+${baseRules}
+- Each bullet = 1 natural sentence`;
+        }
+
+        if (type === 'collocations') {
+            return `Give max 5 popular natural collocations for "${selectedText}".
+
+${baseRules}
+- Format: - **collocation**: short explanation`;
+        }
+
+        return `Give natural paraphrases for "${selectedText}".
+
+${baseRules}
+- Each bullet = 1 paraphrase`;
+    };
+
     const ChatCoachActionBar = () => {
         const hasSelection = !!coachSelectionText;
         const baseButtonClass = 'h-8 rounded-2xl flex items-center justify-center px-3 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
@@ -1511,7 +1551,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         onClick={() => handleChatCoachPromptToChat(
                             'examples',
                             'Examples',
-                            (selectedText) => `Give examples for "${selectedText}". Use English only. Do NOT translate into Vietnamese. Keep them natural, practical, and concise for an IELTS learner.`
+                            (selectedText) => buildCoachPrompt(selectedText, 'examples')
                         )}
                         disabled={!hasSelection || !!activeChatCoachAction}
                         className={`${baseButtonClass} bg-blue-50 text-blue-600 hover:bg-blue-100`}
@@ -1524,7 +1564,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         onClick={() => handleChatCoachPromptToChat(
                             'collocations',
                             'Collocations',
-                            (selectedText) => `Give popular natural collocations for "${selectedText}". Use English only. Do NOT translate into Vietnamese. Keep the answer concise and learner-friendly.`
+                            (selectedText) => buildCoachPrompt(selectedText, 'collocations')
                         )}
                         disabled={!hasSelection || !!activeChatCoachAction}
                         className={`${baseButtonClass} bg-amber-50 text-amber-600 hover:bg-amber-100`}
@@ -1537,7 +1577,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         onClick={() => handleChatCoachPromptToChat(
                             'paraphrase',
                             'Paraphrase',
-                            (selectedText) => `Natural paraphrases for "${selectedText}". Use English only. Do NOT translate into Vietnamese. Give concise, natural alternatives suitable for IELTS speaking and writing.`
+                            (selectedText) => buildCoachPrompt(selectedText, 'paraphrase')
                         )}
                         disabled={!hasSelection || !!activeChatCoachAction}
                         className={`${baseButtonClass} bg-rose-50 text-rose-600 hover:bg-rose-100`}
@@ -1746,7 +1786,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 {!isChatOpen && (
                     <button
                         type="button"
-                        onClick={() => openChatPanel(selectedTextRef.current || window.getSelection()?.toString().trim())}
+                        onClick={() => openChatPanel()}
                         className="col-span-8 h-10 mt-0.5 bg-neutral-900 text-white rounded-2xl flex items-center justify-center gap-2 hover:bg-neutral-800 transition-all active:scale-[0.98] shadow-sm text-[11px] font-black uppercase tracking-wide"
                         title="Chat with StudyBuddy AI"
                     >
