@@ -13,10 +13,16 @@ import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { ToolsModal } from '../tools/ToolsModal';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import ReactMarkdown from 'react-markdown';
+import { getAiStudyContextText } from '../../utils/context_util';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
 const CHAT_AUDIO_PREFETCH_AHEAD = 2;
+const STUDY_BUDDY_AI_REQUEST_CONFIG = {
+    temperature: 0.2,
+    top_p: 0.85,
+    repetition_penalty: 1.15
+} as const;
 
 interface Props {
     user: User;
@@ -79,6 +85,54 @@ export const showStudyBuddyMessage = (text: string, iconType: 'example' | 'info'
     );
 };
 
+export const requestStudyBuddyChatResponse = (prompt: string) => {
+    window.dispatchEvent(
+        new CustomEvent('studybuddy-chat-request', {
+            detail: { prompt }
+        })
+    );
+};
+
+export const pushStudyBuddyAssistantMessage = (content: string) => {
+    window.dispatchEvent(
+        new CustomEvent('studybuddy-chat-response', {
+            detail: { content }
+        })
+    );
+};
+
+export const startStudyBuddyAssistantStream = (requestId: string) => {
+    window.dispatchEvent(
+        new CustomEvent('studybuddy-chat-stream-start', {
+            detail: { requestId }
+        })
+    );
+};
+
+export const appendStudyBuddyAssistantStream = (requestId: string, delta: string) => {
+    window.dispatchEvent(
+        new CustomEvent('studybuddy-chat-stream-delta', {
+            detail: { requestId, delta }
+        })
+    );
+};
+
+export const finishStudyBuddyAssistantStream = (requestId: string) => {
+    window.dispatchEvent(
+        new CustomEvent('studybuddy-chat-stream-end', {
+            detail: { requestId }
+        })
+    );
+};
+
+export const failStudyBuddyAssistantStream = (requestId: string, message: string) => {
+    window.dispatchEvent(
+        new CustomEvent('studybuddy-chat-stream-error', {
+            detail: { requestId, message }
+        })
+    );
+};
+
 const normalizeCambridgePronunciations = (items?: CambridgePronunciation[]): CambridgePronunciation[] => {
     if (!Array.isArray(items) || items.length === 0) return [];
     const byPos = new Map<string, CambridgePronunciation>();
@@ -136,6 +190,45 @@ const AVATAR_DEFINITIONS = {
 };
 
 const STUDY_BUDDY_SYSTEM_PROMPT = 'You are StudyBuddy, an IELTS and English learning coach. Give practical, concise help with clear examples. Prefer simple formatting and answer in Vietnamese when the learner writes in Vietnamese.';
+
+const getStudyBuddyUserProfileMessage = (user: User): string => {
+    const profileLines = [
+        `Learner name: ${user.name || 'Unknown'}`,
+        `App level: ${Number.isFinite(user.level) ? user.level : 'Unknown'}`,
+        user.currentLevel ? `English level: ${user.currentLevel}` : null,
+        user.target ? `Target: ${user.target}` : null,
+        user.nativeLanguage ? `Native language: ${user.nativeLanguage}` : null,
+        user.role ? `Role: ${user.role}` : null,
+        user.note ? `Learner note: ${user.note}` : null
+    ].filter(Boolean);
+
+    return `Here is the learner profile. Always use it as lightweight personalization context when giving advice, examples, tone, and study guidance.\n\n${profileLines.join('\n')}`;
+};
+
+const getStudyBuddyContextMessage = (isContextAware: boolean): string => {
+    if (!isContextAware) {
+        return 'Fast mode is active, so no personal study context is attached. If the user asks about their own learning status, recent learned words, hard/forgotten words, or focus words, explicitly tell them to switch the toggle from "Fast mode" to "Context aware".';
+    }
+    try {
+        const contextText = getAiStudyContextText().trim();
+        return contextText
+            ? `Here is the learner's current study context. Use it when helpful, especially for personalization, revision priorities, deep dives, and choosing examples.\n\n${contextText}`
+            : 'No study context is currently available.';
+    } catch {
+        return 'No study context is currently available.';
+    }
+};
+
+const buildStudyBuddyMessages = (
+    user: User,
+    isContextAware: boolean,
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>
+) => ([
+    { role: 'system' as const, content: STUDY_BUDDY_SYSTEM_PROMPT },
+    { role: 'system' as const, content: getStudyBuddyUserProfileMessage(user) },
+    { role: 'system' as const, content: getStudyBuddyContextMessage(isContextAware) },
+    ...messages
+]);
 
 const createChatTurn = (role: ChatTurn['role'], content: string): ChatTurn => ({
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -370,6 +463,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [chatInput, setChatInput] = useState('');
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
+    const [isContextAware, setIsContextAware] = useState(false);
     const [isChatListening, setIsChatListening] = useState(false);
     const [activeChatCoachAction, setActiveChatCoachAction] = useState<string | null>(null);
     const [coachSelectionText, setCoachSelectionText] = useState('');
@@ -386,9 +480,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const commandBoxRef = useRef<HTMLDivElement>(null);
     const selectionMenuRef = useRef<HTMLDivElement>(null);
     const messageBoxRef = useRef<HTMLDivElement>(null);
+    const studyBuddyRootRef = useRef<HTMLDivElement>(null);
     const chatPanelRef = useRef<HTMLDivElement>(null);
     const chatScrollRef = useRef<HTMLDivElement>(null);
     const chatAbortRef = useRef<AbortController | null>(null);
+    const externalChatStreamRef = useRef<{ requestId: string; assistantId: string; spokenCursor: number } | null>(null);
     const chatRecognitionRef = useRef<SpeechRecognitionManager | null>(null);
     const chatDraftPrefixRef = useRef('');
     const chatSpeechQueueRef = useRef<ChatSpeechChunk[]>([]);
@@ -755,11 +851,117 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
             setIsOpen(true);
         };
+        const handleExternalStudyBuddyChatRequest = (event: Event) => {
+            const custom = event as CustomEvent<{ prompt?: string }>;
+            const prompt = custom.detail?.prompt?.trim();
+            if (!prompt) return;
+            void handleBackgroundChatRequest(prompt);
+        };
+        const handleExternalStudyBuddyChatResponse = (event: Event) => {
+            const custom = event as CustomEvent<{ content?: string }>;
+            const content = custom.detail?.content?.trim();
+            if (!content) return;
+
+            setIsChatOpen(true);
+            setIsChatLoading(false);
+            setIsThinking(false);
+            setChatHistory((current) => [
+                ...current,
+                createChatTurn('assistant', content)
+            ]);
+
+            if (isChatAudioEnabledRef.current) {
+                queueChatSpeech(content);
+            }
+        };
+        const handleExternalStudyBuddyChatStreamStart = (event: Event) => {
+            const custom = event as CustomEvent<{ requestId?: string }>;
+            const requestId = custom.detail?.requestId?.trim();
+            if (!requestId) return;
+
+            const assistantId = `assistant-stream-${requestId}`;
+            externalChatStreamRef.current = { requestId, assistantId, spokenCursor: 0 };
+            setIsChatOpen(true);
+            setIsChatLoading(true);
+            setIsThinking(false);
+            clearChatSpeechQueue(true);
+            setChatHistory((current) => [
+                ...current,
+                { id: assistantId, role: 'assistant', content: '' }
+            ]);
+        };
+        const handleExternalStudyBuddyChatStreamDelta = (event: Event) => {
+            const custom = event as CustomEvent<{ requestId?: string; delta?: string }>;
+            const requestId = custom.detail?.requestId?.trim();
+            const delta = custom.detail?.delta;
+            const streamState = externalChatStreamRef.current;
+            if (!requestId || !delta || !streamState || streamState.requestId !== requestId) return;
+
+            let nextContent = '';
+            setChatHistory((current) =>
+                current.map((turn) => {
+                    if (turn.id !== streamState.assistantId) return turn;
+                    nextContent = `${turn.content}${delta}`;
+                    return { ...turn, content: nextContent };
+                })
+            );
+
+            if (isChatAudioEnabledRef.current && nextContent) {
+                const pendingChunk = nextContent.slice(streamState.spokenCursor);
+                const { sentences, remainder } = splitSpeakableSentences(pendingChunk);
+                if (sentences.length > 0) {
+                    for (const sentence of sentences) {
+                        queueChatSpeech(sentence);
+                    }
+                    streamState.spokenCursor = nextContent.length - remainder.length;
+                }
+            }
+        };
+        const handleExternalStudyBuddyChatStreamEnd = (event: Event) => {
+            const custom = event as CustomEvent<{ requestId?: string }>;
+            const requestId = custom.detail?.requestId?.trim();
+            const streamState = externalChatStreamRef.current;
+            if (!requestId || !streamState || streamState.requestId !== requestId) return;
+
+            if (isChatAudioEnabledRef.current) {
+                const turn = chatHistory.find((item) => item.id === streamState.assistantId);
+                const trailing = turn?.content.slice(streamState.spokenCursor).trim();
+                if (trailing) {
+                    queueChatSpeech(trailing);
+                }
+            }
+
+            externalChatStreamRef.current = null;
+            setIsChatLoading(false);
+        };
+        const handleExternalStudyBuddyChatStreamError = (event: Event) => {
+            const custom = event as CustomEvent<{ requestId?: string; message?: string }>;
+            const requestId = custom.detail?.requestId?.trim();
+            const message = custom.detail?.message?.trim() || 'Khong the ket noi StudyBuddy AI luc nay.';
+            const streamState = externalChatStreamRef.current;
+            if (!requestId || !streamState || streamState.requestId !== requestId) return;
+
+            setChatHistory((current) =>
+                current.map((turn) =>
+                    turn.id === streamState.assistantId
+                        ? { ...turn, content: turn.content.trim() || message }
+                        : turn
+                )
+            );
+            externalChatStreamRef.current = null;
+            setIsChatLoading(false);
+        };
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
         window.addEventListener('coach-cambridge-lookup-request', handleCoachLookupRequest as EventListener);
         window.addEventListener('coach-ipa-fallback-request', handleCoachIpaFallbackRequest as EventListener);
         window.addEventListener('studybuddy-show-message', handleExternalStudyBuddyMessage as EventListener);
+        window.addEventListener('studybuddy-chat-request', handleExternalStudyBuddyChatRequest as EventListener);
+        window.addEventListener('studybuddy-chat-response', handleExternalStudyBuddyChatResponse as EventListener);
+        window.addEventListener('studybuddy-chat-stream-start', handleExternalStudyBuddyChatStreamStart as EventListener);
+        window.addEventListener('studybuddy-chat-stream-delta', handleExternalStudyBuddyChatStreamDelta as EventListener);
+        window.addEventListener('studybuddy-chat-stream-end', handleExternalStudyBuddyChatStreamEnd as EventListener);
+        window.addEventListener('studybuddy-chat-stream-error', handleExternalStudyBuddyChatStreamError as EventListener);
         
         // Initial check
         setIsAudioPlaying(getIsSpeaking());
@@ -785,6 +987,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             window.removeEventListener('coach-cambridge-lookup-request', handleCoachLookupRequest as EventListener);
             window.removeEventListener('coach-ipa-fallback-request', handleCoachIpaFallbackRequest as EventListener);
             window.removeEventListener('studybuddy-show-message', handleExternalStudyBuddyMessage as EventListener);
+            window.removeEventListener('studybuddy-chat-request', handleExternalStudyBuddyChatRequest as EventListener);
+            window.removeEventListener('studybuddy-chat-response', handleExternalStudyBuddyChatResponse as EventListener);
+            window.removeEventListener('studybuddy-chat-stream-start', handleExternalStudyBuddyChatStreamStart as EventListener);
+            window.removeEventListener('studybuddy-chat-stream-delta', handleExternalStudyBuddyChatStreamDelta as EventListener);
+            window.removeEventListener('studybuddy-chat-stream-end', handleExternalStudyBuddyChatStreamEnd as EventListener);
+            window.removeEventListener('studybuddy-chat-stream-error', handleExternalStudyBuddyChatStreamError as EventListener);
             if (cambridgeAudioRef.current) {
                 cambridgeAudioRef.current.pause();
                 cambridgeAudioRef.current = null;
@@ -795,6 +1003,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     useEffect(() => {
         const handleClickOutsidePanels = (e: MouseEvent) => {
             const target = e.target as Node;
+            if (studyBuddyRootRef.current && studyBuddyRootRef.current.contains(target)) {
+                return;
+            }
             if (chatPanelRef.current && !chatPanelRef.current.contains(target)) {
                 stopChatListening();
                 setIsChatOpen(false);
@@ -952,10 +1163,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    messages: [
-                        { role: 'system', content: STUDY_BUDDY_SYSTEM_PROMPT },
-                        ...nextHistory.map((turn) => ({ role: turn.role, content: turn.content }))
-                    ],
+                    messages: buildStudyBuddyMessages(
+                        user,
+                        isContextAware,
+                        nextHistory.map((turn) => ({ role: turn.role, content: turn.content }))
+                    ),
+                    ...STUDY_BUDDY_AI_REQUEST_CONFIG,
                     stream: true
                 }),
                 signal: controller.signal
@@ -1074,6 +1287,164 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
     };
 
+    const handleBackgroundChatRequest = async (prompt: string) => {
+        const cleanPrompt = prompt.trim();
+        if (!cleanPrompt || isChatLoading) return;
+        stopChatListening();
+
+        const assistantId = `assistant-bg-${Date.now()}`;
+        const aiUrl = getStudyBuddyAiUrl(config);
+        let spokenCursor = 0;
+
+        setIsChatOpen(true);
+        setIsChatLoading(true);
+        setIsThinking(false);
+        clearChatSpeechQueue(true);
+        setChatHistory((current) => [
+            ...current,
+            { id: assistantId, role: 'assistant', content: '' }
+        ]);
+
+        const controller = new AbortController();
+        chatAbortRef.current = controller;
+
+        const updateAssistantTurn = (content: string) => {
+            setChatHistory((current) =>
+                current.map((turn) => (turn.id === assistantId ? { ...turn, content } : turn))
+            );
+        };
+
+        try {
+            const res = await fetch(aiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: buildStudyBuddyMessages(
+                        user,
+                        isContextAware,
+                        [{ role: 'user', content: cleanPrompt }]
+                    ),
+                    ...STUDY_BUDDY_AI_REQUEST_CONFIG,
+                    stream: true
+                }),
+                signal: controller.signal
+            });
+
+            if (!res.ok) {
+                throw new Error(`AI server error ${res.status}`);
+            }
+
+            if (!res.body) {
+                throw new Error('AI server did not return a stream.');
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffered = '';
+            let assistantText = '';
+
+            const appendDelta = (payload: any) => {
+                const delta = payload?.choices?.[0]?.delta?.content ?? payload?.choices?.[0]?.message?.content;
+                if (typeof delta === 'string') {
+                    assistantText += delta;
+                } else if (Array.isArray(delta)) {
+                    for (const part of delta) {
+                        if (typeof part?.text === 'string') assistantText += part.text;
+                    }
+                }
+                updateAssistantTurn(assistantText);
+                if (isChatAudioEnabledRef.current) {
+                    const pendingChunk = assistantText.slice(spokenCursor);
+                    const { sentences, remainder } = splitSpeakableSentences(pendingChunk);
+                    if (sentences.length > 0) {
+                        for (const sentence of sentences) {
+                            queueChatSpeech(sentence);
+                        }
+                        spokenCursor = assistantText.length - remainder.length;
+                    }
+                }
+            };
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffered += decoder.decode(value, { stream: true });
+                const events = buffered.split('\n\n');
+                buffered = events.pop() || '';
+
+                for (const eventBlock of events) {
+                    const lines = eventBlock
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean);
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data:')) continue;
+                        const raw = line.slice(5).trim();
+                        if (!raw || raw === '[DONE]') continue;
+                        try {
+                            appendDelta(JSON.parse(raw));
+                        } catch {
+                            // Ignore partial or non-JSON chunks.
+                        }
+                    }
+                }
+            }
+
+            buffered += decoder.decode();
+            if (buffered.trim()) {
+                for (const line of buffered.split('\n')) {
+                    const trimmed = line.trim();
+                    if (!trimmed.startsWith('data:')) continue;
+                    const raw = trimmed.slice(5).trim();
+                    if (!raw || raw === '[DONE]') continue;
+                    try {
+                        appendDelta(JSON.parse(raw));
+                    } catch {
+                        // Ignore final malformed chunk.
+                    }
+                }
+            }
+
+            if (!assistantText.trim()) {
+                updateAssistantTurn('AI server da ket noi, nhung chua tra ve noi dung.');
+            } else if (isChatAudioEnabledRef.current) {
+                const trailing = assistantText.slice(spokenCursor).trim();
+                if (trailing) {
+                    queueChatSpeech(trailing);
+                }
+            }
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId && !turn.content.trim()
+                            ? { ...turn, content: 'Da dung phan hoi.' }
+                            : turn
+                    )
+                );
+            } else {
+                console.error(error);
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, content: 'Khong the ket noi StudyBuddy AI luc nay.' }
+                            : turn
+                    )
+                );
+                showToast('StudyBuddy AI connection failed.', 'error');
+            }
+        } finally {
+            if (chatAbortRef.current === controller) {
+                chatAbortRef.current = null;
+            }
+            setIsChatLoading(false);
+        }
+    };
+
     const requestStudyBuddyAiText = async (userPrompt: string, isStreamed: boolean = true): Promise<string> => {
         const aiUrl = getStudyBuddyAiUrl(config);
         const res = await fetch(aiUrl, {
@@ -1082,10 +1453,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                messages: [
-                    { role: 'system', content: STUDY_BUDDY_SYSTEM_PROMPT },
-                    { role: 'user', content: userPrompt }
-                ],
+                messages: buildStudyBuddyMessages(
+                    user,
+                    isContextAware,
+                    [{ role: 'user', content: userPrompt }]
+                ),
+                ...STUDY_BUDDY_AI_REQUEST_CONFIG,
                 stream: isStreamed
             })
         });
@@ -1165,10 +1538,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    messages: [
-                        { role: 'system', content: STUDY_BUDDY_SYSTEM_PROMPT },
-                        { role: 'user', content: userPrompt }
-                    ],
+                    messages: buildStudyBuddyMessages(
+                        user,
+                        isContextAware,
+                        [{ role: 'user', content: userPrompt }]
+                    ),
+                    ...STUDY_BUDDY_AI_REQUEST_CONFIG,
                     stream: true
                 }),
                 signal: controller.signal
@@ -1858,7 +2233,7 @@ Rules:
                     <CommandBox />
                 </div>
             )}
-            <div className="fixed bottom-0 left-6 z-[2147483646] flex flex-col items-start pointer-events-none">
+            <div ref={studyBuddyRootRef} className="fixed bottom-0 left-6 z-[2147483646] flex flex-col items-start pointer-events-none">
                 <div
                     className="flex flex-col items-center pointer-events-auto group pb-0 pt-10"
                     onMouseEnter={(e) => openCoachMenu(e)}
@@ -1883,6 +2258,18 @@ Rules:
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsContextAware((prev) => !prev)}
+                                            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                                                isContextAware
+                                                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                                    : 'border-neutral-200 bg-white text-neutral-500'
+                                            }`}
+                                            title="Toggle study context embedding"
+                                        >
+                                            {isContextAware ? 'Context aware' : 'Fast mode'}
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={() => setIsChatAudioEnabled((prev) => !prev)}

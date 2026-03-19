@@ -3,6 +3,7 @@ import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2
 import { VocabularyItem, ReviewGrade, WordQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
+import { WordRefineProgressSnapshot } from '../../services/wordRefineApi';
 
 export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'archive' | 'focus' | 'duplicate';
 export type RefinedFilter = 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined';
@@ -247,6 +248,14 @@ export interface WordTableUIProps {
   selectedRawWordsCount: number;
   handleGenerateRefinePrompt: (inputs: { words: string }) => string;
   handleAiRefinementResult: (results: any[]) => void;
+  onApiRefineSelected: () => void;
+  isApiRefining: boolean;
+  apiRefineProgress: WordRefineProgressSnapshot | null;
+  apiRefineHistory: WordRefineProgressSnapshot[];
+  isApiRefineLogOpen: boolean;
+  onOpenApiRefineLog: () => void;
+  onCloseApiRefineLog: () => void;
+  onStopApiRefine: () => void;
   setStatusFilter: (sf: StatusFilter) => void;
   setRefinedFilter: (rf: RefinedFilter) => void;
   setRegisterFilter: (rf: RegisterFilter) => void;
@@ -290,7 +299,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   isAiModalOpen, setIsAiModalOpen,
   notification, viewMenuRef, visibility, setVisibility, handleToggleFilter,
   handleBatchAddSubmit, onOpenBulkDeleteModal, onOpenBulkHardDeleteModal, onBulkVerify, selectedWordsToRefine, selectedRawWordsCount, handleGenerateRefinePrompt,
-  handleAiRefinementResult, setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen,
+  handleAiRefinementResult, onApiRefineSelected, isApiRefining, apiRefineProgress, apiRefineHistory, isApiRefineLogOpen, onOpenApiRefineLog, onCloseApiRefineLog, onStopApiRefine, setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen,
   setIsFilterMenuOpen, setIsAddExpanded, selectedWordsMissingHintsCount, onOpenHintModal,
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
   selectedTypes, toggleType, onOpenWordBook,
@@ -538,11 +547,97 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
               )}
               <button onClick={() => onBulkVerify(selectedIds)} className="px-4 py-3 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><ShieldCheck size={14} /> <span>Verify</span></button>
               {selectedWordsMissingHintsCount > 0 && ( <button onClick={onOpenHintModal} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors" title="Generate hints for collocations and idioms"><Zap size={14} /> <span>Hints ({selectedWordsMissingHintsCount})</span></button> )}
+              <button
+                onClick={onApiRefineSelected}
+                disabled={isApiRefining}
+                className="px-4 py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors disabled:opacity-60"
+                title="Call AI API directly with validation and retry"
+              >
+                {isApiRefining ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                <span>Refine API</span>
+              </button>
+              {isApiRefining && (
+                <button
+                  onClick={onStopApiRefine}
+                  className="px-4 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"
+                >
+                  <X size={14} />
+                  <span>Stop</span>
+                </button>
+              )}
+              {(apiRefineProgress || apiRefineHistory.length > 0) && (
+                <button
+                  onClick={onOpenApiRefineLog}
+                  className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"
+                >
+                  <Eye size={14} />
+                  <span>Logs</span>
+                </button>
+              )}
               <button onClick={() => { setIsAiModalOpen(true); }} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>Details</span></button>
               <button onClick={onOpenParaModal} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors" title="Overwrites existing variations"><Replace size={14} /> <span>Paraphrase</span></button>
               <button onClick={onOpenAddToBookModal} className="px-4 py-3 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><BookPlus size={14} /> <span>Book</span></button>
               <button onClick={onAddToPronunciation} className="px-4 py-3 bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Mic size={14} /> <span>Speech</span></button>
               <button onClick={() => onPractice(selectedIds)} className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-xs flex items-center space-x-2 shadow-lg shadow-blue-500/20 active:scale-95"><Play size={14} fill="currentColor"/> <span>Practice</span></button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isApiRefineLogOpen && apiRefineProgress && (
+        <div className="fixed bottom-40 left-1/2 -translate-x-1/2 z-[210] w-full max-w-5xl px-4">
+          <div className="rounded-[2rem] border border-amber-200 bg-amber-50/95 shadow-2xl p-4 sm:p-5 backdrop-blur">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">Refine API Progress</div>
+                  <div className="text-sm font-black text-amber-950">{apiRefineProgress.message}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-700">
+                    Attempt {Math.max(apiRefineProgress.attempt, 1)}/{apiRefineProgress.maxAttempts}
+                  </div>
+                  <button
+                    onClick={onCloseApiRefineLog}
+                    className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-700 hover:bg-amber-100 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              {apiRefineProgress.issues && apiRefineProgress.issues.length > 0 && (
+                <div className="rounded-2xl border border-rose-200 bg-white p-3">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-rose-500">Validation / Error</div>
+                  <div className="mt-2 text-xs font-semibold text-rose-700 whitespace-pre-wrap">
+                    {apiRefineProgress.issues.slice(0, 8).join('\n')}
+                  </div>
+                </div>
+              )}
+              {apiRefineProgress.rawText && (
+                <div className="rounded-2xl border border-neutral-200 bg-white p-3">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Server Response Preview</div>
+                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed font-mono text-neutral-700">
+                    {apiRefineProgress.rawText}
+                  </pre>
+                </div>
+              )}
+              {apiRefineHistory.length > 1 && (
+                <div className="rounded-2xl border border-neutral-200 bg-white p-3">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Progress Log</div>
+                  <div className="mt-2 max-h-40 overflow-auto space-y-2">
+                    {apiRefineHistory.map((item, index) => (
+                      <div key={`${item.stage}-${item.attempt}-${index}`} className="rounded-xl bg-neutral-50 px-3 py-2">
+                        <div className="text-[11px] font-black text-neutral-700">
+                          [{item.attempt}/{item.maxAttempts}] {item.stage}
+                        </div>
+                        <div className="mt-1 text-[11px] leading-relaxed text-neutral-600 whitespace-pre-wrap">
+                          {item.message}
+                          {item.issues && item.issues.length > 0 ? `\n${item.issues.slice(0, 3).join('\n')}` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

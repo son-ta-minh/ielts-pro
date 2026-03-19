@@ -24,10 +24,13 @@ export interface CompositionEditorUIProps {
     isFeedbackOpen: boolean;
     setIsFeedbackOpen: (v: boolean) => void;
     isSaving: boolean;
+    isCoachActionLoading?: boolean;
     onCancel: () => void;
     onSave: () => void;
     onAutoLink: () => void;
     onRemoveLink: (id: string) => void;
+    onAskAiInstruct: () => void;
+    onAskAiEvaluate: () => void;
     
     // Modal Controls
     isWordSelectorOpen: boolean;
@@ -44,7 +47,7 @@ export interface CompositionEditorUIProps {
 export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
     title, setTitle, prompt, setPrompt, path, setPath, tagsInput, setTagsInput, content, setContent, note, setNote,
     linkedWords, wordCount, aiFeedback, isFeedbackOpen, setIsFeedbackOpen,
-    isSaving, onCancel, onSave, onAutoLink, onRemoveLink,
+    isSaving, isCoachActionLoading, onCancel, onSave, onAutoLink, onRemoveLink, onAskAiInstruct, onAskAiEvaluate,
     isWordSelectorOpen, setIsWordSelectorOpen, allWords, handleManualLink,
     isAiModalOpen, setIsAiModalOpen, handleGenerateEvalPrompt, handleAiResult
 }) => {
@@ -111,9 +114,25 @@ export const CompositionEditorUI: React.FC<CompositionEditorUIProps> = ({
                     <h2 className="text-2xl font-black leading-none text-neutral-900 tracking-tight flex items-center gap-2 -mt-1"><PenLine size={18}/> Compose</h2>
                 </div>
                 <div className="flex items-center gap-2 -mt-1">
-                    <button onClick={() => setIsAiModalOpen(true)} disabled={!content.trim()} className="px-5 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest hover:bg-neutral-50 transition-all disabled:opacity-50">
-                        <Bot size={14} className="text-indigo-500"/><span>AI Evaluate</span>
+                    <button
+                        onClick={onAskAiInstruct}
+                        disabled={isCoachActionLoading || (!prompt.trim() && !content.trim())}
+                        className="px-4 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest hover:bg-neutral-50 transition-all disabled:opacity-50"
+                    >
+                        {isCoachActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className="text-amber-500" />}
+                        <span>Instruct</span>
                     </button>
+                    <button
+                        onClick={onAskAiEvaluate}
+                        disabled={isCoachActionLoading || (!prompt.trim() && !content.trim())}
+                        className="px-4 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest hover:bg-neutral-50 transition-all disabled:opacity-50"
+                    >
+                        {isCoachActionLoading ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} className="text-indigo-500" />}
+                        <span>Evaluate</span>
+                    </button>
+                    {/* <button onClick={() => setIsAiModalOpen(true)} disabled={!content.trim()} className="px-5 py-2.5 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] flex items-center space-x-2 active:scale-95 uppercase tracking-widest hover:bg-neutral-50 transition-all disabled:opacity-50">
+                        <Bot size={14} className="text-indigo-500"/><span>AI Evaluate</span>
+                    </button> */}
                     <button
                         onClick={onSave}
                         disabled={isSaving}

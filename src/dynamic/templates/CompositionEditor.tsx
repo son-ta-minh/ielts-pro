@@ -4,6 +4,7 @@ import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
 import { getCompositionEvaluationPrompt } from '../../services/promptService';
 import { CompositionEditorUI } from './CompositionEditor_UI';
+import { requestStudyBuddyChatResponse } from '../../components/common/StudyBuddy';
 
 interface Props {
     controller: any;
@@ -27,6 +28,7 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
     const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+    const [isCoachActionLoading, setIsCoachActionLoading] = useState(false);
     
     // Modal States
     const [isWordSelectorOpen, setIsWordSelectorOpen] = useState(false);
@@ -229,6 +231,68 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
         showToast("Feedback received!", "success");
     };
 
+    const buildCompositionCardContext = () => {
+        const linkedWordsPreview = linkedWords
+            .slice(0, 20)
+            .map((word) => `- ${word.word}: ${word.meaningVi || 'No meaning'}`)
+            .join('\n');
+
+        return [
+            `Writing card title: ${title.trim() || 'Untitled composition'}`,
+            `Prompt: ${prompt.trim() || 'No prompt provided.'}`,
+            note.trim() ? `Private note:\n${note.trim()}` : 'Private note: None',
+            `Current draft:\n${content.trim() || '(empty draft)'}`
+        ].join('\n\n');
+    };
+
+    const handleAskAiInstruct = async () => {
+        if (!prompt.trim() && !content.trim()) {
+            showToast('Add a prompt or some writing first.', 'error');
+            return;
+        }
+
+        setIsCoachActionLoading(true);
+        try {
+            requestStudyBuddyChatResponse(
+                [
+                    'You are helping with an IELTS writing composition in progress.',
+                    'Do not ask follow-up questions first. Immediately give practical next-step guidance based on the writing card below.',
+                    'Focus on what the learner should do next, what to write next, structure, idea development, and the most important fixes right now.',
+                    'Keep the response concise but actionable. Use markdown sections and bullets if useful. Use English only.',
+                    '',
+                    buildCompositionCardContext()
+                ].join('\n')
+            );
+            showToast('StudyBuddy is generating writing guidance in chat.', 'success');
+        } finally {
+            setIsCoachActionLoading(false);
+        }
+    };
+
+    const handleAskAiEvaluate = async () => {
+        if (!prompt.trim() && !content.trim()) {
+            showToast('Add a prompt or some writing first.', 'error');
+            return;
+        }
+
+        setIsCoachActionLoading(true);
+        try {
+            requestStudyBuddyChatResponse(
+                [
+                    'Evaluate this IELTS writing draft using the writing card below.',
+                    'Estimate the current IELTS band score as fairly as possible, even if the draft is incomplete.',
+                    'Explain the estimated band briefly, identify the biggest weaknesses, and give the top improvements needed to raise the score.',
+                    'Use clear markdown headings. Include a short section for Estimated Band, Strengths, Problems, and Improve Next.',
+                    '',
+                    buildCompositionCardContext()
+                ].join('\n')
+            );
+            showToast('StudyBuddy is evaluating this draft in chat.', 'success');
+        } finally {
+            setIsCoachActionLoading(false);
+        }
+    };
+
     const wordCount = content.split(/\s+/).filter(Boolean).length;
 
     return (
@@ -251,6 +315,7 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
             isFeedbackOpen={isFeedbackOpen}
             setIsFeedbackOpen={setIsFeedbackOpen}
             isSaving={isSaving}
+            isCoachActionLoading={isCoachActionLoading}
             onCancel={async () => {
                 if (isDirty) {
                     await handleSave();
@@ -260,6 +325,8 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
             onSave={handleSave}
             onAutoLink={handleAutoLink}
             onRemoveLink={handleRemoveLink}
+            onAskAiInstruct={handleAskAiInstruct}
+            onAskAiEvaluate={handleAskAiEvaluate}
             isWordSelectorOpen={isWordSelectorOpen}
             setIsWordSelectorOpen={setIsWordSelectorOpen}
             allWords={allWords}

@@ -13,7 +13,7 @@ import UniversalAiModal from '../common/UniversalAiModal';
 import { createNewWord } from '../../utils/srs';
 import { TagTreeNode } from '../common/TagBrowser';
 import * as db from '../../app/db';
-import { useToast } from '../../contexts/ToastContext';
+import { runWordRefineWithRetry, WordRefineProgressSnapshot } from '../../services/wordRefineApi';
 
 // Define interface for persisted filter settings to fix TypeScript inference errors
 interface PersistedFilters {
@@ -79,7 +79,6 @@ const WordTable: React.FC<Props> = ({
 }) => {
   // Load persisted filters with explicit typing to fix property access errors
   const persistedFilters = useMemo(() => getStoredJSON<PersistedFilters>(LIBRARY_FILTERS_KEY, {}), []);
-  const { showToast } = useToast();
 
   const [query, setQuery] = useState(persistedFilters.query || '');
   const [activeFilters, setActiveFilters] = useState<Set<FilterType>>(() => {
@@ -138,6 +137,10 @@ const WordTable: React.FC<Props> = ({
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isParaModalOpen, setIsParaModalOpen] = useState(false);
   const [isHintModalOpen, setIsHintModalOpen] = useState(false);
+  const [isApiRefining, setIsApiRefining] = useState(false);
+  const [apiRefineProgress, setApiRefineProgress] = useState<WordRefineProgressSnapshot | null>(null);
+  const [apiRefineHistory, setApiRefineHistory] = useState<WordRefineProgressSnapshot[]>([]);
+  const [isApiRefineLogOpen, setIsApiRefineLogOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info', message: string} | null>(null);
   
   // Add to Book states
@@ -145,6 +148,7 @@ const WordTable: React.FC<Props> = ({
   const [availableBooks, setAvailableBooks] = useState<WordBook[]>([]);
 
   const viewMenuRef = useRef<HTMLDivElement>(null);
+  const apiRefineAbortRef = useRef<AbortController | null>(null);
 
   const [visibility, setVisibility] = useState(() => {
     const stored = getStoredJSON(settingsKey, null);
@@ -394,7 +398,11 @@ const WordTable: React.FC<Props> = ({
       }
   };
 
-  const handleAiRefinementResult = async (results: any[]) => {
+  const applyAiRefinementResults = async (
+    results: any[],
+    targetWords: VocabularyItem[],
+    options?: { clearSelection?: boolean; closeModal?: boolean; successMessage?: string }
+  ) => {
     if (!Array.isArray(results)) throw new Error('Response must be an array.');
 
     const aiMap = new Map<string, any[]>();
@@ -406,7 +414,7 @@ const WordTable: React.FC<Props> = ({
         }
     });
 
-    const originalWordsMap = new Map<string, VocabularyItem>(selectedWordsToRefine.map(w => [w.word.toLowerCase(), w]));
+    const originalWordsMap = new Map<string, VocabularyItem>(targetWords.map(w => [w.word.toLowerCase(), w]));
     const itemsToSave: VocabularyItem[] = [];
     const itemsToDeleteIds: string[] = [];
     const renames: { id: string; oldWord: string; newWord: string }[] = [];
@@ -463,13 +471,24 @@ const WordTable: React.FC<Props> = ({
     if (itemsToSave.length > 0) {
         await dataStore.bulkSaveWords(itemsToSave);
         if (renames.length > 0 && onWordRenamed) onWordRenamed(renames);
-        let msg = `Refined ${itemsToSave.length} words.`;
+        let msg = options?.successMessage || `Refined ${itemsToSave.length} words.`;
         if (itemsToDeleteIds.length > 0) msg += ` Merged ${itemsToDeleteIds.length} duplicates.`;
         else if (renames.length > 0) msg += ` Renamed ${renames.length} to base forms.`;
         setNotification({ type: 'success', message: msg });
-        setSelectedIds(new Set());
+        if (options?.clearSelection !== false) {
+          setSelectedIds(new Set());
+        }
     }
-    setIsAiModalOpen(false);
+    if (options?.closeModal !== false) {
+      setIsAiModalOpen(false);
+    }
+  };
+
+  const handleAiRefinementResult = async (results: any[]) => {
+    await applyAiRefinementResults(results, selectedWordsToRefine, {
+      clearSelection: true,
+      closeModal: true
+    });
   };
 
   const handleParaAiResult = async (results: any[]) => {
@@ -493,6 +512,68 @@ const WordTable: React.FC<Props> = ({
   const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(stringToWordArray(inputs.words), user.nativeLanguage || 'Vietnamese');
   const handleGenerateParaPrompt = (inputs: { words: string }) => getBulkParaphrasePrompt(selectedWordsToRefine);
   const handleGenerateHintPrompt = (inputs: any) => getHintsPrompt(selectedWordsMissingHints);
+
+  const handleApiRefineSelected = async () => {
+    if (selectedWordsToRefine.length === 0 || isApiRefining) return;
+
+    const controller = new AbortController();
+    apiRefineAbortRef.current = controller;
+    setIsApiRefining(true);
+    setApiRefineProgress(null);
+    setApiRefineHistory([]);
+    setIsApiRefineLogOpen(false);
+    setNotification({ type: 'info', message: `Refining ${selectedWordsToRefine.length} word(s) by API...` });
+
+    try {
+      const { results, attempts } = await runWordRefineWithRetry(
+        selectedWordsToRefine,
+        user.nativeLanguage || 'Vietnamese',
+        {
+          signal: controller.signal,
+          onProgress: (snapshot) => {
+            setApiRefineProgress(snapshot);
+            setApiRefineHistory((current) => [...current, snapshot]);
+          },
+          onWordValidated: async ({ word, results: wordResults, wordIndex, totalWords }) => {
+            await applyAiRefinementResults(wordResults, [word], {
+              clearSelection: false,
+              closeModal: false,
+              successMessage: `Flushed ${wordIndex + 1}/${totalWords}: "${word.word}".`
+            });
+          }
+        }
+      );
+      if (results.length > 0) {
+        setSelectedIds(new Set());
+      }
+      setIsAiModalOpen(false);
+      setNotification({
+        type: 'success',
+        message: attempts > 1
+          ? `Refined ${selectedWordsToRefine.length} word(s) by API after ${attempts} attempts.`
+          : `Refined ${selectedWordsToRefine.length} word(s) by API.`
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setNotification({ type: 'info', message: 'API refine stopped.' });
+      } else {
+        console.error(error);
+        setNotification({
+          type: 'error',
+          message: error instanceof Error ? error.message : 'API refine failed.'
+        });
+      }
+    } finally {
+      if (apiRefineAbortRef.current === controller) {
+        apiRefineAbortRef.current = null;
+      }
+      setIsApiRefining(false);
+    }
+  };
+
+  const handleStopApiRefine = () => {
+    apiRefineAbortRef.current?.abort();
+  };
 
   const handleHintAiResult = async (results: any[]) => {
     if (!Array.isArray(results)) {
@@ -648,6 +729,14 @@ const WordTable: React.FC<Props> = ({
     selectedRawWordsCount: selectedRawWords.length,
     selectedWordsMissingHintsCount: selectedWordsMissingHints.length,
     onOpenHintModal: () => setIsHintModalOpen(true),
+    onApiRefineSelected: handleApiRefineSelected,
+    isApiRefining,
+    apiRefineProgress,
+    apiRefineHistory,
+    isApiRefineLogOpen,
+    onOpenApiRefineLog: () => setIsApiRefineLogOpen(true),
+    onCloseApiRefineLog: () => setIsApiRefineLogOpen(false),
+    onStopApiRefine: handleStopApiRefine,
     setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen, setIsFilterMenuOpen,
     setIsAddExpanded,
     settingsKey,
