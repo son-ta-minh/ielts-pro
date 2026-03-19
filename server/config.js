@@ -15,6 +15,7 @@ const AUDIO_DIR = path.join(__dirname, 'audio');
 const CERT_DIR = path.join(__dirname, '.certs');
 const META_FILENAME = 'metadata.json';
 const DICT_PATH = path.join(__dirname, 'cmudict.dict');
+const STUDY_BUDDY_AI_URL = process.env.STUDY_BUDDY_AI_URL || 'http://127.0.0.1:63392/v1/chat/completions';
 
 // 1. DATA BACKUP DIRECTORY (User Data: iCloud/VocabPro or Local)
 function getInitialBackupPath() {
@@ -65,7 +66,8 @@ const settings = {
     CERT_DIR,
     META_FILENAME,
     DICT_PATH,
-    BACKUP_DIR
+    BACKUP_DIR,
+    STUDY_BUDDY_AI_URL
 };
 
 // Ensure standard directories exist

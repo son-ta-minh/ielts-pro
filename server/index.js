@@ -91,6 +91,7 @@ app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/reading'));
 app.use('/api', require('./routes/planning')); // Registered Planning Route
 app.use('/api', require('./routes/library'));
+app.use('/api', require('./routes/studybuddy'));
 
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {

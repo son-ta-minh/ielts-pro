@@ -946,7 +946,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         };
 
         try {
-            const res = await fetch(`${aiUrl}/v1/chat/completions`, {
+            const res = await fetch(aiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1076,7 +1076,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
     const requestStudyBuddyAiText = async (userPrompt: string, isStreamed: boolean = true): Promise<string> => {
         const aiUrl = getStudyBuddyAiUrl(config);
-        const res = await fetch(`${aiUrl}/v1/chat/completions`, {
+        const res = await fetch(aiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1159,7 +1159,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             controller = new AbortController();
             chatAbortRef.current = controller;
 
-            const res = await fetch(`${aiUrl}/v1/chat/completions`, {
+            const res = await fetch(aiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
