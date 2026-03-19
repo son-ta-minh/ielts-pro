@@ -1242,7 +1242,15 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
     };
 
-    const openCoachMenu = () => {
+    const openCoachMenu = (e?: React.MouseEvent) => {
+        // Do not trigger when hovering inside chat panel
+        if (e && chatPanelRef.current && chatPanelRef.current.contains(e.target as Node)) {
+            return;
+        }
+
+        // Do not auto-open when chat is open unless user has selected text
+        if (isChatOpen && !selectedTextRef.current) return;
+
         isCoachHoveredRef.current = true;
         if (closeMenuTimeoutRef.current) {
             window.clearTimeout(closeMenuTimeoutRef.current);
@@ -1307,16 +1315,17 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 >
                     <Star size={15} fill="currentColor" />
                 </button>
-                <button
-                    type="button"
-                    onClick={() => openChatPanel(selectedTextRef.current || window.getSelection()?.toString().trim())}
-                    className="col-span-8 h-10 mt-0.5 bg-neutral-900 text-white rounded-2xl flex items-center justify-center gap-2 hover:bg-neutral-800 transition-all active:scale-[0.98] shadow-sm text-[11px] font-black uppercase tracking-wide"
-                    title="Chat with StudyBuddy AI"
-                >
-                    <Sparkles size={14} />
-                    AI Chat
-                </button>
-
+                {!isChatOpen && (
+                    <button
+                        type="button"
+                        onClick={() => openChatPanel(selectedTextRef.current || window.getSelection()?.toString().trim())}
+                        className="col-span-8 h-10 mt-0.5 bg-neutral-900 text-white rounded-2xl flex items-center justify-center gap-2 hover:bg-neutral-800 transition-all active:scale-[0.98] shadow-sm text-[11px] font-black uppercase tracking-wide"
+                        title="Chat with StudyBuddy AI"
+                    >
+                        <Sparkles size={14} />
+                        AI Chat
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -1373,10 +1382,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 <div className="fixed z-[2147483647]" style={{ left: `${menuPos.x}px`, top: `${menuPos.y}px`, transform: menuPos.placement === 'top' ? 'translate(-50%, -100%) translateY(-10px)' : 'translate(-50%, 0) translateY(10px)' }}><CommandBox /></div>
             )}
             <div className="fixed bottom-0 left-6 z-[2147483646] flex flex-col items-start pointer-events-none">
-                <div className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" onMouseEnter={openCoachMenu} onMouseLeave={scheduleCloseCoachMenu}>
+                <div className="flex flex-col items-center pointer-events-auto group pb-0 pt-10" onMouseEnter={(e) => openCoachMenu(e)} onMouseLeave={scheduleCloseCoachMenu}>
                     <div className="relative">
                         {isChatOpen && (
-                            <div ref={chatPanelRef} className="absolute bottom-20 left-0 z-50 w-[24rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
+                            <div
+                                ref={chatPanelRef}
+                                className="absolute bottom-20 left-0 z-50 w-[24rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200"
+                                onMouseEnter={(e) => e.stopPropagation()}
+                            >
                                 <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 bg-neutral-50/70">
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="w-10 h-10 rounded-2xl bg-neutral-900 text-white flex items-center justify-center shrink-0">
