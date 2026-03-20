@@ -13,7 +13,7 @@ import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { ToolsModal } from '../tools/ToolsModal';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import ReactMarkdown from 'react-markdown';
-import { buildVocabularySearchContext, getAiStudyContextText } from '../../utils/context_util';
+import { getAiStudyContextText } from '../../utils/context_util';
 import { autoRefineNewWords } from '../../services/wordRefinePersistence';
 
 const MAX_READ_LENGTH = 1000;
@@ -27,11 +27,6 @@ const STUDY_BUDDY_AI_REQUEST_CONFIG = {
     temperature: 0.2,
     top_p: 0.85,
     repetition_penalty: 1.15
-} as const;
-const STUDY_BUDDY_SEARCH_QUERY_CONFIG = {
-    temperature: 0,
-    top_p: 0.2,
-    repetition_penalty: 1.05
 } as const;
 
 interface Props {
@@ -275,31 +270,6 @@ const buildStudyBuddyMessages = (
     ...messages
 ]);
 
-const buildVocabularyReminderSystemMessage = (prompt: string, keywordLines: string[]): {
-    message: string;
-    resultCount: number;
-    queries: string[];
-} => {
-    const searchPayload = buildVocabularySearchContext(prompt, keywordLines);
-    const searchContext = searchPayload.text;
-    console.info('[StudyBuddy][LibrarySearch] Building reminder system message', {
-        prompt,
-        keywordLines,
-        searchContextPreview: searchContext.slice(0, 600)
-    });
-    return {
-        message: [
-            'Use this local vocabulary reminder search only when the user seems to be asking you to recall, guess, or identify a word/phrase from meaning, context, or description.',
-            searchPayload.resultCount > 0
-                ? 'Only answer using words that appear in the local library search results below. Pick the best matching result, explain briefly why it fits, and cite the matching collocation/example. Do not invent a new word outside these results.'
-                : 'The local library search found no matching vocabulary item. Do not guess or invent a word. Clearly say that no matching word was found in the library.',
-            searchContext
-        ].join('\n\n'),
-        resultCount: searchPayload.resultCount,
-        queries: searchPayload.queries
-    };
-};
-
 const createChatTurn = (role: ChatTurn['role'], content: string): ChatTurn => ({
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role,
@@ -318,97 +288,6 @@ const normalizeConversationTranscript = (text: string): string =>
         .replace(/\s+/g, ' ')
         .trim();
 
-const parseKeywordList = (raw: string): string[] => {
-    const seen = new Set<string>();
-    const normalized = raw
-        .replace(/```json|```/gi, '')
-        .trim();
-
-    const tryJson = () => {
-        try {
-            const parsed = JSON.parse(normalized);
-            if (Array.isArray(parsed)) {
-                return parsed;
-            }
-            if (Array.isArray((parsed as any)?.queries)) {
-                return (parsed as any).queries;
-            }
-        } catch {
-            return null;
-        }
-        return null;
-    };
-
-    const fromJson = tryJson();
-    const items = (fromJson || normalized.split(/[\n,|]/g))
-        .map((item) => String(item || '').trim())
-        .map((item) => item.replace(/^\d+\.\s*/, '').replace(/^[-*]\s*/, '').replace(/^"(.*)"$/, '$1'))
-        .filter((item) => item.length >= 2);
-
-    return items.filter((item) => {
-        const lower = item.toLowerCase();
-        if (seen.has(lower)) return false;
-        seen.add(lower);
-        return true;
-    }).slice(0, 10);
-};
-
-const SEARCH_KEYWORD_STOPWORDS = new Set([
-    'the', 'a', 'an', 'to', 'of', 'for', 'in', 'on', 'at', 'by', 'with', 'and', 'or',
-    'before', 'after', 'while', 'when', 'that', 'which', 'what', 'who', 'waiting',
-    'description', 'describe', 'related', 'about'
-]);
-
-const expandKeywordQueries = (keywords: string[]): string[] => {
-    const seen = new Set<string>();
-    const expanded: string[] = [];
-
-    const push = (value: string) => {
-        const normalized = value
-            .toLowerCase()
-            .trim()
-            .replace(/^[^a-z0-9]+|[^a-z0-9-]+$/g, '');
-
-        if (!normalized || normalized.length < 2 || SEARCH_KEYWORD_STOPWORDS.has(normalized) || seen.has(normalized)) {
-            return;
-        }
-        seen.add(normalized);
-        expanded.push(normalized);
-    };
-
-    keywords.forEach((keyword) => {
-        push(keyword);
-
-        keyword
-            .split(/[\s/|,]+/g)
-            .map((part) => part.trim())
-            .filter(Boolean)
-            .forEach(push);
-    });
-
-    const synonymMap: Record<string, string[]> = {
-        airplane: ['plane', 'aircraft'],
-        plane: ['airplane', 'aircraft'],
-        aircraft: ['airplane', 'plane'],
-        circling: ['circle', 'around'],
-        circle: ['circling', 'around'],
-        around: ['circle', 'circling', 'go-around'],
-        landing: ['land'],
-        land: ['landing'],
-        holding: ['hold', 'holding pattern'],
-        hold: ['holding', 'holding pattern'],
-        pattern: ['holding pattern'],
-        touchdown: ['touch down', 'landing'],
-        flying: ['fly'],
-        fly: ['flying']
-    };
-
-    [...expanded].forEach((item) => {
-        (synonymMap[item] || []).forEach(push);
-    });
-
-    return expanded.slice(0, 24);
-};
 
 const shouldForceSubmitConversationTurn = (text: string): boolean => {
     const normalized = normalizeConversationTranscript(text);
@@ -869,7 +748,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         createChatTurn('assistant', 'Xin chào. Tôi có thể trả lời bất cứ thứ gì về tiếng Anh')    ]);
     const [chatInput, setChatInput] = useState('');
     const [isChatLoading, setIsChatLoading] = useState(false);
-    const [isChatLibraryLookupActive, setIsChatLibraryLookupActive] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
     const [isContextAware, setIsContextAware] = useState(false);
     const [isChatListening, setIsChatListening] = useState(false);
@@ -1684,157 +1562,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         return () => document.removeEventListener('mousedown', handleClickOutsidePanels);
     }, []);
 
-    const requestVocabularyReminderQueries = async (
-        prompt: string,
-        mode: 'broad' | 'atomic',
-        signal?: AbortSignal
-    ): Promise<{ raw: string; queries: string[] }> => {
-        const aiUrl = getStudyBuddyAiUrl(config);
-        const instructions = mode === 'atomic'
-            ? {
-                system: 'You expand a learner prompt into broad English search keywords for a local vocabulary database. Return JSON only in the format {"queries":["..."]}. Use mostly single English words. Be aggressive about reducing a description to atomic concepts and close synonyms.',
-                user: `Learner prompt: ${prompt}\n\nReturn 8-14 broad English search keywords. Prefer one-word concepts. Avoid long descriptive phrases unless absolutely necessary.`
-            }
-            : {
-                system: 'You expand a learner prompt into broad English search keywords for a local vocabulary database. Return JSON only in the format {"queries":["..."]}. Prefer single English words. Only include a short multi-word phrase when it is a very strong concept such as a collocation or fixed phrase. Think recall-style, broad, and patient search rather than precise sentence matching.',
-                user: `Learner prompt: ${prompt}\n\nReturn 6-12 broad English search keywords. Prioritize one-word concepts and synonyms that might appear inside headwords, collocations, examples, or meanings.`
-            };
-
-        const res = await fetch(aiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messages: [
-                    { role: 'system', content: instructions.system },
-                    { role: 'user', content: instructions.user }
-                ],
-                ...STUDY_BUDDY_SEARCH_QUERY_CONFIG,
-                stream: false
-            }),
-            signal
-        });
-
-        if (!res.ok) {
-            throw new Error(`ai-status-${res.status}`);
-        }
-
-        const payload = await res.json().catch(() => null);
-        const content = payload?.choices?.[0]?.message?.content;
-        if (typeof content !== 'string' || !content.trim()) {
-            return { raw: '', queries: [] };
-        }
-
-        return {
-            raw: content,
-            queries: parseKeywordList(content)
-        };
-    };
-
-    const generateVocabularyReminderQueries = async (prompt: string, signal?: AbortSignal): Promise<string[]> => {
-        const cleanPrompt = prompt.trim();
-        if (!cleanPrompt) {
-            console.info('[StudyBuddy][LibrarySearch] Skip keyword generation', {
-                reason: 'empty-prompt'
-            });
-            return [];
-        }
-
-        try {
-            const broadPass = await requestVocabularyReminderQueries(cleanPrompt, 'broad', signal);
-            const broadExpanded = expandKeywordQueries(broadPass.queries);
-            const needsAtomicFallback = broadExpanded.length < 5 || broadExpanded.filter((item) => !item.includes(' ')).length < 4;
-
-            let atomicPass: { raw: string; queries: string[] } | null = null;
-            let mergedKeywords = broadExpanded;
-            if (needsAtomicFallback && !signal?.aborted) {
-                atomicPass = await requestVocabularyReminderQueries(cleanPrompt, 'atomic', signal);
-                mergedKeywords = expandKeywordQueries([...broadExpanded, ...atomicPass.queries]);
-            }
-
-            console.info('[StudyBuddy][LibrarySearch] Generated keywords', {
-                prompt: cleanPrompt,
-                broadRaw: broadPass.raw,
-                broadKeywords: broadPass.queries,
-                atomicRaw: atomicPass?.raw || '',
-                atomicKeywords: atomicPass?.queries || [],
-                mergedKeywords
-            });
-            return mergedKeywords;
-        } catch (error: any) {
-            if (error?.name === 'AbortError') {
-                console.info('[StudyBuddy][LibrarySearch] Keyword generation aborted', {
-                    prompt: cleanPrompt
-                });
-                return [];
-            }
-            console.warn('[StudyBuddy][LibrarySearch] Keyword generation threw error', {
-                prompt: cleanPrompt,
-                reason: error?.message || 'unknown-error'
-            });
-            return [];
-        }
-    };
-
-    const buildPromptSpecificSystemMessages = async (
-        prompt: string,
-        options?: {
-            continueConversation?: boolean;
-            signal?: AbortSignal;
-            statusTurnId?: string;
-        }
-    ): Promise<{ messages: string[]; lookupSummary?: string }> => {
-        const extraSystemMessages: string[] = [];
-
-        if (options?.continueConversation) {
-            extraSystemMessages.push('Conversation mode is active. Do not use emojis in your response.');
-        }
-
-        setIsChatLibraryLookupActive(true);
-        if (options?.statusTurnId) {
-            upsertChatStatusTurn(options.statusTurnId, 'Looking up library...');
-        }
-        try {
-            const reminderQueries = await generateVocabularyReminderQueries(prompt, options?.signal);
-            if (reminderQueries.length > 0) {
-                const reminderPayload = buildVocabularyReminderSystemMessage(prompt, reminderQueries);
-                if (options?.statusTurnId) {
-                    upsertChatStatusTurn(
-                        options.statusTurnId,
-                        `Looking up library with keywords: ${reminderPayload.queries.join(', ')}`
-                    );
-                }
-                extraSystemMessages.push(reminderPayload.message);
-                console.info('[StudyBuddy][LibrarySearch] Context util attached', {
-                    prompt,
-                    reminderQueries,
-                    extraSystemMessagesCount: extraSystemMessages.length
-                });
-                return {
-                    messages: extraSystemMessages,
-                    lookupSummary: reminderPayload.resultCount > 0
-                        ? `Library lookup done. ${reminderPayload.resultCount} possible match${reminderPayload.resultCount === 1 ? '' : 'es'} found. Verifying best match...`
-                        : 'Library lookup done. No matching word found in library. Preparing final answer...'
-                };
-            } else {
-                if (options?.statusTurnId) {
-                    upsertChatStatusTurn(options.statusTurnId, 'Library lookup skipped: no useful keywords were generated.');
-                }
-                console.info('[StudyBuddy][LibrarySearch] Context util not attached', {
-                    prompt,
-                    reason: 'no-keywords-generated'
-                });
-                return {
-                    messages: extraSystemMessages,
-                    lookupSummary: 'Library lookup skipped. Preparing final answer...'
-                };
-            }
-        } finally {
-            setIsChatLibraryLookupActive(false);
-        }
-    };
-
     useEffect(() => {
         if (!config.interface.rightClickCommandEnabled) return;
 
@@ -1968,6 +1695,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         const nextHistory = [...chatHistory, nextUserTurn];
         let spokenCursor = 0;
         let conversationListenerRearmed = false;
+        const extraSystemMessages = options?.continueConversation
+            ? ['Conversation mode is active. Do not use emojis in your response.']
+            : [];
 
         setChatHistory(nextHistory);
         setChatInput(options?.continueConversation ? prompt : '');
@@ -1979,18 +1709,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
         const controller = new AbortController();
         chatAbortRef.current = controller;
-        const promptPrep = await buildPromptSpecificSystemMessages(prompt, {
-            continueConversation: options?.continueConversation,
-            signal: controller.signal,
-            statusTurnId
-        });
         if (controller.signal.aborted || chatAbortRef.current !== controller) {
             removeChatStatusTurn(statusTurnId);
             setIsChatLoading(false);
             return;
-        }
-        if (promptPrep.lookupSummary) {
-            upsertChatStatusTurn(statusTurnId, promptPrep.lookupSummary);
         }
         setChatHistory((current) => [...current, { id: assistantId, role: 'assistant', kind: 'message', content: '' }]);
 
@@ -2011,7 +1733,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                         user,
                         isContextAware,
                         nextHistory.map((turn) => ({ role: turn.role, content: turn.content })),
-                        promptPrep.messages
+                        extraSystemMessages
                     ),
                     ...STUDY_BUDDY_AI_REQUEST_CONFIG,
                     stream: true
@@ -2311,17 +2033,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
         const controller = new AbortController();
         chatAbortRef.current = controller;
-        const promptPrep = await buildPromptSpecificSystemMessages(cleanPrompt, {
-            signal: controller.signal,
-            statusTurnId
-        });
         if (controller.signal.aborted || chatAbortRef.current !== controller) {
             removeChatStatusTurn(statusTurnId);
             setIsChatLoading(false);
             return;
-        }
-        if (promptPrep.lookupSummary) {
-            upsertChatStatusTurn(statusTurnId, promptPrep.lookupSummary);
         }
         setChatHistory((current) => [
             ...current,
@@ -2344,8 +2059,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                     messages: buildStudyBuddyMessages(
                         user,
                         isContextAware,
-                        [{ role: 'user', content: cleanPrompt }],
-                        promptPrep.messages
+                        [{ role: 'user', content: cleanPrompt }]
                     ),
                     ...STUDY_BUDDY_AI_REQUEST_CONFIG,
                     stream: true
@@ -3303,9 +3017,7 @@ Rules:
                                         <div className="min-w-0">
                                             <p className="text-xs font-black text-neutral-900 uppercase tracking-wide">StudyBuddy AI</p>
                                             <p className="text-[11px] text-neutral-500 truncate">
-                                                {isChatLibraryLookupActive
-                                                    ? 'Looking up library...'
-                                                    : isConversationMode
+                                                {isConversationMode
                                                     ? (isChatListening ? 'Conversation mode: listening...' : isChatLoading ? 'Conversation mode: AI is replying...' : 'Conversation mode: waiting for voice...')
                                                     : 'Grammar, writing, speaking, tu vung'}
                                             </p>
@@ -3378,15 +3090,6 @@ Rules:
                                         </button>
                                     </div>
                                 </div>
-
-                                {isChatLibraryLookupActive && (
-                                    <div className="border-b border-amber-100 bg-amber-50/80 px-5 py-2">
-                                        <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
-                                            <Loader2 size={12} className="animate-spin" />
-                                            Looking Up Library
-                                        </div>
-                                    </div>
-                                )}
 
                                 <div
                                     ref={chatScrollRef}
