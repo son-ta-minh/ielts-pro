@@ -22,6 +22,12 @@ const WORD_REFINE_DEBUG_STORAGE_KEY = 'vocab_pro_debug_refine_api';
 export interface WordRefineApiResult {
     results: any[];
     attempts: number;
+    finalIssues: Array<{
+        word: string;
+        issues: string[];
+        droppedFields: RetryField[];
+        savedPartially: boolean;
+    }>;
 }
 
 export interface WordRefineProgressSnapshot {
@@ -51,6 +57,8 @@ interface RunWordRefineWithRetryOptions {
         wordIndex: number;
         totalWords: number;
         attempts: number;
+        partial?: boolean;
+        issues?: string[];
     }) => Promise<void> | void;
 }
 
@@ -67,6 +75,35 @@ interface ValidationState {
     issues: string[];
     retryFields: RetryField[];
 }
+
+const normalizeParaphraseTone = (value: string): string => {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return normalized;
+    if (normalized === 'near synonym' || normalized === 'near-synonym' || normalized === 'near_synonym') {
+        return 'synonym';
+    }
+    return normalized;
+};
+
+const normalizeRawParaphrases = (value: any): any[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((item: any) => ({
+            word: String(item?.w || item?.word || '').trim(),
+            tone: normalizeParaphraseTone(String(item?.t || item?.tone || '').trim()),
+            context: String(item?.c || item?.context || '').trim()
+        }))
+        .filter((item) => item.word);
+};
+
+const getParaphrasesFromAnyShape = (value: any): any[] => {
+    if (!value) return [];
+    const directParaphrases = normalizeRawParaphrases(value?.paraphrases);
+    if (directParaphrases.length > 0) return directParaphrases;
+    const rawPara = normalizeRawParaphrases(value?.para);
+    if (rawPara.length > 0) return rawPara;
+    return [];
+};
 
 const isWordRefineDebugEnabled = (): boolean => {
     try {
@@ -115,6 +152,17 @@ const getOriginalKey = (item: any): string => {
         .toLowerCase();
 };
 
+const ensureResultHasOriginalWord = (result: any, originalWord: string): any => {
+    if (!result || typeof result !== 'object') {
+        return { og: originalWord };
+    }
+    const normalizedOriginalWord = originalWord.trim();
+    return {
+        ...result,
+        og: String(result?.og || result?.original || normalizedOriginalWord).trim() || normalizedOriginalWord
+    };
+};
+
 const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const getHeadwordVariants = (effectiveHeadword: string, originalWord: string): string[] => {
@@ -127,10 +175,19 @@ const getHeadwordVariants = (effectiveHeadword: string, originalWord: string): s
     const buildMorphVariants = (value: string) => {
         const lower = value.toLowerCase();
         addVariant(lower);
+        addVariant(`${lower}s`);
+        if (lower.endsWith('e') && lower.length > 1) {
+            addVariant(`${lower}d`);
+            addVariant(`${lower.slice(0, -1)}ing`);
+        } else {
+            addVariant(`${lower}ed`);
+            addVariant(`${lower}ing`);
+        }
         if (lower.endsWith('y') && lower.length > 1) {
             const stem = lower.slice(0, -1);
             addVariant(`${stem}ing`);
             addVariant(`${stem}ed`);
+            addVariant(`${stem}ies`);
             if (stem.endsWith('z')) {
                 addVariant(`${stem}${stem.slice(-1)}ing`);
                 addVariant(`${stem}${stem.slice(-1)}ed`);
@@ -188,6 +245,7 @@ const mergePartialRefineResult = (
     replaceFields: RetryField[] = []
 ): any | null => {
     const normalizedIncoming = normalizeAiResponse(incomingResult);
+    const fallbackParaphrases = getParaphrasesFromAnyShape(incomingResult);
     debugWordRefine('mergePartialRefineResult', {
         incomingOriginalKey: getOriginalKey(incomingResult),
         hasBaseResult: !!baseResult,
@@ -223,8 +281,16 @@ const mergePartialRefineResult = (
             ? (normalizedIncoming.prepositionsArray || baseResult.prepositionsArray)
             : mergeUniqueByText(baseResult.prepositionsArray, normalizedIncoming.prepositionsArray, 'prep'),
         paraphrases: shouldReplace('paraphrases')
-            ? (normalizedIncoming.paraphrases || baseResult.paraphrases)
-            : mergeUniqueByText(baseResult.paraphrases, normalizedIncoming.paraphrases, 'word'),
+            ? ((normalizedIncoming.paraphrases && normalizedIncoming.paraphrases.length > 0
+                ? normalizedIncoming.paraphrases
+                : fallbackParaphrases) || baseResult.paraphrases)
+            : mergeUniqueByText(
+                baseResult.paraphrases,
+                (normalizedIncoming.paraphrases && normalizedIncoming.paraphrases.length > 0
+                    ? normalizedIncoming.paraphrases
+                    : fallbackParaphrases),
+                'word'
+            ),
         wordFamily: normalizedIncoming.wordFamily || baseResult.wordFamily,
         isIdiom: normalizedIncoming.isIdiom ?? baseResult.isIdiom,
         isPhrasalVerb: normalizedIncoming.isPhrasalVerb ?? baseResult.isPhrasalVerb,
@@ -259,7 +325,9 @@ const validateWordResult = (result: any, word: VocabularyItem): ValidationState 
     const example = String(normalized.example || '').trim();
     const register = String(normalized.register || '').trim().toLowerCase();
     const type = String(result.type || '').trim().toLowerCase();
-    const paraphrases = Array.isArray(normalized.paraphrases) ? normalized.paraphrases : [];
+    const normalizedParaphrases = getParaphrasesFromAnyShape(normalized);
+    const rawParaphrases = getParaphrasesFromAnyShape(result);
+    const paraphrases = normalizedParaphrases.length > 0 ? normalizedParaphrases : rawParaphrases;
     const collocations = Array.isArray(normalized.collocationsArray) ? normalized.collocationsArray : [];
     const prepositions = Array.isArray(normalized.prepositionsArray) ? normalized.prepositionsArray : [];
 
@@ -271,6 +339,8 @@ const validateWordResult = (result: any, word: VocabularyItem): ValidationState 
         counts: {
             collocations: collocations.length,
             paraphrases: paraphrases.length,
+            normalizedParaphrases: normalizedParaphrases.length,
+            rawParaphrases: rawParaphrases.length,
             prepositions: prepositions.length
         }
     });
@@ -480,6 +550,52 @@ Use these JSON keys when you answer: ${retryFields.map((field) => fieldKeyMap[fi
 Return ONLY one strict JSON array in a \`\`\`json code block. Do not add explanation text outside the code block.`;
 };
 
+const sanitizePartialResultForFailedFields = (partialResult: any, failedFields: RetryField[]): any => {
+    if (!partialResult) return partialResult;
+    const sanitized = { ...partialResult };
+    const failed = new Set(failedFields);
+
+    if (failed.has('headword')) delete sanitized.headword;
+    if (failed.has('meaningVi')) delete sanitized.meaningVi;
+    if (failed.has('example')) delete sanitized.example;
+    if (failed.has('register')) delete sanitized.register;
+    if (failed.has('collocationsArray')) {
+        delete sanitized.collocationsArray;
+        delete sanitized.collocations;
+    }
+    if (failed.has('paraphrases')) delete sanitized.paraphrases;
+    if (failed.has('prepositionsArray')) {
+        delete sanitized.prepositionsArray;
+        delete sanitized.prepositionString;
+    }
+
+    return sanitized;
+};
+
+const hasAnyUsableRefineData = (result: any): boolean => {
+    if (!result) return false;
+    return Boolean(
+        result.headword ||
+        result.ipaUs ||
+        result.ipaUk ||
+        result.pronSim ||
+        result.meaningVi ||
+        result.register ||
+        result.example ||
+        (Array.isArray(result.collocationsArray) && result.collocationsArray.length > 0) ||
+        (Array.isArray(result.idiomsList) && result.idiomsList.length > 0) ||
+        (Array.isArray(result.prepositionsArray) && result.prepositionsArray.length > 0) ||
+        (Array.isArray(result.paraphrases) && result.paraphrases.length > 0) ||
+        result.wordFamily ||
+        result.isIdiom !== undefined ||
+        result.isPhrasalVerb !== undefined ||
+        result.isCollocation !== undefined ||
+        result.isStandardPhrase !== undefined ||
+        result.isIrregular !== undefined ||
+        result.isPassive !== undefined
+    );
+};
+
 const requestWordRefineAttempt = async (
     prompt: string,
     attempt: number,
@@ -534,6 +650,8 @@ const requestWordRefineAttempt = async (
             ? parsed
             : Array.isArray((parsed as any)?.results)
                 ? (parsed as any).results
+                : parsed && typeof parsed === 'object'
+                    ? [parsed]
                 : null;
 
         if (!arrayPayload) {
@@ -569,6 +687,7 @@ export const runWordRefineWithRetry = async (
     }
 
     const aggregatedResultsByIndex = new Map<number, any>();
+    const finalIssues: WordRefineApiResult['finalIssues'] = [];
     let totalAttempts = 0;
     options.onProgress?.({
         stage: 'starting',
@@ -625,7 +744,8 @@ export const runWordRefineWithRetry = async (
                     message: `Word ${wordIndex + 1}/${words.length} "${currentWord.word}": validating AI JSON quality...`,
                     rawText
                 });
-                const rawResult = results.find((item) => getOriginalKey(item) === currentWord.word.trim().toLowerCase()) || results[0] || null;
+                const matchedRawResult = results.find((item) => getOriginalKey(item) === currentWord.word.trim().toLowerCase()) || results[0] || null;
+                const rawResult = ensureResultHasOriginalWord(matchedRawResult, currentWord.word);
                 debugWordRefine('attempt:rawResult', {
                     word: currentWord.word,
                     attempt,
@@ -698,11 +818,41 @@ export const runWordRefineWithRetry = async (
         }
 
         if (!wordSucceeded) {
-            const suffix = lastIssues.length > 0 ? ` ${lastIssues[0]}` : '';
-            if (lastError instanceof Error) {
-                throw new Error(`API refine failed for "${currentWord.word}" after ${MAX_REFINE_ATTEMPTS} attempts.${suffix}`);
+            const droppedFields = retryFields;
+            const sanitizedPartialResult = sanitizePartialResultForFailedFields(partialResult, droppedFields);
+            const savedPartially = hasAnyUsableRefineData(sanitizedPartialResult);
+
+            if (savedPartially) {
+                aggregatedResultsByIndex.set(wordIndex, sanitizedPartialResult);
+                await options.onWordValidated?.({
+                    word: currentWord,
+                    results: [sanitizedPartialResult],
+                    wordIndex,
+                    totalWords: words.length,
+                    attempts: MAX_REFINE_ATTEMPTS,
+                    partial: true,
+                    issues: lastIssues
+                });
             }
-            throw new Error(`API refine failed for "${currentWord.word}" after ${MAX_REFINE_ATTEMPTS} attempts.${suffix}`);
+
+            finalIssues.push({
+                word: currentWord.word,
+                issues: lastIssues.length > 0
+                    ? lastIssues
+                    : [lastError instanceof Error ? lastError.message : `API refine failed for "${currentWord.word}".`],
+                droppedFields,
+                savedPartially
+            });
+
+            options.onProgress?.({
+                stage: 'error',
+                attempt: MAX_REFINE_ATTEMPTS,
+                maxAttempts: MAX_REFINE_ATTEMPTS,
+                message: savedPartially
+                    ? `Word ${wordIndex + 1}/${words.length} "${currentWord.word}": partial save applied. Invalid fields were skipped for manual review.`
+                    : `Word ${wordIndex + 1}/${words.length} "${currentWord.word}": no valid fields could be saved. Manual review required.`,
+                issues: lastIssues
+            });
         }
     };
 
@@ -723,5 +873,5 @@ export const runWordRefineWithRetry = async (
         .map((_, index) => aggregatedResultsByIndex.get(index))
         .filter(Boolean);
 
-    return { results: aggregatedResults, attempts: totalAttempts };
+    return { results: aggregatedResults, attempts: totalAttempts, finalIssues };
 };

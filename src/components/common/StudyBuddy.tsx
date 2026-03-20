@@ -14,6 +14,7 @@ import { ToolsModal } from '../tools/ToolsModal';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import ReactMarkdown from 'react-markdown';
 import { getAiStudyContextText } from '../../utils/context_util';
+import { autoRefineNewWords } from '../../services/wordRefinePersistence';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
@@ -2301,7 +2302,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             }
             console.log("Adding to library:", newItem);
             await dataStore.saveWord(newItem);
-            showToast(`"${selectedText}" added!`, 'success');
+            let refineResult = { refinedCount: 0, finalIssuesCount: 0 };
+            try {
+                refineResult = await autoRefineNewWords([newItem], user.nativeLanguage || 'Vietnamese');
+            } catch (error) {
+                console.warn('[StudyBuddy] Auto refine after add failed:', error);
+            }
+            showToast(
+                refineResult.refinedCount > 0
+                    ? `"${selectedText}" added and refined!`
+                    : `"${selectedText}" added!`,
+                'success'
+            );
             setIsAlreadyInLibrary(true);
             setIsOpen(false);
             setMenuPos(null);

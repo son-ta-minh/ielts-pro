@@ -149,6 +149,8 @@ const WordTable: React.FC<Props> = ({
   const [isApiRefining, setIsApiRefining] = useState(false);
   const [apiRefineProgress, setApiRefineProgress] = useState<WordRefineProgressSnapshot | null>(null);
   const [apiRefineHistory, setApiRefineHistory] = useState<WordRefineProgressSnapshot[]>([]);
+  const [apiRefineFlushedCount, setApiRefineFlushedCount] = useState(0);
+  const [apiRefineTotalWords, setApiRefineTotalWords] = useState(0);
   const apiRefineFlushedCountRef = useRef(0);
   const [isApiRefineLogOpen, setIsApiRefineLogOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info', message: string} | null>(null);
@@ -435,7 +437,13 @@ const WordTable: React.FC<Props> = ({
         
         const rawAiResult = candidates[0];
         const tempNormalized = normalizeAiResponse(rawAiResult);
-        const suggestedHeadword = (tempNormalized.headword || tempNormalized.word || '').trim();
+        const suggestedHeadword = String(
+            rawAiResult?.hw ||
+            rawAiResult?.headword ||
+            tempNormalized?.headword ||
+            tempNormalized?.word ||
+            ''
+        ).trim();
 
         if (suggestedHeadword) {
             const originalWordCount = originalItem.word.trim().split(/\s+/).length;
@@ -525,6 +533,7 @@ const WordTable: React.FC<Props> = ({
 
   const handleApiRefineSelected = async () => {
     if (selectedWordsToRefine.length === 0 || isApiRefining) return;
+    const totalWordsForRun = selectedWordsToRefine.length;
 
     const controller = new AbortController();
     apiRefineAbortRef.current = controller;
@@ -532,11 +541,13 @@ const WordTable: React.FC<Props> = ({
     setApiRefineProgress(null);
     setApiRefineHistory([]);
     setIsApiRefineLogOpen(false);
+    setApiRefineFlushedCount(0);
+    setApiRefineTotalWords(totalWordsForRun);
     apiRefineFlushedCountRef.current = 0;
-    setNotification({ type: 'info', message: `Refining ${selectedWordsToRefine.length} word(s) by API...` });
+    setNotification({ type: 'info', message: `Refining ${totalWordsForRun} word(s) by API...` });
 
     try {
-      const { results, attempts } = await runWordRefineWithRetry(
+      const { results, attempts, finalIssues } = await runWordRefineWithRetry(
         selectedWordsToRefine,
         user.nativeLanguage || 'Vietnamese',
         {
@@ -550,29 +561,74 @@ const WordTable: React.FC<Props> = ({
                 : next;
             });
           },
-          onWordValidated: async ({ word, results: wordResults, totalWords }) => {
+          onWordValidated: async ({ word, results: wordResults, partial, issues }) => {
             await applyAiRefinementResults(wordResults, [word], {
               clearSelection: false,
               closeModal: false,
               successMessage: (() => {
                 apiRefineFlushedCountRef.current += 1;
                 const flushed = apiRefineFlushedCountRef.current;
-                const remaining = Math.max(totalWords - flushed, 0);
-                return `Flushed ${flushed}/${totalWords}, remaining ${remaining}: "${word.word}".`;
+                setApiRefineFlushedCount(flushed);
+                const remaining = Math.max(totalWordsForRun - flushed, 0);
+                return partial
+                  ? `Flushed ${flushed}/${totalWordsForRun}, remaining ${remaining}: "${word.word}" (partial save, invalid fields skipped).`
+                  : `Flushed ${flushed}/${totalWordsForRun}, remaining ${remaining}: "${word.word}".`;
               })()
             });
+            if (partial && issues && issues.length > 0) {
+              setApiRefineHistory((current) => {
+                const next = [...current, compactRefineSnapshotForHistory({
+                  stage: 'error',
+                  attempt: 1,
+                  maxAttempts: 1,
+                  message: `Partial save for "${word.word}". User review needed.`,
+                  issues
+                })];
+                return next.length > MAX_API_REFINE_HISTORY_ITEMS
+                  ? next.slice(next.length - MAX_API_REFINE_HISTORY_ITEMS)
+                  : next;
+              });
+            }
           }
         }
       );
       if (results.length > 0) {
         setSelectedIds(new Set());
       }
+      if (finalIssues.length > 0) {
+        const summaryLines = finalIssues.map((issue) => {
+          const dropped = issue.droppedFields.length > 0
+            ? `Dropped: ${issue.droppedFields.join(', ')}.`
+            : 'Dropped: none.';
+          const allIssues = issue.issues.length > 0
+            ? issue.issues.join(' | ')
+            : 'Manual review required.';
+          return `${issue.word}: ${allIssues} ${dropped} Saved partially: ${issue.savedPartially ? 'yes' : 'no'}.`;
+        });
+        const summarySnapshot: WordRefineProgressSnapshot = {
+          stage: 'error',
+          attempt: 1,
+          maxAttempts: 1,
+          message: `Refine completed with ${finalIssues.length} word(s) needing manual review.`,
+          issues: summaryLines
+        };
+        setApiRefineProgress(summarySnapshot);
+        setApiRefineHistory((current) => {
+          const next = [...current, compactRefineSnapshotForHistory(summarySnapshot)];
+          return next.length > MAX_API_REFINE_HISTORY_ITEMS
+            ? next.slice(next.length - MAX_API_REFINE_HISTORY_ITEMS)
+            : next;
+        });
+        setIsApiRefineLogOpen(true);
+      }
       setIsAiModalOpen(false);
       setNotification({
-        type: 'success',
-        message: attempts > 1
-          ? `Refined ${selectedWordsToRefine.length} word(s) by API after ${attempts} attempts.`
-          : `Refined ${selectedWordsToRefine.length} word(s) by API.`
+        type: finalIssues.length > 0 ? 'info' : 'success',
+        message: finalIssues.length > 0
+          ? `Refined ${results.length}/${totalWordsForRun} word(s). ${finalIssues.length} word(s) still need manual review; see Logs for full errors.`
+          : attempts > 1
+            ? `Refined ${totalWordsForRun} word(s) by API after ${attempts} attempts.`
+            : `Refined ${totalWordsForRun} word(s) by API.`
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -754,6 +810,8 @@ const WordTable: React.FC<Props> = ({
     isApiRefining,
     apiRefineProgress,
     apiRefineHistory,
+    apiRefineFlushedCount,
+    apiRefineTotalWords,
     isApiRefineLogOpen,
     onOpenApiRefineLog: () => setIsApiRefineLogOpen(true),
     onCloseApiRefineLog: () => setIsApiRefineLogOpen(false),

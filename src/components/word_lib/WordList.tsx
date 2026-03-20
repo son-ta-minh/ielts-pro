@@ -12,6 +12,7 @@ import { getStoredJSON } from '../../utils/storage';
 import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
+import { autoRefineNewWords } from '../../services/wordRefinePersistence';
 
 interface Props {
   user: User;
@@ -312,7 +313,14 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
         newItems.push(newItem);
       }
     }
-    if (newItems.length > 0) await dataStore.bulkSaveWords(newItems);
+    if (newItems.length > 0) {
+      await dataStore.bulkSaveWords(newItems);
+      try {
+        await autoRefineNewWords(newItems, user.nativeLanguage || 'Vietnamese');
+      } catch (error) {
+        console.warn('[WordList] Auto refine after add failed:', error);
+      }
+    }
   };
 
   const handlePractice = (ids: Set<string>) => {

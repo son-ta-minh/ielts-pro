@@ -252,6 +252,8 @@ export interface WordTableUIProps {
   isApiRefining: boolean;
   apiRefineProgress: WordRefineProgressSnapshot | null;
   apiRefineHistory: WordRefineProgressSnapshot[];
+  apiRefineFlushedCount: number;
+  apiRefineTotalWords: number;
   isApiRefineLogOpen: boolean;
   onOpenApiRefineLog: () => void;
   onCloseApiRefineLog: () => void;
@@ -300,6 +302,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   notification, viewMenuRef, visibility, setVisibility, handleToggleFilter,
   handleBatchAddSubmit, onOpenBulkDeleteModal, onOpenBulkHardDeleteModal, onBulkVerify, selectedWordsToRefine, selectedRawWordsCount, handleGenerateRefinePrompt,
   handleAiRefinementResult, onApiRefineSelected, isApiRefining, apiRefineProgress, apiRefineHistory, isApiRefineLogOpen, onOpenApiRefineLog, onCloseApiRefineLog, onStopApiRefine, setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen,
+  apiRefineFlushedCount, apiRefineTotalWords,
   setIsFilterMenuOpen, setIsAddExpanded, selectedWordsMissingHintsCount, onOpenHintModal,
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
   selectedTypes, toggleType, onOpenWordBook,
@@ -309,6 +312,8 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const totalPages = Math.ceil(total / pageSize);
+  const totalApiRefineWords = apiRefineTotalWords || selectedWordsToRefine.length;
+  const remainingApiRefineWords = Math.max(totalApiRefineWords - apiRefineFlushedCount, 0);
   const defaultDeleteMessage = <span>Are you sure you want to permanently delete <span className="font-bold text-neutral-900">&quot;{wordToDelete?.word}&quot;</span>? This action cannot be undone.</span>;
   const unitUnlinkMessage = <span>Remove <span className="font-bold text-neutral-900">&quot;{wordToDelete?.word}&quot;</span> from this unit? It remains in your library.</span>;
 
@@ -591,6 +596,9 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 <div>
                   <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">Refine API Progress</div>
                   <div className="text-sm font-black text-amber-950">{apiRefineProgress.message}</div>
+                  <div className="mt-1 text-[11px] font-black uppercase tracking-wider text-amber-700">
+                    Flushed {apiRefineFlushedCount}/{totalApiRefineWords}, remaining {remainingApiRefineWords}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-700">

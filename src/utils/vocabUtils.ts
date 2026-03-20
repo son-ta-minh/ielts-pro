@@ -28,12 +28,17 @@ export const normalizeAiResponse = (shortData: any): any => {
     };
 
     // Helper to map paraphrases
-    const mapPara = (list: any[]) => list?.map((x: any) => ({ 
-        word: x.w || x.word, 
-        tone: x.t || x.tone, 
-        context: x.c || x.context,
-        isIgnored: x.g ?? x.isIgnored ?? false
-    })) || [];
+    const mapPara = (list: any[]) => {
+        if (!Array.isArray(list)) return [];
+        return list
+            .map((x: any) => ({
+                word: (x?.w || x?.word || '').trim(),
+                tone: (x?.t || x?.tone || '').trim(),
+                context: (x?.c || x?.context || '').trim(),
+                isIgnored: x?.g ?? x?.isIgnored ?? false
+            }))
+            .filter((item) => !!item.word);
+    };
 
     // Helper to map prepositions
     const mapPrep = (list: any[]) => {
