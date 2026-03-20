@@ -39,10 +39,11 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
     const baseButtonClass = 'h-8 rounded-2xl flex items-center justify-center px-3 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
     return (
-        <div className="border-t border-neutral-100 bg-neutral-50/90 px-0 py-0" onMouseDown={onRestoreSelection}>
+        <div className="border-t border-neutral-100 bg-neutral-50/90 px-0 py-0">
             <div className="grid grid-cols-8 gap-2">
                 <button
                     type="button"
+                    onMouseDown={onRestoreSelection}
                     onClick={onSearch}
                     disabled={!hasSelection || !!activeChatCoachAction}
                     className={`${baseButtonClass} bg-teal-50 text-teal-600 hover:bg-teal-100`}
@@ -52,6 +53,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                 </button>
                 <button
                     type="button"
+                    onMouseDown={onRestoreSelection}
                     onClick={onTranslate}
                     disabled={!hasSelection || !!activeChatCoachAction}
                     className={`${baseButtonClass} bg-indigo-50 text-indigo-600 hover:bg-indigo-100`}
@@ -61,6 +63,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                 </button>
                 <button
                     type="button"
+                    onMouseDown={onRestoreSelection}
                     onClick={onReadAndIpa}
                     disabled={!hasSelection}
                     className={`${baseButtonClass} bg-purple-50 text-purple-600 hover:bg-purple-100`}
@@ -69,16 +72,17 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     <Volume2 size={14} />
                 </button>
                 {!isAlreadyInLibrary ? (
-                    <button type="button" onClick={onAddToLibrary} disabled={!hasSelection || isAddingToLibrary} className={`${baseButtonClass} bg-green-50 text-green-600 hover:bg-green-100`} title="Add to Library">
+                    <button type="button" onMouseDown={onRestoreSelection} onClick={onAddToLibrary} disabled={!hasSelection || isAddingToLibrary} className={`${baseButtonClass} bg-green-50 text-green-600 hover:bg-green-100`} title="Add to Library">
                         {isAddingToLibrary ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />}
                     </button>
                 ) : (
-                    <button type="button" onClick={onViewWord} disabled={!hasSelection || isAnyModalOpen} className={`${baseButtonClass} bg-sky-50 text-sky-600 hover:bg-sky-100`} title="View Word Details">
+                    <button type="button" onMouseDown={onRestoreSelection} onClick={onViewWord} disabled={!hasSelection || isAnyModalOpen} className={`${baseButtonClass} bg-sky-50 text-sky-600 hover:bg-sky-100`} title="View Word Details">
                         <Eye size={15} />
                     </button>
                 )}
                 <button
                     type="button"
+                    onMouseDown={onRestoreSelection}
                     onClick={onExamples}
                     disabled={!hasSelection || !!activeChatCoachAction}
                     className={`${baseButtonClass} bg-blue-50 text-blue-600 hover:bg-blue-100`}
@@ -88,6 +92,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                 </button>
                 <button
                     type="button"
+                    onMouseDown={onRestoreSelection}
                     onClick={onCollocations}
                     disabled={!hasSelection || !!activeChatCoachAction}
                     className={`${baseButtonClass} bg-amber-50 text-amber-600 hover:bg-amber-100`}
@@ -97,6 +102,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                 </button>
                 <button
                     type="button"
+                    onMouseDown={onRestoreSelection}
                     onClick={onParaphrase}
                     disabled={!hasSelection || !!activeChatCoachAction}
                     className={`${baseButtonClass} bg-rose-50 text-rose-600 hover:bg-rose-100`}
@@ -106,6 +112,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                 </button>
                 <button
                     type="button"
+                    onMouseDown={onRestoreSelection}
                     onClick={onWordFamily}
                     disabled={!hasSelection || !!activeChatCoachAction}
                     className={`${baseButtonClass} bg-emerald-50 text-emerald-600 hover:bg-emerald-100`}

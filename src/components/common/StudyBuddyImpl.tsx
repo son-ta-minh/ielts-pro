@@ -91,8 +91,8 @@ interface ChatSaveDraft {
     turnId: string;
     sourceText: string;
     targetWord: string;
-    suggestedSections: ChatSaveSection[];
     selectedSection: ChatSaveSection;
+    exampleLines: string[];
     parsedPairs: ParsedPairItem[];
     parsedWordFamily: ParsedWordFamilyItem[];
 }
@@ -322,16 +322,40 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         const sourceText = selectedSnippet && turn.content.includes(selectedSnippet)
             ? selectedSnippet
             : (turn.content || turn.saveContext?.sourceSelection || '').trim();
+        const actionType = turn.saveContext?.actionType;
+        const lockedSection: ChatSaveSection = actionType === 'examples'
+            ? 'example'
+            : actionType === 'collocations'
+                ? 'collocation'
+                : actionType === 'paraphrase'
+                    ? 'paraphrase'
+                    : actionType === 'wordFamily'
+                        ? 'wordFamily'
+                        : (getSuggestedSaveSections(sourceText, turn.saveContext)[0] || 'example');
+        const exampleLines = sourceText
+            .split('\n')
+            .map((line) => cleanExampleSentence(line))
+            .filter(Boolean);
+        const parsedPairs = parseStructuredPairs(sourceText);
+        const fallbackPairs = sourceText
+            .split('\n')
+            .map((line) => ({ item: normalizeSaveLine(line), context: '' }))
+            .filter((item) => item.item);
+        const parsedWordFamily = parseWordFamilyItems(sourceText);
+        const fallbackWordFamily = sourceText
+            .split('\n')
+            .map((line) => normalizeSaveLine(line))
+            .filter(Boolean)
+            .map((word) => ({ word, note: '', bucket: inferWordFamilyBucket(word, '') as keyof WordFamily }));
 
-        const suggestedSections = getSuggestedSaveSections(sourceText, turn.saveContext);
         setChatSaveDraft({
             turnId: turn.id,
             sourceText,
             targetWord: turn.saveContext?.targetWord || '',
-            suggestedSections,
-            selectedSection: suggestedSections[0] || 'example',
-            parsedPairs: parseStructuredPairs(sourceText),
-            parsedWordFamily: parseWordFamilyItems(sourceText)
+            selectedSection: lockedSection,
+            exampleLines,
+            parsedPairs: parsedPairs.length > 0 ? parsedPairs : fallbackPairs,
+            parsedWordFamily: parsedWordFamily.length > 0 ? parsedWordFamily : fallbackWordFamily
         });
     };
 
@@ -361,8 +385,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             };
 
             if (chatSaveDraft.selectedSection === 'example') {
-                const cleanedExamples = sourceText
-                    .split('\n')
+                const cleanedExamples = chatSaveDraft.exampleLines
                     .map((line) => cleanExampleSentence(line))
                     .filter(Boolean)
                     .join('\n');
@@ -370,9 +393,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             }
 
             if (chatSaveDraft.selectedSection === 'collocation') {
-                const nextItems = chatSaveDraft.parsedPairs.length > 0
-                    ? chatSaveDraft.parsedPairs
-                    : sourceText.split('\n').map((line) => ({ item: normalizeSaveLine(line), context: '' })).filter((item) => item.item);
+                const nextItems = chatSaveDraft.parsedPairs;
                 const existing = [...(updatedWord.collocationsArray || [])];
                 nextItems.forEach(({ item, context }) => {
                     const normalized = item.trim().toLowerCase();
@@ -393,9 +414,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             }
 
             if (chatSaveDraft.selectedSection === 'paraphrase') {
-                const nextItems = chatSaveDraft.parsedPairs.length > 0
-                    ? chatSaveDraft.parsedPairs
-                    : sourceText.split('\n').map((line) => ({ item: normalizeSaveLine(line), context: '' })).filter((item) => item.item);
+                const nextItems = chatSaveDraft.parsedPairs;
                 const existing = [...(updatedWord.paraphrases || [])];
                 nextItems.forEach(({ item, context, register }) => {
                     const normalized = item.trim().toLowerCase();
@@ -421,9 +440,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             }
 
             if (chatSaveDraft.selectedSection === 'preposition') {
-                const nextItems = chatSaveDraft.parsedPairs.length > 0
-                    ? chatSaveDraft.parsedPairs
-                    : sourceText.split('\n').map((line) => ({ item: normalizeSaveLine(line), context: '' })).filter((item) => item.item);
+                const nextItems = chatSaveDraft.parsedPairs;
                 const existing = [...(updatedWord.prepositions || [])];
                 nextItems.forEach(({ item, context }) => {
                     const normalized = item.trim().toLowerCase();
@@ -444,12 +461,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
 
             if (chatSaveDraft.selectedSection === 'wordFamily') {
                 const existingFamily: WordFamily = updatedWord.wordFamily || { nouns: [], verbs: [], adjs: [], advs: [] };
-                const nextItems = chatSaveDraft.parsedWordFamily.length > 0
-                    ? chatSaveDraft.parsedWordFamily
-                    : sourceText.split('\n')
-                        .map((line) => normalizeSaveLine(line))
-                        .filter(Boolean)
-                        .map((word) => ({ word, note: '', bucket: inferWordFamilyBucket(word, '') as keyof WordFamily }));
+                const nextItems = chatSaveDraft.parsedWordFamily;
 
                 nextItems.forEach(({ word: familyWord, bucket }) => {
                     const list = [...(existingFamily[bucket] || [])];
@@ -608,6 +620,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         const handleSelectionChange = () => {
             if (!shouldPreserveSelectionRef.current) return;
             const selection = window.getSelection();
+            const anchorNode = selection?.anchorNode;
+            const focusNode = selection?.focusNode;
+            if (
+                (anchorNode && chatPanelRef.current?.contains(anchorNode))
+                || (focusNode && chatPanelRef.current?.contains(focusNode))
+            ) {
+                return;
+            }
             const selectedText = selection?.toString().trim() || '';
             if (selectedText) return;
             if (!selectedRangeRef.current) return;
@@ -1502,11 +1522,20 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             chatSaveDraft={chatSaveDraft}
             saveSectionLabels={SAVE_SECTION_LABELS}
             isSavingChatSnippet={isSavingChatSnippet}
-            normalizeSaveLine={normalizeSaveLine}
-            inferWordFamilyBucket={inferWordFamilyBucket}
             onClose={() => setChatSaveDraft(null)}
             onChangeTargetWord={(value) => setChatSaveDraft((current) => current ? { ...current, targetWord: value } : current)}
-            onSelectSection={(section) => setChatSaveDraft((current) => current ? { ...current, selectedSection: section } : current)}
+            onRemoveExampleLine={(index) => setChatSaveDraft((current) => current ? {
+                ...current,
+                exampleLines: current.exampleLines.filter((_, itemIndex) => itemIndex !== index)
+            } : current)}
+            onRemovePair={(index) => setChatSaveDraft((current) => current ? {
+                ...current,
+                parsedPairs: current.parsedPairs.filter((_, itemIndex) => itemIndex !== index)
+            } : current)}
+            onRemoveWordFamily={(index) => setChatSaveDraft((current) => current ? {
+                ...current,
+                parsedWordFamily: current.parsedWordFamily.filter((_, itemIndex) => itemIndex !== index)
+            } : current)}
             onSave={handleSaveChatSnippet}
         />
     );
@@ -1625,6 +1654,9 @@ Rules:
                                     setIsChatOpen(false);
                                 }}
                                 onOpenSaveModal={openChatSaveModal}
+                                onPointerDownInside={() => {
+                                    disableSelectionPreservation();
+                                }}
                                 onChatInputChange={setChatInput}
                                 onChatInputKeyDown={(e) => {
                                     if (isConversationMode) return;

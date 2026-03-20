@@ -3,16 +3,21 @@ import ReactMarkdown from 'react-markdown';
 import { Loader2, Mic, Save, Send, Sparkles, StopCircle, Volume2, X } from 'lucide-react';
 import { ChatTurn } from '../../utils/studyBuddyChatUtils';
 
+const SAVE_ACTION_LABELS: Record<string, string> = {
+    examples: 'Save Examples',
+    collocations: 'Save Collocations',
+    paraphrase: 'Save Paraphrase',
+    wordFamily: 'Save Word Family'
+};
+
 const ChatHistoryList = React.memo(({
     chatHistory,
     isChatLoading,
     onOpenSaveModal,
-    hasChatSelection,
 }: {
     chatHistory: ChatTurn[];
     isChatLoading: boolean;
     onOpenSaveModal: (turn: ChatTurn) => void;
-    hasChatSelection: boolean;
 }) => (
     <>
         {chatHistory.map((turn) => (
@@ -30,25 +35,20 @@ const ChatHistoryList = React.memo(({
                             Library Lookup
                         </div>
                     )}
-                    {turn.role === 'assistant' && turn.kind !== 'status' && !!turn.content.trim() && (hasChatSelection || !!turn.saveContext?.targetWord) && (
-                        <button
-                            type="button"
-                            onClick={() => onOpenSaveModal(turn)}
-                            className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
-                            title="Save this response into a word"
-                        >
-                            <Save size={11} />
-                            Save
-                        </button>
-                    )}
                     {turn.role === 'assistant' && turn.kind !== 'status' && turn.saveContext?.targetWord && (
-                        <div className="mb-2 flex items-center gap-2 pr-20">
-                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-blue-700">
-                                Target: {turn.saveContext.targetWord}
-                            </span>
+                        <div className="mb-2 flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => onOpenSaveModal(turn)}
+                                className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
+                                title={`Save this response for ${turn.saveContext.targetWord}`}
+                            >
+                                <Save size={11} />
+                                {SAVE_ACTION_LABELS[turn.saveContext.actionType || ''] || 'Save'}
+                            </button>
                         </div>
                     )}
-                    <div className={`leading-relaxed break-words select-text text-neutral-900 ${turn.role === 'assistant' ? 'pr-20 [&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
+                    <div className={`leading-relaxed break-words select-text text-neutral-900 ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
                         <ReactMarkdown
                             components={{
                                 p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
@@ -128,6 +128,7 @@ interface StudyBuddyChatPanelProps {
     onClearChatHistory: () => void;
     onClose: () => void;
     onOpenSaveModal: (turn: ChatTurn) => void;
+    onPointerDownInside: () => void;
     onChatInputChange: (value: string) => void;
     onChatInputKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
     onToggleChatMic: () => void;
@@ -155,6 +156,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     onClearChatHistory,
     onClose,
     onOpenSaveModal,
+    onPointerDownInside,
     onChatInputChange,
     onChatInputKeyDown,
     onToggleChatMic,
@@ -164,6 +166,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     <div
         ref={chatPanelRef}
         className="pointer-events-auto absolute bottom-20 left-0 z-50 w-[36rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200 relative"
+        onMouseDownCapture={onPointerDownInside}
         onMouseDown={(e) => e.stopPropagation()}
         onMouseEnter={(e) => e.stopPropagation()}
     >
@@ -237,13 +240,13 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         <div
             ref={chatScrollRef}
             className="max-h-[24rem] overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)] select-text"
+            onMouseDownCapture={onPointerDownInside}
             onMouseDown={(e) => e.stopPropagation()}
         >
             <ChatHistoryList
                 chatHistory={chatHistory}
                 isChatLoading={isChatLoading}
                 onOpenSaveModal={onOpenSaveModal}
-                hasChatSelection={hasChatTextSelection}
             />
         </div>
 

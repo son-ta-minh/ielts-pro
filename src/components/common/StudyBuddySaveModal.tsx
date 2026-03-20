@@ -1,13 +1,13 @@
 import React from 'react';
-import { Loader2, Save, X } from 'lucide-react';
+import { Loader2, Save, Trash2, X } from 'lucide-react';
 import { ChatSaveSection } from '../../utils/studyBuddyChatUtils';
 import { ParsedPairItem, ParsedWordFamilyItem } from '../../utils/studyBuddyUtils';
 
 interface ChatSaveDraft {
     targetWord: string;
     sourceText: string;
-    suggestedSections: ChatSaveSection[];
     selectedSection: ChatSaveSection;
+    exampleLines: string[];
     parsedPairs: ParsedPairItem[];
     parsedWordFamily: ParsedWordFamilyItem[];
 }
@@ -16,11 +16,11 @@ interface StudyBuddySaveModalProps {
     chatSaveDraft: ChatSaveDraft | null;
     saveSectionLabels: Record<ChatSaveSection, string>;
     isSavingChatSnippet: boolean;
-    normalizeSaveLine: (line: string) => string;
-    inferWordFamilyBucket: (word: string, note: string) => 'nouns' | 'verbs' | 'adjs' | 'advs';
     onClose: () => void;
     onChangeTargetWord: (value: string) => void;
-    onSelectSection: (section: ChatSaveSection) => void;
+    onRemoveExampleLine: (index: number) => void;
+    onRemovePair: (index: number) => void;
+    onRemoveWordFamily: (index: number) => void;
     onSave: () => void;
 }
 
@@ -28,11 +28,11 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
     chatSaveDraft,
     saveSectionLabels,
     isSavingChatSnippet,
-    normalizeSaveLine,
-    inferWordFamilyBucket,
     onClose,
     onChangeTargetWord,
-    onSelectSection,
+    onRemoveExampleLine,
+    onRemovePair,
+    onRemoveWordFamily,
     onSave,
 }) => {
     if (!chatSaveDraft) return null;
@@ -43,7 +43,6 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <p className="text-xs font-black uppercase tracking-[0.18em] text-neutral-500">Save To Word</p>
-                        <p className="mt-1 text-sm font-bold text-neutral-900">Chon phan de luu vao word</p>
                     </div>
                     <button
                         type="button"
@@ -63,36 +62,17 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
                             type="text"
                             value={chatSaveDraft.targetWord}
                             onChange={(e) => onChangeTargetWord(e.target.value)}
-                            placeholder="Nhap word can luu vao"
+                            placeholder="Enter the word to save into"
                             className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-900 outline-none transition-colors focus:border-neutral-900 focus:bg-white"
                         />
                     </div>
 
                     <div>
                         <label className="mb-2 block text-[11px] font-black uppercase tracking-wide text-neutral-500">
-                            Save Section
+                            Save Type
                         </label>
-                        <div className="flex flex-wrap gap-2">
-                            {(Object.keys(saveSectionLabels) as ChatSaveSection[]).map((section) => {
-                                const isActive = chatSaveDraft.selectedSection === section;
-                                const isSuggested = chatSaveDraft.suggestedSections.includes(section);
-                                return (
-                                    <button
-                                        key={section}
-                                        type="button"
-                                        onClick={() => onSelectSection(section)}
-                                        className={`rounded-full border px-3 py-2 text-[11px] font-black uppercase tracking-wide transition-colors ${
-                                            isActive
-                                                ? 'border-neutral-900 bg-neutral-900 text-white'
-                                                : isSuggested
-                                                    ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300'
-                                                    : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900'
-                                        }`}
-                                    >
-                                        {saveSectionLabels[section]}
-                                    </button>
-                                );
-                            })}
+                        <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold text-neutral-900">
+                            {saveSectionLabels[chatSaveDraft.selectedSection]}
                         </div>
                     </div>
 
@@ -102,37 +82,73 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
                         </label>
                         <div className="max-h-48 overflow-y-auto rounded-2xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-700">
                             {chatSaveDraft.selectedSection === 'example' && (
-                                <p className="whitespace-pre-wrap leading-relaxed">{chatSaveDraft.sourceText}</p>
+                                <div className="space-y-2">
+                                    {chatSaveDraft.exampleLines.map((line, index) => (
+                                        <div key={`${line}-${index}`} className="flex items-start justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2">
+                                            <p className="whitespace-pre-wrap leading-relaxed text-neutral-900">{line}</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => onRemoveExampleLine(index)}
+                                                className="shrink-0 rounded-lg p-1 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                                title="Remove item"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                             {(chatSaveDraft.selectedSection === 'collocation' || chatSaveDraft.selectedSection === 'paraphrase' || chatSaveDraft.selectedSection === 'preposition') && (
                                 <div className="space-y-2">
-                                    {(chatSaveDraft.parsedPairs.length > 0
-                                        ? chatSaveDraft.parsedPairs
-                                        : chatSaveDraft.sourceText.split('\n').map((line) => ({ item: normalizeSaveLine(line), context: '' })).filter((item) => item.item)
-                                    ).map((item, index) => (
-                                        <div key={`${item.item}-${index}`} className="rounded-xl border border-neutral-200 bg-white px-3 py-2">
-                                            <p className="font-bold text-neutral-900">{item.item}</p>
+                                    {chatSaveDraft.parsedPairs.map((item, index) => (
+                                        <div key={`${item.item}-${index}`} className="flex items-start justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2">
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-neutral-900">{item.item}</p>
                                             {!!item.context && <p className="mt-1 text-neutral-600">{item.context}</p>}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => onRemovePair(index)}
+                                                className="shrink-0 rounded-lg p-1 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                                title="Remove item"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
                             )}
                             {chatSaveDraft.selectedSection === 'wordFamily' && (
                                 <div className="space-y-2">
-                                    {(chatSaveDraft.parsedWordFamily.length > 0
-                                        ? chatSaveDraft.parsedWordFamily
-                                        : chatSaveDraft.sourceText.split('\n').map((line) => ({
-                                            word: normalizeSaveLine(line),
-                                            note: '',
-                                            bucket: inferWordFamilyBucket(normalizeSaveLine(line), '')
-                                        })).filter((item) => item.word)
-                                    ).map((item, index) => (
-                                        <div key={`${item.word}-${index}`} className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-2">
-                                            <p className="font-bold text-neutral-900">{item.word}</p>
-                                            <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">{item.bucket}</span>
+                                    {chatSaveDraft.parsedWordFamily.map((item, index) => (
+                                        <div key={`${item.word}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2">
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-neutral-900">{item.word}</p>
+                                                {!!item.note && <p className="mt-1 text-neutral-600">{item.note}</p>}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">{item.bucket}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onRemoveWordFamily(index)}
+                                                    className="shrink-0 rounded-lg p-1 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                                    title="Remove item"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
+                            )}
+                            {chatSaveDraft.selectedSection === 'example' && chatSaveDraft.exampleLines.length === 0 && (
+                                <p className="text-neutral-500">No items left to save.</p>
+                            )}
+                            {(chatSaveDraft.selectedSection === 'collocation' || chatSaveDraft.selectedSection === 'paraphrase' || chatSaveDraft.selectedSection === 'preposition') && chatSaveDraft.parsedPairs.length === 0 && (
+                                <p className="text-neutral-500">No items left to save.</p>
+                            )}
+                            {chatSaveDraft.selectedSection === 'wordFamily' && chatSaveDraft.parsedWordFamily.length === 0 && (
+                                <p className="text-neutral-500">No items left to save.</p>
                             )}
                         </div>
                     </div>
