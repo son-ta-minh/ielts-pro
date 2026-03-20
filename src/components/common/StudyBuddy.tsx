@@ -1712,7 +1712,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             }
 
             if (!assistantText.trim()) {
-                updateAssistantTurn('AI server da ket noi, nhung chua tra ve noi dung.');
+                updateAssistantTurn('Connected to AI but not receive response');
             } else if (isChatAudioEnabledRef.current) {
                 const trailing = assistantText.slice(spokenCursor).trim();
                 if (trailing) {
@@ -1724,7 +1724,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 setChatHistory((current) =>
                     current.map((turn) =>
                         turn.id === assistantId && !turn.content.trim()
-                            ? { ...turn, content: 'Da dung phan hoi.' }
+                            ? { ...turn, content: 'Stopped response' }
                             : turn
                     )
                 );
@@ -1733,7 +1733,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 setChatHistory((current) =>
                     current.map((turn) =>
                         turn.id === assistantId
-                            ? { ...turn, content: 'Khong the ket noi AI server. Kiem tra server AI o port 63392.' }
+                            ? { ...turn, content: 'Not able to reach AI' }
                             : turn
                     )
                 );

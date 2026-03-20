@@ -230,8 +230,15 @@ async function updateHostInFirestore(hostUrl) {
     }
 }
 
-// Start tunnel automatically if cloudflared exists
-startCloudflareTunnel();
+// Start tunnel only if --public flag is provided
+const isPublicMode = process.argv.includes('--public');
+
+if (isPublicMode) {
+    console.log('[Cloudflare] Public mode enabled via --public');
+    startCloudflareTunnel();
+} else {
+    console.log('[Cloudflare] Skipped (run with --public to enable)');
+}
 
 function gracefulShutdown(signal) {
     console.log(`\n[Shutdown] Received ${signal}. Backing up courses...`);
