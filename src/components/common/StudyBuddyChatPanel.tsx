@@ -1,18 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Loader2, Mic, Save, Send, Sparkles, StopCircle, Volume2, X } from 'lucide-react';
-
-interface ChatSaveContext {
-    targetWord?: string;
-}
-
-interface ChatTurn {
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    kind?: 'message' | 'status';
-    saveContext?: ChatSaveContext;
-}
+import { ChatTurn } from '../../utils/studyBuddyChatUtils';
 
 const ChatHistoryList = React.memo(({
     chatHistory,

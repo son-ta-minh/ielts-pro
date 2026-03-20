@@ -1,19 +1,7 @@
 import React from 'react';
 import { Loader2, Save, X } from 'lucide-react';
-
-type ChatSaveSection = 'example' | 'preposition' | 'collocation' | 'paraphrase' | 'wordFamily';
-
-interface ParsedPairItem {
-    item: string;
-    context: string;
-    register?: string;
-}
-
-interface ParsedWordFamilyItem {
-    word: string;
-    note: string;
-    bucket: 'nouns' | 'verbs' | 'adjs' | 'advs';
-}
+import { ChatSaveSection } from '../../utils/studyBuddyChatUtils';
+import { ParsedPairItem, ParsedWordFamilyItem } from '../../utils/studyBuddyUtils';
 
 interface ChatSaveDraft {
     targetWord: string;
