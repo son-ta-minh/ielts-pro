@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { settings } = require('../config');
 const { sanitizeToAscii, getAppBackupPath, loadMetadata, saveMetadata } = require('../utils');
+const { rebuildUserVocabularySearchIndexFromFile } = require('../vocabularySearchIndex');
 
 router.get('/backups', async (req, res) => {
     const appName = req.query.app;
@@ -135,6 +136,10 @@ router.post('/backup', (req, res) => {
                 updatedAt: Date.now()
             };
             saveMetadata(meta, appDir);
+
+            if (appName === 'vocab') {
+                rebuildUserVocabularySearchIndexFromFile(filePath, String(identifier || '').trim());
+            }
 
             console.log(`[Backup] Saved ${sizeMB} MB for ${identifier} in app '${appName}'`);
             res.json({ success: true, size: stats.size, timestamp: Date.now() });

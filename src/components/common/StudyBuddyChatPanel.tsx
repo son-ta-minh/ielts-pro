@@ -1,0 +1,320 @@
+import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import { Loader2, Mic, Save, Send, Sparkles, StopCircle, Volume2, X } from 'lucide-react';
+
+interface ChatSaveContext {
+    targetWord?: string;
+}
+
+interface ChatTurn {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    kind?: 'message' | 'status';
+    saveContext?: ChatSaveContext;
+}
+
+const ChatHistoryList = React.memo(({
+    chatHistory,
+    isChatLoading,
+    onOpenSaveModal,
+    hasChatSelection,
+}: {
+    chatHistory: ChatTurn[];
+    isChatLoading: boolean;
+    onOpenSaveModal: (turn: ChatTurn) => void;
+    hasChatSelection: boolean;
+}) => (
+    <>
+        {chatHistory.map((turn) => (
+            <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`relative max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
+                    turn.kind === 'status'
+                        ? 'border border-amber-200 bg-amber-50/90 text-amber-900 rounded-bl-md'
+                        : turn.role === 'user'
+                        ? 'bg-white border border-neutral-200 text-neutral-900 rounded-br-md'
+                        : 'bg-white border border-neutral-200 text-neutral-900 rounded-bl-md'
+                }`}>
+                    {turn.kind === 'status' && (
+                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
+                            <Loader2 size={11} className="animate-spin" />
+                            Library Lookup
+                        </div>
+                    )}
+                    {turn.role === 'assistant' && turn.kind !== 'status' && !!turn.content.trim() && (hasChatSelection || !!turn.saveContext?.targetWord) && (
+                        <button
+                            type="button"
+                            onClick={() => onOpenSaveModal(turn)}
+                            className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
+                            title="Save this response into a word"
+                        >
+                            <Save size={11} />
+                            Save
+                        </button>
+                    )}
+                    {turn.role === 'assistant' && turn.kind !== 'status' && turn.saveContext?.targetWord && (
+                        <div className="mb-2 flex items-center gap-2 pr-20">
+                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-blue-700">
+                                Target: {turn.saveContext.targetWord}
+                            </span>
+                        </div>
+                    )}
+                    <div className={`leading-relaxed break-words select-text text-neutral-900 ${turn.role === 'assistant' ? 'pr-20 [&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
+                        <ReactMarkdown
+                            components={{
+                                p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
+                                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-1 last:mb-0">{children}</ul>,
+                                ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-1 last:mb-0">{children}</ol>,
+                                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                h1: ({ children }) => <h1 className="mb-2 text-base font-black tracking-tight">{children}</h1>,
+                                h2: ({ children }) => <h2 className="mb-2 text-[15px] font-black tracking-tight">{children}</h2>,
+                                h3: ({ children }) => <h3 className="mb-2 text-sm font-black tracking-tight">{children}</h3>,
+                                blockquote: ({ children }) => (
+                                    <blockquote className="mb-2 border-l-4 border-neutral-300 bg-neutral-50/80 px-3 py-2 italic text-neutral-600 last:mb-0">
+                                        {children}
+                                    </blockquote>
+                                ),
+                                a: ({ href, children }) => (
+                                    <a href={href} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 underline underline-offset-2">
+                                        {children}
+                                    </a>
+                                ),
+                                table: ({ children }) => (
+                                    <div className="mb-2 overflow-x-auto rounded-2xl border border-neutral-200 last:mb-0">
+                                        <table className="min-w-full border-collapse text-left text-xs">{children}</table>
+                                    </div>
+                                ),
+                                thead: ({ children }) => <thead className="bg-neutral-100 text-neutral-700">{children}</thead>,
+                                th: ({ children }) => <th className="border-b border-neutral-200 px-3 py-2 font-black">{children}</th>,
+                                td: ({ children }) => <td className="border-b border-neutral-100 px-3 py-2 align-top">{children}</td>,
+                                code: ({ inline, className, children, ...props }: any) => {
+                                    const rawCode = String(children).replace(/\n$/, '');
+                                    const language = className?.replace('language-', '') || '';
+                                    if (inline) {
+                                        return (
+                                            <code className="rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.92em] text-rose-700" {...props}>
+                                                {children}
+                                            </code>
+                                        );
+                                    }
+                                    return (
+                                        <div className="mb-2 overflow-hidden rounded-2xl border border-neutral-200 bg-white text-neutral-900 last:mb-0">
+                                            <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">
+                                                <span>{language || 'code'}</span>
+                                            </div>
+                                            <pre className="overflow-x-auto px-4 py-3 text-[12px] leading-6">
+                                                <code className={className} {...props}>{rawCode}</code>
+                                            </pre>
+                                        </div>
+                                    );
+                                },
+                            }}
+                        >
+                            {turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}
+                        </ReactMarkdown>
+                    </div>
+                </div>
+            </div>
+        ))}
+    </>
+));
+
+interface StudyBuddyChatPanelProps {
+    chatPanelRef: React.RefObject<HTMLDivElement | null>;
+    chatScrollRef: React.RefObject<HTMLDivElement | null>;
+    isConversationMode: boolean;
+    isChatListening: boolean;
+    isChatLoading: boolean;
+    isContextAware: boolean;
+    isChatAudioEnabled: boolean;
+    chatHistory: ChatTurn[];
+    hasChatTextSelection: boolean;
+    chatInput: string;
+    headerDescription: string;
+    chatCoachActionBar: React.ReactNode;
+    chatSaveModal: React.ReactNode;
+    onToggleContextAware: () => void;
+    onToggleConversationMode: () => void;
+    onToggleChatAudio: () => void;
+    onClearChatHistory: () => void;
+    onClose: () => void;
+    onOpenSaveModal: (turn: ChatTurn) => void;
+    onChatInputChange: (value: string) => void;
+    onChatInputKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+    onToggleChatMic: () => void;
+    onStopChatStream: () => void;
+    onSendChat: () => void;
+}
+
+export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
+    chatPanelRef,
+    chatScrollRef,
+    isConversationMode,
+    isChatListening,
+    isChatLoading,
+    isContextAware,
+    isChatAudioEnabled,
+    chatHistory,
+    hasChatTextSelection,
+    chatInput,
+    headerDescription,
+    chatCoachActionBar,
+    chatSaveModal,
+    onToggleContextAware,
+    onToggleConversationMode,
+    onToggleChatAudio,
+    onClearChatHistory,
+    onClose,
+    onOpenSaveModal,
+    onChatInputChange,
+    onChatInputKeyDown,
+    onToggleChatMic,
+    onStopChatStream,
+    onSendChat,
+}) => (
+    <div
+        ref={chatPanelRef}
+        className="pointer-events-auto absolute bottom-20 left-0 z-50 w-[36rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200 relative"
+        onMouseDown={(e) => e.stopPropagation()}
+        onMouseEnter={(e) => e.stopPropagation()}
+    >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 bg-neutral-50/70">
+            <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-neutral-900 text-white flex items-center justify-center shrink-0">
+                    <Sparkles size={16} />
+                </div>
+                <div className="min-w-0">
+                    <p className="text-xs font-black text-neutral-900 uppercase tracking-wide">StudyBuddy AI</p>
+                    <p className="text-[11px] text-neutral-500 truncate">{headerDescription}</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+                <button
+                    type="button"
+                    onClick={onToggleContextAware}
+                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                        isContextAware
+                            ? 'border-blue-200 bg-blue-50 text-blue-700'
+                            : 'border-neutral-200 bg-white text-neutral-500'
+                    }`}
+                    title="Toggle study context embedding"
+                >
+                    {isContextAware ? 'Context aware' : 'Fast mode'}
+                </button>
+                <button
+                    type="button"
+                    onClick={onToggleConversationMode}
+                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                        isConversationMode
+                            ? 'border-rose-200 bg-rose-50 text-rose-700'
+                            : 'border-neutral-200 bg-white text-neutral-500'
+                    }`}
+                    title="Toggle voice conversation mode"
+                >
+                    <Mic size={12} className={isConversationMode ? 'animate-pulse' : ''} />
+                    {isConversationMode ? 'Conversation On' : 'Conversation'}
+                </button>
+                <button
+                    type="button"
+                    onClick={onToggleChatAudio}
+                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                        isChatAudioEnabled
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-neutral-200 bg-white text-neutral-500'
+                    }`}
+                    title="Toggle chat audio"
+                >
+                    <Volume2 size={12} />
+                    Audio {isChatAudioEnabled ? 'On' : 'Off'}
+                </button>
+                <button
+                    type="button"
+                    onClick={onClearChatHistory}
+                    className="h-8 px-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-[10px] font-black uppercase tracking-wide"
+                    title="Clear chat"
+                >
+                    Clear
+                </button>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="text-neutral-400 hover:text-neutral-900"
+                >
+                    <X size={16} />
+                </button>
+            </div>
+        </div>
+
+        <div
+            ref={chatScrollRef}
+            className="max-h-[24rem] overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)] select-text"
+            onMouseDown={(e) => e.stopPropagation()}
+        >
+            <ChatHistoryList
+                chatHistory={chatHistory}
+                isChatLoading={isChatLoading}
+                onOpenSaveModal={onOpenSaveModal}
+                hasChatSelection={hasChatTextSelection}
+            />
+        </div>
+
+        {chatCoachActionBar}
+
+        <div className="border-t border-neutral-100 p-3 bg-white">
+            <div className="flex items-end gap-2">
+                <textarea
+                    value={chatInput}
+                    onChange={(e) => onChatInputChange(e.target.value)}
+                    onKeyDown={onChatInputKeyDown}
+                    rows={3}
+                    placeholder={isConversationMode ? 'Conversation mode dang bat. Hay noi de tro chuyen voi AI.' : 'Hoi StudyBuddy AI... Shift+Enter de xuong dong'}
+                    disabled={isConversationMode}
+                    className={`flex-1 resize-none rounded-2xl border px-4 py-3 text-sm outline-none transition-colors ${
+                        isConversationMode
+                            ? 'border-rose-100 bg-rose-50/70 text-rose-700'
+                            : 'border-neutral-200 bg-neutral-50 text-neutral-800 focus:border-neutral-900 focus:bg-white'
+                    }`}
+                />
+                <div className="flex flex-col gap-2">
+                    <button
+                        type="button"
+                        onClick={onToggleChatMic}
+                        disabled={isConversationMode}
+                        className={`w-11 h-9 rounded-2xl border flex items-center justify-center transition-colors ${
+                            isConversationMode
+                                ? 'bg-neutral-100 text-neutral-300 border-neutral-200 cursor-not-allowed'
+                                : isChatListening
+                                ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
+                                : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100'
+                        }`}
+                        title={isConversationMode ? 'Conversation mode is using the microphone' : isChatListening ? 'Stop voice input' : 'Start voice input'}
+                    >
+                        <Mic size={18} className={isChatListening ? 'animate-pulse' : ''} />
+                    </button>
+                    {isChatLoading ? (
+                        <button
+                            type="button"
+                            onClick={onStopChatStream}
+                            className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 flex items-center justify-center transition-colors"
+                            title="Stop response"
+                        >
+                            <StopCircle size={18} />
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={onSendChat}
+                            disabled={!chatInput.trim() || isConversationMode}
+                            className="w-11 h-11 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                            title="Send"
+                        >
+                            <Send size={18} />
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+
+        {chatSaveModal}
+    </div>
+);

@@ -12,9 +12,9 @@ import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { ToolsModal } from '../tools/ToolsModal';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
-import ReactMarkdown from 'react-markdown';
 import { getAiStudyContextText } from '../../utils/context_util';
 import { autoRefineNewWords } from '../../services/wordRefinePersistence';
+import { StudyBuddyChatPanel } from './StudyBuddyChatPanel';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
@@ -622,111 +622,6 @@ const splitMixedLanguageSegments = (text: string): Array<{ lang: 'vi' | 'en'; te
         ? segments
         : [{ lang: detectLanguage(normalized), text: normalized }];
 };
-
-const ChatHistoryList = React.memo(({
-    chatHistory,
-    isChatLoading,
-    onOpenSaveModal,
-    hasChatSelection,
-}: {
-    chatHistory: ChatTurn[];
-    isChatLoading: boolean;
-    onOpenSaveModal: (turn: ChatTurn) => void;
-    hasChatSelection: boolean;
-}) => (
-    <>
-        {chatHistory.map((turn) => (
-            <div key={turn.id} className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`relative max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
-                    turn.kind === 'status'
-                        ? 'border border-amber-200 bg-amber-50/90 text-amber-900 rounded-bl-md'
-                        : turn.role === 'user'
-                        ? 'bg-white border border-neutral-200 text-neutral-900 rounded-br-md'
-                        : 'bg-white border border-neutral-200 text-neutral-900 rounded-bl-md'
-                }`}>
-                    {turn.kind === 'status' && (
-                        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
-                            <Loader2 size={11} className="animate-spin" />
-                            Library Lookup
-                        </div>
-                    )}
-                    {turn.role === 'assistant' && turn.kind !== 'status' && !!turn.content.trim() && (hasChatSelection || !!turn.saveContext?.targetWord) && (
-                        <button
-                            type="button"
-                            onClick={() => onOpenSaveModal(turn)}
-                            className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
-                            title="Save this response into a word"
-                        >
-                            <Save size={11} />
-                            Save
-                        </button>
-                    )}
-                    {turn.role === 'assistant' && turn.kind !== 'status' && turn.saveContext?.targetWord && (
-                        <div className="mb-2 flex items-center gap-2 pr-20">
-                            <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-blue-700">
-                                Target: {turn.saveContext.targetWord}
-                            </span>
-                        </div>
-                    )}
-                    <div className={`leading-relaxed break-words select-text text-neutral-900 ${turn.role === 'assistant' ? 'pr-20 [&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
-                        <ReactMarkdown
-                            components={{
-                                p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
-                                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-1 last:mb-0">{children}</ul>,
-                                ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-1 last:mb-0">{children}</ol>,
-                                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                                h1: ({ children }) => <h1 className="mb-2 text-base font-black tracking-tight">{children}</h1>,
-                                h2: ({ children }) => <h2 className="mb-2 text-[15px] font-black tracking-tight">{children}</h2>,
-                                h3: ({ children }) => <h3 className="mb-2 text-sm font-black tracking-tight">{children}</h3>,
-                                blockquote: ({ children }) => (
-                                    <blockquote className="mb-2 border-l-4 border-neutral-300 bg-neutral-50/80 px-3 py-2 italic text-neutral-600 last:mb-0">
-                                        {children}
-                                    </blockquote>
-                                ),
-                                a: ({ href, children }) => (
-                                    <a href={href} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 underline underline-offset-2">
-                                        {children}
-                                    </a>
-                                ),
-                                table: ({ children }) => (
-                                    <div className="mb-2 overflow-x-auto rounded-2xl border border-neutral-200 last:mb-0">
-                                        <table className="min-w-full border-collapse text-left text-xs">{children}</table>
-                                    </div>
-                                ),
-                                thead: ({ children }) => <thead className="bg-neutral-100 text-neutral-700">{children}</thead>,
-                                th: ({ children }) => <th className="border-b border-neutral-200 px-3 py-2 font-black">{children}</th>,
-                                td: ({ children }) => <td className="border-b border-neutral-100 px-3 py-2 align-top">{children}</td>,
-                                code: ({ inline, className, children, ...props }: any) => {
-                                    const rawCode = String(children).replace(/\n$/, '');
-                                    const language = className?.replace('language-', '') || '';
-                                    if (inline) {
-                                        return (
-                                            <code className="rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.92em] text-rose-700" {...props}>
-                                                {children}
-                                            </code>
-                                        );
-                                    }
-                                    return (
-                                        <div className="mb-2 overflow-hidden rounded-2xl border border-neutral-200 bg-white text-neutral-900 last:mb-0">
-                                            <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">
-                                                <span>{language || 'code'}</span>
-                                            </div>
-                                            <pre className="overflow-x-auto px-4 py-3 text-[12px] leading-6">
-                                                <code className={className} {...props}>{rawCode}</code>
-                                            </pre>
-                                        </div>
-                                    );
-                                },
-                            }}
-                        >
-                            {turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}
-                        </ReactMarkdown>
-                    </div>
-                </div>
-            </div>
-        ))}
-    </>
-));
 
 export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }) => {
     const { showToast } = useToast();
@@ -2246,6 +2141,81 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         }
     };
 
+    const handleChatCoachSearch = async () => {
+        const selectedText = (
+            selectedTextRef.current
+            || coachSelectionText
+            || window.getSelection()?.toString().trim()
+            || ''
+        ).trim();
+        if (!selectedText) return;
+        selectedTextRef.current = selectedText;
+
+        setActiveChatCoachAction('search');
+        setIsThinking(true);
+        setIsChatOpen(true);
+
+        const userTurn = createChatTurn('user', `Search Vocabulary Library: ${selectedText}`);
+        const assistantId = `assistant-search-${Date.now()}`;
+
+        setChatHistory((current) => [
+            ...current,
+            userTurn,
+            { id: assistantId, role: 'assistant', kind: 'message', content: 'Dang tim trong Vocabulary Library...' }
+        ]);
+
+        try {
+            const serverUrl = getServerUrl(config);
+            const res = await fetch(`${serverUrl}/api/studybuddy/search`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    data: selectedText,
+                    userName: user.name
+                })
+            });
+
+            if (!res.ok) {
+                throw new Error(`Search server error ${res.status}`);
+            }
+
+            const data = await res.json().catch(() => null);
+            const responseTexts = Array.isArray(data?.responses)
+                ? data.responses.map((item: unknown) => String(item || '').trim()).filter(Boolean)
+                : [];
+            const responseText = responseTexts[0]
+                || (typeof data?.response === 'string' && data.response.trim() ? data.response.trim() : '')
+                || 'Khong co noi dung tra ve.';
+
+            const finalAssistantText = responseTexts.length > 1
+                ? responseTexts.map((item, index) => `Result ${index + 1}\n${item}`).join('\n\n')
+                : responseText;
+
+            setChatHistory((current) =>
+                current.map((turn) =>
+                    turn.id === assistantId
+                        ? { ...turn, content: finalAssistantText }
+                        : turn
+                )
+            );
+        } catch (error) {
+            console.error(error);
+            setChatHistory((current) =>
+                current.map((turn) =>
+                    turn.id === assistantId
+                        ? { ...turn, content: 'Search request failed.' }
+                        : turn
+                )
+            );
+            showToast('Search request failed.', 'error');
+        } finally {
+            setIsThinking(false);
+            setActiveChatCoachAction(null);
+        }
+    };
+
     const handleChatCoachPromptToChat = async (
         actionKey: ChatCoachActionKey,
         promptLabel: string,
@@ -2665,7 +2635,16 @@ ${baseRules}
                     restoreSelectedRange();
                 }}
             >
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid grid-cols-8 gap-2">
+                    <button
+                        type="button"
+                        onClick={handleChatCoachSearch}
+                        disabled={!hasSelection || !!activeChatCoachAction}
+                        className={`${baseButtonClass} bg-teal-50 text-teal-600 hover:bg-teal-100`}
+                        title="Search Vocabulary Library"
+                    >
+                        {activeChatCoachAction === 'search' ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                    </button>
                     <button
                         type="button"
                         onClick={handleChatCoachTranslate}
@@ -2971,6 +2950,133 @@ Rules:
         setPlaybackRate(next);
         setPlaybackRateState(next);
     };
+
+    const chatHeaderDescription = isConversationMode
+        ? (isChatListening ? 'Conversation mode: listening...' : isChatLoading ? 'Conversation mode: AI is replying...' : 'Conversation mode: waiting for voice...')
+        : 'Grammar, writing, speaking, tu vung';
+
+    const chatSaveModal = chatSaveDraft ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/75 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[1.75rem] border border-neutral-200 bg-white p-5 shadow-2xl">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-neutral-500">Save To Word</p>
+                        <p className="mt-1 text-sm font-bold text-neutral-900">Chon phan de luu vao word</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setChatSaveDraft(null)}
+                        className="rounded-xl p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+
+                <div className="mt-4 space-y-4">
+                    <div>
+                        <label className="mb-2 block text-[11px] font-black uppercase tracking-wide text-neutral-500">
+                            Target Word
+                        </label>
+                        <input
+                            type="text"
+                            value={chatSaveDraft.targetWord}
+                            onChange={(e) => setChatSaveDraft((current) => current ? { ...current, targetWord: e.target.value } : current)}
+                            placeholder="Nhap word can luu vao"
+                            className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-900 outline-none transition-colors focus:border-neutral-900 focus:bg-white"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="mb-2 block text-[11px] font-black uppercase tracking-wide text-neutral-500">
+                            Save Section
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            {(Object.keys(SAVE_SECTION_LABELS) as ChatSaveSection[]).map((section) => {
+                                const isActive = chatSaveDraft.selectedSection === section;
+                                const isSuggested = chatSaveDraft.suggestedSections.includes(section);
+                                return (
+                                    <button
+                                        key={section}
+                                        type="button"
+                                        onClick={() => setChatSaveDraft((current) => current ? { ...current, selectedSection: section } : current)}
+                                        className={`rounded-full border px-3 py-2 text-[11px] font-black uppercase tracking-wide transition-colors ${
+                                            isActive
+                                                ? 'border-neutral-900 bg-neutral-900 text-white'
+                                                : isSuggested
+                                                    ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300'
+                                                    : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:text-neutral-900'
+                                        }`}
+                                    >
+                                        {SAVE_SECTION_LABELS[section]}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="mb-2 block text-[11px] font-black uppercase tracking-wide text-neutral-500">
+                            Preview
+                        </label>
+                        <div className="max-h-48 overflow-y-auto rounded-2xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-700">
+                            {chatSaveDraft.selectedSection === 'example' && (
+                                <p className="whitespace-pre-wrap leading-relaxed">{chatSaveDraft.sourceText}</p>
+                            )}
+                            {(chatSaveDraft.selectedSection === 'collocation' || chatSaveDraft.selectedSection === 'paraphrase' || chatSaveDraft.selectedSection === 'preposition') && (
+                                <div className="space-y-2">
+                                    {(chatSaveDraft.parsedPairs.length > 0
+                                        ? chatSaveDraft.parsedPairs
+                                        : chatSaveDraft.sourceText.split('\n').map((line) => ({ item: normalizeSaveLine(line), context: '' })).filter((item) => item.item)
+                                    ).map((item, index) => (
+                                        <div key={`${item.item}-${index}`} className="rounded-xl border border-neutral-200 bg-white px-3 py-2">
+                                            <p className="font-bold text-neutral-900">{item.item}</p>
+                                            {!!item.context && <p className="mt-1 text-neutral-600">{item.context}</p>}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {chatSaveDraft.selectedSection === 'wordFamily' && (
+                                <div className="space-y-2">
+                                    {(chatSaveDraft.parsedWordFamily.length > 0
+                                        ? chatSaveDraft.parsedWordFamily
+                                        : chatSaveDraft.sourceText.split('\n').map((line) => ({
+                                            word: normalizeSaveLine(line),
+                                            note: '',
+                                            bucket: inferWordFamilyBucket(normalizeSaveLine(line), '')
+                                        })).filter((item) => item.word)
+                                    ).map((item, index) => (
+                                        <div key={`${item.word}-${index}`} className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-2">
+                                            <p className="font-bold text-neutral-900">{item.word}</p>
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">{item.bucket}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setChatSaveDraft(null)}
+                            className="rounded-2xl border border-neutral-200 px-4 py-3 text-[11px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveChatSnippet}
+                            disabled={isSavingChatSnippet}
+                            className="inline-flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {isSavingChatSnippet ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                            Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    ) : null;
 
     return (
         <>

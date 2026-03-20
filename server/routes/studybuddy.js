@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const https = require('https');
 const { settings } = require('../config');
+const { searchUserVocabularyIndex } = require('../vocabularySearchIndex');
 
 const router = express.Router();
 
@@ -110,6 +111,152 @@ function ensureActiveUrl(callback) {
     });
 }
 
+function requestStudyBuddyAiText(messages, callback) {
+    ensureActiveUrl((err, baseUrl) => {
+        if (err || !baseUrl) {
+            return callback(new Error('No StudyBuddy AI available'));
+        }
+
+        const upstreamUrl = new URL(baseUrl);
+        const client = upstreamUrl.protocol === 'https:' ? https : http;
+        const payload = JSON.stringify({
+            temperature: 0.2,
+            top_p: 0.85,
+            repetition_penalty: 1.05,
+            stream: false,
+            messages
+        });
+
+        const upstreamReq = client.request(
+            upstreamUrl,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(payload),
+                    'Accept': 'application/json'
+                }
+            },
+            (upstreamRes) => {
+                let raw = '';
+
+                upstreamRes.on('data', (chunk) => {
+                    raw += chunk.toString();
+                });
+
+                upstreamRes.on('end', () => {
+                    if (!upstreamRes.statusCode || upstreamRes.statusCode >= 400) {
+                        return callback(new Error(`StudyBuddy AI status ${upstreamRes.statusCode || 500}`));
+                    }
+
+                    try {
+                        const data = JSON.parse(raw);
+                        const content = data?.choices?.[0]?.message?.content;
+                        if (typeof content === 'string' && content.trim()) {
+                            return callback(null, content.trim());
+                        }
+                        return callback(new Error('StudyBuddy AI returned empty content'));
+                    } catch (parseError) {
+                        return callback(parseError);
+                    }
+                });
+            }
+        );
+
+        upstreamReq.setTimeout(60000, () => {
+            upstreamReq.destroy(new Error('StudyBuddy AI upstream timeout'));
+        });
+
+        upstreamReq.on('error', (error) => {
+            activeBaseUrl = null;
+            callback(error);
+        });
+
+        upstreamReq.write(payload);
+        upstreamReq.end();
+    });
+}
+
+function looksVietnamese(text) {
+    const source = String(text || '').toLowerCase();
+    if (!source.trim()) return false;
+    if (/[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(source)) {
+        return true;
+    }
+
+    return /\b(khong|khong|la|cua|cho|voi|nhung|mot|cach|nghia|tu|cum|vi du)\b/i.test(source);
+}
+
+function parseExpandedQueries(raw, fallbackQuery) {
+    const source = String(raw || '').trim();
+    const fallback = [String(fallbackQuery || '').trim()].filter(Boolean);
+    if (!source) return fallback;
+
+    const fenced = source.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+
+    try {
+        const parsed = JSON.parse(fenced);
+        if (Array.isArray(parsed)) {
+            return Array.from(new Set(parsed.map((item) => String(item || '').trim()).filter(Boolean)));
+        }
+        if (Array.isArray(parsed?.queries)) {
+            return Array.from(new Set(parsed.queries.map((item) => String(item || '').trim()).filter(Boolean)));
+        }
+    } catch {
+        // Ignore parse failures and fall back below.
+    }
+
+    const lines = fenced
+        .split('\n')
+        .map((line) => line.replace(/^\s*[-*0-9.]+\s*/, '').trim())
+        .filter(Boolean);
+
+    return Array.from(new Set([...fallback, ...lines])).filter(Boolean);
+}
+
+function expandSearchQueries(query, callback) {
+    const cleanQuery = String(query || '').trim();
+    if (!cleanQuery) return callback(null, []);
+
+    if (!looksVietnamese(cleanQuery)) {
+        console.log('[StudyBuddySearch] Query is non-Vietnamese, using original query only:', cleanQuery);
+        return callback(null, [cleanQuery]);
+    }
+
+    console.log('[StudyBuddySearch] Expanding Vietnamese query:', cleanQuery);
+    requestStudyBuddyAiText(
+        [
+            {
+                role: 'system',
+                content: 'You convert a Vietnamese library search request into short English search variants for semantic vocabulary lookup.'
+            },
+            {
+                role: 'user',
+                content: `Rewrite this Vietnamese query into 4 short English search variants across different registers.
+
+Rules:
+- Return JSON only
+- Format: {"queries":["...", "...", "...", "..."]}
+- Keep each query under 12 words
+- Focus on natural English phrases a learner may want to find
+- No explanations
+
+Vietnamese query: ${cleanQuery}`
+            }
+        ],
+        (error, content) => {
+            if (error) {
+                console.warn('[StudyBuddySearch] Query expansion failed:', error.message);
+                return callback(null, [cleanQuery]);
+            }
+
+            const queries = parseExpandedQueries(content, cleanQuery);
+            console.log('[StudyBuddySearch] Expanded queries:', queries);
+            callback(null, queries.length ? queries : [cleanQuery]);
+        }
+    );
+}
+
 router.post('/studybuddy/chat', (req, res) => {
     const payload = JSON.stringify(req.body || {});
 
@@ -213,6 +360,56 @@ router.post('/studybuddy/chat', (req, res) => {
         }
 
         sendRequest(currentUrl);
+    });
+});
+
+router.post('/studybuddy/search', (req, res) => {
+    const data = String(req.body?.data || '').trim();
+    const userName = String(req.body?.userName || '').trim();
+
+    if (!userName) {
+        return res.status(400).json({ error: 'Missing userName' });
+    }
+
+    if (!data) {
+        return res.status(400).json({ error: 'Missing search data' });
+    }
+
+    console.log('User requested to search:', data);
+
+    expandSearchQueries(data, (_error, queries) => {
+        const results = searchUserVocabularyIndex(userName, queries, 8);
+        console.log('[StudyBuddySearch] Search request detail:', {
+            userName,
+            originalQuery: data,
+            expandedQueries: queries,
+            resultCount: results.length
+        });
+        console.log(
+            '[StudyBuddySearch] Top matches:',
+            results.map((item) => ({
+                word: item.word,
+                section: item.section,
+                text: item.text,
+                matchedQuery: item.matchedQuery,
+                score: Number(item.score.toFixed(4))
+            }))
+        );
+        const response = results.length
+            ? results.map((item) => {
+                const extras = [];
+                if (item.register) extras.push(`register: ${item.register}`);
+                if (item.context) extras.push(`context: ${item.context}`);
+                if (item.hint) extras.push(`hint: ${item.hint}`);
+                return `Word: ${item.word}\nSection: ${item.section}\nMatch: ${item.text}${extras.length ? `\n${extras.join('\n')}` : ''}`;
+            })
+            : ['Khong tim thay ket qua phu hop trong Vocabulary Library cua ban.'];
+
+        return res.json({
+            response: response[0],
+            responses: response,
+            queries
+        });
     });
 });
 

@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { lookupWords, getStats, loadGlobalLibrary } = require('../libraryManager');
+const { rebuildAllUserVocabularySearchIndices, getVocabularySearchStats } = require('../vocabularySearchIndex');
 
 // Batch lookup words
 router.post('/library/lookup', (req, res) => {
@@ -23,7 +24,12 @@ router.get('/library/stats', (req, res) => {
 // Trigger manual reload (useful after a big upload)
 router.post('/library/reload', (req, res) => {
     loadGlobalLibrary();
-    res.json({ success: true, stats: getStats() });
+    const searchStats = rebuildAllUserVocabularySearchIndices();
+    res.json({ success: true, stats: getStats(), searchStats });
+});
+
+router.get('/library/search-stats', (req, res) => {
+    res.json(getVocabularySearchStats());
 });
 
 module.exports = router;

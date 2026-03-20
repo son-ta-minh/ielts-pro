@@ -18,6 +18,7 @@ const http = require('http');
 const { spawn } = require('child_process');
 const { settings } = require('./config');
 const { loadGlobalLibrary } = require('./libraryManager');
+const { rebuildAllUserVocabularySearchIndices } = require('./vocabularySearchIndex');
 const admin = require('firebase-admin');
 const os = require('os');
 
@@ -148,6 +149,7 @@ server.listen(settings.PORT, settings.HOST, () => {
     // Initialize Library
     try {
         loadGlobalLibrary();
+        rebuildAllUserVocabularySearchIndices();
         coursesModule.exportAllCoursesToBackup();
     } catch (e) {
         console.error("[Startup] Failed to load library:", e);
