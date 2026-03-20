@@ -6,7 +6,6 @@ export function getStudyBuddyCoachPrompt(
 - Use English only
 - Do NOT translate into Vietnamese
 - Keep concise, natural, IELTS-friendly
-- Output MUST be a Markdown code block
 - Use bullet list ONLY (-)
 - Do NOT use {}, numbers, or any other symbols
 - Follow the format STRICTLY`;

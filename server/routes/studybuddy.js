@@ -112,9 +112,16 @@ function ensureActiveUrl(callback) {
 }
 
 function requestStudyBuddyAiText(messages, callback) {
+    let settled = false;
+    const finish = (error, content) => {
+        if (settled) return;
+        settled = true;
+        callback(error, content);
+    };
+
     ensureActiveUrl((err, baseUrl) => {
         if (err || !baseUrl) {
-            return callback(new Error('No StudyBuddy AI available'));
+            return finish(new Error('No StudyBuddy AI available'));
         }
 
         const upstreamUrl = new URL(baseUrl);
@@ -146,18 +153,18 @@ function requestStudyBuddyAiText(messages, callback) {
 
                 upstreamRes.on('end', () => {
                     if (!upstreamRes.statusCode || upstreamRes.statusCode >= 400) {
-                        return callback(new Error(`StudyBuddy AI status ${upstreamRes.statusCode || 500}`));
+                        return finish(new Error(`StudyBuddy AI status ${upstreamRes.statusCode || 500}`));
                     }
 
                     try {
                         const data = JSON.parse(raw);
                         const content = data?.choices?.[0]?.message?.content;
                         if (typeof content === 'string' && content.trim()) {
-                            return callback(null, content.trim());
+                            return finish(null, content.trim());
                         }
-                        return callback(new Error('StudyBuddy AI returned empty content'));
+                        return finish(new Error('StudyBuddy AI returned empty content'));
                     } catch (parseError) {
-                        return callback(parseError);
+                        return finish(parseError);
                     }
                 });
             }
@@ -169,7 +176,7 @@ function requestStudyBuddyAiText(messages, callback) {
 
         upstreamReq.on('error', (error) => {
             activeBaseUrl = null;
-            callback(error);
+            finish(error);
         });
 
         upstreamReq.write(payload);
@@ -253,6 +260,111 @@ Vietnamese query: ${cleanQuery}`
             const queries = parseExpandedQueries(content, cleanQuery);
             console.log('[StudyBuddySearch] Expanded queries:', queries);
             callback(null, queries.length ? queries : [cleanQuery]);
+        }
+    );
+}
+
+function parseRerankedIndexes(raw, resultCount) {
+    const source = String(raw || '').trim();
+    if (!source) return [];
+    const fenced = source.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+
+    try {
+        const parsed = JSON.parse(fenced);
+        const indexes = Array.isArray(parsed)
+            ? parsed
+            : Array.isArray(parsed?.ranking)
+                ? parsed.ranking
+                : Array.isArray(parsed?.indexes)
+                    ? parsed.indexes
+                    : [];
+        return Array.from(new Set(indexes
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value) && value >= 0 && value < resultCount)));
+    } catch {
+        const numbers = fenced.match(/\d+/g) || [];
+        return Array.from(new Set(numbers
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value) && value >= 0 && value < resultCount)));
+    }
+}
+
+function isIdentityRanking(ranking, candidateCount) {
+    if (!Array.isArray(ranking) || ranking.length !== candidateCount) return false;
+    for (let index = 0; index < candidateCount; index += 1) {
+        if (ranking[index] !== index) return false;
+    }
+    return true;
+}
+
+function rerankSearchResults(originalQuery, expandedQueries, results, callback, attempt = 1) {
+    if (!Array.isArray(results) || results.length <= 1) {
+        return callback(null, results || []);
+    }
+
+    const candidateResults = results.slice(0, 10);
+    requestStudyBuddyAiText(
+        [
+            {
+                role: 'system',
+                content: attempt === 1
+                    ? 'You rerank semantic vocabulary search matches. Choose the most relevant matches for the user query, prioritizing meaning fit over lexical overlap.'
+                    : 'You rerank semantic vocabulary search matches. You must critically reorder candidates by meaning fit. Do not keep the original order unless it is truly the best order after careful comparison.'
+            },
+            {
+                role: 'user',
+                content: `Rerank these candidate matches for the user query.
+
+Rules:
+- Return JSON only
+- Format: {"ranking":[0,1,2]}
+- ranking must contain the candidate indexes in best-first order
+- Consider meaning match, register fit, and whether the phrase actually helps express the query
+- Original retrieval score is only a hint, not the final answer
+- If candidate 0 is not clearly the best meaning match, move it down
+- If the original order already happens to be best, you may keep it, but only after careful comparison
+- Do not explain
+
+Original query: ${originalQuery}
+Expanded queries: ${JSON.stringify(expandedQueries)}
+
+Candidates:
+${candidateResults.map((item, index) => JSON.stringify({
+    index,
+    word: item.word,
+    section: item.section,
+    text: item.text,
+    context: item.context || '',
+    register: item.register || '',
+    hint: item.hint || '',
+    matchedQuery: item.matchedQuery,
+    score: Number(item.score.toFixed(4))
+})).join('\n')}`
+            }
+        ],
+        (error, content) => {
+            if (error) {
+                console.warn('[StudyBuddySearch] AI rerank failed:', error.message);
+                return callback(null, results);
+            }
+
+            const ranking = parseRerankedIndexes(content, candidateResults.length);
+            if (ranking.length === 0) {
+                console.warn('[StudyBuddySearch] AI rerank returned unusable ranking, keeping original order.');
+                return callback(null, results);
+            }
+
+            if (attempt === 1 && isIdentityRanking(ranking, candidateResults.length)) {
+                console.warn('[StudyBuddySearch] AI rerank returned identity order, retrying with stricter prompt.');
+                return rerankSearchResults(originalQuery, expandedQueries, results, callback, 2);
+            }
+
+            const used = new Set(ranking);
+            const rerankedTop = ranking.map((index) => candidateResults[index]);
+            const remainingTop = candidateResults.filter((_, index) => !used.has(index));
+            const reranked = [...rerankedTop, ...remainingTop, ...results.slice(candidateResults.length)];
+            console.log(`[StudyBuddySearch] AI reranked order (attempt ${attempt}):`, ranking);
+            callback(null, reranked);
         }
     );
 }
@@ -376,18 +488,24 @@ router.post('/studybuddy/search', (req, res) => {
     }
 
     console.log('User requested to search:', data);
+    let responded = false;
 
     expandSearchQueries(data, (_error, queries) => {
-        const results = searchUserVocabularyIndex(userName, queries, 8);
+        if (responded || res.headersSent) {
+            console.warn('[StudyBuddySearch] Ignoring duplicate callback for query:', data);
+            return;
+        }
+        responded = true;
+        const rawResults = searchUserVocabularyIndex(userName, queries, 20);
         console.log('[StudyBuddySearch] Search request detail:', {
             userName,
             originalQuery: data,
             expandedQueries: queries,
-            resultCount: results.length
+            resultCount: rawResults.length
         });
         console.log(
-            '[StudyBuddySearch] Top matches:',
-            results.map((item) => ({
+            '[StudyBuddySearch] Top matches before rerank:',
+            rawResults.map((item) => ({
                 word: item.word,
                 section: item.section,
                 text: item.text,
@@ -395,20 +513,35 @@ router.post('/studybuddy/search', (req, res) => {
                 score: Number(item.score.toFixed(4))
             }))
         );
-        const response = results.length
-            ? results.map((item) => {
-                const extras = [];
-                if (item.register) extras.push(`register: ${item.register}`);
-                if (item.context) extras.push(`context: ${item.context}`);
-                if (item.hint) extras.push(`hint: ${item.hint}`);
-                return `Word: ${item.word}\nSection: ${item.section}\nMatch: ${item.text}${extras.length ? `\n${extras.join('\n')}` : ''}`;
-            })
-            : ['Khong tim thay ket qua phu hop trong Vocabulary Library cua ban.'];
 
-        return res.json({
-            response: response[0],
-            responses: response,
-            queries
+        rerankSearchResults(data, queries, rawResults, (_rerankError, results) => {
+            if (res.headersSent) return;
+            console.log(
+                '[StudyBuddySearch] Top matches after rerank:',
+                results.map((item) => ({
+                    word: item.word,
+                    section: item.section,
+                    text: item.text,
+                    matchedQuery: item.matchedQuery,
+                    score: Number(item.score.toFixed(4))
+                }))
+            );
+
+            const response = results.length
+                ? results.map((item) => {
+                    const extras = [];
+                    if (item.register) extras.push(`register: ${item.register}`);
+                    if (item.context) extras.push(`context: ${item.context}`);
+                    if (item.hint) extras.push(`hint: ${item.hint}`);
+                    return `Word: ${item.word}\nSection: ${item.section}\nMatch: ${item.text}${extras.length ? `\n${extras.join('\n')}` : ''}`;
+                })
+                : ['Khong tim thay ket qua phu hop trong Vocabulary Library cua ban.'];
+
+            return res.json({
+                response: response[0],
+                responses: response,
+                queries
+            });
         });
     });
 });

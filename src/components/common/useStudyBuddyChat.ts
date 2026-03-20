@@ -130,6 +130,16 @@ export function useStudyBuddyChat({
     chatConversationMaxChars,
     chatConversationMaxWords,
 }: UseStudyBuddyChatOptions) {
+    function getActiveActionText() {
+        return (
+            selectedTextRef.current
+            || coachSelectionText
+            || chatInput.trim()
+            || window.getSelection()?.toString().trim()
+            || ''
+        ).trim();
+    }
+
     async function submitChatPrompt(
         rawPrompt: string,
         options?: {
@@ -671,8 +681,9 @@ export function useStudyBuddyChat({
     }
 
     async function handleChatCoachTranslate() {
-        const selectedText = selectedTextRef.current.trim();
+        const selectedText = getActiveActionText();
         if (!selectedText) return;
+        selectedTextRef.current = selectedText;
 
         setActiveChatCoachAction('translate');
         setIsThinking(true);
@@ -700,12 +711,7 @@ export function useStudyBuddyChat({
     }
 
     async function handleChatCoachSearch() {
-        const selectedText = (
-            selectedTextRef.current
-            || coachSelectionText
-            || window.getSelection()?.toString().trim()
-            || ''
-        ).trim();
+        const selectedText = getActiveActionText();
         if (!selectedText) return;
         selectedTextRef.current = selectedText;
 
@@ -779,8 +785,9 @@ export function useStudyBuddyChat({
         promptLabel: string,
         promptBuilder: (selectedText: string) => string
     ) {
-        const selectedText = selectedTextRef.current.trim();
+        const selectedText = getActiveActionText();
         if (!selectedText) return;
+        selectedTextRef.current = selectedText;
 
         const userPrompt = promptBuilder(selectedText);
         const userTurn = createChatTurn('user', `${promptLabel}: ${selectedText}`);

@@ -293,6 +293,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         return text;
     };
 
+    const getCoachActionText = () => (
+        selectedTextRef.current
+        || coachSelectionText
+        || chatInput.trim()
+        || window.getSelection()?.toString().trim()
+        || ''
+    ).trim();
+
     const createWordForChatSave = async (targetWord: string): Promise<VocabularyItem> => {
         const baseItem = await createNewWord(
             targetWord,
@@ -1111,8 +1119,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     ]);
 
     const handleTranslateSelection = async () => {
-        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
+        const selectedText = getCoachActionText();
         if (!selectedText) return;
+        selectedTextRef.current = selectedText;
 
         // If already Vietnamese, do not call translation API
         const detectedLang = detectLanguage(selectedText);
@@ -1212,8 +1221,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     });
 
     const handleReadAndIpa = async () => {
-        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
+        const selectedText = getCoachActionText();
         if (!selectedText) return;
+        selectedTextRef.current = selectedText;
         if (selectedText.length > MAX_READ_LENGTH) {
             showToast("Text is too long to read!", "error");
         } else {
@@ -1277,8 +1287,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const handleAddToLibrary = async () => {
-        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
-        if (!selectedText) return;        if (!selectedText || isAlreadyInLibrary) return;
+        const selectedText = getCoachActionText();
+        if (!selectedText || isAlreadyInLibrary) return;
+        selectedTextRef.current = selectedText;
         setIsAddingToLibrary(true);
         try {
             let newItem: VocabularyItem;
@@ -1360,8 +1371,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const handleViewWord = async () => {
-        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
+        const selectedText = getCoachActionText();
         if (!selectedText || !user.id || !onViewWord || isAnyModalOpen) return;
+        selectedTextRef.current = selectedText;
         const wordObj = await dataStore.findWordByText(user.id, selectedText);
         if (wordObj) {
             setIsOpen(false);
@@ -1605,12 +1617,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 headerDescription={chatHeaderDescription}
                                 chatCoachActionBar={
                                     <StudyBuddyChatCoachActionBar
-                                        hasSelection={!!coachSelectionText}
+                                        hasSelection={!!getCoachActionText()}
                                         activeChatCoachAction={activeChatCoachAction}
                                         isAlreadyInLibrary={isAlreadyInLibrary}
                                         isAddingToLibrary={isAddingToLibrary}
                                         isAnyModalOpen={isAnyModalOpen}
                                         onRestoreSelection={(e) => {
+                                            if (!selectedTextRef.current && !coachSelectionText) return;
                                             e.preventDefault();
                                             restoreSelectedRange();
                                         }}
