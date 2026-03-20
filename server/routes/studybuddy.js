@@ -119,8 +119,31 @@ router.post('/studybuddy/chat', (req, res) => {
         }
 
         let currentUrl = baseUrl;
+        let activeUpstreamReq = null;
+        let responseCommitted = false;
+        let requestClosed = false;
+
+        const cleanupUpstream = () => {
+            if (activeUpstreamReq) {
+                activeUpstreamReq.removeAllListeners();
+                activeUpstreamReq.destroy();
+                activeUpstreamReq = null;
+            }
+        };
+
+        req.on('aborted', () => {
+            requestClosed = true;
+            cleanupUpstream();
+        });
+
+        res.on('close', () => {
+            requestClosed = true;
+            cleanupUpstream();
+        });
 
         function sendRequest(urlToUse) {
+            if (requestClosed) return;
+
             const upstreamUrl = new URL(urlToUse);
             const client = upstreamUrl.protocol === 'https:' ? https : http;
 
@@ -137,11 +160,23 @@ router.post('/studybuddy/chat', (req, res) => {
                     }
                 },
                 (upstreamRes) => {
+                    if (requestClosed) {
+                        upstreamRes.resume();
+                        return;
+                    }
+
+                    if (responseCommitted || res.headersSent) {
+                        upstreamRes.resume();
+                        return;
+                    }
+
+                    responseCommitted = true;
                     const responseHeaders = filterHeaders(upstreamRes.headers);
                     res.writeHead(upstreamRes.statusCode || 502, responseHeaders);
                     upstreamRes.pipe(res);
                 }
             );
+            activeUpstreamReq = upstreamReq;
 
             upstreamReq.setTimeout(300000, () => {
                 upstreamReq.destroy(new Error('StudyBuddy AI upstream timeout'));
@@ -150,6 +185,18 @@ router.post('/studybuddy/chat', (req, res) => {
             upstreamReq.on('error', (error) => {
                 console.error('[StudyBuddy] Active AI failed:', upstreamUrl.href, error.message);
                 activeBaseUrl = null;
+
+                if (requestClosed) {
+                    return;
+                }
+
+                if (responseCommitted || res.headersSent) {
+                    if (!res.writableEnded) {
+                        res.end();
+                    }
+                    return;
+                }
+
                 ensureActiveUrl((err2, newUrl) => {
                     if (err2 || !newUrl) {
                         if (!res.headersSent) {
