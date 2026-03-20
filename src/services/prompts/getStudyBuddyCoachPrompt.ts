@@ -1,0 +1,36 @@
+export function getStudyBuddyCoachPrompt(
+    selectedText: string,
+    type: 'examples' | 'collocations' | 'paraphrase'
+): string {
+    const baseRules = `Rules:
+- Use English only
+- Do NOT translate into Vietnamese
+- Keep concise, natural, IELTS-friendly
+- Output MUST be a Markdown code block
+- Use bullet list ONLY (-)
+- Do NOT use {}, numbers, or any other symbols
+- Follow the format STRICTLY`;
+
+    if (type === 'examples') {
+        return `Give max 3 example sentences for '"${selectedText}' use the exact words provided, do not paraphrases".
+
+${baseRules}
+- Each bullet = 1 natural sentence`;
+    }
+
+    if (type === 'collocations') {
+        return `Give max 5 popular natural collocations for "${selectedText}".
+
+${baseRules}
+- Format: - **collocation**: short explanation`;
+    }
+
+    return `Give natural paraphrases for "${selectedText}".
+
+${baseRules}
+- Format: - **paraphrase**(Register): short explanation
+- Register must be one of: Academic, Casual, Synonym
+- Always put Register immediately after the paraphrase, before the colon
+- Do NOT put Register at the end of the explanation
+- If unsure, use Synonym`;
+}
