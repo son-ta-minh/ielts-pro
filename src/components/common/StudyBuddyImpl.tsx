@@ -294,9 +294,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const getCoachActionText = () => (
-        selectedTextRef.current
+        chatInput.trim()
+        || selectedTextRef.current
         || coachSelectionText
-        || chatInput.trim()
         || window.getSelection()?.toString().trim()
         || ''
     ).trim();

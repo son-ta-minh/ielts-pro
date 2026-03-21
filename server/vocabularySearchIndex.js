@@ -128,6 +128,7 @@ function normalizeVocabItem(rawItem, fallbackUserName) {
         word: readText(rawItem, 'word', 'w'),
         example: readText(rawItem, 'example', 'ex'),
         note: readText(rawItem, 'note', 'nt'),
+        isIdiom: Boolean(rawItem.isIdiom || rawItem.is_id),
         collocationsArray,
         idiomsList,
         paraphrases
@@ -155,7 +156,8 @@ function createChunk(section, text, word, wordId, ownerName, extra = {}) {
         searchableTokens: tokenizeNormalized(searchableText),
         hint: extra.hint || '',
         context: extra.context || '',
-        register: extra.register || ''
+        register: extra.register || '',
+        isIdiom: Boolean(extra.isIdiom)
     };
 }
 
@@ -163,7 +165,9 @@ function buildChunksFromWord(item) {
     if (!item?.ownerName || !item?.word) return [];
 
     const chunks = [];
-    const wordChunk = createChunk('word', item.word, item.word, item.id, item.ownerName);
+    const wordChunk = createChunk('word', item.word, item.word, item.id, item.ownerName, {
+        isIdiom: item.isIdiom
+    });
     const exampleChunks = splitTextIntoChunks(item.example);
     const noteChunks = splitTextIntoChunks(item.note);
 
@@ -358,7 +362,13 @@ function searchUserVocabularyIndex(userName, queries, limit = DEFAULT_RESULT_LIM
 
     const sectionFilter = String(options?.section || 'all').trim().toLowerCase();
     const searchableChunks = sectionFilter && sectionFilter !== 'all'
-        ? index.chunks.filter((chunk) => String(chunk.section || '').toLowerCase() === sectionFilter)
+        ? index.chunks.filter((chunk) => {
+            const chunkSection = String(chunk.section || '').toLowerCase();
+            if (sectionFilter === 'idiom') {
+                return chunkSection === 'idiom' || (chunkSection === 'word' && chunk.isIdiom);
+            }
+            return chunkSection === sectionFilter;
+        })
         : index.chunks;
 
     if (!searchableChunks.length) return [];

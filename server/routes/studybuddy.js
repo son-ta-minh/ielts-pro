@@ -283,27 +283,70 @@ function parseExpandedQueries(raw, fallbackQuery) {
     return Array.from(new Set([...fallback, ...lines])).filter(Boolean);
 }
 
-function expandSearchQueries(query, callback, attempt = 1) {
-    const cleanQuery = String(query || '').trim();
-    if (!cleanQuery) return callback(null, []);
+function getSearchExpansionPrompt(section, attempt, cleanQuery) {
+    const englishOnlyRule = attempt === 1
+        ? ''
+        : ' Every output query must be English only. Vietnamese output is invalid.';
 
-    if (!looksVietnamese(cleanQuery)) {
-        console.log('[StudyBuddySearch] Query is non-Vietnamese, using original query only:', cleanQuery);
-        return callback(null, [cleanQuery]);
-    }
-
-    console.log('[StudyBuddySearch] Expanding Vietnamese query:', cleanQuery);
-    requestStudyBuddyAiText(
-        [
+    if (section === 'idiom') {
+        return [
             {
                 role: 'system',
-                content: attempt === 1
-                    ? 'You convert a Vietnamese library search request into short English search variants for semantic vocabulary lookup.'
-                    : 'You convert a Vietnamese library search request into short English search variants for semantic vocabulary lookup. Every output query must be English only. Vietnamese output is invalid.'
+                content: `You convert a Vietnamese idiom search request into likely English idioms and natural fixed expressions for vocabulary lookup.${englishOnlyRule}`
             },
             {
                 role: 'user',
-                content: `Rewrite this Vietnamese query into 4 short English search variants across different registers.
+                content: `Rewrite this Vietnamese idiom meaning into 4 short English idiom or expression search variants.
+
+Rules:
+- Return JSON only
+- Format: {"queries":["...", "...", "...", "..."]}
+- Prefer common idioms, natural fixed expressions, and phrase-like search terms
+- Do not use abstract academic paraphrases unless they are also natural phrase searches
+- Keep each query under 8 words when possible
+- Every query must be English only
+- Do not copy Vietnamese words
+- No explanations
+
+Vietnamese idiom meaning: ${cleanQuery}`
+            }
+        ];
+    }
+
+    if (section === 'word') {
+        return [
+            {
+                role: 'system',
+                content: `You convert a Vietnamese headword search request into likely English headword candidates for vocabulary lookup.${englishOnlyRule}`
+            },
+            {
+                role: 'user',
+                content: `Rewrite this Vietnamese word meaning into 4 short English headword candidates.
+
+Rules:
+- Return JSON only
+- Format: {"queries":["...", "...", "...", "..."]}
+- Prefer single words or very short lexical items
+- Avoid long paraphrases
+- Every query must be English only
+- Do not copy Vietnamese words
+- No explanations
+
+Vietnamese meaning: ${cleanQuery}`
+            }
+        ];
+    }
+
+    return [
+        {
+            role: 'system',
+            content: attempt === 1
+                ? 'You convert a Vietnamese library search request into short English search variants for semantic vocabulary lookup.'
+                : 'You convert a Vietnamese library search request into short English search variants for semantic vocabulary lookup. Every output query must be English only. Vietnamese output is invalid.'
+        },
+        {
+            role: 'user',
+            content: `Rewrite this Vietnamese query into 4 short English search variants across different registers.
 
 Rules:
 - Return JSON only
@@ -315,14 +358,28 @@ Rules:
 - No explanations
 
 Vietnamese query: ${cleanQuery}`
-            }
-        ],
+        }
+    ];
+}
+
+function expandSearchQueries(query, callback, attempt = 1, section = 'all') {
+    const cleanQuery = String(query || '').trim();
+    if (!cleanQuery) return callback(null, []);
+
+    if (!looksVietnamese(cleanQuery)) {
+        console.log('[StudyBuddySearch] Query is non-Vietnamese, using original query only:', cleanQuery);
+        return callback(null, [cleanQuery]);
+    }
+
+    console.log('[StudyBuddySearch] Expanding Vietnamese query:', cleanQuery);
+    requestStudyBuddyAiText(
+        getSearchExpansionPrompt(section, attempt, cleanQuery),
         (error, content) => {
             if (error) {
                 console.warn('[StudyBuddySearch] Query expansion failed:', error.message);
                 if (attempt < 2) {
                     console.warn('[StudyBuddySearch] Retrying query expansion with stricter English-only prompt.');
-                    return expandSearchQueries(cleanQuery, callback, attempt + 1);
+                    return expandSearchQueries(cleanQuery, callback, attempt + 1, section);
                 }
                 return callback(new Error('I could not generate valid English search queries. Please retry.'));
             }
@@ -332,7 +389,7 @@ Vietnamese query: ${cleanQuery}`
                 console.warn('[StudyBuddySearch] Expansion returned non-English or unusable queries.');
                 if (attempt < 2) {
                     console.warn('[StudyBuddySearch] Retrying query expansion with stricter English-only prompt.');
-                    return expandSearchQueries(cleanQuery, callback, attempt + 1);
+                    return expandSearchQueries(cleanQuery, callback, attempt + 1, section);
                 }
                 return callback(new Error('I could not generate valid English search queries. Please retry.'));
             }
@@ -430,17 +487,52 @@ function filterSearchResultsUntilStable(originalQuery, expandedQueries, results,
     }
 
     const candidateResults = results.slice(0, 20);
-    requestStudyBuddyAiText(
-        [
-            {
-                role: 'system',
-                content: attempt === 1
-                    ? 'You filter semantic vocabulary search matches by strict literal meaning relevance.'
-                    : 'You filter semantic vocabulary search matches by strict literal meaning relevance. Critically remove any candidate that does not directly express the query.'
-            },
-            {
-                role: 'user',
-                content: `Remove irrelevant candidate texts for this search query.
+    const requestFilter = (mode, done) => {
+        const isRemoveIrrelevantMode = mode === 'remove-irrelevant';
+        requestStudyBuddyAiText(
+            [
+                {
+                    role: 'system',
+                    content: isRemoveIrrelevantMode
+                        ? 'You filter semantic vocabulary search matches by removing only clearly irrelevant candidates. Be conservative about removal.'
+                        : attempt === 1
+                            ? 'You filter semantic vocabulary search matches by strict literal meaning relevance.'
+                            : 'You filter semantic vocabulary search matches by strict literal meaning relevance. Critically remove any candidate that does not directly express the query.'
+                },
+                {
+                    role: 'user',
+                    content: isRemoveIrrelevantMode
+                        ? `Remove only the clearly irrelevant candidate texts for this search query.
+
+Rules:
+- Return JSON only
+- Format: {"keepTexts":["text 1","text 2"]}
+- keepTexts must contain the exact candidate text strings that should remain after you remove clearly irrelevant ones
+- Copy each kept text exactly from the candidate list
+- Keep texts in their current order
+- Do not try to find only the best match
+- Instead, remove only the texts that are little or not relevant at all
+- If a candidate might still plausibly help express the query, keep it for now
+- Use literal meaning only
+- Do not use metaphor, analogy, symbolism, shape similarity, or associative reasoning
+- Do not explain
+
+Original query: ${originalQuery}
+Search variants: ${JSON.stringify(expandedQueries)}
+
+Candidates:
+${candidateResults.map((item, index) => JSON.stringify({
+    index,
+    text: item.text
+})).join('\n')}
+
+Bad examples of reasoning that must be rejected:
+- "political circles" is relevant because a plane circles before landing
+- "circular depression" is relevant because both involve a circular shape
+- any candidate is relevant just because it can be loosely compared to flying, turning, safety, or motion
+
+Remove only the clearly irrelevant candidates.`
+                        : `Remove irrelevant candidate texts for this search query.
 
 Rules:
 - Return JSON only
@@ -471,9 +563,13 @@ Bad examples of reasoning that must be rejected:
 - any candidate is relevant just because it can be loosely compared to flying, turning, safety, or motion
 
 Only keep candidates with direct meaning match.`
-            }
-        ],
-        (error, content) => {
+                }
+            ],
+            done
+        );
+    };
+
+    requestFilter('strict', (error, content) => {
             if (error) {
                 console.warn('[StudyBuddySearch] AI filter failed:', error.message);
                 return callback(null, results);
@@ -482,6 +578,52 @@ Only keep candidates with direct meaning match.`
             console.log(`[StudyBuddySearch] AI filter raw response (attempt ${attempt}):`, content);
             const keptTexts = parseKeptTexts(content);
             if (Array.isArray(keptTexts) && keptTexts.length === 0) {
+                if (attempt === 1) {
+                    console.log('[StudyBuddySearch] Attempt 1 returned empty keepTexts; retrying with remove-irrelevant strategy.');
+                    return requestFilter('remove-irrelevant', (retryError, retryContent) => {
+                        if (retryError) {
+                            console.warn('[StudyBuddySearch] AI remove-irrelevant retry failed:', retryError.message);
+                            return callback(null, []);
+                        }
+                        console.log('[StudyBuddySearch] AI filter raw response (attempt 1 retry remove-irrelevant):', retryContent);
+                        const retryKeptTexts = parseKeptTexts(retryContent);
+                        if (!Array.isArray(retryKeptTexts) || retryKeptTexts.length === 0) {
+                            const stage = 'Mình lọc lần 1: không còn kết quả nào đủ phù hợp.';
+                            stageCollector.push(stage);
+                            if (typeof onStage === 'function') onStage(stage);
+                            return callback(null, []);
+                        }
+                        const retryKeepIndexes = mapKeptTextsToIndexes(retryKeptTexts, candidateResults);
+                        if (retryKeepIndexes.length === 0) {
+                            console.warn('[StudyBuddySearch] AI remove-irrelevant retry returned texts that did not match any candidate exactly.');
+                            return callback(null, []);
+                        }
+                        const retryFilteredTop = retryKeepIndexes.map((index) => candidateResults[index]);
+                        retryFilteredTop.forEach((item) => {
+                            const key = buildItemKey(item);
+                            const previous = accumulatedMap.get(key);
+                            accumulatedMap.set(key, {
+                                ...item,
+                                aiFilterScore: (previous?.aiFilterScore || 0) + attempt
+                            });
+                        });
+                        const retryFiltered = [...retryFilteredTop, ...results.slice(candidateResults.length)];
+                        const stage = `Mình lọc lần ${attempt}: từ ${results.length} kết quả còn ${retryFiltered.length} kết quả.`;
+                        stageCollector.push(stage);
+                        if (typeof onStage === 'function') onStage(stage);
+                        console.log('[StudyBuddySearch] AI filter keep indexes (attempt 1 retry remove-irrelevant):', retryKeepIndexes);
+                        console.log('[StudyBuddySearch] AI filter kept texts (attempt 1 retry remove-irrelevant):', retryFilteredTop.map((item) => item.text));
+
+                        if (retryFiltered.length <= 1) {
+                            const finalStage = `Mình dừng lọc ở lần ${attempt} và còn ${retryFiltered.length} kết quả.`;
+                            stageCollector.push(finalStage);
+                            if (typeof onStage === 'function') onStage(finalStage);
+                            return callback(null, sortAccumulatedResults(accumulatedMap, retryFiltered));
+                        }
+
+                        return filterSearchResultsUntilStable(originalQuery, expandedQueries, retryFiltered, callback, attempt + 1, stageCollector, onStage, accumulatedMap);
+                    });
+                }
                 console.log(`[StudyBuddySearch] AI filter returned empty keepTexts at attempt ${attempt}; stopping with previous results.`);
                 const stage = attempt > 1
                     ? `Mình dừng lọc ở lần ${attempt} và giữ lại các kết quả tốt nhất từ những vòng trước.`
@@ -538,8 +680,7 @@ Only keep candidates with direct meaning match.`
             }
 
             return filterSearchResultsUntilStable(originalQuery, expandedQueries, filtered, callback, attempt + 1, stageCollector, onStage, accumulatedMap);
-        }
-    );
+        });
 }
 
 router.post('/studybuddy/chat', (req, res) => {
@@ -778,7 +919,7 @@ router.post('/studybuddy/search', (req, res) => {
                 stages
             });
         }, 1, stages, sendStage);
-    });
+    }, 1, searchSection);
 });
 
 module.exports = router;

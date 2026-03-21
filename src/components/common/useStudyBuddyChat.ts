@@ -186,9 +186,9 @@ export function useStudyBuddyChat({
 
     function getActiveActionText() {
         return (
-            selectedTextRef.current
+            chatInput.trim()
+            || selectedTextRef.current
             || coachSelectionText
-            || chatInput.trim()
             || window.getSelection()?.toString().trim()
             || ''
         ).trim();
