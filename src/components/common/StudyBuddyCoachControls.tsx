@@ -1,5 +1,5 @@
 import React from 'react';
-import { Blocks, Bot, BringToFront, Eye, Languages, ListCollapse, Loader2, Mic, NotebookPen, PenTool, Plus, Search, Volume2, Wrench } from 'lucide-react';
+import { Bot, Eye, Loader2, Mic, PenTool, Plus, Volume2, Wrench } from 'lucide-react';
 
 interface ChatCoachActionBarProps {
     hasSelection: boolean;
@@ -40,11 +40,17 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
     onParaphrase,
     onWordFamily,
 }) => {
-    const baseButtonClass = 'h-8 rounded-2xl flex items-center justify-center px-3 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+    const baseButtonClass = 'h-8 rounded-2xl flex items-center justify-center px-3 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap';
+
+    const renderButtonLabel = (actionKey: string, idleLabel: string) => (
+        activeChatCoachAction === actionKey
+            ? <Loader2 size={14} className="animate-spin" />
+            : idleLabel
+    );
 
     return (
         <div className="border-t border-neutral-100 bg-neutral-50/90 px-0 py-0">
-            <div className="grid grid-cols-10 gap-2">
+            <div className="flex flex-wrap gap-2">
                 <button
                     type="button"
                     onMouseDown={onRestoreSelection}
@@ -53,7 +59,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     className={`${baseButtonClass} bg-teal-50 text-teal-600 hover:bg-teal-100`}
                     title="Search Vocabulary Library"
                 >
-                    {activeChatCoachAction === 'search' ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                    {renderButtonLabel('search', 'Search')}
                 </button>
                 <button
                     type="button"
@@ -63,7 +69,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     className={`${baseButtonClass} bg-indigo-50 text-indigo-600 hover:bg-indigo-100`}
                     title="Translate to Vietnamese"
                 >
-                    {activeChatCoachAction === 'translate' ? <Loader2 size={14} className="animate-spin" /> : <Languages size={14} />}
+                    {renderButtonLabel('translate', 'Translate')}
                 </button>
                 <button
                     type="button"
@@ -73,15 +79,15 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     className={`${baseButtonClass} bg-purple-50 text-purple-600 hover:bg-purple-100`}
                     title="Read in English"
                 >
-                    <Volume2 size={14} />
+                    Read
                 </button>
                 {!isAlreadyInLibrary ? (
                     <button type="button" onMouseDown={onRestoreSelection} onClick={onAddToLibrary} disabled={!hasSelection || isAddingToLibrary} className={`${baseButtonClass} bg-green-50 text-green-600 hover:bg-green-100`} title="Add to Library">
-                        {isAddingToLibrary ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />}
+                        {isAddingToLibrary ? <Loader2 size={14} className="animate-spin" /> : 'Add'}
                     </button>
                 ) : (
                     <button type="button" onMouseDown={onRestoreSelection} onClick={onViewWord} disabled={!hasSelection || isAnyModalOpen} className={`${baseButtonClass} bg-sky-50 text-sky-600 hover:bg-sky-100`} title="View Word Details">
-                        <Eye size={15} />
+                        View
                     </button>
                 )}
                 <button
@@ -92,7 +98,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     className={`${baseButtonClass} bg-blue-50 text-blue-600 hover:bg-blue-100`}
                     title="Examples"
                 >
-                    {activeChatCoachAction === 'examples' ? <Loader2 size={14} className="animate-spin" /> : <NotebookPen size={14} />}
+                    {renderButtonLabel('examples', 'Examples')}
                 </button>
                 <button
                     type="button"
@@ -102,7 +108,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     className={`${baseButtonClass} bg-cyan-50 text-cyan-700 hover:bg-cyan-100`}
                     title="Explain"
                 >
-                    {activeChatCoachAction === 'explain' ? <Loader2 size={14} className="animate-spin" /> : 'Explain'}
+                    {renderButtonLabel('explain', 'Explain')}
                 </button>
                 <button
                     type="button"
@@ -112,7 +118,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     className={`${baseButtonClass} bg-fuchsia-50 text-fuchsia-600 hover:bg-fuchsia-100`}
                     title="Generate Test"
                 >
-                    {activeChatCoachAction === 'test' ? <Loader2 size={14} className="animate-spin" /> : 'Test'}
+                    {renderButtonLabel('test', 'Test')}
                 </button>
                 <button
                     type="button"
@@ -122,7 +128,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     className={`${baseButtonClass} bg-amber-50 text-amber-600 hover:bg-amber-100`}
                     title="Collocations"
                 >
-                    {activeChatCoachAction === 'collocations' ? <Loader2 size={14} className="animate-spin" /> : <Blocks size={14} />}
+                    {renderButtonLabel('collocations', 'Collocations')}
                 </button>
                 <button
                     type="button"
@@ -132,7 +138,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     className={`${baseButtonClass} bg-rose-50 text-rose-600 hover:bg-rose-100`}
                     title="Paraphrase"
                 >
-                    {activeChatCoachAction === 'paraphrase' ? <Loader2 size={14} className="animate-spin" /> : <BringToFront size={14} />}
+                    {renderButtonLabel('paraphrase', 'Paraphrase')}
                 </button>
                 <button
                     type="button"
@@ -142,7 +148,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     className={`${baseButtonClass} bg-emerald-50 text-emerald-600 hover:bg-emerald-100`}
                     title="Word Family"
                 >
-                    {activeChatCoachAction === 'wordFamily' ? <Loader2 size={14} className="animate-spin" /> : <ListCollapse size={14} />}
+                    {renderButtonLabel('wordFamily', 'Word Family')}
                 </button>
             </div>
         </div>

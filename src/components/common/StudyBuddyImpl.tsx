@@ -1791,7 +1791,9 @@ Rules:
                                 e.stopPropagation();
                                 openChatPanel();
                             }}
-                            className="absolute -top-2 -right-2 w-8 h-8 rounded-xl bg-neutral-900 text-white border-2 border-white shadow-lg flex items-center justify-center pointer-events-auto hover:scale-105 transition-transform z-30"
+                            className={`absolute -top-2 -right-2 w-8 h-8 rounded-xl bg-neutral-900 text-white border-2 border-white shadow-lg flex items-center justify-center hover:scale-105 transition-all z-30 ${
+                                isChatOpen ? 'opacity-0 pointer-events-none scale-90' : 'pointer-events-auto opacity-100'
+                            }`}
                             title="Open StudyBuddy AI chat"
                         >
                             {isChatLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
