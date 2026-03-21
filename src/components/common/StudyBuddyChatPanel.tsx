@@ -426,6 +426,7 @@ interface StudyBuddyChatPanelProps {
     isChatListening: boolean;
     isChatLoading: boolean;
     isContextAware: boolean;
+    isSearchEnabled: boolean;
     isChatAudioEnabled: boolean;
     chatHistory: ChatTurn[];
     hasChatTextSelection: boolean;
@@ -436,6 +437,7 @@ interface StudyBuddyChatPanelProps {
     chatSaveModal: React.ReactNode;
     imageSettings: StudyBuddyImageSettings;
     onToggleContextAware: () => void;
+    onToggleSearchEnabled: () => void;
     onToggleConversationMode: () => void;
     onToggleChatAudio: () => void;
     onClearChatHistory: () => void;
@@ -460,6 +462,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     isChatListening,
     isChatLoading,
     isContextAware,
+    isSearchEnabled,
     isChatAudioEnabled,
     chatHistory,
     hasChatTextSelection,
@@ -470,6 +473,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     chatSaveModal,
     imageSettings,
     onToggleContextAware,
+    onToggleSearchEnabled,
     onToggleConversationMode,
     onToggleChatAudio,
     onClearChatHistory,
@@ -618,6 +622,22 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                             >
                                 <span>Library Access</span>
                                 <span className="text-[10px] uppercase tracking-wide">{isContextAware ? 'On' : 'Off'}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onToggleSearchEnabled();
+                                    setIsModeMenuOpen(false);
+                                }}
+                                className={`mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors ${
+                                    isSearchEnabled
+                                        ? 'bg-violet-50 text-violet-700'
+                                        : 'bg-white text-neutral-700 hover:bg-neutral-50'
+                                }`}
+                                title="Toggle external reference search assist"
+                            >
+                                <span>Search</span>
+                                <span className="text-[10px] uppercase tracking-wide">{isSearchEnabled ? 'On' : 'Off'}</span>
                             </button>
                             <button
                                 type="button"

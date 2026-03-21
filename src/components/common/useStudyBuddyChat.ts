@@ -36,6 +36,7 @@ interface UseStudyBuddyChatOptions {
     user: User;
     coach: CoachVoiceConfig;
     isContextAware: boolean;
+    isSearchEnabled: boolean;
     isChatLoading: boolean;
     isChatListening: boolean;
     chatInput: string;
@@ -96,6 +97,7 @@ export function useStudyBuddyChat({
     user,
     coach,
     isContextAware,
+    isSearchEnabled,
     isChatLoading,
     isChatListening,
     chatInput,
@@ -275,6 +277,7 @@ export function useStudyBuddyChat({
                         memoryChunks,
                         { name: coach.name, persona: coach.persona }
                     ),
+                    searchEnabled: isSearchEnabled,
                     ...studyBuddyAiRequestConfig,
                     stream: true
                 }),
@@ -622,6 +625,7 @@ export function useStudyBuddyChat({
                         memoryChunks,
                         { name: coach.name, persona: coach.persona }
                     ),
+                    searchEnabled: isSearchEnabled,
                     ...studyBuddyAiRequestConfig,
                     stream: true
                 }),
@@ -779,6 +783,7 @@ export function useStudyBuddyChat({
                     memoryChunks,
                     { name: coach.name, persona: coach.persona }
                 ),
+                searchEnabled: isSearchEnabled,
                 ...studyBuddyAiRequestConfig,
                 stream: isStreamed
             })
@@ -1038,6 +1043,7 @@ Rules:
                         memoryChunks,
                         { name: coach.name, persona: coach.persona }
                     ),
+                    searchEnabled: isSearchEnabled,
                     ...studyBuddyAiRequestConfig,
                     stream: true
                 }),
@@ -1187,7 +1193,8 @@ Rules:
                 body: JSON.stringify({
                     data: selectedText,
                     settings: imageSettings,
-                    mode
+                    mode,
+                    searchEnabled: isSearchEnabled
                 })
             });
 

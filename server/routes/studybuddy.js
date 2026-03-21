@@ -339,6 +339,364 @@ function looksEnglishImagePrompt(text) {
     return words.length >= 3;
 }
 
+function looksEnglishLookupTerm(text) {
+    const source = String(text || '').trim();
+    if (!source) return false;
+    if (looksVietnamese(source)) return false;
+    const words = source.match(/[A-Za-z][A-Za-z'_-]*/g) || [];
+    return words.length >= 1 && words.length <= 8;
+}
+
+function stripHtml(text) {
+    return String(text || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'")
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+async function getWikiSummary(input) {
+    let query = String(input || '').trim();
+
+    console.log("[Wiki] Input:", query);
+
+    if (!query) {
+        console.warn("[Wiki] Empty input");
+        return null;
+    }
+
+    const headers = {
+        Accept: 'application/json',
+        'User-Agent': 'StudyBuddy/1.0'
+    };
+
+    // ===== helpers =====
+    const safeParse = (body) => {
+        try {
+            return JSON.parse(body?.toString('utf8') || '{}');
+        } catch {
+            return {};
+        }
+    };
+
+    const isBadTitle = (title) => {
+        if (!title) return true;
+        const t = title.toLowerCase();
+        return (
+            t.includes("list of") ||
+            t.includes("lists of") ||
+            t.includes("episode") ||
+            t.includes("episodes") ||
+            t.includes("season") ||
+            t.includes("series")
+        );
+    };
+
+    const rewriteQuery = (q) => {
+        return String(q || "")
+            .replace(/\b(list|character|anime|manga|series|episodes?)\b/gi, '')
+            .trim();
+    };
+
+    // ===== retry loop =====
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        console.log(`\n[Wiki] Attempt ${attempt}:`, query);
+
+        // ===== 1. SEARCH =====
+        const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`;
+
+        const searchRes = await httpRequestAsync(searchUrl, {
+            method: 'GET',
+            headers,
+            timeout: 7000
+        });
+
+        const searchData = safeParse(searchRes.body);
+        const results = searchData?.query?.search || [];
+
+        console.log("[Wiki] Results:", results.length);
+
+        if (!results.length) return null;
+
+        const top = results[0];
+        const title = top.title;
+
+        console.log("[Wiki] Top result:", title);
+
+        // ===== 2. BAD TITLE → rewrite =====
+        if (isBadTitle(title)) {
+            console.warn("[Wiki] Bad title → rewriting query");
+
+            query = rewriteQuery(query);
+
+            if (!query.toLowerCase().includes("character")) {
+                query += " character";
+            }
+
+            continue;
+        }
+
+        // ===== 3. FETCH FULL CONTENT =====
+        const contentUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=true&titles=${encodeURIComponent(title)}&format=json`;
+
+        console.log("[Wiki] Fetching FULL content:", contentUrl);
+
+        const res = await httpRequestAsync(contentUrl, {
+            method: 'GET',
+            headers,
+            timeout: 10000
+        });
+
+        const data = safeParse(res.body);
+        const pages = data?.query?.pages || {};
+        const page = Object.values(pages)[0];
+
+        let content = String(page?.extract || '').trim();
+
+        console.log("[Wiki] Content length:", content.length);
+
+        // ===== 4. BAD CONTENT → retry =====
+        if (!content) {
+            console.warn("[Wiki] Bad content → retry");
+
+            query = rewriteQuery(title);
+            continue;
+        }
+
+        // optional: limit size (VERY IMPORTANT for LLM)
+        const MAX_CHARS = 8000;
+        if (content.length > MAX_CHARS) {
+            console.warn("[Wiki] Trimming content to", MAX_CHARS);
+            content = content.slice(0, MAX_CHARS);
+        }
+
+        console.log("[Wiki] Success:", title);
+
+        return {
+            title,
+            content
+        };
+    }
+
+    console.warn("[Wiki] Failed after retries");
+    return null;
+}
+
+// helper
+function safeParse(body) {
+    try {
+        return JSON.parse(body?.toString('utf8') || '{}');
+    } catch {
+        return {};
+    }
+}
+
+async function searchFandom(name) {
+    console.log("\n[Fandom] ===== START =====");
+    console.log("[Fandom] Input:", name);
+
+    const cleanName = String(name || '').trim();
+    if (!cleanName) {
+        console.warn("[Fandom] Empty input");
+        return null;
+    }
+
+    // Cross-wiki search URL
+    const url = `https://community.fandom.com/wiki/Special:Search?query=${encodeURIComponent(cleanName)}&scope=cross-wiki&limit=5&format=json`;
+    console.log("[Fandom] Request URL:", url);
+
+    try {
+        const response = await httpRequestAsync(url, {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+                'User-Agent': 'StudyBuddy/1.0'
+            },
+            timeout: 7000
+        });
+
+        if (response.statusCode >= 400) {
+            console.warn("[Fandom] Bad status code:", response.statusCode);
+            return null;
+        }
+
+        const raw = response.body?.toString('utf8') || '';
+        if (!raw) {
+            console.warn("[Fandom] Empty response body");
+            return null;
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (err) {
+            console.error("[Fandom] JSON parse error:", err.message);
+            return null;
+        }
+
+        const results = Array.isArray(parsed?.items) ? parsed.items : [];
+        console.log("[Fandom] Results count:", results.length);
+
+        if (!results.length) return null;
+
+        const snippets = results.map(item => {
+            const title = String(item.title || '').trim();
+            const wikiDomain = item?.wiki?.domain || 'community.fandom.com';
+            return title ? {
+                title,
+                snippet: stripHtml(item?.excerpt || '(no snippet)'),
+                url: `https://${wikiDomain}/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`
+            } : null;
+        }).filter(Boolean).slice(0, 5);
+
+        snippets.forEach((s, i) => console.log(`[Fandom] #${i + 1} URL:`, s.url));
+
+        console.log("[Fandom] ===== END =====\n");
+        return snippets.length ? snippets : null;
+
+    } catch (err) {
+        console.error("[Fandom] Fatal error:", err.message);
+        return null;
+    }
+}
+
+async function getDanbooruTags(name) {
+    const cleanName = String(name || '').trim().replace(/\s+/g, '_');
+    if (!cleanName) return null;
+    try {
+        const response = await httpRequestAsync(
+            `https://danbooru.donmai.us/tags.json?search[name_matches]=${encodeURIComponent(`${cleanName}*`)}&search[order]=count&limit=12`,
+            {
+                method: 'GET',
+                headers: {
+                    Accept: 'application/json',
+                    'User-Agent': 'StudyBuddy/1.0'
+                },
+                timeout: 7000
+            }
+        );
+        if (response.statusCode >= 400) return null;
+        const parsed = JSON.parse(response.body.toString('utf8') || '[]');
+        const tags = Array.isArray(parsed)
+            ? parsed.map((item) => String(item?.name || '').trim()).filter(Boolean).slice(0, 12)
+            : [];
+        return tags.length ? tags : null;
+    } catch {
+        return null;
+    }
+}
+
+function parseReferenceQueryResponse(raw, maxQueries) {
+    const jsonText = extractFirstJsonObject(raw);
+    if (jsonText) {
+        try {
+            const parsed = JSON.parse(jsonText);
+            if (Array.isArray(parsed?.queries)) {
+                return Array.from(new Set(
+                    parsed.queries
+                        .map((item) => String(item || '').trim())
+                        .filter(looksEnglishLookupTerm)
+                )).slice(0, maxQueries);
+            }
+        } catch {
+            // Fall through to loose parsing.
+        }
+    }
+
+    return Array.from(new Set(
+        String(raw || '')
+            .split(/[\n,]/)
+            .map((item) => item.replace(/^[-*]\s*/, '').trim())
+            .filter(looksEnglishLookupTerm)
+    )).slice(0, maxQueries);
+}
+
+async function generateReferenceQueries(userRequest, mode = 'chat') {
+    const isImageMode = mode === 'image';
+    const maxQueries = isImageMode ? 4 : 3;
+    const raw = await requestStudyBuddyAiTextAsync([
+        {
+            role: 'system',
+            content: `You decide whether external reference lookup would help answer a user request.
+
+Return ONLY valid JSON:
+{"queries":["name 1","name 2"]}
+
+Rules:
+- English only
+- each query should be a short search term, title, proper noun, concept name, object category, franchise, character, location, or visual reference phrase
+- max ${maxQueries} queries
+- if external lookup is not helpful, return {"queries":[]}
+- do not explain`
+        },
+        {
+            role: 'user',
+            content: isImageMode
+                ? `User image request: ${userRequest}\nReturn only the most useful English visual-reference search terms.`
+                : `User request: ${userRequest}\nReturn only the most useful English factual-reference search terms, if any.`
+        }
+    ]);
+
+    const queries = parseReferenceQueryResponse(raw, maxQueries);
+    console.log(`[StudyBuddySearchAssist] ${mode} query planner raw:`, raw);
+    console.log(`[StudyBuddySearchAssist] ${mode} queries:`, queries);
+    return queries;
+}
+
+async function collectExternalReferenceContext(userRequest, mode = 'chat') {
+    const queries = await generateReferenceQueries(userRequest, mode);
+    if (!queries.length) {
+        return { queries: [], contextText: '' };
+    }
+
+    const sections = [];
+    let wikiFound = true;
+    for (const name of queries) {
+        if (!wikiFound) {
+            const wiki = await getWikiSummary(name);
+            if (wiki) {
+                sections.push(`Wiki for ${name}: ${wiki.title} - ${wiki.content}`);
+                wikiFound = true;
+            }
+        }
+
+        // if (mode === 'image') {
+            // const fandom = await searchFandom(name);
+            // if (fandom?.length) {
+            //     sections.push(`Fandom for ${name}: ${fandom.map((item) => `${item.title}: ${item.snippet}`).join(' | ')}`);
+            // }
+
+            // const tags = await getDanbooruTags(name);
+            // if (tags?.length) {
+            //     sections.push(`Danbooru tags for ${name}: ${tags.join(', ')}`);
+            // }
+        // }
+    }
+
+    return {
+        queries,
+        contextText: sections.join('\n\n').trim()
+    };
+}
+
+function attachExternalReferenceContext(messages, contextText, mode = 'chat', queries = []) {
+    const currentMessages = Array.isArray(messages) ? messages : [];
+    if (!contextText.trim()) return currentMessages;
+
+    const systemMessage = {
+        role: 'system',
+        content: mode === 'image'
+            ? `External reference material gathered by the app for image generation. Use it as supporting visual/context clues, not as text to copy literally into the final answer.\n\nQueries: ${queries.join(', ') || 'none'}\n\n${contextText}`
+            : `External reference material gathered by the app. Use it only when relevant, and do not quote or overstate it if uncertain.\n\nQueries: ${queries.join(', ') || 'none'}\n\n${contextText}`
+    };
+
+    return [systemMessage, ...currentMessages];
+}
+
 function detectUnsafeImageRequest(text) {
     const source = String(text || '').toLowerCase();
     if (!source.trim()) return false;
@@ -426,7 +784,7 @@ Design style:
 If any label sounds unnatural or like a direct translation, replace it with a natural English headword.`;
 }
 
-async function generateInfographicWordList(theme) {
+async function generateInfographicWordList(theme, searchContext = '') {
     const raw = await requestStudyBuddyAiTextAsync([
         {
             role: 'system',
@@ -445,7 +803,7 @@ Rules:
         },
         {
             role: 'user',
-            content: `Theme: ${theme}`
+            content: `Theme: ${theme}${searchContext ? `\n\nReference context:\n${searchContext}` : ''}`
         }
     ]);
 
@@ -474,7 +832,7 @@ function parseInfographicWordList(wordListText) {
         .slice(0, 14);
 }
 
-async function generateInfographicThemeLabel(theme, wordListText) {
+async function generateInfographicThemeLabel(theme, wordListText, searchContext = '') {
     const raw = await requestStudyBuddyAiTextAsync([
         {
             role: 'system',
@@ -491,7 +849,7 @@ Rules:
         },
         {
             role: 'user',
-            content: `Original user theme: ${theme}\n${wordListText}\n\nReturn one short English category label that best fits the listed vocabulary.`
+            content: `Original user theme: ${theme}\n${wordListText}${searchContext ? `\n\nReference context:\n${searchContext}` : ''}\n\nReturn one short English category label that best fits the listed vocabulary.`
         }
     ]);
 
@@ -574,7 +932,7 @@ function applyImageModeOverrides(imageSettings, mode) {
     return next;
 }
 
-async function buildInfographicImageParams(theme, wordListText, rawImageSettings) {
+async function buildInfographicImageParams(theme, wordListText, rawImageSettings, searchContext = '') {
     const imageSettings = applyImageModeOverrides(normalizeIncomingImageSettings(rawImageSettings), 'infographic');
     const words = parseInfographicWordList(wordListText);
     if (words.length < 5) {
@@ -584,10 +942,11 @@ async function buildInfographicImageParams(theme, wordListText, rawImageSettings
     const rawThemeLabel = String(theme || '').trim();
     const themeLabel = looksEnglishImagePrompt(rawThemeLabel)
         ? rawThemeLabel
-        : await generateInfographicThemeLabel(rawThemeLabel, wordListText);
+        : await generateInfographicThemeLabel(rawThemeLabel, wordListText, searchContext);
     const prompt = uniqueCommaPhrases(
         `clean educational vocabulary infographic about ${themeLabel}`,
         `use exactly these lowercase English labels written visibly inside the image: ${words.join(', ')}`,
+        searchContext ? `reference context: ${searchContext}` : '',
         `${words.length} labeled vocabulary items`,
         'every listed word must appear as a visible label in the image',
         'one pointer line per label connecting to the correct illustration',
@@ -701,7 +1060,7 @@ function getMissingImageParamFields(params, imageSettings = normalizeIncomingIma
     return missing;
 }
 
-async function generateImageParamsWithRetry(userRequest, rawImageSettings, mode = 'image') {
+async function generateImageParamsWithRetry(userRequest, rawImageSettings, mode = 'image', searchContext = '') {
     const imageSettings = applyImageModeOverrides(normalizeIncomingImageSettings(rawImageSettings), mode);
     if (imageSettings.safeMode && detectUnsafeImageRequest(userRequest)) {
         throw new Error('Request violated standard rules and considered unsafe.');
@@ -760,8 +1119,8 @@ Rules:
             {
                 role: 'user',
                 content: attempt === 1
-                    ? `User request: ${userRequest}${mode === 'infographic' ? '\n\nThis must be an educational infographic image request, not a normal illustration.' : ''}${manualHints ? `\n\nManual settings locked by the app:\n${manualHints}` : ''}`
-                    : `User request: ${userRequest}${mode === 'infographic' ? '\n\nThis must be an educational infographic image request, not a normal illustration.' : ''}${manualHints ? `\n\nManual settings locked by the app:\n${manualHints}` : ''}\n\nYour previous JSON was missing or invalid for these fields: ${lastMissing.join(', ')}.\nReturn ONLY corrected JSON with all required fields present.`
+                    ? `User request: ${userRequest}${mode === 'infographic' ? '\n\nThis must be an educational infographic image request, not a normal illustration.' : ''}${searchContext ? `\n\nExternal reference context:\n${searchContext}` : ''}${manualHints ? `\n\nManual settings locked by the app:\n${manualHints}` : ''}`
+                    : `User request: ${userRequest}${mode === 'infographic' ? '\n\nThis must be an educational infographic image request, not a normal illustration.' : ''}${searchContext ? `\n\nExternal reference context:\n${searchContext}` : ''}${manualHints ? `\n\nManual settings locked by the app:\n${manualHints}` : ''}\n\nYour previous JSON was missing or invalid for these fields: ${lastMissing.join(', ')}.\nReturn ONLY corrected JSON with all required fields present.`
             }
         ];
 
@@ -1491,8 +1850,31 @@ Only keep candidates with direct meaning match.`
         });
 }
 
-router.post('/studybuddy/chat', (req, res) => {
-    const payload = JSON.stringify(req.body || {});
+router.post('/studybuddy/chat', async (req, res) => {
+    const requestBody = req.body && typeof req.body === 'object' ? { ...req.body } : {};
+
+    if (requestBody.searchEnabled && Array.isArray(requestBody.messages)) {
+        const latestUserMessage = [...requestBody.messages]
+            .reverse()
+            .find((item) => item?.role === 'user' && typeof item?.content === 'string' && item.content.trim());
+        if (latestUserMessage?.content) {
+            try {
+                const externalContext = await collectExternalReferenceContext(latestUserMessage.content.trim(), 'chat');
+                if (externalContext.contextText) {
+                    requestBody.messages = attachExternalReferenceContext(
+                        requestBody.messages,
+                        externalContext.contextText,
+                        'chat',
+                        externalContext.queries
+                    );
+                }
+            } catch (error) {
+                console.warn('[StudyBuddySearchAssist] chat context collection failed:', error?.message || error);
+            }
+        }
+    }
+
+    const payload = JSON.stringify(requestBody || {});
 
     ensureActiveUrl((err, baseUrl) => {
         if (err || !baseUrl) {
@@ -1734,6 +2116,7 @@ router.post('/studybuddy/image', async (req, res) => {
     const data = String(req.body?.data || '').trim();
     const mode = String(req.body?.mode || 'image').trim().toLowerCase() === 'infographic' ? 'infographic' : 'image';
     const imageSettings = normalizeIncomingImageSettings(req.body?.settings);
+    const searchEnabled = req.body?.searchEnabled === true;
     const wantsStream = String(req.headers.accept || '').includes('text/event-stream');
 
     const sendProgress = (progress) => {
@@ -1780,13 +2163,22 @@ router.post('/studybuddy/image', async (req, res) => {
         sendProgress(4);
         let imageParams;
         let infographicWordList = '';
+        let imageSearchContext = '';
+        if (searchEnabled) {
+            try {
+                const externalContext = await collectExternalReferenceContext(data, 'image');
+                imageSearchContext = externalContext.contextText;
+            } catch (error) {
+                console.warn('[StudyBuddySearchAssist] image context collection failed:', error?.message || error);
+            }
+        }
         if (mode === 'infographic') {
-            const wordListText = await generateInfographicWordList(data);
+            const wordListText = await generateInfographicWordList(data, imageSearchContext);
             infographicWordList = wordListText;
-            const built = await buildInfographicImageParams(data, wordListText, imageSettings);
+            const built = await buildInfographicImageParams(data, wordListText, imageSettings, imageSearchContext);
             imageParams = built.params;
         } else {
-            imageParams = await generateImageParamsWithRetry(data, imageSettings, mode);
+            imageParams = await generateImageParamsWithRetry(data, imageSettings, mode, imageSearchContext);
         }
         console.log('[StudyBuddyImage] Original request:', data);
         console.log('[StudyBuddyImage] Mode:', mode);

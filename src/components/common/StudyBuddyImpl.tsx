@@ -188,6 +188,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
     const [isContextAware, setIsContextAware] = useState(false);
+    const [isSearchEnabled, setIsSearchEnabled] = useState(false);
     const [isChatListening, setIsChatListening] = useState(false);
     const [isConversationMode, setIsConversationMode] = useState(false);
     const [activeChatCoachAction, setActiveChatCoachAction] = useState<string | null>(null);
@@ -1345,6 +1346,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         user,
         coach,
         isContextAware,
+        isSearchEnabled,
         isChatLoading,
         isChatListening,
         chatInput,
@@ -1799,6 +1801,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 isChatListening={isChatListening}
                                 isChatLoading={isChatLoading}
                                 isContextAware={isContextAware}
+                                isSearchEnabled={isSearchEnabled}
                                 isChatAudioEnabled={isChatAudioEnabled}
                                 chatHistory={chatHistory}
                                 hasChatTextSelection={hasChatTextSelection}
@@ -1839,6 +1842,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 chatSaveModal={chatSaveModal}
                                 imageSettings={imageSettings}
                                 onToggleContextAware={() => setIsContextAware((prev) => !prev)}
+                                onToggleSearchEnabled={() => setIsSearchEnabled((prev) => !prev)}
                                 onToggleConversationMode={handleToggleConversationMode}
                                 onToggleChatAudio={() => setIsChatAudioEnabled((prev) => !prev)}
                                 onClearChatHistory={handleClearChatHistory}
