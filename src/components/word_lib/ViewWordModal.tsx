@@ -153,6 +153,66 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   const config = getConfig();
   const appliedAccent = config.audio.appliedAccent;
 
+  const handleAskAi = () => {
+    const parts = [
+      `Word: ${currentWord.word}`,
+      currentWord.meaningVi ? `Meaning (Vietnamese): ${currentWord.meaningVi}` : '',
+      currentWord.register ? `Register: ${currentWord.register}` : '',
+      currentWord.example ? `Examples:\n${currentWord.example}` : '',
+      currentWord.collocationsArray?.length
+        ? `Collocations:\n${currentWord.collocationsArray
+            .filter((item) => !item.isIgnored)
+            .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
+            .join('\n')}`
+        : '',
+      currentWord.idiomsList?.length
+        ? `Idioms:\n${currentWord.idiomsList
+            .filter((item) => !item.isIgnored)
+            .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
+            .join('\n')}`
+        : '',
+      currentWord.paraphrases?.length
+        ? `Paraphrases:\n${currentWord.paraphrases
+            .filter((item) => !item.isIgnored)
+            .map((item) => `- ${item.word}${item.context ? `: ${item.context}` : ''}`)
+            .join('\n')}`
+        : '',
+      currentWord.prepositions?.length
+        ? `Prepositions:\n${currentWord.prepositions
+            .filter((item) => !item.isIgnored)
+            .map((item) => `- ${item.prep}${item.usage ? `: ${item.usage}` : ''}`)
+            .join('\n')}`
+        : '',
+      currentWord.wordFamily
+        ? `Word family:\n${[
+            ...(currentWord.wordFamily.nouns || []).filter((item) => !item.isIgnored).map((item) => `- noun: ${item.word}`),
+            ...(currentWord.wordFamily.verbs || []).filter((item) => !item.isIgnored).map((item) => `- verb: ${item.word}`),
+            ...(currentWord.wordFamily.adjs || []).filter((item) => !item.isIgnored).map((item) => `- adjective: ${item.word}`),
+            ...(currentWord.wordFamily.advs || []).filter((item) => !item.isIgnored).map((item) => `- adverb: ${item.word}`),
+          ].join('\n')}`
+        : '',
+      currentWord.note ? `Private note:\n${currentWord.note}` : '',
+    ].filter(Boolean);
+
+    window.dispatchEvent(
+      new CustomEvent('studybuddy-chat-request', {
+        detail: {
+          prompt: `Using only the vocabulary record below, explain this word/item for the learner in a practical English-learning way. Focus on meaning, nuance, usage, register, collocations/patterns, and how to remember or use it well.
+
+Important:
+- If any collocation, paraphrase, idiom, or phrase in the record sounds unnatural in English, too narrow in meaning, awkwardly translated, or easy to misunderstand, say that clearly and briefly.
+- If a phrase is usable but limited, explain the limitation.
+- Prefer warning the learner early instead of pretending every saved phrase is fully natural.
+- If the record is incomplete, say what is missing briefly.
+- Prefer Vietnamese if helpful for this learner.
+
+Vocabulary record:
+${parts.join('\n\n')}`
+        }
+      })
+    );
+  };
+
   return (
     <>
     {isChallenging && <TestModal word={currentWord} onComplete={handleChallengeComplete} onClose={() => setIsChallenging(false)} />}
@@ -169,6 +229,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       onNavigateToWord={onNavigateToWord}
       appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}
+      onAskAiRequest={handleAskAi}
     />
     </>
   );

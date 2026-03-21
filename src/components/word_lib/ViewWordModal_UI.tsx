@@ -192,12 +192,14 @@ export interface ViewWordModalUIProps {
     isViewOnly?: boolean;
     appliedAccent?: 'US' | 'UK';
     onAddAIExample?: () => void;
+    onAskAiRequest?: () => void;
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
     word, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onNavigateToWord, isViewOnly = false,
-    onAddAIExample
+    onAddAIExample,
+    onAskAiRequest
 }) => {
     // Helper to render examples with badge replacements
     const renderExample = (text: string) => {
@@ -545,7 +547,20 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         </div>
                                     </div>
                                 )}
-                                <MasteryScoreCalculator word={word} />
+                                <div className="flex items-center gap-2">
+                                    <MasteryScoreCalculator word={word} />
+                                    {onAskAiRequest ? (
+                                        <button
+                                            type="button"
+                                            onClick={onAskAiRequest}
+                                            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                            title="Ask StudyBuddy to explain this word using its saved content"
+                                        >
+                                            <MessageSquare size={12} />
+                                            <span>Ask AI</span>
+                                        </button>
+                                    ) : null}
+                                </div>
                             </div>
 
                             
