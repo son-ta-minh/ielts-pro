@@ -1216,7 +1216,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const {
         handleBackgroundChatRequest,
         handleChatCoachPromptToChat,
+        handleChatCoachExplain,
         handleChatCoachSearch,
+        handleChatCoachTest,
         handleChatCoachTranslate,
         handleSendChat,
         handleToggleChatMic,
@@ -1691,6 +1693,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                         onAddToLibrary={handleAddToLibrary}
                                         onViewWord={handleViewWord}
                                         onExamples={() => handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'))}
+                                        onExplain={handleChatCoachExplain}
+                                        onTest={handleChatCoachTest}
                                         onCollocations={() => handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'))}
                                         onParaphrase={() => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'))}
                                         onWordFamily={() => handleChatCoachPromptToChat(

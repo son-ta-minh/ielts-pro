@@ -2,11 +2,14 @@ import React from 'react';
 import { Languages } from 'lucide-react';
 import { StudyBuddyMemoryChunk, User } from '../../app/types';
 import { SystemConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
+import { getGenerateLessonTestPrompt } from '../../services/prompts/getGenerateLessonTestPrompt';
+import { getLessonPrompt } from '../../services/prompts/getRefineLessonPrompt';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import {
     buildStudyBuddyMessages,
     ChatCoachActionKey,
     ChatSearchMatch,
+    ChatSaveActionType,
     ChatSaveContext,
     ChatTurn,
     createChatTurn,
@@ -19,6 +22,7 @@ import { parseStudyBuddyMemoryDirectives } from '../../utils/studyBuddyMemoryUti
 
 type MenuPos = { x: number; y: number; placement: 'top' | 'bottom' } | null;
 type CoachVoiceConfig = {
+    name?: string;
     viVoice?: string;
     viAccent?: string;
 };
@@ -961,7 +965,10 @@ export function useStudyBuddyChat({
     async function handleChatCoachPromptToChat(
         actionKey: ChatCoachActionKey,
         promptLabel: string,
-        promptBuilder: (selectedText: string) => string
+        promptBuilder: (selectedText: string) => string,
+        options?: {
+            saveActionType?: ChatSaveActionType;
+        }
     ) {
         const selectedText = getActiveActionText();
         if (!selectedText) return;
@@ -972,18 +979,21 @@ export function useStudyBuddyChat({
         const assistantId = `assistant-${actionKey}-${Date.now()}`;
         const aiUrl = getStudyBuddyAiUrl(config);
         const memoryChunks = getStudyBuddyMemoryChunks();
-        const saveContext: ChatSaveContext = {
-            actionType: actionKey,
-            targetWord: selectedText,
-            sourceSelection: selectedText
-        };
+        const inferredSaveActionType = options?.saveActionType ?? (actionKey === 'test' ? undefined : actionKey);
+        const saveContext: ChatSaveContext | undefined = inferredSaveActionType
+            ? {
+                actionType: inferredSaveActionType,
+                targetWord: selectedText,
+                sourceSelection: selectedText
+            }
+            : undefined;
 
         setActiveChatCoachAction(actionKey);
         setIsChatLoading(true);
         setChatHistory((current) => [
             ...current,
             userTurn,
-            { id: assistantId, role: 'assistant', content: '', saveContext }
+            { id: assistantId, role: 'assistant', content: '', ...(saveContext ? { saveContext } : {}) }
         ]);
 
         let controller: AbortController | undefined;
@@ -1023,7 +1033,7 @@ export function useStudyBuddyChat({
             const updateAssistant = (text: string) => {
                 setChatHistory((current) =>
                     current.map((turn) =>
-                        turn.id === assistantId ? { ...turn, content: text, saveContext } : turn
+                        turn.id === assistantId ? { ...turn, content: text, ...(saveContext ? { saveContext } : {}) } : turn
                     )
                 );
             };
@@ -1089,6 +1099,37 @@ export function useStudyBuddyChat({
         }
     }
 
+    async function handleChatCoachTest() {
+        await handleChatCoachPromptToChat(
+            'test',
+            'Test',
+            (selectedText) => getGenerateLessonTestPrompt(
+                selectedText,
+                selectedText,
+                `Create a focused practice test for this query: ${selectedText}`,
+                []
+            )
+        );
+    }
+
+    async function handleChatCoachExplain() {
+        await handleChatCoachPromptToChat(
+            'explain',
+            'Explain',
+            (selectedText) => getLessonPrompt({
+                task: 'create_reading',
+                topic: selectedText,
+                userRequest: `Explain clearly and compactly for this query: ${selectedText}`,
+                language: user.lessonPreferences?.language || 'English',
+                targetAudience: user.lessonPreferences?.targetAudience || 'Adult',
+                tone: user.lessonPreferences?.tone || 'professional_professor',
+                coachName: coach.name || 'StudyBuddy',
+                format: 'reading',
+                displayDirect: true
+            })
+        );
+    }
+
     async function handleToggleChatMic() {
         if (isConversationModeRef.current) return;
         if (isChatListening) {
@@ -1136,7 +1177,9 @@ export function useStudyBuddyChat({
     return {
         handleBackgroundChatRequest,
         handleChatCoachPromptToChat,
+        handleChatCoachExplain,
         handleChatCoachSearch,
+        handleChatCoachTest,
         handleChatCoachTranslate,
         handleSendChat,
         handleToggleChatMic,

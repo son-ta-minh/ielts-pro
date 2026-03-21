@@ -14,6 +14,8 @@ interface ChatCoachActionBarProps {
     onAddToLibrary: () => void;
     onViewWord: () => void;
     onExamples: () => void;
+    onExplain: () => void;
+    onTest: () => void;
     onCollocations: () => void;
     onParaphrase: () => void;
     onWordFamily: () => void;
@@ -32,6 +34,8 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
     onAddToLibrary,
     onViewWord,
     onExamples,
+    onExplain,
+    onTest,
     onCollocations,
     onParaphrase,
     onWordFamily,
@@ -40,7 +44,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
 
     return (
         <div className="border-t border-neutral-100 bg-neutral-50/90 px-0 py-0">
-            <div className="grid grid-cols-8 gap-2">
+            <div className="grid grid-cols-10 gap-2">
                 <button
                     type="button"
                     onMouseDown={onRestoreSelection}
@@ -89,6 +93,26 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     title="Examples"
                 >
                     {activeChatCoachAction === 'examples' ? <Loader2 size={14} className="animate-spin" /> : <NotebookPen size={14} />}
+                </button>
+                <button
+                    type="button"
+                    onMouseDown={onRestoreSelection}
+                    onClick={onExplain}
+                    disabled={!hasSelection || !!activeChatCoachAction}
+                    className={`${baseButtonClass} bg-cyan-50 text-cyan-700 hover:bg-cyan-100`}
+                    title="Explain"
+                >
+                    {activeChatCoachAction === 'explain' ? <Loader2 size={14} className="animate-spin" /> : 'Explain'}
+                </button>
+                <button
+                    type="button"
+                    onMouseDown={onRestoreSelection}
+                    onClick={onTest}
+                    disabled={!hasSelection || !!activeChatCoachAction}
+                    className={`${baseButtonClass} bg-fuchsia-50 text-fuchsia-600 hover:bg-fuchsia-100`}
+                    title="Generate Test"
+                >
+                    {activeChatCoachAction === 'test' ? <Loader2 size={14} className="animate-spin" /> : 'Test'}
                 </button>
                 <button
                     type="button"

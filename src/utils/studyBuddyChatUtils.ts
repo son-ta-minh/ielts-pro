@@ -3,10 +3,11 @@ import { detectLanguage } from './audio';
 import { getAiStudyContextText } from './context_util';
 
 export type ChatSaveSection = 'example' | 'preposition' | 'collocation' | 'paraphrase' | 'wordFamily';
-export type ChatCoachActionKey = 'examples' | 'collocations' | 'paraphrase' | 'wordFamily';
+export type ChatSaveActionType = 'examples' | 'collocations' | 'paraphrase' | 'wordFamily';
+export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain';
 
 export interface ChatSaveContext {
-    actionType?: ChatCoachActionKey;
+    actionType?: ChatSaveActionType;
     targetWord?: string;
     sourceSelection?: string;
 }

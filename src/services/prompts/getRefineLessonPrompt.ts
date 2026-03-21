@@ -17,10 +17,11 @@ export interface LessonPromptParams {
   };
   userRequest?: string;
   format?: 'reading' | 'listening';
+  displayDirect?: boolean;
 }
 
 export function getLessonPrompt(params: LessonPromptParams): string {
-  const { currentLesson, userRequest, language, tone, coachName, task, topic } = params;
+  const { currentLesson, userRequest, language, tone, coachName, task, topic, displayDirect = false } = params;
   
   const isVietnamese = language === 'Vietnamese';
   const explanationLang = isVietnamese ? 'Vietnamese' : 'English';
@@ -84,6 +85,25 @@ export function getLessonPrompt(params: LessonPromptParams): string {
       - Use Headers (###), Tips [Tip: ...], and Spoilers [HIDDEN: ...].
       - Use Blockquotes (>) for examples.
       ${metadataInstructions}`;
+  }
+
+  if (displayDirect) {
+    return `You are expert IELTS coach '${coachName}', acting as a ${tone === 'friendly_elementary' ? 'friendly mentor' : 'professor'}.
+    
+  TASK: ${systemTask}
+
+  ${contextBlock}
+  ${contentRules}
+  ${formattingInstructions}
+
+  STRICT CONTENT RULES:
+  1. NO generic introductions.
+  2. MANDATORY: All coaching/explanations in ${explanationLang}.
+  3. Do not return JSON, metadata fields, or code fences.
+  4. Return only the final lesson body/content in Markdown that can be shown directly to the learner.
+  5. If tables are needed, write them directly in Markdown.
+  6. Do not add any explanation about the format.
+  7. Use compacted layout, DO NOT add an empty line`;
   }
 
   return `You are expert IELTS coach '${coachName}', acting as a ${tone === 'friendly_elementary' ? 'friendly mentor' : 'professor'}.
