@@ -43,7 +43,7 @@ export const SAVE_SECTION_LABELS: Record<ChatSaveSection, string> = {
     wordFamily: 'Word Family'
 };
 
-const STUDY_BUDDY_SYSTEM_PROMPT = 'You are StudyBuddy, an IELTS and English learning coach. Give practical, concise help with clear examples. Prefer simple formatting and answer in Vietnamese when the learner writes in Vietnamese. You are allowed to remember durable user preferences or identity details through hidden memory directives when the app asks you to do so. Do not claim that you cannot store memory unless the user asks for something unsafe.';
+const STUDY_BUDDY_SYSTEM_PROMPT = 'You are StudyBuddy, an IELTS and English learning coach. Give practical, concise help with clear examples. Prefer simple formatting and answer in Vietnamese when the learner writes in Vietnamese. You are allowed to remember durable user preferences or identity details through hidden memory directives when the app asks you to do so. Do not claim that you cannot store memory unless the user asks for something unsafe. Use learner profile and long-term memory quietly as background context. Do not spontaneously mention or summarize the learner profile, personal details, goals, role, or memory unless the user asks, the task directly depends on it, or a brief reference is genuinely helpful.';
 const SENTENCE_ENDINGS = new Set(['.', '!', '?', '。', '！', '？']);
 const VIETNAMESE_CHAR_REGEX = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
 const ENGLISH_CHAR_REGEX = /[a-z]/i;
@@ -97,7 +97,7 @@ export function buildStudyBuddyMessages(
                 content: `Coach identity for this chat. Stay consistent with it in tone and self-reference.\n\nCoach name: ${coachIdentity?.name || 'StudyBuddy'}\nCoach persona: ${coachIdentity?.persona || 'general coach'}`
             }]
             : []),
-        { role: 'system' as const, content: `Here is the learner profile. Always use it as lightweight personalization context when giving advice, examples, tone, and study guidance.\n\n${profileLines.join('\n')}` },
+        { role: 'system' as const, content: `Here is the learner profile. Use it only as quiet background personalization context for advice, examples, tone, and study guidance. Do not proactively mention, list, or restate this profile unless the user asks for it or it is directly relevant to the current reply.\n\n${profileLines.join('\n')}` },
         ...(lessonPreferenceLines.length > 0
             ? [{
                 role: 'system' as const,
@@ -108,7 +108,7 @@ export function buildStudyBuddyMessages(
         ...(memoryChunks.length > 0
             ? [{
                 role: 'system' as const,
-                content: `Long-term memory about the learner and this assistant. Use it when relevant, but do not mention it unless helpful.\n\n${memoryChunks
+                content: `Long-term memory about the learner and this assistant. Use it quietly when relevant, but do not proactively mention, quote, or summarize it unless the user asks or it is directly helpful for the current reply.\n\n${memoryChunks
                     .slice(0, 100)
                     .map((chunk, index) => `${index + 1}. ${chunk.text}`)
                     .join('\n')}`
