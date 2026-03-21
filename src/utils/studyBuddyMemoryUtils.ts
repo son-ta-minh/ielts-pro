@@ -14,7 +14,7 @@ function normalizeMemoryText(text: string) {
 function canonicalizeMemoryText(text: string) {
     const normalized = normalizeMemoryText(text)
         .replace(/^\[\s*|\s*\]$/g, '')
-        .replace(/^(?:W_?UMEM|W_?MEM|WMEM|UMEM|MEM)\s*[:\-]?\s*/i, '')
+        .replace(/^(?:W_?UMEM|W_?MEM|WMEM|UMEM|MEM|T_W_UMEM)\s*[:\-]?\s*/i, '')
         .replace(/^(?:ghi nhớ|hãy nhớ|remember|note|lưu ý)\s*[:\-]?\s*/i, '')
         .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
         .trim();
