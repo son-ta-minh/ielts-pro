@@ -113,6 +113,13 @@ export interface DailyGoalSnapshot {
   review: number;
 }
 
+export interface StudyBuddyMemoryChunk {
+  id: string;
+  text: string;
+  createdAt: number;
+  source?: 'auto' | 'manual';
+}
+
 export interface User {
   id: string;
   name: string;
@@ -130,6 +137,7 @@ export interface User {
   isAdmin?: boolean;
   lessonPreferences?: LessonPreferences;
   note?: string;
+  studyBuddyMemory?: StudyBuddyMemoryChunk[];
 }
 
 export interface PrepositionPattern {

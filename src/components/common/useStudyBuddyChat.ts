@@ -1,6 +1,6 @@
 import React from 'react';
 import { Languages } from 'lucide-react';
-import { User } from '../../app/types';
+import { StudyBuddyMemoryChunk, User } from '../../app/types';
 import { SystemConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import {
@@ -15,12 +15,15 @@ import {
     shouldForceSubmitConversationTurn,
     splitSpeakableSentences
 } from '../../utils/studyBuddyChatUtils';
+import { parseStudyBuddyMemoryDirectives } from '../../utils/studyBuddyMemoryUtils';
 
 type MenuPos = { x: number; y: number; placement: 'top' | 'bottom' } | null;
 type CoachVoiceConfig = {
     viVoice?: string;
     viAccent?: string;
 };
+
+const STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE = `If the user reveals durable personal info or asks you to remember something for future chats, append one hidden memory directive on its own line using this preferred syntax: [W_UMEM short memory chunk]. Example: [W_UMEM User prefers concise answers]. Keep each memory chunk minimal. Do not use this for temporary task details. Fast mode only disables Word Library study context, not long-term chat memory. Do not say that memory is unavailable just because Fast mode is on.`;
 
 interface UseStudyBuddyChatOptions {
     config: SystemConfig;
@@ -77,6 +80,8 @@ interface UseStudyBuddyChatOptions {
     chatConversationSilenceMs: number;
     chatConversationMaxChars: number;
     chatConversationMaxWords: number;
+    getStudyBuddyMemoryChunks: () => StudyBuddyMemoryChunk[];
+    saveMemoryTexts: (memoryTexts: string[]) => Promise<void>;
 }
 
 export function useStudyBuddyChat({
@@ -130,6 +135,8 @@ export function useStudyBuddyChat({
     chatConversationSilenceMs,
     chatConversationMaxChars,
     chatConversationMaxWords,
+    getStudyBuddyMemoryChunks,
+    saveMemoryTexts,
 }: UseStudyBuddyChatOptions) {
     function formatSearchSectionLabel(section: string) {
         const normalized = String(section || '').trim().toLowerCase();
@@ -203,6 +210,7 @@ export function useStudyBuddyChat({
     ) {
         const prompt = rawPrompt.trim();
         if (!prompt || isChatLoading) return;
+        const memoryChunks = getStudyBuddyMemoryChunks();
         if (options?.stopListening !== false) {
             stopChatListening();
         }
@@ -214,9 +222,12 @@ export function useStudyBuddyChat({
         const nextHistory = [...chatHistory, nextUserTurn];
         let spokenCursor = 0;
         let conversationListenerRearmed = false;
-        const extraSystemMessages = options?.continueConversation
-            ? ['Conversation mode is active. Do not use emojis in your response.']
-            : [];
+        const extraSystemMessages = [
+            ...(options?.continueConversation
+                ? ['Conversation mode is active. Do not use emojis in your response.']
+                : []),
+            STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE
+        ];
 
         setChatHistory(nextHistory);
         setChatInput(options?.continueConversation ? prompt : '');
@@ -252,7 +263,8 @@ export function useStudyBuddyChat({
                         user,
                         isContextAware,
                         nextHistory.map((turn) => ({ role: turn.role, content: turn.content })),
-                        extraSystemMessages
+                        extraSystemMessages,
+                        memoryChunks
                     ),
                     ...studyBuddyAiRequestConfig,
                     stream: true
@@ -272,6 +284,7 @@ export function useStudyBuddyChat({
             const decoder = new TextDecoder();
             let buffered = '';
             let assistantText = '';
+            const persistedMemories = new Set<string>();
 
             const appendDelta = (payload: any) => {
                 const delta = payload?.choices?.[0]?.delta?.content ?? payload?.choices?.[0]?.message?.content;
@@ -282,7 +295,21 @@ export function useStudyBuddyChat({
                         if (typeof part?.text === 'string') assistantText += part.text;
                     }
                 }
-                updateAssistantTurn(assistantText);
+                const parsed = parseStudyBuddyMemoryDirectives(assistantText);
+                if (parsed.memories.length) {
+                    const freshMemories = parsed.memories.filter((text) => !persistedMemories.has(text));
+                    if (freshMemories.length) {
+                        freshMemories.forEach((text) => persistedMemories.add(text));
+                        void saveMemoryTexts(freshMemories);
+                    }
+                }
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, content: parsed.visibleText, hasMemoryWrite: turn.hasMemoryWrite || parsed.memories.length > 0 }
+                            : turn
+                    )
+                );
                 removeChatStatusTurn(statusTurnId);
                 if (options?.continueConversation && !conversationListenerRearmed && isConversationModeRef.current) {
                     conversationListenerRearmed = true;
@@ -294,13 +321,13 @@ export function useStudyBuddyChat({
                     }, chatConversationRestartDelayMs);
                 }
                 if (isChatAudioEnabledRef.current) {
-                    const pendingChunk = assistantText.slice(spokenCursor);
+                    const pendingChunk = parsed.visibleText.slice(spokenCursor);
                     const { sentences, remainder } = splitSpeakableSentences(pendingChunk);
                     if (sentences.length > 0) {
                         for (const sentence of sentences) {
                             queueChatSpeech(sentence);
                         }
-                        spokenCursor = assistantText.length - remainder.length;
+                        spokenCursor = parsed.visibleText.length - remainder.length;
                     }
                 }
             };
@@ -347,11 +374,12 @@ export function useStudyBuddyChat({
                 }
             }
 
-            if (!assistantText.trim()) {
+            const parsedFinal = parseStudyBuddyMemoryDirectives(assistantText);
+            if (!parsedFinal.visibleText.trim()) {
                 removeChatStatusTurn(statusTurnId);
-                updateAssistantTurn('Connected to AI but not receive response');
+                updateAssistantTurn(parsedFinal.memories.length ? 'OK' : 'Connected to AI but not receive response');
             } else if (isChatAudioEnabledRef.current) {
-                const trailing = assistantText.slice(spokenCursor).trim();
+                const trailing = parsedFinal.visibleText.slice(spokenCursor).trim();
                 if (trailing) {
                     queueChatSpeech(trailing);
                 }
@@ -538,12 +566,14 @@ export function useStudyBuddyChat({
     async function handleBackgroundChatRequest(prompt: string) {
         const cleanPrompt = prompt.trim();
         if (!cleanPrompt || isChatLoading) return;
+        const memoryChunks = getStudyBuddyMemoryChunks();
         stopChatListening();
 
         const statusTurnId = `status-bg-${Date.now()}`;
         const assistantId = `assistant-bg-${Date.now()}`;
         const aiUrl = getStudyBuddyAiUrl(config);
         let spokenCursor = 0;
+        const extraSystemMessages = [STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE];
 
         setIsChatOpen(true);
         setIsChatLoading(true);
@@ -578,7 +608,9 @@ export function useStudyBuddyChat({
                     messages: buildStudyBuddyMessages(
                         user,
                         isContextAware,
-                        [{ role: 'user', content: cleanPrompt }]
+                        [{ role: 'user', content: cleanPrompt }],
+                        extraSystemMessages,
+                        memoryChunks
                     ),
                     ...studyBuddyAiRequestConfig,
                     stream: true
@@ -598,6 +630,7 @@ export function useStudyBuddyChat({
             const decoder = new TextDecoder();
             let buffered = '';
             let assistantText = '';
+            const persistedMemories = new Set<string>();
 
             const appendDelta = (payload: any) => {
                 const delta = payload?.choices?.[0]?.delta?.content ?? payload?.choices?.[0]?.message?.content;
@@ -608,16 +641,30 @@ export function useStudyBuddyChat({
                         if (typeof part?.text === 'string') assistantText += part.text;
                     }
                 }
-                updateAssistantTurn(assistantText);
+                const parsed = parseStudyBuddyMemoryDirectives(assistantText);
+                if (parsed.memories.length) {
+                    const freshMemories = parsed.memories.filter((text) => !persistedMemories.has(text));
+                    if (freshMemories.length) {
+                        freshMemories.forEach((text) => persistedMemories.add(text));
+                        void saveMemoryTexts(freshMemories);
+                    }
+                }
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, content: parsed.visibleText, hasMemoryWrite: turn.hasMemoryWrite || parsed.memories.length > 0 }
+                            : turn
+                    )
+                );
                 removeChatStatusTurn(statusTurnId);
                 if (isChatAudioEnabledRef.current) {
-                    const pendingChunk = assistantText.slice(spokenCursor);
+                    const pendingChunk = parsed.visibleText.slice(spokenCursor);
                     const { sentences, remainder } = splitSpeakableSentences(pendingChunk);
                     if (sentences.length > 0) {
                         for (const sentence of sentences) {
                             queueChatSpeech(sentence);
                         }
-                        spokenCursor = assistantText.length - remainder.length;
+                        spokenCursor = parsed.visibleText.length - remainder.length;
                     }
                 }
             };
@@ -664,11 +711,12 @@ export function useStudyBuddyChat({
                 }
             }
 
-            if (!assistantText.trim()) {
+            const parsedFinal = parseStudyBuddyMemoryDirectives(assistantText);
+            if (!parsedFinal.visibleText.trim()) {
                 removeChatStatusTurn(statusTurnId);
-                updateAssistantTurn('AI server da ket noi, nhung chua tra ve noi dung.');
+                updateAssistantTurn(parsedFinal.memories.length ? 'OK' : 'AI server da ket noi, nhung chua tra ve noi dung.');
             } else if (isChatAudioEnabledRef.current) {
-                const trailing = assistantText.slice(spokenCursor).trim();
+                const trailing = parsedFinal.visibleText.slice(spokenCursor).trim();
                 if (trailing) {
                     queueChatSpeech(trailing);
                 }
@@ -706,6 +754,7 @@ export function useStudyBuddyChat({
 
     async function requestStudyBuddyAiText(userPrompt: string, isStreamed = true): Promise<string> {
         const aiUrl = getStudyBuddyAiUrl(config);
+        const memoryChunks = getStudyBuddyMemoryChunks();
         const res = await fetch(aiUrl, {
             method: 'POST',
             headers: {
@@ -715,7 +764,9 @@ export function useStudyBuddyChat({
                 messages: buildStudyBuddyMessages(
                     user,
                     isContextAware,
-                    [{ role: 'user', content: userPrompt }]
+                    [{ role: 'user', content: userPrompt }],
+                    [],
+                    memoryChunks
                 ),
                 ...studyBuddyAiRequestConfig,
                 stream: isStreamed
@@ -920,6 +971,7 @@ export function useStudyBuddyChat({
         const userTurn = createChatTurn('user', `${promptLabel}: ${selectedText}`);
         const assistantId = `assistant-${actionKey}-${Date.now()}`;
         const aiUrl = getStudyBuddyAiUrl(config);
+        const memoryChunks = getStudyBuddyMemoryChunks();
         const saveContext: ChatSaveContext = {
             actionType: actionKey,
             targetWord: selectedText,
@@ -948,7 +1000,9 @@ export function useStudyBuddyChat({
                     messages: buildStudyBuddyMessages(
                         user,
                         isContextAware,
-                        [{ role: 'user', content: userPrompt }]
+                        [{ role: 'user', content: userPrompt }],
+                        [],
+                        memoryChunks
                     ),
                     ...studyBuddyAiRequestConfig,
                     stream: true

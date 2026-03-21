@@ -1,4 +1,4 @@
-import { User } from '../app/types';
+import { StudyBuddyMemoryChunk, User } from '../app/types';
 import { detectLanguage } from './audio';
 import { getAiStudyContextText } from './context_util';
 
@@ -31,6 +31,7 @@ export interface ChatTurn {
     kind?: 'message' | 'status';
     saveContext?: ChatSaveContext;
     searchResultMeta?: ChatSearchResultMeta;
+    hasMemoryWrite?: boolean;
 }
 
 export const SAVE_SECTION_LABELS: Record<ChatSaveSection, string> = {
@@ -41,7 +42,7 @@ export const SAVE_SECTION_LABELS: Record<ChatSaveSection, string> = {
     wordFamily: 'Word Family'
 };
 
-const STUDY_BUDDY_SYSTEM_PROMPT = 'You are StudyBuddy, an IELTS and English learning coach. Give practical, concise help with clear examples. Prefer simple formatting and answer in Vietnamese when the learner writes in Vietnamese.';
+const STUDY_BUDDY_SYSTEM_PROMPT = 'You are StudyBuddy, an IELTS and English learning coach. Give practical, concise help with clear examples. Prefer simple formatting and answer in Vietnamese when the learner writes in Vietnamese. You are allowed to remember durable user preferences or identity details through hidden memory directives when the app asks you to do so. Do not claim that you cannot store memory unless the user asks for something unsafe.';
 const SENTENCE_ENDINGS = new Set(['.', '!', '?', '。', '！', '？']);
 const VIETNAMESE_CHAR_REGEX = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
 const ENGLISH_CHAR_REGEX = /[a-z]/i;
@@ -51,7 +52,8 @@ export function buildStudyBuddyMessages(
     user: User,
     isContextAware: boolean,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-    extraSystemMessages: string[] = []
+    extraSystemMessages: string[] = [],
+    memoryChunks: StudyBuddyMemoryChunk[] = []
 ) {
     const profileLines = [
         `Learner name: ${user.name || 'Unknown'}`,
@@ -59,13 +61,12 @@ export function buildStudyBuddyMessages(
         user.currentLevel ? `English level: ${user.currentLevel}` : null,
         user.target ? `Target: ${user.target}` : null,
         user.nativeLanguage ? `Native language: ${user.nativeLanguage}` : null,
-        user.role ? `Role: ${user.role}` : null,
-        user.note ? `Learner note: ${user.note}` : null
+        user.role ? `Role: ${user.role}` : null
     ].filter(Boolean);
 
     const contextMessage = (() => {
         if (!isContextAware) {
-            return 'Fast mode is active, so no personal study context is attached. If the user asks about their own learning status, recent learned words, hard/forgotten words, or focus words, explicitly tell them to switch the toggle from "Fast mode" to "Context aware".';
+            return 'Fast mode is active, so no study context from the learner\'s Word Library is attached. This only affects library/context-aware study data. It does not disable long-term chat memory. If the user asks about their own learning status, recent learned words, hard/forgotten words, or focus words from the library, explicitly tell them to switch the toggle from "Fast mode" to "Context aware".';
         }
         try {
             const contextText = getAiStudyContextText().trim();
@@ -81,6 +82,15 @@ export function buildStudyBuddyMessages(
         { role: 'system' as const, content: STUDY_BUDDY_SYSTEM_PROMPT },
         { role: 'system' as const, content: `Here is the learner profile. Always use it as lightweight personalization context when giving advice, examples, tone, and study guidance.\n\n${profileLines.join('\n')}` },
         { role: 'system' as const, content: contextMessage },
+        ...(memoryChunks.length > 0
+            ? [{
+                role: 'system' as const,
+                content: `Long-term memory about the learner and this assistant. Use it when relevant, but do not mention it unless helpful.\n\n${memoryChunks
+                    .slice(0, 100)
+                    .map((chunk, index) => `${index + 1}. ${chunk.text}`)
+                    .join('\n')}`
+            }]
+            : []),
         ...extraSystemMessages.map((content) => ({ role: 'system' as const, content })),
         ...messages
     ];

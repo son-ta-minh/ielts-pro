@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, AppView, WordQuality, VocabularyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, WordFamily } from '../../app/types';
+import { User, AppView, WordQuality, VocabularyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyMemoryChunk, WordFamily } from '../../app/types';
 import { Bot, NotebookPen, ListCollapse, BringToFront, Blocks, X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star, Sparkles, Save } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
+import { getAllUsers, saveUser } from '../../app/db';
 import { createNewWord, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
@@ -43,6 +44,7 @@ import {
     splitMixedLanguageSegments,
     splitSpeakableSentences
 } from '../../utils/studyBuddyChatUtils';
+import { mergeStudyBuddyMemoryChunks, parseStudyBuddyMemoryDirectives } from '../../utils/studyBuddyMemoryUtils';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
@@ -181,6 +183,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [chatHistory, setChatHistory] = useState<ChatTurn[]>([
         createChatTurn('assistant', 'Xin chào. Tôi có thể trả lời bất cứ thứ gì về tiếng Anh')    ]);
     const [chatInput, setChatInput] = useState('');
+    const [memoryChunks, setMemoryChunks] = useState<StudyBuddyMemoryChunk[]>(user.studyBuddyMemory || []);
+    const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false);
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
     const [isContextAware, setIsContextAware] = useState(false);
@@ -218,6 +222,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const isConversationModeRef = useRef(isConversationMode);
     const conversationTranscriptRef = useRef('');
     const conversationPendingSubmitRef = useRef(false);
+    const memoryChunksRef = useRef<StudyBuddyMemoryChunk[]>(user.studyBuddyMemory || []);
     const conversationSilenceTimeoutRef = useRef<number | null>(null);
     const conversationRestartTimeoutRef = useRef<number | null>(null);
     const chatAbortReasonRef = useRef<'manual' | 'conversation-interrupt' | null>(null);
@@ -237,6 +242,47 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
     const avatarInfo = getAvatarProps(coach.avatar);
+
+    useEffect(() => {
+        let isMounted = true;
+        setMemoryChunks(user.studyBuddyMemory || []);
+        memoryChunksRef.current = user.studyBuddyMemory || [];
+
+        void (async () => {
+            const storedUser = (await getAllUsers()).find((item) => item.id === user.id);
+            if (isMounted && storedUser?.studyBuddyMemory) {
+                setMemoryChunks(storedUser.studyBuddyMemory);
+                memoryChunksRef.current = storedUser.studyBuddyMemory;
+            }
+        })();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [user.id, user.studyBuddyMemory]);
+
+    const persistMemoryChunks = async (nextChunks: StudyBuddyMemoryChunk[]) => {
+        setMemoryChunks(nextChunks);
+        memoryChunksRef.current = nextChunks;
+        const storedUser = (await getAllUsers()).find((item) => item.id === user.id) || user;
+        await saveUser({
+            ...storedUser,
+            studyBuddyMemory: nextChunks
+        });
+    };
+
+    const saveMemoryTexts = async (memoryTexts: string[]) => {
+        if (!memoryTexts.length) return;
+        const { merged } = mergeStudyBuddyMemoryChunks(memoryChunksRef.current, memoryTexts, 'auto');
+        if (merged.length === memoryChunksRef.current.length) return;
+        await persistMemoryChunks(merged);
+    };
+
+    const handleDeleteMemory = async (memoryId: string) => {
+        const nextChunks = memoryChunks.filter((chunk) => chunk.id !== memoryId);
+        setMemoryChunks(nextChunks);
+        await persistMemoryChunks(nextChunks);
+    };
 
     const restoreSelectedRange = () => {
         const savedRange = selectedRangeRef.current;
@@ -840,7 +886,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         };
         const handleExternalStudyBuddyChatResponse = (event: Event) => {
             const custom = event as CustomEvent<{ content?: string }>;
-            const content = custom.detail?.content?.trim();
+            const parsed = parseStudyBuddyMemoryDirectives(custom.detail?.content || '');
+            const content = parsed.visibleText.trim();
+            if (parsed.memories.length) {
+                void saveMemoryTexts(parsed.memories);
+            }
             if (!content) return;
 
             setIsChatOpen(true);
@@ -848,7 +898,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             setIsThinking(false);
             setChatHistory((current) => [
                 ...current,
-                createChatTurn('assistant', content)
+                { ...createChatTurn('assistant', content), hasMemoryWrite: parsed.memories.length > 0 }
             ]);
 
             if (isChatAudioEnabledRef.current) {
@@ -882,8 +932,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             setChatHistory((current) =>
                 current.map((turn) => {
                     if (turn.id !== streamState.assistantId) return turn;
-                    nextContent = `${turn.content}${delta}`;
-                    return { ...turn, content: nextContent };
+                    const parsed = parseStudyBuddyMemoryDirectives(`${turn.content}${delta}`);
+                    nextContent = parsed.visibleText;
+                    if (parsed.memories.length) {
+                        void saveMemoryTexts(parsed.memories);
+                    }
+                    return { ...turn, content: nextContent, hasMemoryWrite: turn.hasMemoryWrite || parsed.memories.length > 0 };
                 })
             );
 
@@ -1218,6 +1272,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         chatConversationSilenceMs: CHAT_CONVERSATION_SILENCE_MS,
         chatConversationMaxChars: CHAT_CONVERSATION_MAX_CHARS,
         chatConversationMaxWords: CHAT_CONVERSATION_MAX_WORDS,
+        getStudyBuddyMemoryChunks: () => memoryChunksRef.current,
+        saveMemoryTexts,
     });
 
     const handleReadAndIpa = async () => {
@@ -1615,6 +1671,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 hasChatTextSelection={hasChatTextSelection}
                                 chatInput={chatInput}
                                 headerDescription={chatHeaderDescription}
+                                memoryChunks={memoryChunks}
+                                isMemoryPanelOpen={isMemoryPanelOpen}
                                 chatCoachActionBar={
                                     <StudyBuddyChatCoachActionBar
                                         hasSelection={!!getCoachActionText()}
@@ -1653,6 +1711,8 @@ Rules:
                                 onToggleContextAware={() => setIsContextAware((prev) => !prev)}
                                 onToggleConversationMode={handleToggleConversationMode}
                                 onToggleChatAudio={() => setIsChatAudioEnabled((prev) => !prev)}
+                                onToggleMemoryPanel={() => setIsMemoryPanelOpen((prev) => !prev)}
+                                onDeleteMemory={handleDeleteMemory}
                                 onClearChatHistory={handleClearChatHistory}
                                 onClose={() => {
                                     stopChatStream();
