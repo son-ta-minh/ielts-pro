@@ -1,8 +1,8 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
 import { Brain, Loader2, Mic, Save, Send, Sparkles, StopCircle, Trash2, Volume2, X } from 'lucide-react';
 import { ChatSearchMatch, ChatTurn } from '../../utils/studyBuddyChatUtils';
 import { StudyBuddyMemoryChunk } from '../../app/types';
+import { parseMarkdown } from '../../utils/markdownParser';
 
 const SAVE_ACTION_LABELS: Record<string, string> = {
     examples: 'Save Examples',
@@ -55,6 +55,11 @@ function SearchMoreMatches({ matches }: { matches: ChatSearchMatch[] }) {
     );
 }
 
+function renderBubbleHtml(turn: ChatTurn, isChatLoading: boolean) {
+    const content = `${turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}${turn.role === 'assistant' && turn.kind !== 'status' && turn.hasMemoryWrite ? ' ✍️' : ''}`;
+    return { __html: parseMarkdown(content) };
+}
+
 const ChatHistoryList = React.memo(({
     chatHistory,
     isChatLoading,
@@ -93,63 +98,13 @@ const ChatHistoryList = React.memo(({
                             </button>
                         </div>
                     )}
-                    <div className={`leading-relaxed break-words select-text text-neutral-900 ${turn.role === 'assistant' ? '[&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded-md' : ''}`}>
-                        <ReactMarkdown
-                            components={{
-                                p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap">{children}</p>,
-                                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-1 last:mb-0">{children}</ul>,
-                                ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-1 last:mb-0">{children}</ol>,
-                                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                                h1: ({ children }) => <h1 className="mb-2 text-base font-black tracking-tight">{children}</h1>,
-                                h2: ({ children }) => <h2 className="mb-2 text-[15px] font-black tracking-tight">{children}</h2>,
-                                h3: ({ children }) => <h3 className="mb-2 text-sm font-black tracking-tight">{children}</h3>,
-                                blockquote: ({ children }) => (
-                                    <blockquote className="mb-2 border-l-4 border-neutral-300 bg-neutral-50/80 px-3 py-2 italic text-neutral-600 last:mb-0">
-                                        {children}
-                                    </blockquote>
-                                ),
-                                a: ({ href, children }) => (
-                                    <a href={href} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 underline underline-offset-2">
-                                        {children}
-                                    </a>
-                                ),
-                                table: ({ children }) => (
-                                    <div className="mb-2 overflow-x-auto rounded-2xl border border-neutral-200 last:mb-0">
-                                        <table className="min-w-full border-collapse text-left text-xs">{children}</table>
-                                    </div>
-                                ),
-                                thead: ({ children }) => <thead className="bg-neutral-100 text-neutral-700">{children}</thead>,
-                                th: ({ children }) => <th className="border-b border-neutral-200 px-3 py-2 font-black">{children}</th>,
-                                td: ({ children }) => <td className="border-b border-neutral-100 px-3 py-2 align-top">{children}</td>,
-                                code: ({ inline, className, children, ...props }: any) => {
-                                    const rawCode = String(children).replace(/\n$/, '');
-                                    const language = className?.replace('language-', '') || '';
-                                    if (inline) {
-                                        return (
-                                            <code className="rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.92em] text-rose-700" {...props}>
-                                                {children}
-                                            </code>
-                                        );
-                                    }
-                                    return (
-                                        <div className="mb-2 overflow-hidden rounded-2xl border border-neutral-200 bg-white text-neutral-900 last:mb-0">
-                                            <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">
-                                                <span>{language || 'code'}</span>
-                                            </div>
-                                            <pre className="overflow-x-auto px-4 py-3 text-[12px] leading-6">
-                                                <code className={className} {...props}>{rawCode}</code>
-                                            </pre>
-                                        </div>
-                                    );
-                                },
-                            }}
-                        >
-                            {`${turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}${turn.role === 'assistant' && turn.kind !== 'status' && turn.hasMemoryWrite ? ' ✍️' : ''}`}
-                        </ReactMarkdown>
+                    <div
+                        className="leading-relaxed break-words select-text text-neutral-900 [&_a]:font-semibold [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-2 [&_code]:rounded-md [&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-rose-700 [&_ol]:mb-2 [&_ol]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:mb-2 [&_p]:whitespace-pre-wrap [&_p:last-child]:mb-0 [&_pre]:overflow-x-auto [&_pre]:rounded-2xl [&_pre]:border [&_pre]:border-neutral-200 [&_pre]:bg-white [&_pre]:px-4 [&_pre]:py-3 [&_pre]:text-[12px] [&_pre]:leading-6 [&_table]:min-w-full [&_table]:border-collapse [&_table]:text-left [&_table]:text-xs [&_td]:border-b [&_td]:border-neutral-100 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_th]:border-b [&_th]:border-neutral-200 [&_th]:px-3 [&_th]:py-2 [&_th]:font-black [&_thead]:bg-neutral-100 [&_thead]:text-neutral-700 [&_ul]:mb-2 [&_ul]:ml-4 [&_ul]:list-disc [&_ul]:space-y-1"
+                        dangerouslySetInnerHTML={renderBubbleHtml(turn, isChatLoading)}
+                    />
                         {turn.role === 'assistant' && turn.kind !== 'status' && turn.searchResultMeta?.moreMatches?.length ? (
                             <SearchMoreMatches matches={turn.searchResultMeta.moreMatches} />
                         ) : null}
-                    </div>
                 </div>
             </div>
         ))}
