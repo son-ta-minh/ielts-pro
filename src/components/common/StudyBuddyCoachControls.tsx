@@ -15,6 +15,8 @@ interface ChatCoachActionBarProps {
     onViewWord: () => void;
     onExamples: () => void;
     onExplain: () => void;
+    onImage: () => void;
+    onInfographic: () => void;
     onTest: () => void;
     onCollocations: () => void;
     onParaphrase: () => void;
@@ -35,6 +37,8 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
     onViewWord,
     onExamples,
     onExplain,
+    onImage,
+    onInfographic,
     onTest,
     onCollocations,
     onParaphrase,
@@ -109,6 +113,26 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                     title="Explain"
                 >
                     {renderButtonLabel('explain', 'Explain')}
+                </button>
+                <button
+                    type="button"
+                    onMouseDown={onRestoreSelection}
+                    onClick={onImage}
+                    disabled={!hasSelection || !!activeChatCoachAction}
+                    className={`${baseButtonClass} bg-violet-50 text-violet-700 hover:bg-violet-100`}
+                    title="Generate Image"
+                >
+                    {renderButtonLabel('image', 'Image')}
+                </button>
+                <button
+                    type="button"
+                    onMouseDown={onRestoreSelection}
+                    onClick={onInfographic}
+                    disabled={!hasSelection || !!activeChatCoachAction}
+                    className={`${baseButtonClass} bg-lime-50 text-lime-700 hover:bg-lime-100`}
+                    title="Generate infographic"
+                >
+                    {renderButtonLabel('infographic', 'Infographic')}
                 </button>
                 <button
                     type="button"

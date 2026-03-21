@@ -61,6 +61,7 @@ const userKeyMap: { [key: string]: string } = {
     target: 't', nativeLanguage: 'nl', experience: 'xp', level: 'lv',
     peakLevel: 'pl', adventure: 'adv', adventureLastDailyStar: 'alds',
     studyBuddyMemory: 'sbm',
+    studyBuddyImageSettings: 'sbis',
     unlockedChapterIds: 'uc', completedSegmentIds: 'cs', segmentStars: 'ss',
     badges: 'b', keys: 'k', keyFragments: 'kf',
     currentNodeIndex: 'cni', energy: 'e', energyShards: 'es', map: 'm'

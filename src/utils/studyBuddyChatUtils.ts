@@ -4,7 +4,7 @@ import { getAiStudyContextText } from './context_util';
 
 export type ChatSaveSection = 'example' | 'preposition' | 'collocation' | 'paraphrase' | 'wordFamily';
 export type ChatSaveActionType = 'examples' | 'collocations' | 'paraphrase' | 'wordFamily';
-export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain';
+export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain' | 'image' | 'infographic';
 
 export interface ChatSaveContext {
     actionType?: ChatSaveActionType;
@@ -30,6 +30,7 @@ export interface ChatTurn {
     role: 'user' | 'assistant';
     content: string;
     kind?: 'message' | 'status';
+    imageProgress?: number;
     saveContext?: ChatSaveContext;
     searchResultMeta?: ChatSearchResultMeta;
     hasMemoryWrite?: boolean;

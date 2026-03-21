@@ -120,6 +120,26 @@ export interface StudyBuddyMemoryChunk {
   source?: 'auto' | 'manual';
 }
 
+export type StudyBuddyImageAspectRatio = 'portrait' | 'square' | 'landscape';
+export type StudyBuddyImagePreset = 'fast' | 'balanced' | 'quality' | 'ultra';
+export type StudyBuddyImageSettingMode = 'auto' | 'manual';
+
+export interface StudyBuddyImageSettings {
+  safeMode: boolean;
+  aspectRatioMode: StudyBuddyImageSettingMode;
+  aspectRatio: StudyBuddyImageAspectRatio;
+  presetMode: StudyBuddyImageSettingMode;
+  preset: StudyBuddyImagePreset;
+  stepsMode: StudyBuddyImageSettingMode;
+  steps: number;
+  cfgMode: StudyBuddyImageSettingMode;
+  cfg: number;
+  seedMode: StudyBuddyImageSettingMode;
+  seed: number | null;
+  negativeMode: StudyBuddyImageSettingMode;
+  negative: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -138,6 +158,7 @@ export interface User {
   lessonPreferences?: LessonPreferences;
   note?: string;
   studyBuddyMemory?: StudyBuddyMemoryChunk[];
+  studyBuddyImageSettings?: StudyBuddyImageSettings;
 }
 
 export interface PrepositionPattern {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Languages } from 'lucide-react';
-import { StudyBuddyMemoryChunk, User } from '../../app/types';
+import { StudyBuddyImageSettings, StudyBuddyMemoryChunk, User } from '../../app/types';
 import { SystemConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { getGenerateLessonTestPrompt } from '../../services/prompts/getGenerateLessonTestPrompt';
 import { getLessonPrompt } from '../../services/prompts/getRefineLessonPrompt';
@@ -19,6 +19,7 @@ import {
     splitSpeakableSentences
 } from '../../utils/studyBuddyChatUtils';
 import { parseStudyBuddyMemoryDirectives } from '../../utils/studyBuddyMemoryUtils';
+import { normalizeStudyBuddyImageSettings } from '../../utils/studyBuddyImageUtils';
 
 type MenuPos = { x: number; y: number; placement: 'top' | 'bottom' } | null;
 type CoachVoiceConfig = {
@@ -86,6 +87,7 @@ interface UseStudyBuddyChatOptions {
     chatConversationMaxChars: number;
     chatConversationMaxWords: number;
     getStudyBuddyMemoryChunks: () => StudyBuddyMemoryChunk[];
+    getStudyBuddyImageSettings: () => StudyBuddyImageSettings;
     saveMemoryTexts: (memoryTexts: string[]) => Promise<void>;
 }
 
@@ -141,6 +143,7 @@ export function useStudyBuddyChat({
     chatConversationMaxChars,
     chatConversationMaxWords,
     getStudyBuddyMemoryChunks,
+    getStudyBuddyImageSettings,
     saveMemoryTexts,
 }: UseStudyBuddyChatOptions) {
     function formatSearchSectionLabel(section: string) {
@@ -1151,6 +1154,142 @@ Rules:
         );
     }
 
+    async function handleChatCoachImageRequest(mode: 'image' | 'infographic') {
+        const selectedText = getActiveActionText();
+        if (!selectedText) return;
+        selectedTextRef.current = selectedText;
+
+        setActiveChatCoachAction(mode);
+        setIsChatLoading(true);
+        setIsChatOpen(true);
+
+        const userTurn = createChatTurn('user', `${mode === 'infographic' ? 'Infographic' : 'Image'}: ${selectedText}`);
+        const assistantId = `assistant-${mode}-${Date.now()}`;
+
+        setChatHistory((current) => [
+            ...current,
+            userTurn,
+            { id: assistantId, role: 'assistant', kind: 'status', content: '', imageProgress: 4 }
+        ]);
+
+        try {
+            const controller = new AbortController();
+            chatAbortRef.current = controller;
+            const serverUrl = getServerUrl(config);
+            const imageSettings = normalizeStudyBuddyImageSettings(getStudyBuddyImageSettings());
+            const res = await fetch(`${serverUrl}/api/studybuddy/image`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
+                },
+                signal: controller.signal,
+                body: JSON.stringify({
+                    data: selectedText,
+                    settings: imageSettings,
+                    mode
+                })
+            });
+
+            if (!res.ok || !res.body) {
+                const payload = await res.json().catch(() => null);
+                throw new Error(payload?.error || `Image server error ${res.status}`);
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffered = '';
+            let finalUpdated = false;
+
+            const updateAssistantProgress = (progress: number) => {
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, kind: 'status', content: '', imageProgress: progress }
+                            : turn
+                    )
+                );
+            };
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffered += decoder.decode(value, { stream: true });
+                const events = buffered.split('\n\n');
+                buffered = events.pop() || '';
+
+                for (const eventBlock of events) {
+                    const lines = eventBlock
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean);
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data:')) continue;
+                        const raw = line.slice(5).trim();
+                        if (!raw) continue;
+
+                        const payload = JSON.parse(raw);
+                        if (payload?.type === 'progress' && Number.isFinite(Number(payload.progress))) {
+                            updateAssistantProgress(Number(payload.progress));
+                            continue;
+                        }
+                        if (payload?.type === 'final') {
+                            setChatHistory((current) =>
+                                current.map((turn) =>
+                                    turn.id === assistantId
+                                        ? { ...turn, kind: 'message', content: payload?.response || 'Khong tao duoc hinh.', imageProgress: undefined }
+                                        : turn
+                                )
+                            );
+                            finalUpdated = true;
+                            continue;
+                        }
+                        if (payload?.type === 'error') {
+                            throw new Error(typeof payload.error === 'string' ? payload.error : 'Image generation failed.');
+                        }
+                    }
+                }
+            }
+
+            if (!finalUpdated) {
+                throw new Error('Image stream ended without final payload.');
+            }
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, kind: 'message', content: 'Da dung tao hinh.', imageProgress: undefined }
+                            : turn
+                    )
+                );
+            } else {
+                console.error(error);
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, kind: 'message', content: error?.message || 'Khong the tao hinh luc nay.', imageProgress: undefined }
+                            : turn
+                    )
+                );
+            }
+        } finally {
+            chatAbortRef.current = null;
+            setIsChatLoading(false);
+            setActiveChatCoachAction(null);
+        }
+    }
+
+    async function handleChatCoachImage() {
+        await handleChatCoachImageRequest('image');
+    }
+
+    async function handleChatCoachInfographic() {
+        await handleChatCoachImageRequest('infographic');
+    }
+
     async function handleToggleChatMic() {
         if (isConversationModeRef.current) return;
         if (isChatListening) {
@@ -1200,6 +1339,8 @@ Rules:
         streamInitialGreeting,
         handleChatCoachPromptToChat,
         handleChatCoachExplain,
+        handleChatCoachInfographic,
+        handleChatCoachImage,
         handleChatCoachSearch,
         handleChatCoachTest,
         handleChatCoachTranslate,

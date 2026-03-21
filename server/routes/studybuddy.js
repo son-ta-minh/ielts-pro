@@ -1,10 +1,40 @@
 const express = require('express');
 const http = require('http');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const { settings } = require('../config');
+const { FOLDER_MAPPINGS_FILE } = require('../config');
 const { searchUserVocabularyIndex } = require('../vocabularySearchIndex');
 
 const router = express.Router();
+
+const COMFY_UI_URL = process.env.COMFY_UI_URL || 'http://127.0.0.1:8188';
+const IMAGE_FLOW_PATH = path.join(__dirname, '..', 'image_gen_flow.json');
+const IMAGE_RATIO_MAP = {
+    portrait: { width: 512, height: 768 },
+    square: { width: 512, height: 512 },
+    landscape: { width: 768, height: 512 }
+};
+const BASE_NEGATIVE_PROMPT = 'blurry, bad anatomy, extra fingers, low quality, worst quality, distorted face';
+const IMAGE_PARAM_DEFAULTS = {
+    aspect_ratio: 'square',
+    steps: 20,
+    cfg: 7,
+    seed: null
+};
+const IMAGE_PRESETS = {
+    fast: { steps: 15, cfg: 6 },
+    balanced: { steps: 20, cfg: 7 },
+    quality: { steps: 25, cfg: 7.5 },
+    ultra: { steps: 30, cfg: 8 }
+};
+const IMAGE_STYLE_HINTS = {
+    cinematic: 'cinematic lighting, high contrast, film look',
+    portrait: '85mm lens, shallow depth of field, bokeh',
+    anime: 'anime style, vibrant colors, sharp lines',
+    realistic: 'ultra realistic, skin texture, natural lighting'
+};
 
 
 const DEFAULT_STUDY_BUDDY_AI_URL = process.env.STUDY_BUDDY_AI_URL || 'http://127.0.0.1:63392/v1/chat/completions';
@@ -41,20 +71,37 @@ function filterHeaders(headers = {}) {
 
 let activeBaseUrl = null;
 let isProbing = false;
+let pendingActiveUrlCallbacks = [];
 
 function probeAndSelectActiveUrl(callback) {
     const urls = getCandidateUrls();
     let index = 0;
+    let finished = false;
+
+    const finishProbe = (error, url) => {
+        if (finished) return;
+        finished = true;
+        callback(error, url);
+    };
 
     function tryNextProbe() {
+        if (finished) return;
+
         if (index >= urls.length) {
             activeBaseUrl = null;
             console.error('[StudyBuddy] No AI upstream available');
-            return callback(new Error('No upstream available'));
+            return finishProbe(new Error('No upstream available'));
         }
 
         const url = new URL(urls[index++]);
         const client = url.protocol === 'https:' ? https : http;
+        let probeSettled = false;
+
+        const settleProbe = (runner) => {
+            if (probeSettled || finished) return;
+            probeSettled = true;
+            runner();
+        };
 
         const probeUrl = new URL(url.href);
         probeUrl.pathname = '/v1/models'; // safer probe endpoint for OpenAI-compatible APIs
@@ -63,28 +110,34 @@ function probeAndSelectActiveUrl(callback) {
             probeUrl,
             { method: 'GET', timeout: 5000 },
             (res) => {
-                if (res.statusCode && res.statusCode < 500) {
-                    console.log('[StudyBuddy] Connected to AI:', url.href, 'status:', res.statusCode);
-                    activeBaseUrl = url.href;
-                    res.resume(); // drain
-                    return callback(null, activeBaseUrl);
-                } else {
+                settleProbe(() => {
+                    if (res.statusCode && res.statusCode < 500) {
+                        console.log('[StudyBuddy] Connected to AI:', url.href, 'status:', res.statusCode);
+                        activeBaseUrl = url.href;
+                        res.resume(); // drain
+                        return finishProbe(null, activeBaseUrl);
+                    }
+
                     console.warn('[StudyBuddy] Probe bad status:', url.href, res.statusCode);
                     res.resume();
                     tryNextProbe();
-                }
+                });
             }
         );
 
         req.on('error', (err) => {
-            console.warn('[StudyBuddy] Probe failed:', url.href, err.message);
-            tryNextProbe();
+            settleProbe(() => {
+                console.warn('[StudyBuddy] Probe failed:', url.href, err.message);
+                tryNextProbe();
+            });
         });
 
         req.on('timeout', () => {
-            req.destroy();
-            console.warn('[StudyBuddy] Probe timeout (skip):', url.href);
-            tryNextProbe();
+            settleProbe(() => {
+                console.warn('[StudyBuddy] Probe timeout (skip):', url.href);
+                req.destroy(new Error('Probe timeout'));
+                tryNextProbe();
+            });
         });
 
         req.end();
@@ -96,18 +149,21 @@ function probeAndSelectActiveUrl(callback) {
 function ensureActiveUrl(callback) {
     if (activeBaseUrl) return callback(null, activeBaseUrl);
     if (isProbing) {
-        const interval = setInterval(() => {
-            if (activeBaseUrl) {
-                clearInterval(interval);
-                return callback(null, activeBaseUrl);
-            }
-        }, 100);
+        pendingActiveUrlCallbacks.push(callback);
         return;
     }
     isProbing = true;
+    pendingActiveUrlCallbacks.push(callback);
     probeAndSelectActiveUrl((err, url) => {
         isProbing = false;
-        callback(err, url);
+        const queued = pendingActiveUrlCallbacks.splice(0, pendingActiveUrlCallbacks.length);
+        queued.forEach((cb) => {
+            try {
+                cb(err, url);
+            } catch (callbackError) {
+                console.error('[StudyBuddy] Active URL callback failed:', callbackError);
+            }
+        });
     });
 }
 
@@ -182,6 +238,758 @@ function requestStudyBuddyAiText(messages, callback) {
         upstreamReq.write(payload);
         upstreamReq.end();
     });
+}
+
+function requestStudyBuddyAiTextAsync(messages) {
+    return new Promise((resolve, reject) => {
+        requestStudyBuddyAiText(messages, (error, content) => {
+            if (error) return reject(error);
+            resolve(content);
+        });
+    });
+}
+
+function loadFolderMappings() {
+    try {
+        const filePath = FOLDER_MAPPINGS_FILE();
+        if (fs.existsSync(filePath)) {
+            return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        }
+    } catch (error) {
+        console.error('[StudyBuddyImage] Failed to load folder mappings:', error.message);
+    }
+    return {};
+}
+
+function httpRequestAsync(targetUrl, options = {}, bodyBuffer = null) {
+    return new Promise((resolve, reject) => {
+        const url = new URL(targetUrl);
+        const client = url.protocol === 'https:' ? https : http;
+        const req = client.request(
+            url,
+            options,
+            (res) => {
+                const chunks = [];
+                res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+                res.on('end', () => {
+                    resolve({
+                        statusCode: res.statusCode || 500,
+                        headers: res.headers,
+                        body: Buffer.concat(chunks)
+                    });
+                });
+            }
+        );
+
+        req.on('error', reject);
+        req.setTimeout(options.timeout || 300000, () => {
+            req.destroy(new Error('Request timeout'));
+        });
+
+        if (bodyBuffer) {
+            req.write(bodyBuffer);
+        }
+        req.end();
+    });
+}
+
+function extractFirstJsonObject(raw) {
+    const source = String(raw || '').trim();
+    if (!source) return null;
+    const fenced = source.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+    const start = fenced.indexOf('{');
+    const end = fenced.lastIndexOf('}');
+    if (start === -1 || end === -1 || end <= start) return null;
+    return fenced.slice(start, end + 1);
+}
+
+function parseImageParamsResponse(raw) {
+    const jsonText = extractFirstJsonObject(raw);
+    if (!jsonText) return null;
+    try {
+        return JSON.parse(jsonText);
+    } catch {
+        return null;
+    }
+}
+
+function uniqueCommaPhrases(...parts) {
+    const seen = new Set();
+    const result = [];
+    for (const part of parts) {
+        const text = String(part || '').trim();
+        if (!text) continue;
+        const phrases = text.split(',').map((item) => item.trim()).filter(Boolean);
+        for (const phrase of phrases) {
+            const key = phrase.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            result.push(phrase);
+        }
+    }
+    return result.join(', ');
+}
+
+function looksEnglishImagePrompt(text) {
+    const source = String(text || '').trim();
+    if (!source) return false;
+    if (looksVietnamese(source)) return false;
+    if (!/[a-z]/i.test(source)) return false;
+    const words = source.match(/[A-Za-z]+/g) || [];
+    return words.length >= 3;
+}
+
+function detectUnsafeImageRequest(text) {
+    const source = String(text || '').toLowerCase();
+    if (!source.trim()) return false;
+    const unsafePatterns = [
+        /\b(sex|sexy|nude|naked|porn|explicit|nsfw|boobs?|breasts?|nipples?|genitals?|vagina|penis|cum|fetish)\b/i,
+        /\b(blood|bloody|gore|gory|dismember|decapitat|corpse|dead body|mutilat|intestines?)\b/i,
+        /\b(stab|stabbing|slash|slashing|behead|beheading|murder|kill|killing|knife fight|sword fight|massacre)\b/i,
+        /\b(tinh duc|khoa than|mau me|dam chem|giet nguoi|chat xac|chem giet)\b/i
+    ];
+    return unsafePatterns.some((pattern) => pattern.test(source));
+}
+
+async function classifyImageSafetyWithAi(userRequest) {
+    const messages = [
+        {
+            role: 'system',
+            content: `You are a safety classifier for image-generation requests.
+
+Return ONLY valid JSON in this exact format:
+{"safe":true,"reason":""}
+or
+{"safe":false,"reason":"sexual|graphic_violence|gore|self_harm|other"}
+
+Rules:
+- Judge the user's intended image content, not whether it is educational or fictional
+- Mark unsafe for explicit sexual content, nudity, pornographic intent, graphic gore, bloody violence, dismemberment, stabbing, murder scenes, or similarly graphic harmful imagery
+- If the request is harmless or non-graphic, mark safe true
+- Do not explain outside JSON`
+        },
+        {
+            role: 'user',
+            content: `Classify this image request:\n${userRequest}`
+        }
+    ];
+
+    const raw = await requestStudyBuddyAiTextAsync(messages);
+    const parsed = parseImageParamsResponse(raw);
+    console.log('[StudyBuddyImage] AI safety raw:', raw);
+
+    if (parsed && typeof parsed.safe === 'boolean') {
+        return {
+            safe: parsed.safe,
+            reason: String(parsed.reason || '').trim()
+        };
+    }
+
+    throw new Error('Image safety classifier returned invalid JSON.');
+}
+
+function buildInfographicThemePrompt(input) {
+    const theme = String(input || '').trim();
+    return `Create a clean educational vocabulary infographic illustrating words related to this theme: ${theme}
+
+The vocabulary may include objects, natural features, environments, weather phenomena, human actions, facial expressions, or abstract concepts.
+
+Requirements:
+
+- Do NOT include any title or header text.
+- Do NOT include any Vietnamese or non-English text.
+- All labels must be in English only.
+- Use lowercase headword/base form for labels.
+- Include 10–14 labeled vocabulary items.
+- Every vocabulary item must have its label visibly written inside the image.
+- Each concept must have a thin pointer line connecting the illustration to its label.
+- One label per concept. No unlabeled objects. No extra labels beyond the chosen vocabulary.
+- If the concept is not a physical object (for example weather, emotion, or action), illustrate a clear visual scene that represents it.
+
+Examples of acceptable vocabulary types:
+- geographical features (estuary, mangrove forest, glacier)
+- weather events (blizzard, thunderstorm, drought)
+- human actions (frown, whisper, shrug)
+- environments (wetland, coral reef)
+- processes or phenomena (erosion, evaporation)
+
+Design style:
+- clean educational infographic
+- minimalist composition
+- light neutral background
+- soft lighting
+- clear spacing
+- consistent sans-serif labels
+- thin pointer lines
+- realistic illustrations or scenes
+
+If any label sounds unnatural or like a direct translation, replace it with a natural English headword.`;
+}
+
+async function generateInfographicWordList(theme) {
+    const raw = await requestStudyBuddyAiTextAsync([
+        {
+            role: 'system',
+            content: `You create English vocabulary lists for educational infographics.
+
+Return ONLY plain text in exactly this format:
+Word list (comma separated):
+word1, word2, word3
+
+Rules:
+- English only
+- lowercase labels
+- 10 to 14 items
+- use natural headwords/base forms
+- no explanation`
+        },
+        {
+            role: 'user',
+            content: `Theme: ${theme}`
+        }
+    ]);
+
+    const cleaned = String(raw || '').trim().replace(/^```(?:text)?/i, '').replace(/```$/i, '').trim();
+    const match = cleaned.match(/Word list \(comma separated\):\s*([\s\S]+)/i);
+    const words = (match ? match[1] : cleaned)
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+        .slice(0, 14);
+
+    if (words.length < 5) {
+        throw new Error('Could not generate a valid infographic word list.');
+    }
+
+    return `Word list (comma separated):\n${words.join(', ')}`;
+}
+
+function parseInfographicWordList(wordListText) {
+    const cleaned = String(wordListText || '').trim();
+    const match = cleaned.match(/Word list \(comma separated\):\s*([\s\S]+)/i);
+    return (match ? match[1] : cleaned)
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+        .slice(0, 14);
+}
+
+async function generateInfographicThemeLabel(theme, wordListText) {
+    const raw = await requestStudyBuddyAiTextAsync([
+        {
+            role: 'system',
+            content: `You create a short English-only theme label for an educational vocabulary infographic.
+
+Return ONLY plain text.
+
+Rules:
+- English only
+- 2 to 5 words
+- short natural category phrase
+- no punctuation except spaces or hyphen if needed
+- no explanation`
+        },
+        {
+            role: 'user',
+            content: `Original user theme: ${theme}\n${wordListText}\n\nReturn one short English category label that best fits the listed vocabulary.`
+        }
+    ]);
+
+    const cleaned = String(raw || '')
+        .trim()
+        .replace(/^```(?:text)?/i, '')
+        .replace(/```$/i, '')
+        .trim()
+        .split('\n')[0]
+        .trim()
+        .replace(/[.:;!?]+$/g, '');
+
+    if (!looksEnglishImagePrompt(cleaned)) {
+        return 'vocabulary theme';
+    }
+
+    const words = cleaned.match(/[A-Za-z-]+/g) || [];
+    if (words.length < 2 || words.length > 5) {
+        return 'vocabulary theme';
+    }
+
+    return words.join(' ');
+}
+
+function buildInfographicChatResponse(imageUrl, wordListText) {
+    return [
+        `[IMG ${imageUrl}]`,
+        '',
+        wordListText
+    ].join('\n');
+}
+
+function normalizeIncomingImageSettings(raw) {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const safeMode = source.safeMode !== false;
+    const aspectRatioMode = source.aspectRatioMode === 'manual' ? 'manual' : 'auto';
+    const aspectRatio = IMAGE_RATIO_MAP[String(source.aspectRatio || '').trim().toLowerCase()]
+        ? String(source.aspectRatio).trim().toLowerCase()
+        : IMAGE_PARAM_DEFAULTS.aspect_ratio;
+    const presetMode = source.presetMode === 'manual' ? 'manual' : 'auto';
+    const preset = IMAGE_PRESETS[String(source.preset || '').trim().toLowerCase()]
+        ? String(source.preset).trim().toLowerCase()
+        : 'balanced';
+    const stepsMode = source.stepsMode === 'manual' ? 'manual' : 'auto';
+    const steps = Number.isFinite(Number(source.steps)) ? Math.max(15, Math.min(30, Math.round(Number(source.steps)))) : IMAGE_PARAM_DEFAULTS.steps;
+    const cfgMode = source.cfgMode === 'manual' ? 'manual' : 'auto';
+    const cfg = Number.isFinite(Number(source.cfg)) ? Math.max(5, Math.min(9, Math.round(Number(source.cfg) * 2) / 2)) : IMAGE_PARAM_DEFAULTS.cfg;
+    const seedMode = source.seedMode === 'manual' ? 'manual' : 'auto';
+    const seed = source.seed === null || source.seed === undefined || source.seed === ''
+        ? null
+        : (Number.isFinite(Number(source.seed)) ? Math.max(1, Math.floor(Number(source.seed))) : null);
+    const negativeMode = source.negativeMode === 'manual' ? 'manual' : 'auto';
+    const negative = String(source.negative || '').trim();
+
+    return {
+        safeMode,
+        aspectRatioMode,
+        aspectRatio,
+        presetMode,
+        preset,
+        stepsMode,
+        steps,
+        cfgMode,
+        cfg,
+        seedMode,
+        seed,
+        negativeMode,
+        negative
+    };
+}
+
+function applyImageModeOverrides(imageSettings, mode) {
+    const next = { ...imageSettings };
+    if (mode === 'infographic') {
+        next.aspectRatio = 'landscape';
+        next.preset = 'ultra';
+        next.steps = 30;
+        next.cfg = 8;
+    }
+    return next;
+}
+
+async function buildInfographicImageParams(theme, wordListText, rawImageSettings) {
+    const imageSettings = applyImageModeOverrides(normalizeIncomingImageSettings(rawImageSettings), 'infographic');
+    const words = parseInfographicWordList(wordListText);
+    if (words.length < 5) {
+        throw new Error('Could not generate enough infographic labels.');
+    }
+
+    const rawThemeLabel = String(theme || '').trim();
+    const themeLabel = looksEnglishImagePrompt(rawThemeLabel)
+        ? rawThemeLabel
+        : await generateInfographicThemeLabel(rawThemeLabel, wordListText);
+    const prompt = uniqueCommaPhrases(
+        `clean educational vocabulary infographic about ${themeLabel}`,
+        `use exactly these lowercase English labels written visibly inside the image: ${words.join(', ')}`,
+        `${words.length} labeled vocabulary items`,
+        'every listed word must appear as a visible label in the image',
+        'one pointer line per label connecting to the correct illustration',
+        'one label per concept',
+        'no unlabeled objects',
+        'no extra labels beyond the listed words',
+        'clear realistic illustration or scene for every label',
+        'minimalist poster composition',
+        'light neutral background',
+        'soft studio lighting',
+        'clear spacing',
+        'consistent sans-serif labels',
+        'crisp readable text',
+        'educational poster layout',
+        'print-quality educational poster',
+        'ultra sharp',
+        'maximum clarity',
+        'high detail',
+        'cinematic'
+    );
+
+    const negative = uniqueCommaPhrases(
+        BASE_NEGATIVE_PROMPT,
+        'blurry text, unreadable labels, duplicate labels, cropped labels, missing labels, unlabeled objects, extra labels, cluttered layout, overlapping objects, missing pointer lines'
+    );
+
+    const params = {
+        prompt,
+        negative,
+        aspect_ratio: 'landscape',
+        steps: 30,
+        cfg: 8,
+        seed: imageSettings.seedMode === 'manual' ? imageSettings.seed : null
+    };
+
+    if (imageSettings.negativeMode === 'manual') {
+        params.negative = uniqueCommaPhrases(params.negative, imageSettings.negative);
+    }
+
+    return { params, wordListText, words, themeLabel };
+}
+
+function applyManualImageSettings(params, imageSettings) {
+    const next = { ...params };
+
+    if (imageSettings.presetMode === 'manual' && IMAGE_PRESETS[imageSettings.preset]) {
+        next.steps = IMAGE_PRESETS[imageSettings.preset].steps;
+        next.cfg = IMAGE_PRESETS[imageSettings.preset].cfg;
+    }
+    if (imageSettings.aspectRatioMode === 'manual') {
+        next.aspect_ratio = imageSettings.aspectRatio;
+    }
+    if (imageSettings.stepsMode === 'manual') {
+        next.steps = imageSettings.steps;
+    }
+    if (imageSettings.cfgMode === 'manual') {
+        next.cfg = imageSettings.cfg;
+    }
+    if (imageSettings.seedMode === 'manual') {
+        next.seed = imageSettings.seed;
+    }
+    if (imageSettings.negativeMode === 'manual') {
+        next.negative = uniqueCommaPhrases(BASE_NEGATIVE_PROMPT, imageSettings.negative);
+    }
+
+    return next;
+}
+
+function normalizeImageParams(params, userRequest, imageSettings = normalizeIncomingImageSettings()) {
+    const rawPrompt = String(params?.prompt || '').trim();
+    const rawNegative = String(params?.negative || '').trim();
+    const rawAspect = String(params?.aspect_ratio || '').trim().toLowerCase();
+    const aspect_ratio = IMAGE_RATIO_MAP[rawAspect] ? rawAspect : IMAGE_PARAM_DEFAULTS.aspect_ratio;
+    const steps = Number.isFinite(Number(params?.steps)) ? Math.max(15, Math.min(30, Math.round(Number(params.steps)))) : IMAGE_PARAM_DEFAULTS.steps;
+    const cfg = Number.isFinite(Number(params?.cfg)) ? Math.max(5, Math.min(9, Number(params.cfg))) : IMAGE_PARAM_DEFAULTS.cfg;
+    const seed = params?.seed === null || params?.seed === undefined || params?.seed === ''
+        ? null
+        : (Number.isFinite(Number(params.seed)) ? Math.max(1, Math.floor(Number(params.seed))) : null);
+
+    const fallbackPrompt = `${userRequest}, soft natural lighting, 85mm lens, shallow depth of field, ultra realistic, cinematic`;
+    const prompt = uniqueCommaPhrases(
+        rawPrompt || fallbackPrompt,
+        'high detail',
+        'cinematic'
+    );
+
+    const negative = uniqueCommaPhrases(
+        BASE_NEGATIVE_PROMPT,
+        rawNegative
+    );
+
+    return applyManualImageSettings({
+        prompt,
+        negative,
+        aspect_ratio,
+        steps,
+        cfg,
+        seed
+    }, imageSettings);
+}
+
+function getMissingImageParamFields(params, imageSettings = normalizeIncomingImageSettings()) {
+    const missing = [];
+    if (!params || typeof params !== 'object') return ['prompt', 'negative', 'aspect_ratio', 'steps', 'cfg', 'seed'];
+    if (!String(params.prompt || '').trim() || !looksEnglishImagePrompt(params.prompt)) missing.push('prompt');
+    if (imageSettings.negativeMode !== 'manual' && !String(params.negative || '').trim()) missing.push('negative');
+    if (imageSettings.aspectRatioMode !== 'manual' && !IMAGE_RATIO_MAP[String(params.aspect_ratio || '').trim().toLowerCase()]) missing.push('aspect_ratio');
+    if (imageSettings.stepsMode !== 'manual' && imageSettings.presetMode !== 'manual' && !Number.isFinite(Number(params.steps))) missing.push('steps');
+    if (imageSettings.cfgMode !== 'manual' && imageSettings.presetMode !== 'manual' && !Number.isFinite(Number(params.cfg))) missing.push('cfg');
+    if (imageSettings.seedMode !== 'manual' && !(params.seed === null || params.seed === undefined || Number.isFinite(Number(params.seed)))) missing.push('seed');
+    return missing;
+}
+
+async function generateImageParamsWithRetry(userRequest, rawImageSettings, mode = 'image') {
+    const imageSettings = applyImageModeOverrides(normalizeIncomingImageSettings(rawImageSettings), mode);
+    if (imageSettings.safeMode && detectUnsafeImageRequest(userRequest)) {
+        throw new Error('Request violated standard rules and considered unsafe.');
+    }
+    if (imageSettings.safeMode) {
+        const safetyResult = await classifyImageSafetyWithAi(userRequest);
+        if (!safetyResult.safe) {
+            throw new Error(`Unsafe request ${safetyResult.reason ? ` (${safetyResult.reason})` : ''}.`);
+        }
+    }
+    const promptInstructions = `You are an image prompt generator for Stable Diffusion.
+
+Output ONLY valid JSON with the following fields:
+- prompt (string)
+- negative (string)
+- aspect_ratio ("portrait" | "square" | "landscape")
+- steps (integer 15–30)
+- cfg (float 5–9)
+- seed (integer or null)
+
+Rules:
+- prompt and negative must be English only
+- prompt must be detailed, include subject, lighting, camera, style
+- prompt format should feel like: [subject], [details], [lighting], [camera], [style], high detail, cinematic
+- never use Vietnamese words such as "meo", "meo con", "ao dai" in Vietnamese spelling, etc. Translate them to natural English
+- if safe mode is ON, refuse any sexual, nude, pornographic, gory, bloody, stabbing, murder, or graphic violence request by returning {"refuse":"unsafe"}
+- negative must include common defects
+- base negative prompt is: ${BASE_NEGATIVE_PROMPT}
+- You may only append more negative terms. Do not remove or replace the base negative prompt.
+- Steps default to 20. Use 25-30 only when the request clearly needs high detail.
+- CFG default to 7. Prefer 6-7 for realistic images, 7-9 for more creative images.
+- Aspect ratio should match the subject when obvious.
+- Style examples you may reflect in prompt when appropriate:
+  cinematic: ${IMAGE_STYLE_HINTS.cinematic}
+  portrait: ${IMAGE_STYLE_HINTS.portrait}
+  anime: ${IMAGE_STYLE_HINTS.anime}
+  realistic: ${IMAGE_STYLE_HINTS.realistic}
+- DO NOT invent fields
+- DO NOT output explanation`;
+
+    const manualHints = [
+        imageSettings.aspectRatioMode === 'manual' ? `Locked aspect_ratio: ${imageSettings.aspectRatio}` : '',
+        imageSettings.presetMode === 'manual' ? `Locked preset: ${imageSettings.preset} (${IMAGE_PRESETS[imageSettings.preset].steps} steps, cfg ${IMAGE_PRESETS[imageSettings.preset].cfg})` : '',
+        imageSettings.stepsMode === 'manual' ? `Locked steps: ${imageSettings.steps}` : '',
+        imageSettings.cfgMode === 'manual' ? `Locked cfg: ${imageSettings.cfg}` : '',
+        imageSettings.seedMode === 'manual' ? `Locked seed: ${imageSettings.seed ?? 'null'}` : '',
+        imageSettings.negativeMode === 'manual' ? `Locked extra negative terms: ${imageSettings.negative || '(none)'}` : ''
+    ].filter(Boolean).join('\n');
+
+    let lastParsed = null;
+    let lastMissing = [];
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const messages = [
+            { role: 'system', content: promptInstructions },
+            {
+                role: 'user',
+                content: attempt === 1
+                    ? `User request: ${userRequest}${mode === 'infographic' ? '\n\nThis must be an educational infographic image request, not a normal illustration.' : ''}${manualHints ? `\n\nManual settings locked by the app:\n${manualHints}` : ''}`
+                    : `User request: ${userRequest}${mode === 'infographic' ? '\n\nThis must be an educational infographic image request, not a normal illustration.' : ''}${manualHints ? `\n\nManual settings locked by the app:\n${manualHints}` : ''}\n\nYour previous JSON was missing or invalid for these fields: ${lastMissing.join(', ')}.\nReturn ONLY corrected JSON with all required fields present.`
+            }
+        ];
+
+        const raw = await requestStudyBuddyAiTextAsync(messages);
+        const parsed = parseImageParamsResponse(raw);
+        if (parsed?.refuse === 'unsafe') {
+            throw new Error('Yeu cau tao hinh bi tu choi vi co noi dung nhay cam hoac bao luc.');
+        }
+        const missing = getMissingImageParamFields(parsed, imageSettings);
+        console.log(`[StudyBuddyImage] AI params raw (attempt ${attempt}):`, raw);
+
+        if (missing.length === 0) {
+            const normalized = normalizeImageParams(parsed, userRequest, imageSettings);
+            if (imageSettings.safeMode && detectUnsafeImageRequest(normalized.prompt)) {
+                throw new Error('Unsafe request');
+            }
+            if (imageSettings.safeMode) {
+                const promptSafety = await classifyImageSafetyWithAi(normalized.prompt);
+                if (!promptSafety.safe) {
+                    throw new Error(`Unsafe request ${promptSafety.reason ? ` (${promptSafety.reason})` : ''}.`);
+                }
+            }
+            return normalized;
+        }
+
+        lastParsed = parsed;
+        lastMissing = missing;
+        console.warn(`[StudyBuddyImage] Missing/invalid image params (attempt ${attempt}):`, missing);
+    }
+
+    const fallback = normalizeImageParams(lastParsed || {}, userRequest, imageSettings);
+    if (!looksEnglishImagePrompt(fallback.prompt)) {
+        throw new Error('Could not generate a valid English-only image prompt. Please retry.');
+    }
+    if (imageSettings.safeMode && detectUnsafeImageRequest(fallback.prompt)) {
+        throw new Error('Unsafe request.');
+    }
+    if (imageSettings.safeMode) {
+        const promptSafety = await classifyImageSafetyWithAi(fallback.prompt);
+        if (!promptSafety.safe) {
+            throw new Error(`Unsafe request${promptSafety.reason ? ` (${promptSafety.reason})` : ''}.`);
+        }
+    }
+    return fallback;
+}
+
+function buildComfyWorkflow(imageParams) {
+    const ratio = IMAGE_RATIO_MAP[imageParams.aspect_ratio] || IMAGE_RATIO_MAP.square;
+    const seed = imageParams.seed ?? Math.floor(Math.random() * 2147483647);
+    const filename = `studybuddy_${Date.now()}`;
+    const template = fs.readFileSync(IMAGE_FLOW_PATH, 'utf8');
+    const workflowText = template
+        .replace('"__PROMPT__"', JSON.stringify(imageParams.prompt))
+        .replace('"__NEGATIVE__"', JSON.stringify(imageParams.negative))
+        .replace('__WIDTH__', String(ratio.width))
+        .replace('__HEIGHT__', String(ratio.height))
+        .replace('__SEED__', String(seed))
+        .replace('__STEPS__', String(imageParams.steps))
+        .replace('__CFG__', String(imageParams.cfg))
+        .replace('"__FILENAME__"', JSON.stringify(filename));
+    return JSON.parse(workflowText);
+}
+
+function createComfyClientId() {
+    return `studybuddy_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createComfyProgressSocket(clientId, promptId, onProgress) {
+    if (typeof WebSocket !== 'function') {
+        return { close() {} };
+    }
+
+    const wsUrl = new URL(COMFY_UI_URL);
+    wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsUrl.pathname = '/ws';
+    wsUrl.searchParams.set('clientId', clientId);
+
+    let closed = false;
+    let lastPercent = -1;
+    let didReachCompletion = false;
+
+    const socket = new WebSocket(wsUrl.toString());
+    socket.addEventListener('message', (event) => {
+        try {
+            const msg = JSON.parse(String(event.data || ''));
+            if (msg?.type === 'progress') {
+                const sourcePromptId = msg?.data?.prompt_id;
+                if (sourcePromptId && sourcePromptId !== promptId) return;
+                const value = Number(msg?.data?.value);
+                const max = Number(msg?.data?.max);
+                if (!Number.isFinite(value) || !Number.isFinite(max) || max <= 0) return;
+                const percent = Math.max(0, Math.min(100, Math.floor((value / max) * 100)));
+                if (percent === lastPercent) return;
+                lastPercent = percent;
+                onProgress(percent);
+                if (percent >= 100) {
+                    didReachCompletion = true;
+                }
+                return;
+            }
+
+            if (msg?.type === 'executing') {
+                const sourcePromptId = msg?.data?.prompt_id;
+                if (sourcePromptId && sourcePromptId !== promptId) return;
+                if (msg?.data?.node == null && !didReachCompletion) {
+                    didReachCompletion = true;
+                    if (lastPercent < 100) {
+                        lastPercent = 100;
+                        onProgress(100);
+                    }
+                }
+            }
+        } catch {
+            // Ignore malformed progress payloads from ComfyUI.
+        }
+    });
+
+    const close = () => {
+        if (closed) return;
+        closed = true;
+        try {
+            socket.close();
+        } catch {
+            // ignore close failures
+        }
+    };
+
+    socket.addEventListener('error', () => {
+        // Progress is best-effort; history polling remains the source of truth.
+    });
+
+    return { close };
+}
+
+async function queueComfyPrompt(workflow, clientId) {
+    const requestPayload = clientId
+        ? { ...workflow, client_id: clientId }
+        : workflow;
+    const payload = Buffer.from(JSON.stringify(requestPayload));
+    const response = await httpRequestAsync(`${COMFY_UI_URL}/prompt`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': payload.length
+        }
+    }, payload);
+
+    if (response.statusCode >= 400) {
+        throw new Error(`ComfyUI prompt error ${response.statusCode}`);
+    }
+
+    const data = JSON.parse(response.body.toString('utf8'));
+    if (!data?.prompt_id) {
+        throw new Error('ComfyUI did not return prompt_id');
+    }
+    return data.prompt_id;
+}
+
+function extractFirstComfyImage(historyJson, promptId) {
+    const historyEntry = historyJson?.[promptId] || historyJson?.prompt_id || historyJson;
+    const outputs = historyEntry?.outputs || {};
+    for (const nodeOutput of Object.values(outputs)) {
+        if (Array.isArray(nodeOutput?.images) && nodeOutput.images.length > 0) {
+            return nodeOutput.images[0];
+        }
+    }
+    return null;
+}
+
+async function waitForComfyImage(promptId, options = {}) {
+    const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 180000;
+    const clientId = String(options.clientId || '').trim();
+    const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    const progressSocket = onProgress && clientId
+        ? createComfyProgressSocket(clientId, promptId, onProgress)
+        : null;
+    const started = Date.now();
+    try {
+        while (Date.now() - started < timeoutMs) {
+            const response = await httpRequestAsync(`${COMFY_UI_URL}/history/${encodeURIComponent(promptId)}`, {
+                method: 'GET',
+                timeout: 30000
+            });
+            if (response.statusCode < 400) {
+                const data = JSON.parse(response.body.toString('utf8'));
+                const imageInfo = extractFirstComfyImage(data, promptId);
+                if (imageInfo) {
+                    return imageInfo;
+                }
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+        }
+    } finally {
+        progressSocket?.close();
+    }
+    throw new Error('Timed out waiting for ComfyUI image');
+}
+
+async function downloadComfyImage(imageInfo) {
+    const viewUrl = new URL(`${COMFY_UI_URL}/view`);
+    viewUrl.searchParams.set('filename', imageInfo.filename);
+    viewUrl.searchParams.set('subfolder', imageInfo.subfolder || '');
+    viewUrl.searchParams.set('type', imageInfo.type || 'output');
+    const response = await httpRequestAsync(viewUrl.toString(), { method: 'GET', timeout: 120000 });
+    if (response.statusCode >= 400) {
+        throw new Error(`ComfyUI image download failed ${response.statusCode}`);
+    }
+    return response.body;
+}
+
+function saveGeneratedImage(buffer, originalFilename) {
+    const mappings = loadFolderMappings();
+    const targetDir = mappings.Image;
+    if (!targetDir) {
+        throw new Error('Image mapping not found');
+    }
+    if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const extension = path.extname(originalFilename || '').toLowerCase() || '.png';
+    const safeName = `studybuddy_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${extension}`;
+    const filePath = path.join(targetDir, safeName);
+    fs.writeFileSync(filePath, buffer);
+    return {
+        filename: safeName,
+        url: `/api/images/stream/Image/${safeName}`
+    };
 }
 
 function looksVietnamese(text) {
@@ -920,6 +1728,106 @@ router.post('/studybuddy/search', (req, res) => {
             });
         }, 1, stages, sendStage);
     }, 1, searchSection);
+});
+
+router.post('/studybuddy/image', async (req, res) => {
+    const data = String(req.body?.data || '').trim();
+    const mode = String(req.body?.mode || 'image').trim().toLowerCase() === 'infographic' ? 'infographic' : 'image';
+    const imageSettings = normalizeIncomingImageSettings(req.body?.settings);
+    const wantsStream = String(req.headers.accept || '').includes('text/event-stream');
+
+    const sendProgress = (progress) => {
+        if (wantsStream && !res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ type: 'progress', progress: Math.max(0, Math.min(100, Math.floor(Number(progress) || 0))) })}\n\n`);
+        }
+    };
+
+    const sendFinal = (payload) => {
+        if (wantsStream) {
+            if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ type: 'final', ...payload })}\n\n`);
+                res.end();
+            }
+            return;
+        }
+        return res.json(payload);
+    };
+
+    const sendError = (status, error) => {
+        if (wantsStream) {
+            if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`);
+                res.end();
+            }
+            return;
+        }
+        return res.status(status).json({ error });
+    };
+
+    if (wantsStream) {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive'
+        });
+    }
+
+    if (!data) {
+        return sendError(400, 'Missing image request data');
+    }
+
+    try {
+        sendProgress(4);
+        let imageParams;
+        let infographicWordList = '';
+        if (mode === 'infographic') {
+            const wordListText = await generateInfographicWordList(data);
+            infographicWordList = wordListText;
+            const built = await buildInfographicImageParams(data, wordListText, imageSettings);
+            imageParams = built.params;
+        } else {
+            imageParams = await generateImageParamsWithRetry(data, imageSettings, mode);
+        }
+        console.log('[StudyBuddyImage] Original request:', data);
+        console.log('[StudyBuddyImage] Mode:', mode);
+        console.log('[StudyBuddyImage] Incoming settings:', imageSettings);
+        console.log('[StudyBuddyImage] Final params:', imageParams);
+        sendProgress(10);
+
+        const clientId = createComfyClientId();
+        const workflow = buildComfyWorkflow(imageParams);
+        const promptId = await queueComfyPrompt(workflow, clientId);
+
+        let lastProgressStage = -1;
+        sendProgress(14);
+        const imageInfo = await waitForComfyImage(promptId, {
+            clientId,
+            onProgress: (percent) => {
+                const rounded = Math.max(14, Math.min(96, Math.floor(percent)));
+                if (rounded === lastProgressStage) return;
+                lastProgressStage = rounded;
+                sendProgress(rounded);
+            }
+        });
+        sendProgress(97);
+        const imageBuffer = await downloadComfyImage(imageInfo);
+        const saved = saveGeneratedImage(imageBuffer, imageInfo.filename);
+        sendProgress(100);
+
+        let response = `[IMG ${saved.url}]`;
+        if (mode === 'infographic') {
+            response = buildInfographicChatResponse(saved.url, infographicWordList);
+        }
+
+        return sendFinal({
+            params: imageParams,
+            imageUrl: saved.url,
+            response
+        });
+    } catch (error) {
+        console.error('[StudyBuddyImage] Generation failed:', error);
+        return sendError(500, error.message || 'Failed to generate image.');
+    }
 });
 
 module.exports = router;

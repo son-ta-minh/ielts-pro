@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, AppView, WordQuality, VocabularyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyMemoryChunk, WordFamily } from '../../app/types';
+import { User, AppView, WordQuality, VocabularyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily } from '../../app/types';
 import { Bot, NotebookPen, ListCollapse, BringToFront, Blocks, X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star, Sparkles, Save } from 'lucide-react';
 import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
@@ -45,6 +45,7 @@ import {
     splitSpeakableSentences
 } from '../../utils/studyBuddyChatUtils';
 import { mergeStudyBuddyMemoryChunks, parseStudyBuddyMemoryDirectives } from '../../utils/studyBuddyMemoryUtils';
+import { normalizeStudyBuddyImageSettings } from '../../utils/studyBuddyImageUtils';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
@@ -183,6 +184,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [chatHistory, setChatHistory] = useState<ChatTurn[]>([]);
     const [chatInput, setChatInput] = useState('');
     const [memoryChunks, setMemoryChunks] = useState<StudyBuddyMemoryChunk[]>(user.studyBuddyMemory || []);
+    const [imageSettings, setImageSettings] = useState<StudyBuddyImageSettings>(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings));
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
     const [isContextAware, setIsContextAware] = useState(false);
@@ -221,6 +223,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const conversationTranscriptRef = useRef('');
     const conversationPendingSubmitRef = useRef(false);
     const memoryChunksRef = useRef<StudyBuddyMemoryChunk[]>(user.studyBuddyMemory || []);
+    const imageSettingsRef = useRef<StudyBuddyImageSettings>(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings));
     const conversationSilenceTimeoutRef = useRef<number | null>(null);
     const conversationRestartTimeoutRef = useRef<number | null>(null);
     const chatAbortReasonRef = useRef<'manual' | 'conversation-interrupt' | null>(null);
@@ -237,6 +240,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const isOpenRef = useRef(false);
     const messageRef = useRef<Message | null>(null);
     const lastCoachLookupRef = useRef<{ word: string; at: number }>({ word: '', at: 0 });
+    const imageSettingsPersistSnapshotRef = useRef(JSON.stringify(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings)));
+    const imageSettingsPersistTimeoutRef = useRef<number | null>(null);
     
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
@@ -246,6 +251,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         let isMounted = true;
         setMemoryChunks(user.studyBuddyMemory || []);
         memoryChunksRef.current = user.studyBuddyMemory || [];
+        const normalizedUserImageSettings = normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings);
+        setImageSettings(normalizedUserImageSettings);
+        imageSettingsRef.current = normalizedUserImageSettings;
+        imageSettingsPersistSnapshotRef.current = JSON.stringify(normalizedUserImageSettings);
 
         void (async () => {
             const storedUser = (await getAllUsers()).find((item) => item.id === user.id);
@@ -253,12 +262,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                 setMemoryChunks(storedUser.studyBuddyMemory);
                 memoryChunksRef.current = storedUser.studyBuddyMemory;
             }
+            if (isMounted && storedUser?.studyBuddyImageSettings) {
+                const normalizedStoredImageSettings = normalizeStudyBuddyImageSettings(storedUser.studyBuddyImageSettings);
+                setImageSettings(normalizedStoredImageSettings);
+                imageSettingsRef.current = normalizedStoredImageSettings;
+                imageSettingsPersistSnapshotRef.current = JSON.stringify(normalizedStoredImageSettings);
+            }
         })();
 
         return () => {
             isMounted = false;
         };
-    }, [user.id, user.studyBuddyMemory]);
+    }, [user.id, user.studyBuddyMemory, user.studyBuddyImageSettings]);
 
     const persistMemoryChunks = async (nextChunks: StudyBuddyMemoryChunk[]) => {
         setMemoryChunks(nextChunks);
@@ -282,6 +297,34 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setMemoryChunks(nextChunks);
         await persistMemoryChunks(nextChunks);
     };
+
+    useEffect(() => {
+        const normalized = normalizeStudyBuddyImageSettings(imageSettings);
+        imageSettingsRef.current = normalized;
+        const serialized = JSON.stringify(normalized);
+        if (serialized === imageSettingsPersistSnapshotRef.current) return;
+
+        if (imageSettingsPersistTimeoutRef.current !== null) {
+            window.clearTimeout(imageSettingsPersistTimeoutRef.current);
+        }
+
+        imageSettingsPersistTimeoutRef.current = window.setTimeout(async () => {
+            const storedUser = (await getAllUsers()).find((item) => item.id === user.id) || user;
+            await saveUser({
+                ...storedUser,
+                studyBuddyImageSettings: normalized
+            });
+            imageSettingsPersistSnapshotRef.current = serialized;
+            imageSettingsPersistTimeoutRef.current = null;
+        }, 250);
+
+        return () => {
+            if (imageSettingsPersistTimeoutRef.current !== null) {
+                window.clearTimeout(imageSettingsPersistTimeoutRef.current);
+                imageSettingsPersistTimeoutRef.current = null;
+            }
+        };
+    }, [imageSettings, user.id]);
 
     const restoreSelectedRange = () => {
         const savedRange = selectedRangeRef.current;
@@ -410,6 +453,75 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             parsedPairs: parsedPairs.length > 0 ? parsedPairs : fallbackPairs,
             parsedWordFamily: parsedWordFamily.length > 0 ? parsedWordFamily : fallbackWordFamily
         });
+    };
+
+    const extractImagePathFromChatTurn = (turn: ChatTurn) => {
+        const match = String(turn.content || '').match(/\[IMG\s+([^\]|]+)(?:\|[^\]]+)?\]/i);
+        return match?.[1]?.trim() || '';
+    };
+
+    const resolveImageUrlForChatTurn = (turn: ChatTurn) => {
+        const pathOrUrl = extractImagePathFromChatTurn(turn);
+        if (!pathOrUrl) return '';
+        if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+        const serverUrl = getServerUrl(config);
+        const cleanPath = pathOrUrl.startsWith('/') ? pathOrUrl.slice(1) : pathOrUrl;
+        return cleanPath.startsWith('api/')
+            ? `${serverUrl}/${cleanPath}`
+            : `${serverUrl}/api/images/stream/${cleanPath}`;
+    };
+
+    const handleCopyChatImageUrl = async (url: string) => {
+        try {
+            await navigator.clipboard.writeText(url);
+            showToast('Image URL copied.', 'success');
+        } catch {
+            showToast('Could not copy image URL.', 'error');
+        }
+    };
+
+    const handleSaveChatImage = (url: string) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = '';
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleDeleteChatTurn = async (turn: ChatTurn) => {
+        const imagePath = extractImagePathFromChatTurn(turn);
+        const imageUrl = resolveImageUrlForChatTurn(turn);
+
+        setChatHistory((current) => current.filter((item) => item.id !== turn.id));
+
+        if (!imagePath || !imageUrl) {
+            return;
+        }
+
+        const shouldDeleteImage = window.confirm(
+            'Delete the image file too?\n\nOK: delete both the chat bubble and the image file.\nCancel: keep the image file and remove only the chat bubble.'
+        );
+
+        if (!shouldDeleteImage) return;
+
+        try {
+            const serverUrl = getServerUrl(config);
+            const fileName = imageUrl.split('/').pop() || '';
+            const res = await fetch(
+                `${serverUrl}/api/images/file?mapName=${encodeURIComponent('Image')}&filename=${encodeURIComponent(fileName)}`,
+                { method: 'DELETE' }
+            );
+            const payload = await res.json().catch(() => null);
+            if (!res.ok) {
+                throw new Error(payload?.error || 'Failed to delete image file.');
+            }
+            showToast('Image file deleted.', 'success');
+        } catch (error) {
+            console.error(error);
+            showToast('Chat bubble was removed, but the image file could not be deleted.', 'error');
+        }
     };
 
     const handleSaveChatSnippet = async () => {
@@ -1220,6 +1332,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         handleBackgroundChatRequest,
         handleChatCoachPromptToChat,
         handleChatCoachExplain,
+        handleChatCoachInfographic,
+        handleChatCoachImage,
         handleChatCoachSearch,
         handleChatCoachTest,
         handleChatCoachTranslate,
@@ -1278,6 +1392,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         chatConversationMaxChars: CHAT_CONVERSATION_MAX_CHARS,
         chatConversationMaxWords: CHAT_CONVERSATION_MAX_WORDS,
         getStudyBuddyMemoryChunks: () => memoryChunksRef.current,
+        getStudyBuddyImageSettings: () => imageSettingsRef.current,
         saveMemoryTexts,
     });
 
@@ -1709,6 +1824,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                         onViewWord={handleViewWord}
                                         onExamples={() => handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'))}
                                         onExplain={handleChatCoachExplain}
+                                        onImage={handleChatCoachImage}
+                                        onInfographic={handleChatCoachInfographic}
                                         onTest={handleChatCoachTest}
                                         onCollocations={() => handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'))}
                                         onParaphrase={() => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'))}
@@ -1720,6 +1837,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                     />
                                 }
                                 chatSaveModal={chatSaveModal}
+                                imageSettings={imageSettings}
                                 onToggleContextAware={() => setIsContextAware((prev) => !prev)}
                                 onToggleConversationMode={handleToggleConversationMode}
                                 onToggleChatAudio={() => setIsChatAudioEnabled((prev) => !prev)}
@@ -1737,6 +1855,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                     setIsChatOpen(false);
                                 }}
                                 onOpenSaveModal={openChatSaveModal}
+                                onCopyImageUrl={handleCopyChatImageUrl}
+                                onSaveImage={handleSaveChatImage}
+                                onDeleteTurn={handleDeleteChatTurn}
                                 onPointerDownInside={() => {
                                     disableSelectionPreservation();
                                 }}
@@ -1751,6 +1872,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 onToggleChatMic={handleToggleChatMic}
                                 onStopChatStream={stopChatStream}
                                 onSendChat={handleSendChat}
+                                onImageSettingsChange={setImageSettings}
                             />
                         )}
                         {isOpen && !menuPos && (
