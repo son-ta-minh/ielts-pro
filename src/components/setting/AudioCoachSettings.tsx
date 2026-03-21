@@ -1,16 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
-import { Save, ChevronDown, CheckCircle2, AlertCircle, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Volume2, Mic, Link, Edit3, Star } from 'lucide-react';
+import { Save, ChevronDown, CheckCircle2, AlertCircle, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Volume2, Mic, Link, Edit3, Star, Brain, Plus, Trash2 } from 'lucide-react';
 import { SystemConfig, CoachConfig, getServerUrl, saveConfig } from '../../app/settingsManager';
 import { fetchServerVoices, ServerVoicesResponse, speak, VoiceDefinition, resetAudioProtocolCache } from '../../utils/audio';
 import { AvatarSelectionModal } from '../common/AvatarSelectionModal';
-import { User } from '../../app/types';
+import { StudyBuddyMemoryChunk, User } from '../../app/types';
 import { useToast } from '../../contexts/ToastContext';
 
 interface AudioCoachSettingsProps {
     config: SystemConfig;
+    user: User;
     onConfigChange: (section: keyof SystemConfig, key: any, value: any) => void;
     onSaveSettings: () => void;
+    onUpdateUser: (user: User) => Promise<void>;
 }
 
 const VoiceSelector: React.FC<{
@@ -114,10 +116,11 @@ const VoiceSelector: React.FC<{
     );
 };
 
-export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, onConfigChange, onSaveSettings }) => {
+export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, user, onConfigChange, onSaveSettings, onUpdateUser }) => {
     const [serverData, setServerData] = useState<ServerVoicesResponse | null>(null);
     const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
     const [onlyHighQuality, setOnlyHighQuality] = useState(false);
+    const [memoryDrafts, setMemoryDrafts] = useState<StudyBuddyMemoryChunk[]>(user.studyBuddyMemory || []);
     const { showToast } = useToast();
     
     const fullUrl = getServerUrl(config);
@@ -134,6 +137,10 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
     useEffect(() => {
         checkServers();
     }, [fullUrl]);
+
+    useEffect(() => {
+        setMemoryDrafts(user.studyBuddyMemory || []);
+    }, [user.studyBuddyMemory]);
 
     // Enhanced handler with Auto-Save capability
     const handleUpdateCoach = (updates: Partial<CoachConfig>, shouldPersist = false) => {
@@ -181,6 +188,46 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
         lastLogin: 0,
         adventure: {}
     } as User;
+
+    const persistMemoryDrafts = async (nextDrafts: StudyBuddyMemoryChunk[]) => {
+        setMemoryDrafts(nextDrafts);
+        await onUpdateUser({
+            ...user,
+            studyBuddyMemory: nextDrafts
+        });
+    };
+
+    const handleAddMemory = async () => {
+        const nextDrafts = [
+            {
+                id: `sbmem-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                text: '',
+                createdAt: Date.now(),
+                source: 'manual' as const,
+            },
+            ...memoryDrafts
+        ];
+        await persistMemoryDrafts(nextDrafts);
+    };
+
+    const handleChangeMemoryText = async (memoryId: string, text: string) => {
+        const nextDrafts = memoryDrafts.map((chunk) =>
+            chunk.id === memoryId ? { ...chunk, text } : chunk
+        );
+        setMemoryDrafts(nextDrafts);
+    };
+
+    const handleBlurMemory = async () => {
+        const cleaned = memoryDrafts
+            .map((chunk) => ({ ...chunk, text: chunk.text.trim() }))
+            .filter((chunk) => chunk.text);
+        await persistMemoryDrafts(cleaned);
+    };
+
+    const handleDeleteMemory = async (memoryId: string) => {
+        const nextDrafts = memoryDrafts.filter((chunk) => chunk.id !== memoryId);
+        await persistMemoryDrafts(nextDrafts);
+    };
 
     return (
         <section className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col space-y-8 animate-in fade-in duration-300">
@@ -326,6 +373,48 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
                         onPreview={(v, a) => handleVoicePreview('vi', v, a)}
                         filterHighQuality={onlyHighQuality}
                     />
+                </div>
+            </div>
+
+            <div className="space-y-6 pt-4 border-t border-neutral-100">
+                <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest">
+                        <Brain size={12}/> AI Memory
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleAddMemory}
+                        className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-50"
+                    >
+                        <Plus size={12} />
+                        Add Memory
+                    </button>
+                </div>
+                <div className="space-y-3">
+                    {memoryDrafts.length ? memoryDrafts.map((chunk) => (
+                        <div key={chunk.id} className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50/70 p-3">
+                            <textarea
+                                value={chunk.text}
+                                onChange={(e) => void handleChangeMemoryText(chunk.id, e.target.value)}
+                                onBlur={() => void handleBlurMemory()}
+                                rows={2}
+                                placeholder="Memory chunk..."
+                                className="min-h-[4.5rem] flex-1 resize-y rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition-colors focus:border-neutral-900"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => void handleDeleteMemory(chunk.id)}
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                                title="Delete memory"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    )) : (
+                        <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-4 text-sm text-neutral-500">
+                            No AI memory yet. Add memory chunks here to help StudyBuddy remember long-term facts and preferences.
+                        </div>
+                    )}
                 </div>
             </div>
 

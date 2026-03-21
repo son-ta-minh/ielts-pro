@@ -36,6 +36,9 @@ export function getLessonPrompt(params: LessonPromptParams): string {
       systemTask = isSpecialty 
         ? `Create a structured study guide for a ${params.targetAudience} comparing nuanced vocabulary related to: "${topic}".`
         : `Create an immersive, high-impact lesson for a ${params.targetAudience} on: "${topic}".`;
+      if (userRequest?.trim()) {
+        contextBlock = `FOCUS REQUEST: "${userRequest.trim()}"`;
+      }
   } else if (task === 'convert_to_listening') {
       systemTask = `TRANSFORM the provided Reading Lesson into a high-quality NATURAL AUDIO SCRIPT.`;
       contextBlock = `SOURCE: ${currentLesson?.title}\n${currentLesson?.content}`;

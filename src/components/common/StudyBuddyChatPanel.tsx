@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Brain, ChevronUp, Loader2, Mic, Save, Send, Sparkles, StopCircle, Trash2, Volume2, Wrench, X } from 'lucide-react';
+import { ChevronUp, Loader2, Mic, Save, Send, Sparkles, StopCircle, Volume2, Wrench, X } from 'lucide-react';
 import { ChatSearchMatch, ChatTurn } from '../../utils/studyBuddyChatUtils';
-import { StudyBuddyMemoryChunk } from '../../app/types';
 import { parseMarkdown } from '../../utils/markdownParser';
 
 const STUDY_BUDDY_CHAT_PANEL_SIZE_KEY = 'studybuddy_chat_panel_size_v1';
@@ -123,16 +122,13 @@ interface StudyBuddyChatPanelProps {
     chatHistory: ChatTurn[];
     hasChatTextSelection: boolean;
     chatInput: string;
+    headerTitle: string;
     headerDescription: string;
-    memoryChunks: StudyBuddyMemoryChunk[];
-    isMemoryPanelOpen: boolean;
     chatCoachActionBar: React.ReactNode;
     chatSaveModal: React.ReactNode;
     onToggleContextAware: () => void;
     onToggleConversationMode: () => void;
     onToggleChatAudio: () => void;
-    onToggleMemoryPanel: () => void;
-    onDeleteMemory: (memoryId: string) => void;
     onClearChatHistory: () => void;
     onClose: () => void;
     onOpenSaveModal: (turn: ChatTurn) => void;
@@ -155,16 +151,13 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     chatHistory,
     hasChatTextSelection,
     chatInput,
+    headerTitle,
     headerDescription,
-    memoryChunks,
-    isMemoryPanelOpen,
     chatCoachActionBar,
     chatSaveModal,
     onToggleContextAware,
     onToggleConversationMode,
     onToggleChatAudio,
-    onToggleMemoryPanel,
-    onDeleteMemory,
     onClearChatHistory,
     onClose,
     onOpenSaveModal,
@@ -177,6 +170,15 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
 }) => {
     const [isCoachMenuOpen, setIsCoachMenuOpen] = useState(false);
     const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+
+    const handleCoachMenuClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        const target = event.target as HTMLElement | null;
+        const button = target?.closest('button');
+        if (!button || (button as HTMLButtonElement).disabled) return;
+        window.setTimeout(() => {
+            setIsCoachMenuOpen(false);
+        }, 0);
+    };
 
     useEffect(() => {
         const panel = chatPanelRef.current;
@@ -264,7 +266,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                     <Sparkles size={16} />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-xs font-black text-neutral-900 uppercase tracking-wide">StudyBuddy AI</p>
+                    <p className="text-xs font-black text-neutral-900 uppercase tracking-wide">{headerTitle}</p>
                     <p className="text-[11px] text-neutral-500 truncate">{headerDescription}</p>
                 </div>
             </div>
@@ -334,19 +336,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                 </div>
                 <button
                     type="button"
-                    onClick={onToggleMemoryPanel}
-                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
-                        isMemoryPanelOpen
-                            ? 'border-amber-200 bg-amber-50 text-amber-700'
-                            : 'border-neutral-200 bg-white text-neutral-500'
-                    }`}
-                    title="View StudyBuddy memory"
-                >
-                    <Brain size={12} />
-                    Memory {memoryChunks.length ? `(${memoryChunks.length})` : ''}
-                </button>
-                <button
-                    type="button"
                     onClick={onClearChatHistory}
                     className="h-8 px-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-[10px] font-black uppercase tracking-wide"
                     title="Clear chat"
@@ -362,36 +351,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                 </button>
             </div>
         </div>
-
-        {isMemoryPanelOpen ? (
-            <div className="border-b border-neutral-100 bg-amber-50/60 px-4 py-3">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-black uppercase tracking-[0.16em] text-amber-800">Memory Chunks</p>
-                    <p className="text-[10px] font-semibold text-amber-700">Max 100</p>
-                </div>
-                {memoryChunks.length ? (
-                    <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
-                        {memoryChunks.map((chunk) => (
-                            <div key={chunk.id} className="flex items-start gap-2 rounded-2xl border border-amber-100 bg-white/90 px-3 py-2">
-                                <p className="min-w-0 flex-1 text-sm leading-relaxed text-neutral-800">{chunk.text}</p>
-                                <button
-                                    type="button"
-                                    onClick={() => onDeleteMemory(chunk.id)}
-                                    className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition-colors hover:bg-red-100"
-                                    title="Delete memory"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-sm text-neutral-600">
-                        No saved memory yet. StudyBuddy will store small memory chunks when you tell it to remember something.
-                    </p>
-                )}
-            </div>
-        ) : null}
 
         <div
             ref={chatScrollRef}
@@ -423,7 +382,10 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                 />
                 <div className="relative flex items-center gap-2 shrink-0">
                     {isCoachMenuOpen ? (
-                        <div className="absolute bottom-[calc(100%+0.5rem)] right-0 z-20 w-[min(42rem,calc(100vw-2rem))] max-w-[42rem] rounded-[1.5rem] border border-neutral-200 bg-white/98 p-3 shadow-2xl backdrop-blur-xl">
+                        <div
+                            className="absolute bottom-[calc(100%+0.5rem)] right-0 z-20 w-[min(42rem,calc(100vw-2rem))] max-w-[42rem] rounded-[1.5rem] border border-neutral-200 bg-white/98 p-3 shadow-2xl backdrop-blur-xl"
+                            onClick={handleCoachMenuClick}
+                        >
                             {chatCoachActionBar}
                         </div>
                     ) : null}
@@ -480,9 +442,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         </div>
 
             {chatSaveModal}
-            <div className="pointer-events-none absolute bottom-2 right-3 text-[10px] font-black uppercase tracking-[0.16em] text-neutral-300">
-                Resize
-            </div>
         </div>
     );
 };

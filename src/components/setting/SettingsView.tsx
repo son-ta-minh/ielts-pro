@@ -194,6 +194,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         isDropdownOpen={isDropdownOpen}
         notification={notification}
         profileData={profileData}
+        user={user}
         config={config}
         isVoiceLoading={isVoiceLoading}
         availableVoices={availableVoices}
@@ -205,6 +206,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         onProfileChange={handleProfileChange}
         onAvatarChange={handleAvatarChange}
         onSaveProfile={handleSaveProfile}
+        onUpdateUser={onUpdateUser}
         onConfigChange={handleConfigChange}
         onAiConfigChange={handleAiConfigChange}
         onApiKeyInputChange={(e) => setApiKeyInput(e.target.value)}

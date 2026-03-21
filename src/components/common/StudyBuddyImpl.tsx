@@ -180,11 +180,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [messageIndex, setMessageIndex] = useState(0);
     const [isThinking, setIsThinking] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
-    const [chatHistory, setChatHistory] = useState<ChatTurn[]>([
-        createChatTurn('assistant', 'Xin chào. Tôi có thể trả lời bất cứ thứ gì về tiếng Anh')    ]);
+    const [chatHistory, setChatHistory] = useState<ChatTurn[]>([]);
     const [chatInput, setChatInput] = useState('');
     const [memoryChunks, setMemoryChunks] = useState<StudyBuddyMemoryChunk[]>(user.studyBuddyMemory || []);
-    const [isMemoryPanelOpen, setIsMemoryPanelOpen] = useState(false);
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
     const [isContextAware, setIsContextAware] = useState(false);
@@ -226,6 +224,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const conversationSilenceTimeoutRef = useRef<number | null>(null);
     const conversationRestartTimeoutRef = useRef<number | null>(null);
     const chatAbortReasonRef = useRef<'manual' | 'conversation-interrupt' | null>(null);
+    const hasAutoGreetedRef = useRef(false);
     const closeMenuTimeoutRef = useRef<number | null>(null);
     const audioStatusSettleTimeoutRef = useRef<number | null>(null);
     const playbackControlsHideTimeoutRef = useRef<number | null>(null);
@@ -613,9 +612,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const handleClearChatHistory = () => {
-        setChatHistory([
-            createChatTurn('assistant', 'Xin chào. Tôi có thể trả lời bất cứ thứ gì về tiếng Anh')
-        ]);
+        setChatHistory([]);
         clearChatSpeechQueue(true);
     };
 
@@ -652,6 +649,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setMenuPos(null);
         setIsOpen(false);
         setIsChatOpen(true);
+
+        if (!hasAutoGreetedRef.current && chatHistory.length === 0) {
+            hasAutoGreetedRef.current = true;
+            void streamInitialGreeting();
+        }
     };
 
     useEffect(() => {
@@ -1214,6 +1216,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     };
 
     const {
+        streamInitialGreeting,
         handleBackgroundChatRequest,
         handleChatCoachPromptToChat,
         handleChatCoachExplain,
@@ -1583,9 +1586,22 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setPlaybackRateState(next);
     };
 
+    const formatCoachRole = (persona?: string) => {
+        switch ((persona || '').trim()) {
+            case 'professional_professor':
+                return 'Professional Professor';
+            case 'friendly_elementary':
+                return 'Friendly Elementary Coach';
+            default:
+                return (persona || 'Coach Identity').trim();
+        }
+    };
+
+    const chatHeaderTitle = (coach.name || 'StudyBuddy AI').trim();
+    const coachIdentityLabel = formatCoachRole(coach.persona);
     const chatHeaderDescription = isConversationMode
         ? (isChatListening ? 'Conversation mode: listening...' : isChatLoading ? 'Conversation mode: AI is replying...' : 'Conversation mode: waiting for voice...')
-        : 'Grammar, writing, speaking, tu vung';
+        : coachIdentityLabel;
 
     const chatSaveModal = (
         <StudyBuddySaveModal
@@ -1672,9 +1688,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 chatHistory={chatHistory}
                                 hasChatTextSelection={hasChatTextSelection}
                                 chatInput={chatInput}
+                                headerTitle={chatHeaderTitle}
                                 headerDescription={chatHeaderDescription}
-                                memoryChunks={memoryChunks}
-                                isMemoryPanelOpen={isMemoryPanelOpen}
                                 chatCoachActionBar={
                                     <StudyBuddyChatCoachActionBar
                                         hasSelection={!!getCoachActionText()}
@@ -1700,14 +1715,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                         onWordFamily={() => handleChatCoachPromptToChat(
                                             'wordFamily',
                                             'Word Family',
-                                            (selectedText) => `Give word family forms for "${selectedText}" (noun, verb, adjective, adverb if possible).
-
-Rules:
-- English only
-- Very concise
-- Bullet list format (-)
-- Each line: word form (part of speech): short meaning
-- Part of speech must be one of: noun, verb, adjective, adverb`
+                                            (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'wordFamily')
                                         )}
                                     />
                                 }
@@ -1715,8 +1723,6 @@ Rules:
                                 onToggleContextAware={() => setIsContextAware((prev) => !prev)}
                                 onToggleConversationMode={handleToggleConversationMode}
                                 onToggleChatAudio={() => setIsChatAudioEnabled((prev) => !prev)}
-                                onToggleMemoryPanel={() => setIsMemoryPanelOpen((prev) => !prev)}
-                                onDeleteMemory={handleDeleteMemory}
                                 onClearChatHistory={handleClearChatHistory}
                                 onClose={() => {
                                     stopChatStream();

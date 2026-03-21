@@ -1,6 +1,6 @@
 export function getStudyBuddyCoachPrompt(
     selectedText: string,
-    type: 'examples' | 'collocations' | 'paraphrase'
+    type: 'examples' | 'collocations' | 'paraphrase' | 'wordFamily'
 ): string {
     const baseRules = `Rules:
 - Use English only
@@ -22,6 +22,21 @@ ${baseRules}
 
 ${baseRules}
 - Format: - **collocation**: short explanation`;
+    }
+
+    if (type === 'wordFamily') {
+        return `Give the most useful word family forms for "${selectedText}".
+
+${baseRules}
+- Output ONLY the list, no greeting, no intro, no conclusion
+- Max 6 lines
+- Each line must be exactly: - **word form** (noun|verb|adjective|adverb): short meaning
+- Use only these part-of-speech labels: noun, verb, adjective, adverb
+- If a part of speech does not exist or is uncommon, skip it
+- Do not repeat the same word form
+- Example format:
+- successful (adjective): achieving the result you wanted
+- succeed (verb): achieve the result you wanted`;
     }
 
     return `Give natural paraphrases for "${selectedText}".

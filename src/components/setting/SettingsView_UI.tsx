@@ -8,6 +8,7 @@ import { GoalSettings } from './GoalSettings';
 import { DangerZone } from './DangerZone';
 import { ServerSettings } from './ServerSettings';
 import { SystemConfig, DailyGoalConfig } from '../../app/settingsManager';
+import { User as UserType } from '../../app/types';
 
 export type SettingView = 'PROFILE' | 'INTERFACE' | 'SERVER' | 'AUDIO_COACH' | 'LEARNING' | 'DANGER';
 
@@ -17,6 +18,7 @@ interface SettingsViewUIProps {
     isDropdownOpen: boolean;
     notification: string | null;
     profileData: { name: string; avatar: string; role: string; currentLevel: string; target: string; nativeLanguage: string; };
+    user: UserType;
     config: SystemConfig;
     isVoiceLoading: boolean;
     availableVoices: SpeechSynthesisVoice[];
@@ -32,6 +34,7 @@ interface SettingsViewUIProps {
     onProfileChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
     onAvatarChange: (url: string) => void;
     onSaveProfile: () => void;
+    onUpdateUser: (user: UserType) => Promise<void>;
     onConfigChange: (section: keyof SystemConfig, key: any, value: any) => void;
     onAiConfigChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onApiKeyInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -74,7 +77,7 @@ export const SettingsViewUI: React.FC<SettingsViewUIProps> = (props) => {
         switch (currentView) {
             case 'PROFILE': return <ProfileSettings profileData={props.profileData} onProfileChange={props.onProfileChange} onAvatarChange={props.onAvatarChange} onSaveProfile={props.onSaveProfile} />;
             case 'SERVER': return <ServerSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />;
-            case 'AUDIO_COACH': return <AudioCoachSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />;
+            case 'AUDIO_COACH': return <AudioCoachSettings config={props.config} user={props.user} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} onUpdateUser={props.onUpdateUser} />;
             case 'LEARNING': return (
                 <div className="space-y-6 animate-in fade-in duration-300">
                     <GoalSettings goalConfig={props.goalConfig} onGoalConfigChange={props.onGoalConfigChange} onSaveSettings={props.onSaveSettings} />

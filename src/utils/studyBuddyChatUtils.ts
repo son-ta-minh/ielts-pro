@@ -54,7 +54,11 @@ export function buildStudyBuddyMessages(
     isContextAware: boolean,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     extraSystemMessages: string[] = [],
-    memoryChunks: StudyBuddyMemoryChunk[] = []
+    memoryChunks: StudyBuddyMemoryChunk[] = [],
+    coachIdentity?: {
+        name?: string;
+        persona?: string;
+    }
 ) {
     const profileLines = [
         `Learner name: ${user.name || 'Unknown'}`,
@@ -63,6 +67,12 @@ export function buildStudyBuddyMessages(
         user.target ? `Target: ${user.target}` : null,
         user.nativeLanguage ? `Native language: ${user.nativeLanguage}` : null,
         user.role ? `Role: ${user.role}` : null
+    ].filter(Boolean);
+
+    const lessonPreferenceLines = [
+        user.lessonPreferences?.language ? `Preferred lesson language: ${user.lessonPreferences.language}` : null,
+        user.lessonPreferences?.targetAudience ? `Preferred lesson audience: ${user.lessonPreferences.targetAudience}` : null,
+        user.lessonPreferences?.tone ? `Preferred lesson tone: ${user.lessonPreferences.tone}` : null,
     ].filter(Boolean);
 
     const contextMessage = (() => {
@@ -81,7 +91,19 @@ export function buildStudyBuddyMessages(
 
     return [
         { role: 'system' as const, content: STUDY_BUDDY_SYSTEM_PROMPT },
+        ...(coachIdentity?.name || coachIdentity?.persona
+            ? [{
+                role: 'system' as const,
+                content: `Coach identity for this chat. Stay consistent with it in tone and self-reference.\n\nCoach name: ${coachIdentity?.name || 'StudyBuddy'}\nCoach persona: ${coachIdentity?.persona || 'general coach'}`
+            }]
+            : []),
         { role: 'system' as const, content: `Here is the learner profile. Always use it as lightweight personalization context when giving advice, examples, tone, and study guidance.\n\n${profileLines.join('\n')}` },
+        ...(lessonPreferenceLines.length > 0
+            ? [{
+                role: 'system' as const,
+                content: `Here are the learner's lesson preferences. Follow them when giving explanations, examples, mini-lessons, and generated practice unless the user asks otherwise.\n\n${lessonPreferenceLines.join('\n')}`
+            }]
+            : []),
         { role: 'system' as const, content: contextMessage },
         ...(memoryChunks.length > 0
             ? [{

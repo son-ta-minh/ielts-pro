@@ -23,6 +23,7 @@ import { parseStudyBuddyMemoryDirectives } from '../../utils/studyBuddyMemoryUti
 type MenuPos = { x: number; y: number; placement: 'top' | 'bottom' } | null;
 type CoachVoiceConfig = {
     name?: string;
+    persona?: string;
     viVoice?: string;
     viAccent?: string;
 };
@@ -268,7 +269,8 @@ export function useStudyBuddyChat({
                         isContextAware,
                         nextHistory.map((turn) => ({ role: turn.role, content: turn.content })),
                         extraSystemMessages,
-                        memoryChunks
+                        memoryChunks,
+                        { name: coach.name, persona: coach.persona }
                     ),
                     ...studyBuddyAiRequestConfig,
                     stream: true
@@ -614,7 +616,8 @@ export function useStudyBuddyChat({
                         isContextAware,
                         [{ role: 'user', content: cleanPrompt }],
                         extraSystemMessages,
-                        memoryChunks
+                        memoryChunks,
+                        { name: coach.name, persona: coach.persona }
                     ),
                     ...studyBuddyAiRequestConfig,
                     stream: true
@@ -770,7 +773,8 @@ export function useStudyBuddyChat({
                     isContextAware,
                     [{ role: 'user', content: userPrompt }],
                     [],
-                    memoryChunks
+                    memoryChunks,
+                    { name: coach.name, persona: coach.persona }
                 ),
                 ...studyBuddyAiRequestConfig,
                 stream: isStreamed
@@ -787,6 +791,18 @@ export function useStudyBuddyChat({
             return content.trim();
         }
         throw new Error('AI server returned empty content.');
+    }
+
+    async function streamInitialGreeting() {
+        await handleBackgroundChatRequest(`Please greet the learner by name with one short, warm, positive sentence of encouragement.
+
+Rules:
+- Answer directly as the coach
+- Keep it brief
+- No bullet points
+- No emojis
+- Sound active and welcoming
+- Use Vietnamese if the learner writes Vietnamese or their native language is Vietnamese`);
     }
 
     async function handleChatCoachTranslate() {
@@ -979,7 +995,11 @@ export function useStudyBuddyChat({
         const assistantId = `assistant-${actionKey}-${Date.now()}`;
         const aiUrl = getStudyBuddyAiUrl(config);
         const memoryChunks = getStudyBuddyMemoryChunks();
-        const inferredSaveActionType = options?.saveActionType ?? (actionKey === 'test' ? undefined : actionKey);
+        const inferredSaveActionType = options?.saveActionType ?? (
+            actionKey === 'test' || actionKey === 'explain'
+                ? undefined
+                : actionKey
+        );
         const saveContext: ChatSaveContext | undefined = inferredSaveActionType
             ? {
                 actionType: inferredSaveActionType,
@@ -1012,7 +1032,8 @@ export function useStudyBuddyChat({
                         isContextAware,
                         [{ role: 'user', content: userPrompt }],
                         [],
-                        memoryChunks
+                        memoryChunks,
+                        { name: coach.name, persona: coach.persona }
                     ),
                     ...studyBuddyAiRequestConfig,
                     stream: true
@@ -1119,7 +1140,7 @@ export function useStudyBuddyChat({
             (selectedText) => getLessonPrompt({
                 task: 'create_reading',
                 topic: selectedText,
-                userRequest: `Explain clearly and compactly for this query: ${selectedText}`,
+                userRequest: `Explain this as an English/IELTS vocabulary coach, not as a general life or science topic. Focus on meaning in English, part of speech, register, common collocations, common mistakes, and how learners should use "${selectedText}" in IELTS speaking/writing. Do not drift into broad philosophy, self-help, or real-world topic discussion unless directly needed for word usage.`,
                 language: user.lessonPreferences?.language || 'English',
                 targetAudience: user.lessonPreferences?.targetAudience || 'Adult',
                 tone: user.lessonPreferences?.tone || 'professional_professor',
@@ -1176,6 +1197,7 @@ export function useStudyBuddyChat({
 
     return {
         handleBackgroundChatRequest,
+        streamInitialGreeting,
         handleChatCoachPromptToChat,
         handleChatCoachExplain,
         handleChatCoachSearch,
