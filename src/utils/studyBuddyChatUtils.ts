@@ -11,12 +11,26 @@ export interface ChatSaveContext {
     sourceSelection?: string;
 }
 
+export interface ChatSearchMatch {
+    word: string;
+    section: string;
+    text: string;
+    register?: string;
+    context?: string;
+    hint?: string;
+}
+
+export interface ChatSearchResultMeta {
+    moreMatches: ChatSearchMatch[];
+}
+
 export interface ChatTurn {
     id: string;
     role: 'user' | 'assistant';
     content: string;
     kind?: 'message' | 'status';
     saveContext?: ChatSaveContext;
+    searchResultMeta?: ChatSearchResultMeta;
 }
 
 export const SAVE_SECTION_LABELS: Record<ChatSaveSection, string> = {

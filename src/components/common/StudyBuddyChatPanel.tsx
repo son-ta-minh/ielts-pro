@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Loader2, Mic, Save, Send, Sparkles, StopCircle, Volume2, X } from 'lucide-react';
-import { ChatTurn } from '../../utils/studyBuddyChatUtils';
+import { ChatSearchMatch, ChatTurn } from '../../utils/studyBuddyChatUtils';
 
 const SAVE_ACTION_LABELS: Record<string, string> = {
     examples: 'Save Examples',
@@ -9,6 +9,50 @@ const SAVE_ACTION_LABELS: Record<string, string> = {
     paraphrase: 'Save Paraphrase',
     wordFamily: 'Save Word Family'
 };
+
+function formatSearchSectionLabel(section: string) {
+    const normalized = String(section || '').trim().toLowerCase();
+    switch (normalized) {
+        case 'example':
+            return 'Example';
+        case 'collocation':
+            return 'Collocation';
+        case 'paraphrase':
+            return 'Paraphrase';
+        case 'idiom':
+            return 'Idiom';
+        case 'private note':
+        case 'note':
+            return 'Private Note';
+        default:
+            return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Match';
+    }
+}
+
+function SearchMoreMatches({ matches }: { matches: ChatSearchMatch[] }) {
+    if (!matches.length) return null;
+
+    return (
+        <details className="mt-3 rounded-2xl border border-neutral-200 bg-neutral-50/70 px-3 py-2">
+            <summary className="cursor-pointer list-none text-[11px] font-black uppercase tracking-[0.16em] text-neutral-600">
+                More results
+            </summary>
+            <div className="mt-3 space-y-3">
+                {matches.map((item, index) => (
+                    <div key={`${item.word}-${item.section}-${index}`} className="rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-neutral-900">
+                        <p className="text-sm font-black">{index + 2}. {item.word || 'Unknown'}</p>
+                        <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-500">
+                            {formatSearchSectionLabel(item.section)}
+                        </p>
+                        <blockquote className="mt-2 border-l-4 border-neutral-300 bg-neutral-50/80 px-3 py-2 italic text-neutral-600">
+                            {item.text || ''}
+                        </blockquote>
+                    </div>
+                ))}
+            </div>
+        </details>
+    );
+}
 
 const ChatHistoryList = React.memo(({
     chatHistory,
@@ -101,6 +145,9 @@ const ChatHistoryList = React.memo(({
                         >
                             {turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}
                         </ReactMarkdown>
+                        {turn.role === 'assistant' && turn.kind !== 'status' && turn.searchResultMeta?.moreMatches?.length ? (
+                            <SearchMoreMatches matches={turn.searchResultMeta.moreMatches} />
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -165,7 +212,8 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
 }) => (
     <div
         ref={chatPanelRef}
-        className="pointer-events-auto absolute bottom-20 left-0 z-50 w-[36rem] max-w-[calc(100vw-2rem)] rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200 relative"
+        className="pointer-events-auto absolute bottom-20 left-0 z-50 flex h-[42rem] min-h-[32rem] w-[46rem] min-w-[28rem] max-w-[calc(100vw-1rem)] max-h-[calc(100vh-5rem)] flex-col rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200 relative"
+        style={{ resize: 'both' }}
         onMouseDownCapture={onPointerDownInside}
         onMouseDown={(e) => e.stopPropagation()}
         onMouseEnter={(e) => e.stopPropagation()}
@@ -239,7 +287,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
 
         <div
             ref={chatScrollRef}
-            className="max-h-[24rem] overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)] select-text"
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)] select-text"
             onMouseDownCapture={onPointerDownInside}
             onMouseDown={(e) => e.stopPropagation()}
         >
@@ -287,10 +335,11 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                         <button
                             type="button"
                             onClick={onStopChatStream}
-                            className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 flex items-center justify-center transition-colors"
-                            title="Stop response"
+                            className="h-11 min-w-[7.5rem] rounded-2xl bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 flex items-center justify-center gap-2 px-3 transition-colors"
+                            title="Stop current response or search"
                         >
                             <StopCircle size={18} />
+                            <span className="text-[11px] font-black uppercase tracking-[0.14em]">Stop</span>
                         </button>
                     ) : (
                         <button
@@ -308,5 +357,8 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         </div>
 
         {chatSaveModal}
+        <div className="pointer-events-none absolute bottom-2 right-3 text-[10px] font-black uppercase tracking-[0.16em] text-neutral-300">
+            Resize
+        </div>
     </div>
 );

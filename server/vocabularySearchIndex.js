@@ -45,9 +45,20 @@ function hashToken(token) {
     return hash >>> 0;
 }
 
+function tokenizeNormalized(text) {
+    return normalizeText(text).split(' ').filter(Boolean);
+}
+
+function buildNgrams(tokens, size) {
+    const grams = [];
+    for (let index = 0; index <= tokens.length - size; index += 1) {
+        grams.push(tokens.slice(index, index + size).join(' '));
+    }
+    return grams;
+}
+
 function embedText(text) {
-    const normalized = normalizeText(text);
-    const tokens = normalized.split(' ').filter(Boolean);
+    const tokens = tokenizeNormalized(text);
     const vector = new Float32Array(VECTOR_DIMENSIONS);
 
     if (tokens.length === 0) return vector;
@@ -138,7 +149,10 @@ function createChunk(section, text, word, wordId, ownerName, extra = {}) {
         section,
         text: cleanText,
         searchableText,
-        vector: embedText(searchableText),
+        textVector: embedText(cleanText),
+        searchableVector: embedText(searchableText),
+        textTokens: tokenizeNormalized(cleanText),
+        searchableTokens: tokenizeNormalized(searchableText),
         hint: extra.hint || '',
         context: extra.context || '',
         register: extra.register || ''
@@ -149,8 +163,11 @@ function buildChunksFromWord(item) {
     if (!item?.ownerName || !item?.word) return [];
 
     const chunks = [];
+    const wordChunk = createChunk('word', item.word, item.word, item.id, item.ownerName);
     const exampleChunks = splitTextIntoChunks(item.example);
     const noteChunks = splitTextIntoChunks(item.note);
+
+    if (wordChunk) chunks.push(wordChunk);
 
     exampleChunks.forEach((text) => {
         const chunk = createChunk('example', text, item.word, item.id, item.ownerName);
@@ -193,18 +210,64 @@ function buildChunksFromWord(item) {
     return chunks;
 }
 
-function scoreChunk(chunk, queryVector, queryTokens) {
-    const cosine = cosineSimilarity(queryVector, chunk.vector);
-    if (!queryTokens.length) return cosine;
+function scoreChunk(chunk, queryProfile) {
+    const cosineText = cosineSimilarity(queryProfile.vector, chunk.textVector);
+    const cosineSearchable = cosineSimilarity(queryProfile.vector, chunk.searchableVector);
+    if (!queryProfile.tokens.length) return cosineText * 0.75 + cosineSearchable * 0.25;
 
-    const chunkTokens = new Set(normalizeText(chunk.searchableText).split(' ').filter(Boolean));
-    let overlapCount = 0;
-    queryTokens.forEach((token) => {
-        if (chunkTokens.has(token)) overlapCount += 1;
+    const textTokenSet = new Set(chunk.textTokens);
+    const searchableTokenSet = new Set(chunk.searchableTokens);
+    let textOverlapCount = 0;
+    let searchableOverlapCount = 0;
+
+    queryProfile.tokens.forEach((token) => {
+        if (textTokenSet.has(token)) textOverlapCount += 1;
+        if (searchableTokenSet.has(token)) searchableOverlapCount += 1;
     });
 
-    const overlap = overlapCount / queryTokens.length;
-    return cosine * 0.82 + overlap * 0.18;
+    const textOverlap = textOverlapCount / queryProfile.tokens.length;
+    const searchableOverlap = searchableOverlapCount / queryProfile.tokens.length;
+
+    const textBigrams = new Set(buildNgrams(chunk.textTokens, 2));
+    const textTrigrams = new Set(buildNgrams(chunk.textTokens, 3));
+    let bigramOverlapCount = 0;
+    let trigramOverlapCount = 0;
+
+    queryProfile.bigrams.forEach((gram) => {
+        if (textBigrams.has(gram)) bigramOverlapCount += 1;
+    });
+    queryProfile.trigrams.forEach((gram) => {
+        if (textTrigrams.has(gram)) trigramOverlapCount += 1;
+    });
+
+    const bigramOverlap = queryProfile.bigrams.length ? bigramOverlapCount / queryProfile.bigrams.length : 0;
+    const trigramOverlap = queryProfile.trigrams.length ? trigramOverlapCount / queryProfile.trigrams.length : 0;
+
+    let score =
+        cosineText * 0.48 +
+        cosineSearchable * 0.12 +
+        textOverlap * 0.2 +
+        searchableOverlap * 0.08 +
+        bigramOverlap * 0.22 +
+        trigramOverlap * 0.28;
+
+    if (queryProfile.tokens.length >= 4 && textOverlapCount <= 1 && bigramOverlapCount === 0 && trigramOverlapCount === 0) {
+        score *= 0.58;
+    }
+
+    if (textOverlapCount >= 2) {
+        score += 0.05;
+    }
+
+    if (bigramOverlapCount > 0) {
+        score += 0.08;
+    }
+
+    if (trigramOverlapCount > 0) {
+        score += 0.12;
+    }
+
+    return score;
 }
 
 function parseVocabularyPayload(raw, fallbackUserName) {
@@ -287,11 +350,18 @@ function rebuildUserVocabularySearchIndexFromFile(filePath, fallbackUserName = '
     }
 }
 
-function searchUserVocabularyIndex(userName, queries, limit = DEFAULT_RESULT_LIMIT) {
+function searchUserVocabularyIndex(userName, queries, limit = DEFAULT_RESULT_LIMIT, options = {}) {
     const index = userSearchIndices.get(String(userName || '').trim());
     if (!index || !Array.isArray(index.chunks) || !index.chunks.length) {
         return [];
     }
+
+    const sectionFilter = String(options?.section || 'all').trim().toLowerCase();
+    const searchableChunks = sectionFilter && sectionFilter !== 'all'
+        ? index.chunks.filter((chunk) => String(chunk.section || '').toLowerCase() === sectionFilter)
+        : index.chunks;
+
+    if (!searchableChunks.length) return [];
 
     const normalizedQueries = Array.from(new Set(
         (Array.isArray(queries) ? queries : [queries])
@@ -301,22 +371,27 @@ function searchUserVocabularyIndex(userName, queries, limit = DEFAULT_RESULT_LIM
 
     if (!normalizedQueries.length) return [];
 
-    const queryVectors = normalizedQueries.map((query) => ({
+    const queryProfiles = normalizedQueries.map((query) => {
+        const tokens = tokenizeNormalized(query);
+        return {
         raw: query,
         vector: embedText(query),
-        tokens: normalizeText(query).split(' ').filter(Boolean)
-    }));
+        tokens,
+        bigrams: buildNgrams(tokens, 2),
+        trigrams: buildNgrams(tokens, 3)
+    };
+    });
 
-    const scored = index.chunks
+    const scored = searchableChunks
         .map((chunk) => {
             let bestScore = 0;
             let bestQuery = normalizedQueries[0] || '';
 
-            queryVectors.forEach(({ raw, vector, tokens }) => {
-                const score = scoreChunk(chunk, vector, tokens);
+            queryProfiles.forEach((queryProfile) => {
+                const score = scoreChunk(chunk, queryProfile);
                 if (score > bestScore) {
                     bestScore = score;
-                    bestQuery = raw;
+                    bestQuery = queryProfile.raw;
                 }
             });
 

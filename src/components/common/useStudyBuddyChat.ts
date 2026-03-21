@@ -6,6 +6,7 @@ import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import {
     buildStudyBuddyMessages,
     ChatCoachActionKey,
+    ChatSearchMatch,
     ChatSaveContext,
     ChatTurn,
     createChatTurn,
@@ -130,6 +131,59 @@ export function useStudyBuddyChat({
     chatConversationMaxChars,
     chatConversationMaxWords,
 }: UseStudyBuddyChatOptions) {
+    function formatSearchSectionLabel(section: string) {
+        const normalized = String(section || '').trim().toLowerCase();
+        switch (normalized) {
+            case 'example':
+                return 'Example';
+            case 'collocation':
+                return 'Collocation';
+            case 'paraphrase':
+                return 'Paraphrase';
+            case 'idiom':
+                return 'Idiom';
+            case 'private note':
+            case 'note':
+                return 'Private Note';
+            default:
+                return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Match';
+        }
+    }
+
+    function formatSearchFinalMessage(payload: any) {
+        const matches = Array.isArray(payload?.matches) ? payload.matches : [];
+        if (!matches.length) {
+            return {
+                content: typeof payload?.response === 'string' && payload.response.trim()
+                    ? `## Search Result\n\n${payload.response.trim()}`
+                    : '## Search Result\n\nI could not find a relevant match in your Vocabulary Library.',
+                moreMatches: [] as ChatSearchMatch[],
+            };
+        }
+
+        const [bestMatch, ...restMatches] = matches;
+        const extras = [
+            bestMatch?.register ? `- **Register:** ${bestMatch.register}` : '',
+            bestMatch?.context ? `- **Context:** ${bestMatch.context}` : '',
+            bestMatch?.hint ? `- **Hint:** ${bestMatch.hint}` : ''
+        ].filter(Boolean);
+
+        const content = [
+            '## Best Match',
+            '',
+            `**Word:** ${bestMatch?.word || 'Unknown'}`,
+            `**Type:** ${formatSearchSectionLabel(bestMatch?.section || '')}`,
+            '',
+            `> ${bestMatch?.text || ''}`,
+            ...(extras.length ? ['', ...extras] : [])
+        ].join('\n');
+
+        return {
+            content,
+            moreMatches: restMatches as ChatSearchMatch[],
+        };
+    }
+
     function getActiveActionText() {
         return (
             selectedTextRef.current
@@ -717,6 +771,7 @@ export function useStudyBuddyChat({
 
         setActiveChatCoachAction('search');
         setIsThinking(true);
+        setIsChatLoading(true);
         setIsChatOpen(true);
 
         const userTurn = createChatTurn('user', `Search Vocabulary Library: ${selectedText}`);
@@ -725,16 +780,20 @@ export function useStudyBuddyChat({
         setChatHistory((current) => [
             ...current,
             userTurn,
-            { id: assistantId, role: 'assistant', kind: 'message', content: 'Dang tim trong Vocabulary Library...' }
+            { id: assistantId, role: 'assistant', kind: 'message', content: 'Mình đang thử tìm các cách diễn đạt tiếng Anh gần nhất...' }
         ]);
 
         try {
+            const controller = new AbortController();
+            chatAbortRef.current = controller;
             const serverUrl = getServerUrl(config);
             const res = await fetch(`${serverUrl}/api/studybuddy/search`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
                 },
+                signal: controller.signal,
                 body: JSON.stringify({
                     data: selectedText,
                     userName: user.name
@@ -745,36 +804,104 @@ export function useStudyBuddyChat({
                 throw new Error(`Search server error ${res.status}`);
             }
 
-            const data = await res.json().catch(() => null);
-            const responseTexts = Array.isArray(data?.responses)
-                ? data.responses.map((item: unknown) => String(item || '').trim()).filter(Boolean)
-                : [];
-            const responseText = responseTexts[0]
-                || (typeof data?.response === 'string' && data.response.trim() ? data.response.trim() : '')
-                || 'Khong co noi dung tra ve.';
+            if (!res.body) {
+                throw new Error('Search server did not return a stream.');
+            }
 
-            const finalAssistantText = responseTexts.length > 1
-                ? responseTexts.map((item, index) => `Result ${index + 1}\n${item}`).join('\n\n')
-                : responseText;
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffered = '';
+            let finalUpdated = false;
+            const stageTexts: string[] = [];
 
-            setChatHistory((current) =>
-                current.map((turn) =>
-                    turn.id === assistantId
-                        ? { ...turn, content: finalAssistantText }
-                        : turn
-                )
-            );
-        } catch (error) {
+            const updateAssistant = (content: string) => {
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, content, searchResultMeta: undefined }
+                            : turn
+                    )
+                );
+            };
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffered += decoder.decode(value, { stream: true });
+                const events = buffered.split('\n\n');
+                buffered = events.pop() || '';
+
+                for (const eventBlock of events) {
+                    const lines = eventBlock
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean);
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data:')) continue;
+                        const raw = line.slice(5).trim();
+                        if (!raw) continue;
+
+                        try {
+                            const payload = JSON.parse(raw);
+                            if (payload?.type === 'stage' && typeof payload.text === 'string' && payload.text.trim()) {
+                                stageTexts.push(payload.text.trim());
+                                updateAssistant(stageTexts.join('\n\n'));
+                            }
+                            if (payload?.type === 'final') {
+                                const formatted = formatSearchFinalMessage(payload);
+                                setChatHistory((current) =>
+                                    current.map((turn) =>
+                                        turn.id === assistantId
+                                            ? {
+                                                ...turn,
+                                                content: formatted.content,
+                                                searchResultMeta: formatted.moreMatches.length
+                                                    ? { moreMatches: formatted.moreMatches }
+                                                    : undefined,
+                                            }
+                                            : turn
+                                    )
+                                );
+                                finalUpdated = true;
+                            }
+                            if (payload?.type === 'error') {
+                                throw new Error(typeof payload.error === 'string' ? payload.error : 'Search request failed.');
+                            }
+                        } catch (error) {
+                            if (error instanceof Error) throw error;
+                        }
+                    }
+                }
+            }
+
+            if (!finalUpdated) {
+                throw new Error('Search stream ended without final payload.');
+            }
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                setChatHistory((current) =>
+                    current.map((turn) =>
+                        turn.id === assistantId
+                            ? { ...turn, content: 'Search canceled.' }
+                            : turn
+                    )
+                );
+                return;
+            }
             console.error(error);
             setChatHistory((current) =>
                 current.map((turn) =>
                     turn.id === assistantId
-                        ? { ...turn, content: 'Search request failed.' }
+                        ? { ...turn, content: error?.message || 'Search request failed.' }
                         : turn
                 )
             );
             showToast('Search request failed.', 'error');
         } finally {
+            chatAbortRef.current = null;
+            setIsChatLoading(false);
             setIsThinking(false);
             setActiveChatCoachAction(null);
         }

@@ -194,9 +194,71 @@ function looksVietnamese(text) {
     return /\b(khong|khong|la|cua|cho|voi|nhung|mot|cach|nghia|tu|cum|vi du)\b/i.test(source);
 }
 
+function looksEnglishSearchQuery(text) {
+    const source = String(text || '').trim();
+    if (!source) return false;
+    if (looksVietnamese(source)) return false;
+    if (!/[a-z]/i.test(source)) return false;
+    const lettersOnly = source.match(/[a-z]/gi) || [];
+    const alphaNumeric = source.match(/[a-z0-9]/gi) || [];
+    if (lettersOnly.length === 0 || alphaNumeric.length === 0) return false;
+    return lettersOnly.length / alphaNumeric.length >= 0.7;
+}
+
+function normalizeSearchTypeAlias(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
+
+function parseTypedSearchInput(rawInput) {
+    const raw = String(rawInput || '').trim();
+    if (!raw) {
+        return { section: 'all', query: '' };
+    }
+
+    const colonIndex = raw.indexOf(':');
+    if (colonIndex <= 0) {
+        return { section: 'all', query: raw };
+    }
+
+    const rawType = raw.slice(0, colonIndex).trim();
+    const query = raw.slice(colonIndex + 1).trim();
+    const alias = normalizeSearchTypeAlias(rawType);
+    const aliasMap = new Map([
+        ['idm', 'idiom'],
+        ['idom', 'idiom'],
+        ['idiom', 'idiom'],
+        ['thanh ngu', 'idiom'],
+        ['col', 'collocation'],
+        ['collocation', 'collocation'],
+        ['collocations', 'collocation'],
+        ['ex', 'example'],
+        ['exam', 'example'],
+        ['example', 'example'],
+        ['examples', 'example'],
+        ['ví dụ', 'example'],
+        ['para', 'paraphrase'],
+        ['phrase', 'paraphrase'],
+        ['paraphrase', 'paraphrase'],
+        ['word', 'word'],
+        ['headword', 'word'],
+        ['từ', 'word']
+    ]);
+    const section = aliasMap.get(alias);
+
+    if (!section || !query) {
+        return { section: 'all', query: raw };
+    }
+
+    return { section, query };
+}
+
 function parseExpandedQueries(raw, fallbackQuery) {
     const source = String(raw || '').trim();
-    const fallback = [String(fallbackQuery || '').trim()].filter(Boolean);
+    const fallback = [String(fallbackQuery || '').trim()].filter(looksEnglishSearchQuery);
     if (!source) return fallback;
 
     const fenced = source.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
@@ -204,10 +266,10 @@ function parseExpandedQueries(raw, fallbackQuery) {
     try {
         const parsed = JSON.parse(fenced);
         if (Array.isArray(parsed)) {
-            return Array.from(new Set(parsed.map((item) => String(item || '').trim()).filter(Boolean)));
+            return Array.from(new Set(parsed.map((item) => String(item || '').trim()).filter(looksEnglishSearchQuery)));
         }
         if (Array.isArray(parsed?.queries)) {
-            return Array.from(new Set(parsed.queries.map((item) => String(item || '').trim()).filter(Boolean)));
+            return Array.from(new Set(parsed.queries.map((item) => String(item || '').trim()).filter(looksEnglishSearchQuery)));
         }
     } catch {
         // Ignore parse failures and fall back below.
@@ -216,12 +278,12 @@ function parseExpandedQueries(raw, fallbackQuery) {
     const lines = fenced
         .split('\n')
         .map((line) => line.replace(/^\s*[-*0-9.]+\s*/, '').trim())
-        .filter(Boolean);
+        .filter(looksEnglishSearchQuery);
 
     return Array.from(new Set([...fallback, ...lines])).filter(Boolean);
 }
 
-function expandSearchQueries(query, callback) {
+function expandSearchQueries(query, callback, attempt = 1) {
     const cleanQuery = String(query || '').trim();
     if (!cleanQuery) return callback(null, []);
 
@@ -235,7 +297,9 @@ function expandSearchQueries(query, callback) {
         [
             {
                 role: 'system',
-                content: 'You convert a Vietnamese library search request into short English search variants for semantic vocabulary lookup.'
+                content: attempt === 1
+                    ? 'You convert a Vietnamese library search request into short English search variants for semantic vocabulary lookup.'
+                    : 'You convert a Vietnamese library search request into short English search variants for semantic vocabulary lookup. Every output query must be English only. Vietnamese output is invalid.'
             },
             {
                 role: 'user',
@@ -246,6 +310,8 @@ Rules:
 - Format: {"queries":["...", "...", "...", "..."]}
 - Keep each query under 12 words
 - Focus on natural English phrases a learner may want to find
+- Every query must be English only
+- Do not copy Vietnamese words
 - No explanations
 
 Vietnamese query: ${cleanQuery}`
@@ -254,117 +320,224 @@ Vietnamese query: ${cleanQuery}`
         (error, content) => {
             if (error) {
                 console.warn('[StudyBuddySearch] Query expansion failed:', error.message);
-                return callback(null, [cleanQuery]);
+                if (attempt < 2) {
+                    console.warn('[StudyBuddySearch] Retrying query expansion with stricter English-only prompt.');
+                    return expandSearchQueries(cleanQuery, callback, attempt + 1);
+                }
+                return callback(new Error('I could not generate valid English search queries. Please retry.'));
             }
 
             const queries = parseExpandedQueries(content, cleanQuery);
+            if (!queries.length) {
+                console.warn('[StudyBuddySearch] Expansion returned non-English or unusable queries.');
+                if (attempt < 2) {
+                    console.warn('[StudyBuddySearch] Retrying query expansion with stricter English-only prompt.');
+                    return expandSearchQueries(cleanQuery, callback, attempt + 1);
+                }
+                return callback(new Error('I could not generate valid English search queries. Please retry.'));
+            }
             console.log('[StudyBuddySearch] Expanded queries:', queries);
-            callback(null, queries.length ? queries : [cleanQuery]);
+            callback(null, queries);
         }
     );
 }
 
-function parseRerankedIndexes(raw, resultCount) {
+function normalizeFilterText(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function parseKeptTexts(raw) {
     const source = String(raw || '').trim();
     if (!source) return [];
     const fenced = source.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
 
     try {
         const parsed = JSON.parse(fenced);
-        const indexes = Array.isArray(parsed)
+        const texts = Array.isArray(parsed)
             ? parsed
-            : Array.isArray(parsed?.ranking)
-                ? parsed.ranking
-                : Array.isArray(parsed?.indexes)
-                    ? parsed.indexes
-                    : [];
-        return Array.from(new Set(indexes
-            .map((value) => Number(value))
-            .filter((value) => Number.isInteger(value) && value >= 0 && value < resultCount)));
+            : Array.isArray(parsed?.keepTexts)
+                ? parsed.keepTexts
+                : Array.isArray(parsed?.texts)
+                    ? parsed.texts
+                    : Array.isArray(parsed?.keep)
+                        ? parsed.keep
+                        : [];
+        return Array.from(new Set(texts
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)));
     } catch {
-        const numbers = fenced.match(/\d+/g) || [];
-        return Array.from(new Set(numbers
-            .map((value) => Number(value))
-            .filter((value) => Number.isInteger(value) && value >= 0 && value < resultCount)));
+        const quotedTexts = [...fenced.matchAll(/"([^"]+)"/g)]
+            .map((match) => String(match[1] || '').trim())
+            .filter(Boolean);
+        return Array.from(new Set(quotedTexts));
     }
 }
 
-function isIdentityRanking(ranking, candidateCount) {
-    if (!Array.isArray(ranking) || ranking.length !== candidateCount) return false;
+function mapKeptTextsToIndexes(keptTexts, candidateResults) {
+    const normalizedWanted = new Set((keptTexts || []).map(normalizeFilterText).filter(Boolean));
+    if (!normalizedWanted.size) return [];
+
+    const indexes = [];
+    candidateResults.forEach((item, index) => {
+        if (normalizedWanted.has(normalizeFilterText(item?.text))) {
+            indexes.push(index);
+        }
+    });
+    return indexes;
+}
+
+function isIdentityKeep(keepIndexes, candidateCount) {
+    if (!Array.isArray(keepIndexes) || keepIndexes.length !== candidateCount) return false;
     for (let index = 0; index < candidateCount; index += 1) {
-        if (ranking[index] !== index) return false;
+        if (keepIndexes[index] !== index) return false;
     }
     return true;
 }
 
-function rerankSearchResults(originalQuery, expandedQueries, results, callback, attempt = 1) {
+function buildItemKey(item) {
+    return JSON.stringify([
+        item?.ownerName || '',
+        item?.wordId || '',
+        item?.word || '',
+        item?.section || '',
+        item?.text || ''
+    ]);
+}
+
+function sortAccumulatedResults(accumulatedMap, fallbackResults = []) {
+    const results = Array.from(accumulatedMap.values());
+    if (!results.length) return fallbackResults;
+    return results.sort((a, b) => {
+        if ((b.aiFilterScore || 0) !== (a.aiFilterScore || 0)) {
+            return (b.aiFilterScore || 0) - (a.aiFilterScore || 0);
+        }
+        return (b.score || 0) - (a.score || 0);
+    });
+}
+
+function filterSearchResultsUntilStable(originalQuery, expandedQueries, results, callback, attempt = 1, stageCollector = [], onStage = null, accumulatedMap = new Map()) {
     if (!Array.isArray(results) || results.length <= 1) {
-        return callback(null, results || []);
+        if (Array.isArray(results) && results.length === 1) {
+            const item = results[0];
+            const key = buildItemKey(item);
+            const previous = accumulatedMap.get(key);
+            accumulatedMap.set(key, {
+                ...item,
+                aiFilterScore: Math.max(previous?.aiFilterScore || 0, attempt)
+            });
+        }
+        return callback(null, sortAccumulatedResults(accumulatedMap, results || []));
     }
 
-    const candidateResults = results.slice(0, 10);
+    const candidateResults = results.slice(0, 20);
     requestStudyBuddyAiText(
         [
             {
                 role: 'system',
                 content: attempt === 1
-                    ? 'You rerank semantic vocabulary search matches. Choose the most relevant matches for the user query, prioritizing meaning fit over lexical overlap.'
-                    : 'You rerank semantic vocabulary search matches. You must critically reorder candidates by meaning fit. Do not keep the original order unless it is truly the best order after careful comparison.'
+                    ? 'You filter semantic vocabulary search matches by strict literal meaning relevance.'
+                    : 'You filter semantic vocabulary search matches by strict literal meaning relevance. Critically remove any candidate that does not directly express the query.'
             },
             {
                 role: 'user',
-                content: `Rerank these candidate matches for the user query.
+                content: `Remove irrelevant candidate texts for this search query.
 
 Rules:
 - Return JSON only
-- Format: {"ranking":[0,1,2]}
-- ranking must contain the candidate indexes in best-first order
-- Consider meaning match, register fit, and whether the phrase actually helps express the query
-- Original retrieval score is only a hint, not the final answer
-- If candidate 0 is not clearly the best meaning match, move it down
-- If the original order already happens to be best, you may keep it, but only after careful comparison
+- Format: {"keepTexts":["text 1","text 2"]}
+- keepTexts must contain only the exact candidate text strings that are still relevant
+- Copy each kept text exactly from the candidate list
+- Keep texts in their current order
+- Be strict
+- Use literal meaning only
+- Do not use metaphor, analogy, symbolism, shape similarity, or associative reasoning
+- A candidate is relevant only if it directly helps express the user's intended meaning
+- If a candidate merely shares one word like "circle", "landing", or "pattern" but describes a different concept, remove it
+- If you are unsure, remove it
 - Do not explain
 
 Original query: ${originalQuery}
-Expanded queries: ${JSON.stringify(expandedQueries)}
+Search variants: ${JSON.stringify(expandedQueries)}
 
 Candidates:
 ${candidateResults.map((item, index) => JSON.stringify({
     index,
-    word: item.word,
-    section: item.section,
-    text: item.text,
-    context: item.context || '',
-    register: item.register || '',
-    hint: item.hint || '',
-    matchedQuery: item.matchedQuery,
-    score: Number(item.score.toFixed(4))
-})).join('\n')}`
+    text: item.text
+})).join('\n')}
+
+Bad examples of reasoning that must be rejected:
+- "political circles" is relevant because a plane circles before landing
+- "circular depression" is relevant because both involve a circular shape
+- any candidate is relevant just because it can be loosely compared to flying, turning, safety, or motion
+
+Only keep candidates with direct meaning match.`
             }
         ],
         (error, content) => {
             if (error) {
-                console.warn('[StudyBuddySearch] AI rerank failed:', error.message);
+                console.warn('[StudyBuddySearch] AI filter failed:', error.message);
                 return callback(null, results);
             }
 
-            const ranking = parseRerankedIndexes(content, candidateResults.length);
-            if (ranking.length === 0) {
-                console.warn('[StudyBuddySearch] AI rerank returned unusable ranking, keeping original order.');
-                return callback(null, results);
+            console.log(`[StudyBuddySearch] AI filter raw response (attempt ${attempt}):`, content);
+            const keptTexts = parseKeptTexts(content);
+            if (Array.isArray(keptTexts) && keptTexts.length === 0) {
+                console.log(`[StudyBuddySearch] AI filter returned empty keepTexts at attempt ${attempt}; stopping with previous results.`);
+                const stage = attempt > 1
+                    ? `Mình dừng lọc ở lần ${attempt} và giữ lại các kết quả tốt nhất từ những vòng trước.`
+                    : `Mình lọc lần ${attempt}: không còn kết quả nào đủ phù hợp.`;
+                stageCollector.push(stage);
+                if (typeof onStage === 'function') onStage(stage);
+                return callback(null, attempt > 1 ? sortAccumulatedResults(accumulatedMap, results) : []);
+            }
+            const keepIndexes = mapKeptTextsToIndexes(keptTexts, candidateResults);
+            if (keepIndexes.length === 0) {
+                console.warn('[StudyBuddySearch] AI filter returned texts that did not match any candidate exactly, keeping current results.');
+                return callback(null, sortAccumulatedResults(accumulatedMap, results));
             }
 
-            if (attempt === 1 && isIdentityRanking(ranking, candidateResults.length)) {
-                console.warn('[StudyBuddySearch] AI rerank returned identity order, retrying with stricter prompt.');
-                return rerankSearchResults(originalQuery, expandedQueries, results, callback, 2);
+            const filteredTop = keepIndexes.map((index) => candidateResults[index]);
+            filteredTop.forEach((item) => {
+                const key = buildItemKey(item);
+                const previous = accumulatedMap.get(key);
+                accumulatedMap.set(key, {
+                    ...item,
+                    aiFilterScore: (previous?.aiFilterScore || 0) + attempt
+                });
+            });
+
+            if (isIdentityKeep(keepIndexes, candidateResults.length)) {
+                console.log(`[StudyBuddySearch] AI filter stable at attempt ${attempt}; no more removals.`);
+                const finalResults = sortAccumulatedResults(accumulatedMap, results);
+                const stage = `Mình lọc xong và giữ lại ${finalResults.length} kết quả phù hợp nhất.`;
+                stageCollector.push(stage);
+                if (typeof onStage === 'function') onStage(stage);
+                return callback(null, finalResults);
             }
 
-            const used = new Set(ranking);
-            const rerankedTop = ranking.map((index) => candidateResults[index]);
-            const remainingTop = candidateResults.filter((_, index) => !used.has(index));
-            const reranked = [...rerankedTop, ...remainingTop, ...results.slice(candidateResults.length)];
-            console.log(`[StudyBuddySearch] AI reranked order (attempt ${attempt}):`, ranking);
-            callback(null, reranked);
+            const filtered = [...filteredTop, ...results.slice(candidateResults.length)];
+            const stage = `Mình lọc lần ${attempt}: từ ${results.length} kết quả còn ${filtered.length} kết quả.`;
+            stageCollector.push(stage);
+            if (typeof onStage === 'function') onStage(stage);
+            console.log(`[StudyBuddySearch] AI filter keep indexes (attempt ${attempt}):`, keepIndexes);
+            console.log(`[StudyBuddySearch] AI filter kept texts (attempt ${attempt}):`, filteredTop.map((item) => item.text));
+            console.log(
+                `[StudyBuddySearch] AI filter accumulated scores (attempt ${attempt}):`,
+                sortAccumulatedResults(accumulatedMap).map((item) => ({
+                    text: item.text,
+                    aiFilterScore: item.aiFilterScore,
+                    score: Number((item.score || 0).toFixed(4))
+                }))
+            );
+
+            if (attempt >= 4 || filtered.length <= 1) {
+                const finalStage = `Mình dừng lọc ở lần ${attempt} và còn ${filtered.length} kết quả.`;
+                stageCollector.push(finalStage);
+                if (typeof onStage === 'function') onStage(finalStage);
+                return callback(null, sortAccumulatedResults(accumulatedMap, filtered));
+            }
+
+            return filterSearchResultsUntilStable(originalQuery, expandedQueries, filtered, callback, attempt + 1, stageCollector, onStage, accumulatedMap);
         }
     );
 }
@@ -478,33 +651,86 @@ router.post('/studybuddy/chat', (req, res) => {
 router.post('/studybuddy/search', (req, res) => {
     const data = String(req.body?.data || '').trim();
     const userName = String(req.body?.userName || '').trim();
+    const parsedInput = parseTypedSearchInput(data);
+    const searchSection = parsedInput.section;
+    const searchQuery = parsedInput.query;
+    const wantsStream = String(req.headers.accept || '').includes('text/event-stream');
+    const stages = [];
 
-    if (!userName) {
-        return res.status(400).json({ error: 'Missing userName' });
+    const sendStage = (text) => {
+        if (!text) return;
+        if (wantsStream && !res.writableEnded) {
+            res.write(`data: ${JSON.stringify({ type: 'stage', text })}\n\n`);
+        }
+    };
+
+    const sendFinal = (payload) => {
+        if (wantsStream) {
+            if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ type: 'final', ...payload })}\n\n`);
+                res.end();
+            }
+            return;
+        }
+        return res.json(payload);
+    };
+
+    const sendError = (status, error) => {
+        if (wantsStream) {
+            if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`);
+                res.end();
+            }
+            return;
+        }
+        return res.status(status).json({ error });
+    };
+
+    if (wantsStream) {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive'
+        });
     }
 
-    if (!data) {
-        return res.status(400).json({ error: 'Missing search data' });
+    if (!userName) {
+        return sendError(400, 'Missing userName');
+    }
+
+    if (!searchQuery) {
+        return sendError(400, 'Missing search data');
     }
 
     console.log('User requested to search:', data);
     let responded = false;
 
-    expandSearchQueries(data, (_error, queries) => {
-        if (responded || res.headersSent) {
-            console.warn('[StudyBuddySearch] Ignoring duplicate callback for query:', data);
+    expandSearchQueries(searchQuery, (expandError, queries) => {
+        if (responded || (!wantsStream && res.headersSent) || res.writableEnded) {
+            console.warn('[StudyBuddySearch] Ignoring duplicate callback for query:', searchQuery);
             return;
         }
         responded = true;
-        const rawResults = searchUserVocabularyIndex(userName, queries, 20);
+        if (expandError) {
+            console.warn('[StudyBuddySearch] Expansion aborted search:', expandError.message);
+            return sendError(422, expandError.message);
+        }
+        const expandStage = `Mình đang thử tìm các bản tiếng Anh như: ${queries.join(' | ')}`;
+        stages.push(expandStage);
+        sendStage(expandStage);
+        const rawResults = searchUserVocabularyIndex(userName, queries, 20, { section: searchSection });
+        const foundStage = `Mình tìm thấy vài kết quả ban đầu, mình đang lọc bớt.`;
+        stages.push(foundStage);
+        sendStage(foundStage);
         console.log('[StudyBuddySearch] Search request detail:', {
             userName,
-            originalQuery: data,
+            originalQuery: searchQuery,
+            searchSection,
             expandedQueries: queries,
             resultCount: rawResults.length
         });
         console.log(
-            '[StudyBuddySearch] Top matches before rerank:',
+            '[StudyBuddySearch] Top matches before AI filter:',
             rawResults.map((item) => ({
                 word: item.word,
                 section: item.section,
@@ -514,10 +740,10 @@ router.post('/studybuddy/search', (req, res) => {
             }))
         );
 
-        rerankSearchResults(data, queries, rawResults, (_rerankError, results) => {
-            if (res.headersSent) return;
+        filterSearchResultsUntilStable(searchQuery, queries, rawResults, (_filterError, results) => {
+            if ((!wantsStream && res.headersSent) || res.writableEnded) return;
             console.log(
-                '[StudyBuddySearch] Top matches after rerank:',
+                '[StudyBuddySearch] Top matches after AI filter:',
                 results.map((item) => ({
                     word: item.word,
                     section: item.section,
@@ -537,12 +763,21 @@ router.post('/studybuddy/search', (req, res) => {
                 })
                 : ['Khong tim thay ket qua phu hop trong Vocabulary Library cua ban.'];
 
-            return res.json({
+            return sendFinal({
                 response: response[0],
                 responses: response,
-                queries
+                matches: results.map((item) => ({
+                    word: item.word,
+                    section: item.section,
+                    text: item.text,
+                    register: item.register || '',
+                    context: item.context || '',
+                    hint: item.hint || ''
+                })),
+                queries,
+                stages
             });
-        });
+        }, 1, stages, sendStage);
     });
 });
 
