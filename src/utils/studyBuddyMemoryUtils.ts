@@ -2,9 +2,9 @@ import { StudyBuddyMemoryChunk } from '../app/types';
 
 export const MAX_STUDY_BUDDY_MEMORY_CHUNKS = 100;
 const MEMORY_DIRECTIVE_REGEXES = [
-    /\[(?:W_UMEM|W_?MEM|WMEM|W)\s+([\s\S]*?)\]/gi,
-    /\[W_[A-Z0-9]+\s+([\s\S]*?)\]/gi,
-    /\[W_([^[\]]+?)\]/gi,
+    /\[\s*(?:W_UMEM|W_?MEM|WMEM|W)\s+([\s\S]*?)\s*\]/gi,
+    /\[\s*W_[A-Z0-9]+\s+([\s\S]*?)\s*\]/gi,
+    /\[\s*W_([^\[\]]+?)\s*\]/gi,
 ];
 
 function normalizeMemoryText(text: string) {
