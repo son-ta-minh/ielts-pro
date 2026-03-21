@@ -9,7 +9,16 @@ import { useDataActions } from './hooks/useDataActions';
 import * as dataStore from './dataStore';
 import * as db from './db';
 import { getConfig, getServerUrl, saveConfig } from './settingsManager';
-import { performAutoBackup, fetchServerBackups, ServerBackupItem } from '../services/backupService';
+import {
+    performAutoBackup,
+    fetchServerBackups,
+    ServerBackupItem,
+    ServerArchiveItem,
+    fetchServerArchives,
+    createServerArchive,
+    restoreArchiveOnServer,
+    deleteServerArchive
+} from '../services/backupService';
 import { DEFAULT_USER_ID } from '../data/user_data';
 import { generateMap } from '../data/adventure_map';
 
@@ -76,6 +85,9 @@ export const useAppController = () => {
 
     const [autoRestoreCandidates, setAutoRestoreCandidates] = useState<ServerBackupItem[]>([]);
     const [isAutoRestoreOpen, setIsAutoRestoreOpen] = useState(false);
+    const [selectedArchiveUser, setSelectedArchiveUser] = useState<ServerBackupItem | null>(null);
+    const [archiveCandidates, setArchiveCandidates] = useState<ServerArchiveItem[]>([]);
+    const [isArchiveLoading, setIsArchiveLoading] = useState(false);
     const hasCheckedAutoRestore = useRef(false);
 
     const [isResetting, setIsResetting] = useState(false);
@@ -618,6 +630,88 @@ export const useAppController = () => {
         } catch { setIsSyncing(false); showToast("Restore failed.", "error"); }
     };
 
+    const handleOpenArchivePicker = async (backup: ServerBackupItem) => {
+        setSelectedArchiveUser(backup);
+        setIsArchiveLoading(true);
+        try {
+            const archives = await fetchServerArchives(backup.id);
+            setArchiveCandidates(archives);
+        } catch {
+            showToast('Failed to load archive list.', 'error');
+        } finally {
+            setIsArchiveLoading(false);
+        }
+    };
+
+    const handleCloseArchivePicker = () => {
+        setSelectedArchiveUser(null);
+        setArchiveCandidates([]);
+        setIsArchiveLoading(false);
+    };
+
+    const handleCreateArchiveForUser = async (backup: ServerBackupItem) => {
+        setIsSyncing(true);
+        try {
+            const archives = await fetchServerArchives(backup.id);
+            const latestArchive = archives[0];
+            if (latestArchive && Number.isFinite(backup.size) && Number.isFinite(latestArchive.size) && backup.size < latestArchive.size) {
+                const confirmed = window.confirm(
+                    `The current backup file is smaller than the latest archive.\n\nCurrent: ${backup.size} bytes\nLatest archive: ${latestArchive.size} bytes\n\nNormally the current file is expected to be larger or newer. Are you sure you still want to archive it?\n\nThis is safe and will not modify any existing archive files.`
+                );
+                if (!confirmed) {
+                    setIsSyncing(false);
+                    return;
+                }
+            }
+            const ok = await createServerArchive(backup.id);
+            if (!ok) {
+                showToast('Failed to archive current backup.', 'error');
+                return;
+            }
+            showToast('Archive created on server.', 'success');
+            if (selectedArchiveUser?.id === backup.id) {
+                const archives = await fetchServerArchives(backup.id);
+                setArchiveCandidates(archives);
+            }
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleDeleteArchive = async (archiveId: string) => {
+        if (!selectedArchiveUser) return;
+        setIsSyncing(true);
+        try {
+            const ok = await deleteServerArchive(selectedArchiveUser.id, archiveId);
+            if (!ok) {
+                showToast('Failed to delete archive.', 'error');
+                return;
+            }
+            const archives = await fetchServerArchives(selectedArchiveUser.id);
+            setArchiveCandidates(archives);
+            showToast('Archive deleted.', 'success');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleRestoreFromArchive = async (archiveId: string) => {
+        if (!selectedArchiveUser) return;
+        setIsSyncing(true);
+        try {
+            const ok = await restoreArchiveOnServer(selectedArchiveUser.id, archiveId);
+            if (!ok) {
+                showToast('Failed to restore archive.', 'error');
+                return;
+            }
+            await handleAutoRestoreAction(selectedArchiveUser.id);
+            handleCloseArchivePicker();
+        } catch {
+            showToast('Failed to restore archive.', 'error');
+            setIsSyncing(false);
+        }
+    };
+
     const handleLocalRestoreSetup = () => { setIsAutoRestoreOpen(false); triggerLocalRestore(); };
 
     const handleNewUserSetup = async () => {
@@ -1014,6 +1108,7 @@ export const useAppController = () => {
         sslIssueUrl,
         setSslIssueUrl,
         hasUnsavedChanges, hasWritingUnsavedChanges, setHasWritingUnsavedChanges, nextAutoBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates,
+        selectedArchiveUser, archiveCandidates, isArchiveLoading, handleOpenArchivePicker, handleCloseArchivePicker, handleCreateArchiveForUser, handleRestoreFromArchive, handleDeleteArchive,
         handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen,
         connectionScanStatus, scanningUrl, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt,
         isSyncing, handleSyncPush, handleSyncRestore, checkServerConnection, retrySslConnection, handleSpecialAction

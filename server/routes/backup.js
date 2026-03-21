@@ -7,6 +7,53 @@ const { settings } = require('../config');
 const { sanitizeToAscii, getAppBackupPath, loadMetadata, saveMetadata } = require('../utils');
 const { rebuildUserVocabularySearchIndexFromFile } = require('../vocabularySearchIndex');
 
+function resolveBackupPaths(appName, identifier, createIfNotExist = false) {
+    const appDir = getAppBackupPath(appName, createIfNotExist);
+    if (!appDir) return null;
+    const safeIdentifier = sanitizeToAscii(identifier);
+    const fileName = `backup_${safeIdentifier}.json`;
+    const filePath = path.join(appDir, fileName);
+    const archiveDir = path.join(appDir, 'archive');
+    return {
+        appDir,
+        safeIdentifier,
+        fileName,
+        filePath,
+        archiveDir,
+    };
+}
+
+function ensureArchiveDir(archiveDir) {
+    if (!fs.existsSync(archiveDir)) {
+        fs.mkdirSync(archiveDir, { recursive: true });
+    }
+}
+
+function archiveCurrentBackupFile({ filePath, fileName, archiveDir, safeIdentifier }) {
+    if (!fs.existsSync(filePath)) {
+        const err = new Error('Current backup file does not exist.');
+        err.code = 'BACKUP_NOT_FOUND';
+        throw err;
+    }
+
+    ensureArchiveDir(archiveDir);
+
+    const stats = fs.statSync(filePath);
+    const sourceDate = new Date(stats.mtime).toISOString().split('T')[0];
+    let archiveFileName = `backup_${safeIdentifier}_${sourceDate}.json`;
+    let archivePath = path.join(archiveDir, archiveFileName);
+
+    if (fs.existsSync(archivePath)) {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        archiveFileName = `backup_${safeIdentifier}_${sourceDate}_${stamp}.json`;
+        archivePath = path.join(archiveDir, archiveFileName);
+    }
+
+    fs.copyFileSync(filePath, archivePath);
+    console.log(`[Backup] Archived '${fileName}' to '${archivePath}'`);
+    return { archiveFileName, archivePath };
+}
+
 router.get('/backups', async (req, res) => {
     const appName = req.query.app;
     if (!appName) {
@@ -58,6 +105,134 @@ router.get('/backups', async (req, res) => {
     } catch (err) {
         console.error(`[Backup] List error: ${err.message}`);
         return res.status(500).json({ error: 'Failed to scan backup directories' });
+    }
+});
+
+router.get('/archives', async (req, res) => {
+    const appName = req.query.app;
+    const identifier = String(req.query.identifier || '').trim();
+    if (!appName) {
+        return res.status(400).json({ error: 'app parameter is required' });
+    }
+    if (!identifier) {
+        return res.status(400).json({ error: 'identifier parameter is required' });
+    }
+
+    const resolved = resolveBackupPaths(appName, identifier);
+    if (!resolved || !fs.existsSync(resolved.archiveDir)) {
+        return res.json({ archives: [] });
+    }
+
+    try {
+        const archives = fs.readdirSync(resolved.archiveDir)
+            .filter((file) => file.startsWith(`backup_${resolved.safeIdentifier}_`) && file.endsWith('.json'))
+            .map((file) => {
+                const filePath = path.join(resolved.archiveDir, file);
+                const stats = fs.statSync(filePath);
+                return {
+                    id: file,
+                    name: file.replace(/^backup_/, '').replace(/\.json$/i, ''),
+                    size: stats.size,
+                    date: stats.mtime,
+                };
+            })
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        return res.json({ archives });
+    } catch (err) {
+        console.error(`[Backup] Failed to list archives: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to list archive files.' });
+    }
+});
+
+router.post('/archive', (req, res) => {
+    const appName = req.query.app;
+    const identifier = String(req.query.identifier || req.query.username || req.query.userId || '').trim();
+    if (!appName) {
+        return res.status(400).json({ error: 'app parameter is required' });
+    }
+    if (!identifier) {
+        return res.status(400).json({ error: 'identifier parameter is required' });
+    }
+
+    try {
+        const resolved = resolveBackupPaths(appName, identifier, true);
+        const { archiveFileName } = archiveCurrentBackupFile(resolved);
+        return res.json({ success: true, archiveId: archiveFileName });
+    } catch (err) {
+        if (err.code === 'BACKUP_NOT_FOUND') {
+            return res.status(404).json({ error: `No current backup found for ${identifier}.` });
+        }
+        console.error(`[Backup] Failed to archive current backup: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to archive current backup.' });
+    }
+});
+
+router.post('/archive/restore', (req, res) => {
+    const appName = req.query.app;
+    const identifier = String(req.body?.identifier || req.query.identifier || '').trim();
+    const archiveId = String(req.body?.archiveId || '').trim();
+    if (!appName) {
+        return res.status(400).json({ error: 'app parameter is required' });
+    }
+    if (!identifier || !archiveId) {
+        return res.status(400).json({ error: 'identifier and archiveId are required' });
+    }
+
+    try {
+        const resolved = resolveBackupPaths(appName, identifier, true);
+        const archivePath = path.join(resolved.archiveDir, archiveId);
+        if (!archiveId.startsWith(`backup_${resolved.safeIdentifier}_`) || !archiveId.endsWith('.json') || !fs.existsSync(archivePath)) {
+            return res.status(404).json({ error: 'Archive file not found for this user.' });
+        }
+
+        fs.copyFileSync(archivePath, resolved.filePath);
+        const meta = loadMetadata(resolved.appDir);
+        meta[resolved.fileName] = {
+            ...(meta[resolved.fileName] || {}),
+            displayName: identifier,
+            originalId: meta[resolved.fileName]?.originalId || req.body?.userId || null,
+            updatedAt: Date.now(),
+            restoredFromArchive: archiveId
+        };
+        saveMetadata(meta, resolved.appDir);
+
+        if (appName === 'vocab') {
+            rebuildUserVocabularySearchIndexFromFile(resolved.filePath, String(identifier || '').trim());
+        }
+
+        console.log(`[Backup] Restored archive '${archiveId}' as current backup for '${identifier}'.`);
+        return res.json({ success: true });
+    } catch (err) {
+        console.error(`[Backup] Failed to restore archive: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to restore archive.' });
+    }
+});
+
+router.delete('/archive', (req, res) => {
+    const appName = req.query.app;
+    const identifier = String(req.query.identifier || '').trim();
+    const archiveId = String(req.query.archiveId || '').trim();
+    if (!appName) {
+        return res.status(400).json({ error: 'app parameter is required' });
+    }
+    if (!identifier || !archiveId) {
+        return res.status(400).json({ error: 'identifier and archiveId are required' });
+    }
+
+    try {
+        const resolved = resolveBackupPaths(appName, identifier, true);
+        const archivePath = path.join(resolved.archiveDir, archiveId);
+        if (!archiveId.startsWith(`backup_${resolved.safeIdentifier}_`) || !archiveId.endsWith('.json') || !fs.existsSync(archivePath)) {
+            return res.status(404).json({ error: 'Archive file not found for this user.' });
+        }
+
+        fs.unlinkSync(archivePath);
+        console.log(`[Backup] Deleted archive '${archiveId}' for '${identifier}'.`);
+        return res.json({ success: true });
+    } catch (err) {
+        console.error(`[Backup] Failed to delete archive: ${err.message}`);
+        return res.status(500).json({ error: 'Failed to delete archive.' });
     }
 });
 

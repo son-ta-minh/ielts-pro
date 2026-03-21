@@ -135,6 +135,13 @@ export interface ServerBackupItem {
     date: string;
 }
 
+export interface ServerArchiveItem {
+    id: string;
+    name: string;
+    size: number;
+    date: string;
+}
+
 export const fetchServerBackups = async (): Promise<ServerBackupItem[]> => {
     try {
         const config = getConfig();
@@ -148,6 +155,67 @@ export const fetchServerBackups = async (): Promise<ServerBackupItem[]> => {
     } catch (e) {
         console.warn("[Backup] Failed to fetch list:", e);
         return [];
+    }
+};
+
+export const fetchServerArchives = async (identifier: string): Promise<ServerArchiveItem[]> => {
+    try {
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+        const response = await fetch(`${serverUrl}/api/archives?app=vocab&identifier=${encodeURIComponent(identifier)}`);
+        if (response.ok) {
+            const data = await response.json();
+            return data.archives || [];
+        }
+        return [];
+    } catch (e) {
+        console.warn('[Backup] Failed to fetch archives:', e);
+        return [];
+    }
+};
+
+export const createServerArchive = async (identifier: string): Promise<boolean> => {
+    try {
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+        const response = await fetch(`${serverUrl}/api/archive?app=vocab&identifier=${encodeURIComponent(identifier)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        return response.ok;
+    } catch (e) {
+        console.warn('[Backup] Failed to create archive:', e);
+        return false;
+    }
+};
+
+export const restoreArchiveOnServer = async (identifier: string, archiveId: string): Promise<boolean> => {
+    try {
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+        const response = await fetch(`${serverUrl}/api/archive/restore?app=vocab`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identifier, archiveId })
+        });
+        return response.ok;
+    } catch (e) {
+        console.warn('[Backup] Failed to restore archive:', e);
+        return false;
+    }
+};
+
+export const deleteServerArchive = async (identifier: string, archiveId: string): Promise<boolean> => {
+    try {
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+        const response = await fetch(`${serverUrl}/api/archive?app=vocab&identifier=${encodeURIComponent(identifier)}&archiveId=${encodeURIComponent(archiveId)}`, {
+            method: 'DELETE'
+        });
+        return response.ok;
+    } catch (e) {
+        console.warn('[Backup] Failed to delete archive:', e);
+        return false;
     }
 };
 

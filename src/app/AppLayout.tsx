@@ -10,6 +10,7 @@ import ViewWordModal from '../components/word_lib/ViewWordModal';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import { StudyBuddy } from '../components/common/StudyBuddy';
 import { ServerRestoreModal } from '../components/common/ServerRestoreModal';
+import { ServerArchiveModal } from '../components/common/ServerArchiveModal';
 import { SyncPromptModal } from '../components/common/SyncPromptModal';
 
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
@@ -191,7 +192,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
 };
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, restoreFromServerAction, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore, sslIssueUrl, setSslIssueUrl, retrySslConnection } = controller;
+  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, selectedArchiveUser, archiveCandidates, isArchiveLoading, restoreFromServerAction, handleOpenArchivePicker, handleCloseArchivePicker, handleCreateArchiveForUser, handleRestoreFromArchive, handleDeleteArchive, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore, sslIssueUrl, setSslIssueUrl, retrySslConnection } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
   const [writingConfirmModal, setWritingConfirmModal] = useState<{ isOpen: boolean; targetView: AppView | null; action?: () => void }>({
@@ -261,7 +262,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
         }}
         onClose={() => setWritingConfirmModal({ isOpen: false, targetView: null, action: undefined })}
       />
-      <ServerRestoreModal isOpen={isAutoRestoreOpen} onClose={() => setIsAutoRestoreOpen(false)} backups={autoRestoreCandidates} onRestore={(id) => { setIsRestoring(true); restoreFromServerAction(id).finally(() => setIsRestoring(false)); }} isRestoring={isRestoring} title="User Selection" description="We found existing profiles on the server. Select yours to restore." onNewUser={handleNewUserSetup} onLocalRestore={handleLocalRestoreSetup} />
+      <ServerRestoreModal isOpen={isAutoRestoreOpen} onClose={() => setIsAutoRestoreOpen(false)} backups={autoRestoreCandidates} onRestore={(id) => { setIsRestoring(true); restoreFromServerAction(id).finally(() => setIsRestoring(false)); }} onOpenArchivePicker={handleOpenArchivePicker} onCreateArchive={handleCreateArchiveForUser} isRestoring={isRestoring} title="User Selection" description="We found existing profiles on the server. Select yours to restore." onNewUser={handleNewUserSetup} onLocalRestore={handleLocalRestoreSetup} />
+      <ServerArchiveModal
+        isOpen={!!selectedArchiveUser}
+        userName={selectedArchiveUser?.name || ''}
+        archives={archiveCandidates}
+        isLoading={isArchiveLoading}
+        isSubmitting={isSyncing}
+        onClose={handleCloseArchivePicker}
+        onRefresh={() => selectedArchiveUser ? handleOpenArchivePicker(selectedArchiveUser) : undefined}
+        onCreateArchive={() => selectedArchiveUser ? handleCreateArchiveForUser(selectedArchiveUser) : undefined}
+        onRestore={handleRestoreFromArchive}
+        onDelete={handleDeleteArchive}
+      />
       {syncPrompt && <SyncPromptModal isOpen={syncPrompt.isOpen} onClose={() => setSyncPrompt(null)} onPush={handleSyncPush} onRestore={handleSyncRestore} type={syncPrompt.type} localDate={syncPrompt.localDate} serverDate={syncPrompt.serverDate} isProcessing={isSyncing} />}
       {sslIssueUrl && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">

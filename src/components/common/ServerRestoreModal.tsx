@@ -1,5 +1,5 @@
-import React from 'react';
-import { Cloud, X, User, Loader2, Plus, FileJson } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArchiveRestore, ChevronDown, Cloud, HardDriveUpload, X, User, Loader2, Plus, FileJson } from 'lucide-react';
 import { ServerBackupItem } from '../../services/backupService';
 
 export interface RestoreModalProps {
@@ -7,6 +7,8 @@ export interface RestoreModalProps {
     onClose: () => void;
     backups: ServerBackupItem[];
     onRestore: (identifier: string) => void;
+    onOpenArchivePicker: (backup: ServerBackupItem) => void;
+    onCreateArchive: (backup: ServerBackupItem) => void;
     onNewUser: () => void;
     onLocalRestore: () => void;
     isRestoring: boolean;
@@ -19,12 +21,16 @@ export const ServerRestoreModal: React.FC<RestoreModalProps> = ({
     onClose, 
     backups, 
     onRestore, 
+    onOpenArchivePicker,
+    onCreateArchive,
     onNewUser,
     onLocalRestore,
     isRestoring,
     title = "Server Backups",
     description = "Select a user profile to restore."
 }) => {
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
     if (!isOpen) return null;
 
     const formatSize = (bytes: number) => {
@@ -48,25 +54,66 @@ export const ServerRestoreModal: React.FC<RestoreModalProps> = ({
                         <div className="text-center py-10 text-neutral-400 font-medium italic">No backups found on server.</div>
                     ) : (
                         backups.map(backup => (
-                            <div key={backup.id} className="flex items-center justify-between p-4 rounded-2xl bg-neutral-50 border border-neutral-100 hover:border-neutral-300 transition-all group">
-                                <div className="flex items-center gap-3 overflow-hidden">
-                                    <div className="p-2.5 bg-white rounded-xl text-neutral-500 shadow-sm"><User size={18}/></div>
-                                    <div className="min-w-0">
-                                        <h4 className="font-bold text-sm text-neutral-900 truncate">{backup.name}</h4>
-                                        <div className="flex items-center gap-2 text-[10px] text-neutral-500 font-medium">
-                                            <span className="font-black text-indigo-600">{new Date(backup.date).toLocaleString()}</span>
-                                            <span className="w-1 h-1 rounded-full bg-neutral-300"></span>
-                                            <span>{formatSize(backup.size)}</span>
+                            <div key={backup.id} className="rounded-2xl bg-neutral-50 border border-neutral-100 p-4 hover:border-neutral-300 transition-all group">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="p-2.5 bg-white rounded-xl text-neutral-500 shadow-sm"><User size={18}/></div>
+                                        <div className="min-w-0">
+                                            <h4 className="font-bold text-sm text-neutral-900 truncate">{backup.name}</h4>
+                                            <div className="flex items-center gap-2 text-[10px] text-neutral-500 font-medium">
+                                                <span className="font-black text-indigo-600">{new Date(backup.date).toLocaleString()}</span>
+                                                <span className="w-1 h-1 rounded-full bg-neutral-300"></span>
+                                                <span>{formatSize(backup.size)}</span>
+                                            </div>
                                         </div>
                                     </div>
+                                    <div className="relative">
+                                        <button 
+                                            onClick={() => setOpenMenuId((current) => current === backup.id ? null : backup.id)}
+                                            disabled={isRestoring}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                        >
+                                            {isRestoring ? <Loader2 size={14} className="animate-spin"/> : 'Restore'}
+                                            <ChevronDown size={13} />
+                                        </button>
+                                        {openMenuId === backup.id ? (
+                                            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 min-w-[13rem] rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl">
+                                                <button
+                                                    onClick={() => {
+                                                        setOpenMenuId(null);
+                                                        onRestore(backup.id);
+                                                    }}
+                                                    disabled={isRestoring}
+                                                    className="flex w-full items-center rounded-xl px-3 py-2 text-left text-[11px] font-bold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+                                                >
+                                                    Restore current backup
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setOpenMenuId(null);
+                                                        onOpenArchivePicker(backup);
+                                                    }}
+                                                    disabled={isRestoring}
+                                                    className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+                                                >
+                                                    <ArchiveRestore size={13} />
+                                                    Restore from Archive
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setOpenMenuId(null);
+                                                        onCreateArchive(backup);
+                                                    }}
+                                                    disabled={isRestoring}
+                                                    className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+                                                >
+                                                    <HardDriveUpload size={13} />
+                                                    Archive
+                                                </button>
+                                            </div>
+                                        ) : null}
+                                    </div>
                                 </div>
-                                <button 
-                                    onClick={() => onRestore(backup.id)}
-                                    disabled={isRestoring}
-                                    className="px-4 py-2 bg-white border border-neutral-200 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                                >
-                                    {isRestoring ? <Loader2 size={14} className="animate-spin"/> : 'Restore'}
-                                </button>
                             </div>
                         ))
                     )}
