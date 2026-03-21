@@ -213,6 +213,76 @@ ${parts.join('\n\n')}`
     );
   };
 
+  const handleAskAiSection = (section: 'wordFamily' | 'collocation' | 'paraphrase' | 'idiom' | 'example') => {
+    let sectionData = '';
+
+    if (section === 'wordFamily' && currentWord.wordFamily) {
+      const familyLines = [
+        ...(currentWord.wordFamily.nouns || []).filter((item) => !item.isIgnored).map((item) => `- noun: ${item.word}`),
+        ...(currentWord.wordFamily.verbs || []).filter((item) => !item.isIgnored).map((item) => `- verb: ${item.word}`),
+        ...(currentWord.wordFamily.adjs || []).filter((item) => !item.isIgnored).map((item) => `- adjective: ${item.word}`),
+        ...(currentWord.wordFamily.advs || []).filter((item) => !item.isIgnored).map((item) => `- adverb: ${item.word}`),
+      ];
+      sectionData = familyLines.join('\n');
+    }
+
+    if (section === 'collocation' && currentWord.collocationsArray?.length) {
+      sectionData = currentWord.collocationsArray
+        .filter((item) => !item.isIgnored)
+        .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
+        .join('\n');
+    }
+
+    if (section === 'paraphrase' && currentWord.paraphrases?.length) {
+      sectionData = currentWord.paraphrases
+        .filter((item) => !item.isIgnored)
+        .map((item) => `- ${item.word}${item.context ? `: ${item.context}` : ''}`)
+        .join('\n');
+    }
+
+    if (section === 'idiom' && currentWord.idiomsList?.length) {
+      sectionData = currentWord.idiomsList
+        .filter((item) => !item.isIgnored)
+        .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
+        .join('\n');
+    }
+
+    if (section === 'example' && currentWord.example) {
+      sectionData = currentWord.example;
+    }
+
+    if (!sectionData.trim()) return;
+
+    const sectionLabelMap = {
+      wordFamily: 'word family',
+      collocation: 'collocations',
+      paraphrase: 'paraphrases',
+      idiom: 'idioms',
+      example: 'examples'
+    } as const;
+
+    window.dispatchEvent(
+      new CustomEvent('studybuddy-chat-request', {
+        detail: {
+          prompt: `Explain this ${sectionLabelMap[section]} section in clear practical English for an English learner.
+
+Rules:
+- Your response must be 100% in English.
+- Use only the section data below.
+- If any phrase/collocation/paraphrase/idiom sounds unnatural, too narrow, awkwardly translated, or easy to misunderstand, say that clearly.
+- If something is correct but limited in use, explain the limitation.
+- Be concise but useful.
+
+Section data:
+Headword: ${currentWord.word}
+
+${sectionLabelMap[section]}:
+${sectionData}`
+        }
+      })
+    );
+  };
+
   return (
     <>
     {isChallenging && <TestModal word={currentWord} onComplete={handleChallengeComplete} onClose={() => setIsChallenging(false)} />}
@@ -230,6 +300,7 @@ ${parts.join('\n\n')}`
       appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}
       onAskAiRequest={handleAskAi}
+      onAskAiSectionRequest={handleAskAiSection}
     />
     </>
   );

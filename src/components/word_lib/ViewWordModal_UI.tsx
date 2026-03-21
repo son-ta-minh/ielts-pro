@@ -193,13 +193,15 @@ export interface ViewWordModalUIProps {
     appliedAccent?: 'US' | 'UK';
     onAddAIExample?: () => void;
     onAskAiRequest?: () => void;
+    onAskAiSectionRequest?: (section: 'wordFamily' | 'collocation' | 'paraphrase' | 'idiom' | 'example') => void;
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
     word, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onNavigateToWord, isViewOnly = false,
     onAddAIExample,
-    onAskAiRequest
+    onAskAiRequest,
+    onAskAiSectionRequest
 }) => {
     // Helper to render examples with badge replacements
     const renderExample = (text: string) => {
@@ -697,9 +699,21 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 )}
                                 {hasAnyFamilyData && (
                                     <div className="space-y-1 md:col-span-4">
-                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                                            <Network size={10}/> Word Family
-                                        </label>
+                                        <div className="mb-1 flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                                <Network size={10}/> Word Family
+                                            </label>
+                                            {onAskAiSectionRequest ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onAskAiSectionRequest('wordFamily')}
+                                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                                >
+                                                    <MessageSquare size={10} />
+                                                    <span>Ask AI</span>
+                                                </button>
+                                            ) : null}
+                                        </div>
                                         <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100">
                                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                                 {renderFamilyCardGroup("Nouns", word.wordFamily?.nouns, "blue", "nouns")}
@@ -712,9 +726,21 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 )}
                                 {displayedCollocs.length > 0 && (
                                     <div className="space-y-1 md:col-span-4">
-                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                                            <Combine size={10}/> Collocations
-                                        </label>
+                                        <div className="mb-1 flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                                <Combine size={10}/> Collocations
+                                            </label>
+                                            {onAskAiSectionRequest ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onAskAiSectionRequest('collocation')}
+                                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                                >
+                                                    <MessageSquare size={10} />
+                                                    <span>Ask AI</span>
+                                                </button>
+                                            ) : null}
+                                        </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedCollocs.map((c, i) => {
                                                 let isFailed = false;
@@ -747,9 +773,21 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 )}
                                 {displayedParas.length > 0 && (
                                     <div className="space-y-1 md:col-span-4">
-                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                                            <Zap size={10} className="text-amber-500"/> Variations
-                                        </label>
+                                        <div className="mb-1 flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                                <Zap size={10} className="text-amber-500"/> Variations
+                                            </label>
+                                            {onAskAiSectionRequest ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onAskAiSectionRequest('paraphrase')}
+                                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                                >
+                                                    <MessageSquare size={10} />
+                                                    <span>Ask AI</span>
+                                                </button>
+                                            ) : null}
+                                        </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedParas.map((para, idx) => {
                                                 const types = ['PARAPHRASE_QUIZ', 'PARAPHRASE_CONTEXT_QUIZ'];
@@ -778,9 +816,21 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 )}
                                 {displayedIdioms.length > 0 && (
                                     <div className="space-y-1 md:col-span-4">
-                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                                            <MessageSquare size={10}/> Related Idioms
-                                        </label>
+                                        <div className="mb-1 flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                                <MessageSquare size={10}/> Related Idioms
+                                            </label>
+                                            {onAskAiSectionRequest ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onAskAiSectionRequest('idiom')}
+                                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                                >
+                                                    <MessageSquare size={10} />
+                                                    <span>Ask AI</span>
+                                                </button>
+                                            ) : null}
+                                        </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedIdioms.map((idiom, i) => {
                                                 let isFailed = false;
@@ -819,15 +869,27 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                                 <AtSign size={10}/> Examples
                                             </label>
-                                            {onAddAIExample && (
-                                                <button
-                                                    onClick={() => onAddAIExample()}
-                                                    className="flex items-center justify-center w-5 h-5 rounded-md bg-neutral-100 hover:bg-indigo-100 text-neutral-500 hover:text-indigo-600 transition-colors"
-                                                    title="Add AI Example"
-                                                >
-                                                    <Plus size={12}/>
-                                                </button>
-                                            )}
+                                            <div className="flex items-center gap-2">
+                                                {onAskAiSectionRequest ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onAskAiSectionRequest('example')}
+                                                        className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                                    >
+                                                        <MessageSquare size={10} />
+                                                        <span>Ask AI</span>
+                                                    </button>
+                                                ) : null}
+                                                {onAddAIExample && (
+                                                    <button
+                                                        onClick={() => onAddAIExample()}
+                                                        className="flex items-center justify-center w-5 h-5 rounded-md bg-neutral-100 hover:bg-indigo-100 text-neutral-500 hover:text-indigo-600 transition-colors"
+                                                        title="Add AI Example"
+                                                    >
+                                                        <Plus size={12}/>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div
                                             className="w-full text-sm leading-relaxed text-neutral-700"
