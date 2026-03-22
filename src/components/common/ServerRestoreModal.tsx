@@ -68,26 +68,28 @@ export const ServerRestoreModal: React.FC<RestoreModalProps> = ({
                                         </div>
                                     </div>
                                     <div className="relative">
-                                        <button 
-                                            onClick={() => setOpenMenuId((current) => current === backup.id ? null : backup.id)}
-                                            disabled={isRestoring}
-                                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-neutral-200 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                                        >
-                                            {isRestoring ? <Loader2 size={14} className="animate-spin"/> : 'Restore'}
-                                            <ChevronDown size={13} />
-                                        </button>
+                                        <div className="inline-flex items-stretch rounded-xl shadow-sm">
+                                            <button
+                                                onClick={() => {
+                                                    setOpenMenuId(null);
+                                                    onRestore(backup.id);
+                                                }}
+                                                disabled={isRestoring}
+                                                className="inline-flex items-center gap-2 rounded-l-xl border border-r-0 border-neutral-200 bg-white px-4 py-2 font-black text-[10px] uppercase tracking-wider text-indigo-600 transition-all hover:border-indigo-200 hover:bg-indigo-50 active:scale-95 disabled:opacity-50"
+                                            >
+                                                {isRestoring ? <Loader2 size={14} className="animate-spin"/> : 'Restore'}
+                                            </button>
+                                            <button
+                                                onClick={() => setOpenMenuId((current) => current === backup.id ? null : backup.id)}
+                                                disabled={isRestoring}
+                                                aria-label={`Open archive actions for ${backup.name}`}
+                                                className="inline-flex items-center justify-center rounded-r-xl border border-neutral-200 bg-white px-3 py-2 text-indigo-600 transition-all hover:border-indigo-200 hover:bg-indigo-50 active:scale-95 disabled:opacity-50"
+                                            >
+                                                <ChevronDown size={13} className={openMenuId === backup.id ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                                            </button>
+                                        </div>
                                         {openMenuId === backup.id ? (
                                             <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 min-w-[13rem] rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl">
-                                                <button
-                                                    onClick={() => {
-                                                        setOpenMenuId(null);
-                                                        onRestore(backup.id);
-                                                    }}
-                                                    disabled={isRestoring}
-                                                    className="flex w-full items-center rounded-xl px-3 py-2 text-left text-[11px] font-bold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
-                                                >
-                                                    Restore current backup
-                                                </button>
                                                 <button
                                                     onClick={() => {
                                                         setOpenMenuId(null);
@@ -108,7 +110,7 @@ export const ServerRestoreModal: React.FC<RestoreModalProps> = ({
                                                     className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                                                 >
                                                     <HardDriveUpload size={13} />
-                                                    Archive
+                                                    Archive current backup
                                                 </button>
                                             </div>
                                         ) : null}
