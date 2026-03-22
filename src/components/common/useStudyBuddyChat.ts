@@ -161,8 +161,8 @@ export function useStudyBuddyChat({
 }: UseStudyBuddyChatOptions) {
     function buildChatLanguageSystemMessage(language: 'vi' | 'en') {
         return language === 'vi'
-            ? 'Language mode is locked to Vietnamese. Write the full reply in Vietnamese only. Do not switch to English just because the quoted word, examples, or user message are in English. Only switch if the user explicitly asks you to answer in English.'
-            : 'Language mode is locked to English. Write the full reply in English only. Do not answer in Vietnamese, even if the user writes in Vietnamese or the learner profile says Vietnamese. Only switch if the user explicitly asks you to answer in Vietnamese.';
+            ? 'IMPORTANT: Language mode is locked to Vietnamese. Write the full reply in Vietnamese only. Do not switch to English just because the quoted word, examples, or user message are in English. If user asks to use Vietnamese, tell them switch the language toggle to English mode first.'
+            : 'IMPORTANT: Language mode is locked to English. Write the full reply in English only. Do not answer in Vietnamese, even if the user writes in Vietnamese or the learner profile says Vietnamese. If user asks to use Vietnamese, tell them switch the language toggle to Vietnamese mode first.';
     }
 
     function buildTargetAcademicStyleSystemMessage(target: StudyBuddyChatTarget | null) {
