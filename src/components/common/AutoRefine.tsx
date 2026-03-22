@@ -7,7 +7,7 @@ import React, {
     useRef,
     useState
 } from 'react';
-import { CheckCircle2, Info, Loader2, Wand2, X } from 'lucide-react';
+import { CheckCircle2, Loader2, Wand2, X } from 'lucide-react';
 import { User, VocabularyItem, WordQuality } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
@@ -15,7 +15,6 @@ import { runWordRefineWithRetry, WordRefineProgressSnapshot } from '../../servic
 import { applyAiRefinementResultsToWords } from '../../services/wordRefinePersistence';
 
 const AUTO_REFINE_STORAGE_KEY = 'vocab_pro_auto_refine_state_v1';
-const MAX_AUTO_REFINE_HISTORY_ITEMS = 120;
 
 type AutoRefineStatus = 'idle' | 'running' | 'completed';
 
@@ -31,12 +30,12 @@ interface AutoRefineState {
     currentWordId: string | null;
     currentWordText: string | null;
     progress: WordRefineProgressSnapshot | null;
-    history: WordRefineProgressSnapshot[];
 }
 
 interface AutoRefineContextValue {
     state: AutoRefineState;
     startAutoRefine: () => Promise<void>;
+    stopAutoRefine: () => void;
 }
 
 const DEFAULT_AUTO_REFINE_STATE: AutoRefineState = {
@@ -50,19 +49,20 @@ const DEFAULT_AUTO_REFINE_STATE: AutoRefineState = {
     pendingWordIds: [],
     currentWordId: null,
     currentWordText: null,
-    progress: null,
-    history: []
+    progress: null
 };
 
 const AutoRefineContext = createContext<AutoRefineContextValue>({
     state: DEFAULT_AUTO_REFINE_STATE,
-    startAutoRefine: async () => undefined
+    startAutoRefine: async () => undefined,
+    stopAutoRefine: () => undefined
 });
 
 const compactRefineSnapshotForHistory = (snapshot: WordRefineProgressSnapshot): WordRefineProgressSnapshot => ({
     ...snapshot,
-    rawText: snapshot.rawText
-        ? `${snapshot.rawText.slice(0, 800)}${snapshot.rawText.length > 800 ? '\n...[truncated]' : ''}`
+    rawText: undefined,
+    issues: Array.isArray(snapshot.issues)
+        ? snapshot.issues.slice(0, 3).map((issue) => String(issue).slice(0, 240))
         : undefined
 });
 
@@ -71,12 +71,30 @@ const loadPersistedAutoRefineState = (): AutoRefineState => {
         const raw = window.localStorage.getItem(AUTO_REFINE_STORAGE_KEY);
         if (!raw) return DEFAULT_AUTO_REFINE_STATE;
         const parsed = JSON.parse(raw);
-        return {
+        const nextState: AutoRefineState = {
             ...DEFAULT_AUTO_REFINE_STATE,
             ...parsed,
-            history: Array.isArray(parsed?.history) ? parsed.history : [],
             pendingWordIds: Array.isArray(parsed?.pendingWordIds) ? parsed.pendingWordIds : []
         };
+        if (nextState.status === 'running') {
+            return {
+                ...DEFAULT_AUTO_REFINE_STATE,
+                status: 'completed',
+                userId: nextState.userId,
+                startedAt: nextState.startedAt,
+                totalWords: nextState.totalWords,
+                completedCount: nextState.completedCount,
+                successCount: nextState.successCount,
+                failedCount: nextState.failedCount,
+                progress: {
+                    stage: 'aborted',
+                    attempt: 1,
+                    maxAttempts: 1,
+                    message: 'Auto Refine was stopped because the page reloaded.'
+                }
+            };
+        }
+        return nextState;
     } catch {
         return DEFAULT_AUTO_REFINE_STATE;
     }
@@ -91,6 +109,11 @@ const getWordLabel = (wordId: string | null, userId: string | null): string | nu
     return getWordById(wordId, userId)?.word || null;
 };
 
+const hasUserWordsHydrated = (userId: string | null): boolean => {
+    if (!userId) return false;
+    return dataStore.getAllWords().some((word) => word.userId === userId);
+};
+
 export const AutoRefineProvider: React.FC<{
     currentUser: User | null;
     children: React.ReactNode;
@@ -101,33 +124,59 @@ export const AutoRefineProvider: React.FC<{
     ));
     const stateRef = useRef(state);
     const processingRef = useRef(false);
+    const persistTimeoutRef = useRef<number | null>(null);
 
-    useEffect(() => {
-        stateRef.current = state;
-        if (typeof window !== 'undefined') {
-            window.localStorage.setItem(AUTO_REFINE_STORAGE_KEY, JSON.stringify(state));
-        }
-    }, [state]);
-
-    const appendHistory = useCallback((snapshot: WordRefineProgressSnapshot) => {
-        const compact = compactRefineSnapshotForHistory(snapshot);
+    const updateState = useCallback((updater: React.SetStateAction<AutoRefineState>) => {
         setState((current) => {
-            const nextHistory = [...current.history, compact];
-            return {
-                ...current,
-                progress: compact,
-                history: nextHistory.length > MAX_AUTO_REFINE_HISTORY_ITEMS
-                    ? nextHistory.slice(nextHistory.length - MAX_AUTO_REFINE_HISTORY_ITEMS)
-                    : nextHistory
-            };
+            const next = typeof updater === 'function'
+                ? (updater as (prev: AutoRefineState) => AutoRefineState)(current)
+                : updater;
+            stateRef.current = next;
+            return next;
         });
     }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (persistTimeoutRef.current) {
+            window.clearTimeout(persistTimeoutRef.current);
+        }
+        persistTimeoutRef.current = window.setTimeout(() => {
+            const persistedState = {
+                ...state,
+                progress: state.progress
+                    ? {
+                        stage: state.progress.stage,
+                        attempt: state.progress.attempt,
+                        maxAttempts: state.progress.maxAttempts,
+                        message: state.progress.message,
+                        issues: state.progress.issues
+                    }
+                    : null
+            };
+            window.localStorage.setItem(AUTO_REFINE_STORAGE_KEY, JSON.stringify(persistedState));
+        }, 250);
+        return () => {
+            if (persistTimeoutRef.current) {
+                window.clearTimeout(persistTimeoutRef.current);
+                persistTimeoutRef.current = null;
+            }
+        };
+    }, [state]);
+
+    const setProgressSnapshot = useCallback((snapshot: WordRefineProgressSnapshot) => {
+        const compact = compactRefineSnapshotForHistory(snapshot);
+        updateState((current) => ({
+            ...current,
+            progress: compact
+        }));
+    }, [updateState]);
 
     const markWordProcessed = useCallback((wordId: string, wordText: string, options: {
         success: boolean;
         progress?: WordRefineProgressSnapshot | null;
     }) => {
-        setState((current) => {
+        updateState((current) => {
             const nextPendingIds = current.pendingWordIds.filter((id) => id !== wordId);
             const nextCompletedCount = current.completedCount + 1;
             const nextState: AutoRefineState = {
@@ -145,13 +194,14 @@ export const AutoRefineProvider: React.FC<{
             }
             return nextState;
         });
-    }, []);
+    }, [updateState]);
 
     const processQueue = useCallback(async () => {
         if (!currentUser) return;
         if (processingRef.current) return;
         if (stateRef.current.status !== 'running') return;
         if (stateRef.current.userId !== currentUser.id) return;
+        if (stateRef.current.pendingWordIds.length > 0 && !hasUserWordsHydrated(currentUser.id)) return;
 
         processingRef.current = true;
         try {
@@ -164,63 +214,45 @@ export const AutoRefineProvider: React.FC<{
                 const liveWord = getWordById(wordId, currentUser.id);
                 const fallbackWordLabel = liveWord?.word || getWordLabel(wordId, currentUser.id) || 'Unknown word';
 
-                setState((current) => ({
+                updateState((current) => ({
                     ...current,
                     currentWordId: wordId,
                     currentWordText: fallbackWordLabel
                 }));
 
-                if (!liveWord || liveWord.quality !== WordQuality.RAW) {
-                    const skippedSnapshot: WordRefineProgressSnapshot = {
-                        stage: 'success',
-                        attempt: 1,
-                        maxAttempts: 1,
-                        message: `Skipped "${fallbackWordLabel}" because it is no longer RAW.`
-                    };
-                    appendHistory(skippedSnapshot);
-                    markWordProcessed(wordId, fallbackWordLabel, { success: true, progress: skippedSnapshot });
-                    showToast(`Auto Refine skipped "${fallbackWordLabel}" because it is no longer RAW.`, 'info', 2500);
+                if (!liveWord || liveWord.quality !== WordQuality.RAW || !!liveWord.isPassive) {
+                    markWordProcessed(wordId, fallbackWordLabel, { success: true });
+                    showToast(`Auto Refine skipped "${fallbackWordLabel}" because it is no longer an active RAW word.`, 'info', 2500);
                     continue;
                 }
 
                 let wordSaved = false;
                 let partialSave = false;
-                let finalProgress: WordRefineProgressSnapshot | null = null;
 
                 try {
                     const { finalIssues } = await runWordRefineWithRetry(
                         [liveWord],
                         currentUser.nativeLanguage || 'Vietnamese',
                         {
-                            onProgress: (snapshot) => {
-                                const enrichedSnapshot: WordRefineProgressSnapshot = {
-                                    ...snapshot,
-                                    message: `"${liveWord.word}": ${snapshot.message}`
-                                };
-                                finalProgress = enrichedSnapshot;
-                                appendHistory(enrichedSnapshot);
-                            },
+                            onProgress: () => {},
                             onWordValidated: async ({ word, results, partial, issues }) => {
                                 await applyAiRefinementResultsToWords(results, [word]);
                                 wordSaved = true;
                                 partialSave = !!partial;
-                                const progressSnapshot: WordRefineProgressSnapshot = {
-                                    stage: partial ? 'error' : 'success',
-                                    attempt: 1,
-                                    maxAttempts: 1,
-                                    message: partial
-                                        ? `"${word.word}" saved partially. Manual review may still be needed.`
-                                        : `"${word.word}" refined successfully.`,
-                                    issues
-                                };
-                                finalProgress = progressSnapshot;
-                                appendHistory(progressSnapshot);
                             }
                         }
                     );
 
                     if (wordSaved) {
-                        markWordProcessed(wordId, liveWord.word, { success: true, progress: finalProgress });
+                        markWordProcessed(wordId, liveWord.word, { success: true });
+                        setProgressSnapshot({
+                            stage: partialSave ? 'error' : 'success',
+                            attempt: 1,
+                            maxAttempts: 1,
+                            message: partialSave
+                                ? `"${liveWord.word}" saved partially.`
+                                : `"${liveWord.word}" refined successfully.`
+                        });
                         showToast(
                             partialSave
                                 ? `Auto Refine saved "${liveWord.word}" with partial fields.`
@@ -228,40 +260,24 @@ export const AutoRefineProvider: React.FC<{
                             partialSave ? 'info' : 'success',
                             2600
                         );
-
-                        if (finalIssues.length > 0 && !partialSave) {
-                            const issueSnapshot: WordRefineProgressSnapshot = {
-                                stage: 'error',
-                                attempt: 1,
-                                maxAttempts: 1,
-                                message: `Manual review suggested for "${liveWord.word}".`,
-                                issues: finalIssues.flatMap((issue) => issue.issues || [])
-                            };
-                            appendHistory(issueSnapshot);
-                        }
                     } else {
-                        const failureIssues = finalIssues.flatMap((issue) => issue.issues || []);
-                        const failureSnapshot: WordRefineProgressSnapshot = {
+                        markWordProcessed(wordId, liveWord.word, { success: false });
+                        setProgressSnapshot({
                             stage: 'error',
                             attempt: 1,
                             maxAttempts: 1,
-                            message: `Auto Refine could not save "${liveWord.word}".`,
-                            issues: failureIssues.length > 0 ? failureIssues : ['No valid fields could be saved.']
-                        };
-                        appendHistory(failureSnapshot);
-                        markWordProcessed(wordId, liveWord.word, { success: false, progress: failureSnapshot });
+                            message: `Auto Refine could not save "${liveWord.word}".`
+                        });
                         showToast(`Auto Refine could not refine "${liveWord.word}".`, 'error', 3200);
                     }
                 } catch (error) {
-                    const errorSnapshot: WordRefineProgressSnapshot = {
+                    markWordProcessed(wordId, liveWord.word, { success: false });
+                    setProgressSnapshot({
                         stage: 'error',
                         attempt: 1,
                         maxAttempts: 1,
-                        message: `Auto Refine failed on "${liveWord.word}".`,
-                        issues: [error instanceof Error ? error.message : 'Unknown error']
-                    };
-                    appendHistory(errorSnapshot);
-                    markWordProcessed(wordId, liveWord.word, { success: false, progress: errorSnapshot });
+                        message: `Auto Refine failed on "${liveWord.word}".`
+                    });
                     showToast(`Auto Refine failed on "${liveWord.word}".`, 'error', 3200);
                 }
             }
@@ -277,7 +293,7 @@ export const AutoRefineProvider: React.FC<{
                     maxAttempts: 1,
                     message: `Auto Refine completed ${stateRef.current.completedCount}/${stateRef.current.totalWords} word(s).`
                 };
-                appendHistory(summarySnapshot);
+                setProgressSnapshot(summarySnapshot);
                 showToast(
                     `Auto Refine completed: ${stateRef.current.successCount}/${stateRef.current.totalWords} word(s) saved.`,
                     'success',
@@ -287,13 +303,27 @@ export const AutoRefineProvider: React.FC<{
         } finally {
             processingRef.current = false;
         }
-    }, [appendHistory, currentUser, markWordProcessed, showToast]);
+    }, [currentUser, markWordProcessed, setProgressSnapshot, showToast, updateState]);
 
     useEffect(() => {
         if (!currentUser) return;
         if (state.status === 'running' && state.userId === currentUser.id) {
             processQueue();
         }
+    }, [currentUser, processQueue, state.status, state.userId]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        if (state.status !== 'running' || state.userId !== currentUser.id) return;
+
+        const handleDataUpdate = () => {
+            if (!processingRef.current && hasUserWordsHydrated(currentUser.id)) {
+                processQueue();
+            }
+        };
+
+        window.addEventListener('datastore-updated', handleDataUpdate);
+        return () => window.removeEventListener('datastore-updated', handleDataUpdate);
     }, [currentUser, processQueue, state.status, state.userId]);
 
     const startAutoRefine = useCallback(async () => {
@@ -303,7 +333,7 @@ export const AutoRefineProvider: React.FC<{
         }
 
         const rawWords = dataStore.getAllWords()
-            .filter((word) => word.userId === currentUser.id && word.quality === WordQuality.RAW);
+            .filter((word) => word.userId === currentUser.id && word.quality === WordQuality.RAW && !word.isPassive);
 
         if (rawWords.length === 0) {
             showToast('No RAW words found for Auto Refine.', 'info');
@@ -317,7 +347,7 @@ export const AutoRefineProvider: React.FC<{
             message: `Auto Refine queued ${rawWords.length} RAW word(s).`
         };
 
-        setState({
+        updateState({
             status: 'running',
             userId: currentUser.id,
             startedAt: Date.now(),
@@ -328,16 +358,34 @@ export const AutoRefineProvider: React.FC<{
             pendingWordIds: rawWords.map((word) => word.id),
             currentWordId: null,
             currentWordText: null,
-            progress: startingSnapshot,
-            history: [compactRefineSnapshotForHistory(startingSnapshot)]
+            progress: startingSnapshot
         });
         showToast(`Auto Refine started for ${rawWords.length} RAW word(s).`, 'info', 2600);
-    }, [currentUser, showToast]);
+    }, [currentUser, showToast, updateState]);
+
+    const stopAutoRefine = useCallback(() => {
+        if (stateRef.current.status !== 'running') return;
+        const completedSnapshot: WordRefineProgressSnapshot = {
+            stage: 'aborted',
+            attempt: 1,
+            maxAttempts: 1,
+            message: `Auto Refine stopped after ${stateRef.current.completedCount}/${stateRef.current.totalWords} word(s).`
+        };
+        updateState((current) => ({
+            ...current,
+            status: 'completed',
+            currentWordId: null,
+            currentWordText: null,
+            progress: completedSnapshot
+        }));
+        showToast('Auto Refine stopped.', 'info', 2200);
+    }, [showToast, updateState]);
 
     const contextValue = useMemo<AutoRefineContextValue>(() => ({
         state,
-        startAutoRefine
-    }), [startAutoRefine, state]);
+        startAutoRefine,
+        stopAutoRefine
+    }), [startAutoRefine, state, stopAutoRefine]);
 
     return (
         <AutoRefineContext.Provider value={contextValue}>
@@ -349,9 +397,8 @@ export const AutoRefineProvider: React.FC<{
 const useAutoRefine = () => useContext(AutoRefineContext);
 
 export const AutoRefineDashboardControl: React.FC = () => {
-    const { state, startAutoRefine } = useAutoRefine();
+    const { state, startAutoRefine, stopAutoRefine } = useAutoRefine();
     const [isPanelOpen, setIsPanelOpen] = useState(false);
-    const [isLogOpen, setIsLogOpen] = useState(false);
 
     const isRunning = state.status === 'running';
     const hasProgress = state.totalWords > 0;
@@ -422,13 +469,16 @@ export const AutoRefineDashboardControl: React.FC = () => {
                         )}
 
                         <div className="mt-4 flex items-center justify-between gap-2">
-                            <button
-                                onClick={() => setIsLogOpen(true)}
-                                className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-neutral-700 hover:bg-neutral-50"
-                            >
-                                <Info size={12} />
-                                <span>View Refine API Log</span>
-                            </button>
+                            <div />
+                            {isRunning && (
+                                <button
+                                    onClick={stopAutoRefine}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-rose-700 hover:bg-rose-100"
+                                >
+                                    <X size={12} />
+                                    <span>Stop AutoRefine</span>
+                                </button>
+                            )}
                             {state.status === 'completed' && (
                                 <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600">
                                     <CheckCircle2 size={12} />
@@ -439,65 +489,6 @@ export const AutoRefineDashboardControl: React.FC = () => {
                     </div>
                 )}
             </div>
-
-            {isLogOpen && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                    <div className="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-neutral-200 bg-white shadow-2xl">
-                        <header className="flex items-center justify-between border-b border-neutral-100 px-6 py-5">
-                            <div>
-                                <h3 className="text-lg font-black text-neutral-900">Refine API Log</h3>
-                                <p className="mt-1 text-xs font-medium text-neutral-400">
-                                    {state.completedCount}/{state.totalWords} processed since Auto Refine started
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setIsLogOpen(false)}
-                                className="rounded-full p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-                            >
-                                <X size={18} />
-                            </button>
-                        </header>
-
-                        <main className="flex-1 overflow-y-auto px-6 py-5">
-                            {state.history.length === 0 ? (
-                                <div className="rounded-2xl border border-neutral-100 bg-neutral-50 px-4 py-6 text-center text-sm font-medium text-neutral-400">
-                                    No refine log yet.
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {state.history.map((item, index) => {
-                                        const toneClass = item.stage === 'error'
-                                            ? 'border-rose-100 bg-rose-50'
-                                            : item.stage === 'success'
-                                                ? 'border-emerald-100 bg-emerald-50'
-                                                : 'border-neutral-100 bg-neutral-50';
-                                        const badgeClass = item.stage === 'error'
-                                            ? 'bg-rose-500 text-white'
-                                            : item.stage === 'success'
-                                                ? 'bg-emerald-500 text-white'
-                                                : 'bg-neutral-700 text-white';
-                                        return (
-                                            <div key={`${item.stage}-${index}-${item.message}`} className={`rounded-2xl border px-4 py-3 ${toneClass}`}>
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div className="text-sm font-bold text-neutral-800">{item.message}</div>
-                                                    <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-widest ${badgeClass}`}>
-                                                        {item.stage}
-                                                    </span>
-                                                </div>
-                                                {item.issues && item.issues.length > 0 && (
-                                                    <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-[11px] font-medium leading-relaxed text-neutral-600">
-                                                        {item.issues.join(' | ')}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </main>
-                    </div>
-                </div>
-            )}
         </>
     );
 };
