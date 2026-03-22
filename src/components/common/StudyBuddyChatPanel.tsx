@@ -958,7 +958,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         </div>
 
         <div
-            ref={chatScrollRef}
+            // ref={chatScrollRef}
             className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)] select-text"
             onMouseDownCapture={onPointerDownInside}
             onMouseDown={(e) => e.stopPropagation()}

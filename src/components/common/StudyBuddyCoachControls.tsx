@@ -65,35 +65,6 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                 <button
                     type="button"
                     onMouseDown={onRestoreSelection}
-                    onClick={onTranslate}
-                    disabled={!hasSelection || !!activeChatCoachAction}
-                    className={`${baseButtonClass} bg-indigo-50 text-indigo-600 hover:bg-indigo-100`}
-                    title="Translate to Vietnamese"
-                >
-                    {renderButtonLabel('translate', 'Translate')}
-                </button>
-                <button
-                    type="button"
-                    onMouseDown={onRestoreSelection}
-                    onClick={onReadAndIpa}
-                    disabled={!hasSelection}
-                    className={`${baseButtonClass} bg-purple-50 text-purple-600 hover:bg-purple-100`}
-                    title="Read in English"
-                >
-                    Read
-                </button>
-                {!isAlreadyInLibrary ? (
-                    <button type="button" onMouseDown={onRestoreSelection} onClick={onAddToLibrary} disabled={!hasSelection || isAddingToLibrary} className={`${baseButtonClass} bg-green-50 text-green-600 hover:bg-green-100`} title="Add to Library">
-                        {isAddingToLibrary ? <Loader2 size={14} className="animate-spin" /> : 'Add'}
-                    </button>
-                ) : (
-                    <button type="button" onMouseDown={onRestoreSelection} onClick={onViewWord} disabled={!hasSelection || isAnyModalOpen} className={`${baseButtonClass} bg-sky-50 text-sky-600 hover:bg-sky-100`} title="View Word Details">
-                        View
-                    </button>
-                )}
-                <button
-                    type="button"
-                    onMouseDown={onRestoreSelection}
                     onClick={onImage}
                     disabled={!hasSelection || !!activeChatCoachAction}
                     className={`${baseButtonClass} bg-violet-50 text-violet-700 hover:bg-violet-100`}
