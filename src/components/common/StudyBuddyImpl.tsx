@@ -900,10 +900,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         isConversationModeRef.current = isConversationMode;
     }, [isConversationMode]);
 
-    useEffect(() => {
-        if (!chatScrollRef.current) return;
-        chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-    }, [chatHistory, isChatLoading, isChatOpen]);
+    // useEffect(() => {
+    //     if (!chatScrollRef.current) return;
+    //     chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    // }, [chatHistory, isChatLoading, isChatOpen]);
 
     useEffect(() => {
         const shouldShow = isAudioPlaying && !isSingleWordAudio;

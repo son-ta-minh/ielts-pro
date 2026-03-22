@@ -717,6 +717,19 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         panel.style.height = `${panelHeight}px`;
     }, [chatPanelRef, panelHeight]);
 
+    // Only auto-scroll ONCE when chat first loads, and do not scroll during streaming.
+    const hasInitializedScrollRef = React.useRef(false);
+    useEffect(() => {
+        const el = chatScrollRef.current;
+        if (!el) return;
+
+        // Only auto scroll ONCE when chat first loads
+        if (!hasInitializedScrollRef.current) {
+            el.scrollTop = el.scrollHeight;
+            hasInitializedScrollRef.current = true;
+        }
+    }, [chatHistory]);
+
     const handleResizeWidth = () => {
         setPanelWidth((current) => {
             const options = [640, 736, 832, 928];
@@ -958,7 +971,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         </div>
 
         <div
-            // ref={chatScrollRef}
+            ref={chatScrollRef}
             className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[linear-gradient(180deg,#fafafa_0%,#ffffff_100%)] select-text"
             onMouseDownCapture={onPointerDownInside}
             onMouseDown={(e) => e.stopPropagation()}
