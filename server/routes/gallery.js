@@ -22,16 +22,35 @@ const writeItems = (items) => {
   fs.writeFileSync(GALLERY_FILE, JSON.stringify(items, null, 2));
 };
 
+const normalizeGalleryImagePath = (rawPath = '') => {
+  const value = typeof rawPath === 'string' ? rawPath.trim() : '';
+  if (!value || !/^https?:\/\//i.test(value)) return value;
+
+  try {
+    const parsed = new URL(value);
+    const pathname = parsed.pathname || '';
+    const galleryPrefix = '/Gallery/';
+    const galleryIndex = pathname.indexOf(galleryPrefix);
+    if (galleryIndex >= 0) {
+      return pathname.slice(galleryIndex);
+    }
+    return pathname || value;
+  } catch {
+    return value;
+  }
+};
+
 router.get('/gallery', (req, res) => {
   return res.json(readItems());
 });
 
 router.post('/gallery', (req, res) => {
   const { title = 'Untitled', collection = 'Unsorted', imagePath = '', words = [], note = '' } = req.body || {};
-  if (!imagePath) return res.status(400).json({ error: 'imagePath is required' });
+  const normalizedImagePath = normalizeGalleryImagePath(imagePath);
+  if (!normalizedImagePath) return res.status(400).json({ error: 'imagePath is required' });
   const items = readItems();
   const id = `wg-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-  const payload = { id, title, collection, imagePath, words, note };
+  const payload = { id, title, collection, imagePath: normalizedImagePath, words, note };
   items.unshift(payload);
   writeItems(items);
   return res.json(payload);
@@ -46,7 +65,7 @@ router.put('/gallery/:id', (req, res) => {
   const updated = { ...items[idx] };
   if (title !== undefined) updated.title = title;
   if (collection !== undefined) updated.collection = collection;
-  if (imagePath !== undefined) updated.imagePath = imagePath;
+  if (imagePath !== undefined) updated.imagePath = normalizeGalleryImagePath(imagePath);
   if (words !== undefined) updated.words = Array.isArray(words) ? words : [];
   if (note !== undefined) updated.note = note;
   items[idx] = updated;

@@ -40,6 +40,28 @@ const buildImageUrl = (path: string) => {
   return `${baseUrl}/${cleanPath}`;
 };
 
+const normalizeGalleryImagePath = (rawPath: string) => {
+  const value = rawPath.trim();
+  if (!value) return '';
+
+  if (!value.startsWith('http')) {
+    return value;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const pathname = parsed.pathname || '';
+    const galleryPrefix = '/Gallery/';
+    const galleryIndex = pathname.indexOf(galleryPrefix);
+    if (galleryIndex >= 0) {
+      return pathname.slice(galleryIndex);
+    }
+    return pathname || value;
+  } catch {
+    return value;
+  }
+};
+
 export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [filter, setFilter] = useState<string>('all');
@@ -145,7 +167,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const collection = (formState.collection || 'Unsorted').trim() || 'Unsorted';
-    const imagePath = formState.imagePath.trim();
+    const imagePath = normalizeGalleryImagePath(formState.imagePath);
     const words = formState.words
       ? formState.words
           .split(',')

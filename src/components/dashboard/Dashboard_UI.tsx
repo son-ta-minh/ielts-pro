@@ -559,6 +559,7 @@ const FocusPeriodPanel: React.FC<FocusPeriodPanelProps> = ({
     onDeleteHistory,
     clockTick
 }) => {
+    const [isExpanded, setIsExpanded] = useState(true);
     const sortedTimers = useMemo(
         () => [...timers].sort((a, b) => {
             const aSort = a.lastActivatedAt ?? a.createdAt;
@@ -586,15 +587,24 @@ const FocusPeriodPanel: React.FC<FocusPeriodPanelProps> = ({
                     </h3>
                     <p className="text-[11px] text-neutral-500">Create up to 12 timers. Alarm After only triggers reminder toasts and never changes elapsed time.</p>
                 </div>
-                <button
-                    onClick={onToggleForm}
-                    className="px-3 py-1.5 rounded-full border border-neutral-200 uppercase text-[10px] font-black tracking-widest bg-white hover:border-neutral-300 transition"
-                >
-                    {showForm ? (editingTimerId ? 'Cancel edit' : 'Hide form') : (editingTimerId ? 'Cancel edit' : 'New timer')}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={onToggleForm}
+                        className="px-3 py-1.5 rounded-full border border-neutral-200 uppercase text-[10px] font-black tracking-widest bg-white hover:border-neutral-300 transition"
+                    >
+                        {showForm ? (editingTimerId ? 'Cancel edit' : 'Hide form') : (editingTimerId ? 'Cancel edit' : 'New timer')}
+                    </button>
+                    <button
+                        onClick={() => setIsExpanded((current) => !current)}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-neutral-200 uppercase text-[10px] font-black tracking-widest bg-white hover:border-neutral-300 transition"
+                    >
+                        <span>{isExpanded ? 'Collapse' : 'Expand'}</span>
+                        <ChevronDown size={12} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                </div>
             </div>
 
-            {showForm && (
+            {isExpanded && showForm && (
                 <div className="rounded-3xl border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <select value={form.category} onChange={(e) => onFormChange('category', e.target.value)} className="w-full rounded-2xl border border-neutral-200 p-3 bg-white text-sm font-semibold">
@@ -633,120 +643,137 @@ const FocusPeriodPanel: React.FC<FocusPeriodPanelProps> = ({
                 </div>
             )}
 
-            <div className="space-y-3">
-                {sortedTimers.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-neutral-200 p-4 text-sm text-neutral-400">No active timers yet.</div>
-                )}
-                {sortedTimers.map(timer => {
-                    const displayElapsed = timer.elapsedSeconds + (timer.status === 'running' && timer.lastStart ? Math.floor((clockTick - timer.lastStart) / 1000) : 0);
-                    const badge = FOCUS_CATEGORY_BADGES[timer.category];
-                    return (
-                        <div key={timer.id} className="rounded-2xl border border-neutral-200 p-4 bg-neutral-50/70">
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black ${badge.color} ${badge.bg}`}>
-                                        {timer.category}
+            {!isExpanded && (
+                <div className="rounded-2xl border border-neutral-200 bg-neutral-50/60 px-4 py-3 flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Summary</span>
+                    <span className="text-xs font-bold text-neutral-700">{sortedTimers.length} timer(s)</span>
+                    <span className="text-neutral-300">•</span>
+                    <span className="text-xs font-bold text-neutral-700">{todayStops.length} stop(s) today</span>
+                    <span className="text-neutral-300">•</span>
+                    <span className="text-xs font-bold text-neutral-700">{sortedTimers.filter(timer => timer.status === 'running').length} running</span>
+                </div>
+            )}
+
+            {isExpanded && (
+                <>
+                    <div className="space-y-3">
+                        {sortedTimers.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-neutral-200 p-4 text-sm text-neutral-400">No active timers yet.</div>
+                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {sortedTimers.map(timer => {
+                                const displayElapsed = timer.elapsedSeconds + (timer.status === 'running' && timer.lastStart ? Math.floor((clockTick - timer.lastStart) / 1000) : 0);
+                                const badge = FOCUS_CATEGORY_BADGES[timer.category];
+                                return (
+                                    <div key={timer.id} className="rounded-2xl border border-neutral-200 p-4 bg-neutral-50/70 h-full">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black ${badge.color} ${badge.bg}`}>
+                                                    {timer.category}
+                                                </div>
+                                                <p className="text-sm font-bold text-neutral-900 mt-2 break-words">{timer.name || `${timer.category} Focus`}</p>
+                                                <p className="text-[10px] text-neutral-500">
+                                                    {timer.status === 'completed' ? 'Stopped' : timer.status === 'paused' ? 'Paused' : timer.status === 'running' ? 'Running' : 'Ready'}
+                                                </p>
+                                                <p className="text-[10px] text-neutral-400 mt-0.5">
+                                                    Alarm After: {timer.alarmAfterSeconds && timer.alarmAfterSeconds > 0 ? formatDuration(timer.alarmAfterSeconds) : 'Off'}
+                                                </p>
+                                            </div>
+                                            <div className="text-lg font-black text-neutral-900 text-right shrink-0">{formatDuration(displayElapsed)}</div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 mt-4">
+                                            {(timer.status === 'idle' || timer.status === 'completed') && (
+                                                <button onClick={() => onStart(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                                    <Play size={12} /> {timer.status === 'completed' ? 'Restart' : 'Start'}
+                                                </button>
+                                            )}
+                                            {timer.status === 'running' && (
+                                                <button onClick={() => onPause(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                                    <Pause size={12} /> Pause
+                                                </button>
+                                            )}
+                                            {timer.status === 'paused' && (
+                                                <button onClick={() => onResume(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                                    <Play size={12} /> Resume
+                                                </button>
+                                            )}
+                                            {(timer.status === 'running' || timer.status === 'paused') && (
+                                                <button onClick={() => onStop(timer.id)} className="px-3 py-1.5 rounded-full border border-rose-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-rose-600 bg-rose-50" title="Stop session">
+                                                    <StopCircle size={12} /> Stop
+                                                </button>
+                                            )}
+                                            <button onClick={() => onEdit(timer)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-600">
+                                                <PenLine size={12} /> Edit
+                                            </button>
+                                            <button onClick={() => onToggleElapsedEditor(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-600">
+                                                Set elapsed
+                                            </button>
+                                            {timer.status === 'completed' && (
+                                                <button onClick={() => onRemove(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-500">
+                                                    <Trash2 size={12} /> Remove
+                                                </button>
+                                            )}
+                                        </div>
+                                        {elapsedEditorId === timer.id && (
+                                            <div className="flex flex-wrap items-end gap-2 mt-3 bg-white border border-dashed border-neutral-200 rounded-2xl p-3">
+                                                <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
+                                                    Hours
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={elapsedInputs[timer.id]?.hours ?? Math.floor(timer.elapsedSeconds / 3600).toString()}
+                                                        onChange={(e) => onElapsedInputChange(timer.id, 'hours', e.target.value)}
+                                                        className="w-20 rounded-2xl border border-neutral-200 p-2 text-sm"
+                                                    />
+                                                </label>
+                                                <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
+                                                    Minutes
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="59"
+                                                        value={elapsedInputs[timer.id]?.minutes ?? Math.floor((timer.elapsedSeconds % 3600) / 60).toString()}
+                                                        onChange={(e) => onElapsedInputChange(timer.id, 'minutes', e.target.value)}
+                                                        className="w-20 rounded-2xl border border-neutral-200 p-2 text-sm"
+                                                    />
+                                                </label>
+                                                <button onClick={() => onSetElapsed(timer.id)} className="px-3 py-1.5 rounded-full bg-neutral-900 text-white text-[10px] font-black uppercase tracking-widest">Apply</button>
+                                                <button onClick={() => onToggleElapsedEditor(null)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest">Close</button>
+                                            </div>
+                                        )}
                                     </div>
-                                    <p className="text-sm font-bold text-neutral-900 mt-2">{timer.name || `${timer.category} Focus`}</p>
-                                    <p className="text-[10px] text-neutral-500">
-                                        {timer.status === 'completed' ? 'Stopped' : timer.status === 'paused' ? 'Paused' : timer.status === 'running' ? 'Running' : 'Ready'}
-                                    </p>
-                                    <p className="text-[10px] text-neutral-400 mt-0.5">
-                                        Alarm After: {timer.alarmAfterSeconds && timer.alarmAfterSeconds > 0 ? formatDuration(timer.alarmAfterSeconds) : 'Off'}
-                                    </p>
-                                </div>
-                                    <div className="text-lg font-black text-neutral-900">{formatDuration(displayElapsed)}</div>
-                            </div>
-                            <div className="flex flex-wrap gap-2 mt-4">
-                                {(timer.status === 'idle' || timer.status === 'completed') && (
-                                    <button onClick={() => onStart(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
-                                        <Play size={12} /> {timer.status === 'completed' ? 'Restart' : 'Start'}
-                                    </button>
-                                )}
-                                {timer.status === 'running' && (
-                                    <button onClick={() => onPause(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
-                                        <Pause size={12} /> Pause
-                                    </button>
-                                )}
-                                {timer.status === 'paused' && (
-                                    <button onClick={() => onResume(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
-                                        <Play size={12} /> Resume
-                                    </button>
-                                )}
-                                {(timer.status === 'running' || timer.status === 'paused') && (
-                                    <button onClick={() => onStop(timer.id)} className="px-3 py-1.5 rounded-full border border-rose-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-rose-600 bg-rose-50" title="Stop session">
-                                        <StopCircle size={12} /> Stop
-                                    </button>
-                                )}
-                                <button onClick={() => onEdit(timer)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-600">
-                                    <PenLine size={12} /> Edit
-                                </button>
-                                <button onClick={() => onToggleElapsedEditor(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-600">
-                                    Set elapsed
-                                </button>
-                                {timer.status === 'completed' && (
-                                    <button onClick={() => onRemove(timer.id)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 text-neutral-500">
-                                        <Trash2 size={12} /> Remove
-                                    </button>
-                                )}
-                            </div>
-                            {elapsedEditorId === timer.id && (
-                                <div className="flex flex-wrap items-end gap-2 mt-3 bg-white border border-dashed border-neutral-200 rounded-2xl p-3">
-                                    <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
-                                        Hours
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={elapsedInputs[timer.id]?.hours ?? Math.floor(timer.elapsedSeconds / 3600).toString()}
-                                            onChange={(e) => onElapsedInputChange(timer.id, 'hours', e.target.value)}
-                                            className="w-20 rounded-2xl border border-neutral-200 p-2 text-sm"
-                                        />
-                                    </label>
-                                    <label className="flex flex-col text-[10px] text-neutral-500 font-black uppercase tracking-widest">
-                                        Minutes
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="59"
-                                            value={elapsedInputs[timer.id]?.minutes ?? Math.floor((timer.elapsedSeconds % 3600) / 60).toString()}
-                                            onChange={(e) => onElapsedInputChange(timer.id, 'minutes', e.target.value)}
-                                            className="w-20 rounded-2xl border border-neutral-200 p-2 text-sm"
-                                        />
-                                    </label>
-                                    <button onClick={() => onSetElapsed(timer.id)} className="px-3 py-1.5 rounded-full bg-neutral-900 text-white text-[10px] font-black uppercase tracking-widest">Apply</button>
-                                    <button onClick={() => onToggleElapsedEditor(null)} className="px-3 py-1.5 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest">Close</button>
-                                </div>
-                            )}
+                                );
+                            })}
                         </div>
-                    );
-                })}
-            </div>
-            <div className="space-y-3">
-                <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400">Recent Stops Today</h4>
-                {todayStops.length === 0 ? (
-                    <p className="text-sm text-neutral-400">No timer stopped today yet.</p>
-                ) : (
-                    todayStops.slice(0, 5).map(entry => (
-                        <div key={entry.id} className="rounded-2xl border border-neutral-200 p-3 bg-white">
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="text-sm font-bold text-neutral-900">{entry.name}</span>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-semibold uppercase text-neutral-400">{entry.category}</span>
-                                    <button
-                                        onClick={() => onDeleteHistory(entry.id)}
-                                        className="px-2 py-1 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:border-neutral-300"
-                                        title="Delete this history item"
-                                    >
-                                        <Trash2 size={11} />
-                                    </button>
+                    </div>
+                    <div className="space-y-3">
+                        <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400">Recent Stops Today</h4>
+                        {todayStops.length === 0 ? (
+                            <p className="text-sm text-neutral-400">No timer stopped today yet.</p>
+                        ) : (
+                            todayStops.slice(0, 5).map(entry => (
+                                <div key={entry.id} className="rounded-2xl border border-neutral-200 p-3 bg-white">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-sm font-bold text-neutral-900">{entry.name}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-semibold uppercase text-neutral-400">{entry.category}</span>
+                                            <button
+                                                onClick={() => onDeleteHistory(entry.id)}
+                                                className="px-2 py-1 rounded-full border border-neutral-200 text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:border-neutral-300"
+                                                title="Delete this history item"
+                                            >
+                                                <Trash2 size={11} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-neutral-500">{entry.category} · {formatDuration(entry.durationSeconds)}</p>
+                                    <p className="text-[10px] text-neutral-400">{new Date(entry.stoppedAt).toLocaleString()}</p>
                                 </div>
-                            </div>
-                            <p className="text-[10px] text-neutral-500">{entry.category} · {formatDuration(entry.durationSeconds)}</p>
-                            <p className="text-[10px] text-neutral-400">{new Date(entry.stoppedAt).toLocaleString()}</p>
-                        </div>
-                    ))
-                )}
-            </div>
+                            ))
+                        )}
+                    </div>
+                </>
+            )}
         </div>
     );
 }
