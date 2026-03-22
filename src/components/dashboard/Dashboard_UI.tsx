@@ -10,6 +10,7 @@ import { DayProgress } from './DayProgress';
 import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
+import { AutoRefineDashboardControl } from '../common/AutoRefine';
 
 const getFormattedBuildDate = () => {
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
@@ -327,14 +328,17 @@ const VocabularyCenterPanel: React.FC<{
 
     return (
         <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4">
-             <div className="flex items-center gap-3">
-                 <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 shadow-md">
-                     <BookCopy size={18} />
+             <div className="flex items-start justify-between gap-3">
+                 <div className="flex items-center gap-3">
+                     <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 shadow-md">
+                         <BookCopy size={18} />
+                     </div>
+                     <div>
+                         <h3 className="text-base font-black text-neutral-900 tracking-tight">Vocabulary Center</h3>
+                         <p className="text-[10px] font-medium text-neutral-400">Manage and expand your lexical resource.</p>
+                     </div>
                  </div>
-                 <div>
-                     <h3 className="text-base font-black text-neutral-900 tracking-tight">Vocabulary Center</h3>
-                     <p className="text-[10px] font-medium text-neutral-400">Manage and expand your lexical resource.</p>
-                 </div>
+                 <AutoRefineDashboardControl />
              </div>
 
              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">

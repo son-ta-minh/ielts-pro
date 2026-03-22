@@ -1,5 +1,5 @@
 import { VocabularyItem } from '../app/types';
-import { getConfig, getStudyBuddyAiUrl } from '../app/settingsManager';
+import { getConfig, getServerUrl, getStudyBuddyAiUrl } from '../app/settingsManager';
 import { getWordDetailsPrompt } from './promptService';
 import { normalizeAiResponse } from '../utils/vocabUtils';
 
@@ -76,6 +76,12 @@ interface ValidationState {
     retryFields: RetryField[];
 }
 
+interface CambridgePronunciationPayload {
+    ipaUs?: string;
+    ipaUk?: string;
+    pronSim?: 'same' | 'near' | 'different';
+}
+
 const normalizeParaphraseTone = (value: string): string => {
     const normalized = value.trim().toLowerCase();
     if (!normalized) return normalized;
@@ -83,6 +89,82 @@ const normalizeParaphraseTone = (value: string): string => {
         return 'synonym';
     }
     return normalized;
+};
+
+const stripIpaDelimiters = (value: string): string => String(value || '').replace(/^\/+|\/+$/g, '').trim();
+
+const normalizeIpaForComparison = (value: string): string => stripIpaDelimiters(value)
+    .toLowerCase()
+    .replace(/[ˈˌ.]/g, '')
+    .replace(/ɡ/g, 'g')
+    .replace(/əʊ/g, 'oʊ')
+    .replace(/ɚ/g, 'ər')
+    .replace(/ɝ/g, 'ər')
+    .replace(/i/g, 'iː')
+    .replace(/u/g, 'uː');
+
+const comparePronunciationSimilarity = (ipaUs?: string, ipaUk?: string): 'same' | 'near' | 'different' | undefined => {
+    const us = normalizeIpaForComparison(ipaUs || '');
+    const uk = normalizeIpaForComparison(ipaUk || '');
+    if (!us && !uk) return undefined;
+    if (!us || !uk) return 'same';
+    if (us === uk) return 'same';
+
+    const relaxedUs = us.replace(/ː/g, '').replace(/r/g, '');
+    const relaxedUk = uk.replace(/ː/g, '').replace(/r/g, '');
+    if (relaxedUs === relaxedUk) return 'near';
+
+    const maxLen = Math.max(us.length, uk.length);
+    if (maxLen === 0) return 'same';
+    let diffCount = Math.abs(us.length - uk.length);
+    const limit = Math.min(us.length, uk.length);
+    for (let i = 0; i < limit; i += 1) {
+        if (us[i] !== uk[i]) diffCount += 1;
+    }
+    return diffCount <= 2 ? 'near' : 'different';
+};
+
+const formatIpaValue = (value?: string | null): string | undefined => {
+    const clean = stripIpaDelimiters(String(value || ''));
+    return clean ? `/${clean}/` : undefined;
+};
+
+const fetchCambridgePronunciation = async (word: string): Promise<CambridgePronunciationPayload | null> => {
+    const normalizedWord = String(word || '').trim();
+    if (!normalizedWord) return null;
+
+    try {
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+        const response = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(normalizedWord)}`, {
+            cache: 'no-store'
+        });
+        if (!response.ok) return null;
+
+        const payload = await response.json().catch(() => null);
+        if (!payload?.exists || !Array.isArray(payload?.pronunciations)) return null;
+
+        const pronunciation = payload.pronunciations.find((item: any) => item?.ipaUs || item?.ipaUk);
+        if (!pronunciation) return null;
+
+        const ipaUs = formatIpaValue(pronunciation.ipaUs);
+        const ipaUk = formatIpaValue(pronunciation.ipaUk);
+        const pronSim = comparePronunciationSimilarity(ipaUs, ipaUk);
+
+        if (!ipaUs && !ipaUk) return null;
+
+        return {
+            ipaUs,
+            ipaUk: ipaUk || (pronSim === 'same' ? ipaUs : undefined),
+            pronSim
+        };
+    } catch (error) {
+        debugWordRefine('fetchCambridgePronunciation:error', {
+            word: normalizedWord,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return null;
+    }
 };
 
 const normalizeRawParaphrases = (value: any): any[] => {
@@ -161,67 +243,6 @@ const ensureResultHasOriginalWord = (result: any, originalWord: string): any => 
         ...result,
         og: String(result?.og || result?.original || normalizedOriginalWord).trim() || normalizedOriginalWord
     };
-};
-
-const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const getHeadwordVariants = (effectiveHeadword: string, originalWord: string): string[] => {
-    const variants = new Set<string>();
-    const addVariant = (value?: string) => {
-        const normalized = String(value || '').trim().toLowerCase();
-        if (normalized) variants.add(normalized);
-    };
-
-    const buildMorphVariants = (value: string) => {
-        const lower = value.toLowerCase();
-        addVariant(lower);
-        addVariant(`${lower}s`);
-        if (lower.endsWith('e') && lower.length > 1) {
-            addVariant(`${lower}d`);
-            addVariant(`${lower.slice(0, -1)}ing`);
-        } else {
-            addVariant(`${lower}ed`);
-            addVariant(`${lower}ing`);
-        }
-        if (lower.endsWith('y') && lower.length > 1) {
-            const stem = lower.slice(0, -1);
-            addVariant(`${stem}ing`);
-            addVariant(`${stem}ed`);
-            addVariant(`${stem}ies`);
-            if (stem.endsWith('z')) {
-                addVariant(`${stem}${stem.slice(-1)}ing`);
-                addVariant(`${stem}${stem.slice(-1)}ed`);
-            }
-        }
-        if (lower.endsWith('ied') && lower.length > 3) addVariant(`${lower.slice(0, -3)}y`);
-        if (lower.endsWith('ed') && lower.length > 2) {
-            const minusOne = lower.slice(0, -1);
-            const minusTwo = lower.slice(0, -2);
-            addVariant(minusOne);
-            addVariant(minusTwo);
-            addVariant(`${minusTwo}ing`);
-        }
-        if (lower.endsWith('ing') && lower.length > 3) {
-            addVariant(lower.slice(0, -3));
-            addVariant(`${lower.slice(0, -3)}e`);
-        }
-        if (lower.endsWith('ies') && lower.length > 3) addVariant(`${lower.slice(0, -3)}y`);
-        if (lower.endsWith('s') && lower.length > 1) addVariant(lower.slice(0, -1));
-    };
-
-    buildMorphVariants(effectiveHeadword);
-    buildMorphVariants(originalWord);
-
-    return Array.from(variants);
-};
-
-const collocationContainsHeadwordVariant = (text: string, variants: string[]): boolean => {
-    const normalized = text.trim().toLowerCase();
-    if (!normalized) return false;
-    return variants.some((variant) => {
-        const pattern = new RegExp(`(^|[^a-z])${escapeRegex(variant)}([^a-z]|$)`, 'i');
-        return pattern.test(normalized);
-    });
 };
 
 const mergeUniqueByText = (base: any[] = [], incoming: any[] = [], key: string) => {
@@ -390,20 +411,6 @@ const validateWordResult = (result: any, word: VocabularyItem): ValidationState 
         issues.push(`Collocations for "${word.word}" must include both text and hint.`);
         retryFields.add('collocationsArray');
     }
-    const acceptableHeadwordVariants = getHeadwordVariants(effectiveHeadword, word.word);
-    const collocationsWithoutHeadword = collocations
-        .map((item: any) => String(item?.text || '').trim())
-        .filter((text) => !!text && !collocationContainsHeadwordVariant(text, acceptableHeadwordVariants));
-    debugWordRefine('validateWordResult:collocationVariantCheck', {
-        word: word.word,
-        effectiveHeadword,
-        acceptableHeadwordVariants,
-        invalidCollocations: collocationsWithoutHeadword
-    });
-    if (needsDenseDetails && collocationsWithoutHeadword.length > 0) {
-        issues.push(`Collocations for "${word.word}" must explicitly contain the headword "${effectiveHeadword}" or a valid inflected/base variant ${acceptableHeadwordVariants.join('/')}. Invalid values: ${collocationsWithoutHeadword.join(', ')}.`);
-        retryFields.add('collocationsArray');
-    }
     const invalidPrepositionUsage = prepositions.find((item: any) => {
         const prep = String(item?.prep || '').trim().toLowerCase();
         const usage = String(item?.usage || '').trim().toLowerCase();
@@ -470,7 +477,7 @@ const buildRetryPrompt = (
         meaningVi: `- m: Vietnamese-only meaning in ${nativeLanguage}.`,
         example: '- ex: one natural example sentence using the exact headword.',
         register: '- reg: A-MUST / IMPORTANT. MUST be ONLY one of "academic", "casual", or "neutral". NEVER output any other register label.',
-        collocationsArray: '- col: A-MUST / IMPORTANT. For a single-word headword, col MUST NOT be empty. Return 3-5 collocations. Every item must explicitly contain the exact headword and include both "text" and "d".',
+        collocationsArray: '- col: A-MUST / IMPORTANT. For a single-word headword, col MUST NOT be empty. Return 3-5 natural collocations related to the headword. Every item must include both "text" and "d".',
         paraphrases: '- para: A-MUST / IMPORTANT. Every item must include "w", valid tone "t", and short context "c". Tone "t" MUST be ONLY one of "academic", "casual", "synonym".',
         prepositionsArray: '- prep: A-MUST / IMPORTANT. Dependent prepositions only. Every item MUST include BOTH "p" and "c". NEVER return only the preposition without context. Each usage example/context must explicitly contain the exact same preposition. Example: if p = "against", then c MUST contain "against". If no natural dependent preposition exists, return [].'
     };
@@ -698,17 +705,27 @@ export const runWordRefineWithRetry = async (
 
     const processSingleWord = async (wordIndex: number) => {
         const currentWord = words[wordIndex];
-        const basePrompt = getWordDetailsPrompt([currentWord.word], nativeLanguage);
+        const cambridgePronunciation = await fetchCambridgePronunciation(currentWord.word);
+        const basePrompt = getWordDetailsPrompt([currentWord.word], nativeLanguage, {
+            includePronunciation: !cambridgePronunciation
+        });
         let lastIssues: string[] = [];
         let lastError: unknown = null;
         let retryFields: RetryField[] = [];
-        let partialResult: any | null = null;
+        let partialResult: any | null = cambridgePronunciation
+            ? {
+                original: currentWord.word,
+                ipaUs: cambridgePronunciation.ipaUs,
+                ipaUk: cambridgePronunciation.ipaUk,
+                pronSim: cambridgePronunciation.pronSim
+            }
+            : null;
 
         options.onProgress?.({
             stage: 'starting',
             attempt: 0,
             maxAttempts: MAX_REFINE_ATTEMPTS,
-            message: `Word ${wordIndex + 1}/${words.length}: preparing "${currentWord.word}"...`
+            message: `Word ${wordIndex + 1}/${words.length}: preparing "${currentWord.word}"${cambridgePronunciation ? ' with Cambridge IPA' : ''}...`
         });
 
         let wordSucceeded = false;

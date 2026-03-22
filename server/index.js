@@ -262,13 +262,39 @@ function gracefulShutdown(signal) {
     }, 5000);
 }
 
+function isIgnorableTransientNetworkError(errorLike) {
+    const error = errorLike && typeof errorLike === 'object' && 'code' in errorLike
+        ? errorLike
+        : null;
+    const code = error?.code || '';
+    const message = String(error?.message || errorLike || '').toLowerCase();
+
+    return (
+        code === 'ECONNRESET' ||
+        code === 'EPIPE' ||
+        code === 'ETIMEDOUT' ||
+        code === 'UND_ERR_SOCKET' ||
+        message.includes('socket hang up') ||
+        message.includes('aborted') ||
+        message.includes('network timeout')
+    );
+}
+
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));   // Ctrl+C
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // PM2 / Docker
 process.on('uncaughtException', (err) => {
+    if (isIgnorableTransientNetworkError(err)) {
+        console.warn('[Warn] Ignored transient uncaught network error:', err);
+        return;
+    }
     console.error('[Fatal] Uncaught Exception:', err);
     gracefulShutdown('uncaughtException');
 });
 process.on('unhandledRejection', (reason) => {
+    if (isIgnorableTransientNetworkError(reason)) {
+        console.warn('[Warn] Ignored transient unhandled network rejection:', reason);
+        return;
+    }
     console.error('[Fatal] Unhandled Rejection:', reason);
     gracefulShutdown('unhandledRejection');
 });

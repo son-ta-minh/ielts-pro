@@ -12,6 +12,7 @@ import { StudyBuddy } from '../components/common/StudyBuddy';
 import { ServerRestoreModal } from '../components/common/ServerRestoreModal';
 import { ServerArchiveModal } from '../components/common/ServerArchiveModal';
 import { SyncPromptModal } from '../components/common/SyncPromptModal';
+import { AutoRefineProvider } from '../components/common/AutoRefine';
 
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
 const ReviewSession = React.lazy(() => import('../components/practice/ReviewSession'));
@@ -229,54 +230,55 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
   const [isRestoring, setIsRestoring] = useState(false);
 
   return (
-    <div className="min-h-screen bg-neutral-50 md:flex">
-      <Sidebar controller={controller} onNavigate={handleNavigation} onSwitchUser={handleSwitchUser} />
-      <div className={`fixed inset-0 bg-black/30 z-40 lg:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
-      <main className={`flex-1 overflow-y-auto relative ${view === 'MIMIC' ? 'p-0' : 'p-6 md:p-10'}`}>
-        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30"><Menu size={24} /></button>
-        <Suspense fallback={<div className="flex justify-center p-20"><Loader2 className="animate-spin text-neutral-300" size={32} /></div>}><MainContent controller={controller} /></Suspense>
-      </main>
-      {currentUser && <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={controller.handleSpecialAction} onViewWord={setGlobalViewWord} isAnyModalOpen={!!globalViewWord || !!editingWord} />}
-      {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
-      {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
-      <ConfirmationModal isOpen={endSessionModal.isOpen} title="End Current Session?" message="Navigating away will end your current study session. Are you sure you want to continue?" confirmText="End Session" isProcessing={false} onConfirm={confirmEndSession} onClose={cancelEndSession} icon={<AlertTriangle size={40} className="text-orange-50" />} confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" />
-      <ConfirmationModal
-        isOpen={writingConfirmModal.isOpen}
-        title="Unsaved Writing Changes"
-        message="You have unsaved writing changes. Leave without saving?"
-        confirmText="Leave"
-        isProcessing={false}
-        confirmButtonClass="bg-red-600 text-white hover:bg-red-700 shadow-red-200"
-        onConfirm={() => {
-          if (writingConfirmModal.targetView) {
-            controller.setHasWritingUnsavedChanges(false);
-            if (writingConfirmModal.action) {
-              writingConfirmModal.action();
-            } else {
-              setForceExpandAdd(false);
+    <AutoRefineProvider currentUser={currentUser}>
+      <div className="min-h-screen bg-neutral-50 md:flex">
+        <Sidebar controller={controller} onNavigate={handleNavigation} onSwitchUser={handleSwitchUser} />
+        <div className={`fixed inset-0 bg-black/30 z-40 lg:hidden ${isSidebarOpen ? 'block' : 'hidden'}`} onClick={() => setIsSidebarOpen(false)} />
+        <main className={`flex-1 overflow-y-auto relative ${view === 'MIMIC' ? 'p-0' : 'p-6 md:p-10'}`}>
+          <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30"><Menu size={24} /></button>
+          <Suspense fallback={<div className="flex justify-center p-20"><Loader2 className="animate-spin text-neutral-300" size={32} /></div>}><MainContent controller={controller} /></Suspense>
+        </main>
+        {currentUser && <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={controller.handleSpecialAction} onViewWord={setGlobalViewWord} isAnyModalOpen={!!globalViewWord || !!editingWord} />}
+        {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
+        {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
+        <ConfirmationModal isOpen={endSessionModal.isOpen} title="End Current Session?" message="Navigating away will end your current study session. Are you sure you want to continue?" confirmText="End Session" isProcessing={false} onConfirm={confirmEndSession} onClose={cancelEndSession} icon={<AlertTriangle size={40} className="text-orange-50" />} confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" />
+        <ConfirmationModal
+          isOpen={writingConfirmModal.isOpen}
+          title="Unsaved Writing Changes"
+          message="You have unsaved writing changes. Leave without saving?"
+          confirmText="Leave"
+          isProcessing={false}
+          confirmButtonClass="bg-red-600 text-white hover:bg-red-700 shadow-red-200"
+          onConfirm={() => {
+            if (writingConfirmModal.targetView) {
+              controller.setHasWritingUnsavedChanges(false);
+              if (writingConfirmModal.action) {
+                writingConfirmModal.action();
+              } else {
+                setForceExpandAdd(false);
+              }
+              setView(writingConfirmModal.targetView);
+              setIsSidebarOpen(false);
             }
-            setView(writingConfirmModal.targetView);
-            setIsSidebarOpen(false);
-          }
-          setWritingConfirmModal({ isOpen: false, targetView: null, action: undefined });
-        }}
-        onClose={() => setWritingConfirmModal({ isOpen: false, targetView: null, action: undefined })}
-      />
-      <ServerRestoreModal isOpen={isAutoRestoreOpen} onClose={() => setIsAutoRestoreOpen(false)} backups={autoRestoreCandidates} onRestore={(id) => { setIsRestoring(true); restoreFromServerAction(id).finally(() => setIsRestoring(false)); }} onOpenArchivePicker={handleOpenArchivePicker} onCreateArchive={handleCreateArchiveForUser} isRestoring={isRestoring} title="User Selection" description="We found existing profiles on the server. Select yours to restore." onNewUser={handleNewUserSetup} onLocalRestore={handleLocalRestoreSetup} />
-      <ServerArchiveModal
-        isOpen={!!selectedArchiveUser}
-        userName={selectedArchiveUser?.name || ''}
-        archives={archiveCandidates}
-        isLoading={isArchiveLoading}
-        isSubmitting={isSyncing}
-        onClose={handleCloseArchivePicker}
-        onRefresh={() => selectedArchiveUser ? handleOpenArchivePicker(selectedArchiveUser) : undefined}
-        onCreateArchive={() => selectedArchiveUser ? handleCreateArchiveForUser(selectedArchiveUser) : undefined}
-        onRestore={handleRestoreFromArchive}
-        onDelete={handleDeleteArchive}
-      />
-      {syncPrompt && <SyncPromptModal isOpen={syncPrompt.isOpen} onClose={() => setSyncPrompt(null)} onPush={handleSyncPush} onRestore={handleSyncRestore} type={syncPrompt.type} localDate={syncPrompt.localDate} serverDate={syncPrompt.serverDate} isProcessing={isSyncing} />}
-      {sslIssueUrl && (
+            setWritingConfirmModal({ isOpen: false, targetView: null, action: undefined });
+          }}
+          onClose={() => setWritingConfirmModal({ isOpen: false, targetView: null, action: undefined })}
+        />
+        <ServerRestoreModal isOpen={isAutoRestoreOpen} onClose={() => setIsAutoRestoreOpen(false)} backups={autoRestoreCandidates} onRestore={(id) => { setIsRestoring(true); restoreFromServerAction(id).finally(() => setIsRestoring(false)); }} onOpenArchivePicker={handleOpenArchivePicker} onCreateArchive={handleCreateArchiveForUser} isRestoring={isRestoring} title="User Selection" description="We found existing profiles on the server. Select yours to restore." onNewUser={handleNewUserSetup} onLocalRestore={handleLocalRestoreSetup} />
+        <ServerArchiveModal
+          isOpen={!!selectedArchiveUser}
+          userName={selectedArchiveUser?.name || ''}
+          archives={archiveCandidates}
+          isLoading={isArchiveLoading}
+          isSubmitting={isSyncing}
+          onClose={handleCloseArchivePicker}
+          onRefresh={() => selectedArchiveUser ? handleOpenArchivePicker(selectedArchiveUser) : undefined}
+          onCreateArchive={() => selectedArchiveUser ? handleCreateArchiveForUser(selectedArchiveUser) : undefined}
+          onRestore={handleRestoreFromArchive}
+          onDelete={handleDeleteArchive}
+        />
+        {syncPrompt && <SyncPromptModal isOpen={syncPrompt.isOpen} onClose={() => setSyncPrompt(null)} onPush={handleSyncPush} onRestore={handleSyncRestore} type={syncPrompt.type} localDate={syncPrompt.localDate} serverDate={syncPrompt.serverDate} isProcessing={isSyncing} />}
+        {sslIssueUrl && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
           <div className="bg-white rounded-2xl p-6 w-[440px] shadow-2xl border border-red-100">
             <h2 className="text-lg font-bold text-red-600 mb-2">
@@ -325,7 +327,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
             </div>
           </div>
         </div>
-      )}
-    </div>
+        )}
+      </div>
+    </AutoRefineProvider>
   );
 };

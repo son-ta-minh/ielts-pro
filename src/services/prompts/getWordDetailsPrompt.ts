@@ -1,5 +1,26 @@
-export function getWordDetailsPrompt(words: string[], nativeLanguage: string = 'Vietnamese'): string {
+interface WordDetailsPromptOptions {
+    includePronunciation?: boolean;
+}
+
+export function getWordDetailsPrompt(
+    words: string[],
+    nativeLanguage: string = 'Vietnamese',
+    options: WordDetailsPromptOptions = {}
+): string {
     const wordList = words.map(w => `"${w}"`).join(', ');
+    const includePronunciation = options.includePronunciation !== false;
+    const pronunciationOptimizationRule = includePronunciation
+        ? '- Omit "ipa_uk" if "pron_sim" is "same".'
+        : '- Do NOT output "ipa_us", "ipa_uk", or "pron_sim".';
+    const pronunciationFieldDefinitions = includePronunciation
+        ? `- ipa_us: Primary IPA transcription (General American).
+    - ipa_uk: Received Pronunciation (UK) IPA. (Omit if "pron_sim" is "same").
+    - pron_sim: Similarity between US and UK pronunciation. MUST be: "same", "near", or "different".`
+        : '';
+    const pronunciationExampleBlock = includePronunciation
+        ? `      "ipa_us": "/ʌnˈhæpi/",
+      "pron_sim": "same",`
+        : '';
 
     return `You are an expert IELTS coach, examiner, and native English speaker.
     
@@ -19,13 +40,18 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     - If the headword (hw) is a PHRASE, PHRASAL VERB, or IDIOM (e.g., "break the ice"):
       - DO NOT generate 'fam' (word family). Return an empty object {} or null.
       - DO NOT generate 'col' (collocations). Return an empty array [].
+    - A-MUST / IMPORTANT FOR WORD FAMILY:
+      - 'fam' must contain ONLY real morphological family members of the exact headword/base headword.
+      - NEVER include synonyms, paraphrases, near-synonyms, semantic alternatives, or words derived from a paraphrase.
+      - Example: if paraphrase includes "resistance", do NOT put "resistant" into 'fam' unless it is also a true family member of the headword itself.
+      - If you are not confident a candidate belongs to the headword's own word family, omit it.
     - A-MUST / IMPORTANT:
       - 'reg' MUST be ONLY one of: "academic", "casual", "neutral".
       - NEVER output any other register label such as "formal", "informal", "synonym", "professional", or "general".
     - A-MUST / IMPORTANT:
       - If the headword (hw) is a SINGLE WORD, 'col' MUST NOT be empty.
       - For SINGLE-WORD headwords, always return at least 3 collocations in 'col'.
-      - Every collocation text MUST explicitly contain the exact headword itself.
+      - Collocations should be natural and tightly related to the headword, but they do NOT need to literally contain the exact headword string.
     - A-MUST / IMPORTANT:
       - In 'para', 't' (tone) MUST be ONLY one of: "academic", "casual", "synonym".
       - NEVER output any other tone labels.
@@ -39,18 +65,16 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
 
     RESPONSE OPTIMIZATION:
     - Omit "og" if it is identical to "hw".
-    - Omit "ipa_uk" if "pron_sim" is "same".
+    ${pronunciationOptimizationRule}
 
     FIELD DEFINITIONS:
     - og: The EXACT string from the input list. (Include ONLY if different from "hw").
     - hw: The headword (Full phrase for expressions; base form for single words).
-    - ipa_us: Primary IPA transcription (General American).
-    - ipa_uk: Received Pronunciation (UK) IPA. (Omit if "pron_sim" is "same").
-    - pron_sim: Similarity between US and UK pronunciation. MUST be: "same", "near", or "different".
+    ${pronunciationFieldDefinitions}
     - m: Definition of the headword in ${nativeLanguage}.
     - reg: Register. A-MUST / IMPORTANT: MUST be ONLY one of: "academic", "casual", or "neutral". NEVER output any other register label.
     - ex: A high-quality example sentence using the headword.
-    - col: Array of 3-5 collocations. ONLY for single-word headwords. A-MUST / IMPORTANT: for every single-word headword, "col" MUST NOT be empty. Each "text" MUST be a natural collocation that explicitly contains the exact headword itself. Do NOT return synonyms, near-synonyms, or standalone adjectives/adverbs that do not include the headword. Items: {"text": "phrase containing the headword", "d": "minimal descriptive cue for recall (5-10 words)"}.
+    - col: Array of 3-5 collocations. ONLY for single-word headwords. A-MUST / IMPORTANT: for every single-word headword, "col" MUST NOT be empty. Each "text" should be a natural collocation strongly associated with the headword. It does NOT need to literally contain the headword string. Do NOT return loose synonyms or unrelated standalone words. Items: {"text": "natural collocation", "d": "minimal descriptive cue for recall (5-10 words)"}.
     - idm: Array of 1-3 common idioms containing the headword (only if hw is a single word). Items: {"text": "phrase", "d": "descriptive cue"}.
     - prep: Array of dependent prepositions. If the headword does NOT take a fixed preposition, return an empty array []. Format: [{"p": "preposition", "c": "short usage example"}]. A-MUST / IMPORTANT: every item MUST include BOTH "p" and "c". The usage example in "c" MUST explicitly contain the exact same preposition "p". Example: if "p" = "against", then "c" must contain "against".
     - para: Controlled paraphrase system (max 5 items total). ONLY generate categories if a natural equivalent exists. Try to force all tone types but avoid unnatural versions.        - Each item MUST be an object: {"w": "word_or_phrase", "t": "tone_type", "c": "recall cue"}.
@@ -64,8 +88,7 @@ export function getWordDetailsPrompt(words: string[], nativeLanguage: string = '
     Response Example (Return in code block format Strict JSON Array):
     [{
       "hw": "unhappy",
-      "ipa_us": "/ʌnˈhæpi/",
-      "pron_sim": "same",
+${pronunciationExampleBlock}
       "m": "không vui, buồn",
       "reg": "neutral",
       "ex": "She was unhappy with the results of the experiment.",
