@@ -155,24 +155,24 @@ export async function createNewWord(
   const tasks: Promise<void>[] = [];
 
   // 1. Auto-translate meaning if empty (EN → VI)
-  if (!finalMeaningVi) {
-    tasks.push((async () => {
-      try {
-        const cleanedWord = word.trim();
-        const res = await fetch(
-          `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanedWord)}&langpair=en|vi`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.responseData?.translatedText) {
-            finalMeaningVi = data.responseData.translatedText;
-          }
-        }
-      } catch (err) {
-        console.error('[createNewWord] Meaning auto-translate failed:', err);
-      }
-    })());
-  }
+  // if (!finalMeaningVi) {
+  //   tasks.push((async () => {
+  //     try {
+  //       const cleanedWord = word.trim();
+  //       const res = await fetch(
+  //         `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanedWord)}&langpair=en|vi`
+  //       );
+  //       if (res.ok) {
+  //         const data = await res.json();
+  //         if (data?.responseData?.translatedText) {
+  //           finalMeaningVi = data.responseData.translatedText;
+  //         }
+  //       }
+  //     } catch (err) {
+  //       console.error('[createNewWord] Meaning auto-translate failed:', err);
+  //     }
+  //   })());
+  // }
 
   // 2. Auto-fetch IPA if empty
   if (!finalIpaUs) {

@@ -13,7 +13,6 @@ import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { ToolsModal } from '../tools/ToolsModal';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
-import { autoRefineNewWords } from '../../services/wordRefinePersistence';
 import { StudyBuddyChatPanel } from './StudyBuddyChatPanel';
 import { StudyBuddyChatCoachActionBar, StudyBuddyChatStudyMenu, StudyBuddyCommandBox } from './StudyBuddyCoachControls';
 import { StudyBuddySaveModal } from './StudyBuddySaveModal';
@@ -1721,18 +1720,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             }
             console.log("Adding to library:", newItem);
             await dataStore.saveWord(newItem);
-            let refineResult = { refinedCount: 0, finalIssuesCount: 0 };
-            try {
-                refineResult = await autoRefineNewWords([newItem], user.nativeLanguage || 'Vietnamese');
-            } catch (error) {
-                console.warn('[StudyBuddy] Auto refine after add failed:', error);
-            }
-            showToast(
-                refineResult.refinedCount > 0
-                    ? `"${selectedText}" added and refined!`
-                    : `"${selectedText}" added!`,
-                'success'
-            );
+            showToast(`"${selectedText}" added!`);
             setIsAlreadyInLibrary(true);
             setIsOpen(false);
             setMenuPos(null);
@@ -1804,18 +1792,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 newItem.isPassive = false;
             }
             await dataStore.saveWord(newItem);
-            let refineResult = { refinedCount: 0, finalIssuesCount: 0 };
-            try {
-                refineResult = await autoRefineNewWords([newItem], user.nativeLanguage || 'Vietnamese');
-            } catch (error) {
-                console.warn('[StudyBuddy] Auto refine after add failed:', error);
-            }
-            showToast(
-                refineResult.refinedCount > 0
-                    ? `"${normalized}" added and refined!`
-                    : `"${normalized}" added!`,
-                'success'
-            );
+            showToast(`"${normalized}" added!`);
             setIsAlreadyInLibrary(true);
         } catch {
             showToast("Add error!", "error");
