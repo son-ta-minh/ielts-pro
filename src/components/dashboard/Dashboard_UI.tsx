@@ -559,7 +559,7 @@ const FocusPeriodPanel: React.FC<FocusPeriodPanelProps> = ({
     onDeleteHistory,
     clockTick
 }) => {
-    const [isExpanded, setIsExpanded] = useState(true);
+    const [isExpanded, setIsExpanded] = useState(false);
     const sortedTimers = useMemo(
         () => [...timers].sort((a, b) => {
             const aSort = a.lastActivatedAt ?? a.createdAt;

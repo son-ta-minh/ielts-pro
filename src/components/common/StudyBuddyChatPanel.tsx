@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronUp, Copy, Download, Image as ImageIcon, Loader2, Mic, Save, Send, Sparkles, StopCircle, Trash2, Volume2, Wrench, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowUpDown, BookOpenCheck, ChevronUp, CircleHelp, Copy, Download, Flag, Image as ImageIcon, Loader2, Mic, Save, Send, Settings2, Sparkles, StopCircle, Trash2, Volume2, Wrench, X } from 'lucide-react';
 import { StudyBuddyImageSettings } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { ChatSearchMatch, ChatTurn } from '../../utils/studyBuddyChatUtils';
@@ -46,6 +46,69 @@ function ModeToggle({
                 }`}
             >
                 Manual
+            </button>
+        </div>
+    );
+}
+
+function ModeInfoTooltip() {
+    return (
+        <span className="relative inline-flex">
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-neutral-400 transition-colors hover:text-neutral-700">
+                <CircleHelp size={12} />
+            </span>
+        </span>
+    );
+}
+
+function ModeSettingButton({
+    className = '',
+    label,
+    tooltip,
+    value,
+    activeClassName,
+    inactiveClassName,
+    isTooltipOpen,
+    onTooltipEnter,
+    onTooltipLeave,
+    onClick
+}: {
+    className?: string;
+    label: string;
+    tooltip: string;
+    value: boolean;
+    activeClassName: string;
+    inactiveClassName: string;
+    isTooltipOpen: boolean;
+    onTooltipEnter: () => void;
+    onTooltipLeave: () => void;
+    onClick: () => void;
+}) {
+    return (
+        <div className={`${className} relative`}>
+            <button
+                type="button"
+                onClick={onClick}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors ${
+                    value ? activeClassName : inactiveClassName
+                }`}
+            >
+                <span className="inline-flex items-center gap-2">
+                    <span>{label}</span>
+                    <span
+                        className="relative inline-flex"
+                        onMouseEnter={onTooltipEnter}
+                        onMouseLeave={onTooltipLeave}
+                    >
+                        <ModeInfoTooltip />
+                        {isTooltipOpen ? (
+                            <span className="pointer-events-none absolute right-0 top-[calc(100%+0.35rem)] z-40 w-48 rounded-xl bg-neutral-900 px-2.5 py-2 text-[10px] font-medium leading-relaxed text-white shadow-xl">
+                                {tooltip}
+                            </span>
+                        ) : null}
+                    </span>
+                </span>
+                <span className="text-[10px] uppercase tracking-wide">{value ? 'On' : 'Off'}</span>
             </button>
         </div>
     );
@@ -428,11 +491,15 @@ interface StudyBuddyChatPanelProps {
     isContextAware: boolean;
     isSearchEnabled: boolean;
     isChatAudioEnabled: boolean;
+    chatResponseLanguage: 'vi' | 'en';
     chatHistory: ChatTurn[];
     hasChatTextSelection: boolean;
     chatInput: string;
+    chatTarget: { word: string } | null;
     headerTitle: string;
     headerDescription: string;
+    chatPlaceholder: string;
+    chatStudyMenu: React.ReactNode;
     chatCoachActionBar: React.ReactNode;
     chatSaveModal: React.ReactNode;
     imageSettings: StudyBuddyImageSettings;
@@ -440,8 +507,11 @@ interface StudyBuddyChatPanelProps {
     onToggleSearchEnabled: () => void;
     onToggleConversationMode: () => void;
     onToggleChatAudio: () => void;
+    onChatResponseLanguageChange: (language: 'vi' | 'en') => void;
     onClearChatHistory: () => void;
     onClose: () => void;
+    onClearChatTarget: () => void;
+    onRetryIncompleteTargetReply: () => void;
     onOpenSaveModal: (turn: ChatTurn) => void;
     onCopyImageUrl: (url: string) => void;
     onSaveImage: (url: string) => void;
@@ -464,11 +534,15 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     isContextAware,
     isSearchEnabled,
     isChatAudioEnabled,
+    chatResponseLanguage,
     chatHistory,
     hasChatTextSelection,
     chatInput,
+    chatTarget,
     headerTitle,
     headerDescription,
+    chatPlaceholder,
+    chatStudyMenu,
     chatCoachActionBar,
     chatSaveModal,
     imageSettings,
@@ -476,8 +550,11 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     onToggleSearchEnabled,
     onToggleConversationMode,
     onToggleChatAudio,
+    onChatResponseLanguageChange,
     onClearChatHistory,
     onClose,
+    onClearChatTarget,
+    onRetryIncompleteTargetReply,
     onOpenSaveModal,
     onCopyImageUrl,
     onSaveImage,
@@ -491,9 +568,34 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     onImageSettingsChange,
 }) => {
     const [isCoachMenuOpen, setIsCoachMenuOpen] = useState(false);
+    const [isStudyMenuOpen, setIsStudyMenuOpen] = useState(false);
     const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+    const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
     const [isImageSettingsOpen, setIsImageSettingsOpen] = useState(false);
     const [isDeleteMode, setIsDeleteMode] = useState(false);
+    const [activeModeTooltip, setActiveModeTooltip] = useState<string | null>(null);
+    const coachMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
+    const studyMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
+    const [panelWidth, setPanelWidth] = useState<number>(() => {
+        if (typeof window === 'undefined') return true;
+        try {
+            const raw = window.localStorage.getItem(STUDY_BUDDY_CHAT_PANEL_SIZE_KEY);
+            const parsed = raw ? JSON.parse(raw) : null;
+            return Number.isFinite(parsed?.width) && parsed.width > 0 ? parsed.width : 736;
+        } catch {
+            return 736;
+        }
+    });
+    const [panelHeight, setPanelHeight] = useState<number>(() => {
+        if (typeof window === 'undefined') return 672;
+        try {
+            const raw = window.localStorage.getItem(STUDY_BUDDY_CHAT_PANEL_SIZE_KEY);
+            const parsed = raw ? JSON.parse(raw) : null;
+            return Number.isFinite(parsed?.height) && parsed.height > 0 ? parsed.height : 672;
+        } catch {
+            return 672;
+        }
+    });
 
     const handleCoachMenuClick = (event: React.MouseEvent<HTMLDivElement>) => {
         const target = event.target as HTMLElement | null;
@@ -501,6 +603,15 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         if (!button || (button as HTMLButtonElement).disabled) return;
         window.setTimeout(() => {
             setIsCoachMenuOpen(false);
+        }, 0);
+    };
+
+    const handleStudyMenuClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        const target = event.target as HTMLElement | null;
+        const button = target?.closest('button');
+        if (!button || (button as HTMLButtonElement).disabled) return;
+        window.setTimeout(() => {
+            setIsStudyMenuOpen(false);
         }, 0);
     };
 
@@ -512,21 +623,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         let width = 0;
         let height = 0;
         let frameId: number | null = null;
-
-        try {
-            const raw = window.localStorage.getItem(STUDY_BUDDY_CHAT_PANEL_SIZE_KEY);
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Number.isFinite(parsed?.width) && parsed.width > 0) {
-                    panel.style.width = `${parsed.width}px`;
-                }
-                if (Number.isFinite(parsed?.height) && parsed.height > 0) {
-                    panel.style.height = `${parsed.height}px`;
-                }
-            }
-        } catch {
-            // Ignore invalid persisted size.
-        }
 
         const clampPanelHeight = () => {
             const rect = panel.getBoundingClientRect();
@@ -547,7 +643,10 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
             try {
                 window.localStorage.setItem(
                     STUDY_BUDDY_CHAT_PANEL_SIZE_KEY,
-                    JSON.stringify({ width: nextWidth, height: nextHeight })
+                    JSON.stringify({
+                        width: nextWidth,
+                        height: nextHeight
+                    })
                 );
             } catch {
                 // Ignore localStorage write failures.
@@ -575,11 +674,70 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         };
     }, [chatPanelRef]);
 
+    useEffect(() => {
+        const handlePointerDownOutsideMenus = (event: MouseEvent) => {
+            const target = event.target as Node | null;
+            if (!target) return;
+
+            if (studyMenuWrapRef.current && !studyMenuWrapRef.current.contains(target)) {
+                setIsStudyMenuOpen(false);
+            }
+
+            if (coachMenuWrapRef.current && !coachMenuWrapRef.current.contains(target)) {
+                setIsCoachMenuOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handlePointerDownOutsideMenus);
+        return () => {
+            document.removeEventListener('mousedown', handlePointerDownOutsideMenus);
+        };
+    }, []);
+
+    useEffect(() => {
+        const panel = chatPanelRef.current;
+        if (!panel) return;
+        panel.style.width = `${panelWidth}px`;
+    }, [chatPanelRef, panelWidth]);
+
+    useEffect(() => {
+        const panel = chatPanelRef.current;
+        if (!panel) return;
+        panel.style.height = `${panelHeight}px`;
+    }, [chatPanelRef, panelHeight]);
+
+    const handleResizeWidth = () => {
+        setPanelWidth((current) => {
+            const options = [640, 736, 832, 928];
+            const next = options.find((value) => value > current + 8) ?? options[0];
+            return next;
+        });
+    };
+
+    const handleResizeHeight = () => {
+        setPanelHeight((current) => {
+            const options = [560, 672, 784, 896];
+            const next = options.find((value) => value > current + 8) ?? options[0];
+            return next;
+        });
+    };
+
+    const latestAssistantTurn = [...chatHistory]
+        .reverse()
+        .find((turn) => turn.role === 'assistant' && turn.kind !== 'status' && turn.content.trim());
+    const shouldShowRetryIncompleteReply = Boolean(
+        chatTarget
+        && !isChatLoading
+        && latestAssistantTurn
+        && !latestAssistantTurn.suppressTargetFollowUp
+        && !latestAssistantTurn.content.includes('[FOLLOWUP:')
+    );
+
     return (
         <div
             ref={chatPanelRef}
             className="pointer-events-auto absolute bottom-8 left-0 z-50 flex h-[42rem] min-h-[32rem] w-[46rem] min-w-[28rem] max-w-[calc(100vw-1rem)] flex-col rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200 relative"
-            style={{ resize: 'both' }}
+            style={{ width: `${panelWidth}px`, height: `${panelHeight}px` }}
             onMouseDownCapture={onPointerDownInside}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseEnter={(e) => e.stopPropagation()}
@@ -595,6 +753,32 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                 </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+                <div className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white p-1">
+                    <button
+                        type="button"
+                        onClick={() => onChatResponseLanguageChange('en')}
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition-colors ${
+                            chatResponseLanguage === 'en'
+                                ? 'bg-neutral-900 text-white'
+                                : 'text-neutral-600 hover:bg-neutral-50'
+                        }`}
+                        title="Force English replies"
+                    >
+                        EN
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => onChatResponseLanguageChange('vi')}
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition-colors ${
+                            chatResponseLanguage === 'vi'
+                                ? 'bg-neutral-900 text-white'
+                                : 'text-neutral-600 hover:bg-neutral-50'
+                        }`}
+                        title="Force Vietnamese replies"
+                    >
+                        VI
+                    </button>
+                </div>
                 <div className="relative">
                     <button
                         type="button"
@@ -602,101 +786,136 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                         className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-50"
                         title="Mode settings"
                     >
-                        Mode
+                        <Flag size={14} />
                         <ChevronUp size={12} className={`transition-transform ${isModeMenuOpen ? '' : 'rotate-180'}`} />
                     </button>
                     {isModeMenuOpen ? (
                         <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-56 rounded-2xl border border-neutral-200 bg-white/98 p-2 shadow-2xl backdrop-blur-xl">
-                            <button
-                                type="button"
+                            <ModeSettingButton
+                                label="Library Access"
+                                tooltip="Let StudyBuddy inject your saved vocabulary and study context into replies."
+                                value={isContextAware}
+                                activeClassName="bg-blue-50 text-blue-700"
+                                inactiveClassName="bg-white text-neutral-700 hover:bg-neutral-50"
+                                isTooltipOpen={activeModeTooltip === 'library'}
+                                onTooltipEnter={() => setActiveModeTooltip('library')}
+                                onTooltipLeave={() => setActiveModeTooltip((current) => current === 'library' ? null : current)}
                                 onClick={() => {
                                     onToggleContextAware();
                                     setIsModeMenuOpen(false);
                                 }}
-                                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors ${
-                                    isContextAware
-                                        ? 'bg-blue-50 text-blue-700'
-                                        : 'bg-white text-neutral-700 hover:bg-neutral-50'
-                                }`}
-                                title="Toggle study context embedding"
-                            >
-                                <span>Library Access</span>
-                                <span className="text-[10px] uppercase tracking-wide">{isContextAware ? 'On' : 'Off'}</span>
-                            </button>
-                            <button
-                                type="button"
+                            />
+                            <ModeSettingButton
+                                label="Search"
+                                tooltip="Allow extra reference search support when the answer needs outside lookup."
+                                value={isSearchEnabled}
+                                className="mt-1"
+                                activeClassName="bg-violet-50 text-violet-700"
+                                inactiveClassName="bg-white text-neutral-700 hover:bg-neutral-50"
+                                isTooltipOpen={activeModeTooltip === 'search'}
+                                onTooltipEnter={() => setActiveModeTooltip('search')}
+                                onTooltipLeave={() => setActiveModeTooltip((current) => current === 'search' ? null : current)}
                                 onClick={() => {
                                     onToggleSearchEnabled();
                                     setIsModeMenuOpen(false);
                                 }}
-                                className={`mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors ${
-                                    isSearchEnabled
-                                        ? 'bg-violet-50 text-violet-700'
-                                        : 'bg-white text-neutral-700 hover:bg-neutral-50'
-                                }`}
-                                title="Toggle external reference search assist"
-                            >
-                                <span>Search</span>
-                                <span className="text-[10px] uppercase tracking-wide">{isSearchEnabled ? 'On' : 'Off'}</span>
-                            </button>
-                            <button
-                                type="button"
+                            />
+                            <ModeSettingButton
+                                label="Conversation"
+                                tooltip="Hands-free voice conversation mode that keeps listening and replying by voice."
+                                value={isConversationMode}
+                                className="mt-1"
+                                activeClassName="bg-rose-50 text-rose-700"
+                                inactiveClassName="bg-white text-neutral-700 hover:bg-neutral-50"
+                                isTooltipOpen={activeModeTooltip === 'conversation'}
+                                onTooltipEnter={() => setActiveModeTooltip('conversation')}
+                                onTooltipLeave={() => setActiveModeTooltip((current) => current === 'conversation' ? null : current)}
                                 onClick={() => {
                                     onToggleConversationMode();
                                     setIsModeMenuOpen(false);
                                 }}
-                                className={`mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors ${
-                                    isConversationMode
-                                        ? 'bg-rose-50 text-rose-700'
-                                        : 'bg-white text-neutral-700 hover:bg-neutral-50'
-                                }`}
-                                title="Toggle voice conversation mode"
-                            >
-                                <span>Conversation</span>
-                                <span className="text-[10px] uppercase tracking-wide">{isConversationMode ? 'On' : 'Off'}</span>
-                            </button>
-                            <button
-                                type="button"
+                            />
+                            <ModeSettingButton
+                                label="Audio"
+                                tooltip="Automatically speak StudyBuddy replies out loud inside the chat."
+                                value={isChatAudioEnabled}
+                                className="mt-1"
+                                activeClassName="bg-emerald-50 text-emerald-700"
+                                inactiveClassName="bg-white text-neutral-700 hover:bg-neutral-50"
+                                isTooltipOpen={activeModeTooltip === 'audio'}
+                                onTooltipEnter={() => setActiveModeTooltip('audio')}
+                                onTooltipLeave={() => setActiveModeTooltip((current) => current === 'audio' ? null : current)}
                                 onClick={() => {
                                     onToggleChatAudio();
                                     setIsModeMenuOpen(false);
                                 }}
-                                className={`mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors ${
-                                    isChatAudioEnabled
-                                        ? 'bg-emerald-50 text-emerald-700'
-                                        : 'bg-white text-neutral-700 hover:bg-neutral-50'
-                                }`}
-                                title="Toggle chat audio"
+                            />
+                            <ModeSettingButton
+                                label="Delete Mode"
+                                tooltip="Show delete controls on chat bubbles so you can remove messages faster."
+                                value={isDeleteMode}
+                                className="mt-1"
+                                activeClassName="bg-red-50 text-red-700"
+                                inactiveClassName="bg-white text-neutral-700 hover:bg-neutral-50"
+                                isTooltipOpen={activeModeTooltip === 'delete'}
+                                onTooltipEnter={() => setActiveModeTooltip('delete')}
+                                onTooltipLeave={() => setActiveModeTooltip((current) => current === 'delete' ? null : current)}
+                                onClick={() => {
+                                    setIsDeleteMode((prev) => !prev);
+                                }}
+                            />
+                        </div>
+                    ) : null}
+                </div>
+                <div className="relative">
+                    <button
+                        type="button"
+                        onClick={() => setIsSettingsMenuOpen((prev) => !prev)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-50"
+                        title="Settings"
+                    >
+                        <Settings2 size={14} />
+                        <ChevronUp size={12} className={`transition-transform ${isSettingsMenuOpen ? '' : 'rotate-180'}`} />
+                    </button>
+                    {isSettingsMenuOpen ? (
+                        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 grid w-56 gap-1 rounded-2xl border border-neutral-200 bg-white/98 p-2 shadow-2xl backdrop-blur-xl">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    handleResizeWidth();
+                                    setIsSettingsMenuOpen(false);
+                                }}
+                                className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-left text-[11px] font-bold text-neutral-700 transition-colors hover:bg-neutral-50"
                             >
-                                <span>Audio</span>
-                                <span className="text-[10px] uppercase tracking-wide">{isChatAudioEnabled ? 'On' : 'Off'}</span>
+                                <ArrowLeftRight size={14} />
+                                Resize Width
                             </button>
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setIsDeleteMode((prev) => !prev);
+                                    handleResizeHeight();
+                                    setIsSettingsMenuOpen(false);
                                 }}
-                                className={`mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors ${
-                                    isDeleteMode
-                                        ? 'bg-red-50 text-red-700'
-                                        : 'bg-white text-neutral-700 hover:bg-neutral-50'
-                                }`}
-                                title="Toggle delete mode for chat bubbles"
+                                className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-left text-[11px] font-bold text-neutral-700 transition-colors hover:bg-neutral-50"
                             >
-                                <span>Delete Mode</span>
-                                <span className="text-[10px] uppercase tracking-wide">{isDeleteMode ? 'On' : 'Off'}</span>
+                                <ArrowUpDown size={14} />
+                                Resize Height
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsImageSettingsOpen((prev) => !prev);
+                                    setIsSettingsMenuOpen(false);
+                                }}
+                                className="flex items-center gap-2 rounded-xl bg-white-100 px-3 py-2 text-left text-[11px] font-bold text-neutral-700 transition-colors hover:bg-neutral-200"
+                                title={`Image settings: ${getStudyBuddyImageSettingsSummary(imageSettings)}`}
+                            >
+                                <ImageIcon size={14} />
+                                Image Settings
                             </button>
                         </div>
                     ) : null}
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setIsImageSettingsOpen((prev) => !prev)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-700 transition-colors hover:bg-neutral-50"
-                    title={`Image settings: ${getStudyBuddyImageSettingsSummary(imageSettings)}`}
-                >
-                    <ImageIcon size={14} />
-                </button>
                 <button
                     type="button"
                     onClick={onClearChatHistory}
@@ -744,13 +963,40 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         </div>
 
         <div className="border-t border-neutral-100 p-3 bg-white">
+            {chatTarget ? (
+                <div className="mb-2 flex items-center justify-between rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                    <p className="min-w-0 truncate text-sm font-black uppercase tracking-wide text-neutral-700">
+                        TARGET: <span className="normal-case text-neutral-900">{chatTarget.word}</span>
+                    </p>
+                    {shouldShowRetryIncompleteReply ? (
+                        <button
+                            type="button"
+                            onClick={onRetryIncompleteTargetReply}
+                            className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700 transition-colors hover:bg-amber-50"
+                            title="Retry the target reply when follow-up buttons did not appear"
+                        >
+                            Retry Incomplete Reply
+                        </button>
+                    ) : null}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClearChatTarget}
+                        className="ml-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                        title="Clear target word"
+                    >
+                        <X size={14} />
+                    </button>
+                </div>
+            ) : null}
             <div className="flex items-center gap-2">
                 <textarea
                     value={chatInput}
                     onChange={(e) => onChatInputChange(e.target.value)}
                     onKeyDown={onChatInputKeyDown}
                     rows={1}
-                    placeholder={isConversationMode ? 'Conversation mode is ON. Say something...' : 'Ask me anything...'}
+                    placeholder={chatPlaceholder}
                     disabled={isConversationMode}
                     className={`min-h-[2.75rem] flex-1 resize-none rounded-2xl border px-4 py-3 text-sm outline-none transition-colors ${
                         isConversationMode
@@ -759,14 +1005,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                     }`}
                 />
                 <div className="relative flex items-center gap-2 shrink-0">
-                    {isCoachMenuOpen ? (
-                        <div
-                            className="absolute bottom-[calc(100%+0.5rem)] right-0 z-20 w-[min(42rem,calc(100vw-2rem))] max-w-[42rem] rounded-[1.5rem] border border-neutral-200 bg-white/98 p-3 shadow-2xl backdrop-blur-xl"
-                            onClick={handleCoachMenuClick}
-                        >
-                            {chatCoachActionBar}
-                        </div>
-                    ) : null}
                     {isChatLoading ? (
                         <button
                             type="button"
@@ -802,17 +1040,56 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                             >
                                 <Mic size={18} className={isChatListening ? 'animate-pulse' : ''} />
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => setIsCoachMenuOpen((prev) => !prev)}
-                                className="h-10 w-10 rounded-2xl border border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 flex items-center justify-center transition-colors"
-                                title="Open coach commands"
-                            >
-                                <div className="relative flex items-center justify-center">
-                                    <Wrench size={16} />
-                                    <ChevronUp size={12} className={`absolute -top-2 -right-2 transition-transform ${isCoachMenuOpen ? '' : 'rotate-180'}`} />
-                                </div>
-                            </button>
+                            <div ref={studyMenuWrapRef} className="relative">
+                                {isStudyMenuOpen ? (
+                                    <div
+                                        className="absolute bottom-[calc(100%+0.5rem)] right-0 z-20 w-[min(16rem,calc(100vw-2rem))] rounded-[1.5rem] bg-white/98 p-0 backdrop-blur-xl"
+                                        onClick={handleStudyMenuClick}
+                                    >
+                                        {chatStudyMenu}
+                                    </div>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsCoachMenuOpen(false);
+                                        setIsSettingsMenuOpen(false);
+                                        setIsStudyMenuOpen((prev) => !prev);
+                                    }}
+                                    className="h-10 w-10 rounded-2xl border border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 flex items-center justify-center transition-colors"
+                                    title="Open study tools"
+                                >
+                                    <div className="relative flex items-center justify-center">
+                                        <BookOpenCheck size={16} />
+                                        <ChevronUp size={12} className={`absolute -top-2 -right-2 transition-transform ${isStudyMenuOpen ? '' : 'rotate-180'}`} />
+                                    </div>
+                                </button>
+                            </div>
+                            <div ref={coachMenuWrapRef} className="relative">
+                                {isCoachMenuOpen ? (
+                                    <div
+                                        className="absolute bottom-[calc(100%+0.5rem)] right-0 z-20 w-[min(16rem,calc(100vw-2rem))] rounded-[1.5rem] bg-white/98 p-0 backdrop-blur-xl"
+                                        onClick={handleCoachMenuClick}
+                                    >
+                                        {chatCoachActionBar}
+                                    </div>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsStudyMenuOpen(false);
+                                        setIsSettingsMenuOpen(false);
+                                        setIsCoachMenuOpen((prev) => !prev);
+                                    }}
+                                    className="h-10 w-10 rounded-2xl border border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 flex items-center justify-center transition-colors"
+                                    title="Open coach commands"
+                                >
+                                    <div className="relative flex items-center justify-center">
+                                        <Wrench size={16} />
+                                        <ChevronUp size={12} className={`absolute -top-2 -right-2 transition-transform ${isCoachMenuOpen ? '' : 'rotate-180'}`} />
+                                    </div>
+                                </button>
+                            </div>
                         </>
                     )}
                 </div>

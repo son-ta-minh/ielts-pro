@@ -193,7 +193,7 @@ export interface ViewWordModalUIProps {
     appliedAccent?: 'US' | 'UK';
     onAddAIExample?: () => void;
     onAskAiRequest?: () => void;
-    onAskAiSectionRequest?: (section: 'wordFamily' | 'collocation' | 'paraphrase' | 'idiom' | 'example') => void;
+    onAskAiSectionRequest?: (section: 'wordFamily' | 'collocation' | 'paraphrase' | 'idiom' | 'example' | 'preposition') => void;
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
@@ -652,9 +652,21 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 )}
                                 {displayedPreps.length > 0 && (
                                     <div className="space-y-1 md:col-span-4">
-                                        <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                                            <AtSign size={10}/> Prepositions
-                                        </label>
+                                        <div className="mb-1 flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                                <AtSign size={10}/> Prepositions
+                                            </label>
+                                            {onAskAiSectionRequest ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onAskAiSectionRequest('preposition')}
+                                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                                >
+                                                    <MessageSquare size={10} />
+                                                    <span>Ask AI</span>
+                                                </button>
+                                            ) : null}
+                                        </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-100 p-3 rounded-xl shadow-sm">
                                             {displayedPreps.map((p, i) => {
                                                 const specificKey = `PREPOSITION_QUIZ:${p.prep}`;

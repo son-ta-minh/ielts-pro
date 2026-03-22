@@ -16,7 +16,6 @@ interface ChatCoachActionBarProps {
     onExamples: () => void;
     onExplain: () => void;
     onImage: () => void;
-    onInfographic: () => void;
     onTest: () => void;
     onCollocations: () => void;
     onParaphrase: () => void;
@@ -38,13 +37,12 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
     onExamples,
     onExplain,
     onImage,
-    onInfographic,
     onTest,
     onCollocations,
     onParaphrase,
     onWordFamily,
 }) => {
-    const baseButtonClass = 'h-8 rounded-2xl flex items-center justify-center px-3 text-[10px] font-black uppercase tracking-wide transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap';
+    const baseButtonClass = 'rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40';
 
     const renderButtonLabel = (actionKey: string, idleLabel: string) => (
         activeChatCoachAction === actionKey
@@ -53,8 +51,7 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
     );
 
     return (
-        <div className="border-t border-neutral-100 bg-neutral-50/90 px-0 py-0">
-            <div className="flex flex-wrap gap-2">
+        <div className="grid min-w-[12rem] gap-1 rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl">
                 <button
                     type="button"
                     onMouseDown={onRestoreSelection}
@@ -97,26 +94,6 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                 <button
                     type="button"
                     onMouseDown={onRestoreSelection}
-                    onClick={onExamples}
-                    disabled={!hasSelection || !!activeChatCoachAction}
-                    className={`${baseButtonClass} bg-blue-50 text-blue-600 hover:bg-blue-100`}
-                    title="Examples"
-                >
-                    {renderButtonLabel('examples', 'Examples')}
-                </button>
-                <button
-                    type="button"
-                    onMouseDown={onRestoreSelection}
-                    onClick={onExplain}
-                    disabled={!hasSelection || !!activeChatCoachAction}
-                    className={`${baseButtonClass} bg-cyan-50 text-cyan-700 hover:bg-cyan-100`}
-                    title="Explain"
-                >
-                    {renderButtonLabel('explain', 'Explain')}
-                </button>
-                <button
-                    type="button"
-                    onMouseDown={onRestoreSelection}
                     onClick={onImage}
                     disabled={!hasSelection || !!activeChatCoachAction}
                     className={`${baseButtonClass} bg-violet-50 text-violet-700 hover:bg-violet-100`}
@@ -124,57 +101,64 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
                 >
                     {renderButtonLabel('image', 'Image')}
                 </button>
-                <button
-                    type="button"
-                    onMouseDown={onRestoreSelection}
-                    onClick={onInfographic}
-                    disabled={!hasSelection || !!activeChatCoachAction}
-                    className={`${baseButtonClass} bg-lime-50 text-lime-700 hover:bg-lime-100`}
-                    title="Generate infographic"
-                >
-                    {renderButtonLabel('infographic', 'Infographic')}
-                </button>
-                <button
-                    type="button"
-                    onMouseDown={onRestoreSelection}
-                    onClick={onTest}
-                    disabled={!hasSelection || !!activeChatCoachAction}
-                    className={`${baseButtonClass} bg-fuchsia-50 text-fuchsia-600 hover:bg-fuchsia-100`}
-                    title="Generate Test"
-                >
-                    {renderButtonLabel('test', 'Test')}
-                </button>
-                <button
-                    type="button"
-                    onMouseDown={onRestoreSelection}
-                    onClick={onCollocations}
-                    disabled={!hasSelection || !!activeChatCoachAction}
-                    className={`${baseButtonClass} bg-amber-50 text-amber-600 hover:bg-amber-100`}
-                    title="Collocations"
-                >
-                    {renderButtonLabel('collocations', 'Collocations')}
-                </button>
-                <button
-                    type="button"
-                    onMouseDown={onRestoreSelection}
-                    onClick={onParaphrase}
-                    disabled={!hasSelection || !!activeChatCoachAction}
-                    className={`${baseButtonClass} bg-rose-50 text-rose-600 hover:bg-rose-100`}
-                    title="Paraphrase"
-                >
-                    {renderButtonLabel('paraphrase', 'Paraphrase')}
-                </button>
-                <button
-                    type="button"
-                    onMouseDown={onRestoreSelection}
-                    onClick={onWordFamily}
-                    disabled={!hasSelection || !!activeChatCoachAction}
-                    className={`${baseButtonClass} bg-emerald-50 text-emerald-600 hover:bg-emerald-100`}
-                    title="Word Family"
-                >
-                    {renderButtonLabel('wordFamily', 'Word Family')}
-                </button>
-            </div>
+        </div>
+    );
+};
+
+interface ChatStudyMenuProps {
+    activeChatCoachAction: string | null;
+    hasSelection: boolean;
+    onExamples: () => void;
+    onExplain: () => void;
+    onPreposition: () => void;
+    onTest: () => void;
+    onCollocations: () => void;
+    onParaphrase: () => void;
+    onWordFamily: () => void;
+}
+
+export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
+    activeChatCoachAction,
+    hasSelection,
+    onExamples,
+    onExplain,
+    onPreposition,
+    onTest,
+    onCollocations,
+    onParaphrase,
+    onWordFamily,
+}) => {
+    const renderButtonLabel = (actionKey: string, idleLabel: string) => (
+        activeChatCoachAction === actionKey
+            ? <Loader2 size={14} className="animate-spin" />
+            : idleLabel
+    );
+
+    const baseButtonClass = 'rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40';
+
+    return (
+        <div className="grid min-w-[12rem] gap-1 rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl">
+            <button type="button" onClick={onExplain} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-cyan-50 text-cyan-700 hover:bg-cyan-100`}>
+                {renderButtonLabel('explain', 'Explain')}
+            </button>
+            <button type="button" onClick={onExamples} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-blue-50 text-blue-700 hover:bg-blue-100`}>
+                {renderButtonLabel('examples', 'Examples')}
+            </button>
+            <button type="button" onClick={onCollocations} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-amber-50 text-amber-700 hover:bg-amber-100`}>
+                {renderButtonLabel('collocations', 'Collocations')}
+            </button>
+            <button type="button" onClick={onPreposition} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-sky-50 text-sky-700 hover:bg-sky-100`}>
+                {renderButtonLabel('preposition', 'Dependent Prep')}
+            </button>
+            <button type="button" onClick={onParaphrase} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
+                {renderButtonLabel('paraphrase', 'Paraphrase')}
+            </button>
+            <button type="button" onClick={onWordFamily} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}>
+                {renderButtonLabel('wordFamily', 'Word Family')}
+            </button>
+            <button type="button" onClick={onTest} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100`}>
+                {renderButtonLabel('test', 'Test')}
+            </button>
         </div>
     );
 };

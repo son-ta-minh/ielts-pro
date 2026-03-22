@@ -1,6 +1,6 @@
 export function getStudyBuddyCoachPrompt(
     selectedText: string,
-    type: 'examples' | 'collocations' | 'paraphrase' | 'wordFamily'
+    type: 'examples' | 'collocations' | 'paraphrase' | 'wordFamily' | 'preposition'
 ): string {
     const baseRules = `Rules:
 - Use English only
@@ -37,6 +37,17 @@ ${baseRules}
 - Example format:
 - successful (adjective): achieving the result you wanted
 - succeed (verb): achieve the result you wanted`;
+    }
+
+    if (type === 'preposition') {
+        return `Give the most useful dependent prepositions or preposition patterns for "${selectedText}".
+
+${baseRules}
+- Output ONLY the list, no greeting, no intro, no conclusion
+- Max 5 lines
+- Format: - **preposition or pattern**: short usage note
+- Prefer natural, common learner-useful patterns
+- If a pattern is limited or formal, say that briefly`;
     }
 
     return `Give natural paraphrases for "${selectedText}".

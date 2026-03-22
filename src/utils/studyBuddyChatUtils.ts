@@ -1,10 +1,17 @@
-import { StudyBuddyMemoryChunk, User } from '../app/types';
+import { StudyBuddyMemoryChunk, User, VocabularyItem, WordFamily } from '../app/types';
 import { detectLanguage } from './audio';
 import { getAiStudyContextText } from './context_util';
 
 export type ChatSaveSection = 'example' | 'preposition' | 'collocation' | 'paraphrase' | 'wordFamily';
 export type ChatSaveActionType = 'examples' | 'collocations' | 'paraphrase' | 'wordFamily';
-export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain' | 'image' | 'infographic';
+export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain' | 'image' | 'infographic' | 'preposition';
+export type StudyBuddyTargetSection = 'coreUsage' | 'collocation' | 'wordFamily' | 'idiom' | 'paraphrase' | 'example' | 'preposition';
+
+export interface StudyBuddyChatTarget {
+    word: VocabularyItem;
+    section: StudyBuddyTargetSection;
+    source?: string;
+}
 
 export interface ChatSaveContext {
     actionType?: ChatSaveActionType;
@@ -34,7 +41,18 @@ export interface ChatTurn {
     saveContext?: ChatSaveContext;
     searchResultMeta?: ChatSearchResultMeta;
     hasMemoryWrite?: boolean;
+    suppressTargetFollowUp?: boolean;
 }
+
+export const STUDY_BUDDY_TARGET_LABELS: Record<StudyBuddyTargetSection, string> = {
+    coreUsage: 'Core Usage',
+    collocation: 'Collocation',
+    wordFamily: 'Word Family',
+    idiom: 'Idiom',
+    paraphrase: 'Paraphrase',
+    example: 'Example',
+    preposition: 'Dependent Preposition'
+};
 
 export const SAVE_SECTION_LABELS: Record<ChatSaveSection, string> = {
     example: 'Example',
@@ -118,6 +136,164 @@ export function buildStudyBuddyMessages(
         ...extraSystemMessages.map((content) => ({ role: 'system' as const, content })),
         ...messages
     ];
+}
+
+function formatWordFamilySection(wordFamily?: WordFamily | null) {
+    if (!wordFamily) return '';
+    return [
+        ...(wordFamily.nouns || []).filter((item) => !item.isIgnored).map((item) => `- noun: ${item.word}`),
+        ...(wordFamily.verbs || []).filter((item) => !item.isIgnored).map((item) => `- verb: ${item.word}`),
+        ...(wordFamily.adjs || []).filter((item) => !item.isIgnored).map((item) => `- adjective: ${item.word}`),
+        ...(wordFamily.advs || []).filter((item) => !item.isIgnored).map((item) => `- adverb: ${item.word}`),
+    ].join('\n');
+}
+
+export function buildStudyBuddyTargetRecord(word: VocabularyItem) {
+    return [
+        `Word: ${word.word}`,
+        word.meaning ? `Meaning (English): ${word.meaning}` : '',
+        word.meaningVi ? `Meaning (Vietnamese): ${word.meaningVi}` : '',
+        word.register ? `Register: ${word.register}` : '',
+        word.type ? `Word type: ${word.type}` : '',
+        word.note ? `Private note:\n${word.note}` : '',
+        word.example ? `Examples:\n${word.example}` : '',
+        word.prepositions?.length
+            ? `Prepositions:\n${word.prepositions
+                .filter((item) => !item.isIgnored)
+                .map((item) => `- ${item.prep}${item.usage ? `: ${item.usage}` : ''}`)
+                .join('\n')}`
+            : '',
+        word.collocationsArray?.length
+            ? `Collocations:\n${word.collocationsArray
+                .filter((item) => !item.isIgnored)
+                .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
+                .join('\n')}`
+            : '',
+        word.idiomsList?.length
+            ? `Idioms:\n${word.idiomsList
+                .filter((item) => !item.isIgnored)
+                .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
+                .join('\n')}`
+            : '',
+        word.paraphrases?.length
+            ? `Paraphrases:\n${word.paraphrases
+                .filter((item) => !item.isIgnored)
+                .map((item) => `- ${item.word}${item.context ? `: ${item.context}` : ''}`)
+                .join('\n')}`
+            : '',
+        formatWordFamilySection(word.wordFamily)
+            ? `Word family:\n${formatWordFamilySection(word.wordFamily)}`
+            : '',
+    ].filter(Boolean).join('\n\n');
+}
+
+export function buildStudyBuddyTargetSystemMessage(target: StudyBuddyChatTarget) {
+    return [
+        `Current target word for this chat: ${target.word.word}`,
+        `Current focus section: ${STUDY_BUDDY_TARGET_LABELS[target.section]}`,
+        target.source ? `User opened AI from: ${target.source}` : '',
+        '',
+        'Use the vocabulary record below as persistent context for this target word until the target changes or is cleared.',
+        '',
+        buildStudyBuddyTargetRecord(target.word)
+    ].filter(Boolean).join('\n');
+}
+
+export function buildStudyBuddyTargetPrompt(target: StudyBuddyChatTarget) {
+    const headword = target.word.word;
+    const record = buildStudyBuddyTargetRecord(target.word);
+
+    switch (target.section) {
+        case 'coreUsage':
+            return `Explain the core usage of "${headword}" for the learner.
+
+Focus on:
+- meaning and nuance
+- core usage patterns
+- common prepositions or grammar patterns if available
+- one or two practical examples
+- short caution notes if any saved data sounds unnatural, too narrow, or misleading
+
+Prefer Vietnamese if helpful, but keep English examples natural.
+
+Vocabulary record:
+${record}`;
+        case 'collocation':
+            return `Explain the collocations of "${headword}" in a practical learning way.
+
+Rules:
+- explain which collocations are common, limited, awkward, or unnatural if needed
+- give short usage guidance
+- keep the answer concise but useful
+
+Vocabulary record:
+${record}`;
+        case 'wordFamily':
+            return `Explain the word family of "${headword}" for the learner.
+
+Rules:
+- clarify how each form changes meaning or usage
+- point out the most useful members first
+- mention awkward or doubtful items if any
+
+Vocabulary record:
+${record}`;
+        case 'idiom':
+            return `Explain the idioms or fixed expressions related to "${headword}".
+
+Rules:
+- say clearly if an item is not really a natural idiom
+- explain usage limits and tone
+
+Vocabulary record:
+${record}`;
+        case 'paraphrase':
+            return `Explain the paraphrases of "${headword}" for the learner.
+
+Rules:
+- compare nuance and register
+- warn clearly if a paraphrase is awkward, too broad, too narrow, or misleading
+
+Vocabulary record:
+${record}`;
+        case 'preposition':
+            return `Explain the dependent prepositions or preposition patterns of "${headword}" for the learner.
+
+Rules:
+- focus on which prepositions are natural and common
+- explain usage limits briefly
+- warn clearly if any saved pattern sounds awkward or misleading
+
+Vocabulary record:
+${record}`;
+        case 'example':
+            return `Teach "${headword}" through its examples.
+
+Rules:
+- explain what each example shows
+- point out pattern, tone, and common usage
+- if any example sounds unnatural or weak, say so briefly
+
+Vocabulary record:
+${record}`;
+        default:
+            return `Help the learner with "${headword}" using the vocabulary record below.\n\n${record}`;
+    }
+}
+
+export function buildStudyBuddyTargetFollowUpMarkdown() {
+    return `[FOLLOWUP:coreUsage|Core] [FOLLOWUP:collocation|Collo] [FOLLOWUP:wordFamily|Family] [FOLLOWUP:preposition|Prep] [FOLLOWUP:idiom|Idiom] [FOLLOWUP:paraphrase|Para] [FOLLOWUP:example|Example]`;
+}
+
+export function formatStudyBuddyTargetAssistantPreview(content: string, target: StudyBuddyChatTarget | null) {
+    void target;
+    return content.trim();
+}
+
+export function formatStudyBuddyTargetAssistantFinal(content: string, target: StudyBuddyChatTarget | null) {
+    const preview = formatStudyBuddyTargetAssistantPreview(content, target);
+    if (!target) return preview;
+    return `${preview}\n${buildStudyBuddyTargetFollowUpMarkdown()}`;
 }
 
 export function createChatTurn(role: ChatTurn['role'], content: string): ChatTurn {

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, WordQuality, VocabularyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily } from '../../app/types';
 import { Bot, NotebookPen, ListCollapse, BringToFront, Blocks, X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star, Sparkles, Save } from 'lucide-react';
-import { getConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
+import { getConfig, saveConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
@@ -15,7 +15,7 @@ import { ToolsModal } from '../tools/ToolsModal';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { autoRefineNewWords } from '../../services/wordRefinePersistence';
 import { StudyBuddyChatPanel } from './StudyBuddyChatPanel';
-import { StudyBuddyChatCoachActionBar, StudyBuddyCommandBox } from './StudyBuddyCoachControls';
+import { StudyBuddyChatCoachActionBar, StudyBuddyChatStudyMenu, StudyBuddyCommandBox } from './StudyBuddyCoachControls';
 import { StudyBuddySaveModal } from './StudyBuddySaveModal';
 import { StudyBuddyMessageCard } from './StudyBuddyMessageCard';
 import { useStudyBuddyChat } from './useStudyBuddyChat';
@@ -38,7 +38,10 @@ import {
 } from '../../utils/studyBuddyUtils';
 import {
     ChatSaveSection,
+    StudyBuddyChatTarget,
+    StudyBuddyTargetSection,
     ChatTurn,
+    buildStudyBuddyTargetPrompt,
     createChatTurn,
     SAVE_SECTION_LABELS,
     splitMixedLanguageSegments,
@@ -191,6 +194,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const [isSearchEnabled, setIsSearchEnabled] = useState(false);
     const [isChatListening, setIsChatListening] = useState(false);
     const [isConversationMode, setIsConversationMode] = useState(false);
+    const [activeChatTarget, setActiveChatTarget] = useState<StudyBuddyChatTarget | null>(null);
     const [activeChatCoachAction, setActiveChatCoachAction] = useState<string | null>(null);
     const [coachSelectionText, setCoachSelectionText] = useState('');
     const [hasChatTextSelection, setHasChatTextSelection] = useState(false);
@@ -228,6 +232,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const conversationSilenceTimeoutRef = useRef<number | null>(null);
     const conversationRestartTimeoutRef = useRef<number | null>(null);
     const chatAbortReasonRef = useRef<'manual' | 'conversation-interrupt' | null>(null);
+    const activeChatTargetRef = useRef<StudyBuddyChatTarget | null>(null);
     const hasAutoGreetedRef = useRef(false);
     const closeMenuTimeoutRef = useRef<number | null>(null);
     const audioStatusSettleTimeoutRef = useRef<number | null>(null);
@@ -247,6 +252,23 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
     const avatarInfo = getAvatarProps(coach.avatar);
+
+    const handleChatResponseLanguageChange = (language: 'vi' | 'en') => {
+        if (config.interface.studyBuddyLanguage === language) return;
+        const nextConfig: SystemConfig = {
+            ...config,
+            interface: {
+                ...config.interface,
+                studyBuddyLanguage: language
+            }
+        };
+        setConfig(nextConfig);
+        saveConfig(nextConfig, true);
+    };
+
+    useEffect(() => {
+        activeChatTargetRef.current = activeChatTarget;
+    }, [activeChatTarget]);
 
     useEffect(() => {
         let isMounted = true;
@@ -994,10 +1016,45 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             setIsOpen(true);
         };
         const handleExternalStudyBuddyChatRequest = (event: Event) => {
-            const custom = event as CustomEvent<{ prompt?: string }>;
+            const custom = event as CustomEvent<{
+                prompt?: string;
+                targetWord?: string;
+                targetData?: VocabularyItem;
+                targetSection?: StudyBuddyTargetSection;
+                targetSource?: string;
+            }>;
             const prompt = custom.detail?.prompt?.trim();
+            const targetWord = custom.detail?.targetWord?.trim();
+            const targetData = custom.detail?.targetData;
+            const targetSection = custom.detail?.targetSection;
+            const targetSource = custom.detail?.targetSource?.trim();
+
+            if (targetWord && targetData && targetSection) {
+                const nextTarget: StudyBuddyChatTarget = {
+                    word: targetData,
+                    section: targetSection,
+                    source: targetSource
+                };
+                setActiveChatTarget(nextTarget);
+                void handleBackgroundChatRequest(buildStudyBuddyTargetPrompt(nextTarget), nextTarget);
+                return;
+            }
+
             if (!prompt) return;
             void handleBackgroundChatRequest(prompt);
+        };
+        const handleExternalStudyBuddyTargetFollowUp = (event: Event) => {
+            const custom = event as CustomEvent<{ section?: StudyBuddyTargetSection }>;
+            const section = custom.detail?.section;
+            const currentTarget = activeChatTargetRef.current;
+            if (!section || !currentTarget) return;
+
+            const nextTarget: StudyBuddyChatTarget = {
+                ...currentTarget,
+                section
+            };
+            setActiveChatTarget(nextTarget);
+            void handleBackgroundChatRequest(buildStudyBuddyTargetPrompt(nextTarget), nextTarget);
         };
         const handleExternalStudyBuddyChatResponse = (event: Event) => {
             const custom = event as CustomEvent<{ content?: string }>;
@@ -1107,6 +1164,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         window.addEventListener('coach-ipa-fallback-request', handleCoachIpaFallbackRequest as EventListener);
         window.addEventListener('studybuddy-show-message', handleExternalStudyBuddyMessage as EventListener);
         window.addEventListener('studybuddy-chat-request', handleExternalStudyBuddyChatRequest as EventListener);
+        window.addEventListener('studybuddy-target-followup', handleExternalStudyBuddyTargetFollowUp as EventListener);
         window.addEventListener('studybuddy-chat-response', handleExternalStudyBuddyChatResponse as EventListener);
         window.addEventListener('studybuddy-chat-stream-start', handleExternalStudyBuddyChatStreamStart as EventListener);
         window.addEventListener('studybuddy-chat-stream-delta', handleExternalStudyBuddyChatStreamDelta as EventListener);
@@ -1138,6 +1196,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
             window.removeEventListener('coach-ipa-fallback-request', handleCoachIpaFallbackRequest as EventListener);
             window.removeEventListener('studybuddy-show-message', handleExternalStudyBuddyMessage as EventListener);
             window.removeEventListener('studybuddy-chat-request', handleExternalStudyBuddyChatRequest as EventListener);
+            window.removeEventListener('studybuddy-target-followup', handleExternalStudyBuddyTargetFollowUp as EventListener);
             window.removeEventListener('studybuddy-chat-response', handleExternalStudyBuddyChatResponse as EventListener);
             window.removeEventListener('studybuddy-chat-stream-start', handleExternalStudyBuddyChatStreamStart as EventListener);
             window.removeEventListener('studybuddy-chat-stream-delta', handleExternalStudyBuddyChatStreamDelta as EventListener);
@@ -1333,7 +1392,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         handleBackgroundChatRequest,
         handleChatCoachPromptToChat,
         handleChatCoachExplain,
-        handleChatCoachInfographic,
         handleChatCoachImage,
         handleChatCoachSearch,
         handleChatCoachTest,
@@ -1345,6 +1403,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         config,
         user,
         coach,
+        chatResponseLanguage: config.interface.studyBuddyLanguage,
         isContextAware,
         isSearchEnabled,
         isChatLoading,
@@ -1378,6 +1437,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         setIsChatAudioEnabled,
         setIsChatListening,
         setIsConversationMode,
+        setActiveChatTarget,
         showToast,
         removeChatStatusTurn,
         stopChatListening,
@@ -1395,6 +1455,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         chatConversationMaxWords: CHAT_CONVERSATION_MAX_WORDS,
         getStudyBuddyMemoryChunks: () => memoryChunksRef.current,
         getStudyBuddyImageSettings: () => imageSettingsRef.current,
+        getActiveChatTarget: () => activeChatTargetRef.current,
         saveMemoryTexts,
     });
 
@@ -1719,6 +1780,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
     const chatHeaderDescription = isConversationMode
         ? (isChatListening ? 'Conversation mode: listening...' : isChatLoading ? 'Conversation mode: AI is replying...' : 'Conversation mode: waiting for voice...')
         : coachIdentityLabel;
+    const chatPlaceholder = activeChatTarget
+        ? `Target: ${activeChatTarget.word.word}`
+        : (isConversationMode ? 'Conversation mode is ON. Say something...' : 'Ask me anything...');
 
     const chatSaveModal = (
         <StudyBuddySaveModal
@@ -1803,11 +1867,33 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 isContextAware={isContextAware}
                                 isSearchEnabled={isSearchEnabled}
                                 isChatAudioEnabled={isChatAudioEnabled}
+                                chatResponseLanguage={config.interface.studyBuddyLanguage}
                                 chatHistory={chatHistory}
                                 hasChatTextSelection={hasChatTextSelection}
                                 chatInput={chatInput}
+                                chatTarget={activeChatTarget ? {
+                                    word: activeChatTarget.word.word
+                                } : null}
                                 headerTitle={chatHeaderTitle}
                                 headerDescription={chatHeaderDescription}
+                                chatPlaceholder={chatPlaceholder}
+                                chatStudyMenu={
+                                    <StudyBuddyChatStudyMenu
+                                        activeChatCoachAction={activeChatCoachAction}
+                                        hasSelection={!!getCoachActionText() || !!activeChatTarget}
+                                        onExamples={() => handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'))}
+                                        onExplain={handleChatCoachExplain}
+                                        onPreposition={() => handleChatCoachPromptToChat('preposition', 'Dependent Preposition', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'preposition'))}
+                                        onTest={handleChatCoachTest}
+                                        onCollocations={() => handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'))}
+                                        onParaphrase={() => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'))}
+                                        onWordFamily={() => handleChatCoachPromptToChat(
+                                            'wordFamily',
+                                            'Word Family',
+                                            (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'wordFamily')
+                                        )}
+                                    />
+                                }
                                 chatCoachActionBar={
                                     <StudyBuddyChatCoachActionBar
                                         hasSelection={!!getCoachActionText()}
@@ -1828,7 +1914,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                         onExamples={() => handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'))}
                                         onExplain={handleChatCoachExplain}
                                         onImage={handleChatCoachImage}
-                                        onInfographic={handleChatCoachInfographic}
                                         onTest={handleChatCoachTest}
                                         onCollocations={() => handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'))}
                                         onParaphrase={() => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'))}
@@ -1845,6 +1930,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 onToggleSearchEnabled={() => setIsSearchEnabled((prev) => !prev)}
                                 onToggleConversationMode={handleToggleConversationMode}
                                 onToggleChatAudio={() => setIsChatAudioEnabled((prev) => !prev)}
+                                onChatResponseLanguageChange={handleChatResponseLanguageChange}
                                 onClearChatHistory={handleClearChatHistory}
                                 onClose={() => {
                                     stopChatStream();
@@ -1857,6 +1943,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                     clearChatSpeechQueue(true);
                                     stopChatListening();
                                     setIsChatOpen(false);
+                                }}
+                                onClearChatTarget={() => setActiveChatTarget(null)}
+                                onRetryIncompleteTargetReply={() => {
+                                    const currentTarget = activeChatTargetRef.current;
+                                    if (!currentTarget || isChatLoading) return;
+                                    void handleBackgroundChatRequest(buildStudyBuddyTargetPrompt(currentTarget), currentTarget);
                                 }}
                                 onOpenSaveModal={openChatSaveModal}
                                 onCopyImageUrl={handleCopyChatImageUrl}

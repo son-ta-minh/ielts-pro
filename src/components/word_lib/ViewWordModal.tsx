@@ -7,6 +7,7 @@ import TestModal from '../practice/TestModal';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
 import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { getConfig } from '../../app/settingsManager';
+import { StudyBuddyTargetSection } from '../../utils/studyBuddyChatUtils';
 
 interface Props {
   word: VocabularyItem;
@@ -153,134 +154,25 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   const config = getConfig();
   const appliedAccent = config.audio.appliedAccent;
 
-  const handleAskAi = () => {
-    const parts = [
-      `Word: ${currentWord.word}`,
-      currentWord.meaningVi ? `Meaning (Vietnamese): ${currentWord.meaningVi}` : '',
-      currentWord.register ? `Register: ${currentWord.register}` : '',
-      currentWord.example ? `Examples:\n${currentWord.example}` : '',
-      currentWord.collocationsArray?.length
-        ? `Collocations:\n${currentWord.collocationsArray
-            .filter((item) => !item.isIgnored)
-            .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
-            .join('\n')}`
-        : '',
-      currentWord.idiomsList?.length
-        ? `Idioms:\n${currentWord.idiomsList
-            .filter((item) => !item.isIgnored)
-            .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
-            .join('\n')}`
-        : '',
-      currentWord.paraphrases?.length
-        ? `Paraphrases:\n${currentWord.paraphrases
-            .filter((item) => !item.isIgnored)
-            .map((item) => `- ${item.word}${item.context ? `: ${item.context}` : ''}`)
-            .join('\n')}`
-        : '',
-      currentWord.prepositions?.length
-        ? `Prepositions:\n${currentWord.prepositions
-            .filter((item) => !item.isIgnored)
-            .map((item) => `- ${item.prep}${item.usage ? `: ${item.usage}` : ''}`)
-            .join('\n')}`
-        : '',
-      currentWord.wordFamily
-        ? `Word family:\n${[
-            ...(currentWord.wordFamily.nouns || []).filter((item) => !item.isIgnored).map((item) => `- noun: ${item.word}`),
-            ...(currentWord.wordFamily.verbs || []).filter((item) => !item.isIgnored).map((item) => `- verb: ${item.word}`),
-            ...(currentWord.wordFamily.adjs || []).filter((item) => !item.isIgnored).map((item) => `- adjective: ${item.word}`),
-            ...(currentWord.wordFamily.advs || []).filter((item) => !item.isIgnored).map((item) => `- adverb: ${item.word}`),
-          ].join('\n')}`
-        : '',
-      currentWord.note ? `Private note:\n${currentWord.note}` : '',
-    ].filter(Boolean);
-
+  const dispatchAskAiTarget = (section: StudyBuddyTargetSection, source: string) => {
     window.dispatchEvent(
       new CustomEvent('studybuddy-chat-request', {
         detail: {
-          prompt: `Using only the vocabulary record below, explain this word/item for the learner in a practical English-learning way. Focus on meaning, nuance, usage, register, collocations/patterns, and how to remember or use it well.
-
-Important:
-- If any collocation, paraphrase, idiom, or phrase in the record sounds unnatural in English, too narrow in meaning, awkwardly translated, or easy to misunderstand, say that clearly and briefly.
-- If a phrase is usable but limited, explain the limitation.
-- Prefer warning the learner early instead of pretending every saved phrase is fully natural.
-- If the record is incomplete, say what is missing briefly.
-- Prefer Vietnamese if helpful for this learner.
-
-Vocabulary record:
-${parts.join('\n\n')}`
+          targetWord: currentWord.word,
+          targetData: currentWord,
+          targetSection: section,
+          targetSource: source
         }
       })
     );
   };
 
-  const handleAskAiSection = (section: 'wordFamily' | 'collocation' | 'paraphrase' | 'idiom' | 'example') => {
-    let sectionData = '';
+  const handleAskAi = () => {
+    dispatchAskAiTarget('coreUsage', 'WordViewModal top Ask AI');
+  };
 
-    if (section === 'wordFamily' && currentWord.wordFamily) {
-      const familyLines = [
-        ...(currentWord.wordFamily.nouns || []).filter((item) => !item.isIgnored).map((item) => `- noun: ${item.word}`),
-        ...(currentWord.wordFamily.verbs || []).filter((item) => !item.isIgnored).map((item) => `- verb: ${item.word}`),
-        ...(currentWord.wordFamily.adjs || []).filter((item) => !item.isIgnored).map((item) => `- adjective: ${item.word}`),
-        ...(currentWord.wordFamily.advs || []).filter((item) => !item.isIgnored).map((item) => `- adverb: ${item.word}`),
-      ];
-      sectionData = familyLines.join('\n');
-    }
-
-    if (section === 'collocation' && currentWord.collocationsArray?.length) {
-      sectionData = currentWord.collocationsArray
-        .filter((item) => !item.isIgnored)
-        .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
-        .join('\n');
-    }
-
-    if (section === 'paraphrase' && currentWord.paraphrases?.length) {
-      sectionData = currentWord.paraphrases
-        .filter((item) => !item.isIgnored)
-        .map((item) => `- ${item.word}${item.context ? `: ${item.context}` : ''}`)
-        .join('\n');
-    }
-
-    if (section === 'idiom' && currentWord.idiomsList?.length) {
-      sectionData = currentWord.idiomsList
-        .filter((item) => !item.isIgnored)
-        .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
-        .join('\n');
-    }
-
-    if (section === 'example' && currentWord.example) {
-      sectionData = currentWord.example;
-    }
-
-    if (!sectionData.trim()) return;
-
-    const sectionLabelMap = {
-      wordFamily: 'word family',
-      collocation: 'collocations',
-      paraphrase: 'paraphrases',
-      idiom: 'idioms',
-      example: 'examples'
-    } as const;
-
-    window.dispatchEvent(
-      new CustomEvent('studybuddy-chat-request', {
-        detail: {
-          prompt: `Explain this ${sectionLabelMap[section]} section in clear practical English for an English learner.
-
-Rules:
-- Your response must be 100% in English.
-- Use only the section data below.
-- If any phrase/collocation/paraphrase/idiom sounds unnatural, too narrow, awkwardly translated, or easy to misunderstand, say that clearly.
-- If something is correct but limited in use, explain the limitation.
-- Be concise but useful.
-
-Section data:
-Headword: ${currentWord.word}
-
-${sectionLabelMap[section]}:
-${sectionData}`
-        }
-      })
-    );
+  const handleAskAiSection = (section: 'wordFamily' | 'collocation' | 'paraphrase' | 'idiom' | 'example' | 'preposition') => {
+    dispatchAskAiTarget(section, `WordViewModal ${section}`);
   };
 
   return (

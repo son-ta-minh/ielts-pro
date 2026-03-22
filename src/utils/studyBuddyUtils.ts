@@ -93,6 +93,7 @@ export function getAvatarProps(avatarStr: string) {
 
 export function stripMarkdownForSave(text: string): string {
     return text
+        .replace(/\s*\[FOLLOWUP:\s*[^|\]]+\|[^\]]+\]/gi, '')
         .replace(/```[a-zA-Z0-9_-]*\n?/g, '')
         .replace(/```/g, '')
         .replace(/\*\*(.*?)\*\*/g, '$1')

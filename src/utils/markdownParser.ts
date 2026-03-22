@@ -18,6 +18,7 @@ import { getConfig, getServerUrl } from '../app/settingsManager';
  * [Tip content] -> Blue info box with lightbulb icon
  * [SOUND text|link|start|duration] -> Play sound button
  * [IMG link|width] -> Image with optional width scaling
+ * [FOLLOWUP key|label] -> StudyBuddy follow-up button
  */
 
 if (typeof window !== 'undefined') {
@@ -141,6 +142,14 @@ if (typeof window !== 'undefined') {
 
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
+
+    (window as any).handleStudyBuddyFollowUp = (section: string) => {
+        window.dispatchEvent(
+            new CustomEvent('studybuddy-target-followup', {
+                detail: { section }
+            })
+        );
+    };
 }
 
 const parseTable = (lines: string[]): { html: string; consumed: number } | null => {
@@ -201,7 +210,7 @@ const parseTable = (lines: string[]): { html: string; consumed: number } | null 
  * Allows external renderer via window.renderMarkdownBadge(tag: string): string
  */
 const processDynamicBadges = (text: string): string => {
-    return text.replace(/\[(?!(?:NAV|W_AUDIO|IMG|SOUND|Quiz|Select|Multi|HIDDEN|Tip)\b)(?!\/)([^\[\]\n]+?)\]/g, (_, tag) => {
+    return text.replace(/\[(?!(?:NAV|W_AUDIO|IMG|SOUND|Quiz|Select|Multi|HIDDEN|Tip|FOLLOWUP)\b)(?!\/)([^\[\]\n]+?)\]/g, (_, tag) => {
         if (typeof window !== 'undefined') {
             const renderer = (window as any).renderMarkdownBadge;
             if (typeof renderer === 'function') {
@@ -436,6 +445,14 @@ const processSound = (text: string): string => {
     });
 };
 
+const processFollowUpButtons = (text: string): string => {
+    return text.replace(/\[FOLLOWUP:\s*([^|\]]+)\|([^\]]+)\]/gi, (_, section, label) => {
+        const safeSection = String(section || '').trim().replace(/'/g, "\\'");
+        const safeLabel = String(label || '').trim();
+        return `<button onclick="window.handleStudyBuddyFollowUp('${safeSection}')" class="inline-flex items-center justify-center px-2 py-1 bg-neutral-100 border border-neutral-200 hover:bg-neutral-900 hover:text-white hover:border-neutral-900 text-neutral-700 rounded-lg text-[10px] font-bold leading-none transition-all active:scale-95 mr-1 whitespace-nowrap align-middle">${safeLabel}</button>`;
+    });
+};
+
 /**
  * Process [IMG link|width]
  */
@@ -480,6 +497,7 @@ export const parseMarkdown = (text: string): string => {
     processed = processNavTags(processed);
     processed = processSound(processed);
     processed = processImages(processed);
+    processed = processFollowUpButtons(processed);
     processed = processQuiz(processed);
     processed = processDropdown(processed); // New: Select
     processed = processMultiChoice(processed); // Process Multi before table to safely replace pipes

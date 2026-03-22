@@ -4,14 +4,19 @@ import { StudyBuddyImageSettings, StudyBuddyMemoryChunk, User } from '../../app/
 import { SystemConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { getGenerateLessonTestPrompt } from '../../services/prompts/getGenerateLessonTestPrompt';
 import { getLessonPrompt } from '../../services/prompts/getRefineLessonPrompt';
+import * as dataStore from '../../app/dataStore';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import {
     buildStudyBuddyMessages,
+    buildStudyBuddyTargetSystemMessage,
+    formatStudyBuddyTargetAssistantFinal,
+    formatStudyBuddyTargetAssistantPreview,
     ChatCoachActionKey,
     ChatSearchMatch,
     ChatSaveActionType,
     ChatSaveContext,
     ChatTurn,
+    StudyBuddyChatTarget,
     createChatTurn,
     getStudyBuddySttLang,
     normalizeConversationTranscript,
@@ -35,6 +40,7 @@ interface UseStudyBuddyChatOptions {
     config: SystemConfig;
     user: User;
     coach: CoachVoiceConfig;
+    chatResponseLanguage: 'vi' | 'en';
     isContextAware: boolean;
     isSearchEnabled: boolean;
     isChatLoading: boolean;
@@ -68,6 +74,7 @@ interface UseStudyBuddyChatOptions {
     setIsChatAudioEnabled: React.Dispatch<React.SetStateAction<boolean>>;
     setIsChatListening: React.Dispatch<React.SetStateAction<boolean>>;
     setIsConversationMode: React.Dispatch<React.SetStateAction<boolean>>;
+    setActiveChatTarget: React.Dispatch<React.SetStateAction<StudyBuddyChatTarget | null>>;
     showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
     removeChatStatusTurn: (turnId: string) => void;
     stopChatListening: () => void;
@@ -89,6 +96,7 @@ interface UseStudyBuddyChatOptions {
     chatConversationMaxWords: number;
     getStudyBuddyMemoryChunks: () => StudyBuddyMemoryChunk[];
     getStudyBuddyImageSettings: () => StudyBuddyImageSettings;
+    getActiveChatTarget: () => StudyBuddyChatTarget | null;
     saveMemoryTexts: (memoryTexts: string[]) => Promise<void>;
 }
 
@@ -96,6 +104,7 @@ export function useStudyBuddyChat({
     config,
     user,
     coach,
+    chatResponseLanguage,
     isContextAware,
     isSearchEnabled,
     isChatLoading,
@@ -129,6 +138,7 @@ export function useStudyBuddyChat({
     setIsChatAudioEnabled,
     setIsChatListening,
     setIsConversationMode,
+    setActiveChatTarget,
     showToast,
     removeChatStatusTurn,
     stopChatListening,
@@ -146,8 +156,45 @@ export function useStudyBuddyChat({
     chatConversationMaxWords,
     getStudyBuddyMemoryChunks,
     getStudyBuddyImageSettings,
+    getActiveChatTarget,
     saveMemoryTexts,
 }: UseStudyBuddyChatOptions) {
+    function buildChatLanguageSystemMessage(language: 'vi' | 'en') {
+        return language === 'vi'
+            ? 'Language mode is locked to Vietnamese. Write the full reply in Vietnamese only. Do not switch to English just because the quoted word, examples, or user message are in English. Only switch if the user explicitly asks you to answer in English.'
+            : 'Language mode is locked to English. Write the full reply in English only. Do not answer in Vietnamese, even if the user writes in Vietnamese or the learner profile says Vietnamese. Only switch if the user explicitly asks you to answer in Vietnamese.';
+    }
+
+    function buildTargetAcademicStyleSystemMessage(target: StudyBuddyChatTarget | null) {
+        if (!target) return '';
+        return [
+            `A target word is active: ${target.word.word}.`,
+            'Adopt an academic tutoring style for this target flow.',
+            'Answer the requested point directly and precisely.',
+            'Do not add greetings, compliments, warm-up lines, closings, or conversational filler.',
+            'Do not say hello, good question, let us begin, hope this helps, or similar phrases.',
+            'Stay tightly focused on the target word and the requested section.',
+            'Prefer short structured explanation over chatty prose.'
+        ].join(' ');
+    }
+
+    async function resolveTargetWord(selectedText: string, section: StudyBuddyChatTarget['section'], source: string) {
+        const existing = await dataStore.findWordByText(user.id, selectedText);
+        if (existing) {
+            return { word: existing, section, source } satisfies StudyBuddyChatTarget;
+        }
+        return {
+            word: {
+                id: `studybuddy-target-${Date.now()}`,
+                userId: user.id,
+                word: selectedText,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            } as any,
+            section,
+            source
+        } satisfies StudyBuddyChatTarget;
+    }
     function formatSearchSectionLabel(section: string) {
         const normalized = String(section || '').trim().toLowerCase();
         switch (normalized) {
@@ -211,6 +258,12 @@ export function useStudyBuddyChat({
         ).trim();
     }
 
+    function getStudyCommandText() {
+        const activeTargetWord = getActiveChatTarget()?.word?.word?.trim() || '';
+        if (activeTargetWord) return activeTargetWord;
+        return getActiveActionText();
+    }
+
     async function submitChatPrompt(
         rawPrompt: string,
         options?: {
@@ -221,6 +274,7 @@ export function useStudyBuddyChat({
         const prompt = rawPrompt.trim();
         if (!prompt || isChatLoading) return;
         const memoryChunks = getStudyBuddyMemoryChunks();
+        const activeTarget = getActiveChatTarget();
         if (options?.stopListening !== false) {
             stopChatListening();
         }
@@ -233,9 +287,12 @@ export function useStudyBuddyChat({
         let spokenCursor = 0;
         let conversationListenerRearmed = false;
         const extraSystemMessages = [
+            ...(activeTarget ? [buildStudyBuddyTargetSystemMessage(activeTarget)] : []),
+            ...(activeTarget ? [buildTargetAcademicStyleSystemMessage(activeTarget)] : []),
             ...(options?.continueConversation
                 ? ['Conversation mode is active. Do not use emojis in your response.']
                 : []),
+            buildChatLanguageSystemMessage(chatResponseLanguage),
             STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE
         ];
 
@@ -318,7 +375,7 @@ export function useStudyBuddyChat({
                 setChatHistory((current) =>
                     current.map((turn) =>
                         turn.id === assistantId
-                            ? { ...turn, content: parsed.visibleText, hasMemoryWrite: turn.hasMemoryWrite || parsed.memories.length > 0 }
+                            ? { ...turn, content: formatStudyBuddyTargetAssistantPreview(parsed.visibleText, activeTarget), hasMemoryWrite: turn.hasMemoryWrite || parsed.memories.length > 0 }
                             : turn
                     )
                 );
@@ -389,13 +446,14 @@ export function useStudyBuddyChat({
             const parsedFinal = parseStudyBuddyMemoryDirectives(assistantText);
             if (!parsedFinal.visibleText.trim()) {
                 removeChatStatusTurn(statusTurnId);
-                updateAssistantTurn(parsedFinal.memories.length ? 'OK' : 'Connected to AI but not receive response');
+                updateAssistantTurn(formatStudyBuddyTargetAssistantFinal(parsedFinal.memories.length ? 'OK' : 'Connected to AI but not receive response', activeTarget));
             } else if (isChatAudioEnabledRef.current) {
                 const trailing = parsedFinal.visibleText.slice(spokenCursor).trim();
                 if (trailing) {
                     queueChatSpeech(trailing);
                 }
             }
+            updateAssistantTurn(formatStudyBuddyTargetAssistantFinal(parsedFinal.visibleText, activeTarget));
         } catch (error: any) {
             const abortReason = chatAbortReasonRef.current;
             chatAbortReasonRef.current = null;
@@ -575,17 +633,23 @@ export function useStudyBuddyChat({
         await submitChatPrompt(chatInput, { continueConversation: false, stopListening: true });
     }
 
-    async function handleBackgroundChatRequest(prompt: string) {
+    async function handleBackgroundChatRequest(prompt: string, targetOverride?: StudyBuddyChatTarget | null) {
         const cleanPrompt = prompt.trim();
         if (!cleanPrompt || isChatLoading) return;
         const memoryChunks = getStudyBuddyMemoryChunks();
+        const activeTarget = targetOverride ?? getActiveChatTarget();
         stopChatListening();
 
         const statusTurnId = `status-bg-${Date.now()}`;
         const assistantId = `assistant-bg-${Date.now()}`;
         const aiUrl = getStudyBuddyAiUrl(config);
         let spokenCursor = 0;
-        const extraSystemMessages = [STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE];
+        const extraSystemMessages = [
+            ...(activeTarget ? [buildStudyBuddyTargetSystemMessage(activeTarget)] : []),
+            ...(activeTarget ? [buildTargetAcademicStyleSystemMessage(activeTarget)] : []),
+            buildChatLanguageSystemMessage(chatResponseLanguage),
+            STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE
+        ];
 
         setIsChatOpen(true);
         setIsChatLoading(true);
@@ -666,7 +730,7 @@ export function useStudyBuddyChat({
                 setChatHistory((current) =>
                     current.map((turn) =>
                         turn.id === assistantId
-                            ? { ...turn, content: parsed.visibleText, hasMemoryWrite: turn.hasMemoryWrite || parsed.memories.length > 0 }
+                            ? { ...turn, content: formatStudyBuddyTargetAssistantPreview(parsed.visibleText, activeTarget), hasMemoryWrite: turn.hasMemoryWrite || parsed.memories.length > 0 }
                             : turn
                     )
                 );
@@ -728,13 +792,14 @@ export function useStudyBuddyChat({
             const parsedFinal = parseStudyBuddyMemoryDirectives(assistantText);
             if (!parsedFinal.visibleText.trim()) {
                 removeChatStatusTurn(statusTurnId);
-                updateAssistantTurn(parsedFinal.memories.length ? 'OK' : 'AI server da ket noi, nhung chua tra ve noi dung.');
+                updateAssistantTurn(formatStudyBuddyTargetAssistantFinal(parsedFinal.memories.length ? 'OK' : 'AI server da ket noi, nhung chua tra ve noi dung.', activeTarget));
             } else if (isChatAudioEnabledRef.current) {
                 const trailing = parsedFinal.visibleText.slice(spokenCursor).trim();
                 if (trailing) {
                     queueChatSpeech(trailing);
                 }
             }
+            updateAssistantTurn(formatStudyBuddyTargetAssistantFinal(parsedFinal.visibleText, activeTarget));
         } catch (error: any) {
             if (error?.name === 'AbortError') {
                 removeChatStatusTurn(statusTurnId);
@@ -992,11 +1057,31 @@ Rules:
         promptBuilder: (selectedText: string) => string,
         options?: {
             saveActionType?: ChatSaveActionType;
+            targetSection?: StudyBuddyChatTarget['section'];
         }
     ) {
-        const selectedText = getActiveActionText();
+        const selectedText = getStudyCommandText();
         if (!selectedText) return;
         selectedTextRef.current = selectedText;
+        setChatInput('');
+
+        const targetSection = options?.targetSection ?? (
+            actionKey === 'explain'
+                ? 'coreUsage'
+                : actionKey === 'collocations'
+                    ? 'collocation'
+                    : actionKey === 'preposition'
+                        ? 'preposition'
+                    : actionKey === 'wordFamily'
+                        ? 'wordFamily'
+                        : actionKey === 'paraphrase'
+                            ? 'paraphrase'
+                            : actionKey === 'test'
+                                ? 'coreUsage'
+                                : 'example'
+        );
+        const nextTarget = await resolveTargetWord(selectedText, targetSection, `Study Command Box ${promptLabel}`);
+        setActiveChatTarget(nextTarget);
 
         const userPrompt = promptBuilder(selectedText);
         const userTurn = createChatTurn('user', `${promptLabel}: ${selectedText}`);
@@ -1021,7 +1106,7 @@ Rules:
         setChatHistory((current) => [
             ...current,
             userTurn,
-            { id: assistantId, role: 'assistant', content: '', ...(saveContext ? { saveContext } : {}) }
+            { id: assistantId, role: 'assistant', content: '', suppressTargetFollowUp: true, ...(saveContext ? { saveContext } : {}) }
         ]);
 
         let controller: AbortController | undefined;
@@ -1039,7 +1124,11 @@ Rules:
                         user,
                         isContextAware,
                         [{ role: 'user', content: userPrompt }],
-                        [],
+                        [
+                            buildStudyBuddyTargetSystemMessage(nextTarget),
+                            buildTargetAcademicStyleSystemMessage(nextTarget),
+                            buildChatLanguageSystemMessage(chatResponseLanguage)
+                        ],
                         memoryChunks,
                         { name: coach.name, persona: coach.persona }
                     ),
@@ -1063,7 +1152,7 @@ Rules:
             const updateAssistant = (text: string) => {
                 setChatHistory((current) =>
                     current.map((turn) =>
-                        turn.id === assistantId ? { ...turn, content: text, ...(saveContext ? { saveContext } : {}) } : turn
+                        turn.id === assistantId ? { ...turn, content: text, suppressTargetFollowUp: true, ...(saveContext ? { saveContext } : {}) } : turn
                     )
                 );
             };
@@ -1089,7 +1178,7 @@ Rules:
                             const delta = json?.choices?.[0]?.delta?.content;
                             if (delta) {
                                 assistantText += delta;
-                                updateAssistant(assistantText);
+                                updateAssistant(formatStudyBuddyTargetAssistantPreview(assistantText, nextTarget));
                             }
                         } catch {
                             // ignore
@@ -1100,6 +1189,8 @@ Rules:
 
             if (!assistantText.trim()) {
                 updateAssistant('Khong co noi dung tra ve.');
+            } else {
+                updateAssistant(formatStudyBuddyTargetAssistantPreview(assistantText, nextTarget));
             }
         } catch (error: any) {
             if (error?.name === 'AbortError') {
