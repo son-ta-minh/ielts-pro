@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, WordQuality, VocabularyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily } from '../../app/types';
-import { Bot, NotebookPen, ListCollapse, BringToFront, Blocks, X, MessageSquare, Languages, Volume2, Mic, Binary, Loader2, Plus, Eye, Search, Wrench, Pause, Play, Square, PenTool, Star, Sparkles, Save } from 'lucide-react';
+import { MessageSquare, Languages, Binary, Loader2, Search, Pause, Play, Square, Sparkles } from 'lucide-react';
 import { getConfig, saveConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
@@ -195,9 +195,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const [isChatListening, setIsChatListening] = useState(false);
     const [isConversationMode, setIsConversationMode] = useState(false);
     const [activeChatTarget, setActiveChatTarget] = useState<StudyBuddyChatTarget | null>(null);
+    const [activeChatSelectionText, setActiveChatSelectionText] = useState('');
     const [activeChatCoachAction, setActiveChatCoachAction] = useState<string | null>(null);
     const [coachSelectionText, setCoachSelectionText] = useState('');
-    const [hasChatTextSelection, setHasChatTextSelection] = useState(false);
     const [chatSaveDraft, setChatSaveDraft] = useState<ChatSaveDraft | null>(null);
     const [isSavingChatSnippet, setIsSavingChatSnippet] = useState(false);
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
@@ -427,6 +427,29 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         || window.getSelection()?.toString().trim()
         || ''
     ).trim();
+
+    const syncChatSelectionText = (text: string) => {
+        const normalized = text.trim();
+        disableSelectionPreservation();
+        selectedRangeRef.current = null;
+        selectedTextRef.current = normalized;
+        setCoachSelectionText(normalized);
+        setActiveChatSelectionText(normalized);
+        if (normalized) {
+            void checkLibraryExistence(normalized);
+        } else {
+            setIsAlreadyInLibrary(false);
+        }
+        setIsOpen(false);
+        setMenuPos(null);
+    };
+
+    const clearChatSelectionText = () => {
+        setActiveChatSelectionText('');
+        selectedTextRef.current = '';
+        setCoachSelectionText('');
+        setIsAlreadyInLibrary(false);
+    };
 
     const createWordForChatSave = async (targetWord: string): Promise<VocabularyItem> => {
         const baseItem = await createNewWord(
@@ -883,16 +906,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     }, [chatHistory, isChatLoading, isChatOpen]);
 
     useEffect(() => {
-        const handleSelectionChange = () => {
-            const text = getChatPanelSelectionText();
-            setHasChatTextSelection(!!text);
-        };
-
-        document.addEventListener('selectionchange', handleSelectionChange);
-        return () => document.removeEventListener('selectionchange', handleSelectionChange);
-    }, []);
-
-    useEffect(() => {
         const shouldShow = isAudioPlaying && !isSingleWordAudio;
         if (shouldShow) {
             if (playbackControlsHideTimeoutRef.current) {
@@ -1231,6 +1244,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             if (studyBuddyRootRef.current && studyBuddyRootRef.current.contains(target)) {
                 return;
             }
+            if (selectionMenuRef.current && selectionMenuRef.current.contains(target)) {
+                return;
+            }
+            if (messageBoxRef.current && messageBoxRef.current.contains(target)) {
+                return;
+            }
             if (chatPanelRef.current && !chatPanelRef.current.contains(target)) {
                 setIsConversationMode(false);
                 isConversationModeRef.current = false;
@@ -1252,17 +1271,28 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     useEffect(() => {
         if (!config.interface.rightClickCommandEnabled) return;
 
-        const openCoachMenu = (selection: Selection) => {
-            if (!selection || selection.rangeCount === 0) return;
+        const scheduleChatSelectionPanel = (range: Range, selectedText: string) => {
+            if (!selectedText.trim()) return;
+            window.setTimeout(() => {
+                if (!chatPanelRef.current?.contains(range.commonAncestorContainer as Node)) return;
+                syncChatSelectionText(selectedText);
+            }, 0);
+        };
 
-            const selectedText = selection.toString().trim();
-            if (!selectedText) return;
-
-            const range = selection.getRangeAt(0).cloneRange(); // clone để tránh iOS mất range
+        const openCoachMenuWithRange = (selectedText: string, range: Range, options?: { fromChat?: boolean }) => {
+            if (!selectedText.trim()) return;
             const rect = range.getBoundingClientRect();
             const placement = rect.top > 250 ? 'top' : 'bottom';
 
-            updateCoachSelection(selectedText, range, true);
+            if (options?.fromChat) {
+                disableSelectionPreservation();
+                selectedRangeRef.current = null;
+                selectedTextRef.current = selectedText;
+                setCoachSelectionText(selectedText);
+                void checkLibraryExistence(selectedText);
+            } else {
+                updateCoachSelection(selectedText, range, true);
+            }
 
             setMenuPos({
                 x: rect.left + rect.width / 2,
@@ -1274,9 +1304,37 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             setIsOpen(true);
         };
 
+        const openCoachMenu = (selection: Selection, options?: { fromChat?: boolean }) => {
+            if (!selection || selection.rangeCount === 0) return;
+            const selectedText = selection.toString().trim();
+            if (!selectedText) return;
+            openCoachMenuWithRange(selectedText, selection.getRangeAt(0).cloneRange(), options);
+        };
+
         const handleContextMenu = (e: MouseEvent) => {
+            const target = e.target as Node | null;
             const selection = window.getSelection();
             if (!selection || !selection.toString().trim()) return;
+
+            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+            const isChatSelection = Boolean(
+                range
+                && chatPanelRef.current
+                && chatPanelRef.current.contains(range.commonAncestorContainer as Node)
+            );
+
+            if (isChatSelection) {
+                e.preventDefault();
+                e.stopPropagation();
+                const selectedText = selection.toString().trim();
+                if (!selectedText || !range) return;
+                scheduleChatSelectionPanel(range, selectedText);
+                return;
+            }
+
+            if (chatPanelRef.current && target && chatPanelRef.current.contains(target)) {
+                return;
+            }
 
             e.preventDefault();
             openCoachMenu(selection);
@@ -1291,9 +1349,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
             const range = selection.getRangeAt(0);
             if (chatPanelRef.current && chatPanelRef.current.contains(range.commonAncestorContainer as Node)) {
-                updateCoachSelection(selectedText, range, false);
-                setIsOpen(false);
-                setMenuPos(null);
                 return;
             }
 
@@ -1316,6 +1371,19 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             if (!clickedInsideSelection) return;
 
             openCoachMenu(selection);
+        };
+
+        const handleChatMouseUp = () => {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+
+            const selectedText = selection.toString().trim();
+            if (!selectedText) return;
+
+            const range = selection.getRangeAt(0);
+            if (!chatPanelRef.current?.contains(range.commonAncestorContainer as Node)) return;
+
+            scheduleChatSelectionPanel(range, selectedText);
         };
 
         const handleClickOutside = (e: MouseEvent) => {
@@ -1346,11 +1414,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             }
         };
 
+        const chatPanel = chatPanelRef.current;
+        chatPanel?.addEventListener('mouseup', handleChatMouseUp);
         document.addEventListener('contextmenu', handleContextMenu);
         document.addEventListener('click', handleSelectionClick);
         document.addEventListener('mousedown', handleClickOutside);
 
         return () => {
+            chatPanel?.removeEventListener('mouseup', handleChatMouseUp);
             document.removeEventListener('contextmenu', handleContextMenu);
             document.removeEventListener('click', handleSelectionClick);
             document.removeEventListener('mousedown', handleClickOutside);
@@ -1386,6 +1457,42 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
         try {
             const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(selectedText)}&langpair=en|vi`);
+            const data = await res.json();
+            if (data?.responseData?.translatedText) {
+                const translation = data.responseData.translatedText;
+                setMessage({
+                    text: translation,
+                    icon: <Languages size={18} className="text-blue-500" />
+                });
+                setIsOpen(true);
+                speak(translation, false, 'vi', coach.viVoice, coach.viAccent);
+            }
+        } catch {
+            showToast("Translation error!", "error");
+        } finally {
+            setIsThinking(false);
+        }
+    };
+
+    const handleTranslateExplicitSelection = async (text: string) => {
+        const normalized = text.trim();
+        if (!normalized) return;
+        syncChatSelectionText(normalized);
+        const detectedLang = detectLanguage(normalized);
+
+        if (detectedLang === 'vi') {
+            setMessage({
+                text: normalized,
+                icon: <Languages size={18} className="text-blue-500" />
+            });
+            setIsOpen(true);
+            speak(normalized, false, 'vi', coach.viVoice, coach.viAccent);
+            return;
+        }
+
+        setIsThinking(true);
+        try {
+            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(normalized)}&langpair=en|vi`);
             const data = await res.json();
             if (data?.responseData?.translatedText) {
                 const translation = data.responseData.translatedText;
@@ -1541,6 +1648,17 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         }
     };
 
+    const handleReadExplicitSelection = async (text: string) => {
+        const normalized = text.trim();
+        if (!normalized) return;
+        syncChatSelectionText(normalized);
+        if (normalized.length > MAX_READ_LENGTH) {
+            showToast("Text is too long to read!", "error");
+            return;
+        }
+        speak(normalized, false, 'en', coach.enVoice, coach.enAccent);
+    };
+
     const handleAddToLibrary = async () => {
         const selectedText = getCoachActionText();
         if (!selectedText || isAlreadyInLibrary) return;
@@ -1625,16 +1743,107 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         }
     };
 
-    const handleViewWord = async () => {
-        const selectedText = getCoachActionText();
-        if (!selectedText || !user.id || !onViewWord || isAnyModalOpen) return;
-        selectedTextRef.current = selectedText;
-        const wordObj = await dataStore.findWordByText(user.id, selectedText);
+    const handleAddExplicitSelectionToLibrary = async (text: string) => {
+        const normalized = text.trim();
+        if (!normalized || isAlreadyInLibrary) return;
+        syncChatSelectionText(normalized);
+        setIsAddingToLibrary(true);
+        try {
+            let newItem: VocabularyItem;
+            let serverItem: VocabularyItem | null = null;
+            try {
+                const results = await lookupWordsInGlobalLibrary([normalized]);
+                if (results.length > 0) serverItem = results[0];
+            } catch {
+                // Silent fail is acceptable here
+            }
+
+            if (serverItem) {
+                newItem = {
+                    ...serverItem,
+                    id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+                    userId: user.id,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    quality: WordQuality.REFINED,
+                    source: 'refine',
+                    nextReview: Date.now(),
+                    interval: 0,
+                    easeFactor: 2.5,
+                    consecutiveCorrect: 0,
+                    forgotCount: 0,
+                    lastReview: undefined,
+                    lastGrade: undefined,
+                    lastTestResults: {},
+                    groups: [...(serverItem.groups || []), 'coach-added']
+                };
+                newItem.isPassive = false;
+                newItem.complexity = calculateComplexity(newItem);
+                newItem.masteryScore = calculateMasteryScore(newItem);
+                newItem.gameEligibility = calculateGameEligibility(newItem);
+            } else {
+                const baseItem = await createNewWord(
+                    normalized,
+                    '',
+                    '',
+                    '',
+                    '',
+                    ['coach-added'],
+                    false,
+                    false,
+                    false,
+                    normalized.includes(' '),
+                    false
+                );
+
+                newItem = {
+                    ...baseItem,
+                    userId: user.id,
+                    quality: WordQuality.RAW
+                };
+                newItem.isPassive = false;
+            }
+            await dataStore.saveWord(newItem);
+            let refineResult = { refinedCount: 0, finalIssuesCount: 0 };
+            try {
+                refineResult = await autoRefineNewWords([newItem], user.nativeLanguage || 'Vietnamese');
+            } catch (error) {
+                console.warn('[StudyBuddy] Auto refine after add failed:', error);
+            }
+            showToast(
+                refineResult.refinedCount > 0
+                    ? `"${normalized}" added and refined!`
+                    : `"${normalized}" added!`,
+                'success'
+            );
+            setIsAlreadyInLibrary(true);
+        } catch {
+            showToast("Add error!", "error");
+        } finally {
+            setIsAddingToLibrary(false);
+        }
+    };
+
+    const displayViewWord = async (text: string) => {
+        if (!user.id || !onViewWord)
+        {
+            console.log(user.id, onViewWord, isAnyModalOpen);
+            console.log("cannot view word");
+            return;
+        }
+        const wordObj = await dataStore.findWordByText(user.id, text);
         if (wordObj) {
             setIsOpen(false);
             setMenuPos(null);
             onViewWord(wordObj);
         }
+    };
+
+    const handleViewWord = async () => {
+        const selectedText = getCoachActionText();
+        if (!selectedText || !user.id || !onViewWord || isAnyModalOpen) return;
+        selectedTextRef.current = selectedText;
+        displayViewWord(selectedText)
     };
 
     const handleSpeakSelection = () => {
@@ -1646,6 +1855,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             setMimicTarget(null); // Still open modal but with no pre-filled text
         } else {
             setMimicTarget(selectedText || ''); // Pass selected text or empty string for manual input
+        }
+    };
+
+    const handleSpeakExplicitSelection = (text: string) => {
+        const normalized = text.trim();
+        if (!normalized) return;
+        syncChatSelectionText(normalized);
+        if (normalized.length > MAX_MIMIC_LENGTH) {
+            showToast("Selection too long for mimic!", "error");
+            setMimicTarget(null);
+        } else {
+            setMimicTarget(normalized);
         }
     };
     
@@ -1885,10 +2106,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 isChatAudioEnabled={isChatAudioEnabled}
                                 chatResponseLanguage={config.interface.studyBuddyLanguage}
                                 chatHistory={chatHistory}
-                                hasChatTextSelection={hasChatTextSelection}
                                 chatInput={chatInput}
                                 chatTarget={activeChatTarget ? {
                                     word: activeChatTarget.word.word
+                                } : null}
+                                chatSelection={activeChatSelectionText ? {
+                                    text: activeChatSelectionText,
+                                    isAlreadyInLibrary,
+                                    isAddingToLibrary
                                 } : null}
                                 headerTitle={chatHeaderTitle}
                                 headerDescription={chatHeaderDescription}
@@ -1959,9 +2184,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                     conversationTranscriptRef.current = '';
                                     clearChatSpeechQueue(true);
                                     stopChatListening();
+                                    clearChatSelectionText();
                                     setIsChatOpen(false);
                                 }}
                                 onClearChatTarget={() => setActiveChatTarget(null)}
+                                onClearChatSelection={clearChatSelectionText}
                                 onRetryIncompleteTargetReply={() => {
                                     const currentTarget = activeChatTargetRef.current;
                                     if (!currentTarget || isChatLoading) return;
@@ -1973,6 +2200,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 onDeleteTurn={handleDeleteChatTurn}
                                 onPointerDownInside={() => {
                                     disableSelectionPreservation();
+                                    selectedRangeRef.current = null;
                                 }}
                                 onChatInputChange={setChatInput}
                                 onChatInputKeyDown={(e) => {
@@ -1981,6 +2209,26 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                         e.preventDefault();
                                         handleSendChat();
                                     }
+                                }}
+                                onTranslateChatSelection={() => {
+                                    if (!activeChatSelectionText) return;
+                                    void handleTranslateExplicitSelection(activeChatSelectionText);
+                                }}
+                                onReadChatSelection={() => {
+                                    if (!activeChatSelectionText) return;
+                                    void handleReadExplicitSelection(activeChatSelectionText);
+                                }}
+                                onMimicChatSelection={() => {
+                                    if (!activeChatSelectionText) return;
+                                    handleSpeakExplicitSelection(activeChatSelectionText);
+                                }}
+                                onAddChatSelectionToLibrary={() => {
+                                    if (!activeChatSelectionText) return;
+                                    void handleAddExplicitSelectionToLibrary(activeChatSelectionText);
+                                }}
+                                onDisplayViewWord={(text) => {
+                                    if (!activeChatSelectionText) return;
+                                    void displayViewWord(text);
                                 }}
                                 onToggleChatMic={handleToggleChatMic}
                                 onStopChatStream={stopChatStream}

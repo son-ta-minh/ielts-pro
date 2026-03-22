@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeftRight, ArrowUpDown, BookOpenCheck, Brain, ChevronUp, CircleHelp, Copy, Download, Flag, Image as ImageIcon, Loader2, Mic, Save, Send, Settings2, Sparkles, StopCircle, Trash2, Volume2, Wrench, X } from 'lucide-react';
+import { Wrench, ArrowLeftRight, ArrowUpDown, BookOpenCheck, Brain, ChevronUp, CircleHelp, Copy, Download, Flag, Image as ImageIcon, Loader2, Mic, Plus, Save, Send, Settings2, Sparkles, StopCircle, Trash2, Volume2, X, Eye, Check } from 'lucide-react';
 import { StudyBuddyImageSettings } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { ChatSearchMatch, ChatTurn } from '../../utils/studyBuddyChatUtils';
@@ -493,9 +493,9 @@ interface StudyBuddyChatPanelProps {
     isChatAudioEnabled: boolean;
     chatResponseLanguage: 'vi' | 'en';
     chatHistory: ChatTurn[];
-    hasChatTextSelection: boolean;
     chatInput: string;
     chatTarget: { word: string } | null;
+    chatSelection: { text: string; isAlreadyInLibrary: boolean; isAddingToLibrary: boolean } | null;
     headerTitle: string;
     headerDescription: string;
     chatPlaceholder: string;
@@ -512,6 +512,7 @@ interface StudyBuddyChatPanelProps {
     onClearChatHistory: () => void;
     onClose: () => void;
     onClearChatTarget: () => void;
+    onClearChatSelection: () => void;
     onRetryIncompleteTargetReply: () => void;
     onOpenSaveModal: (turn: ChatTurn) => void;
     onCopyImageUrl: (url: string) => void;
@@ -520,6 +521,11 @@ interface StudyBuddyChatPanelProps {
     onPointerDownInside: () => void;
     onChatInputChange: (value: string) => void;
     onChatInputKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+    onTranslateChatSelection: () => void;
+    onReadChatSelection: () => void;
+    onMimicChatSelection: () => void;
+    onAddChatSelectionToLibrary: () => void;
+    onDisplayViewWord: (text: string) => void;
     onToggleChatMic: () => void;
     onStopChatStream: () => void;
     onSendChat: () => void;
@@ -536,9 +542,9 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     isChatAudioEnabled,
     chatResponseLanguage,
     chatHistory,
-    hasChatTextSelection,
     chatInput,
     chatTarget,
+    chatSelection,
     headerTitle,
     headerDescription,
     chatPlaceholder,
@@ -555,6 +561,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     onClearChatHistory,
     onClose,
     onClearChatTarget,
+    onClearChatSelection,
     onRetryIncompleteTargetReply,
     onOpenSaveModal,
     onCopyImageUrl,
@@ -563,6 +570,11 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     onPointerDownInside,
     onChatInputChange,
     onChatInputKeyDown,
+    onTranslateChatSelection,
+    onReadChatSelection,
+    onMimicChatSelection,
+    onAddChatSelectionToLibrary,
+    onDisplayViewWord,
     onToggleChatMic,
     onStopChatStream,
     onSendChat,
@@ -963,6 +975,62 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         </div>
 
         <div className="border-t border-neutral-100 p-3 bg-white">
+            {chatSelection ? (
+                <div className="mb-2 flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-black uppercase tracking-wide text-neutral-700">
+                            SELECTION: <span className="normal-case text-neutral-900">{chatSelection.text}</span>
+                        </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={onTranslateChatSelection}
+                            className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-indigo-700 transition-colors hover:bg-indigo-50"
+                            title="Translate selection"
+                        >
+                            VN
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onReadChatSelection}
+                            className="inline-flex items-center rounded-full border border-violet-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-violet-700 transition-colors hover:bg-violet-50"
+                            title="Read selection"
+                        >
+                            <Volume2 size={14} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onMimicChatSelection}
+                            className="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700 transition-colors hover:bg-amber-50"
+                            title="Open mimic practice"
+                        >
+                            <Mic size={14} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={
+                                chatSelection.isAlreadyInLibrary
+                                    ? () => onDisplayViewWord(chatSelection.text)
+                                    : onAddChatSelectionToLibrary
+                            }
+                            className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            title={chatSelection.isAlreadyInLibrary ? 'Already in library' : 'Add selection to library'}
+                        >
+                            {chatSelection.isAddingToLibrary ? <Loader2 size={12} className="animate-spin" /> : null}
+                            {chatSelection.isAlreadyInLibrary ? <Eye size={12} /> : !chatSelection.isAddingToLibrary && <Plus size={12} />}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onClearChatSelection}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                            title="Clear selected text"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                </div>
+            ) : null}
             {chatTarget ? (
                 <div className="mb-2 flex items-center justify-between rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2">
