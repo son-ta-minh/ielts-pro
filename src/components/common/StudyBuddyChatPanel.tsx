@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeftRight, ArrowUpDown, BookOpenCheck, ChevronUp, CircleHelp, Copy, Download, Flag, Image as ImageIcon, Loader2, Mic, Save, Send, Settings2, Sparkles, StopCircle, Trash2, Volume2, Wrench, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowUpDown, BookOpenCheck, Brain, ChevronUp, CircleHelp, Copy, Download, Flag, Image as ImageIcon, Loader2, Mic, Save, Send, Settings2, Sparkles, StopCircle, Trash2, Volume2, Wrench, X } from 'lucide-react';
 import { StudyBuddyImageSettings } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { ChatSearchMatch, ChatTurn } from '../../utils/studyBuddyChatUtils';
@@ -502,12 +502,13 @@ interface StudyBuddyChatPanelProps {
     chatStudyMenu: React.ReactNode;
     chatCoachActionBar: React.ReactNode;
     chatSaveModal: React.ReactNode;
-    imageSettings: StudyBuddyImageSettings;
     onToggleContextAware: () => void;
     onToggleSearchEnabled: () => void;
     onToggleConversationMode: () => void;
     onToggleChatAudio: () => void;
     onChatResponseLanguageChange: (language: 'vi' | 'en') => void;
+    onOpenImageSettings: () => void;
+    onOpenMemorySettings: () => void;
     onClearChatHistory: () => void;
     onClose: () => void;
     onClearChatTarget: () => void;
@@ -522,7 +523,6 @@ interface StudyBuddyChatPanelProps {
     onToggleChatMic: () => void;
     onStopChatStream: () => void;
     onSendChat: () => void;
-    onImageSettingsChange: (next: StudyBuddyImageSettings) => void;
 }
 
 export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
@@ -545,12 +545,13 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     chatStudyMenu,
     chatCoachActionBar,
     chatSaveModal,
-    imageSettings,
     onToggleContextAware,
     onToggleSearchEnabled,
     onToggleConversationMode,
     onToggleChatAudio,
     onChatResponseLanguageChange,
+    onOpenImageSettings,
+    onOpenMemorySettings,
     onClearChatHistory,
     onClose,
     onClearChatTarget,
@@ -565,13 +566,11 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     onToggleChatMic,
     onStopChatStream,
     onSendChat,
-    onImageSettingsChange,
 }) => {
     const [isCoachMenuOpen, setIsCoachMenuOpen] = useState(false);
     const [isStudyMenuOpen, setIsStudyMenuOpen] = useState(false);
     const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
     const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
-    const [isImageSettingsOpen, setIsImageSettingsOpen] = useState(false);
     const [isDeleteMode, setIsDeleteMode] = useState(false);
     const [activeModeTooltip, setActiveModeTooltip] = useState<string | null>(null);
     const coachMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
@@ -904,14 +903,26 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setIsImageSettingsOpen((prev) => !prev);
+                                    onOpenImageSettings();
+                                    setIsCoachMenuOpen(false);
                                     setIsSettingsMenuOpen(false);
                                 }}
-                                className="flex items-center gap-2 rounded-xl bg-white-100 px-3 py-2 text-left text-[11px] font-bold text-neutral-700 transition-colors hover:bg-neutral-200"
-                                title={`Image settings: ${getStudyBuddyImageSettingsSummary(imageSettings)}`}
+                                className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-left text-[11px] font-bold text-neutral-700 transition-colors hover:bg-neutral-50"
                             >
                                 <ImageIcon size={14} />
                                 Image Settings
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onOpenMemorySettings();
+                                    setIsCoachMenuOpen(false);
+                                    setIsSettingsMenuOpen(false);
+                                }}
+                                className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-left text-[11px] font-bold text-neutral-700 transition-colors hover:bg-neutral-50"
+                            >
+                                <Brain size={14} />
+                                Memory Settings
                             </button>
                         </div>
                     ) : null}
@@ -933,17 +944,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                 </button>
             </div>
         </div>
-
-        {isImageSettingsOpen ? (
-            <div className="absolute left-4 right-4 top-[5.25rem] z-30">
-                <div className="mx-auto max-w-[42rem] rounded-[1.5rem] border border-neutral-200 bg-white/98 p-3 shadow-2xl backdrop-blur-xl">
-                    <ImageSettingsPanel
-                        settings={imageSettings}
-                        onChange={onImageSettingsChange}
-                    />
-                </div>
-            </div>
-        ) : null}
 
         <div
             ref={chatScrollRef}

@@ -1,11 +1,17 @@
 
-import React, { useState, useEffect } from 'react';
-import { Save, ChevronDown, CheckCircle2, AlertCircle, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Volume2, Mic, Link, Edit3, Star, Brain, Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Save, ChevronDown, CheckCircle2, AlertCircle, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Volume2, Mic, Link, Edit3, Star, Brain, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
 import { SystemConfig, CoachConfig, getServerUrl, saveConfig } from '../../app/settingsManager';
 import { fetchServerVoices, ServerVoicesResponse, speak, VoiceDefinition, resetAudioProtocolCache } from '../../utils/audio';
 import { AvatarSelectionModal } from '../common/AvatarSelectionModal';
-import { StudyBuddyMemoryChunk, User } from '../../app/types';
+import { StudyBuddyImageSettings, StudyBuddyMemoryChunk, User } from '../../app/types';
 import { useToast } from '../../contexts/ToastContext';
+import {
+    STUDY_BUDDY_IMAGE_ASPECT_OPTIONS,
+    STUDY_BUDDY_IMAGE_BASE_NEGATIVE,
+    STUDY_BUDDY_IMAGE_PRESETS,
+    normalizeStudyBuddyImageSettings
+} from '../../utils/studyBuddyImageUtils';
 
 interface AudioCoachSettingsProps {
     config: SystemConfig;
@@ -121,7 +127,10 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
     const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
     const [onlyHighQuality, setOnlyHighQuality] = useState(false);
     const [memoryDrafts, setMemoryDrafts] = useState<StudyBuddyMemoryChunk[]>(user.studyBuddyMemory || []);
+    const [imageSettingsDraft, setImageSettingsDraft] = useState<StudyBuddyImageSettings>(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings));
     const { showToast } = useToast();
+    const imageSectionRef = useRef<HTMLDivElement | null>(null);
+    const memorySectionRef = useRef<HTMLDivElement | null>(null);
     
     const fullUrl = getServerUrl(config);
     const activeType = config.audioCoach.activeCoach; 
@@ -141,6 +150,24 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
     useEffect(() => {
         setMemoryDrafts(user.studyBuddyMemory || []);
     }, [user.studyBuddyMemory]);
+
+    useEffect(() => {
+        setImageSettingsDraft(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings));
+    }, [user.studyBuddyImageSettings]);
+
+    useEffect(() => {
+        const section = sessionStorage.getItem('vocab_pro_audio_coach_section');
+        if (!section) return;
+        sessionStorage.removeItem('vocab_pro_audio_coach_section');
+        window.setTimeout(() => {
+            if (section === 'image') {
+                imageSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            if (section === 'memory') {
+                memorySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 120);
+    }, []);
 
     // Enhanced handler with Auto-Save capability
     const handleUpdateCoach = (updates: Partial<CoachConfig>, shouldPersist = false) => {
@@ -195,6 +222,22 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
             ...user,
             studyBuddyMemory: nextDrafts
         });
+    };
+
+    const persistImageSettingsDraft = async (nextDrafts: StudyBuddyImageSettings) => {
+        setImageSettingsDraft(nextDrafts);
+        await onUpdateUser({
+            ...user,
+            studyBuddyImageSettings: nextDrafts
+        });
+    };
+
+    const updateImageSettings = async (patch: Partial<StudyBuddyImageSettings>) => {
+        const nextDrafts = normalizeStudyBuddyImageSettings({
+            ...imageSettingsDraft,
+            ...patch
+        });
+        await persistImageSettingsDraft(nextDrafts);
     };
 
     const handleAddMemory = async () => {
@@ -377,6 +420,173 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
             </div>
 
             <div className="space-y-6 pt-4 border-t border-neutral-100">
+                <div ref={imageSectionRef} className="space-y-6">
+                    <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest">
+                            <ImageIcon size={12}/> Image Settings
+                        </div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-4 md:col-span-2">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-neutral-700">Reject Unsafe Mode</p>
+                                    <p className="text-[10px] text-neutral-500">Block unsafe generations before image output.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => void updateImageSettings({ safeMode: !imageSettingsDraft.safeMode })}
+                                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] transition-colors ${
+                                        imageSettingsDraft.safeMode
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                            : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50'
+                                    }`}
+                                >
+                                    <span>{imageSettingsDraft.safeMode ? 'On' : 'Off'}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-neutral-700">Preset</p>
+                                    <p className="text-[10px] text-neutral-500">Quick quality profile.</p>
+                                </div>
+                                <div className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white p-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => void updateImageSettings({ presetMode: 'auto' })}
+                                        className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${imageSettingsDraft.presetMode === 'auto' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}`}
+                                    >
+                                        Auto
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void updateImageSettings({ presetMode: 'manual' })}
+                                        className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${imageSettingsDraft.presetMode === 'manual' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}`}
+                                    >
+                                        Manual
+                                    </button>
+                                </div>
+                            </div>
+                            {imageSettingsDraft.presetMode === 'manual' ? (
+                                <select
+                                    value={imageSettingsDraft.preset}
+                                    onChange={(e) => void updateImageSettings({ preset: e.target.value as StudyBuddyImageSettings['preset'] })}
+                                    className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none focus:border-neutral-900"
+                                >
+                                    {Object.entries(STUDY_BUDDY_IMAGE_PRESETS).map(([key, value]) => (
+                                        <option key={key} value={key}>
+                                            {value.label} ({value.steps} steps / cfg {value.cfg})
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : null}
+                        </div>
+
+                        <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-neutral-700">Aspect Ratio</p>
+                                    <p className="text-[10px] text-neutral-500">Resolution template used for generated images.</p>
+                                </div>
+                                <div className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white p-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => void updateImageSettings({ aspectRatioMode: 'auto' })}
+                                        className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${imageSettingsDraft.aspectRatioMode === 'auto' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}`}
+                                    >
+                                        Auto
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void updateImageSettings({ aspectRatioMode: 'manual' })}
+                                        className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${imageSettingsDraft.aspectRatioMode === 'manual' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}`}
+                                    >
+                                        Manual
+                                    </button>
+                                </div>
+                            </div>
+                            {imageSettingsDraft.aspectRatioMode === 'manual' ? (
+                                <select
+                                    value={imageSettingsDraft.aspectRatio}
+                                    onChange={(e) => void updateImageSettings({ aspectRatio: e.target.value as StudyBuddyImageSettings['aspectRatio'] })}
+                                    className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none focus:border-neutral-900"
+                                >
+                                    {STUDY_BUDDY_IMAGE_ASPECT_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label} ({option.width}x{option.height})
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : null}
+                        </div>
+
+                        <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-neutral-700">Steps</p>
+                                    <p className="text-[10px] text-neutral-500">15 fast, 20 balanced, 25 high quality, 30 ultra.</p>
+                                </div>
+                            </div>
+                            <input
+                                type="range"
+                                min={15}
+                                max={30}
+                                step={1}
+                                value={imageSettingsDraft.steps}
+                                onChange={(e) => void updateImageSettings({ steps: Number(e.target.value), stepsMode: 'manual' })}
+                                className="w-full"
+                            />
+                            <div className="flex items-center justify-between text-[11px] text-neutral-500">
+                                <span>Fast</span>
+                                <span className="font-black text-neutral-800">{imageSettingsDraft.steps}</span>
+                                <span>Ultra</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-neutral-700">CFG</p>
+                                    <p className="text-[10px] text-neutral-500">5 creative, 7 balanced, 9 strict.</p>
+                                </div>
+                            </div>
+                            <input
+                                type="range"
+                                min={5}
+                                max={9}
+                                step={0.5}
+                                value={imageSettingsDraft.cfg}
+                                onChange={(e) => void updateImageSettings({ cfg: Number(e.target.value), cfgMode: 'manual' })}
+                                className="w-full"
+                            />
+                            <div className="flex items-center justify-between text-[11px] text-neutral-500">
+                                <span>Creative</span>
+                                <span className="font-black text-neutral-800">{imageSettingsDraft.cfg}</span>
+                                <span>Strict</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-4 md:col-span-2">
+                            <div>
+                                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-neutral-700">Negative Prompt</p>
+                                <p className="text-[10px] text-neutral-500">Extra bans appended after the default safety baseline.</p>
+                            </div>
+                            <textarea
+                                value={imageSettingsDraft.negativePrompt}
+                                onChange={(e) => void updateImageSettings({ negativePrompt: e.target.value })}
+                                rows={4}
+                                className="w-full rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none focus:border-neutral-900"
+                                placeholder={STUDY_BUDDY_IMAGE_BASE_NEGATIVE}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div ref={memorySectionRef} className="space-y-6 pt-4 border-t border-neutral-100">
                 <div className="flex items-center justify-between px-1">
                     <div className="flex items-center gap-2 text-[10px] font-black text-neutral-400 uppercase tracking-widest">
                         <Brain size={12}/> AI Memory

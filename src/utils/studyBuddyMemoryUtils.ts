@@ -29,6 +29,18 @@ function isMeaningfulMemoryText(text: string) {
     if (/^(?:umem|w_?umem|w_?mem|wmem|mem)$/i.test(value)) return false;
     if (/^[\W_]+$/i.test(value)) return false;
     if (/^(?:ghi nhớ|hãy nhớ|remember|note|lưu ý)$/i.test(value)) return false;
+    if (
+        /\b(?:learned|learnt|studied|reviewed|asked about|practised|practiced|is learning|was learning)\b/i.test(value)
+        && /\b(?:word|vocabulary|core usage|collocation|collocations|paraphrase|word family|dependent preposition|preposition|idiom|example|examples)\b/i.test(value)
+    ) {
+        return false;
+    }
+    if (
+        /\b(?:đã học|đang học|vừa học|ôn|đã hỏi|đang hỏi)\b/i.test(value)
+        && /\b(?:từ|từ vựng|core usage|collocation|paraphrase|word family|preposition|idiom|example)\b/i.test(value)
+    ) {
+        return false;
+    }
     return true;
 }
 

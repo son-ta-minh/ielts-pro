@@ -34,7 +34,7 @@ type CoachVoiceConfig = {
     viAccent?: string;
 };
 
-const STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE = `If the user reveals durable personal info or asks you to remember something for future chats, append one hidden memory directive on its own line using this preferred syntax: [W_UMEM short memory chunk]. Example: [W_UMEM User prefers concise answers]. Keep each memory chunk minimal. Do not use this for temporary task details. Fast mode only disables Word Library study context, not long-term chat memory. Do not say that memory is unavailable just because Fast mode is on.`;
+const STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE = `If the user reveals durable personal info or asks you to remember something for future chats, append one hidden memory directive on its own line using this preferred syntax: [W_UMEM short memory chunk]. Example: [W_UMEM User prefers concise answers]. Keep each memory chunk minimal. Only store durable user preferences, identity facts, stable long-term goals, or preferred assistant behavior. Do not use memory for temporary task details, recent chat content, what the learner just asked, what word they are currently studying, or any learning-history summary such as "learner studied word X", "learner learned core usage of Y", "learner asked about collocations", or similar vocabulary progress/history because Context Aware mode already handles study context. Fast mode only disables Word Library study context, not long-term chat memory. Do not say that memory is unavailable just because Fast mode is on.`;
 
 interface UseStudyBuddyChatOptions {
     config: SystemConfig;

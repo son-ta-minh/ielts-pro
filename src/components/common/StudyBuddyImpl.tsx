@@ -168,7 +168,7 @@ export const failStudyBuddyAssistantStream = (requestId: string, message: string
 };
 
 
-export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }) => {
+export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAnyModalOpen }) => {
     const { showToast } = useToast();
     const [config, setConfig] = useState<SystemConfig>(getConfig());
     const [isAudioPlaying, setIsAudioPlaying] = useState(getIsSpeaking());
@@ -264,6 +264,22 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
         };
         setConfig(nextConfig);
         saveConfig(nextConfig, true);
+    };
+
+    const openAudioCoachSettingsSection = (section: 'image' | 'memory') => {
+        stopChatStream();
+        setIsConversationMode(false);
+        isConversationModeRef.current = false;
+        clearConversationSilenceTimeout();
+        clearConversationRestartTimeout();
+        conversationPendingSubmitRef.current = false;
+        conversationTranscriptRef.current = '';
+        clearChatSpeechQueue(true);
+        stopChatListening();
+        setIsChatOpen(false);
+        sessionStorage.setItem('vocab_pro_settings_tab', 'AUDIO_COACH');
+        sessionStorage.setItem('vocab_pro_audio_coach_section', section);
+        onNavigate('SETTINGS');
     };
 
     useEffect(() => {
@@ -1925,12 +1941,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                     />
                                 }
                                 chatSaveModal={chatSaveModal}
-                                imageSettings={imageSettings}
                                 onToggleContextAware={() => setIsContextAware((prev) => !prev)}
                                 onToggleSearchEnabled={() => setIsSearchEnabled((prev) => !prev)}
                                 onToggleConversationMode={handleToggleConversationMode}
                                 onToggleChatAudio={() => setIsChatAudioEnabled((prev) => !prev)}
                                 onChatResponseLanguageChange={handleChatResponseLanguageChange}
+                                onOpenImageSettings={() => openAudioCoachSettingsSection('image')}
+                                onOpenMemorySettings={() => openAudioCoachSettingsSection('memory')}
                                 onClearChatHistory={handleClearChatHistory}
                                 onClose={() => {
                                     stopChatStream();
@@ -1968,7 +1985,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onViewWord, isAnyModalOpen }
                                 onToggleChatMic={handleToggleChatMic}
                                 onStopChatStream={stopChatStream}
                                 onSendChat={handleSendChat}
-                                onImageSettingsChange={setImageSettings}
                             />
                         )}
                         {isOpen && !menuPos && (
