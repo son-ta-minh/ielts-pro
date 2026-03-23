@@ -14,10 +14,13 @@ import {
 
 const STUDY_BUDDY_CHAT_PANEL_SIZE_KEY = 'studybuddy_chat_panel_size_v1';
 const SAVE_ACTION_LABELS: Record<string, string> = {
-    examples: 'Save Examples',
-    collocations: 'Save Collocations',
-    paraphrase: 'Save Paraphrase',
-    wordFamily: 'Save Word Family'
+    examples: 'Save Library',
+    collocations: 'Save Library',
+    paraphrase: 'Save Library',
+    wordFamily: 'Save Library',
+    preposition: 'Save Library',
+    idioms: 'Save Library',
+    compare: 'Save Library'
 };
 
 function ModeToggle({
@@ -353,8 +356,55 @@ function SearchMoreMatches({ matches }: { matches: ChatSearchMatch[] }) {
 }
 
 function renderBubbleHtml(turn: ChatTurn, isChatLoading: boolean) {
-    const content = `${turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}${turn.role === 'assistant' && turn.kind !== 'status' && turn.hasMemoryWrite ? ' ✍️' : ''}`;
+    const rawContent = `${turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}${turn.role === 'assistant' && turn.kind !== 'status' && turn.hasMemoryWrite ? ' ✍️' : ''}`;
+    const content = dedupeFollowUpLines(rawContent);
     return { __html: parseMarkdown(content) };
+}
+
+function dedupeFollowUpLines(text: string): string {
+    const lines = String(text || '').split('\n');
+    const nextLines: string[] = [];
+    let lastFollowUpSignature = '';
+
+    for (const line of lines) {
+        if (!/\[FOLLOWUP:\s*[^|\]]+\|[^\]]+\]/i.test(line)) {
+            nextLines.push(line);
+            lastFollowUpSignature = '';
+            continue;
+        }
+
+        const tags = Array.from(line.matchAll(/\[FOLLOWUP:\s*([^|\]]+)\|([^\]]+)\]/gi))
+            .map((match) => `[FOLLOWUP:${String(match[1]).trim()}|${String(match[2]).trim()}]`);
+
+        const dedupedTags = Array.from(new Set(tags));
+        const signature = dedupedTags.join(' ');
+
+        if (!signature || signature === lastFollowUpSignature) {
+            continue;
+        }
+
+        nextLines.push(signature);
+        lastFollowUpSignature = signature;
+    }
+
+    return nextLines.join('\n');
+}
+
+function isNonActionableAssistantReply(turn: ChatTurn): boolean {
+    if (turn.role !== 'assistant' || turn.kind === 'status') return true;
+    const content = String(turn.content || '').trim().toLowerCase();
+    if (!content) return true;
+
+    return [
+        'da dung phan hoi.',
+        'đã dừng phản hồi.',
+        'search canceled.',
+        'search request failed.',
+        'streaming failed',
+        'studybuddy ai connection failed.',
+        'khong the tao hinh luc nay.',
+        'không thể tạo hình lúc này.'
+    ].some((item) => content === item || content.includes(item));
 }
 
 function extractImagePathFromContent(content: string): string | null {
@@ -426,13 +476,13 @@ const ChatHistoryList = React.memo(({
                                 </div>
                             </div>
                         )}
-                        {turn.role === 'assistant' && turn.kind !== 'status' && turn.saveContext?.targetWord && (
+                        {turn.role === 'assistant' && turn.kind !== 'status' && turn.saveContext && !isNonActionableAssistantReply(turn) && (
                             <div className="mb-2 flex items-center gap-2">
                                 <button
                                     type="button"
                                     onClick={() => onOpenSaveModal(turn)}
                                     className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
-                                    title={`Save this response for ${turn.saveContext.targetWord}`}
+                                    title={turn.saveContext.targetWord ? `Save this response for ${turn.saveContext.targetWord}` : 'Save this response'}
                                 >
                                     <Save size={11} />
                                     {SAVE_ACTION_LABELS[turn.saveContext.actionType || ''] || 'Save'}
@@ -511,12 +561,12 @@ interface StudyBuddyChatPanelProps {
     chatResponseLanguage: 'vi' | 'en';
     chatHistory: ChatTurn[];
     chatInput: string;
-    chatTarget: { word: string } | null;
     chatSelection: { text: string; isAlreadyInLibrary: boolean; isAddingToLibrary: boolean } | null;
     headerTitle: string;
     headerDescription: string;
     chatPlaceholder: string;
-    chatStudyMenu: React.ReactNode;
+    composerStudyMenu: React.ReactNode;
+    selectionStudyMenu: React.ReactNode;
     chatCoachActionBar: React.ReactNode;
     chatSaveModal: React.ReactNode;
     onToggleContextAware: () => void;
@@ -528,9 +578,7 @@ interface StudyBuddyChatPanelProps {
     onOpenMemorySettings: () => void;
     onClearChatHistory: () => void;
     onClose: () => void;
-    onClearChatTarget: () => void;
     onClearChatSelection: () => void;
-    onRetryIncompleteTargetReply: () => void;
     onOpenSaveModal: (turn: ChatTurn) => void;
     onCopyImageUrl: (url: string) => void;
     onSaveImage: (url: string) => void;
@@ -560,12 +608,12 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     chatResponseLanguage,
     chatHistory,
     chatInput,
-    chatTarget,
     chatSelection,
     headerTitle,
     headerDescription,
     chatPlaceholder,
-    chatStudyMenu,
+    composerStudyMenu,
+    selectionStudyMenu,
     chatCoachActionBar,
     chatSaveModal,
     onToggleContextAware,
@@ -577,9 +625,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     onOpenMemorySettings,
     onClearChatHistory,
     onClose,
-    onClearChatTarget,
     onClearChatSelection,
-    onRetryIncompleteTargetReply,
     onOpenSaveModal,
     onCopyImageUrl,
     onSaveImage,
@@ -597,13 +643,14 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     onSendChat,
 }) => {
     const [isCoachMenuOpen, setIsCoachMenuOpen] = useState(false);
-    const [isStudyMenuOpen, setIsStudyMenuOpen] = useState(false);
+    const [openStudyMenu, setOpenStudyMenu] = useState<'composer' | 'selection' | null>(null);
     const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
     const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
     const [isDeleteMode, setIsDeleteMode] = useState(false);
     const [activeModeTooltip, setActiveModeTooltip] = useState<string | null>(null);
     const coachMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
-    const studyMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
+    const composerStudyMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
+    const selectionStudyMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
     const [panelWidth, setPanelWidth] = useState<number>(() => {
         if (typeof window === 'undefined') return 832;
         try {
@@ -639,7 +686,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         const button = target?.closest('button');
         if (!button || (button as HTMLButtonElement).disabled) return;
         window.setTimeout(() => {
-            setIsStudyMenuOpen(false);
+            setOpenStudyMenu(null);
         }, 0);
     };
 
@@ -707,8 +754,13 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
             const target = event.target as Node | null;
             if (!target) return;
 
-            if (studyMenuWrapRef.current && !studyMenuWrapRef.current.contains(target)) {
-                setIsStudyMenuOpen(false);
+            const studyMenuRefs = [
+                composerStudyMenuWrapRef.current,
+                selectionStudyMenuWrapRef.current
+            ].filter(Boolean) as HTMLDivElement[];
+
+            if (studyMenuRefs.every((ref) => !ref.contains(target))) {
+                setOpenStudyMenu(null);
             }
 
             if (coachMenuWrapRef.current && !coachMenuWrapRef.current.contains(target)) {
@@ -763,16 +815,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         });
     };
 
-    const latestAssistantTurn = [...chatHistory]
-        .reverse()
-        .find((turn) => turn.role === 'assistant' && turn.kind !== 'status' && turn.content.trim());
-    const shouldShowRetryIncompleteReply = Boolean(
-        chatTarget
-        && !isChatLoading
-        && latestAssistantTurn
-        && !latestAssistantTurn.suppressTargetFollowUp
-        && !latestAssistantTurn.content.includes('[FOLLOWUP:')
-    );
+    const isComposerStudyDisabled = !chatInput.trim() || isConversationMode;
 
     return (
         <div
@@ -1009,10 +1052,32 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                 <div className="mb-2 flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-2">
                     <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-black uppercase tracking-wide text-neutral-700">
-                            SELECTION: <span className="normal-case text-neutral-900">{chatSelection.text}</span>
+                            <span className="normal-case text-neutral-900">{chatSelection.text}</span>
                         </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
+                        <div ref={selectionStudyMenuWrapRef} className="relative">
+                            {openStudyMenu === 'selection' ? (
+                                <div
+                                    className="absolute bottom-[calc(100%+0.5rem)] right-0 z-20 w-[min(16rem,calc(100vw-2rem))] rounded-[1.5rem] bg-white/98 p-0 backdrop-blur-xl"
+                                    onClick={handleStudyMenuClick}
+                                >
+                                    {selectionStudyMenu}
+                                </div>
+                            ) : null}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsCoachMenuOpen(false);
+                                    setIsSettingsMenuOpen(false);
+                                    setOpenStudyMenu((prev) => prev === 'selection' ? null : 'selection');
+                                }}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-blue-200 bg-white text-blue-700 transition-colors hover:bg-blue-50"
+                                title="Open study tools for the current selection"
+                            >
+                                <BookOpenCheck size={13} />
+                            </button>
+                        </div>
                         <button
                             type="button"
                             onClick={onTranslateChatSelection}
@@ -1059,33 +1124,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                             <X size={14} />
                         </button>
                     </div>
-                </div>
-            ) : null}
-            {chatTarget ? (
-                <div className="mb-2 flex items-center justify-between rounded-2xl border border-neutral-200 bg-neutral-50 px-3 py-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                    <p className="min-w-0 truncate text-sm font-black uppercase tracking-wide text-neutral-700">
-                        TARGET: <span className="normal-case text-neutral-900">{chatTarget.word}</span>
-                    </p>
-                    {shouldShowRetryIncompleteReply ? (
-                        <button
-                            type="button"
-                            onClick={onRetryIncompleteTargetReply}
-                            className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-700 transition-colors hover:bg-amber-50"
-                            title="Retry the target reply when follow-up buttons did not appear"
-                        >
-                            Retry Incomplete Reply
-                        </button>
-                    ) : null}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClearChatTarget}
-                        className="ml-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                        title="Clear target word"
-                    >
-                        <X size={14} />
-                    </button>
                 </div>
             ) : null}
             <div className="flex items-center gap-2">
@@ -1138,28 +1176,30 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                             >
                                 <Mic size={18} className={isChatListening ? 'animate-pulse' : ''} />
                             </button>
-                            <div ref={studyMenuWrapRef} className="relative">
-                                {isStudyMenuOpen ? (
+                            <div ref={composerStudyMenuWrapRef} className="relative">
+                                {openStudyMenu === 'composer' ? (
                                     <div
                                         className="absolute bottom-[calc(100%+0.5rem)] right-0 z-20 w-[min(16rem,calc(100vw-2rem))] rounded-[1.5rem] bg-white/98 p-0 backdrop-blur-xl"
                                         onClick={handleStudyMenuClick}
                                     >
-                                        {chatStudyMenu}
+                                        {composerStudyMenu}
                                     </div>
                                 ) : null}
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        if (isComposerStudyDisabled) return;
                                         setIsCoachMenuOpen(false);
                                         setIsSettingsMenuOpen(false);
-                                        setIsStudyMenuOpen((prev) => !prev);
+                                        setOpenStudyMenu((prev) => prev === 'composer' ? null : 'composer');
                                     }}
-                                    className="h-10 w-10 rounded-2xl border border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 flex items-center justify-center transition-colors"
-                                    title="Open study tools"
+                                    disabled={isComposerStudyDisabled}
+                                    className="h-10 w-10 rounded-2xl border border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 flex items-center justify-center transition-colors"
+                                    title="Open study tools for the text box"
                                 >
                                     <div className="relative flex items-center justify-center">
                                         <BookOpenCheck size={16} />
-                                        <ChevronUp size={12} className={`absolute -top-2 -right-2 transition-transform ${isStudyMenuOpen ? '' : 'rotate-180'}`} />
+                                        <ChevronUp size={12} className={`absolute -top-2 -right-2 transition-transform ${openStudyMenu === 'composer' ? '' : 'rotate-180'}`} />
                                     </div>
                                 </button>
                             </div>
@@ -1175,7 +1215,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setIsStudyMenuOpen(false);
+                                        setOpenStudyMenu(null);
                                         setIsSettingsMenuOpen(false);
                                         setIsCoachMenuOpen((prev) => !prev);
                                     }}

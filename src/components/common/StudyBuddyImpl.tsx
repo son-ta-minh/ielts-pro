@@ -22,6 +22,7 @@ import { getStudyBuddyCoachPrompt } from '../../services/prompts/getStudyBuddyCo
 import {
     CambridgePronunciation,
     cleanExampleSentence,
+    extractCompareTargetCandidates,
     getAvatarProps,
     getSuggestedSaveSections,
     inferWordFamilyBucket,
@@ -94,9 +95,11 @@ interface CambridgeSimpleResult {
 
 interface ChatSaveDraft {
     turnId: string;
+    detectedTargetWords: string[];
     sourceText: string;
     targetWord: string;
     selectedSection: ChatSaveSection;
+    availableSections: ChatSaveSection[];
     exampleLines: string[];
     parsedPairs: ParsedPairItem[];
     parsedWordFamily: ParsedWordFamilyItem[];
@@ -480,6 +483,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             ? selectedSnippet
             : (turn.content || turn.saveContext?.sourceSelection || '').trim();
         const actionType = turn.saveContext?.actionType;
+        const detectedTargetWords = actionType === 'compare' ? extractCompareTargetCandidates(sourceText) : [];
+        const availableSections: ChatSaveSection[] = actionType === 'preposition' || actionType === 'idioms' || actionType === 'compare'
+            ? ['preposition', 'idiom', 'userNote']
+            : actionType === 'examples'
+                ? ['example']
+                : actionType === 'collocations'
+                    ? ['collocation']
+                    : actionType === 'paraphrase'
+                        ? ['paraphrase']
+                        : actionType === 'wordFamily'
+                            ? ['wordFamily']
+                            : getSuggestedSaveSections(sourceText, turn.saveContext);
         const lockedSection: ChatSaveSection = actionType === 'examples'
             ? 'example'
             : actionType === 'collocations'
@@ -488,7 +503,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     ? 'paraphrase'
                     : actionType === 'wordFamily'
                         ? 'wordFamily'
-                        : (getSuggestedSaveSections(sourceText, turn.saveContext)[0] || 'example');
+                        : actionType === 'preposition'
+                            ? 'preposition'
+                            : actionType === 'idioms'
+                                ? 'idiom'
+                                : actionType === 'compare'
+                                    ? 'userNote'
+                                    : (availableSections[0] || 'example');
         const exampleLines = sourceText
             .split('\n')
             .map((line) => cleanExampleSentence(line))
@@ -507,9 +528,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
         setChatSaveDraft({
             turnId: turn.id,
+            detectedTargetWords,
             sourceText,
-            targetWord: turn.saveContext?.targetWord || '',
+            targetWord: actionType === 'compare'
+                ? (detectedTargetWords.length === 1 ? detectedTargetWords[0] : '')
+                : (turn.saveContext?.targetWord || ''),
             selectedSection: lockedSection,
+            availableSections,
             exampleLines,
             parsedPairs: parsedPairs.length > 0 ? parsedPairs : fallbackPairs,
             parsedWordFamily: parsedWordFamily.length > 0 ? parsedWordFamily : fallbackWordFamily
@@ -683,6 +708,31 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     }
                 });
                 updatedWord.prepositions = existing;
+            }
+
+            if (chatSaveDraft.selectedSection === 'idiom') {
+                const nextItems = chatSaveDraft.parsedPairs;
+                const existing = [...(updatedWord.idiomsList || [])];
+                nextItems.forEach(({ item, context }) => {
+                    const normalized = item.trim().toLowerCase();
+                    const index = existing.findIndex((entry) => entry.text.trim().toLowerCase() === normalized);
+                    const nextEntry: CollocationDetail = { text: item.trim(), d: context.trim(), isIgnored: false };
+                    if (index >= 0) {
+                        existing[index] = {
+                            ...existing[index],
+                            d: mergeTextBlock(existing[index].d, nextEntry.d || ''),
+                            isIgnored: false
+                        };
+                    } else {
+                        existing.push(nextEntry);
+                    }
+                });
+                updatedWord.idiomsList = existing;
+                updatedWord.idioms = existing.map((item) => item.text).join('\n');
+            }
+
+            if (chatSaveDraft.selectedSection === 'userNote') {
+                updatedWord.note = mergeTextBlock(updatedWord.note, sourceText);
             }
 
             if (chatSaveDraft.selectedSection === 'wordFamily') {
@@ -2007,9 +2057,32 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const chatHeaderDescription = isConversationMode
         ? (isChatListening ? 'Conversation mode: listening...' : isChatLoading ? 'Conversation mode: AI is replying...' : 'Conversation mode: waiting for voice...')
         : coachIdentityLabel;
-    const chatPlaceholder = activeChatTarget
-        ? `Target: ${activeChatTarget.word.word}`
-        : (isConversationMode ? 'Conversation mode is ON. Say something...' : 'Ask me anything...');
+    const chatPlaceholder = isConversationMode ? 'Conversation mode is ON. Say something...' : 'Ask me anything...';
+    const renderStudyMenu = (
+        inputSource: 'composer' | 'selection' | 'target',
+        hasSelection: boolean
+    ) => (
+        <StudyBuddyChatStudyMenu
+            activeChatCoachAction={activeChatCoachAction}
+            hasSelection={hasSelection}
+            showIdiom={inputSource !== 'selection'}
+            showCompare={inputSource !== 'selection'}
+            onExamples={() => handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'), { inputSource })}
+            onExplain={() => handleChatCoachExplain({ inputSource })}
+            onPreposition={() => handleChatCoachPromptToChat('preposition', 'Dependent Preposition', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'preposition'), { inputSource })}
+            onTest={() => handleChatCoachTest({ inputSource })}
+            onCollocations={() => handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'), { inputSource })}
+            onParaphrase={() => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'), { inputSource })}
+            onIdiom={() => handleChatCoachPromptToChat('idioms', 'Idioms', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'idioms'), { inputSource })}
+            onCompare={() => handleChatCoachPromptToChat('compare', 'Compare', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'compare'), { inputSource })}
+            onWordFamily={() => handleChatCoachPromptToChat(
+                'wordFamily',
+                'Word Family',
+                (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'wordFamily'),
+                { inputSource }
+            )}
+        />
+    );
 
     const chatSaveModal = (
         <StudyBuddySaveModal
@@ -2018,6 +2091,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             isSavingChatSnippet={isSavingChatSnippet}
             onClose={() => setChatSaveDraft(null)}
             onChangeTargetWord={(value) => setChatSaveDraft((current) => current ? { ...current, targetWord: value } : current)}
+            onChangeSection={(value) => setChatSaveDraft((current) => current ? { ...current, selectedSection: value } : current)}
             onRemoveExampleLine={(index) => setChatSaveDraft((current) => current ? {
                 ...current,
                 exampleLines: current.exampleLines.filter((_, itemIndex) => itemIndex !== index)
@@ -2097,9 +2171,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 chatResponseLanguage={config.interface.studyBuddyLanguage}
                                 chatHistory={chatHistory}
                                 chatInput={chatInput}
-                                chatTarget={activeChatTarget ? {
-                                    word: activeChatTarget.word.word
-                                } : null}
                                 chatSelection={activeChatSelectionText ? {
                                     text: activeChatSelectionText,
                                     isAlreadyInLibrary,
@@ -2108,25 +2179,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 headerTitle={chatHeaderTitle}
                                 headerDescription={chatHeaderDescription}
                                 chatPlaceholder={chatPlaceholder}
-                                chatStudyMenu={
-                                    <StudyBuddyChatStudyMenu
-                                        activeChatCoachAction={activeChatCoachAction}
-                                        hasSelection={!!getCoachActionText() || !!activeChatTarget}
-                                        onExamples={() => handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'))}
-                                        onExplain={handleChatCoachExplain}
-                                        onPreposition={() => handleChatCoachPromptToChat('preposition', 'Dependent Preposition', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'preposition'))}
-                                        onTest={handleChatCoachTest}
-                                        onCollocations={() => handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'))}
-                                        onParaphrase={() => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'))}
-                                        onIdiom={() => handleChatCoachPromptToChat('idioms', 'Idioms', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'idioms'))}
-                                        onCompare={() => handleChatCoachPromptToChat('compare', 'Compare', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'compare'))}
-                                        onWordFamily={() => handleChatCoachPromptToChat(
-                                            'wordFamily',
-                                            'Word Family',
-                                            (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'wordFamily')
-                                        )}
-                                    />
-                                }
+                                composerStudyMenu={renderStudyMenu('composer', !!chatInput.trim())}
+                                selectionStudyMenu={renderStudyMenu('selection', !!activeChatSelectionText.trim())}
                                 chatCoachActionBar={
                                     <StudyBuddyChatCoachActionBar
                                         hasSelection={!!getCoachActionText()}
@@ -2181,13 +2235,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                     clearChatSelectionText();
                                     setIsChatOpen(false);
                                 }}
-                                onClearChatTarget={() => setActiveChatTarget(null)}
                                 onClearChatSelection={clearChatSelectionText}
-                                onRetryIncompleteTargetReply={() => {
-                                    const currentTarget = activeChatTargetRef.current;
-                                    if (!currentTarget || isChatLoading) return;
-                                    void handleBackgroundChatRequest(buildStudyBuddyTargetPrompt(currentTarget), currentTarget);
-                                }}
                                 onOpenSaveModal={openChatSaveModal}
                                 onCopyImageUrl={handleCopyChatImageUrl}
                                 onSaveImage={handleSaveChatImage}

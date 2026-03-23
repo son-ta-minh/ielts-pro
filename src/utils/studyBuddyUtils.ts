@@ -21,6 +21,52 @@ export interface ParsedWordFamilyItem {
     bucket: keyof WordFamily;
 }
 
+export function extractCompareTargetCandidates(text: string): string[] {
+    const candidates: string[] = [];
+    const seen = new Set<string>();
+
+    const push = (value?: string) => {
+        const cleaned = stripMarkdownForSave(String(value || ''))
+            .replace(/\|/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!cleaned) return;
+        const key = cleaned.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        candidates.push(cleaned);
+    };
+
+    const lines = String(text || '').split('\n').map((line) => line.trim()).filter(Boolean);
+    const tableLines = lines.filter((line) => line.includes('|'));
+
+    if (tableLines.length >= 2) {
+        tableLines.slice(2).forEach((line) => {
+            const cells = line
+                .split('|')
+                .map((cell) => stripMarkdownForSave(cell).trim())
+                .filter(Boolean);
+            if (cells.length > 0) push(cells[0]);
+        });
+    }
+
+    if (candidates.length === 0) {
+        const boldMatches = Array.from(String(text || '').matchAll(/\*\*([^*]+)\*\*/g));
+        boldMatches.forEach((match) => push(match[1]));
+    }
+
+    if (candidates.length === 0) {
+        lines.forEach((line) => {
+            const normalized = normalizeSaveLine(line);
+            if (!normalized) return;
+            const splitMatch = normalized.split(/:| - /).map((part) => part.trim()).filter(Boolean);
+            if (splitMatch.length > 0) push(splitMatch[0]);
+        });
+    }
+
+    return candidates.slice(0, 8);
+}
+
 export const AVATAR_DEFINITIONS = {
     woman_teacher: { url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/People/Woman%20Teacher.png', bg: 'bg-indigo-50' },
     man_teacher: { url: 'https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/People/Man%20Teacher.png', bg: 'bg-blue-50' },
@@ -36,7 +82,10 @@ const COACH_ACTION_TO_SAVE_SECTION: Partial<Record<ChatCoachActionKey, ChatSaveS
     examples: 'example',
     collocations: 'collocation',
     paraphrase: 'paraphrase',
-    wordFamily: 'wordFamily'
+    wordFamily: 'wordFamily',
+    preposition: 'preposition',
+    idioms: 'idiom',
+    compare: 'userNote'
 };
 
 export function normalizeCambridgePronunciations(items?: CambridgePronunciation[]): CambridgePronunciation[] {

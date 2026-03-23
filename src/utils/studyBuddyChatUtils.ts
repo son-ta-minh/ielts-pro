@@ -2,8 +2,8 @@ import { StudyBuddyMemoryChunk, User, VocabularyItem, WordFamily } from '../app/
 import { detectLanguage } from './audio';
 import { getAiStudyContextText } from './context_util';
 
-export type ChatSaveSection = 'example' | 'preposition' | 'collocation' | 'paraphrase' | 'wordFamily';
-export type ChatSaveActionType = 'examples' | 'collocations' | 'paraphrase' | 'wordFamily';
+export type ChatSaveSection = 'example' | 'preposition' | 'collocation' | 'paraphrase' | 'wordFamily' | 'idiom' | 'userNote';
+export type ChatSaveActionType = 'examples' | 'collocations' | 'paraphrase' | 'wordFamily' | 'preposition' | 'idioms' | 'compare';
 export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain' | 'image' | 'infographic' | 'preposition' | 'idioms' | 'compare';
 export type StudyBuddyTargetSection = 'coreUsage' | 'collocation' | 'wordFamily' | 'idiom' | 'paraphrase' | 'example' | 'preposition';
 
@@ -59,7 +59,9 @@ export const SAVE_SECTION_LABELS: Record<ChatSaveSection, string> = {
     preposition: 'Preposition',
     collocation: 'Collocation',
     paraphrase: 'Paraphrase',
-    wordFamily: 'Word Family'
+    wordFamily: 'Word Family',
+    idiom: 'Idiom',
+    userNote: 'User Note'
 };
 
 const STUDY_BUDDY_SYSTEM_PROMPT = 'You are StudyBuddy, an IELTS and English learning coach. Give practical, concise help with clear examples. Prefer simple formatting and answer in Vietnamese when the learner writes in Vietnamese. You are allowed to remember durable user preferences or identity details through hidden memory directives when the app asks you to do so. Do not claim that you cannot store memory unless the user asks for something unsafe. Use learner profile and long-term memory quietly as background context. Do not spontaneously mention or summarize the learner profile, personal details, goals, role, or memory unless the user asks, the task directly depends on it, or a brief reference is genuinely helpful.';

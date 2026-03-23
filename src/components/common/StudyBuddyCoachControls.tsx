@@ -83,6 +83,8 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
 interface ChatStudyMenuProps {
     activeChatCoachAction: string | null;
     hasSelection: boolean;
+    showIdiom?: boolean;
+    showCompare?: boolean;
     onExamples: () => void;
     onExplain: () => void;
     onPreposition: () => void;
@@ -97,6 +99,8 @@ interface ChatStudyMenuProps {
 export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
     activeChatCoachAction,
     hasSelection,
+    showIdiom = true,
+    showCompare = true,
     onExamples,
     onExplain,
     onPreposition,
@@ -127,17 +131,21 @@ export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
                 {renderButtonLabel('collocations', 'Collocations')}
             </button>
             <button type="button" onClick={onPreposition} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-sky-50 text-sky-700 hover:bg-sky-100`}>
-                {renderButtonLabel('preposition', 'Dependent Prep')}
+                {renderButtonLabel('preposition', 'Preposition')}
             </button>
             <button type="button" onClick={onParaphrase} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
                 {renderButtonLabel('paraphrase', 'Paraphrase')}
             </button>
-            <button type="button" onClick={onIdiom} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
-                {renderButtonLabel('idioms', 'Idioms')}
-            </button>
-            <button type="button" onClick={onCompare} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
-                {renderButtonLabel('compare', 'Compare')}
-            </button>
+            {showIdiom ? (
+                <button type="button" onClick={onIdiom} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
+                    {renderButtonLabel('idioms', 'Idioms')}
+                </button>
+            ) : null}
+            {showCompare ? (
+                <button type="button" onClick={onCompare} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
+                    {renderButtonLabel('compare', 'Compare')}
+                </button>
+            ) : null}
             <button type="button" onClick={onWordFamily} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}>
                 {renderButtonLabel('wordFamily', 'Word Family')}
             </button>

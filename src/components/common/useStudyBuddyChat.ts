@@ -3,7 +3,7 @@ import { Languages } from 'lucide-react';
 import { StudyBuddyImageSettings, StudyBuddyMemoryChunk, User } from '../../app/types';
 import { SystemConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { getGenerateLessonTestPrompt } from '../../services/prompts/getGenerateLessonTestPrompt';
-import { getLessonPrompt } from '../../services/prompts/getRefineLessonPrompt';
+import { getStudyBuddyExplainPrompt } from '../../services/prompts/getStudyBuddyExplainPrompt';
 import * as dataStore from '../../app/dataStore';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import {
@@ -256,12 +256,6 @@ export function useStudyBuddyChat({
             || window.getSelection()?.toString().trim()
             || ''
         ).trim();
-    }
-
-    function getStudyCommandText() {
-        const activeTargetWord = getActiveChatTarget()?.word?.word?.trim() || '';
-        if (activeTargetWord) return activeTargetWord;
-        return getActiveActionText();
     }
 
     async function submitChatPrompt(
@@ -1058,12 +1052,27 @@ Rules:
         options?: {
             saveActionType?: ChatSaveActionType;
             targetSection?: StudyBuddyChatTarget['section'];
+            inputSource?: 'auto' | 'composer' | 'selection' | 'target';
+            inputText?: string;
         }
     ) {
-        const selectedText = getStudyCommandText();
+        const selectedText = (
+            options?.inputText?.trim()
+            || (
+                options?.inputSource === 'composer'
+                    ? chatInput.trim()
+                    : options?.inputSource === 'selection'
+                        ? (coachSelectionText || selectedTextRef.current || window.getSelection()?.toString().trim() || '').trim()
+                        : options?.inputSource === 'target'
+                            ? (getActiveChatTarget()?.word?.word?.trim() || '')
+                            : ((getActiveChatTarget()?.word?.word?.trim() || '') || getActiveActionText())
+            )
+        ).trim();
         if (!selectedText) return;
         selectedTextRef.current = selectedText;
-        setChatInput('');
+        if (options?.inputSource === 'composer') {
+            setChatInput('');
+        }
 
         const targetSection = options?.targetSection ?? (
             actionKey === 'explain'
@@ -1096,7 +1105,7 @@ Rules:
         const saveContext: ChatSaveContext | undefined = inferredSaveActionType
             ? {
                 actionType: inferredSaveActionType,
-                targetWord: selectedText,
+                targetWord: actionKey === 'compare' ? undefined : selectedText,
                 sourceSelection: selectedText
             }
             : undefined;
@@ -1220,7 +1229,7 @@ Rules:
         }
     }
 
-    async function handleChatCoachTest() {
+    async function handleChatCoachTest(options?: { inputSource?: 'auto' | 'composer' | 'selection' | 'target'; inputText?: string }) {
         await handleChatCoachPromptToChat(
             'test',
             'Test',
@@ -1229,25 +1238,17 @@ Rules:
                 selectedText,
                 `Create a focused practice test for this query: ${selectedText}`,
                 []
-            )
+            ),
+            options
         );
     }
 
-    async function handleChatCoachExplain() {
+    async function handleChatCoachExplain(options?: { inputSource?: 'auto' | 'composer' | 'selection' | 'target'; inputText?: string }) {
         await handleChatCoachPromptToChat(
             'explain',
             'Explain',
-            (selectedText) => getLessonPrompt({
-                task: 'create_reading',
-                topic: selectedText,
-                userRequest: `Explain this as an English/IELTS vocabulary coach, not as a general life or science topic. Focus on meaning in English, part of speech, register, common collocations, common mistakes, and how learners should use "${selectedText}" in IELTS speaking/writing. Do not drift into broad philosophy, self-help, or real-world topic discussion unless directly needed for word usage.`,
-                language: user.lessonPreferences?.language || 'English',
-                targetAudience: user.lessonPreferences?.targetAudience || 'Adult',
-                tone: user.lessonPreferences?.tone || 'professional_professor',
-                coachName: coach.name || 'StudyBuddy',
-                format: 'reading',
-                displayDirect: true
-            })
+            (selectedText) => getStudyBuddyExplainPrompt(selectedText),
+            options
         );
     }
 

@@ -28,8 +28,12 @@ ${baseRules}
         return `Give max 5 natural idioms related to "${selectedText}".
 
 ${baseRules}
-- Format: - **idiom**: short explanation`;
-    }
+- Only include real idioms that native speakers naturally use.
+- Idioms are fixed expressions whose meanings are not predictable from the meanings of its individual words. Idioms often rely on metaphors, similes, or other literary devices to create a unique meaning.
+- Do NOT give collocations, ordinary example phrases, or loose word combinations
+- If there are idioms, format: - idiom: short explanation
+- If there are no natural idioms for this word/phrase, output exactly: No common natural idioms for this word.`;
+}
 
     if (type === 'wordFamily') {
         return `Give the most useful word family forms for "${selectedText}".
@@ -47,14 +51,12 @@ ${baseRules}
     }
 
     if (type === 'preposition') {
-        return `Give the most useful dependent prepositions or preposition patterns for "${selectedText}".
+        return `Give the dependent prepositions for "${selectedText}".
 
 ${baseRules}
 - Output ONLY the list, no greeting, no intro, no conclusion
-- Max 5 lines
-- Format: - **preposition or pattern**: short usage note
-- Prefer natural, common learner-useful patterns
-- If a pattern is limited or formal, say that briefly`;
+- Max 5 lines, no duplicated prepositions.
+- Format: - **preposition**: context to use it in, and context must include the mentioned preposition. For example, if the preposition of "interest" is "in", the context could be "interested in sports".`;
     }
 
     if (type === 'compare') {
@@ -72,6 +74,10 @@ ${baseRules}
     return `Give natural paraphrases for "${selectedText}".
 
 ${baseRules}
+- Only include real natural paraphrases with similar meaning and usable learner value
+- Do NOT give collocations, explanations, definitions, examples, or unrelated near-topic words
+- If there are no good natural paraphrases, output exactly:
+- No strong natural paraphrases for this word.
 - Format: - **paraphrase**(Register): short explanation
 - Register must be one of: Academic, Casual, Synonym
 - Always put Register immediately after the paraphrase, before the colon

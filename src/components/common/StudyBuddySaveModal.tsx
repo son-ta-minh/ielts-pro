@@ -5,8 +5,10 @@ import { ParsedPairItem, ParsedWordFamilyItem } from '../../utils/studyBuddyUtil
 
 interface ChatSaveDraft {
     targetWord: string;
+    detectedTargetWords: string[];
     sourceText: string;
     selectedSection: ChatSaveSection;
+    availableSections: ChatSaveSection[];
     exampleLines: string[];
     parsedPairs: ParsedPairItem[];
     parsedWordFamily: ParsedWordFamilyItem[];
@@ -18,6 +20,7 @@ interface StudyBuddySaveModalProps {
     isSavingChatSnippet: boolean;
     onClose: () => void;
     onChangeTargetWord: (value: string) => void;
+    onChangeSection: (value: ChatSaveSection) => void;
     onRemoveExampleLine: (index: number) => void;
     onRemovePair: (index: number) => void;
     onRemoveWordFamily: (index: number) => void;
@@ -30,6 +33,7 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
     isSavingChatSnippet,
     onClose,
     onChangeTargetWord,
+    onChangeSection,
     onRemoveExampleLine,
     onRemovePair,
     onRemoveWordFamily,
@@ -65,15 +69,47 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
                             placeholder="Enter the word to save into"
                             className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-900 outline-none transition-colors focus:border-neutral-900 focus:bg-white"
                         />
+                        {chatSaveDraft.detectedTargetWords.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {chatSaveDraft.detectedTargetWords.map((word) => (
+                                    <button
+                                        key={word}
+                                        type="button"
+                                        onClick={() => onChangeTargetWord(word)}
+                                        className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                                            chatSaveDraft.targetWord.trim().toLowerCase() === word.trim().toLowerCase()
+                                                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                                : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100'
+                                        }`}
+                                    >
+                                        {word}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div>
                         <label className="mb-2 block text-[11px] font-black uppercase tracking-wide text-neutral-500">
                             Save Type
                         </label>
-                        <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold text-neutral-900">
-                            {saveSectionLabels[chatSaveDraft.selectedSection]}
-                        </div>
+                        {chatSaveDraft.availableSections.length > 1 ? (
+                            <select
+                                value={chatSaveDraft.selectedSection}
+                                onChange={(e) => onChangeSection(e.target.value as ChatSaveSection)}
+                                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold text-neutral-900 outline-none transition-colors focus:border-neutral-900 focus:bg-white"
+                            >
+                                {chatSaveDraft.availableSections.map((section) => (
+                                    <option key={section} value={section}>
+                                        {saveSectionLabels[section]}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold text-neutral-900">
+                                {saveSectionLabels[chatSaveDraft.selectedSection]}
+                            </div>
+                        )}
                     </div>
 
                     <div>
@@ -98,7 +134,7 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
                                     ))}
                                 </div>
                             )}
-                            {(chatSaveDraft.selectedSection === 'collocation' || chatSaveDraft.selectedSection === 'paraphrase' || chatSaveDraft.selectedSection === 'preposition') && (
+                            {(chatSaveDraft.selectedSection === 'collocation' || chatSaveDraft.selectedSection === 'paraphrase' || chatSaveDraft.selectedSection === 'preposition' || chatSaveDraft.selectedSection === 'idiom') && (
                                 <div className="space-y-2">
                                     {chatSaveDraft.parsedPairs.map((item, index) => (
                                         <div key={`${item.item}-${index}`} className="flex items-start justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2">
@@ -116,6 +152,11 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
                                             </button>
                                         </div>
                                     ))}
+                                </div>
+                            )}
+                            {chatSaveDraft.selectedSection === 'userNote' && (
+                                <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2">
+                                    <p className="whitespace-pre-wrap leading-relaxed text-neutral-900">{chatSaveDraft.sourceText}</p>
                                 </div>
                             )}
                             {chatSaveDraft.selectedSection === 'wordFamily' && (
@@ -144,7 +185,7 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
                             {chatSaveDraft.selectedSection === 'example' && chatSaveDraft.exampleLines.length === 0 && (
                                 <p className="text-neutral-500">No items left to save.</p>
                             )}
-                            {(chatSaveDraft.selectedSection === 'collocation' || chatSaveDraft.selectedSection === 'paraphrase' || chatSaveDraft.selectedSection === 'preposition') && chatSaveDraft.parsedPairs.length === 0 && (
+                            {(chatSaveDraft.selectedSection === 'collocation' || chatSaveDraft.selectedSection === 'paraphrase' || chatSaveDraft.selectedSection === 'preposition' || chatSaveDraft.selectedSection === 'idiom') && chatSaveDraft.parsedPairs.length === 0 && (
                                 <p className="text-neutral-500">No items left to save.</p>
                             )}
                             {chatSaveDraft.selectedSection === 'wordFamily' && chatSaveDraft.parsedWordFamily.length === 0 && (
