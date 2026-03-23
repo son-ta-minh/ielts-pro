@@ -1310,33 +1310,44 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             openCoachMenuWithRange(selectedText, selection.getRangeAt(0).cloneRange(), options);
         };
 
-        const handleContextMenu = (e: MouseEvent) => {
-            const target = e.target as Node | null;
-            const selection = window.getSelection();
-            if (!selection || !selection.toString().trim()) return;
+        // Helper to handle selection action for both contextmenu and touchend
+        const handleSelectionAction = (selection: Selection) => {
+            if (!selection || selection.rangeCount === 0) return;
 
-            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+            const selectedText = selection.toString().trim();
+            if (!selectedText) return;
+
+            const range = selection.getRangeAt(0);
+
             const isChatSelection = Boolean(
-                range
-                && chatPanelRef.current
-                && chatPanelRef.current.contains(range.commonAncestorContainer as Node)
+                range &&
+                chatPanelRef.current &&
+                chatPanelRef.current.contains(range.commonAncestorContainer as Node)
             );
 
             if (isChatSelection) {
-                e.preventDefault();
-                e.stopPropagation();
-                const selectedText = selection.toString().trim();
-                if (!selectedText || !range) return;
                 scheduleChatSelectionPanel(range, selectedText);
                 return;
             }
 
-            if (chatPanelRef.current && target && chatPanelRef.current.contains(target)) {
-                return;
-            }
+            openCoachMenu(selection);
+        };
+
+        const handleContextMenu = (e: MouseEvent) => {
+            const selection = window.getSelection();
+            if (!selection?.toString().trim()) return;
 
             e.preventDefault();
-            openCoachMenu(selection);
+            handleSelectionAction(selection);
+        };
+
+        const handleTouchEnd = () => {
+            setTimeout(() => {
+                const selection = window.getSelection();
+                if (!selection || !selection.toString().trim()) return;
+
+                handleSelectionAction(selection);
+            }, 50);
         };
 
         const handleSelectionClick = (e: MouseEvent) => {
@@ -1416,12 +1427,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         const chatPanel = chatPanelRef.current;
         chatPanel?.addEventListener('mouseup', handleChatMouseUp);
         document.addEventListener('contextmenu', handleContextMenu);
+        document.addEventListener('touchend', handleTouchEnd);
         document.addEventListener('click', handleSelectionClick);
         document.addEventListener('mousedown', handleClickOutside);
 
         return () => {
             chatPanel?.removeEventListener('mouseup', handleChatMouseUp);
             document.removeEventListener('contextmenu', handleContextMenu);
+            document.removeEventListener('touchend', handleTouchEnd);
             document.removeEventListener('click', handleSelectionClick);
             document.removeEventListener('mousedown', handleClickOutside);
         };

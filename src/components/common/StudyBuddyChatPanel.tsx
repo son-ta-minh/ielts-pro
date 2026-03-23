@@ -732,7 +732,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
 
     const handleResizeWidth = () => {
         setPanelWidth((current) => {
-            const options = [640, 736, 832, 928];
+            const options = [640, 736, 832, 928, 1024, 1120];
             const next = options.find((value) => value > current + 8) ?? options[0];
             return next;
         });
@@ -740,7 +740,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
 
     const handleResizeHeight = () => {
         setPanelHeight((current) => {
-            const options = [560, 672, 784, 896];
+            const options = [560, 672, 784, 896, 1008, 1120];
             const next = options.find((value) => value > current + 8) ?? options[0];
             return next;
         });
