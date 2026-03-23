@@ -476,17 +476,19 @@ const ChatHistoryList = React.memo(({
                                 </div>
                             </div>
                         )}
-                        {turn.role === 'assistant' && turn.kind !== 'status' && turn.saveContext && !isNonActionableAssistantReply(turn) && (
+                        {turn.role === 'assistant' && turn.kind !== 'status' && !isNonActionableAssistantReply(turn) && (
                             <div className="mb-2 flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => onOpenSaveModal(turn)}
-                                    className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
-                                    title={turn.saveContext.targetWord ? `Save this response for ${turn.saveContext.targetWord}` : 'Save this response'}
-                                >
-                                    <Save size={11} />
-                                    {SAVE_ACTION_LABELS[turn.saveContext.actionType || ''] || 'Save'}
-                                </button>
+                                {turn.saveContext ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => onOpenSaveModal(turn)}
+                                        className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
+                                        title={turn.saveContext.targetWord ? `Save this response for ${turn.saveContext.targetWord}` : 'Save this response'}
+                                    >
+                                        <Save size={11} />
+                                        {SAVE_ACTION_LABELS[turn.saveContext.actionType || ''] || 'Save'}
+                                    </button>
+                                ) : null}
 
                                 <button
                                     type="button"
