@@ -227,7 +227,7 @@ const processDynamicBadges = (text: string): string => {
  * Process [HIDDEN: content] into inline reveal buttons
  */
 const processSpoilers = (text: string): string => {
-    return text.replace(/\[HIDDEN:\s*(.*?)\]/gi, (_, content) => {
+    return text.replace(/\[HIDDEN:?\s*(.*?)\]/gi, (_, content) => {
         const safeContent = content.trim()
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
