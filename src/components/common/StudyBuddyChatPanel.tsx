@@ -588,13 +588,13 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     const coachMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
     const studyMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
     const [panelWidth, setPanelWidth] = useState<number>(() => {
-        if (typeof window === 'undefined') return true;
+        if (typeof window === 'undefined') return 832;
         try {
             const raw = window.localStorage.getItem(STUDY_BUDDY_CHAT_PANEL_SIZE_KEY);
             const parsed = raw ? JSON.parse(raw) : null;
-            return Number.isFinite(parsed?.width) && parsed.width > 0 ? parsed.width : 736;
+            return Number.isFinite(parsed?.width) && parsed.width > 0 ? parsed.width : 832;
         } catch {
-            return 736;
+            return 832;
         }
     });
     const [panelHeight, setPanelHeight] = useState<number>(() => {
