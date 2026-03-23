@@ -150,6 +150,14 @@ if (typeof window !== 'undefined') {
             })
         );
     };
+
+    (window as any).handleStudyBuddyTestMore = (focusArea: string) => {
+        window.dispatchEvent(
+            new CustomEvent('studybuddy-test-more', {
+                detail: { focusArea }
+            })
+        );
+    };
 }
 
 const parseTable = (lines: string[]): { html: string; consumed: number } | null => {
@@ -210,7 +218,7 @@ const parseTable = (lines: string[]): { html: string; consumed: number } | null 
  * Allows external renderer via window.renderMarkdownBadge(tag: string): string
  */
 const processDynamicBadges = (text: string): string => {
-    return text.replace(/\[(?!(?:NAV|W_AUDIO|IMG|SOUND|Quiz|Select|Multi|HIDDEN|Tip|FOLLOWUP)\b)(?!\/)([^\[\]\n]+?)\]/g, (_, tag) => {
+    return text.replace(/\[(?!(?:NAV|W_AUDIO|IMG|SOUND|Quiz|Select|Multi|HIDDEN|Tip|FOLLOWUP|TESTMORE)\b)(?!\/)([^\[\]\n]+?)\]/g, (_, tag) => {
         if (typeof window !== 'undefined') {
             const renderer = (window as any).renderMarkdownBadge;
             if (typeof renderer === 'function') {
@@ -470,6 +478,14 @@ const processFollowUpButtons = (text: string): string => {
     });
 };
 
+const processTestMoreButtons = (text: string): string => {
+    return text.replace(/\[TESTMORE:\s*([^|\]]+)\|([^\]]+)\]/gi, (_, focusArea, label) => {
+        const safeFocusArea = String(focusArea || '').trim().replace(/'/g, "\\'");
+        const safeLabel = String(label || '').trim();
+        return `<button onclick="window.handleStudyBuddyTestMore('${safeFocusArea}')" class="inline-flex items-center justify-center px-2 py-1 bg-fuchsia-50 border border-fuchsia-200 hover:bg-fuchsia-600 hover:text-white hover:border-fuchsia-600 text-fuchsia-700 rounded-lg text-[10px] font-bold leading-none transition-all active:scale-95 mr-1 whitespace-nowrap align-middle">${safeLabel}</button>`;
+    });
+};
+
 /**
  * Process [IMG link|width]
  */
@@ -515,6 +531,7 @@ export const parseMarkdown = (text: string): string => {
     processed = processSound(processed);
     processed = processImages(processed);
     processed = processFollowUpButtons(processed);
+    processed = processTestMoreButtons(processed);
     processed = processQuiz(processed);
     processed = processDropdown(processed); // New: Select
     processed = processMultiChoice(processed); // Process Multi before table to safely replace pipes

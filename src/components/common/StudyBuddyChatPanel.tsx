@@ -402,9 +402,35 @@ function isNonActionableAssistantReply(turn: ChatTurn): boolean {
         'search request failed.',
         'streaming failed',
         'studybuddy ai connection failed.',
+        'loi khi tao cau hoi.',
+        'lỗi khi tạo câu hỏi.',
+        'khong the tao cau hoi hop le sau 3 lan thu.',
+        'không thể tạo câu hỏi hợp lệ sau 3 lần thử.',
         'khong the tao hinh luc nay.',
         'không thể tạo hình lúc này.'
     ].some((item) => content === item || content.includes(item));
+}
+
+function shouldHideCopyButton(turn: ChatTurn, index: number, chatHistory: ChatTurn[]): boolean {
+    if (turn.role !== 'assistant' || turn.kind === 'status') return true;
+
+    const content = String(turn.content || '').trim().toLowerCase();
+    if (!content) return true;
+
+    if (
+        content === 'generating question...'
+        || content === 'generating next question...'
+        || content === 'generating next question (click to cancel)'
+    ) {
+        return true;
+    }
+
+    const hasPreviousUserTurn = chatHistory.slice(0, index).some((item) => item.role === 'user');
+    if (!hasPreviousUserTurn) {
+        return true;
+    }
+
+    return isNonActionableAssistantReply(turn);
 }
 
 function extractImagePathFromContent(content: string): string | null {
@@ -443,11 +469,12 @@ const ChatHistoryList = React.memo(({
     const [copiedId, setCopiedId] = React.useState<string | null>(null);
     return (
         <>
-            {chatHistory.map((turn) => (
+            {chatHistory.map((turn, index) => (
                 <div key={turn.id} className={`group flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     {(() => {
                         const imagePath = turn.kind !== 'status' ? extractImagePathFromContent(turn.content) : null;
                         const imageUrl = imagePath ? resolveImageUrl(imagePath) : '';
+                        const hideCopyButton = shouldHideCopyButton(turn, index, chatHistory);
                         return (
                     <div className={`relative max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
                         turn.kind === 'status'
@@ -490,19 +517,21 @@ const ChatHistoryList = React.memo(({
                                     </button>
                                 ) : null}
 
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(turn.content || '');
-                                        setCopiedId(turn.id);
-                                        setTimeout(() => setCopiedId(null), 1500);
-                                    }}
-                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100"
-                                    title="Copy raw response"
-                                >
-                                    {copiedId === turn.id ? <Check size={11} /> : <Copy size={11} />}
-                                    {copiedId === turn.id ? 'Copied' : 'Copy'}
-                                </button>
+                                {!hideCopyButton ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(turn.content || '');
+                                            setCopiedId(turn.id);
+                                            setTimeout(() => setCopiedId(null), 1500);
+                                        }}
+                                        className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100"
+                                        title="Copy raw response"
+                                    >
+                                        {copiedId === turn.id ? <Check size={11} /> : <Copy size={11} />}
+                                        {copiedId === turn.id ? 'Copied' : 'Copy'}
+                                    </button>
+                                ) : null}
                             </div>
                         )}
                         {turn.kind !== 'status' ? (

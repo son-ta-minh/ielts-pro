@@ -1236,6 +1236,21 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             externalChatStreamRef.current = null;
             setIsChatLoading(false);
         };
+        const handleExternalStudyBuddyTestMore = (event: Event) => {
+            const custom = event as CustomEvent<{ focusArea?: string }>;
+            const currentTarget = activeChatTargetRef.current;
+            if (!currentTarget) return;
+
+            const focusArea = (() => {
+                const value = String(custom.detail?.focusArea || '').trim();
+                if (value === 'collocation' || value === 'preposition' || value === 'paraphrase' || value === 'wordFamily') {
+                    return value;
+                }
+                return undefined;
+            })();
+
+            void handleChatCoachTestMore(focusArea);
+        };
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
         window.addEventListener('coach-cambridge-lookup-request', handleCoachLookupRequest as EventListener);
@@ -1248,6 +1263,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         window.addEventListener('studybuddy-chat-stream-delta', handleExternalStudyBuddyChatStreamDelta as EventListener);
         window.addEventListener('studybuddy-chat-stream-end', handleExternalStudyBuddyChatStreamEnd as EventListener);
         window.addEventListener('studybuddy-chat-stream-error', handleExternalStudyBuddyChatStreamError as EventListener);
+        window.addEventListener('studybuddy-test-more', handleExternalStudyBuddyTestMore as EventListener);
         
         // Initial check
         setIsAudioPlaying(getIsSpeaking());
@@ -1280,6 +1296,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             window.removeEventListener('studybuddy-chat-stream-delta', handleExternalStudyBuddyChatStreamDelta as EventListener);
             window.removeEventListener('studybuddy-chat-stream-end', handleExternalStudyBuddyChatStreamEnd as EventListener);
             window.removeEventListener('studybuddy-chat-stream-error', handleExternalStudyBuddyChatStreamError as EventListener);
+            window.removeEventListener('studybuddy-test-more', handleExternalStudyBuddyTestMore as EventListener);
             if (cambridgeAudioRef.current) {
                 cambridgeAudioRef.current.pause();
                 cambridgeAudioRef.current = null;
@@ -1580,6 +1597,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         handleChatCoachImage,
         handleChatCoachSearch,
         handleChatCoachTest,
+        handleChatCoachTestMore,
         handleChatCoachTranslate,
         handleSendChat,
         handleToggleChatMic,

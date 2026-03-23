@@ -34,7 +34,180 @@ type CoachVoiceConfig = {
     viAccent?: string;
 };
 
+type StudyBuddyTestFocusArea = 'collocation' | 'preposition' | 'paraphrase' | 'wordFamily';
+
+interface StudyBuddyTestOptionPayload {
+    isCorrect?: string | boolean;
+    explanation?: string;
+}
+
+interface StudyBuddyTestQuestionPayload {
+    q?: string;
+    o?: Record<string, StudyBuddyTestOptionPayload>;
+}
+
+interface StudyBuddyBufferedTestEntry {
+    markdown: string | null;
+    pending: Promise<string | null> | null;
+    controller?: AbortController | null;
+}
+
+interface ValidatedStudyBuddyTestQuestion {
+    question: string;
+    normalizedOptions: Array<{
+        label: string;
+        isCorrect: boolean;
+        explanation: string;
+    }>;
+}
+
+interface StudyBuddyTestValidationResult {
+    questions: ValidatedStudyBuddyTestQuestion[];
+    errors: string[];
+}
+
 const STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE = `If the user reveals durable personal info or asks you to remember something for future chats, append one hidden memory directive on its own line using this preferred syntax: [W_UMEM short memory chunk]. Example: [W_UMEM User prefers concise answers]. Keep each memory chunk minimal. Only store durable user preferences, identity facts, stable long-term goals, or preferred assistant behavior. Do not use memory for temporary task details, recent chat content, what the learner just asked, what word they are currently studying, or any learning-history summary such as "learner studied word X", "learner learned core usage of Y", "learner asked about collocations", or similar vocabulary progress/history because Context Aware mode already handles study context. Fast mode only disables Word Library study context, not long-term chat memory. Do not say that memory is unavailable just because Fast mode is on.`;
+
+function normalizeTestCorrectFlag(value: string | boolean | undefined): boolean {
+    if (typeof value === 'boolean') return value;
+    return String(value || '').trim().toLowerCase() === 'true';
+}
+
+function extractJsonArrayString(raw: string): string {
+    const trimmed = String(raw || '').trim();
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const unfenced = (fenceMatch?.[1] || trimmed).trim();
+    const start = unfenced.indexOf('[');
+    const end = unfenced.lastIndexOf(']');
+    if (start >= 0 && end > start) {
+        return unfenced.slice(start, end + 1);
+    }
+    return unfenced;
+}
+
+function findAdjacentDuplicateWord(text: string): string | null {
+    const words = String(text || '')
+        .toLowerCase()
+        .match(/[a-z]+(?:'[a-z]+)?/g);
+    if (!words || words.length < 2) return null;
+
+    for (let index = 1; index < words.length; index += 1) {
+        if (words[index] === words[index - 1]) {
+            return words[index];
+        }
+    }
+
+    return null;
+}
+
+function validateStudyBuddyTestPayload(raw: string): StudyBuddyTestValidationResult {
+    try {
+        const parsed = JSON.parse(extractJsonArrayString(raw));
+        if (!Array.isArray(parsed)) {
+            return {
+                questions: [],
+                errors: ['Top-level JSON must be an array of question objects.']
+            };
+        }
+
+        const questions: ValidatedStudyBuddyTestQuestion[] = [];
+        const errors: string[] = [];
+
+        parsed.forEach((item: StudyBuddyTestQuestionPayload, itemIndex) => {
+            const questionLabel = `Question ${itemIndex + 1}`;
+            const question = String(item?.q || '').trim();
+            const options = item?.o && typeof item.o === 'object' ? Object.entries(item.o) : [];
+            const normalizedOptions = options
+                .map(([label, meta]) => ({
+                    label: String(label || '').trim(),
+                    isCorrect: normalizeTestCorrectFlag(meta?.isCorrect),
+                    explanation: String(meta?.explanation || '').trim()
+                }))
+                .filter((entry) => entry.label);
+
+            const correctCount = normalizedOptions.filter((entry) => entry.isCorrect).length;
+            if (!question.includes('__')) {
+                errors.push(`${questionLabel}: "q" must contain "__" as the blank.`);
+            }
+            if (normalizedOptions.length !== 4) {
+                errors.push(`${questionLabel}: must contain exactly 4 options.`);
+            }
+            if (correctCount !== 1) {
+                errors.push(`${questionLabel}: must contain exactly 1 correct option.`);
+            }
+
+            const questionDuplicate = findAdjacentDuplicateWord(question);
+            if (questionDuplicate) {
+                errors.push(`${questionLabel}: question has adjacent duplicate word "${questionDuplicate}".`);
+            }
+
+            normalizedOptions.forEach((entry, optionIndex) => {
+                const optionLabel = `${questionLabel}, option ${optionIndex + 1}`;
+                const optionDuplicate = findAdjacentDuplicateWord(entry.label);
+                if (optionDuplicate) {
+                    errors.push(`${optionLabel}: label has adjacent duplicate word "${optionDuplicate}".`);
+                }
+
+                const explanationDuplicate = findAdjacentDuplicateWord(entry.explanation);
+                if (explanationDuplicate) {
+                    errors.push(`${optionLabel}: explanation has adjacent duplicate word "${explanationDuplicate}".`);
+                }
+            });
+
+            if (
+                question.includes('__')
+                && normalizedOptions.length === 4
+                && correctCount === 1
+                && !questionDuplicate
+                && normalizedOptions.every((entry) => !findAdjacentDuplicateWord(entry.label) && !findAdjacentDuplicateWord(entry.explanation))
+            ) {
+                questions.push({
+                    question,
+                    normalizedOptions
+                });
+            }
+        });
+
+        return {
+            questions,
+            errors
+        };
+    } catch {
+        return {
+            questions: [],
+            errors: ['Response is not valid JSON array format.']
+        };
+    }
+}
+
+function buildStudyBuddyTestMarkdown(raw: string, focusArea?: StudyBuddyTestFocusArea): string | null {
+    const validation = validateStudyBuddyTestPayload(raw);
+    if (validation.errors.length > 0 || validation.questions.length === 0) {
+        return null;
+    }
+
+    const normalizedQuestions = validation.questions;
+
+    const validQuestions = normalizedQuestions.flatMap((item, index) => {
+        const explanationText = item.normalizedOptions
+            .map((entry) => `${entry.label}: ${entry.explanation || (entry.isCorrect ? 'Fits the question.' : 'Does not fit the question.')}`)
+            .join(' | ');
+
+        return [
+            item.question,
+            `[Multi: ${item.normalizedOptions.map((entry) => entry.label).join(' | ')}]`,
+            `[HIDDEN: ${explanationText}]`
+        ];
+    });
+
+    const moreFocus = focusArea || 'general';
+    return [
+        ...validQuestions,
+        `[TESTMORE:${moreFocus}|More question]`
+    ].join('\n');
+}
+
+const STUDY_BUDDY_TEST_ERROR_MESSAGE = 'Khong the tao cau hoi hop le sau 3 lan thu. Vui long bam More question de thu lai.';
 
 interface UseStudyBuddyChatOptions {
     config: SystemConfig;
@@ -159,6 +332,8 @@ export function useStudyBuddyChat({
     getActiveChatTarget,
     saveMemoryTexts,
 }: UseStudyBuddyChatOptions) {
+    const bufferedTestRef = React.useRef<Map<string, StudyBuddyBufferedTestEntry>>(new Map());
+
     function buildChatLanguageSystemMessage(language: 'vi' | 'en') {
         return language === 'vi'
             ? 'IMPORTANT: Language mode is locked to Vietnamese. Write the full reply in Vietnamese only. Do not switch to English just because the quoted word, examples, or user message are in English. If user asks to use Vietnamese, tell them switch the language toggle to English mode first.'
@@ -256,6 +431,157 @@ export function useStudyBuddyChat({
             || window.getSelection()?.toString().trim()
             || ''
         ).trim();
+    }
+
+    function getTestBufferKey(selectedText: string, focusArea?: StudyBuddyTestFocusArea) {
+        return `${selectedText.trim().toLowerCase()}::${focusArea || 'general'}`;
+    }
+
+    function replaceTestMoreLabel(content: string, focusArea: string, label: string) {
+        const escapedFocus = focusArea.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return String(content || '').replace(
+            new RegExp(`\\[TESTMORE:${escapedFocus}\\|[^\\]]*\\]`, 'g'),
+            `[TESTMORE:${focusArea}|${label}]`
+        );
+    }
+
+    function updateBufferedTestButtonLabel(selectedText: string, focusArea: StudyBuddyTestFocusArea | undefined, label: string) {
+        const resolvedFocus = focusArea || 'general';
+        setChatHistory((current) => {
+            let updated = false;
+            return [...current].reverse().map((turn) => {
+                if (updated || turn.role !== 'assistant') return turn;
+                if (!String(turn.content || '').includes(`[TESTMORE:${resolvedFocus}|`)) return turn;
+                updated = true;
+                return { ...turn, content: replaceTestMoreLabel(turn.content, resolvedFocus, label) };
+            }).reverse();
+        });
+    }
+
+    function cancelBufferedTestPrefetch(selectedText: string, focusArea?: StudyBuddyTestFocusArea) {
+        const key = getTestBufferKey(selectedText, focusArea);
+        const buffered = bufferedTestRef.current.get(key);
+        if (!buffered?.pending || !buffered.controller) return false;
+        buffered.controller.abort();
+        bufferedTestRef.current.delete(key);
+        updateBufferedTestButtonLabel(selectedText, focusArea, 'More question');
+        return true;
+    }
+
+    function appendBufferedTestQuestion(
+        selectedText: string,
+        nextTarget: StudyBuddyChatTarget,
+        focusArea: StudyBuddyTestFocusArea | undefined,
+        markdown: string
+    ) {
+        const actionKey = focusArea ? `test-${focusArea}` : 'test';
+        const assistantId = `assistant-${actionKey}-${Date.now()}`;
+
+        setActiveChatTarget(nextTarget);
+        setIsChatOpen(true);
+        setChatHistory((current) => [
+            ...current,
+            { id: assistantId, role: 'assistant', content: markdown, suppressTargetFollowUp: true }
+        ]);
+        prefetchStudyBuddyTest(selectedText, nextTarget, focusArea);
+    }
+
+    async function requestStudyBuddyTestMarkdown(
+        selectedText: string,
+        nextTarget: StudyBuddyChatTarget,
+        focusArea?: StudyBuddyTestFocusArea,
+        signal?: AbortSignal
+    ): Promise<string | null> {
+        const aiUrl = getStudyBuddyAiUrl(config);
+        const memoryChunks = getStudyBuddyMemoryChunks();
+        let retryFeedback = '';
+
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const res = await fetch(aiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: buildStudyBuddyMessages(
+                        user,
+                        isContextAware,
+                        [{
+                            role: 'user',
+                            content: `${getStudyBuddyTestPrompt(selectedText, focusArea)}${retryFeedback}`
+                        }],
+                        [
+                            buildStudyBuddyTargetSystemMessage(nextTarget),
+                            buildTargetAcademicStyleSystemMessage(nextTarget),
+                            buildChatLanguageSystemMessage(chatResponseLanguage)
+                        ],
+                        memoryChunks,
+                        { name: coach.name, persona: coach.persona }
+                    ),
+                    searchEnabled: isSearchEnabled,
+                    ...studyBuddyAiRequestConfig,
+                    stream: false
+                }),
+                signal
+            });
+
+            if (!res.ok) {
+                throw new Error(`AI server error ${res.status}`);
+            }
+
+            const payload = await res.json().catch(() => null);
+            const rawText = payload?.choices?.[0]?.message?.content;
+            if (typeof rawText !== 'string' || !rawText.trim()) {
+                retryFeedback = `\n\nRETRY REQUIRED:\nYour previous response was invalid because it was empty.\nReturn a fresh JSON array only.`;
+                if (attempt === 2) throw new Error('AI server returned empty content.');
+                continue;
+            }
+
+            const validation = validateStudyBuddyTestPayload(rawText);
+            const markdown = buildStudyBuddyTestMarkdown(rawText, focusArea);
+            if (markdown) {
+                return markdown;
+            }
+
+            retryFeedback = `\n\nRETRY REQUIRED:
+Your previous JSON failed validation.
+Fix these exact problems:
+- ${validation.errors.join('\n- ')}
+Return a fresh corrected JSON array only. Do not explain.`;
+        }
+
+        throw new Error('AI returned invalid test JSON after retries.');
+    }
+
+    function prefetchStudyBuddyTest(
+        selectedText: string,
+        nextTarget: StudyBuddyChatTarget,
+        focusArea?: StudyBuddyTestFocusArea
+    ) {
+        const key = getTestBufferKey(selectedText, focusArea);
+        const current = bufferedTestRef.current.get(key);
+        if (current?.markdown || current?.pending) return;
+
+        const controller = new AbortController();
+        updateBufferedTestButtonLabel(selectedText, focusArea, 'Generating next question (Click to Cancel)');
+
+        const pending = requestStudyBuddyTestMarkdown(selectedText, nextTarget, focusArea, controller.signal)
+            .then((markdown) => {
+                bufferedTestRef.current.set(key, { markdown, pending: null, controller: null });
+                updateBufferedTestButtonLabel(selectedText, focusArea, 'More question');
+                return markdown;
+            })
+            .catch((error) => {
+                bufferedTestRef.current.delete(key);
+                if (error?.name !== 'AbortError') {
+                    updateBufferedTestButtonLabel(selectedText, focusArea, 'More question');
+                } else {
+                    updateBufferedTestButtonLabel(selectedText, focusArea, 'More question');
+                }
+                return null;
+            });
+
+        bufferedTestRef.current.set(key, { markdown: null, pending, controller });
     }
 
     async function submitChatPrompt(
@@ -1054,6 +1380,7 @@ Rules:
             targetSection?: StudyBuddyChatTarget['section'];
             inputSource?: 'auto' | 'composer' | 'selection' | 'target';
             inputText?: string;
+            focusArea?: StudyBuddyTestFocusArea;
         }
     ) {
         const selectedText = (
@@ -1085,7 +1412,7 @@ Rules:
                         ? 'wordFamily'
                         : actionKey === 'paraphrase'
                             ? 'paraphrase'
-                            : actionKey === 'test'
+                            : actionKey === 'test' || actionKey.startsWith('test-')
                                 ? 'coreUsage'
                                 : 'example'
         );
@@ -1187,7 +1514,11 @@ Rules:
                             const delta = json?.choices?.[0]?.delta?.content;
                             if (delta) {
                                 assistantText += delta;
-                                updateAssistant(formatStudyBuddyTargetAssistantPreview(assistantText, nextTarget));
+                                updateAssistant(
+                                    actionKey === 'test' || actionKey.startsWith('test-')
+                                        ? assistantText
+                                        : formatStudyBuddyTargetAssistantPreview(assistantText, nextTarget)
+                                );
                             }
                         } catch {
                             // ignore
@@ -1199,7 +1530,11 @@ Rules:
             if (!assistantText.trim()) {
                 updateAssistant('Khong co noi dung tra ve.');
             } else {
-                updateAssistant(formatStudyBuddyTargetAssistantPreview(assistantText, nextTarget));
+                const testFocusArea = options?.focusArea;
+                const renderedTest = actionKey === 'test' || actionKey.startsWith('test-')
+                    ? buildStudyBuddyTestMarkdown(assistantText, testFocusArea)
+                    : null;
+                updateAssistant(renderedTest || formatStudyBuddyTargetAssistantPreview(assistantText, nextTarget));
             }
         } catch (error: any) {
             if (error?.name === 'AbortError') {
@@ -1232,18 +1567,132 @@ Rules:
     async function handleChatCoachTest(options?: {
         inputSource?: 'auto' | 'composer' | 'selection' | 'target';
         inputText?: string;
-        focusArea?: 'collocation' | 'preposition' | 'paraphrase' | 'wordFamily';
+        focusArea?: StudyBuddyTestFocusArea;
     }) {
-        await handleChatCoachPromptToChat(
-            options?.focusArea ? `test-${options.focusArea}` : 'test',
-            options?.focusArea
-                ? `Test ${options.focusArea === 'wordFamily'
-                    ? 'Word Family'
-                    : options.focusArea.charAt(0).toUpperCase() + options.focusArea.slice(1)}`
-                : 'Test',
-            (selectedText) => getStudyBuddyTestPrompt(selectedText, options?.focusArea),
-            options
-        );
+        const selectedText = (
+            options?.inputText?.trim()
+            || (
+                options?.inputSource === 'composer'
+                    ? chatInput.trim()
+                    : options?.inputSource === 'selection'
+                        ? (coachSelectionText || selectedTextRef.current || window.getSelection()?.toString().trim() || '').trim()
+                        : options?.inputSource === 'target'
+                            ? (getActiveChatTarget()?.word?.word?.trim() || '')
+                            : ((getActiveChatTarget()?.word?.word?.trim() || '') || getActiveActionText())
+            )
+        ).trim();
+        if (!selectedText || isChatLoading) return;
+
+        selectedTextRef.current = selectedText;
+        if (options?.inputSource === 'composer') {
+            setChatInput('');
+        }
+
+        const focusArea = options?.focusArea;
+        const promptLabel = focusArea
+            ? `Test ${focusArea === 'wordFamily' ? 'Word Family' : focusArea.charAt(0).toUpperCase() + focusArea.slice(1)}`
+            : 'Test';
+        const actionKey = focusArea ? `test-${focusArea}` : 'test';
+        const nextTarget = await resolveTargetWord(selectedText, 'coreUsage', `Study Command Box ${promptLabel}`);
+        setActiveChatTarget(nextTarget);
+
+        const bufferKey = getTestBufferKey(selectedText, focusArea);
+        const buffered = bufferedTestRef.current.get(bufferKey);
+
+        setActiveChatCoachAction(actionKey);
+        setIsChatLoading(true);
+        setIsChatOpen(true);
+
+        const userTurn = createChatTurn('user', `${promptLabel}: ${selectedText}`);
+        const assistantId = `assistant-${actionKey}-${Date.now()}`;
+        setChatHistory((current) => [
+            ...current,
+            userTurn,
+            { id: assistantId, role: 'assistant', content: 'Generating question...', suppressTargetFollowUp: true }
+        ]);
+
+        try {
+            const markdown = buffered?.markdown ?? await (buffered?.pending || requestStudyBuddyTestMarkdown(selectedText, nextTarget, focusArea));
+            bufferedTestRef.current.delete(bufferKey);
+
+            setChatHistory((current) =>
+                current.map((turn) =>
+                    turn.id === assistantId
+                        ? { ...turn, content: markdown || 'Khong the tao cau hoi hop le cho luc nay.', suppressTargetFollowUp: true }
+                        : turn
+                )
+            );
+
+            prefetchStudyBuddyTest(selectedText, nextTarget, focusArea);
+        } catch (error) {
+            console.error(error);
+            setChatHistory((current) =>
+                current.map((turn) =>
+                    turn.id === assistantId
+                        ? { ...turn, content: STUDY_BUDDY_TEST_ERROR_MESSAGE, suppressTargetFollowUp: true }
+                        : turn
+                )
+            );
+        } finally {
+            setIsChatLoading(false);
+            setActiveChatCoachAction(null);
+        }
+    }
+
+    async function handleChatCoachTestMore(focusArea?: StudyBuddyTestFocusArea) {
+        const selectedText = (getActiveChatTarget()?.word?.word || '').trim();
+        if (!selectedText) return;
+
+        if (cancelBufferedTestPrefetch(selectedText, focusArea)) {
+            return;
+        }
+
+        const nextTarget = await resolveTargetWord(selectedText, 'coreUsage', 'StudyBuddy More Question');
+        const bufferKey = getTestBufferKey(selectedText, focusArea);
+        const buffered = bufferedTestRef.current.get(bufferKey);
+
+        if (buffered?.markdown) {
+            bufferedTestRef.current.delete(bufferKey);
+            appendBufferedTestQuestion(selectedText, nextTarget, focusArea, buffered.markdown);
+            return;
+        }
+
+        if (isChatLoading) return;
+        const actionKey = focusArea ? `test-${focusArea}` : 'test';
+        const assistantId = `assistant-${actionKey}-${Date.now()}`;
+
+        setActiveChatTarget(nextTarget);
+        setActiveChatCoachAction(actionKey);
+        setIsChatLoading(true);
+        setIsChatOpen(true);
+        setChatHistory((current) => [
+            ...current,
+            { id: assistantId, role: 'assistant', content: 'Generating question...', suppressTargetFollowUp: true }
+        ]);
+
+        try {
+            const markdown = await requestStudyBuddyTestMarkdown(selectedText, nextTarget, focusArea);
+            setChatHistory((current) =>
+                current.map((turn) =>
+                    turn.id === assistantId
+                        ? { ...turn, content: markdown || STUDY_BUDDY_TEST_ERROR_MESSAGE, suppressTargetFollowUp: true }
+                        : turn
+                )
+            );
+            prefetchStudyBuddyTest(selectedText, nextTarget, focusArea);
+        } catch (error) {
+            console.error(error);
+            setChatHistory((current) =>
+                current.map((turn) =>
+                    turn.id === assistantId
+                        ? { ...turn, content: STUDY_BUDDY_TEST_ERROR_MESSAGE, suppressTargetFollowUp: true }
+                        : turn
+                )
+            );
+        } finally {
+            setIsChatLoading(false);
+            setActiveChatCoachAction(null);
+        }
     }
 
     async function handleChatCoachExplain(options?: { inputSource?: 'auto' | 'composer' | 'selection' | 'target'; inputText?: string }) {
@@ -1445,6 +1894,7 @@ Rules:
         handleChatCoachImage,
         handleChatCoachSearch,
         handleChatCoachTest,
+        handleChatCoachTestMore,
         handleChatCoachTranslate,
         handleSendChat,
         handleToggleChatMic,
