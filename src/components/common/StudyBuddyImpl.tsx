@@ -2081,6 +2081,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'wordFamily'),
                 { inputSource }
             )}
+            onTestCollocations={() => handleChatCoachTest({ inputSource, focusArea: 'collocation' })}
+            onTestPreposition={() => handleChatCoachTest({ inputSource, focusArea: 'preposition' })}
+            onTestParaphrase={() => handleChatCoachTest({ inputSource, focusArea: 'paraphrase' })}
+            onTestWordFamily={() => handleChatCoachTest({ inputSource, focusArea: 'wordFamily' })}
         />
     );
 

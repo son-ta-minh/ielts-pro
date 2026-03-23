@@ -1046,7 +1046,7 @@ Rules:
     }
 
     async function handleChatCoachPromptToChat(
-        actionKey: ChatCoachActionKey,
+        actionKey: string,
         promptLabel: string,
         promptBuilder: (selectedText: string) => string,
         options?: {
@@ -1098,9 +1098,9 @@ Rules:
         const aiUrl = getStudyBuddyAiUrl(config);
         const memoryChunks = getStudyBuddyMemoryChunks();
         const inferredSaveActionType = options?.saveActionType ?? (
-            actionKey === 'test' || actionKey === 'explain'
+            actionKey === 'test' || actionKey === 'explain' || actionKey.startsWith('test-')
                 ? undefined
-                : actionKey
+                : actionKey as ChatSaveActionType
         );
         const saveContext: ChatSaveContext | undefined = inferredSaveActionType
             ? {
@@ -1229,11 +1229,19 @@ Rules:
         }
     }
 
-    async function handleChatCoachTest(options?: { inputSource?: 'auto' | 'composer' | 'selection' | 'target'; inputText?: string }) {
+    async function handleChatCoachTest(options?: {
+        inputSource?: 'auto' | 'composer' | 'selection' | 'target';
+        inputText?: string;
+        focusArea?: 'collocation' | 'preposition' | 'paraphrase' | 'wordFamily';
+    }) {
         await handleChatCoachPromptToChat(
-            'test',
-            'Test',
-            (selectedText) => getStudyBuddyTestPrompt(selectedText),
+            options?.focusArea ? `test-${options.focusArea}` : 'test',
+            options?.focusArea
+                ? `Test ${options.focusArea === 'wordFamily'
+                    ? 'Word Family'
+                    : options.focusArea.charAt(0).toUpperCase() + options.focusArea.slice(1)}`
+                : 'Test',
+            (selectedText) => getStudyBuddyTestPrompt(selectedText, options?.focusArea),
             options
         );
     }

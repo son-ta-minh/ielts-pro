@@ -88,12 +88,15 @@ interface ChatStudyMenuProps {
     onExamples: () => void;
     onExplain: () => void;
     onPreposition: () => void;
-    onTest: () => void;
     onCollocations: () => void;
     onParaphrase: () => void;
     onIdiom: () => void;
     onCompare: () => void;
     onWordFamily: () => void;
+    onTestCollocations: () => void;
+    onTestPreposition: () => void;
+    onTestParaphrase: () => void;
+    onTestWordFamily: () => void;
 }
 
 export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
@@ -104,12 +107,15 @@ export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
     onExamples,
     onExplain,
     onPreposition,
-    onTest,
     onCollocations,
     onParaphrase,
     onIdiom,
     onCompare,
     onWordFamily,
+    onTestCollocations,
+    onTestPreposition,
+    onTestParaphrase,
+    onTestWordFamily,
 }) => {
     const renderButtonLabel = (actionKey: string, idleLabel: string) => (
         activeChatCoachAction === actionKey
@@ -120,38 +126,53 @@ export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
     const baseButtonClass = 'rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40';
 
     return (
-        <div className="grid min-w-[12rem] gap-1 rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl">
-            <button type="button" onClick={onExplain} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-cyan-50 text-cyan-700 hover:bg-cyan-100`}>
-                {renderButtonLabel('explain', 'Explain')}
-            </button>
-            <button type="button" onClick={onExamples} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-blue-50 text-blue-700 hover:bg-blue-100`}>
-                {renderButtonLabel('examples', 'Examples')}
-            </button>
-            <button type="button" onClick={onCollocations} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-amber-50 text-amber-700 hover:bg-amber-100`}>
-                {renderButtonLabel('collocations', 'Collocations')}
-            </button>
-            <button type="button" onClick={onPreposition} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-sky-50 text-sky-700 hover:bg-sky-100`}>
-                {renderButtonLabel('preposition', 'Preposition')}
-            </button>
-            <button type="button" onClick={onParaphrase} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
-                {renderButtonLabel('paraphrase', 'Paraphrase')}
-            </button>
-            {showIdiom ? (
-                <button type="button" onClick={onIdiom} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
-                    {renderButtonLabel('idioms', 'Idioms')}
+        <div className="grid min-w-[23rem] grid-cols-2 gap-3 rounded-2xl border border-neutral-200 bg-white p-3 shadow-2xl">
+            <div className="space-y-1">
+                <p className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">Study</p>
+                <button type="button" onClick={onExplain} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-cyan-50 text-cyan-700 hover:bg-cyan-100`}>
+                    {renderButtonLabel('explain', 'Explain')}
                 </button>
-            ) : null}
-            {showCompare ? (
-                <button type="button" onClick={onCompare} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
-                    {renderButtonLabel('compare', 'Compare')}
+                <button type="button" onClick={onExamples} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-blue-50 text-blue-700 hover:bg-blue-100`}>
+                    {renderButtonLabel('examples', 'Examples')}
                 </button>
-            ) : null}
-            <button type="button" onClick={onWordFamily} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}>
-                {renderButtonLabel('wordFamily', 'Word Family')}
-            </button>
-            <button type="button" onClick={onTest} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100`}>
-                {renderButtonLabel('test', 'Test')}
-            </button>
+                <button type="button" onClick={onCollocations} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-amber-50 text-amber-700 hover:bg-amber-100`}>
+                    {renderButtonLabel('collocations', 'Collocations')}
+                </button>
+                <button type="button" onClick={onPreposition} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-sky-50 text-sky-700 hover:bg-sky-100`}>
+                    {renderButtonLabel('preposition', 'Preposition')}
+                </button>
+                <button type="button" onClick={onParaphrase} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-rose-50 text-rose-700 hover:bg-rose-100`}>
+                    {renderButtonLabel('paraphrase', 'Paraphrase')}
+                </button>
+                {showIdiom ? (
+                    <button type="button" onClick={onIdiom} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-rose-50 text-rose-700 hover:bg-rose-100`}>
+                        {renderButtonLabel('idioms', 'Idioms')}
+                    </button>
+                ) : null}
+                {showCompare ? (
+                    <button type="button" onClick={onCompare} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-rose-50 text-rose-700 hover:bg-rose-100`}>
+                        {renderButtonLabel('compare', 'Compare')}
+                    </button>
+                ) : null}
+                <button type="button" onClick={onWordFamily} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}>
+                    {renderButtonLabel('wordFamily', 'Word Family')}
+                </button>
+            </div>
+            <div className="space-y-1">
+                <p className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">Test</p>
+                <button type="button" onClick={onTestCollocations} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100`}>
+                    {renderButtonLabel('test-collocation', 'Collocation')}
+                </button>
+                <button type="button" onClick={onTestPreposition} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100`}>
+                    {renderButtonLabel('test-preposition', 'Preposition')}
+                </button>
+                <button type="button" onClick={onTestParaphrase} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100`}>
+                    {renderButtonLabel('test-paraphrase', 'Paraphrase')}
+                </button>
+                <button type="button" onClick={onTestWordFamily} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100`}>
+                    {renderButtonLabel('test-wordFamily', 'Word Family')}
+                </button>
+            </div>
         </div>
     );
 };

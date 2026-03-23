@@ -1,4 +1,17 @@
-export function getStudyBuddyTestPrompt(input: string): string {
+export function getStudyBuddyTestPrompt(
+    input: string,
+    focusArea?: 'collocation' | 'preposition' | 'paraphrase' | 'wordFamily'
+): string {
+    const focusRule = focusArea === 'collocation'
+        ? '- Prioritize collocation testing across all sections when possible'
+        : focusArea === 'preposition'
+            ? '- Prioritize dependent prepositions and preposition patterns across all sections when possible'
+            : focusArea === 'paraphrase'
+                ? '- Prioritize paraphrase choice, synonym nuance, and register differences across all sections when possible'
+                : focusArea === 'wordFamily'
+                    ? '- Prioritize word family forms, part-of-speech shifts, and form-choice accuracy across all sections when possible'
+                    : '';
+
     return `You are an IELTS examiner.
 TASK: Generate a vocabulary practice test for: "${input}"
 
@@ -8,6 +21,7 @@ IMPORTANT:
 - This is a TEST, not an explanation
 - Follow EXACT output format
 - Do NOT copy instruction text
+${focusRule}
 
 ---
 
