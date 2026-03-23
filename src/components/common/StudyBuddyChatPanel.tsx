@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Wrench, ArrowLeftRight, ArrowUpDown, BookOpenCheck, Brain, ChevronUp, CircleHelp, Copy, Download, Flag, Image as ImageIcon, Loader2, Mic, Plus, Save, Send, Settings2, Sparkles, StopCircle, Trash2, Volume2, X, Eye, Check } from 'lucide-react';
 import { StudyBuddyImageSettings } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
@@ -389,98 +389,115 @@ const ChatHistoryList = React.memo(({
     onSaveImage: (url: string) => void;
     onDeleteTurn: (turn: ChatTurn) => void;
     deleteMode: boolean;
-}) => (
-    <>
-        {chatHistory.map((turn) => (
-            <div key={turn.id} className={`group flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {(() => {
-                    const imagePath = turn.kind !== 'status' ? extractImagePathFromContent(turn.content) : null;
-                    const imageUrl = imagePath ? resolveImageUrl(imagePath) : '';
-                    return (
-                <div className={`relative max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
-                    turn.kind === 'status'
-                        ? 'border border-amber-200 bg-amber-50/90 text-amber-900 rounded-bl-md'
-                        : turn.role === 'user'
-                        ? 'bg-white border border-neutral-200 text-neutral-900 rounded-br-md'
-                        : 'bg-white border border-neutral-200 text-neutral-900 rounded-bl-md'
-                }`}>
-                    {turn.kind !== 'status' && deleteMode ? (
-                        <button
-                            type="button"
-                            onClick={() => onDeleteTurn(turn)}
-                            className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white/90 text-neutral-400 opacity-0 transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                            title="Delete this chat bubble"
-                        >
-                            <Trash2 size={13} />
-                        </button>
-                    ) : null}
-                    {turn.kind === 'status' && (
-                        <div className="space-y-2">
-                            <div className="h-2.5 w-48 overflow-hidden rounded-full bg-white/80 ring-1 ring-amber-200">
-                                <div
-                                    className="h-full rounded-full bg-amber-500 transition-[width] duration-300 ease-out"
-                                    style={{ width: `${Math.max(6, Math.min(100, Number(turn.imageProgress || 0)))}%` }}
-                                />
-                            </div>
-                        </div>
-                    )}
-                    {turn.role === 'assistant' && turn.kind !== 'status' && turn.saveContext?.targetWord && (
-                        <div className="mb-2 flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => onOpenSaveModal(turn)}
-                                className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
-                                title={`Save this response for ${turn.saveContext.targetWord}`}
-                            >
-                                <Save size={11} />
-                                {SAVE_ACTION_LABELS[turn.saveContext.actionType || ''] || 'Save'}
-                            </button>
-                        </div>
-                    )}
-                    {turn.kind !== 'status' ? (
-                        <div
-                            className="leading-relaxed break-words select-text text-neutral-900 [&_a]:font-semibold [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-2 [&_code]:rounded-md [&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-rose-700 [&_ol]:mb-2 [&_ol]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:mb-2 [&_p]:whitespace-pre-wrap [&_p:last-child]:mb-0 [&_pre]:overflow-x-auto [&_pre]:rounded-2xl [&_pre]:border [&_pre]:border-neutral-200 [&_pre]:bg-white [&_pre]:px-4 [&_pre]:py-3 [&_pre]:text-[12px] [&_pre]:leading-6 [&_table]:min-w-full [&_table]:border-collapse [&_table]:text-left [&_table]:text-xs [&_td]:border-b [&_td]:border-neutral-100 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_th]:border-b [&_th]:border-neutral-200 [&_th]:px-3 [&_th]:py-2 [&_th]:font-black [&_thead]:bg-neutral-100 [&_thead]:text-neutral-700 [&_ul]:mb-2 [&_ul]:ml-4 [&_ul]:list-disc [&_ul]:space-y-1"
-                            dangerouslySetInnerHTML={renderBubbleHtml(turn, isChatLoading)}
-                        />
-                    ) : null}
-                    {turn.role === 'assistant' && turn.kind !== 'status' && turn.searchResultMeta?.moreMatches?.length ? (
-                            <SearchMoreMatches matches={turn.searchResultMeta.moreMatches} />
-                        ) : null}
-                    {imageUrl ? (
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => onCopyImageUrl(imageUrl)}
-                                className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100"
-                            >
-                                <Copy size={11} />
-                                Copy URL
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => onSaveImage(imageUrl)}
-                                className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-emerald-700 transition-colors hover:bg-emerald-100"
-                            >
-                                <Download size={11} />
-                                Save
-                            </button>
+}) => {
+    const [copiedId, setCopiedId] = React.useState<string | null>(null);
+    return (
+        <>
+            {chatHistory.map((turn) => (
+                <div key={turn.id} className={`group flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {(() => {
+                        const imagePath = turn.kind !== 'status' ? extractImagePathFromContent(turn.content) : null;
+                        const imageUrl = imagePath ? resolveImageUrl(imagePath) : '';
+                        return (
+                    <div className={`relative max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
+                        turn.kind === 'status'
+                            ? 'border border-amber-200 bg-amber-50/90 text-amber-900 rounded-bl-md'
+                            : turn.role === 'user'
+                            ? 'bg-white border border-neutral-200 text-neutral-900 rounded-br-md'
+                            : 'bg-white border border-neutral-200 text-neutral-900 rounded-bl-md'
+                    }`}>
+                        {turn.kind !== 'status' && deleteMode ? (
                             <button
                                 type="button"
                                 onClick={() => onDeleteTurn(turn)}
-                                className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-red-700 transition-colors hover:bg-red-100"
+                                className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white/90 text-neutral-400 opacity-0 transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                                title="Delete this chat bubble"
                             >
-                                <Trash2 size={11} />
-                                Delete
+                                <Trash2 size={13} />
                             </button>
-                        </div>
-                    ) : null}
+                        ) : null}
+                        {turn.kind === 'status' && (
+                            <div className="space-y-2">
+                                <div className="h-2.5 w-48 overflow-hidden rounded-full bg-white/80 ring-1 ring-amber-200">
+                                    <div
+                                        className="h-full rounded-full bg-amber-500 transition-[width] duration-300 ease-out"
+                                        style={{ width: `${Math.max(6, Math.min(100, Number(turn.imageProgress || 0)))}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        {turn.role === 'assistant' && turn.kind !== 'status' && turn.saveContext?.targetWord && (
+                            <div className="mb-2 flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenSaveModal(turn)}
+                                    className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900"
+                                    title={`Save this response for ${turn.saveContext.targetWord}`}
+                                >
+                                    <Save size={11} />
+                                    {SAVE_ACTION_LABELS[turn.saveContext.actionType || ''] || 'Save'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(turn.content || '');
+                                        setCopiedId(turn.id);
+                                        setTimeout(() => setCopiedId(null), 1500);
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100"
+                                    title="Copy raw response"
+                                >
+                                    {copiedId === turn.id ? <Check size={11} /> : <Copy size={11} />}
+                                    {copiedId === turn.id ? 'Copied' : 'Copy'}
+                                </button>
+                            </div>
+                        )}
+                        {turn.kind !== 'status' ? (
+                            <div
+                                className="leading-relaxed break-words select-text text-neutral-900 [&_a]:font-semibold [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-2 [&_code]:rounded-md [&_code]:bg-neutral-100 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-rose-700 [&_ol]:mb-2 [&_ol]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-1 [&_p]:mb-2 [&_p]:whitespace-pre-wrap [&_p:last-child]:mb-0 [&_pre]:overflow-x-auto [&_pre]:rounded-2xl [&_pre]:border [&_pre]:border-neutral-200 [&_pre]:bg-white [&_pre]:px-4 [&_pre]:py-3 [&_pre]:text-[12px] [&_pre]:leading-6 [&_table]:min-w-full [&_table]:border-collapse [&_table]:text-left [&_table]:text-xs [&_td]:border-b [&_td]:border-neutral-100 [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_th]:border-b [&_th]:border-neutral-200 [&_th]:px-3 [&_th]:py-2 [&_th]:font-black [&_thead]:bg-neutral-100 [&_thead]:text-neutral-700 [&_ul]:mb-2 [&_ul]:ml-4 [&_ul]:list-disc [&_ul]:space-y-1"
+                                dangerouslySetInnerHTML={renderBubbleHtml(turn, isChatLoading)}
+                            />
+                        ) : null}
+                        {turn.role === 'assistant' && turn.kind !== 'status' && turn.searchResultMeta?.moreMatches?.length ? (
+                                <SearchMoreMatches matches={turn.searchResultMeta.moreMatches} />
+                            ) : null}
+                        {imageUrl ? (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onCopyImageUrl(imageUrl)}
+                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100"
+                                >
+                                    <Copy size={11} />
+                                    Copy URL
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onSaveImage(imageUrl)}
+                                    className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-emerald-700 transition-colors hover:bg-emerald-100"
+                                >
+                                    <Download size={11} />
+                                    Save
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onDeleteTurn(turn)}
+                                    className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-red-700 transition-colors hover:bg-red-100"
+                                >
+                                    <Trash2 size={11} />
+                                    Delete
+                                </button>
+                            </div>
+                        ) : null}
+                    </div>
+                        );
+                    })()}
                 </div>
-                    );
-                })()}
-            </div>
-        ))}
-    </>
-));
+            ))}
+        </>
+    );
+});
 
 interface StudyBuddyChatPanelProps {
     chatPanelRef: React.RefObject<HTMLDivElement | null>;
