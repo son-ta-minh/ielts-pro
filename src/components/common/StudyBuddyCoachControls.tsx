@@ -19,6 +19,8 @@ interface ChatCoachActionBarProps {
     onTest: () => void;
     onCollocations: () => void;
     onParaphrase: () => void;
+    onIdiom: () => void;
+    onCompare: () => void;
     onWordFamily: () => void;
 }
 
@@ -40,6 +42,8 @@ export const StudyBuddyChatCoachActionBar: React.FC<ChatCoachActionBarProps> = (
     onTest,
     onCollocations,
     onParaphrase,
+    onIdiom,
+    onCompare,
     onWordFamily,
 }) => {
     const baseButtonClass = 'rounded-xl px-3 py-2 text-left text-[11px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40';
@@ -85,6 +89,8 @@ interface ChatStudyMenuProps {
     onTest: () => void;
     onCollocations: () => void;
     onParaphrase: () => void;
+    onIdiom: () => void;
+    onCompare: () => void;
     onWordFamily: () => void;
 }
 
@@ -97,6 +103,8 @@ export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
     onTest,
     onCollocations,
     onParaphrase,
+    onIdiom,
+    onCompare,
     onWordFamily,
 }) => {
     const renderButtonLabel = (actionKey: string, idleLabel: string) => (
@@ -123,6 +131,12 @@ export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
             </button>
             <button type="button" onClick={onParaphrase} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
                 {renderButtonLabel('paraphrase', 'Paraphrase')}
+            </button>
+            <button type="button" onClick={onIdiom} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
+                {renderButtonLabel('idioms', 'Idioms')}
+            </button>
+            <button type="button" onClick={onCompare} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
+                {renderButtonLabel('compare', 'Compare')}
             </button>
             <button type="button" onClick={onWordFamily} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}>
                 {renderButtonLabel('wordFamily', 'Word Family')}

@@ -4,7 +4,7 @@ import { getAiStudyContextText } from './context_util';
 
 export type ChatSaveSection = 'example' | 'preposition' | 'collocation' | 'paraphrase' | 'wordFamily';
 export type ChatSaveActionType = 'examples' | 'collocations' | 'paraphrase' | 'wordFamily';
-export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain' | 'image' | 'infographic' | 'preposition';
+export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain' | 'image' | 'infographic' | 'preposition' | 'idioms' | 'compare';
 export type StudyBuddyTargetSection = 'coreUsage' | 'collocation' | 'wordFamily' | 'idiom' | 'paraphrase' | 'example' | 'preposition';
 
 export interface StudyBuddyChatTarget {

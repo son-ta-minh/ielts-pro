@@ -2105,6 +2105,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                         onTest={handleChatCoachTest}
                                         onCollocations={() => handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'))}
                                         onParaphrase={() => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'))}
+                                        onIdiom={() => handleChatCoachPromptToChat('idioms', 'Idioms', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'idioms'))}
+                                        onCompare={() => handleChatCoachPromptToChat('compare', 'Compare', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'compare'))}
                                         onWordFamily={() => handleChatCoachPromptToChat(
                                             'wordFamily',
                                             'Word Family',
@@ -2135,6 +2137,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                         onTest={handleChatCoachTest}
                                         onCollocations={() => handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'))}
                                         onParaphrase={() => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'))}
+                                        onIdiom={() => handleChatCoachPromptToChat('idioms', 'Idioms', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'idioms'))}
+                                        onCompare={() => handleChatCoachPromptToChat('compare', 'Compare', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'compare'))}
                                         onWordFamily={() => handleChatCoachPromptToChat(
                                             'wordFamily',
                                             'Word Family',

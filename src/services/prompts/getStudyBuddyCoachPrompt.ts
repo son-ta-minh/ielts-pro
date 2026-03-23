@@ -1,6 +1,6 @@
 export function getStudyBuddyCoachPrompt(
     selectedText: string,
-    type: 'examples' | 'collocations' | 'paraphrase' | 'wordFamily' | 'preposition'
+    type: 'examples' | 'collocations' | 'paraphrase' | 'wordFamily' | 'preposition' | 'idioms' | 'compare'
 ): string {
     const baseRules = `Rules:
 - Use English only
@@ -22,6 +22,13 @@ ${baseRules}
 
 ${baseRules}
 - Format: - **collocation**: short explanation`;
+    }
+
+    if (type === 'idioms') {
+        return `Give max 5 natural idioms related to "${selectedText}".
+
+${baseRules}
+- Format: - **idiom**: short explanation`;
     }
 
     if (type === 'wordFamily') {
@@ -48,6 +55,18 @@ ${baseRules}
 - Format: - **preposition or pattern**: short usage note
 - Prefer natural, common learner-useful patterns
 - If a pattern is limited or formal, say that briefly`;
+    }
+
+    if (type === 'compare') {
+        return `Compare the words in "${selectedText}" and explain the nuance differences.
+
+${baseRules}
+- Output as a Markdown table
+- Columns: Word | Nuance | Example (collocations)
+- Each cell must be concise
+- In the Example column, include 2-3 natural collocations
+- Use </br> for line breaks inside a cell
+- Do NOT add any text before or after the table`;
     }
 
     return `Give natural paraphrases for "${selectedText}".
