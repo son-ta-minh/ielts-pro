@@ -2,7 +2,7 @@ export function baseRules(input: string, focusArea: string): string {
     return `You are an IELTS examiner tasked with creating a ${focusArea} practice test for: "${input}"
 
 BASE RULES:
-- Go straight to create 1 question only focused solely on ${focusArea} and the target word(s) "${input}".
+- Go straight to create only 1 entirely new question, DO NOT duplicate with previous one. focused solely on ${focusArea} and the target word(s) "${input}".
 - Output only as an array of JSON objects with keys "q" for question and "o" for options.
 - Each option maps to an object with "isCorrect" ("true"/"false") and "explanation" (string).
 - Use clear, concise English suitable for IELTS 6.5–8.0.

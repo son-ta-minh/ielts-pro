@@ -357,8 +357,18 @@ function SearchMoreMatches({ matches }: { matches: ChatSearchMatch[] }) {
 
 function renderBubbleHtml(turn: ChatTurn, isChatLoading: boolean) {
     const rawContent = `${turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}${turn.role === 'assistant' && turn.kind !== 'status' && turn.hasMemoryWrite ? ' ✍️' : ''}`;
-    const content = dedupeFollowUpLines(rawContent);
+    const content = dedupeFollowUpLines(rawContent).replace(/\n?\[TESTMORE:\s*[^|\]]+\|[^\]]+\]\s*/gi, '\n');
     return { __html: parseMarkdown(content) };
+}
+
+function extractTestMoreAction(content: string): { focusArea: string; label: string } | null {
+    const match = String(content || '').match(/\[TESTMORE:\s*([^|\]]+)\|([^\]]+)\]/i);
+    if (!match) return null;
+
+    return {
+        focusArea: String(match[1] || '').trim(),
+        label: String(match[2] || '').trim() || 'More question'
+    };
 }
 
 function dedupeFollowUpLines(text: string): string {
@@ -418,9 +428,9 @@ function shouldHideCopyButton(turn: ChatTurn, index: number, chatHistory: ChatTu
     if (!content) return true;
 
     if (
-        content === 'generating question...'
-        || content === 'generating next question...'
-        || content === 'generating next question (click to cancel)'
+        content.startsWith('generating question...')
+        || content.startsWith('generating next question...')
+        || content.startsWith('generating next question (click to cancel)')
     ) {
         return true;
     }
@@ -475,6 +485,7 @@ const ChatHistoryList = React.memo(({
                         const imagePath = turn.kind !== 'status' ? extractImagePathFromContent(turn.content) : null;
                         const imageUrl = imagePath ? resolveImageUrl(imagePath) : '';
                         const hideCopyButton = shouldHideCopyButton(turn, index, chatHistory);
+                        const testMoreAction = extractTestMoreAction(turn.content);
                         return (
                     <div className={`relative max-w-[85%] rounded-[1.4rem] px-4 py-3 text-sm shadow-sm ${
                         turn.kind === 'status'
@@ -530,6 +541,22 @@ const ChatHistoryList = React.memo(({
                                     >
                                         {copiedId === turn.id ? <Check size={11} /> : <Copy size={11} />}
                                         {copiedId === turn.id ? 'Copied' : 'Copy'}
+                                    </button>
+                                ) : null}
+
+                                {testMoreAction ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (typeof window !== 'undefined' && typeof (window as any).handleStudyBuddyTestMore === 'function') {
+                                                (window as any).handleStudyBuddyTestMore(testMoreAction.focusArea);
+                                            }
+                                        }}
+                                        className="inline-flex items-center gap-1 rounded-full border border-fuchsia-200 bg-fuchsia-50 px-2.5 py-1.5 text-[10px] font-black tracking-wide text-fuchsia-700 transition-colors hover:bg-fuchsia-100"
+                                        title={testMoreAction.label}
+                                    >
+                                        <Sparkles size={11} />
+                                        {testMoreAction.label}
                                     </button>
                                 ) : null}
                             </div>

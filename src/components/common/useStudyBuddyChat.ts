@@ -209,6 +209,15 @@ function buildStudyBuddyTestMarkdown(raw: string, focusArea?: StudyBuddyTestFocu
 
 const STUDY_BUDDY_TEST_ERROR_MESSAGE = 'Khong the tao cau hoi hop le sau 3 lan thu. Vui long bam More question de thu lai.';
 
+function summarizeTestValidationErrors(errors: string[]): string {
+    const normalized = errors
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+    if (!normalized.length) return 'Unknown validation error.';
+    if (normalized.length === 1) return normalized[0];
+    return `${normalized[0]} (+${normalized.length - 1} more issue${normalized.length > 2 ? 's' : ''})`;
+}
+
 interface UseStudyBuddyChatOptions {
     config: SystemConfig;
     user: User;
@@ -490,13 +499,15 @@ export function useStudyBuddyChat({
         selectedText: string,
         nextTarget: StudyBuddyChatTarget,
         focusArea?: StudyBuddyTestFocusArea,
-        signal?: AbortSignal
+        signal?: AbortSignal,
+        onStatus?: (message: string) => void
     ): Promise<string | null> {
         const aiUrl = getStudyBuddyAiUrl(config);
         const memoryChunks = getStudyBuddyMemoryChunks();
         let retryFeedback = '';
 
         for (let attempt = 0; attempt < 3; attempt++) {
+            onStatus?.(`Generating question... (attempt ${attempt + 1}/3)`);
             const res = await fetch(aiUrl, {
                 method: 'POST',
                 headers: {
@@ -533,6 +544,7 @@ export function useStudyBuddyChat({
             const rawText = payload?.choices?.[0]?.message?.content;
             if (typeof rawText !== 'string' || !rawText.trim()) {
                 retryFeedback = `\n\nRETRY REQUIRED:\nYour previous response was invalid because it was empty.\nReturn a fresh JSON array only.`;
+                onStatus?.(`Generating question... (attempt ${attempt + 1}/3)\nFail reason: empty response.`);
                 if (attempt === 2) throw new Error('AI server returned empty content.');
                 continue;
             }
@@ -543,6 +555,8 @@ export function useStudyBuddyChat({
                 return markdown;
             }
 
+            const failReason = summarizeTestValidationErrors(validation.errors);
+            onStatus?.(`Generating question... (attempt ${attempt + 1}/3)\nFail reason: ${failReason}`);
             retryFeedback = `\n\nRETRY REQUIRED:
 Your previous JSON failed validation.
 Fix these exact problems:
@@ -1608,11 +1622,25 @@ Rules:
         setChatHistory((current) => [
             ...current,
             userTurn,
-            { id: assistantId, role: 'assistant', content: 'Generating question...', suppressTargetFollowUp: true }
+            { id: assistantId, role: 'assistant', content: 'Generating question... (attempt 1/3)', suppressTargetFollowUp: true }
         ]);
 
         try {
-            const markdown = buffered?.markdown ?? await (buffered?.pending || requestStudyBuddyTestMarkdown(selectedText, nextTarget, focusArea));
+            const markdown = buffered?.markdown ?? await (buffered?.pending || requestStudyBuddyTestMarkdown(
+                selectedText,
+                nextTarget,
+                focusArea,
+                undefined,
+                (message) => {
+                    setChatHistory((current) =>
+                        current.map((turn) =>
+                            turn.id === assistantId
+                                ? { ...turn, content: message, suppressTargetFollowUp: true }
+                                : turn
+                        )
+                    );
+                }
+            ));
             bufferedTestRef.current.delete(bufferKey);
 
             setChatHistory((current) =>
@@ -1667,11 +1695,25 @@ Rules:
         setIsChatOpen(true);
         setChatHistory((current) => [
             ...current,
-            { id: assistantId, role: 'assistant', content: 'Generating question...', suppressTargetFollowUp: true }
+            { id: assistantId, role: 'assistant', content: 'Generating question... (attempt 1/3)', suppressTargetFollowUp: true }
         ]);
 
         try {
-            const markdown = await requestStudyBuddyTestMarkdown(selectedText, nextTarget, focusArea);
+            const markdown = await requestStudyBuddyTestMarkdown(
+                selectedText,
+                nextTarget,
+                focusArea,
+                undefined,
+                (message) => {
+                    setChatHistory((current) =>
+                        current.map((turn) =>
+                            turn.id === assistantId
+                                ? { ...turn, content: message, suppressTargetFollowUp: true }
+                                : turn
+                        )
+                    );
+                }
+            );
             setChatHistory((current) =>
                 current.map((turn) =>
                     turn.id === assistantId
