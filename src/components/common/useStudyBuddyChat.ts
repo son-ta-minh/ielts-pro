@@ -2,8 +2,8 @@ import React from 'react';
 import { Languages } from 'lucide-react';
 import { StudyBuddyImageSettings, StudyBuddyMemoryChunk, User } from '../../app/types';
 import { SystemConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
-import { getGenerateLessonTestPrompt } from '../../services/prompts/getGenerateLessonTestPrompt';
 import { getStudyBuddyExplainPrompt } from '../../services/prompts/getStudyBuddyExplainPrompt';
+import { getStudyBuddyTestPrompt } from '../../services/prompts/getStudyBuddyTestPrompt';
 import * as dataStore from '../../app/dataStore';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import {
@@ -1233,12 +1233,7 @@ Rules:
         await handleChatCoachPromptToChat(
             'test',
             'Test',
-            (selectedText) => getGenerateLessonTestPrompt(
-                selectedText,
-                selectedText,
-                `Create a focused practice test for this query: ${selectedText}`,
-                []
-            ),
+            (selectedText) => getStudyBuddyTestPrompt(selectedText),
             options
         );
     }

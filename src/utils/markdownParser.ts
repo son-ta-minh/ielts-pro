@@ -253,6 +253,34 @@ const processQuiz = (text: string): string => {
     });
 };
 
+function createDeterministicRng(seedText: string) {
+    let seed = 2166136261;
+    for (let i = 0; i < seedText.length; i++) {
+        seed ^= seedText.charCodeAt(i);
+        seed = Math.imul(seed, 16777619);
+    }
+
+    return () => {
+        seed += 0x6D2B79F5;
+        let t = seed;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function deterministicShuffle<T>(items: T[], seedText: string): T[] {
+    const rng = createDeterministicRng(seedText);
+    const shuffled = [...items];
+
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    return shuffled;
+}
+
 /**
  * Process [Select: Correct | Option | Option]
  */
@@ -262,12 +290,7 @@ const processDropdown = (text: string): string => {
         if (parts.length < 2) return `[Invalid Select: ${content}]`;
 
         const correctAnswer = parts[0];
-        // Fisher-Yates Shuffle
-        const shuffled = [...parts];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
+        const shuffled = deterministicShuffle(parts, `select:${content}`);
         
         let html = `<span class="inline-flex items-center gap-1 align-middle mx-1 whitespace-nowrap">`;
         html += `<select data-answer="${correctAnswer.replace(/"/g, '&quot;')}" class="border-b-2 border-neutral-300 bg-transparent font-bold text-neutral-900 outline-none focus:border-indigo-600 transition-all rounded-t-md px-2 py-0.5 text-sm cursor-pointer hover:bg-neutral-50 appearance-none pr-6 relative" style="min-width: 80px;">`;
@@ -294,13 +317,7 @@ const processMultiChoice = (text: string): string => {
         if (parts.length < 2) return `[Invalid Multi: ${content}]`;
 
         const correctAnswer = parts[0];
-        const shuffled = [...parts];
-
-        // Fisher-Yates Shuffle ensures true randomness so the first option isn't always the correct one in the UI
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
+        const shuffled = deterministicShuffle(parts, `multi:${content}`);
         
         let html = `<span class="inline-flex flex-wrap items-center gap-1.5 align-middle mx-1" data-answer="${correctAnswer.replace(/"/g, '&quot;')}">`;
         
