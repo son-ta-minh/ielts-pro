@@ -238,7 +238,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const imageSettingsRef = useRef<StudyBuddyImageSettings>(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings));
     const conversationSilenceTimeoutRef = useRef<number | null>(null);
     const conversationRestartTimeoutRef = useRef<number | null>(null);
-    const chatAbortReasonRef = useRef<'manual' | 'conversation-interrupt' | null>(null);
+    const chatAbortReasonRef = useRef<'manual' | 'conversation-interrupt' | 'superseded' | null>(null);
     const activeChatTargetRef = useRef<StudyBuddyChatTarget | null>(null);
     const hasAutoGreetedRef = useRef(false);
     const closeMenuTimeoutRef = useRef<number | null>(null);
@@ -339,7 +339,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     return;
                 }
                 if (command === 'ask_ai') {
-                    void handleBackgroundChatRequest(`Explain: ${text}`);
+                    syncChatSelectionText(text);
+                    setIsChatOpen(true);
+                    window.setTimeout(() => {
+                        void handleBackgroundChatRequest(`Explain: ${text}`);
+                    }, 0);
                     return;
                 }
                 if (command === 'explain') {
@@ -2074,6 +2078,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         const normalized = text.trim();
         if (!normalized) return;
         syncChatSelectionText(normalized);
+        setIsChatOpen(false);
         if (normalized.length > MAX_MIMIC_LENGTH) {
             showToast("Selection too long for mimic!", "error");
             setMimicTarget(null);

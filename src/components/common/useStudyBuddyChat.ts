@@ -242,7 +242,7 @@ interface UseStudyBuddyChatOptions {
     conversationPendingSubmitRef: React.MutableRefObject<boolean>;
     conversationSilenceTimeoutRef: React.MutableRefObject<number | null>;
     conversationRestartTimeoutRef: React.MutableRefObject<number | null>;
-    chatAbortReasonRef: React.MutableRefObject<'manual' | 'conversation-interrupt' | null>;
+    chatAbortReasonRef: React.MutableRefObject<'manual' | 'conversation-interrupt' | 'superseded' | null>;
     chatSpeechQueueRef: React.MutableRefObject<Array<{ text: string }>>;
     setMessage: React.Dispatch<React.SetStateAction<any>>;
     setMenuPos: React.Dispatch<React.SetStateAction<MenuPos>>;
@@ -606,7 +606,12 @@ Return a fresh corrected JSON array only. Do not explain.`;
         }
     ) {
         const prompt = rawPrompt.trim();
-        if (!prompt || isChatLoading) return;
+        if (!prompt) return;
+        if (chatAbortRef.current) {
+            chatAbortReasonRef.current = 'superseded';
+            chatAbortRef.current.abort();
+            chatAbortRef.current = null;
+        }
         const memoryChunks = getStudyBuddyMemoryChunks();
         const activeTarget = getActiveChatTarget();
         if (options?.stopListening !== false) {
@@ -794,7 +799,7 @@ Return a fresh corrected JSON array only. Do not explain.`;
             if (error?.name === 'AbortError') {
                 removeChatStatusTurn(statusTurnId);
                 setChatHistory((current) =>
-                    abortReason === 'conversation-interrupt'
+                    abortReason === 'conversation-interrupt' || abortReason === 'superseded'
                         ? current.filter((turn) => !(turn.id === assistantId && !turn.content.trim()))
                         : current.map((turn) =>
                             turn.id === assistantId && !turn.content.trim()
@@ -817,9 +822,9 @@ Return a fresh corrected JSON array only. Do not explain.`;
         } finally {
             if (chatAbortRef.current === controller) {
                 chatAbortRef.current = null;
+                setIsChatLoading(false);
             }
             removeChatStatusTurn(statusTurnId);
-            setIsChatLoading(false);
             if (options?.continueConversation && isConversationModeRef.current && !isChatListeningRef.current) {
                 clearConversationRestartTimeout();
                 conversationRestartTimeoutRef.current = window.setTimeout(() => {
@@ -969,7 +974,12 @@ Return a fresh corrected JSON array only. Do not explain.`;
 
     async function handleBackgroundChatRequest(prompt: string, targetOverride?: StudyBuddyChatTarget | null) {
         const cleanPrompt = prompt.trim();
-        if (!cleanPrompt || isChatLoading) return;
+        if (!cleanPrompt) return;
+        if (chatAbortRef.current) {
+            chatAbortReasonRef.current = 'superseded';
+            chatAbortRef.current.abort();
+            chatAbortRef.current = null;
+        }
         const memoryChunks = getStudyBuddyMemoryChunks();
         const activeTarget = targetOverride ?? getActiveChatTarget();
         stopChatListening();
@@ -1135,14 +1145,18 @@ Return a fresh corrected JSON array only. Do not explain.`;
             }
             updateAssistantTurn(formatStudyBuddyTargetAssistantFinal(parsedFinal.visibleText, activeTarget));
         } catch (error: any) {
+            const abortReason = chatAbortReasonRef.current;
+            chatAbortReasonRef.current = null;
             if (error?.name === 'AbortError') {
                 removeChatStatusTurn(statusTurnId);
                 setChatHistory((current) =>
-                    current.map((turn) =>
-                        turn.id === assistantId && !turn.content.trim()
-                            ? { ...turn, content: 'Da dung phan hoi.' }
-                            : turn
-                    )
+                    abortReason === 'superseded'
+                        ? current.filter((turn) => !(turn.id === assistantId && !turn.content.trim()))
+                        : current.map((turn) =>
+                            turn.id === assistantId && !turn.content.trim()
+                                ? { ...turn, content: 'Da dung phan hoi.' }
+                                : turn
+                        )
                 );
             } else {
                 removeChatStatusTurn(statusTurnId);
@@ -1159,9 +1173,9 @@ Return a fresh corrected JSON array only. Do not explain.`;
         } finally {
             if (chatAbortRef.current === controller) {
                 chatAbortRef.current = null;
+                setIsChatLoading(false);
             }
             removeChatStatusTurn(statusTurnId);
-            setIsChatLoading(false);
         }
     }
 
