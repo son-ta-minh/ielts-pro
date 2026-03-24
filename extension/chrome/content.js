@@ -24,6 +24,7 @@
   let currentHighlightEl = null;
   let hideTimer = null;
   let isInteractingWithUI = false;
+  let list;
 
   function toOrigin(url) {
     try {
@@ -231,52 +232,42 @@
   triangle.style.zIndex = "2147483648"; // above toolbar
   document.body.appendChild(triangle);
 
-  function showToolbar(x, y, range, forceAbove) {
+  function showToolbar(mouseX, mouseY, range, forceAbove) {
     const padding = 8;
-    const toolbarWidth = root.offsetWidth || 280;
-    const toolbarHeight = root.offsetHeight || 40;
+    const toolbarWidth = root.offsetWidth;
+    const toolbarHeight = root.offsetHeight;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
     const rect = range.getBoundingClientRect();
 
+    // Horizontal: center near mouse if provided, else center on selection
+    let left = mouseX != null ? mouseX - toolbarWidth / 2 : rect.left + rect.width / 2 - toolbarWidth / 2;
+    left = Math.max(padding, Math.min(left, viewportWidth - toolbarWidth - padding));
+
+    // Vertical: choose above or below highlight based on forceAbove and available space
     let top;
-    let pointingUp;
-
     if (forceAbove) {
-      top = rect.top - toolbarHeight - 6;
-      pointingUp = true;
+      top = rect.top - toolbarHeight - 6; // above highlight
+      if (top < padding) top = rect.bottom + 6; // fallback below
     } else {
-      top = rect.bottom + 6;
-      pointingUp = false;
+      top = rect.bottom + 6; // below highlight
+      if (top + toolbarHeight + padding > viewportHeight) top = rect.top - toolbarHeight - 6; // fallback above
     }
-
-    // Clamp top to viewport
-    if (top < padding) {
-      top = rect.bottom + 6;
-      pointingUp = false;
-    }
-    if (top + toolbarHeight + padding > viewportHeight) {
-      top = rect.top - toolbarHeight - 6;
-      pointingUp = true;
-    }
-
-    let left = rect.left + rect.width / 2 - toolbarWidth / 2;
-    if (left < padding) left = padding;
-    if (left + toolbarWidth + padding > viewportWidth) left = viewportWidth - toolbarWidth - padding;
 
     root.style.left = `${left}px`;
     root.style.top = `${top}px`;
     root.style.display = "block";
     triangle.style.display = "block";
 
+    // Triangle points to center of highlight
     const triangleX = Math.min(Math.max(rect.left + rect.width / 2, left + 6), left + toolbarWidth - 6);
     triangle.style.left = `${triangleX - 6}px`;
-    if (pointingUp) {
+    if (top < rect.top) { // toolbar above
       triangle.style.top = `${top + toolbarHeight}px`;
       triangle.style.borderTop = "6px solid rgba(255,255,255,0.85)";
       triangle.style.borderBottom = "none";
-    } else {
+    } else { // toolbar below
       triangle.style.top = `${top - 6}px`;
       triangle.style.borderBottom = "6px solid rgba(255,255,255,0.85)";
       triangle.style.borderTop = "none";
@@ -415,8 +406,8 @@
     const clone = document.createRange();
     clone.setStartAfter(highlight);
     clone.collapse(true);
-    clone.insertNode(anchor);
-    currentAnchorEl = anchor;
+    // clone.insertNode(anchor);
+    // currentAnchorEl = anchor;
   }
 
   function uniqueUrls(items) {
@@ -547,10 +538,12 @@
 
     if (command === "mark") {
       try {
-
         addWordToPanel(text);
-        flashButtonSuccess(button);
 
+        // After marking, remove the highlight and anchor
+        removeAnchor();
+
+        flashButtonSuccess(button);
       } catch (_) {
         window.alert("Mark failed");
         setButtonState(button, "default");
@@ -587,6 +580,143 @@
     if (await shouldDisableOnCurrentPage()) {
       return;
     }
+
+    /* Floating Copy Panel */
+    const floatingPanel = document.createElement("div");
+    floatingPanel.style.position = "fixed";
+    floatingPanel.style.bottom = "20px";
+    floatingPanel.style.right = "20px";
+    floatingPanel.style.width = "260px";
+    floatingPanel.style.maxHeight = "600px";
+    floatingPanel.style.overflowY = "auto";
+    floatingPanel.style.background = "#f9fafb"; 
+    floatingPanel.style.border = "1px solid #d1d5db";
+    floatingPanel.style.borderRadius = "12px";
+    floatingPanel.style.boxShadow = "0 8px 24px rgba(0,0,0,0.15)";
+    floatingPanel.style.fontFamily = "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    floatingPanel.style.fontSize = "12px";
+    floatingPanel.style.color = "#111827";
+    floatingPanel.style.zIndex = "2147483647";
+    floatingPanel.style.cursor = "default";
+    floatingPanel.style.resize = "both"; // allow both horizontal and vertical resizing
+    floatingPanel.style.overflow = "auto"; // ensures scrollbars appear if content overflows
+    document.body.appendChild(floatingPanel);
+
+    // Compact, minimalist header
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.justifyContent = "space-between";
+    header.style.alignItems = "center";
+    header.style.padding = "2px 6px"; // minimal padding
+    header.style.background = "#5340a1"; // header color
+    header.style.borderTopLeftRadius = "8px";
+    header.style.borderTopRightRadius = "8px";
+    header.style.color = "#ffffff";
+    header.style.fontWeight = "700";
+    header.style.fontSize = "12px";
+    header.style.userSelect = "none";
+    header.style.height = "28px"; // fixed compact height
+
+    // Left: title
+    const title = document.createElement("span");
+    title.textContent = "Words";
+    header.appendChild(title);
+
+    // Right: buttons container
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.alignItems = "center";
+    actions.style.gap = "4px"; // minimal gap
+
+    // Save All button
+    const saveAllBtn = document.createElement("button");
+    saveAllBtn.textContent = "Save All";
+    saveAllBtn.style.fontSize = "10px";
+    saveAllBtn.style.padding = "1px 4px";
+    saveAllBtn.style.borderRadius = "4px";
+    saveAllBtn.style.border = "none";
+    saveAllBtn.style.cursor = "pointer";
+    saveAllBtn.style.background = "#ffffff";
+    saveAllBtn.style.color = "#5340a1";
+    saveAllBtn.addEventListener("click", () => {
+      const words = Array.from(list.querySelectorAll("li span")).map(s => s.textContent.replace(/^\+ /, ""));
+      console.log("Save all words:", words);
+    });
+
+    // Clear All button
+    const clearAllBtn = document.createElement("button");
+    clearAllBtn.textContent = "Clear All";
+    clearAllBtn.style.fontSize = "10px";
+    clearAllBtn.style.padding = "1px 4px";
+    clearAllBtn.style.borderRadius = "4px";
+    clearAllBtn.style.border = "none";
+    clearAllBtn.style.cursor = "pointer";
+    clearAllBtn.style.background = "#f87171";
+    clearAllBtn.style.color = "#ffffff";
+    clearAllBtn.addEventListener("click", () => {
+    list.innerHTML = "";
+    localStorage.removeItem("markedWords");
+});
+
+// Close button
+const closeBtn = document.createElement("button");
+closeBtn.textContent = "×";
+closeBtn.style.background = "transparent";
+closeBtn.style.border = "none";
+closeBtn.style.cursor = "pointer";
+closeBtn.style.fontSize = "14px";
+closeBtn.style.fontWeight = "700";
+closeBtn.style.color = "#ffffff";
+closeBtn.addEventListener("click", () => {
+  floatingPanel.style.display = "none";
+});
+
+// Append buttons to actions container
+actions.appendChild(saveAllBtn);
+actions.appendChild(clearAllBtn);
+actions.appendChild(closeBtn);
+
+// Append actions to header
+header.appendChild(actions);
+
+// Add header to panel
+floatingPanel.appendChild(header);
+floatingPanel.style.userSelect = "none";
+
+// Content list
+list = document.createElement("ul");
+list.style.listStyle = "none";
+list.style.margin = "0";
+list.style.padding = "6px 10px";
+list.style.display = "flex";
+list.style.flexDirection = "column";
+list.style.gap = "4px";
+floatingPanel.appendChild(list);
+list.style.userSelect = "none";
+
+// Load saved words after creating list
+const savedWords = JSON.parse(localStorage.getItem("markedWords") || "[]");
+savedWords.forEach(word => addWordToPanel(word));
+
+  // Drag functionality
+  let isDragging = false;
+  let offsetX, offsetY;
+
+  header.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    offsetX = e.clientX - floatingPanel.getBoundingClientRect().left;
+    offsetY = e.clientY - floatingPanel.getBoundingClientRect().top;
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    floatingPanel.style.left = `${e.clientX - offsetX}px`;
+    floatingPanel.style.top = `${e.clientY - offsetY}px`;
+  });
+
+  document.addEventListener("mouseup", () => {
+    isDragging = false;
+  });
 
     ACTIONS.forEach((action) => {
       const button = document.createElement("button");
@@ -646,11 +776,15 @@
         if (button) setButtonState(button, "default");
       });
 
+      // Only create a new anchor if there isn't an existing one for this highlight,
+      // or if the selection has changed. Otherwise, keep the anchor/highlight as is.
       createAnchor(range);
     });
 
     document.addEventListener("mousedown", (event) => {
-      if (!root.contains(event.target)) {
+      // Only remove anchor/toolbar if clicking outside the toolbar and NOT on the anchor or highlight
+      if (!root.contains(event.target) &&
+          (!currentAnchorEl || (event.target !== currentAnchorEl && event.target !== currentHighlightEl))) {
         scheduleHideToolbar();
       }
     });
@@ -663,142 +797,5 @@
   }
 
   void init();
-
-  /* Floating Copy Panel */
-  const floatingPanel = document.createElement("div");
-floatingPanel.style.position = "fixed";
-floatingPanel.style.bottom = "20px";
-floatingPanel.style.right = "20px";
-floatingPanel.style.width = "260px";
-floatingPanel.style.maxHeight = "600px";
-floatingPanel.style.overflowY = "auto";
-floatingPanel.style.background = "#f9fafb"; 
-floatingPanel.style.border = "1px solid #d1d5db";
-floatingPanel.style.borderRadius = "12px";
-floatingPanel.style.boxShadow = "0 8px 24px rgba(0,0,0,0.15)";
-floatingPanel.style.fontFamily = "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-floatingPanel.style.fontSize = "12px";
-floatingPanel.style.color = "#111827";
-floatingPanel.style.zIndex = "2147483647";
-floatingPanel.style.cursor = "default";
-floatingPanel.style.resize = "both"; // allow both horizontal and vertical resizing
-floatingPanel.style.overflow = "auto"; // ensures scrollbars appear if content overflows
-document.body.appendChild(floatingPanel);
-
-// Compact, minimalist header
-const header = document.createElement("div");
-header.style.display = "flex";
-header.style.justifyContent = "space-between";
-header.style.alignItems = "center";
-header.style.padding = "2px 6px"; // minimal padding
-header.style.background = "#5340a1"; // header color
-header.style.borderTopLeftRadius = "8px";
-header.style.borderTopRightRadius = "8px";
-header.style.color = "#ffffff";
-header.style.fontWeight = "700";
-header.style.fontSize = "12px";
-header.style.userSelect = "none";
-header.style.height = "28px"; // fixed compact height
-
-// Left: title
-const title = document.createElement("span");
-title.textContent = "Words";
-header.appendChild(title);
-
-// Right: buttons container
-const actions = document.createElement("div");
-actions.style.display = "flex";
-actions.style.alignItems = "center";
-actions.style.gap = "4px"; // minimal gap
-
-// Save All button
-const saveAllBtn = document.createElement("button");
-saveAllBtn.textContent = "Save All";
-saveAllBtn.style.fontSize = "10px";
-saveAllBtn.style.padding = "1px 4px";
-saveAllBtn.style.borderRadius = "4px";
-saveAllBtn.style.border = "none";
-saveAllBtn.style.cursor = "pointer";
-saveAllBtn.style.background = "#ffffff";
-saveAllBtn.style.color = "#5340a1";
-saveAllBtn.addEventListener("click", () => {
-  const words = Array.from(list.querySelectorAll("li span")).map(s => s.textContent.replace(/^\+ /, ""));
-  console.log("Save all words:", words);
-});
-
-// Clear All button
-const clearAllBtn = document.createElement("button");
-clearAllBtn.textContent = "Clear All";
-clearAllBtn.style.fontSize = "10px";
-clearAllBtn.style.padding = "1px 4px";
-clearAllBtn.style.borderRadius = "4px";
-clearAllBtn.style.border = "none";
-clearAllBtn.style.cursor = "pointer";
-clearAllBtn.style.background = "#f87171";
-clearAllBtn.style.color = "#ffffff";
-clearAllBtn.addEventListener("click", () => {
-  list.innerHTML = "";
-  localStorage.removeItem("markedWords");
-});
-
-// Close button
-const closeBtn = document.createElement("button");
-closeBtn.textContent = "×";
-closeBtn.style.background = "transparent";
-closeBtn.style.border = "none";
-closeBtn.style.cursor = "pointer";
-closeBtn.style.fontSize = "14px";
-closeBtn.style.fontWeight = "700";
-closeBtn.style.color = "#ffffff";
-closeBtn.addEventListener("click", () => {
-  floatingPanel.style.display = "none";
-});
-
-// Append buttons to actions container
-actions.appendChild(saveAllBtn);
-actions.appendChild(clearAllBtn);
-actions.appendChild(closeBtn);
-
-// Append actions to header
-header.appendChild(actions);
-
-// Add header to panel
-floatingPanel.appendChild(header);
-floatingPanel.style.userSelect = "none";
-
-// Content list
-const list = document.createElement("ul");
-list.style.listStyle = "none";
-list.style.margin = "0";
-list.style.padding = "6px 10px";
-list.style.display = "flex";
-list.style.flexDirection = "column";
-list.style.gap = "4px";
-floatingPanel.appendChild(list);
-list.style.userSelect = "none";
-
-// Load saved words after creating list
-const savedWords = JSON.parse(localStorage.getItem("markedWords") || "[]");
-savedWords.forEach(word => addWordToPanel(word));
-
-  // Drag functionality
-  let isDragging = false;
-  let offsetX, offsetY;
-
-  header.addEventListener("mousedown", (e) => {
-    isDragging = true;
-    offsetX = e.clientX - floatingPanel.getBoundingClientRect().left;
-    offsetY = e.clientY - floatingPanel.getBoundingClientRect().top;
-  });
-
-  document.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
-    floatingPanel.style.left = `${e.clientX - offsetX}px`;
-    floatingPanel.style.top = `${e.clientY - offsetY}px`;
-  });
-
-  document.addEventListener("mouseup", () => {
-    isDragging = false;
-  });
 
 })();
