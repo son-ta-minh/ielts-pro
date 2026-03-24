@@ -357,7 +357,10 @@ function SearchMoreMatches({ matches }: { matches: ChatSearchMatch[] }) {
 
 function renderBubbleHtml(turn: ChatTurn, isChatLoading: boolean) {
     const rawContent = `${turn.content || (turn.role === 'assistant' && isChatLoading ? '...' : '')}${turn.role === 'assistant' && turn.kind !== 'status' && turn.hasMemoryWrite ? ' ✍️' : ''}`;
-    const content = dedupeFollowUpLines(rawContent).replace(/\n?\[TESTMORE:\s*[^|\]]+\|[^\]]+\]\s*/gi, '\n');
+    const followUpSafeContent = turn.suppressTargetFollowUp
+        ? rawContent.replace(/\n?\[FOLLOWUP:\s*[^|\]]+\|[^\]]+\]\s*/gi, '\n')
+        : dedupeFollowUpLines(rawContent);
+    const content = followUpSafeContent.replace(/\n?\[TESTMORE:\s*[^|\]]+\|[^\]]+\]\s*/gi, '\n');
     return { __html: parseMarkdown(content) };
 }
 
@@ -404,6 +407,21 @@ function isNonActionableAssistantReply(turn: ChatTurn): boolean {
     if (turn.role !== 'assistant' || turn.kind === 'status') return true;
     const content = String(turn.content || '').trim().toLowerCase();
     if (!content) return true;
+
+    if (
+        content === 'ok'
+        || content === 'ok i use english.'
+        || content === 'ok i will use english from now on.'
+        || content === 'ok toi dung tieng viet.'
+        || content === 'ok tôi dùng tiếng việt.'
+        || content === 'ok toi se dung tieng viet tu bay gio.'
+        || content === 'ok. i will use english from now on.'
+        || content === 'ok. i will use vietnamese from now on.'
+        || content === 'ok. tôi sẽ dùng tiếng việt từ bây giờ.'
+        || content === 'ok toi se dung tieng viet.'
+    ) {
+        return true;
+    }
 
     return [
         'da dung phan hoi.',

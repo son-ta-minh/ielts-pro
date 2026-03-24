@@ -987,6 +987,9 @@ Return a fresh corrected JSON array only. Do not explain.`;
         const statusTurnId = `status-bg-${Date.now()}`;
         const assistantId = `assistant-bg-${Date.now()}`;
         const aiUrl = getStudyBuddyAiUrl(config);
+        const isLanguageSettingRequest =
+            cleanPrompt.startsWith('Apply the language setting:')
+            || cleanPrompt.startsWith('Ap dung cai dat ngon ngu:');
         let spokenCursor = 0;
         const extraSystemMessages = [
             ...(activeTarget ? [buildStudyBuddyTargetSystemMessage(activeTarget)] : []),
@@ -1009,12 +1012,12 @@ Return a fresh corrected JSON array only. Do not explain.`;
         }
         setChatHistory((current) => [
             ...current,
-            { id: assistantId, role: 'assistant', kind: 'message', content: '' }
+            { id: assistantId, role: 'assistant', kind: 'message', content: '', suppressTargetFollowUp: isLanguageSettingRequest }
         ]);
 
         const updateAssistantTurn = (content: string) => {
             setChatHistory((current) =>
-                current.map((turn) => (turn.id === assistantId ? { ...turn, content } : turn))
+                current.map((turn) => (turn.id === assistantId ? { ...turn, content, suppressTargetFollowUp: turn.suppressTargetFollowUp || isLanguageSettingRequest } : turn))
             );
         };
 
@@ -1074,7 +1077,7 @@ Return a fresh corrected JSON array only. Do not explain.`;
                 setChatHistory((current) =>
                     current.map((turn) =>
                         turn.id === assistantId
-                            ? { ...turn, content: formatStudyBuddyTargetAssistantPreview(parsed.visibleText, activeTarget), hasMemoryWrite: turn.hasMemoryWrite || parsed.memories.length > 0 }
+                            ? { ...turn, content: formatStudyBuddyTargetAssistantPreview(parsed.visibleText, activeTarget), hasMemoryWrite: turn.hasMemoryWrite || parsed.memories.length > 0, suppressTargetFollowUp: turn.suppressTargetFollowUp || isLanguageSettingRequest }
                             : turn
                     )
                 );
