@@ -1825,32 +1825,38 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
           )}
         </div>
         {isChromeBrowser && serverUrl ? (
-          <div className="w-full rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm lg:ml-auto lg:max-w-[28rem]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-400">Chrome Extension</p>
-                <h3 className="mt-1 text-sm font-black text-neutral-900">Download Chrome extension Here</h3>
-                <p className="mt-1 text-[11px] font-medium leading-relaxed text-neutral-500">
-                  Mini Study Buddy for websites outside the app.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-blue-50 p-2 text-blue-600">
-                <Chrome size={18} />
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
+          <div>
               <a
                 href={`${serverUrl.replace(/\/$/, '')}/api/extension/chrome/download`}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-[11px] font-black uppercase tracking-wide text-white shadow-sm transition-colors hover:bg-blue-700"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-[11px] font-semibold tracking-wide transition-all duration-150 bg-purple-500 text-white hover:bg-purple-600 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
               >
-                <Download size={14} />
-                Download
+                <svg width="14" height="14" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="128" cy="128" r="128" fill="#f4f4f4"/>
+                    <path fill="#DB4437" d="M128 128L128 0A128 128 0 0 1 236.6 64L128 128Z"/>
+                    <path fill="#0F9D58" d="M128 128L236.6 64A128 128 0 0 1 128 256L128 128Z"/>
+                    <path fill="#F4B400" d="M128 128L128 256A128 128 0 0 1 19.4 192L128 128Z"/>
+                    <circle cx="128" cy="128" r="48" fill="#4285F4"/>
+                </svg>
+                Chrome Extension
               </a>
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px] font-medium text-neutral-600">
-                How to Install.
-                <div>Unzip / chrome://extensions / EnableDeveloper mode / Load uppack</div>
-              </div>
-            </div>
+                <div className="relative inline-block group">
+                <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide bg-gray-100 text-gray-700 hover:bg-gray-200 shadow-sm"
+                >
+                    <HelpCircle size={12} />
+                </button>
+
+                {/* Tooltip */}
+                <div className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-52 rounded-md bg-gray-800 text-white text-xs p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                    <ul className="list-disc list-inside">
+                    <li>Unzip downloaded extension</li>
+                    <li>Open <code>chrome://extensions</code></li>
+                    <li>Enable Developer mode(top right of the page)</li>
+                    <li>Load unpacked</li>
+                    </ul>
+                </div>
+                </div>
           </div>
         ) : null}
       </div>
