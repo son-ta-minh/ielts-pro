@@ -4,11 +4,11 @@ const router = express.Router();
 const libraryManager = require('../libraryManager');
 const logger = require('../logger');
 
-logger.info("[Planning Route] Module loaded.");
+logger.debug("[Planning Route] Module loaded.");
 
 // Get aggregated Master Planning Goals
 router.get('/planning/master', (req, res) => {
-    logger.info("[Planning] GET /planning/master called");
+    logger.debug("[Planning] GET /planning/master called");
     try {
         if (typeof libraryManager.getPlanningGoals !== 'function') {
             logger.error("[Planning] Critical Error: getPlanningGoals is not a function. LibraryManager exports:", Object.keys(libraryManager));

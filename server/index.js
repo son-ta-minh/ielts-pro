@@ -49,7 +49,7 @@ if (!admin.apps.length) {
         projectId: serviceAccount.project_id
     });
 
-    logger.info('[Firebase] Admin initialized with project:', serviceAccount.project_id);
+    logger.debug('[Firebase] Admin initialized with project:', serviceAccount.project_id);
 }
 
 const app = express();
@@ -140,16 +140,16 @@ if (httpsOptions) {
 }
 
 server.listen(settings.PORT, settings.HOST, () => {
-    logger.info('==================================================');
-    logger.info(`[INFO] Unified Server running on port ${settings.PORT}`);
-    logger.info(`[INFO] Protocol: ${protocol.toUpperCase()}`);
-    logger.info(`[INFO] Address:  ${protocol}://localhost:${settings.PORT}`);
-    logger.info(`[INFO] Storage:  ${settings.BACKUP_DIR}`);
-    logger.info(`[INFO] Log level: ${logger.level}`);
+    logger.debug('==================================================');
+    logger.debug(`[INFO] Unified Server running on port ${settings.PORT}`);
+    logger.debug(`[INFO] Protocol: ${protocol.toUpperCase()}`);
+    logger.debug(`[INFO] Address:  ${protocol}://localhost:${settings.PORT}`);
+    logger.debug(`[INFO] Storage:  ${settings.BACKUP_DIR}`);
+    logger.debug(`[INFO] Log level: ${logger.level}`);
     if (protocol === 'http') {
-        logger.info(`[TIP]  To enable HTTPS, generate certs in ${settings.CERT_DIR}`);
+        logger.debug(`[TIP]  To enable HTTPS, generate certs in ${settings.CERT_DIR}`);
     }
-    logger.info('==================================================');
+    logger.debug('==================================================');
     
     // Initialize Library
     try {
@@ -164,7 +164,7 @@ server.listen(settings.PORT, settings.HOST, () => {
 // --- Auto Start Cloudflare Tunnel (if available) ---
 function startCloudflareTunnel() {
     try {
-        logger.info('[Cloudflare] Attempting to start tunnel...');
+        logger.debug('[Cloudflare] Attempting to start tunnel...');
         const tunnel = spawn('cloudflared', [
             'tunnel',
             '--url',
@@ -183,7 +183,7 @@ function startCloudflareTunnel() {
             if (match && !hostUpdated) {
                 hostUpdated = true;
                 const publicUrl = match[0];
-                logger.info(`[Cloudflare] Public URL detected: ${publicUrl}`);
+                logger.debug(`[Cloudflare] Public URL detected: ${publicUrl}`);
 
                 // --- Update Firestore with new host ---
                 updateHostInFirestore(publicUrl);
@@ -194,7 +194,7 @@ function startCloudflareTunnel() {
         tunnel.stderr.on('data', handleTunnelOutput);
 
         tunnel.on('close', (code) => {
-            logger.info(`[Cloudflare] Tunnel process exited with code ${code}`);
+            logger.debug(`[Cloudflare] Tunnel process exited with code ${code}`);
         });
 
     } catch (err) {
@@ -204,7 +204,7 @@ function startCloudflareTunnel() {
 
 async function updateHostInFirestore(hostUrl) {
     try {
-        logger.info('[Firebase] Updating host in Firestore (Admin SDK)...');
+        logger.debug('[Firebase] Updating host in Firestore (Admin SDK)...');
 
         const db = admin.firestore();
 
@@ -233,7 +233,7 @@ async function updateHostInFirestore(hostUrl) {
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
-        logger.info('[Firebase] Host updated successfully.');
+        logger.debug('[Firebase] Host updated successfully.');
     } catch (err) {
         logger.error('[Firebase] Admin update failed:', err.message);
     }
@@ -243,14 +243,14 @@ async function updateHostInFirestore(hostUrl) {
 const isPublicMode = process.argv.includes('--public');
 
 if (isPublicMode) {
-    logger.info('[Cloudflare] Public mode enabled via --public');
+    logger.debug('[Cloudflare] Public mode enabled via --public');
     startCloudflareTunnel();
 } else {
-    logger.info('[Cloudflare] Skipped (run with --public to enable)');
+    logger.debug('[Cloudflare] Skipped (run with --public to enable)');
 }
 
 function gracefulShutdown(signal) {
-    logger.info(`\n[Shutdown] Received ${signal}. Backing up courses...`);
+    logger.debug(`\n[Shutdown] Received ${signal}. Backing up courses...`);
 
     try {
         coursesModule.exportAllCoursesToBackup();
@@ -259,7 +259,7 @@ function gracefulShutdown(signal) {
     }
 
     server.close(() => {
-        logger.info('[Shutdown] Server closed.');
+        logger.debug('[Shutdown] Server closed.');
         process.exit(0);
     });
 

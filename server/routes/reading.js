@@ -10,7 +10,7 @@ const { FOLDER_MAPPINGS_FILE } = require('../config');
 const { getReadingUnits } = require('../libraryManager');
 const logger = require('../logger');
 
-logger.info("[Reading Route] Module loaded.");
+logger.debug("[Reading Route] Module loaded.");
 
 let folderMappings = {};
 
@@ -77,7 +77,7 @@ router.get('/reading/from-url', async (req, res) => {
                 });
 
                 if (mirrorResponse.ok) {
-                    logger.info('[Reading] textise fallback succeeded');
+                    logger.debug('[Reading] textise fallback succeeded');
                     const mirrorHtml = await mirrorResponse.text();
 
                     const dom = new JSDOM(mirrorHtml, { url: targetUrl });
@@ -124,7 +124,7 @@ router.get('/reading/from-url', async (req, res) => {
                     });
 
                     if (ampResponse.ok) {
-                        logger.info('[Reading] AMP fallback succeeded');
+                        logger.debug('[Reading] AMP fallback succeeded');
                         const ampHtml = await ampResponse.text();
 
                         const dom = new JSDOM(ampHtml, { url: targetUrl });
@@ -232,7 +232,7 @@ router.get('/reading/from-url', async (req, res) => {
 
 // NEW: Get aggregated Master Reading Units
 router.get('/reading/master', (req, res) => {
-    logger.info("[Reading] GET /reading/master called");
+    logger.debug("[Reading] GET /reading/master called");
     try {
         const units = getReadingUnits();
         

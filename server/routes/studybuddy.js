@@ -343,7 +343,7 @@ function createStudyBuddyError(message, statusCode = 400) {
     return error;
 }
 
-function getImageRefusalError(parsed, raw = '') {
+function getImageRefusalError(parsed, raw = '', imageSettings = normalizeIncomingImageSettings()) {
     if (!parsed || typeof parsed !== 'object' || !parsed.refuse) return null;
 
     const refuseCode = String(parsed.refuse || '').trim().toLowerCase();
@@ -357,8 +357,11 @@ function getImageRefusalError(parsed, raw = '') {
     const rawText = String(raw || '').trim();
 
     if (refuseCode === 'unsafe') {
+        const fallbackMessage = imageSettings.safeMode
+            ? 'Yeu cau tao hinh bi tu choi vi co noi dung nhay cam hoac bao luc.'
+            : 'AI prompt generator da tu choi yeu cau nay du Safe mode cua app dang tat. Day la tu choi tu AI upstream, khong phai app Safe mode.';
         return createStudyBuddyError(
-            detail || 'Yeu cau tao hinh bi tu choi vi co noi dung nhay cam hoac bao luc.',
+            detail || fallbackMessage,
             422
         );
     }
@@ -423,7 +426,7 @@ function stripHtml(text) {
 async function getWikiSummary(input) {
     let query = String(input || '').trim();
 
-    logger.info("[Wiki] Input:", query);
+    logger.debug("[Wiki] Input:", query);
 
     if (!query) {
         logger.warn("[Wiki] Empty input");
@@ -465,7 +468,7 @@ async function getWikiSummary(input) {
 
     // ===== retry loop =====
     for (let attempt = 1; attempt <= 3; attempt++) {
-        logger.info(`\n[Wiki] Attempt ${attempt}:`, query);
+        logger.debug(`\n[Wiki] Attempt ${attempt}:`, query);
 
         // ===== 1. SEARCH =====
         const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`;
@@ -479,14 +482,14 @@ async function getWikiSummary(input) {
         const searchData = safeParse(searchRes.body);
         const results = searchData?.query?.search || [];
 
-        logger.info("[Wiki] Results:", results.length);
+        logger.debug("[Wiki] Results:", results.length);
 
         if (!results.length) return null;
 
         const top = results[0];
         const title = top.title;
 
-        logger.info("[Wiki] Top result:", title);
+        logger.debug("[Wiki] Top result:", title);
 
         // ===== 2. BAD TITLE → rewrite =====
         if (isBadTitle(title)) {
@@ -504,7 +507,7 @@ async function getWikiSummary(input) {
         // ===== 3. FETCH FULL CONTENT =====
         const contentUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=true&titles=${encodeURIComponent(title)}&format=json`;
 
-        logger.info("[Wiki] Fetching FULL content:", contentUrl);
+        logger.debug("[Wiki] Fetching FULL content:", contentUrl);
 
         const res = await httpRequestAsync(contentUrl, {
             method: 'GET',
@@ -518,7 +521,7 @@ async function getWikiSummary(input) {
 
         let content = String(page?.extract || '').trim();
 
-        logger.info("[Wiki] Content length:", content.length);
+        logger.debug("[Wiki] Content length:", content.length);
 
         // ===== 4. BAD CONTENT → retry =====
         if (!content) {
@@ -535,7 +538,7 @@ async function getWikiSummary(input) {
             content = content.slice(0, MAX_CHARS);
         }
 
-        logger.info("[Wiki] Success:", title);
+        logger.debug("[Wiki] Success:", title);
 
         return {
             title,
@@ -557,8 +560,8 @@ function safeParse(body) {
 }
 
 async function searchFandom(name) {
-    logger.info("\n[Fandom] ===== START =====");
-    logger.info("[Fandom] Input:", name);
+    logger.debug("\n[Fandom] ===== START =====");
+    logger.debug("[Fandom] Input:", name);
 
     const cleanName = String(name || '').trim();
     if (!cleanName) {
@@ -568,7 +571,7 @@ async function searchFandom(name) {
 
     // Cross-wiki search URL
     const url = `https://community.fandom.com/wiki/Special:Search?query=${encodeURIComponent(cleanName)}&scope=cross-wiki&limit=5&format=json`;
-    logger.info("[Fandom] Request URL:", url);
+    logger.debug("[Fandom] Request URL:", url);
 
     try {
         const response = await httpRequestAsync(url, {
@@ -600,7 +603,7 @@ async function searchFandom(name) {
         }
 
         const results = Array.isArray(parsed?.items) ? parsed.items : [];
-        logger.info("[Fandom] Results count:", results.length);
+        logger.debug("[Fandom] Results count:", results.length);
 
         if (!results.length) return null;
 
@@ -614,9 +617,9 @@ async function searchFandom(name) {
             } : null;
         }).filter(Boolean).slice(0, 5);
 
-        snippets.forEach((s, i) => logger.info(`[Fandom] #${i + 1} URL:`, s.url));
+        snippets.forEach((s, i) => logger.debug(`[Fandom] #${i + 1} URL:`, s.url));
 
-        logger.info("[Fandom] ===== END =====\n");
+        logger.debug("[Fandom] ===== END =====\n");
         return snippets.length ? snippets : null;
 
     } catch (err) {
@@ -703,8 +706,8 @@ Rules:
     ]);
 
     const queries = parseReferenceQueryResponse(raw, maxQueries);
-    logger.info(`[StudyBuddySearchAssist] ${mode} query planner raw:`, raw);
-    logger.info(`[StudyBuddySearchAssist] ${mode} queries:`, queries);
+    logger.debug(`[StudyBuddySearchAssist] ${mode} query planner raw:`, raw);
+    logger.debug(`[StudyBuddySearchAssist] ${mode} queries:`, queries);
     return queries;
 }
 
@@ -795,7 +798,7 @@ Rules:
 
     const raw = await requestStudyBuddyAiTextAsync(messages);
     const parsed = parseImageParamsResponse(raw);
-    logger.info('[StudyBuddyImage] AI safety raw:', raw);
+    logger.debug('[StudyBuddyImage] AI safety raw:', raw);
 
     if (parsed && typeof parsed.safe === 'boolean') {
         return {
@@ -1147,7 +1150,9 @@ Rules:
 - prompt must be detailed, include subject, lighting, camera, style
 - prompt format should feel like: [subject], [details], [lighting], [camera], [style], high detail, cinematic
 - never use Vietnamese words such as "meo", "meo con", "ao dai" in Vietnamese spelling, etc. Translate them to natural English
+- current app safe mode is ${imageSettings.safeMode ? 'ON' : 'OFF'}
 - if safe mode is ON, refuse any sexual, nude, pornographic, gory, bloody, stabbing, murder, or graphic violence request by returning {"refuse":"unsafe"}
+- if safe mode is OFF, do not use the refuse field just because the request is edgy or violent; still return the best possible JSON image parameters
 - negative must include common defects
 - base negative prompt is: ${BASE_NEGATIVE_PROMPT}
 - You may only append more negative terms. Do not remove or replace the base negative prompt.
@@ -1187,12 +1192,21 @@ Rules:
 
         const raw = await requestStudyBuddyAiTextAsync(messages);
         const parsed = parseImageParamsResponse(raw);
-        const refusalError = getImageRefusalError(parsed, raw);
+        const refusalError = getImageRefusalError(parsed, raw, imageSettings);
         if (refusalError) {
+            logger.error('[StudyBuddyImage] Prompt generator rejected request:', {
+                source: 'studybuddy-ai-prompt-generator',
+                mode,
+                attempt,
+                safeMode: imageSettings.safeMode,
+                userRequest,
+                parsedRefusal: parsed,
+                rawResponse: raw
+            });
             throw refusalError;
         }
         const missing = getMissingImageParamFields(parsed, imageSettings);
-        logger.info(`[StudyBuddyImage] AI params raw (attempt ${attempt}):`, raw);
+        logger.debug(`[StudyBuddyImage] AI params raw (attempt ${attempt}):`, raw);
 
         if (missing.length === 0) {
             const normalized = normalizeImageParams(parsed, userRequest, imageSettings);
@@ -1596,11 +1610,11 @@ function expandSearchQueries(query, callback, attempt = 1, section = 'all') {
     if (!cleanQuery) return callback(null, []);
 
     if (!looksVietnamese(cleanQuery)) {
-        logger.info('[StudyBuddySearch] Query is non-Vietnamese, using original query only:', cleanQuery);
+        logger.debug('[StudyBuddySearch] Query is non-Vietnamese, using original query only:', cleanQuery);
         return callback(null, [cleanQuery]);
     }
 
-    logger.info('[StudyBuddySearch] Expanding Vietnamese query:', cleanQuery);
+    logger.debug('[StudyBuddySearch] Expanding Vietnamese query:', cleanQuery);
     requestStudyBuddyAiText(
         getSearchExpansionPrompt(section, attempt, cleanQuery),
         (error, content) => {
@@ -1622,7 +1636,7 @@ function expandSearchQueries(query, callback, attempt = 1, section = 'all') {
                 }
                 return callback(new Error('I could not generate valid English search queries. Please retry.'));
             }
-            logger.info('[StudyBuddySearch] Expanded queries:', queries);
+            logger.debug('[StudyBuddySearch] Expanded queries:', queries);
             callback(null, queries);
         }
     );
@@ -1804,17 +1818,17 @@ Only keep candidates with direct meaning match.`
                 return callback(null, results);
             }
 
-            logger.info(`[StudyBuddySearch] AI filter raw response (attempt ${attempt}):`, content);
+            logger.debug(`[StudyBuddySearch] AI filter raw response (attempt ${attempt}):`, content);
             const keptTexts = parseKeptTexts(content);
             if (Array.isArray(keptTexts) && keptTexts.length === 0) {
                 if (attempt === 1) {
-                    logger.info('[StudyBuddySearch] Attempt 1 returned empty keepTexts; retrying with remove-irrelevant strategy.');
+                    logger.debug('[StudyBuddySearch] Attempt 1 returned empty keepTexts; retrying with remove-irrelevant strategy.');
                     return requestFilter('remove-irrelevant', (retryError, retryContent) => {
                         if (retryError) {
                             logger.warn('[StudyBuddySearch] AI remove-irrelevant retry failed:', retryError.message);
                             return callback(null, []);
                         }
-                        logger.info('[StudyBuddySearch] AI filter raw response (attempt 1 retry remove-irrelevant):', retryContent);
+                        logger.debug('[StudyBuddySearch] AI filter raw response (attempt 1 retry remove-irrelevant):', retryContent);
                         const retryKeptTexts = parseKeptTexts(retryContent);
                         if (!Array.isArray(retryKeptTexts) || retryKeptTexts.length === 0) {
                             const stage = 'Mình lọc lần 1: không còn kết quả nào đủ phù hợp.';
@@ -1840,8 +1854,8 @@ Only keep candidates with direct meaning match.`
                         const stage = `Mình lọc lần ${attempt}: từ ${results.length} kết quả còn ${retryFiltered.length} kết quả.`;
                         stageCollector.push(stage);
                         if (typeof onStage === 'function') onStage(stage);
-                        logger.info('[StudyBuddySearch] AI filter keep indexes (attempt 1 retry remove-irrelevant):', retryKeepIndexes);
-                        logger.info('[StudyBuddySearch] AI filter kept texts (attempt 1 retry remove-irrelevant):', retryFilteredTop.map((item) => item.text));
+                        logger.debug('[StudyBuddySearch] AI filter keep indexes (attempt 1 retry remove-irrelevant):', retryKeepIndexes);
+                        logger.debug('[StudyBuddySearch] AI filter kept texts (attempt 1 retry remove-irrelevant):', retryFilteredTop.map((item) => item.text));
 
                         if (retryFiltered.length <= 1) {
                             const finalStage = `Mình dừng lọc ở lần ${attempt} và còn ${retryFiltered.length} kết quả.`;
@@ -1853,7 +1867,7 @@ Only keep candidates with direct meaning match.`
                         return filterSearchResultsUntilStable(originalQuery, expandedQueries, retryFiltered, callback, attempt + 1, stageCollector, onStage, accumulatedMap);
                     });
                 }
-                logger.info(`[StudyBuddySearch] AI filter returned empty keepTexts at attempt ${attempt}; stopping with previous results.`);
+                logger.debug(`[StudyBuddySearch] AI filter returned empty keepTexts at attempt ${attempt}; stopping with previous results.`);
                 const stage = attempt > 1
                     ? `Mình dừng lọc ở lần ${attempt} và giữ lại các kết quả tốt nhất từ những vòng trước.`
                     : `Mình lọc lần ${attempt}: không còn kết quả nào đủ phù hợp.`;
@@ -1878,7 +1892,7 @@ Only keep candidates with direct meaning match.`
             });
 
             if (isIdentityKeep(keepIndexes, candidateResults.length)) {
-                logger.info(`[StudyBuddySearch] AI filter stable at attempt ${attempt}; no more removals.`);
+                logger.debug(`[StudyBuddySearch] AI filter stable at attempt ${attempt}; no more removals.`);
                 const finalResults = sortAccumulatedResults(accumulatedMap, results);
                 const stage = `Mình lọc xong và giữ lại ${finalResults.length} kết quả phù hợp nhất.`;
                 stageCollector.push(stage);
@@ -1890,9 +1904,9 @@ Only keep candidates with direct meaning match.`
             const stage = `Mình lọc lần ${attempt}: từ ${results.length} kết quả còn ${filtered.length} kết quả.`;
             stageCollector.push(stage);
             if (typeof onStage === 'function') onStage(stage);
-            logger.info(`[StudyBuddySearch] AI filter keep indexes (attempt ${attempt}):`, keepIndexes);
-            logger.info(`[StudyBuddySearch] AI filter kept texts (attempt ${attempt}):`, filteredTop.map((item) => item.text));
-            logger.info(
+            logger.debug(`[StudyBuddySearch] AI filter keep indexes (attempt ${attempt}):`, keepIndexes);
+            logger.debug(`[StudyBuddySearch] AI filter kept texts (attempt ${attempt}):`, filteredTop.map((item) => item.text));
+            logger.debug(
                 `[StudyBuddySearch] AI filter accumulated scores (attempt ${attempt}):`,
                 sortAccumulatedResults(accumulatedMap).map((item) => ({
                     text: item.text,
@@ -1972,7 +1986,7 @@ router.post('/studybuddy/chat', async (req, res) => {
             const upstreamUrl = new URL(urlToUse);
             const client = upstreamUrl.protocol === 'https:' ? https : http;
 
-            logger.info('[StudyBuddy] Using AI:', upstreamUrl.href);
+            logger.debug('[StudyBuddy] Using AI:', upstreamUrl.href);
 
             const upstreamReq = client.request(
                 upstreamUrl,
@@ -2115,14 +2129,14 @@ router.post('/studybuddy/search', (req, res) => {
         const foundStage = `Mình tìm thấy vài kết quả ban đầu, mình đang lọc bớt.`;
         stages.push(foundStage);
         sendStage(foundStage);
-        logger.info('[StudyBuddySearch] Search request detail:', {
+        logger.debug('[StudyBuddySearch] Search request detail:', {
             userName,
             originalQuery: searchQuery,
             searchSection,
             expandedQueries: queries,
             resultCount: rawResults.length
         });
-        logger.info(
+        logger.debug(
             '[StudyBuddySearch] Top matches before AI filter:',
             rawResults.map((item) => ({
                 word: item.word,
@@ -2135,7 +2149,7 @@ router.post('/studybuddy/search', (req, res) => {
 
         filterSearchResultsUntilStable(searchQuery, queries, rawResults, (_filterError, results) => {
             if ((!wantsStream && res.headersSent) || res.writableEnded) return;
-            logger.info(
+            logger.debug(
                 '[StudyBuddySearch] Top matches after AI filter:',
                 results.map((item) => ({
                     word: item.word,
@@ -2265,10 +2279,10 @@ router.post('/studybuddy/image', async (req, res) => {
         } else {
             imageParams = await generateImageParamsWithRetry(data, imageSettings, mode, imageSearchContext);
         }
-        logger.info('[StudyBuddyImage] Original request:', data);
-        logger.info('[StudyBuddyImage] Mode:', mode);
-        logger.info('[StudyBuddyImage] Incoming settings:', imageSettings);
-        logger.info('[StudyBuddyImage] Final params:', imageParams);
+        logger.debug('[StudyBuddyImage] Original request:', data);
+        logger.debug('[StudyBuddyImage] Mode:', mode);
+        logger.debug('[StudyBuddyImage] Incoming settings:', imageSettings);
+        logger.debug('[StudyBuddyImage] Final params:', imageParams);
         sendProgress(10);
 
         const clientId = createComfyClientId();

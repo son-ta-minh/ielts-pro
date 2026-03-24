@@ -338,7 +338,7 @@ function rebuildAllUserVocabularySearchIndices() {
         }
     });
 
-    logger.info('[VocabularySearch] Indexed users:', userSearchIndices.size);
+    logger.debug('[VocabularySearch] Indexed users:', userSearchIndices.size);
     return getVocabularySearchStats();
 }
 
@@ -347,7 +347,7 @@ function rebuildUserVocabularySearchIndexFromFile(filePath, fallbackUserName = '
         const index = buildIndexFromBackupFile(filePath, fallbackUserName);
         if (!index?.userName) return null;
         userSearchIndices.set(index.userName, index);
-        logger.info('[VocabularySearch] Rebuilt user index:', index.userName, 'chunks:', index.chunkCount);
+        logger.debug('[VocabularySearch] Rebuilt user index:', index.userName, 'chunks:', index.chunkCount);
         return index;
     } catch (error) {
         logger.warn('[VocabularySearch] Failed to rebuild user index from file:', filePath, error.message);

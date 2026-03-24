@@ -60,7 +60,7 @@ router.post('/config/backup-path', (req, res) => {
         }
 
         settings.BACKUP_DIR = resolvedPath;
-        logger.info(`[Config] Backup directory updated to: ${settings.BACKUP_DIR}`);
+        logger.debug(`[Config] Backup directory updated to: ${settings.BACKUP_DIR}`);
         res.json({ success: true, path: settings.BACKUP_DIR });
     } catch (err) {
         logger.error(`[Config] Failed to set backup path: ${err.message}`);

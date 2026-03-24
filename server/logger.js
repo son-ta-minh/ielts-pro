@@ -64,8 +64,8 @@ const logger = {
     info: (...args) => emit('info', args),
     debug: (...args) => emit('debug', args),
     patchGlobalConsole() {
-        console.log = (...args) => logger.info(...args);
-        console.info = (...args) => logger.info(...args);
+        console.log = (...args) => logger.debug(...args);
+        console.info = (...args) => logger.debug(...args);
         console.warn = (...args) => logger.warn(...args);
         console.error = (...args) => logger.error(...args);
         console.debug = (...args) => logger.debug(...args);

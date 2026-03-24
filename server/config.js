@@ -36,7 +36,7 @@ function getInitialBackupPath() {
                 fs.writeFileSync(testFile, 'test');
                 fs.unlinkSync(testFile);
                 
-                logger.info(`[Config] Using iCloud Data directory: ${iCloudPath}`);
+                logger.debug(`[Config] Using iCloud Data directory: ${iCloudPath}`);
                 return iCloudPath;
             }
         }
@@ -45,7 +45,7 @@ function getInitialBackupPath() {
     }
 
     if (!fs.existsSync(localPath)) fs.mkdirSync(localPath, { recursive: true });
-    logger.info(`[Config] Using local backup directory: ${localPath}`);
+    logger.debug(`[Config] Using local backup directory: ${localPath}`);
     return localPath;
 }
 
@@ -54,7 +54,7 @@ const BACKUP_DIR = getInitialBackupPath();
 // 2. SERVER CONFIG DIRECTORY (Inside the main Data Directory: VocabPro/server)
 const CLOUD_CONFIG_DIR = path.join(BACKUP_DIR, 'server');
 if (!fs.existsSync(CLOUD_CONFIG_DIR)) {
-    logger.info(`[Config] Creating Server Config folder: ${CLOUD_CONFIG_DIR}`);
+    logger.debug(`[Config] Creating Server Config folder: ${CLOUD_CONFIG_DIR}`);
     fs.mkdirSync(CLOUD_CONFIG_DIR, { recursive: true });
 }
 
@@ -95,7 +95,7 @@ try {
 
     filesToInit.forEach(f => {
         if (!fs.existsSync(f.path)) {
-            logger.info(`[Config] Creating empty ${f.label} file: ${f.path}`);
+            logger.debug(`[Config] Creating empty ${f.label} file: ${f.path}`);
             fs.writeFileSync(f.path, f.defaultContent);
         }
     });
@@ -120,11 +120,11 @@ try {
 
     if (destIsEmpty) {
         if (fs.existsSync(oldMappingsBackup)) {
-             logger.info("[Config] Migrating folder_mappings.json from VocabPro root -> VocabPro/server...");
+             logger.debug("[Config] Migrating folder_mappings.json from VocabPro root -> VocabPro/server...");
              fs.copyFileSync(oldMappingsBackup, mappingsDest);
              // Optional: fs.unlinkSync(oldMappingsBackup); // Cleanup old file?
         } else if (fs.existsSync(oldMappingsRoot)) {
-             logger.info("[Config] Migrating audio_mappings.json from Local root -> VocabPro/server...");
+             logger.debug("[Config] Migrating audio_mappings.json from Local root -> VocabPro/server...");
              fs.copyFileSync(oldMappingsRoot, mappingsDest);
         }
     }
@@ -142,10 +142,10 @@ try {
 
     if (masterIsEmpty) {
         if (fs.existsSync(oldMasterBackup)) {
-            logger.info("[Config] Migrating master_library.json from VocabPro root -> VocabPro/server...");
+            logger.debug("[Config] Migrating master_library.json from VocabPro root -> VocabPro/server...");
             fs.copyFileSync(oldMasterBackup, masterDest);
         } else if (fs.existsSync(oldMasterRoot)) {
-             logger.info("[Config] Migrating master_library.json from Local root -> VocabPro/server...");
+             logger.debug("[Config] Migrating master_library.json from Local root -> VocabPro/server...");
              fs.copyFileSync(oldMasterRoot, masterDest);
         }
     }
@@ -154,11 +154,11 @@ try {
     logger.warn("[Config] Migration check skipped:", e.message);
 }
 
-logger.info(`[Config] 📂 Mappings: ${FOLDER_MAPPINGS_FILE()}`);
-logger.info(`[Config] 📚 Library:  ${MASTER_LIBRARY_FILE()}`);
-logger.info(`[Config] 📖 Reading:  ${MASTER_READING_FILE()}`);
-logger.info(`[Config] 📅 Planning: ${MASTER_PLANNING_FILE()}`);
-logger.info(`[Config] 💾 Backups:  ${BACKUP_DIR}`);
+logger.debug(`[Config] 📂 Mappings: ${FOLDER_MAPPINGS_FILE()}`);
+logger.debug(`[Config] 📚 Library:  ${MASTER_LIBRARY_FILE()}`);
+logger.debug(`[Config] 📖 Reading:  ${MASTER_READING_FILE()}`);
+logger.debug(`[Config] 📅 Planning: ${MASTER_PLANNING_FILE()}`);
+logger.debug(`[Config] 💾 Backups:  ${BACKUP_DIR}`);
 
 module.exports = {
     settings,

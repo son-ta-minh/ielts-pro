@@ -51,7 +51,7 @@ function archiveCurrentBackupFile({ filePath, fileName, archiveDir, safeIdentifi
     }
 
     fs.copyFileSync(filePath, archivePath);
-    logger.info(`[Backup] Archived '${fileName}' to '${archivePath}'`);
+    logger.debug(`[Backup] Archived '${fileName}' to '${archivePath}'`);
     return { archiveFileName, archivePath };
 }
 
@@ -202,7 +202,7 @@ router.post('/archive/restore', (req, res) => {
             rebuildUserVocabularySearchIndexFromFile(resolved.filePath, String(identifier || '').trim());
         }
 
-        logger.info(`[Backup] Restored archive '${archiveId}' as current backup for '${identifier}'.`);
+        logger.debug(`[Backup] Restored archive '${archiveId}' as current backup for '${identifier}'.`);
         return res.json({ success: true });
     } catch (err) {
         logger.error(`[Backup] Failed to restore archive: ${err.message}`);
@@ -229,7 +229,7 @@ router.delete('/archive', (req, res) => {
         }
 
         fs.unlinkSync(archivePath);
-        logger.info(`[Backup] Deleted archive '${archiveId}' for '${identifier}'.`);
+        logger.debug(`[Backup] Deleted archive '${archiveId}' for '${identifier}'.`);
         return res.json({ success: true });
     } catch (err) {
         logger.error(`[Backup] Failed to delete archive: ${err.message}`);
@@ -264,7 +264,7 @@ router.post('/backup', (req, res) => {
             const lastModDate = new Date(stats.mtime).toISOString().split('T')[0];
 
             if (today !== lastModDate) {
-                logger.info(`[Backup] New day detected. Archiving previous day's data for ${safeIdentifier}.`);
+                logger.debug(`[Backup] New day detected. Archiving previous day's data for ${safeIdentifier}.`);
                 
                 const archiveDir = path.join(appDir, 'archive');
                 if (!fs.existsSync(archiveDir)) {
@@ -275,7 +275,7 @@ router.post('/backup', (req, res) => {
                 const archivePath = path.join(archiveDir, archiveFileName);
                 
                 fs.copyFileSync(filePath, archivePath);
-                logger.info(`[Backup] Archived '${fileName}' to '${archivePath}'`);
+                logger.debug(`[Backup] Archived '${fileName}' to '${archivePath}'`);
 
                 // Retention policy
                 const allArchivedFiles = fs.readdirSync(archiveDir);
@@ -287,7 +287,7 @@ router.post('/backup', (req, res) => {
                     const filesToDelete = userArchives.slice(0, userArchives.length - settings.DAILY_BACKUP_RETENTION);
                     filesToDelete.forEach(fileToDelete => {
                         fs.unlinkSync(path.join(archiveDir, fileToDelete));
-                        logger.info(`[Backup] Rotated out old backup: ${fileToDelete} from archive.`);
+                        logger.debug(`[Backup] Rotated out old backup: ${fileToDelete} from archive.`);
                     });
                 }
             }
@@ -297,7 +297,7 @@ router.post('/backup', (req, res) => {
     }
 
     const writeStream = fs.createWriteStream(filePath);
-    logger.info(`[Backup] Receiving stream for: ${identifier} -> ${fileName}`);
+    logger.debug(`[Backup] Receiving stream for: ${identifier} -> ${fileName}`);
     req.pipe(writeStream);
 
     writeStream.on('finish', () => {
@@ -317,7 +317,7 @@ router.post('/backup', (req, res) => {
                 rebuildUserVocabularySearchIndexFromFile(filePath, String(identifier || '').trim());
             }
 
-            logger.info(`[Backup] Saved ${sizeMB} MB for ${identifier} in app '${appName}'`);
+            logger.debug(`[Backup] Saved ${sizeMB} MB for ${identifier} in app '${appName}'`);
             res.json({ success: true, size: stats.size, timestamp: Date.now() });
         } catch (err) {
             logger.error(`[Backup] Stat error: ${err.message}`);
@@ -343,7 +343,7 @@ router.get('/backup/:identifier', (req, res) => {
     }
 
     const identifier = req.params.identifier;
-    logger.info(`[Backup] Request received for restore: ${identifier} in app '${appName}'`);
+    logger.debug(`[Backup] Request received for restore: ${identifier} in app '${appName}'`);
     
     const safeIdentifier = sanitizeToAscii(identifier);
     const fileName = `backup_${safeIdentifier}.json`;
@@ -354,7 +354,7 @@ router.get('/backup/:identifier', (req, res) => {
         return res.status(404).json({ error: `No backup found for ${identifier}.` });
     }
 
-    logger.info(`[Backup] Streaming download for: ${filePath}`);
+    logger.debug(`[Backup] Streaming download for: ${filePath}`);
 
     const readStream = fs.createReadStream(filePath);
     readStream.on('error', (err) => {

@@ -27,7 +27,7 @@ const MAP = {
 
 function ensureDictionary() {
     if (!fs.existsSync(settings.DICT_PATH)) {
-        logger.info("[IPA] cmudict.dict missing. Downloading...");
+        logger.debug("[IPA] cmudict.dict missing. Downloading...");
         try {
             execSync(`curl -L -o "${settings.DICT_PATH}" https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict`);
         } catch (e) {
@@ -47,7 +47,7 @@ function ensureDictionary() {
             CMU[word] = phones;
             loadedCount++;
         }
-        logger.info(`[IPA] Dictionary loaded: ${loadedCount} words.`);
+        logger.debug(`[IPA] Dictionary loaded: ${loadedCount} words.`);
     } catch (err) {
         logger.error("[IPA] Failed to parse dictionary:", err.message);
     }
@@ -435,7 +435,7 @@ function readLookupCache(word) {
             );
 
             if (hasMissingHeadword) {
-                logger.info(`[Cambridge Cache] Missing headword detected for "${parsed.word}" -> invalidating cache and forcing fresh Cambridge query.`);
+                logger.debug(`[Cambridge Cache] Missing headword detected for "${parsed.word}" -> invalidating cache and forcing fresh Cambridge query.`);
                 return null; // force re-fetch from Cambridge
             }
 
@@ -447,7 +447,7 @@ function readLookupCache(word) {
                 cachedAt: parsed.cachedAt || null
             };
         }
-        logger.info(`[Cambridge Cache] Cache miss or invalid structure for "${word}" -> will query Cambridge.`);
+        logger.debug(`[Cambridge Cache] Cache miss or invalid structure for "${word}" -> will query Cambridge.`);
         return null;
     } catch {
         return null;
@@ -825,7 +825,7 @@ try {
         const content = fs.readFileSync(OLD_IPA_FILE, 'utf8');
         fs.writeFileSync(path.join(MODULES_DIR, '01_General.md'), content);
         // Optional: fs.unlinkSync(OLD_IPA_FILE); // Keep backup for safety
-        logger.info("[IPA] Migrated old single file to modules/01_General.md");
+        logger.debug("[IPA] Migrated old single file to modules/01_General.md");
     }
 } catch (e) {
     logger.error("[IPA] Migration failed:", e.message);
