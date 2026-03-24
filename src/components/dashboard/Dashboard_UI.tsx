@@ -1757,62 +1757,64 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
     <div className="space-y-2 animate-in fade-in duration-500">
       <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-3">
         <div>
-            <div className="flex items-baseline gap-2">
+            <div className="pt-4 flex items-baseline gap-2">
                 <h2 className="text-3xl font-black text-neutral-900 tracking-tight">IELTS Vocab Pro</h2>
                 <span className="text-[10px] font-bold text-neutral-400 font-mono tracking-tighter bg-neutral-100 px-1.5 py-0.5 rounded-md border border-neutral-200">{version}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-2 mt-1">
-                 {serverStatus === 'connected' ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                            <span className="text-[11px] font-semibold text-neutral-500">
-                                {activeServerMode === 'home' ? 'Private Server' : 'Public Server'}
-                            </span>
-                        </div>
-                        <div className="inline-flex items-center gap-1">
-                            <button
-                                onClick={() =>
-                                    onToggleServerMode?.(
-                                        activeServerMode === 'home' ? 'public' : 'home'
-                                    )
-                                }
-                                disabled={!!isSwitchingServerMode}
-                                className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all duration-150 bg-blue-500 text-white hover:bg-blue-600 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
-                            >
-                                {isSwitchingServerMode
-                                    ? 'Switching...'
-                                    : (activeServerMode === 'home'
-                                        ? 'Switch to Public Server'
-                                        : 'Switch to Private Server')}
-                            </button>
-                        </div>
-                    </div>
-                 ) : (
-                    <div className="flex items-center gap-2 px-1.5 py-1.5 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm pr-1.5">
-                        <div className="flex items-center gap-2 px-2">
-                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Offline Mode</span>
-                            <div className="relative group/tooltip">
-                                <HelpCircle size={12} className="cursor-help opacity-70 hover:opacity-100" />
-                                <div className="absolute left-0 top-full mt-2 w-56 p-3 bg-neutral-900 text-white text-[10px] leading-relaxed font-medium rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-neutral-700">
-                                    Disconnected from Vocab Server. Server backup and high-quality voices are unavailable.
-                                    <div className="absolute -top-1 left-3 w-2 h-2 bg-neutral-900 rotate-45 border-l border-t border-neutral-700"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="w-px h-3 bg-red-200"></div>
-                        <button onClick={() => { sessionStorage.setItem('vocab_pro_settings_tab', 'SERVER'); onNavigate('SETTINGS'); }} className="flex items-center gap-1 px-3 py-1 bg-blue-600 border border-blue-700 rounded-full shadow-sm hover:bg-blue-700 transition-all group/btn">
-                            <Link size={10} className="text-white"/><span className="text-[10px] font-black uppercase tracking-widest text-white">Connect</span>
-                        </button>
-                    </div>
-                 )}
-            </div>
+            
         </div>
         <div className="flex flex-col items-end gap-2">
              <BackupStatus lastBackupTime={lastBackupTime} onBackup={onBackup} onRestore={onRestore} serverStatus={serverStatus} />
         </div>
       </header>
+
+      <div className="flex flex-wrap items-center gap-2 mt-1">
+        {serverStatus === 'connected' ? (
+        <div className="flex flex-wrap items-center gap-2">
+            <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="text-[11px] font-semibold text-neutral-500">
+                    {activeServerMode === 'home' ? 'Private Server' : 'Public Server'}
+                </span>
+            </div>
+            <div className="inline-flex items-center gap-1">
+                <button
+                    onClick={() =>
+                        onToggleServerMode?.(
+                            activeServerMode === 'home' ? 'public' : 'home'
+                        )
+                    }
+                    disabled={!!isSwitchingServerMode}
+                    className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all duration-150 bg-blue-500 text-white hover:bg-blue-600 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                >
+                    {isSwitchingServerMode
+                        ? 'Switching...'
+                        : (activeServerMode === 'home'
+                            ? 'Switch to Public Server'
+                            : 'Switch to Private Server')}
+                </button>
+            </div>
+        </div>
+        ) : (
+        <div className="flex items-center gap-2 px-1.5 py-1.5 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm pr-1.5">
+            <div className="flex items-center gap-2 px-2">
+                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Offline Mode</span>
+                <div className="relative group/tooltip">
+                    <HelpCircle size={12} className="cursor-help opacity-70 hover:opacity-100" />
+                    <div className="absolute left-0 top-full mt-2 w-56 p-3 bg-neutral-900 text-white text-[10px] leading-relaxed font-medium rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-neutral-700">
+                        Disconnected from Vocab Server. Server backup and high-quality voices are unavailable.
+                        <div className="absolute -top-1 left-3 w-2 h-2 bg-neutral-900 rotate-45 border-l border-t border-neutral-700"></div>
+                    </div>
+                </div>
+            </div>
+            <div className="w-px h-3 bg-red-200"></div>
+            <button onClick={() => { sessionStorage.setItem('vocab_pro_settings_tab', 'SERVER'); onNavigate('SETTINGS'); }} className="flex items-center gap-1 px-3 py-1 bg-blue-600 border border-blue-700 rounded-full shadow-sm hover:bg-blue-700 transition-all group/btn">
+                <Link size={10} className="text-white"/><span className="text-[10px] font-black uppercase tracking-widest text-white">Connect</span>
+            </button>
+        </div>
+        )}
+      </div>
 
       <div className="flex items-center justify-between">
         <div className="inline-flex p-1 bg-white border-2 border-neutral-100 rounded-2xl w-fit shadow-sm self-start">
