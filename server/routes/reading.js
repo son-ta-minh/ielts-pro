@@ -8,8 +8,9 @@ const { JSDOM } = require('jsdom');
 const { Readability } = require('@mozilla/readability');
 const { FOLDER_MAPPINGS_FILE } = require('../config');
 const { getReadingUnits } = require('../libraryManager');
+const logger = require('../logger');
 
-console.log("[Reading Route] Module loaded.");
+logger.info("[Reading Route] Module loaded.");
 
 let folderMappings = {};
 
@@ -20,7 +21,7 @@ function loadMappings() {
             folderMappings = JSON.parse(fs.readFileSync(mappingFile, 'utf8'));
         }
     } catch (e) {
-        console.error("[Reading] Failed to load mappings:", e.message);
+        logger.error("[Reading] Failed to load mappings:", e.message);
     }
 }
 loadMappings();
@@ -64,7 +65,7 @@ router.get('/reading/from-url', async (req, res) => {
             // --- First fallback: textise mirror (often bypasses bot protection like DataDome) ---
             try {
                 const textiseUrl = `https://textise.net/showtext.aspx?strURL=${encodeURIComponent(targetUrl)}`;
-                console.warn('[Reading] Primary fetch blocked. Trying textise mirror:', textiseUrl);
+                logger.warn('[Reading] Primary fetch blocked. Trying textise mirror:', textiseUrl);
 
                 const mirrorResponse = await fetch(textiseUrl, {
                     headers: {
@@ -76,7 +77,7 @@ router.get('/reading/from-url', async (req, res) => {
                 });
 
                 if (mirrorResponse.ok) {
-                    console.log('[Reading] textise fallback succeeded');
+                    logger.info('[Reading] textise fallback succeeded');
                     const mirrorHtml = await mirrorResponse.text();
 
                     const dom = new JSDOM(mirrorHtml, { url: targetUrl });
@@ -98,7 +99,7 @@ router.get('/reading/from-url', async (req, res) => {
                     }
                 }
             } catch (mirrorError) {
-                console.warn('[Reading] textise fallback failed:', mirrorError.message);
+                logger.warn('[Reading] textise fallback failed:', mirrorError.message);
             }
 
             // --- Second fallback: AMP version (some sites allow it) ---
@@ -108,7 +109,7 @@ router.get('/reading/from-url', async (req, res) => {
                         ? `${targetUrl}&outputType=amp`
                         : `${targetUrl}?outputType=amp`;
 
-                    console.warn('[Reading] Trying AMP fallback:', ampUrl);
+                    logger.warn('[Reading] Trying AMP fallback:', ampUrl);
 
                     const ampResponse = await fetch(ampUrl, {
                         headers: {
@@ -123,7 +124,7 @@ router.get('/reading/from-url', async (req, res) => {
                     });
 
                     if (ampResponse.ok) {
-                        console.log('[Reading] AMP fallback succeeded');
+                        logger.info('[Reading] AMP fallback succeeded');
                         const ampHtml = await ampResponse.text();
 
                         const dom = new JSDOM(ampHtml, { url: targetUrl });
@@ -137,7 +138,7 @@ router.get('/reading/from-url', async (req, res) => {
                         }
                     }
                 } catch (ampError) {
-                    console.warn('[Reading] AMP fallback failed:', ampError.message);
+                    logger.warn('[Reading] AMP fallback failed:', ampError.message);
                 }
             }
 
@@ -150,7 +151,7 @@ router.get('/reading/from-url', async (req, res) => {
                 bodyPreview = '[unable to read body]';
             }
 
-            console.error('[Reading] Upstream fetch failed:', {
+            logger.error('[Reading] Upstream fetch failed:', {
                 url: targetUrl,
                 status: response.status,
                 statusText: response.statusText,
@@ -188,7 +189,7 @@ router.get('/reading/from-url', async (req, res) => {
                 readerAvailable = true;
             }
         } catch (e) {
-            console.warn('[Reading] Readability failed, falling back to cheerio:', e.message);
+            logger.warn('[Reading] Readability failed, falling back to cheerio:', e.message);
         }
 
         // --- Fallback extraction using cheerio if Readability fails ---
@@ -222,7 +223,7 @@ router.get('/reading/from-url', async (req, res) => {
 
         res.json({ title, essay, readerAvailable });
     } catch (error) {
-        console.error('[Reading] Failed to fetch URL', targetUrl, error);
+        logger.error('[Reading] Failed to fetch URL', targetUrl, error);
         res.status(500).json({ error: 'Could not fetch the URL' });
     }
 });
@@ -231,7 +232,7 @@ router.get('/reading/from-url', async (req, res) => {
 
 // NEW: Get aggregated Master Reading Units
 router.get('/reading/master', (req, res) => {
-    console.log("[Reading] GET /reading/master called");
+    logger.info("[Reading] GET /reading/master called");
     try {
         const units = getReadingUnits();
         
@@ -254,7 +255,7 @@ router.get('/reading/master', (req, res) => {
         
         res.json({ items: mappedUnits });
     } catch (e) {
-        console.error("[Reading] Error serving master list:", e);
+        logger.error("[Reading] Error serving master list:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -325,7 +326,7 @@ router.get('/reading/files/:mapName', (req, res) => {
 
         res.json({ items, currentPath: safeSubPath });
     } catch (e) {
-        console.error(`[Reading] Failed to read dir ${targetDir}:`, e);
+        logger.error(`[Reading] Failed to read dir ${targetDir}:`, e);
         res.status(500).json({ error: 'Failed to read directory' });
     }
 });
@@ -410,7 +411,7 @@ router.get('/reading/content/:mapName/*', (req, res) => {
             });
         }
     } catch (e) {
-        console.error(`[Reading] Failed to read file ${fullPath}:`, e);
+        logger.error(`[Reading] Failed to read file ${fullPath}:`, e);
         res.status(500).json({ error: 'Failed to read file' });
     }
 });

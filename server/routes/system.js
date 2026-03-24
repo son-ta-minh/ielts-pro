@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
+const logger = require('../logger');
 
 router.get('/health', (req, res) => {
     // Check mappings count dynamically
@@ -59,10 +60,10 @@ router.post('/config/backup-path', (req, res) => {
         }
 
         settings.BACKUP_DIR = resolvedPath;
-        console.log(`[Config] Backup directory updated to: ${settings.BACKUP_DIR}`);
+        logger.info(`[Config] Backup directory updated to: ${settings.BACKUP_DIR}`);
         res.json({ success: true, path: settings.BACKUP_DIR });
     } catch (err) {
-        console.error(`[Config] Failed to set backup path: ${err.message}`);
+        logger.error(`[Config] Failed to set backup path: ${err.message}`);
         res.status(500).json({ error: err.message });
     }
 });

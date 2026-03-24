@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const router = express.Router();
 const { MASTER_GALLERY_FILE } = require('../config');
+const logger = require('../logger');
 
 const GALLERY_FILE = MASTER_GALLERY_FILE();
 
@@ -12,7 +13,7 @@ const readItems = () => {
     const parsed = JSON.parse(raw || '[]');
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
-    console.warn('[Gallery] Failed to read file, resetting.', e.message);
+    logger.warn('[Gallery] Failed to read file, resetting.', e.message);
     fs.writeFileSync(GALLERY_FILE, '[]');
     return [];
   }

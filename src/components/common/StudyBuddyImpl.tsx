@@ -196,6 +196,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const [isSearchEnabled, setIsSearchEnabled] = useState(false);
     const [isChatListening, setIsChatListening] = useState(false);
     const [isConversationMode, setIsConversationMode] = useState(false);
+    const [studyBuddyConnectionStatus, setStudyBuddyConnectionStatus] = useState<'image' | 'chat' | 'offline'>('offline');
     const [activeChatTarget, setActiveChatTarget] = useState<StudyBuddyChatTarget | null>(null);
     const [activeChatSelectionText, setActiveChatSelectionText] = useState('');
     const [activeChatCoachAction, setActiveChatCoachAction] = useState<string | null>(null);
@@ -254,6 +255,36 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
     const avatarInfo = getAvatarProps(coach.avatar);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadStudyBuddyConnectionStatus = async () => {
+            try {
+                const serverUrl = getServerUrl(getConfig());
+                const res = await fetch(`${serverUrl}/api/studybuddy/status`, {
+                    cache: 'no-store'
+                });
+                if (!res.ok) {
+                    throw new Error(`StudyBuddy status error ${res.status}`);
+                }
+                const payload = await res.json();
+                if (cancelled) return;
+                const nextMode = payload?.mode === 'image' || payload?.mode === 'chat' || payload?.mode === 'offline'
+                    ? payload.mode
+                    : 'offline';
+                setStudyBuddyConnectionStatus(nextMode);
+            } catch {
+                if (cancelled) return;
+                setStudyBuddyConnectionStatus('offline');
+            }
+        };
+
+        loadStudyBuddyConnectionStatus();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const handleChatResponseLanguageChange = (language: 'vi' | 'en') => {
         if (config.interface.studyBuddyLanguage === language) return;
@@ -2184,6 +2215,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                             <StudyBuddyChatPanel
                                 chatPanelRef={chatPanelRef}
                                 chatScrollRef={chatScrollRef}
+                                connectionStatus={studyBuddyConnectionStatus}
                                 isConversationMode={isConversationMode}
                                 isChatListening={isChatListening}
                                 isChatLoading={isChatLoading}

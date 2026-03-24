@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { getAppBackupPath, loadMetadata } = require('./utils');
+const logger = require('./logger');
 
 const VECTOR_DIMENSIONS = 384;
 const DEFAULT_RESULT_LIMIT = 8;
@@ -333,11 +334,11 @@ function rebuildAllUserVocabularySearchIndices() {
                 userSearchIndices.set(index.userName, index);
             }
         } catch (error) {
-            console.warn('[VocabularySearch] Failed to index file:', filePath, error.message);
+            logger.warn('[VocabularySearch] Failed to index file:', filePath, error.message);
         }
     });
 
-    console.log('[VocabularySearch] Indexed users:', userSearchIndices.size);
+    logger.info('[VocabularySearch] Indexed users:', userSearchIndices.size);
     return getVocabularySearchStats();
 }
 
@@ -346,10 +347,10 @@ function rebuildUserVocabularySearchIndexFromFile(filePath, fallbackUserName = '
         const index = buildIndexFromBackupFile(filePath, fallbackUserName);
         if (!index?.userName) return null;
         userSearchIndices.set(index.userName, index);
-        console.log('[VocabularySearch] Rebuilt user index:', index.userName, 'chunks:', index.chunkCount);
+        logger.info('[VocabularySearch] Rebuilt user index:', index.userName, 'chunks:', index.chunkCount);
         return index;
     } catch (error) {
-        console.warn('[VocabularySearch] Failed to rebuild user index from file:', filePath, error.message);
+        logger.warn('[VocabularySearch] Failed to rebuild user index from file:', filePath, error.message);
         return null;
     }
 }

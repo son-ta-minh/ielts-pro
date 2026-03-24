@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const minimist = require('minimist');
+const logger = require('./logger');
 
 // --- Configuration ---
 const args = minimist(process.argv.slice(2));
@@ -35,16 +36,16 @@ function getInitialBackupPath() {
                 fs.writeFileSync(testFile, 'test');
                 fs.unlinkSync(testFile);
                 
-                console.log(`[Config] Using iCloud Data directory: ${iCloudPath}`);
+                logger.info(`[Config] Using iCloud Data directory: ${iCloudPath}`);
                 return iCloudPath;
             }
         }
     } catch (e) {
-        console.warn(`[Config] iCloud Data auto-detection failed (${e.message}). Falling back to local.`);
+        logger.warn(`[Config] iCloud Data auto-detection failed (${e.message}). Falling back to local.`);
     }
 
     if (!fs.existsSync(localPath)) fs.mkdirSync(localPath, { recursive: true });
-    console.log(`[Config] Using local backup directory: ${localPath}`);
+    logger.info(`[Config] Using local backup directory: ${localPath}`);
     return localPath;
 }
 
@@ -53,7 +54,7 @@ const BACKUP_DIR = getInitialBackupPath();
 // 2. SERVER CONFIG DIRECTORY (Inside the main Data Directory: VocabPro/server)
 const CLOUD_CONFIG_DIR = path.join(BACKUP_DIR, 'server');
 if (!fs.existsSync(CLOUD_CONFIG_DIR)) {
-    console.log(`[Config] Creating Server Config folder: ${CLOUD_CONFIG_DIR}`);
+    logger.info(`[Config] Creating Server Config folder: ${CLOUD_CONFIG_DIR}`);
     fs.mkdirSync(CLOUD_CONFIG_DIR, { recursive: true });
 }
 
@@ -94,12 +95,12 @@ try {
 
     filesToInit.forEach(f => {
         if (!fs.existsSync(f.path)) {
-            console.log(`[Config] Creating empty ${f.label} file: ${f.path}`);
+            logger.info(`[Config] Creating empty ${f.label} file: ${f.path}`);
             fs.writeFileSync(f.path, f.defaultContent);
         }
     });
 } catch (e) {
-    console.warn("[Config] File initialization failed:", e.message);
+    logger.warn("[Config] File initialization failed:", e.message);
 }
 
 // --- Minimal Migration Logic (Legacy -> New Cloud) ---
@@ -119,11 +120,11 @@ try {
 
     if (destIsEmpty) {
         if (fs.existsSync(oldMappingsBackup)) {
-             console.log("[Config] Migrating folder_mappings.json from VocabPro root -> VocabPro/server...");
+             logger.info("[Config] Migrating folder_mappings.json from VocabPro root -> VocabPro/server...");
              fs.copyFileSync(oldMappingsBackup, mappingsDest);
              // Optional: fs.unlinkSync(oldMappingsBackup); // Cleanup old file?
         } else if (fs.existsSync(oldMappingsRoot)) {
-             console.log("[Config] Migrating audio_mappings.json from Local root -> VocabPro/server...");
+             logger.info("[Config] Migrating audio_mappings.json from Local root -> VocabPro/server...");
              fs.copyFileSync(oldMappingsRoot, mappingsDest);
         }
     }
@@ -141,23 +142,23 @@ try {
 
     if (masterIsEmpty) {
         if (fs.existsSync(oldMasterBackup)) {
-            console.log("[Config] Migrating master_library.json from VocabPro root -> VocabPro/server...");
+            logger.info("[Config] Migrating master_library.json from VocabPro root -> VocabPro/server...");
             fs.copyFileSync(oldMasterBackup, masterDest);
         } else if (fs.existsSync(oldMasterRoot)) {
-             console.log("[Config] Migrating master_library.json from Local root -> VocabPro/server...");
+             logger.info("[Config] Migrating master_library.json from Local root -> VocabPro/server...");
              fs.copyFileSync(oldMasterRoot, masterDest);
         }
     }
     
 } catch(e) {
-    console.warn("[Config] Migration check skipped:", e.message);
+    logger.warn("[Config] Migration check skipped:", e.message);
 }
 
-console.log(`[Config] 📂 Mappings: ${FOLDER_MAPPINGS_FILE()}`);
-console.log(`[Config] 📚 Library:  ${MASTER_LIBRARY_FILE()}`);
-console.log(`[Config] 📖 Reading:  ${MASTER_READING_FILE()}`);
-console.log(`[Config] 📅 Planning: ${MASTER_PLANNING_FILE()}`);
-console.log(`[Config] 💾 Backups:  ${BACKUP_DIR}`);
+logger.info(`[Config] 📂 Mappings: ${FOLDER_MAPPINGS_FILE()}`);
+logger.info(`[Config] 📚 Library:  ${MASTER_LIBRARY_FILE()}`);
+logger.info(`[Config] 📖 Reading:  ${MASTER_READING_FILE()}`);
+logger.info(`[Config] 📅 Planning: ${MASTER_PLANNING_FILE()}`);
+logger.info(`[Config] 💾 Backups:  ${BACKUP_DIR}`);
 
 module.exports = {
     settings,

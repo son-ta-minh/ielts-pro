@@ -4,6 +4,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { settings } = require('../config');
+const logger = require('../logger');
 
 // --- Courses Storage ---
 const COURSES_DIR = path.join(settings.BACKUP_DIR, 'server', 'courses');
@@ -761,7 +762,7 @@ function exportAllCoursesToBackup() {
     const latestPath = path.join(backupDir, 'full-export.json');
     fs.writeFileSync(latestPath, JSON.stringify(snapshot, null, 2));
 
-    console.log('[Courses] Backup completed');
+    logger.info('[Courses] Backup completed');
 }
 
 // --- Migration / Initialization Logic ---
@@ -797,7 +798,7 @@ if (fs.existsSync(OLD_IPA_MODULES_DIR)) {
     try {
         const files = fs.readdirSync(OLD_IPA_MODULES_DIR);
         if (files.length > 0) {
-            console.log("[Courses] Migrating IPA modules to Pronunciation Roadmap course...");
+            logger.info("[Courses] Migrating IPA modules to Pronunciation Roadmap course...");
             if (!fs.existsSync(NEW_IPA_MODULES_DIR)) fs.mkdirSync(NEW_IPA_MODULES_DIR, { recursive: true });
             
             files.forEach(file => {
@@ -811,7 +812,7 @@ if (fs.existsSync(OLD_IPA_MODULES_DIR)) {
             // Optional: Remove old dir? Keeping for safety for now.
         }
     } catch (e) {
-        console.error("[Courses] Migration failed:", e.message);
+        logger.error("[Courses] Migration failed:", e.message);
     }
 }
 

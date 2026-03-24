@@ -6,6 +6,7 @@ const multer = require('multer');
 const { FOLDER_MAPPINGS_FILE } = require('../config');
 const https = require('https');
 const http = require('http');
+const logger = require('../logger');
 
 // Load mappings (shared with Audio/Reading)
 let folderMappings = {};
@@ -14,7 +15,7 @@ try {
         folderMappings = JSON.parse(fs.readFileSync(FOLDER_MAPPINGS_FILE(), 'utf8'));
     }
 } catch (e) {
-    console.error("[Images] Failed to load mappings:", e);
+    logger.error("[Images] Failed to load mappings:", e);
 }
 
 // Multer Config
@@ -128,7 +129,7 @@ router.get('/images/files/:mapName', (req, res) => {
 
         res.json({ items, currentPath: safeSubPath });
     } catch (e) {
-        console.error(`[Images] Failed to read dir ${targetDir}:`, e);
+        logger.error(`[Images] Failed to read dir ${targetDir}:`, e);
         res.status(500).json({ error: 'Failed to read directory' });
     }
 });
@@ -231,7 +232,7 @@ router.post('/images/cache', express.json(), async (req, res) => {
             res.status(500).json({ error: err.message });
         });
     } catch (err) {
-        console.error('[Images] Cache error:', err);
+        logger.error('[Images] Cache error:', err);
         res.status(500).json({ error: 'Failed to cache image' });
     }
 });

@@ -610,6 +610,7 @@ const ChatHistoryList = React.memo(({
 interface StudyBuddyChatPanelProps {
     chatPanelRef: React.RefObject<HTMLDivElement | null>;
     chatScrollRef: React.RefObject<HTMLDivElement | null>;
+    connectionStatus: 'image' | 'chat' | 'offline';
     isConversationMode: boolean;
     isChatListening: boolean;
     isChatLoading: boolean;
@@ -657,6 +658,7 @@ interface StudyBuddyChatPanelProps {
 export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     chatPanelRef,
     chatScrollRef,
+    connectionStatus,
     isConversationMode,
     isChatListening,
     isChatLoading,
@@ -874,6 +876,18 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     };
 
     const isComposerStudyDisabled = !chatInput.trim() || isConversationMode;
+    const connectionBadgeTitle = connectionStatus === 'image'
+        ? 'Image Gen server connected'
+        : (connectionStatus === 'chat' ? 'AI Chat connected' : 'AI Chat disconnected');
+    const connectionBadgeStyle = connectionStatus === 'image'
+        ? {
+            backgroundImage: 'conic-gradient(#ef4444, #f97316, #facc15, #22c55e, #3b82f6, #8b5cf6, #ec4899, #ef4444)',
+            boxShadow: '0 0 0 2px rgba(255,255,255,0.95), 0 0 0 3px rgba(229,229,229,0.9)'
+        }
+        : undefined;
+    const connectionBadgeClassName = connectionStatus === 'image'
+        ? 'h-3 w-3 rounded-full shrink-0'
+        : `h-3 w-3 rounded-full shrink-0 ${connectionStatus === 'chat' ? 'bg-emerald-500' : 'bg-red-500'}`;
 
     return (
         <div
@@ -890,7 +904,15 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                     <Sparkles size={16} />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-xs font-black text-neutral-900 uppercase tracking-wide">{headerTitle}</p>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span
+                            className={connectionBadgeClassName}
+                            style={connectionBadgeStyle}
+                            title={connectionBadgeTitle}
+                            aria-label={connectionBadgeTitle}
+                        />
+                        <p className="text-xs font-black text-neutral-900 uppercase tracking-wide truncate">{headerTitle}</p>
+                    </div>
                     <p className="text-[11px] text-neutral-500 truncate">{headerDescription}</p>
                 </div>
             </div>

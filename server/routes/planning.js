@@ -2,15 +2,16 @@
 const express = require('express');
 const router = express.Router();
 const libraryManager = require('../libraryManager');
+const logger = require('../logger');
 
-console.log("[Planning Route] Module loaded.");
+logger.info("[Planning Route] Module loaded.");
 
 // Get aggregated Master Planning Goals
 router.get('/planning/master', (req, res) => {
-    console.log("[Planning] GET /planning/master called");
+    logger.info("[Planning] GET /planning/master called");
     try {
         if (typeof libraryManager.getPlanningGoals !== 'function') {
-            console.error("[Planning] Critical Error: getPlanningGoals is not a function. LibraryManager exports:", Object.keys(libraryManager));
+            logger.error("[Planning] Critical Error: getPlanningGoals is not a function. LibraryManager exports:", Object.keys(libraryManager));
             return res.status(500).json({ error: 'Server misconfiguration: Library function missing' });
         }
 
@@ -28,7 +29,7 @@ router.get('/planning/master', (req, res) => {
         
         res.json({ items: mappedGoals });
     } catch (e) {
-         console.error("[Planning] Error serving master list:", e);
+         logger.error("[Planning] Error serving master list:", e);
          res.status(500).json({ error: e.message });
     }
 });

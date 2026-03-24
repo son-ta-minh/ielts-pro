@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { settings, MASTER_LIBRARY_FILE, MASTER_READING_FILE, MASTER_PLANNING_FILE } = require('./config');
+const logger = require('./logger');
 
 // In-memory store: Map<lowercase_word, VocabularyItem>
 const globalLibrary = new Map();
@@ -10,7 +11,7 @@ const globalReadingLibrary = new Map();
 // In-memory store: Map<goal_title, PlanningGoal> (Keyed by Title to prevent duplicates)
 const globalPlanningLibrary = new Map();
 
-console.log("[LibraryManager] Loading version with Strict Data Cleaning...");
+logger.info("[LibraryManager] Loading version with Strict Data Cleaning...");
 
 // Helper to recursively find json files
 function findBackupFiles(dir, fileList = []) {
@@ -32,7 +33,7 @@ function findBackupFiles(dir, fileList = []) {
             }
         });
     } catch (e) {
-        console.warn(`[Library] Error scanning directory ${dir}: ${e.message}`);
+        logger.warn(`[Library] Error scanning directory ${dir}: ${e.message}`);
     }
     return fileList;
 }
@@ -110,12 +111,12 @@ function cleanPlan(item) {
 // -----------------------------
 
 function loadGlobalLibrary() {
-    console.log("[Library] --- Initializing Global Library & Reading & Planning ---");
+    logger.info("[Library] --- Initializing Global Library & Reading & Planning ---");
     const start = Date.now();
     
     // Ensure backup dir exists
     if (!fs.existsSync(settings.BACKUP_DIR)) {
-        console.log(`[Library] Backup directory not found. Creating: ${settings.BACKUP_DIR}`);
+        logger.info(`[Library] Backup directory not found. Creating: ${settings.BACKUP_DIR}`);
         fs.mkdirSync(settings.BACKUP_DIR, { recursive: true });
     }
 
@@ -136,10 +137,10 @@ function loadGlobalLibrary() {
                         globalLibrary.set(cleanItem.word.toLowerCase().trim(), cleanItem);
                     }
                 });
-                console.log(`[Library] Loaded ${masterData.length} words from existing Master File.`);
+                logger.info(`[Library] Loaded ${masterData.length} words from existing Master File.`);
             }
         } catch (e) {
-            console.error("[Library] Failed to load Master File:", e.message);
+            logger.error("[Library] Failed to load Master File:", e.message);
         }
     }
 
@@ -155,10 +156,10 @@ function loadGlobalLibrary() {
                         globalReadingLibrary.set(cleanItem.name.trim(), cleanItem);
                     }
                 });
-                console.log(`[Library] Loaded ${readingData.length} units from existing Master Reading File.`);
+                logger.info(`[Library] Loaded ${readingData.length} units from existing Master Reading File.`);
             }
         } catch (e) {
-            console.error("[Library] Failed to load Master Reading File:", e.message);
+            logger.error("[Library] Failed to load Master Reading File:", e.message);
         }
     }
 
@@ -174,10 +175,10 @@ function loadGlobalLibrary() {
                         globalPlanningLibrary.set(cleanItem.title.trim(), cleanItem);
                     }
                 });
-                console.log(`[Library] Loaded ${planningData.length} plans from existing Master Planning File.`);
+                logger.info(`[Library] Loaded ${planningData.length} plans from existing Master Planning File.`);
             }
         } catch (e) {
-            console.error("[Library] Failed to load Master Planning File:", e.message);
+            logger.error("[Library] Failed to load Master Planning File:", e.message);
         }
     }
 
@@ -270,7 +271,7 @@ function loadGlobalLibrary() {
                 }
 
             } catch (err) {
-                console.warn(`[Library] Failed to parse ${f.path}:`, err.message);
+                logger.warn(`[Library] Failed to parse ${f.path}:`, err.message);
             }
         });
 
@@ -278,33 +279,33 @@ function loadGlobalLibrary() {
         const allItems = Array.from(globalLibrary.values());
         try {
             fs.writeFileSync(MASTER_FILE, JSON.stringify(allItems, null, 2));
-            console.log(`[Library] Master Library updated. Saved ${allItems.length} words to disk.`);
+            logger.info(`[Library] Master Library updated. Saved ${allItems.length} words to disk.`);
         } catch (writeErr) {
-            console.error("[Library] Failed to write Master Library file:", writeErr.message);
+            logger.error("[Library] Failed to write Master Library file:", writeErr.message);
         }
 
         // 6. Save Updated Master Reading (Units)
         const allUnits = Array.from(globalReadingLibrary.values());
         try {
             fs.writeFileSync(READING_FILE, JSON.stringify(allUnits, null, 2));
-            console.log(`[Library] Master Reading updated. Saved ${allUnits.length} units to disk.`);
+            logger.info(`[Library] Master Reading updated. Saved ${allUnits.length} units to disk.`);
         } catch (writeErr) {
-            console.error("[Library] Failed to write Master Reading file:", writeErr.message);
+            logger.error("[Library] Failed to write Master Reading file:", writeErr.message);
         }
 
         // 7. Save Updated Master Planning (Goals)
         const allPlans = Array.from(globalPlanningLibrary.values());
         try {
             fs.writeFileSync(PLANNING_FILE, JSON.stringify(allPlans, null, 2));
-            console.log(`[Library] Master Planning updated. Saved ${allPlans.length} plans to disk.`);
+            logger.info(`[Library] Master Planning updated. Saved ${allPlans.length} plans to disk.`);
         } catch (writeErr) {
-            console.error("[Library] Failed to write Master Planning file:", writeErr.message);
+            logger.error("[Library] Failed to write Master Planning file:", writeErr.message);
         }
 
-        console.log(`[Library] Complete. Processed ${fileCount} user files. Time: ${Date.now() - start}ms`);
-        console.log("[Library] ---------------------------------------");
+        logger.info(`[Library] Complete. Processed ${fileCount} user files. Time: ${Date.now() - start}ms`);
+        logger.info("[Library] ---------------------------------------");
     } catch (e) {
-        console.error("[Library] Critical error loading library:", e);
+        logger.error("[Library] Critical error loading library:", e);
     }
 }
 

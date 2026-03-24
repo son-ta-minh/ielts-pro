@@ -7,6 +7,7 @@ const { execSync } = require('child_process');
 const cheerio = require('cheerio');
 const https = require('https');
 const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
+const logger = require('../logger');
 
 // --- CMU Logic ---
 const CMU = {};
@@ -26,11 +27,11 @@ const MAP = {
 
 function ensureDictionary() {
     if (!fs.existsSync(settings.DICT_PATH)) {
-        console.log("[IPA] cmudict.dict missing. Downloading...");
+        logger.info("[IPA] cmudict.dict missing. Downloading...");
         try {
             execSync(`curl -L -o "${settings.DICT_PATH}" https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict`);
         } catch (e) {
-            console.error("[IPA] Failed to download dictionary:", e.message);
+            logger.error("[IPA] Failed to download dictionary:", e.message);
             return;
         }
     }
@@ -46,9 +47,9 @@ function ensureDictionary() {
             CMU[word] = phones;
             loadedCount++;
         }
-        console.log(`[IPA] Dictionary loaded: ${loadedCount} words.`);
+        logger.info(`[IPA] Dictionary loaded: ${loadedCount} words.`);
     } catch (err) {
-        console.error("[IPA] Failed to parse dictionary:", err.message);
+        logger.error("[IPA] Failed to parse dictionary:", err.message);
     }
 }
 ensureDictionary();
@@ -202,7 +203,7 @@ async function getCambridgeIPA(word) {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-            console.warn(`[IPA MODE 2] Cambridge fetch failed for "${cleanWord}" status: ${response.status}`);
+            logger.warn(`[IPA MODE 2] Cambridge fetch failed for "${cleanWord}" status: ${response.status}`);
             if (response.status === 404) {
                 writeLookupCache(cleanWord, {
                     exists: false,
@@ -219,7 +220,7 @@ async function getCambridgeIPA(word) {
         
         const pageHw = $(".hw.dhw").first().text().toLowerCase().trim();
         if (pageHw && pageHw !== cleanWord) {
-            console.warn(`[IPA MODE 2] Mismatch (Redirect): requested "${cleanWord}", found "${pageHw}".`);
+            logger.warn(`[IPA MODE 2] Mismatch (Redirect): requested "${cleanWord}", found "${pageHw}".`);
             writeLookupCache(cleanWord, {
                 exists: false,
                 word: cleanWord,
@@ -262,7 +263,7 @@ async function getCambridgeIPA(word) {
 
         return usIpa;
     } catch (e) {
-        console.error(`[IPA MODE 2] Error scraping "${cleanWord}":`, e.message);
+        logger.error(`[IPA MODE 2] Error scraping "${cleanWord}":`, e.message);
         return null;
     }
 }
@@ -434,7 +435,7 @@ function readLookupCache(word) {
             );
 
             if (hasMissingHeadword) {
-                console.log(`[Cambridge Cache] Missing headword detected for "${parsed.word}" -> invalidating cache and forcing fresh Cambridge query.`);
+                logger.info(`[Cambridge Cache] Missing headword detected for "${parsed.word}" -> invalidating cache and forcing fresh Cambridge query.`);
                 return null; // force re-fetch from Cambridge
             }
 
@@ -446,7 +447,7 @@ function readLookupCache(word) {
                 cachedAt: parsed.cachedAt || null
             };
         }
-        console.log(`[Cambridge Cache] Cache miss or invalid structure for "${word}" -> will query Cambridge.`);
+        logger.info(`[Cambridge Cache] Cache miss or invalid structure for "${word}" -> will query Cambridge.`);
         return null;
     } catch {
         return null;
@@ -459,7 +460,7 @@ function writeLookupCache(word, payload) {
         if (!txtPath) return;
         fs.writeFileSync(txtPath, JSON.stringify(payload, null, 2), 'utf8');
     } catch (e) {
-        console.warn(`[Cambridge Cache] Failed writing cache for "${word}": ${e.message}`);
+        logger.warn(`[Cambridge Cache] Failed writing cache for "${word}": ${e.message}`);
     }
 }
 
@@ -779,7 +780,7 @@ router.get('/lookup/cambridge/simple', async (req, res) => {
         if (!result) return res.status(200).json({ exists: false });
         res.json(result);
     } catch (e) {
-        console.error("[Cambridge Simple] Failed:", e.message);
+        logger.error("[Cambridge Simple] Failed:", e.message);
         res.status(500).json({ error: 'cambridge_lookup_failed' });
     }
 });
@@ -824,10 +825,10 @@ try {
         const content = fs.readFileSync(OLD_IPA_FILE, 'utf8');
         fs.writeFileSync(path.join(MODULES_DIR, '01_General.md'), content);
         // Optional: fs.unlinkSync(OLD_IPA_FILE); // Keep backup for safety
-        console.log("[IPA] Migrated old single file to modules/01_General.md");
+        logger.info("[IPA] Migrated old single file to modules/01_General.md");
     }
 } catch (e) {
-    console.error("[IPA] Migration failed:", e.message);
+    logger.error("[IPA] Migration failed:", e.message);
 }
 
 router.get('/ipa/modules', (req, res) => {

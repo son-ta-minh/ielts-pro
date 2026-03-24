@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
 const { settings } = require('./config');
+const logger = require('./logger');
 
 // Transliterate Unicode to ASCII (e.g. "Đình" -> "Dinh")
 function sanitizeToAscii(str) {
@@ -34,7 +35,7 @@ function loadMetadata(appDir) {
             return JSON.parse(fs.readFileSync(p, 'utf8'));
         }
     } catch (e) {
-        console.error("[Meta] Failed to load metadata", e);
+        logger.error("[Meta] Failed to load metadata", e);
     }
     return {};
 }
@@ -46,7 +47,7 @@ function saveMetadata(data, appDir) {
             fs.writeFileSync(p, JSON.stringify(data, null, 2));
         }
     } catch (e) {
-        console.error("[Meta] Failed to save metadata", e);
+        logger.error("[Meta] Failed to save metadata", e);
     }
 }
 

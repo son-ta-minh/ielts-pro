@@ -7,6 +7,7 @@ const os = require('os');
 const { spawn } = require('child_process');
 const multer = require('multer');
 const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
+const logger = require('../logger');
 let FFMPEG_COMMAND = process.env.FFMPEG_PATH || 'ffmpeg';
 try {
     const ffmpegStatic = require('ffmpeg-static');
@@ -14,7 +15,7 @@ try {
         FFMPEG_COMMAND = ffmpegStatic;
     }
 } catch (err) {
-    console.warn('[Audio] ffmpeg-static not installed, falling back to system ffmpeg');
+    logger.warn('[Audio] ffmpeg-static not installed, falling back to system ffmpeg');
 }
 
 // Folder Mappings State
@@ -24,14 +25,14 @@ try {
         folderMappings = JSON.parse(fs.readFileSync(FOLDER_MAPPINGS_FILE(), 'utf8'));
     }
 } catch (e) {
-    console.error("[Audio] Failed to load mappings:", e);
+    logger.error("[Audio] Failed to load mappings:", e);
 }
 
 function saveMappings() {
     try {
         fs.writeFileSync(FOLDER_MAPPINGS_FILE(), JSON.stringify(folderMappings, null, 2));
     } catch (e) {
-        console.error("[Audio] Failed to save mappings:", e);
+        logger.error("[Audio] Failed to save mappings:", e);
     }
 }
 
@@ -202,11 +203,11 @@ router.get('/audio/download/:mapName/*', (req, res) => {
     ffmpeg.stdout.pipe(res);
 
     ffmpeg.stderr.on('data', chunk => {
-        console.debug(`[Audio] ffmpeg: ${chunk.toString('utf8')}`);
+        logger.debug(`[Audio] ffmpeg: ${chunk.toString('utf8')}`);
     });
 
     ffmpeg.on('error', err => {
-        console.error('[Audio] ffmpeg spawn failed', err);
+        logger.error('[Audio] ffmpeg spawn failed', err);
         ffmpegError = true;
         if (!res.headersSent) {
             res.status(500).send('Failed to convert audio');
@@ -318,7 +319,7 @@ router.get('/audio/files/:mapName', (req, res) => {
 
         res.json({ items, currentPath: safeSubPath });
     } catch (e) {
-        console.error(`[Audio] Failed to read dir ${targetDir}:`, e);
+        logger.error(`[Audio] Failed to read dir ${targetDir}:`, e);
         res.status(500).json({ error: 'Failed to read directory' });
     }
 });

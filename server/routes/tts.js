@@ -6,6 +6,7 @@ const path = require('path');
 const cheerio = require('cheerio');
 const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
 const { runCommand } = require('../utils');
+const logger = require('../logger');
 
 let selectedVoice = ""; 
 let selectedLanguage = "en";
@@ -28,7 +29,7 @@ function loadFolderMappings() {
         if (!fs.existsSync(mappingFile)) return {};
         return JSON.parse(fs.readFileSync(mappingFile, 'utf8')) || {};
     } catch (e) {
-        console.error("[TTS] Failed to load folder mappings:", e.message);
+        logger.error("[TTS] Failed to load folder mappings:", e.message);
         return {};
     }
 }
@@ -142,7 +143,7 @@ function writeLookupCache(word, payload) {
         if (!txtPath) return;
         fs.writeFileSync(txtPath, JSON.stringify(payload, null, 2), 'utf8');
     } catch (e) {
-        console.warn(`[TTS] Failed writing lookup cache for "${word}": ${e.message}`);
+        logger.warn(`[TTS] Failed writing lookup cache for "${word}": ${e.message}`);
     }
 }
 
@@ -321,10 +322,10 @@ async function ensureCambridgeLookupCacheDirect(wordText) {
             })),
             cachedAt: Date.now()
         });
-        console.log(`[TTS] Ensure cache direct created txt for "${requested}"`);
+        logger.info(`[TTS] Ensure cache direct created txt for "${requested}"`);
         return true;
     } catch (e) {
-        console.log(`[TTS] Ensure cache direct error "${requested}": ${e.message}`);
+        logger.info(`[TTS] Ensure cache direct error "${requested}": ${e.message}`);
         return false;
     }
 }
@@ -337,7 +338,7 @@ async function ensureCambridgeLookupCache(req, wordText) {
     const normalized = normalizeLookupWord(wordText);
     if (!normalized) return false;
 
-    console.log(`[TTS] Ensure cache (direct only) for "${normalized}"`);
+    logger.info(`[TTS] Ensure cache (direct only) for "${normalized}"`);
 
     // Do NOT call self API via localhost/127.0.0.1 anymore.
     // Directly fetch Cambridge page and build cache.
@@ -350,7 +351,7 @@ function findQualitySoundFile(wordText) {
 
     const mappings = loadFolderMappings();
     const qualityRoot = mappings[QUALITY_SOUND_MAP_NAME];
-    // console.log(`[TTS] Quality lookup "${wordText}" candidates=${JSON.stringify(candidates)} mapPath=${qualityRoot || '(missing)'}`);
+    // logger.info(`[TTS] Quality lookup "${wordText}" candidates=${JSON.stringify(candidates)} mapPath=${qualityRoot || '(missing)'}`);
     if (!qualityRoot || !fs.existsSync(qualityRoot)) return null;
 
     const resolvedRoot = path.resolve(qualityRoot);
@@ -358,7 +359,7 @@ function findQualitySoundFile(wordText) {
         for (const ext of AUDIO_EXTENSIONS) {
             const directPath = path.resolve(path.join(resolvedRoot, `${word}${ext}`));
             if (directPath.startsWith(resolvedRoot) && fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
-                // console.log(`[TTS] Quality hit "${wordText}" -> ${directPath}`);
+                // logger.info(`[TTS] Quality hit "${wordText}" -> ${directPath}`);
                 return directPath;
             }
         }
@@ -376,7 +377,7 @@ async function getCambridgeUsAudioUrl(wordText) {
     if (!slug) return null;
 
     const pageUrl = `https://dictionary.cambridge.org/dictionary/english/${encodeURIComponent(slug)}`;
-    console.log(`[TTS] Cambridge lookup start word="${wordText}" slug="${slug}" url=${pageUrl}`);
+    logger.info(`[TTS] Cambridge lookup start word="${wordText}" slug="${slug}" url=${pageUrl}`);
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -405,11 +406,11 @@ async function getCambridgeUsAudioUrl(wordText) {
         });
 
         const firstHeadword = normalizeLookupWord($(".hw.dhw").first().text());
-        console.log(`[TTS] Cambridge page headword word="${wordText}" requested="${requestedWord}" first="${firstHeadword || '(empty)'}" matchedEntry=${matchedEntry ? 'yes' : 'no'}`);
+        logger.info(`[TTS] Cambridge page headword word="${wordText}" requested="${requestedWord}" first="${firstHeadword || '(empty)'}" matchedEntry=${matchedEntry ? 'yes' : 'no'}`);
 
         // Require exact headword match; otherwise reject Cambridge audio.
         if (!requestedWord || !matchedEntry) {
-            console.log(`[TTS] Skip Cambridge audio due to missing exact entry match for "${requestedWord || wordText}"`);
+            logger.info(`[TTS] Skip Cambridge audio due to missing exact entry match for "${requestedWord || wordText}"`);
             return null;
         }
 
@@ -423,24 +424,29 @@ async function getCambridgeUsAudioUrl(wordText) {
         });
 
         if (!src) {
-            console.log(`[TTS] No US audio source in matched entry for "${requestedWord}"`);
+            logger.info(`[TTS] No US audio source in matched entry for "${requestedWord}"`);
             return null;
         }
-        console.log(`[TTS] Cambridge audio source selected word="${wordText}" src="${src}"`);
+        logger.info(`[TTS] Cambridge audio source selected word="${wordText}" src="${src}"`);
         if (src.startsWith('http://') || src.startsWith('https://')) return src;
         if (src.startsWith('//')) return `https:${src}`;
         if (src.startsWith('/')) return `https://dictionary.cambridge.org${src}`;
         return `https://dictionary.cambridge.org/${src}`;
     } catch (e) {
-        console.warn(`[TTS] Cambridge audio lookup failed for "${wordText}": ${e.message}`);
+        logger.warn(`[TTS] Cambridge audio lookup failed for "${wordText}": ${e.message}`);
         return null;
     }
 }
 
 async function downloadCambridgeAudioToQuality(wordText) {
+    if (!isSingleWordText(wordText)) {
+        logger.info(`[TTS] Skip Cambridge cache for multi-word text="${wordText}"`);
+        return null;
+    }
+
     const mappings = loadFolderMappings();
     const qualityRoot = mappings[QUALITY_SOUND_MAP_NAME];
-    console.log(`[TTS] Cambridge cache attempt word="${wordText}" mapPath=${qualityRoot || '(missing)'}`);
+    logger.info(`[TTS] Cambridge cache attempt word="${wordText}" mapPath=${qualityRoot || '(missing)'}`);
     if (!qualityRoot) return null;
 
     const resolvedRoot = path.resolve(qualityRoot);
@@ -455,7 +461,7 @@ async function downloadCambridgeAudioToQuality(wordText) {
     if (!targetName) return null;
 
     const targetPath = path.resolve(path.join(resolvedRoot, `${targetName}.mp3`));
-    console.log(`[TTS] Cambridge cache target word="${wordText}" target=${targetPath}`);
+    logger.info(`[TTS] Cambridge cache target word="${wordText}" target=${targetPath}`);
     if (!targetPath.startsWith(resolvedRoot)) return null;
     if (fs.existsSync(targetPath)) return targetPath;
 
@@ -484,11 +490,11 @@ async function downloadCambridgeAudioToQuality(wordText) {
         fs.renameSync(tmpPath, targetPath);
 
         if (fs.existsSync(targetPath)) {
-            console.log(`[TTS] Cached Cambridge audio: ${targetPath}`);
+            logger.info(`[TTS] Cached Cambridge audio: ${targetPath}`);
             return targetPath;
         }
     } catch (e) {
-        console.warn(`[TTS] Failed to cache Cambridge audio for "${wordText}": ${e.message}`);
+        logger.warn(`[TTS] Failed to cache Cambridge audio for "${wordText}": ${e.message}`);
     }
 
     return null;
@@ -516,9 +522,9 @@ async function loadVoicesFromOS() {
                 accent: accent.replace('-', '_') 
             };
         }
-        console.log(`[TTS] Successfully loaded ${Object.keys(voiceIndex).length} voices from OS.`);
+        logger.info(`[TTS] Successfully loaded ${Object.keys(voiceIndex).length} voices from OS.`);
     } catch (e) {
-        console.error("[TTS] Failed to load voices (Are you on macOS?):", e.message);
+        logger.error("[TTS] Failed to load voices (Are you on macOS?):", e.message);
     }
 }
 loadVoicesFromOS();
@@ -562,7 +568,7 @@ router.post('/select-voice', (req, res) => {
     selectedLanguage = info.language;
     selectedAccent = info.accent;
 
-    console.log(`[TTS] Selected voice context: ${voice} (${selectedAccent})`);
+    logger.info(`[TTS] Selected voice context: ${voice} (${selectedAccent})`);
     res.json({
         success: true,
         voice: selectedVoice,
@@ -583,31 +589,32 @@ router.post('/speak', async (req, res) => {
 
     // Ensure text is NFC normalized
     const cleanText = text.normalize('NFC');
-    console.log(`[TTS] /speak request text="${cleanText}" voice="${voiceToUse || '(default)'}" lang="${language || '(auto)'}"`);
+    logger.info(`[TTS] /speak request text="${cleanText}" voice="${voiceToUse || '(default)'}" lang="${language || '(auto)'}"`);
 
     const effectiveLanguage = language || selectedLanguage || 'en';
 
     // If Vietnamese, skip Quality_Sound and Cambridge completely
     if (effectiveLanguage === 'vi') {
-        console.log(`[TTS] Vietnamese detected → skip quality & Cambridge for "${cleanText}"`);
+        logger.info(`[TTS] Vietnamese detected → skip quality & Cambridge for "${cleanText}"`);
     } else {
         // Fast path first: for single-word requests, serve pre-recorded quality audio if available.
         const qualityAudioFile = findQualitySoundFile(cleanText);
         if (qualityAudioFile) {
             res.setHeader("X-TTS-Source", "quality");
             res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));
-            // console.log(`[TTS] /speak source=quality file=${qualityAudioFile}`);
+            // logger.info(`[TTS] /speak source=quality file=${qualityAudioFile}`);
             return res.sendFile(qualityAudioFile);
         }
 
         const normalizedWord = normalizeLookupWord(cleanText);
+        const isSingleWord = isSingleWordText(cleanText);
         let skipCambridge = false;
 
-        if (isSingleWordText(cleanText)) {
+        if (isSingleWord) {
             let lookupCache = readLookupCache(normalizedWord);
 
             if (lookupCache && lookupCache.exists === false) {
-                console.log(`[TTS] Skip Cambridge completely (negative cache) for "${normalizedWord}"`);
+                logger.info(`[TTS] Skip Cambridge completely (negative cache) for "${normalizedWord}"`);
                 skipCambridge = true;
             } else {
                 await ensureCambridgeLookupCache(req, cleanText);
@@ -615,10 +622,13 @@ router.post('/speak', async (req, res) => {
                 // Re-check cache after ensure to avoid second fetch when negative cache was just created
                 lookupCache = readLookupCache(normalizedWord);
                 if (lookupCache && lookupCache.exists === false) {
-                    console.log(`[TTS] Skip Cambridge after ensure (negative cache) for "${normalizedWord}"`);
+                    logger.info(`[TTS] Skip Cambridge after ensure (negative cache) for "${normalizedWord}"`);
                     skipCambridge = true;
                 }
             }
+        } else {
+            skipCambridge = true;
+            logger.info(`[TTS] Skip Cambridge lookup/cache for multi-word text="${cleanText}"`);
         }
 
         // Fallback: try fetching US pronunciation MP3 from Cambridge and cache into Quality_Sound.
@@ -631,12 +641,12 @@ router.post('/speak', async (req, res) => {
         if (cachedCambridgeFile) {
             res.setHeader("X-TTS-Source", "cambridge");
             res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));
-            console.log(`[TTS] /speak source=cambridge file=${cachedCambridgeFile}`);
+            logger.info(`[TTS] /speak source=cambridge file=${cachedCambridgeFile}`);
             return res.sendFile(cachedCambridgeFile);
         }
     }
 
-    console.log(`[TTS] /speak source=tts word="${cleanText}"`);
+    logger.info(`[TTS] /speak source=tts word="${cleanText}"`);
     
     const timestamp = Date.now();
     const outFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.aiff`);
@@ -646,7 +656,7 @@ router.post('/speak', async (req, res) => {
     try {
         fs.writeFileSync(txtFile, cleanText);
     } catch (e) {
-        console.error("[TTS] Failed to write temp text file:", e.message);
+        logger.error("[TTS] Failed to write temp text file:", e.message);
         return res.status(500).json({ error: "tts_prep_failed" });
     }
     
@@ -671,11 +681,11 @@ router.post('/speak', async (req, res) => {
         
         stream.on('close', () => {
             // Cleanup both files
-            fs.unlink(outFile, (err) => { if (err) console.error("Failed to delete temp audio:", err); });
-            fs.unlink(txtFile, (err) => { if (err) console.error("Failed to delete temp text:", err); });
+            fs.unlink(outFile, (err) => { if (err) logger.error("Failed to delete temp audio:", err); });
+            fs.unlink(txtFile, (err) => { if (err) logger.error("Failed to delete temp text:", err); });
         });
     } catch (err) {
-        console.error("[TTS] Generation failed:", err.message);
+        logger.error("[TTS] Generation failed:", err.message);
         // Attempt cleanup on error
         try { if (fs.existsSync(outFile)) fs.unlinkSync(outFile); } catch(e) {}
         try { if (fs.existsSync(txtFile)) fs.unlinkSync(txtFile); } catch(e) {}

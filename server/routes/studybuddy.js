@@ -6,6 +6,7 @@ const path = require('path');
 const { settings } = require('../config');
 const { FOLDER_MAPPINGS_FILE } = require('../config');
 const { searchUserVocabularyIndex } = require('../vocabularySearchIndex');
+const logger = require('../logger');
 
 const router = express.Router();
 
@@ -89,7 +90,7 @@ function probeAndSelectActiveUrl(callback) {
 
         if (index >= urls.length) {
             activeBaseUrl = null;
-            console.error('[StudyBuddy] No AI upstream available');
+            logger.error('[StudyBuddy] No AI upstream available');
             return finishProbe(new Error('No upstream available'));
         }
 
@@ -112,13 +113,13 @@ function probeAndSelectActiveUrl(callback) {
             (res) => {
                 settleProbe(() => {
                     if (res.statusCode && res.statusCode < 500) {
-                        console.log('[StudyBuddy] Connected to AI:', url.href, 'status:', res.statusCode);
+                        logger.info('[StudyBuddy] Connected to AI:', url.href, 'status:', res.statusCode);
                         activeBaseUrl = url.href;
                         res.resume(); // drain
                         return finishProbe(null, activeBaseUrl);
                     }
 
-                    console.warn('[StudyBuddy] Probe bad status:', url.href, res.statusCode);
+                    logger.warn('[StudyBuddy] Probe bad status:', url.href, res.statusCode);
                     res.resume();
                     tryNextProbe();
                 });
@@ -127,14 +128,14 @@ function probeAndSelectActiveUrl(callback) {
 
         req.on('error', (err) => {
             settleProbe(() => {
-                console.warn('[StudyBuddy] Probe failed:', url.href, err.message);
+                logger.warn('[StudyBuddy] Probe failed:', url.href, err.message);
                 tryNextProbe();
             });
         });
 
         req.on('timeout', () => {
             settleProbe(() => {
-                console.warn('[StudyBuddy] Probe timeout (skip):', url.href);
+                logger.warn('[StudyBuddy] Probe timeout (skip):', url.href);
                 req.destroy(new Error('Probe timeout'));
                 tryNextProbe();
             });
@@ -161,7 +162,7 @@ function ensureActiveUrl(callback) {
             try {
                 cb(err, url);
             } catch (callbackError) {
-                console.error('[StudyBuddy] Active URL callback failed:', callbackError);
+                logger.error('[StudyBuddy] Active URL callback failed:', callbackError);
             }
         });
     });
@@ -249,6 +250,29 @@ function requestStudyBuddyAiTextAsync(messages) {
     });
 }
 
+function ensureActiveUrlAsync() {
+    return new Promise((resolve, reject) => {
+        ensureActiveUrl((error, url) => {
+            if (error || !url) {
+                return reject(error || new Error('No StudyBuddy AI available'));
+            }
+            resolve(url);
+        });
+    });
+}
+
+async function checkComfyUiAvailable() {
+    try {
+        const response = await httpRequestAsync(COMFY_UI_URL, {
+            method: 'GET',
+            timeout: 3000
+        });
+        return response.statusCode < 500;
+    } catch {
+        return false;
+    }
+}
+
 function loadFolderMappings() {
     try {
         const filePath = FOLDER_MAPPINGS_FILE();
@@ -256,7 +280,7 @@ function loadFolderMappings() {
             return JSON.parse(fs.readFileSync(filePath, 'utf8'));
         }
     } catch (error) {
-        console.error('[StudyBuddyImage] Failed to load folder mappings:', error.message);
+        logger.error('[StudyBuddyImage] Failed to load folder mappings:', error.message);
     }
     return {};
 }
@@ -313,6 +337,43 @@ function parseImageParamsResponse(raw) {
     }
 }
 
+function createStudyBuddyError(message, statusCode = 400) {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+}
+
+function getImageRefusalError(parsed, raw = '') {
+    if (!parsed || typeof parsed !== 'object' || !parsed.refuse) return null;
+
+    const refuseCode = String(parsed.refuse || '').trim().toLowerCase();
+    const rawDetail = [
+        parsed.message,
+        parsed.error,
+        parsed.reason,
+        parsed.detail
+    ].find((value) => typeof value === 'string' && value.trim());
+    const detail = rawDetail ? String(rawDetail).trim() : '';
+    const rawText = String(raw || '').trim();
+
+    if (refuseCode === 'unsafe') {
+        return createStudyBuddyError(
+            detail || 'Yeu cau tao hinh bi tu choi vi co noi dung nhay cam hoac bao luc.',
+            422
+        );
+    }
+
+    if (detail) {
+        return createStudyBuddyError(detail, 422);
+    }
+
+    if (rawText && !extractFirstJsonObject(rawText)) {
+        return createStudyBuddyError(rawText, 422);
+    }
+
+    return createStudyBuddyError(`Yeu cau tao hinh bi tu choi (${refuseCode}).`, 422);
+}
+
 function uniqueCommaPhrases(...parts) {
     const seen = new Set();
     const result = [];
@@ -362,10 +423,10 @@ function stripHtml(text) {
 async function getWikiSummary(input) {
     let query = String(input || '').trim();
 
-    console.log("[Wiki] Input:", query);
+    logger.info("[Wiki] Input:", query);
 
     if (!query) {
-        console.warn("[Wiki] Empty input");
+        logger.warn("[Wiki] Empty input");
         return null;
     }
 
@@ -404,7 +465,7 @@ async function getWikiSummary(input) {
 
     // ===== retry loop =====
     for (let attempt = 1; attempt <= 3; attempt++) {
-        console.log(`\n[Wiki] Attempt ${attempt}:`, query);
+        logger.info(`\n[Wiki] Attempt ${attempt}:`, query);
 
         // ===== 1. SEARCH =====
         const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`;
@@ -418,18 +479,18 @@ async function getWikiSummary(input) {
         const searchData = safeParse(searchRes.body);
         const results = searchData?.query?.search || [];
 
-        console.log("[Wiki] Results:", results.length);
+        logger.info("[Wiki] Results:", results.length);
 
         if (!results.length) return null;
 
         const top = results[0];
         const title = top.title;
 
-        console.log("[Wiki] Top result:", title);
+        logger.info("[Wiki] Top result:", title);
 
         // ===== 2. BAD TITLE → rewrite =====
         if (isBadTitle(title)) {
-            console.warn("[Wiki] Bad title → rewriting query");
+            logger.warn("[Wiki] Bad title → rewriting query");
 
             query = rewriteQuery(query);
 
@@ -443,7 +504,7 @@ async function getWikiSummary(input) {
         // ===== 3. FETCH FULL CONTENT =====
         const contentUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=true&titles=${encodeURIComponent(title)}&format=json`;
 
-        console.log("[Wiki] Fetching FULL content:", contentUrl);
+        logger.info("[Wiki] Fetching FULL content:", contentUrl);
 
         const res = await httpRequestAsync(contentUrl, {
             method: 'GET',
@@ -457,11 +518,11 @@ async function getWikiSummary(input) {
 
         let content = String(page?.extract || '').trim();
 
-        console.log("[Wiki] Content length:", content.length);
+        logger.info("[Wiki] Content length:", content.length);
 
         // ===== 4. BAD CONTENT → retry =====
         if (!content) {
-            console.warn("[Wiki] Bad content → retry");
+            logger.warn("[Wiki] Bad content → retry");
 
             query = rewriteQuery(title);
             continue;
@@ -470,11 +531,11 @@ async function getWikiSummary(input) {
         // optional: limit size (VERY IMPORTANT for LLM)
         const MAX_CHARS = 8000;
         if (content.length > MAX_CHARS) {
-            console.warn("[Wiki] Trimming content to", MAX_CHARS);
+            logger.warn("[Wiki] Trimming content to", MAX_CHARS);
             content = content.slice(0, MAX_CHARS);
         }
 
-        console.log("[Wiki] Success:", title);
+        logger.info("[Wiki] Success:", title);
 
         return {
             title,
@@ -482,7 +543,7 @@ async function getWikiSummary(input) {
         };
     }
 
-    console.warn("[Wiki] Failed after retries");
+    logger.warn("[Wiki] Failed after retries");
     return null;
 }
 
@@ -496,18 +557,18 @@ function safeParse(body) {
 }
 
 async function searchFandom(name) {
-    console.log("\n[Fandom] ===== START =====");
-    console.log("[Fandom] Input:", name);
+    logger.info("\n[Fandom] ===== START =====");
+    logger.info("[Fandom] Input:", name);
 
     const cleanName = String(name || '').trim();
     if (!cleanName) {
-        console.warn("[Fandom] Empty input");
+        logger.warn("[Fandom] Empty input");
         return null;
     }
 
     // Cross-wiki search URL
     const url = `https://community.fandom.com/wiki/Special:Search?query=${encodeURIComponent(cleanName)}&scope=cross-wiki&limit=5&format=json`;
-    console.log("[Fandom] Request URL:", url);
+    logger.info("[Fandom] Request URL:", url);
 
     try {
         const response = await httpRequestAsync(url, {
@@ -520,13 +581,13 @@ async function searchFandom(name) {
         });
 
         if (response.statusCode >= 400) {
-            console.warn("[Fandom] Bad status code:", response.statusCode);
+            logger.warn("[Fandom] Bad status code:", response.statusCode);
             return null;
         }
 
         const raw = response.body?.toString('utf8') || '';
         if (!raw) {
-            console.warn("[Fandom] Empty response body");
+            logger.warn("[Fandom] Empty response body");
             return null;
         }
 
@@ -534,12 +595,12 @@ async function searchFandom(name) {
         try {
             parsed = JSON.parse(raw);
         } catch (err) {
-            console.error("[Fandom] JSON parse error:", err.message);
+            logger.error("[Fandom] JSON parse error:", err.message);
             return null;
         }
 
         const results = Array.isArray(parsed?.items) ? parsed.items : [];
-        console.log("[Fandom] Results count:", results.length);
+        logger.info("[Fandom] Results count:", results.length);
 
         if (!results.length) return null;
 
@@ -553,13 +614,13 @@ async function searchFandom(name) {
             } : null;
         }).filter(Boolean).slice(0, 5);
 
-        snippets.forEach((s, i) => console.log(`[Fandom] #${i + 1} URL:`, s.url));
+        snippets.forEach((s, i) => logger.info(`[Fandom] #${i + 1} URL:`, s.url));
 
-        console.log("[Fandom] ===== END =====\n");
+        logger.info("[Fandom] ===== END =====\n");
         return snippets.length ? snippets : null;
 
     } catch (err) {
-        console.error("[Fandom] Fatal error:", err.message);
+        logger.error("[Fandom] Fatal error:", err.message);
         return null;
     }
 }
@@ -642,8 +703,8 @@ Rules:
     ]);
 
     const queries = parseReferenceQueryResponse(raw, maxQueries);
-    console.log(`[StudyBuddySearchAssist] ${mode} query planner raw:`, raw);
-    console.log(`[StudyBuddySearchAssist] ${mode} queries:`, queries);
+    logger.info(`[StudyBuddySearchAssist] ${mode} query planner raw:`, raw);
+    logger.info(`[StudyBuddySearchAssist] ${mode} queries:`, queries);
     return queries;
 }
 
@@ -734,7 +795,7 @@ Rules:
 
     const raw = await requestStudyBuddyAiTextAsync(messages);
     const parsed = parseImageParamsResponse(raw);
-    console.log('[StudyBuddyImage] AI safety raw:', raw);
+    logger.info('[StudyBuddyImage] AI safety raw:', raw);
 
     if (parsed && typeof parsed.safe === 'boolean') {
         return {
@@ -1126,11 +1187,12 @@ Rules:
 
         const raw = await requestStudyBuddyAiTextAsync(messages);
         const parsed = parseImageParamsResponse(raw);
-        if (parsed?.refuse === 'unsafe') {
-            throw new Error('Yeu cau tao hinh bi tu choi vi co noi dung nhay cam hoac bao luc.');
+        const refusalError = getImageRefusalError(parsed, raw);
+        if (refusalError) {
+            throw refusalError;
         }
         const missing = getMissingImageParamFields(parsed, imageSettings);
-        console.log(`[StudyBuddyImage] AI params raw (attempt ${attempt}):`, raw);
+        logger.info(`[StudyBuddyImage] AI params raw (attempt ${attempt}):`, raw);
 
         if (missing.length === 0) {
             const normalized = normalizeImageParams(parsed, userRequest, imageSettings);
@@ -1148,7 +1210,7 @@ Rules:
 
         lastParsed = parsed;
         lastMissing = missing;
-        console.warn(`[StudyBuddyImage] Missing/invalid image params (attempt ${attempt}):`, missing);
+        logger.warn(`[StudyBuddyImage] Missing/invalid image params (attempt ${attempt}):`, missing);
     }
 
     const fallback = normalizeImageParams(lastParsed || {}, userRequest, imageSettings);
@@ -1534,18 +1596,18 @@ function expandSearchQueries(query, callback, attempt = 1, section = 'all') {
     if (!cleanQuery) return callback(null, []);
 
     if (!looksVietnamese(cleanQuery)) {
-        console.log('[StudyBuddySearch] Query is non-Vietnamese, using original query only:', cleanQuery);
+        logger.info('[StudyBuddySearch] Query is non-Vietnamese, using original query only:', cleanQuery);
         return callback(null, [cleanQuery]);
     }
 
-    console.log('[StudyBuddySearch] Expanding Vietnamese query:', cleanQuery);
+    logger.info('[StudyBuddySearch] Expanding Vietnamese query:', cleanQuery);
     requestStudyBuddyAiText(
         getSearchExpansionPrompt(section, attempt, cleanQuery),
         (error, content) => {
             if (error) {
-                console.warn('[StudyBuddySearch] Query expansion failed:', error.message);
+                logger.warn('[StudyBuddySearch] Query expansion failed:', error.message);
                 if (attempt < 2) {
-                    console.warn('[StudyBuddySearch] Retrying query expansion with stricter English-only prompt.');
+                    logger.warn('[StudyBuddySearch] Retrying query expansion with stricter English-only prompt.');
                     return expandSearchQueries(cleanQuery, callback, attempt + 1, section);
                 }
                 return callback(new Error('I could not generate valid English search queries. Please retry.'));
@@ -1553,14 +1615,14 @@ function expandSearchQueries(query, callback, attempt = 1, section = 'all') {
 
             const queries = parseExpandedQueries(content, cleanQuery);
             if (!queries.length) {
-                console.warn('[StudyBuddySearch] Expansion returned non-English or unusable queries.');
+                logger.warn('[StudyBuddySearch] Expansion returned non-English or unusable queries.');
                 if (attempt < 2) {
-                    console.warn('[StudyBuddySearch] Retrying query expansion with stricter English-only prompt.');
+                    logger.warn('[StudyBuddySearch] Retrying query expansion with stricter English-only prompt.');
                     return expandSearchQueries(cleanQuery, callback, attempt + 1, section);
                 }
                 return callback(new Error('I could not generate valid English search queries. Please retry.'));
             }
-            console.log('[StudyBuddySearch] Expanded queries:', queries);
+            logger.info('[StudyBuddySearch] Expanded queries:', queries);
             callback(null, queries);
         }
     );
@@ -1738,21 +1800,21 @@ Only keep candidates with direct meaning match.`
 
     requestFilter('strict', (error, content) => {
             if (error) {
-                console.warn('[StudyBuddySearch] AI filter failed:', error.message);
+                logger.warn('[StudyBuddySearch] AI filter failed:', error.message);
                 return callback(null, results);
             }
 
-            console.log(`[StudyBuddySearch] AI filter raw response (attempt ${attempt}):`, content);
+            logger.info(`[StudyBuddySearch] AI filter raw response (attempt ${attempt}):`, content);
             const keptTexts = parseKeptTexts(content);
             if (Array.isArray(keptTexts) && keptTexts.length === 0) {
                 if (attempt === 1) {
-                    console.log('[StudyBuddySearch] Attempt 1 returned empty keepTexts; retrying with remove-irrelevant strategy.');
+                    logger.info('[StudyBuddySearch] Attempt 1 returned empty keepTexts; retrying with remove-irrelevant strategy.');
                     return requestFilter('remove-irrelevant', (retryError, retryContent) => {
                         if (retryError) {
-                            console.warn('[StudyBuddySearch] AI remove-irrelevant retry failed:', retryError.message);
+                            logger.warn('[StudyBuddySearch] AI remove-irrelevant retry failed:', retryError.message);
                             return callback(null, []);
                         }
-                        console.log('[StudyBuddySearch] AI filter raw response (attempt 1 retry remove-irrelevant):', retryContent);
+                        logger.info('[StudyBuddySearch] AI filter raw response (attempt 1 retry remove-irrelevant):', retryContent);
                         const retryKeptTexts = parseKeptTexts(retryContent);
                         if (!Array.isArray(retryKeptTexts) || retryKeptTexts.length === 0) {
                             const stage = 'Mình lọc lần 1: không còn kết quả nào đủ phù hợp.';
@@ -1762,7 +1824,7 @@ Only keep candidates with direct meaning match.`
                         }
                         const retryKeepIndexes = mapKeptTextsToIndexes(retryKeptTexts, candidateResults);
                         if (retryKeepIndexes.length === 0) {
-                            console.warn('[StudyBuddySearch] AI remove-irrelevant retry returned texts that did not match any candidate exactly.');
+                            logger.warn('[StudyBuddySearch] AI remove-irrelevant retry returned texts that did not match any candidate exactly.');
                             return callback(null, []);
                         }
                         const retryFilteredTop = retryKeepIndexes.map((index) => candidateResults[index]);
@@ -1778,8 +1840,8 @@ Only keep candidates with direct meaning match.`
                         const stage = `Mình lọc lần ${attempt}: từ ${results.length} kết quả còn ${retryFiltered.length} kết quả.`;
                         stageCollector.push(stage);
                         if (typeof onStage === 'function') onStage(stage);
-                        console.log('[StudyBuddySearch] AI filter keep indexes (attempt 1 retry remove-irrelevant):', retryKeepIndexes);
-                        console.log('[StudyBuddySearch] AI filter kept texts (attempt 1 retry remove-irrelevant):', retryFilteredTop.map((item) => item.text));
+                        logger.info('[StudyBuddySearch] AI filter keep indexes (attempt 1 retry remove-irrelevant):', retryKeepIndexes);
+                        logger.info('[StudyBuddySearch] AI filter kept texts (attempt 1 retry remove-irrelevant):', retryFilteredTop.map((item) => item.text));
 
                         if (retryFiltered.length <= 1) {
                             const finalStage = `Mình dừng lọc ở lần ${attempt} và còn ${retryFiltered.length} kết quả.`;
@@ -1791,7 +1853,7 @@ Only keep candidates with direct meaning match.`
                         return filterSearchResultsUntilStable(originalQuery, expandedQueries, retryFiltered, callback, attempt + 1, stageCollector, onStage, accumulatedMap);
                     });
                 }
-                console.log(`[StudyBuddySearch] AI filter returned empty keepTexts at attempt ${attempt}; stopping with previous results.`);
+                logger.info(`[StudyBuddySearch] AI filter returned empty keepTexts at attempt ${attempt}; stopping with previous results.`);
                 const stage = attempt > 1
                     ? `Mình dừng lọc ở lần ${attempt} và giữ lại các kết quả tốt nhất từ những vòng trước.`
                     : `Mình lọc lần ${attempt}: không còn kết quả nào đủ phù hợp.`;
@@ -1801,7 +1863,7 @@ Only keep candidates with direct meaning match.`
             }
             const keepIndexes = mapKeptTextsToIndexes(keptTexts, candidateResults);
             if (keepIndexes.length === 0) {
-                console.warn('[StudyBuddySearch] AI filter returned texts that did not match any candidate exactly, keeping current results.');
+                logger.warn('[StudyBuddySearch] AI filter returned texts that did not match any candidate exactly, keeping current results.');
                 return callback(null, sortAccumulatedResults(accumulatedMap, results));
             }
 
@@ -1816,7 +1878,7 @@ Only keep candidates with direct meaning match.`
             });
 
             if (isIdentityKeep(keepIndexes, candidateResults.length)) {
-                console.log(`[StudyBuddySearch] AI filter stable at attempt ${attempt}; no more removals.`);
+                logger.info(`[StudyBuddySearch] AI filter stable at attempt ${attempt}; no more removals.`);
                 const finalResults = sortAccumulatedResults(accumulatedMap, results);
                 const stage = `Mình lọc xong và giữ lại ${finalResults.length} kết quả phù hợp nhất.`;
                 stageCollector.push(stage);
@@ -1828,9 +1890,9 @@ Only keep candidates with direct meaning match.`
             const stage = `Mình lọc lần ${attempt}: từ ${results.length} kết quả còn ${filtered.length} kết quả.`;
             stageCollector.push(stage);
             if (typeof onStage === 'function') onStage(stage);
-            console.log(`[StudyBuddySearch] AI filter keep indexes (attempt ${attempt}):`, keepIndexes);
-            console.log(`[StudyBuddySearch] AI filter kept texts (attempt ${attempt}):`, filteredTop.map((item) => item.text));
-            console.log(
+            logger.info(`[StudyBuddySearch] AI filter keep indexes (attempt ${attempt}):`, keepIndexes);
+            logger.info(`[StudyBuddySearch] AI filter kept texts (attempt ${attempt}):`, filteredTop.map((item) => item.text));
+            logger.info(
                 `[StudyBuddySearch] AI filter accumulated scores (attempt ${attempt}):`,
                 sortAccumulatedResults(accumulatedMap).map((item) => ({
                     text: item.text,
@@ -1869,7 +1931,7 @@ router.post('/studybuddy/chat', async (req, res) => {
                     );
                 }
             } catch (error) {
-                console.warn('[StudyBuddySearchAssist] chat context collection failed:', error?.message || error);
+                logger.warn('[StudyBuddySearchAssist] chat context collection failed:', error?.message || error);
             }
         }
     }
@@ -1910,7 +1972,7 @@ router.post('/studybuddy/chat', async (req, res) => {
             const upstreamUrl = new URL(urlToUse);
             const client = upstreamUrl.protocol === 'https:' ? https : http;
 
-            console.log('[StudyBuddy] Using AI:', upstreamUrl.href);
+            logger.info('[StudyBuddy] Using AI:', upstreamUrl.href);
 
             const upstreamReq = client.request(
                 upstreamUrl,
@@ -1946,7 +2008,7 @@ router.post('/studybuddy/chat', async (req, res) => {
             });
 
             upstreamReq.on('error', (error) => {
-                console.error('[StudyBuddy] Active AI failed:', upstreamUrl.href, error.message);
+                logger.error('[StudyBuddy] Active AI failed:', upstreamUrl.href, error.message);
                 activeBaseUrl = null;
 
                 if (requestClosed) {
@@ -2033,17 +2095,17 @@ router.post('/studybuddy/search', (req, res) => {
         return sendError(400, 'Missing search data');
     }
 
-    console.log('User requested to search:', data);
+    logger.info('User requested to search:', data);
     let responded = false;
 
     expandSearchQueries(searchQuery, (expandError, queries) => {
         if (responded || (!wantsStream && res.headersSent) || res.writableEnded) {
-            console.warn('[StudyBuddySearch] Ignoring duplicate callback for query:', searchQuery);
+            logger.warn('[StudyBuddySearch] Ignoring duplicate callback for query:', searchQuery);
             return;
         }
         responded = true;
         if (expandError) {
-            console.warn('[StudyBuddySearch] Expansion aborted search:', expandError.message);
+            logger.warn('[StudyBuddySearch] Expansion aborted search:', expandError.message);
             return sendError(422, expandError.message);
         }
         const expandStage = `Mình đang thử tìm các bản tiếng Anh như: ${queries.join(' | ')}`;
@@ -2053,14 +2115,14 @@ router.post('/studybuddy/search', (req, res) => {
         const foundStage = `Mình tìm thấy vài kết quả ban đầu, mình đang lọc bớt.`;
         stages.push(foundStage);
         sendStage(foundStage);
-        console.log('[StudyBuddySearch] Search request detail:', {
+        logger.info('[StudyBuddySearch] Search request detail:', {
             userName,
             originalQuery: searchQuery,
             searchSection,
             expandedQueries: queries,
             resultCount: rawResults.length
         });
-        console.log(
+        logger.info(
             '[StudyBuddySearch] Top matches before AI filter:',
             rawResults.map((item) => ({
                 word: item.word,
@@ -2073,7 +2135,7 @@ router.post('/studybuddy/search', (req, res) => {
 
         filterSearchResultsUntilStable(searchQuery, queries, rawResults, (_filterError, results) => {
             if ((!wantsStream && res.headersSent) || res.writableEnded) return;
-            console.log(
+            logger.info(
                 '[StudyBuddySearch] Top matches after AI filter:',
                 results.map((item) => ({
                     word: item.word,
@@ -2110,6 +2172,29 @@ router.post('/studybuddy/search', (req, res) => {
             });
         }, 1, stages, sendStage);
     }, 1, searchSection);
+});
+
+router.get('/studybuddy/status', async (req, res) => {
+    let chatConnected = false;
+    let imageConnected = false;
+    let activeAiUrl = null;
+
+    try {
+        activeAiUrl = await ensureActiveUrlAsync();
+        chatConnected = true;
+    } catch (error) {
+        logger.warn('[StudyBuddyStatus] AI chat unavailable:', error?.message || error);
+    }
+
+    imageConnected = await checkComfyUiAvailable();
+
+    return res.json({
+        mode: imageConnected ? 'image' : (chatConnected ? 'chat' : 'offline'),
+        chatConnected,
+        imageConnected,
+        activeAiUrl,
+        imageServerUrl: COMFY_UI_URL
+    });
 });
 
 router.post('/studybuddy/image', async (req, res) => {
@@ -2169,7 +2254,7 @@ router.post('/studybuddy/image', async (req, res) => {
                 const externalContext = await collectExternalReferenceContext(data, 'image');
                 imageSearchContext = externalContext.contextText;
             } catch (error) {
-                console.warn('[StudyBuddySearchAssist] image context collection failed:', error?.message || error);
+                logger.warn('[StudyBuddySearchAssist] image context collection failed:', error?.message || error);
             }
         }
         if (mode === 'infographic') {
@@ -2180,10 +2265,10 @@ router.post('/studybuddy/image', async (req, res) => {
         } else {
             imageParams = await generateImageParamsWithRetry(data, imageSettings, mode, imageSearchContext);
         }
-        console.log('[StudyBuddyImage] Original request:', data);
-        console.log('[StudyBuddyImage] Mode:', mode);
-        console.log('[StudyBuddyImage] Incoming settings:', imageSettings);
-        console.log('[StudyBuddyImage] Final params:', imageParams);
+        logger.info('[StudyBuddyImage] Original request:', data);
+        logger.info('[StudyBuddyImage] Mode:', mode);
+        logger.info('[StudyBuddyImage] Incoming settings:', imageSettings);
+        logger.info('[StudyBuddyImage] Final params:', imageParams);
         sendProgress(10);
 
         const clientId = createComfyClientId();
@@ -2217,8 +2302,8 @@ router.post('/studybuddy/image', async (req, res) => {
             response
         });
     } catch (error) {
-        console.error('[StudyBuddyImage] Generation failed:', error);
-        return sendError(500, error.message || 'Failed to generate image.');
+        logger.error('[StudyBuddyImage] Generation failed:', error);
+        return sendError(error?.statusCode || 500, error.message || 'Failed to generate image.');
     }
 });
 

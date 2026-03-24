@@ -16,6 +16,10 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const { spawn } = require('child_process');
+const logger = require('./logger');
+
+logger.patchGlobalConsole();
+
 const { settings } = require('./config');
 const { loadGlobalLibrary } = require('./libraryManager');
 const { rebuildAllUserVocabularySearchIndices } = require('./vocabularySearchIndex');
@@ -26,7 +30,7 @@ const os = require('os');
 try {
     process.chdir(__dirname);
 } catch (err) {
-    console.warn(`[Server] Failed to set CWD to ${__dirname}: ${err.message}`);
+    logger.warn(`[Server] Failed to set CWD to ${__dirname}: ${err.message}`);
 }
 
 // --- Firebase Admin Init (No REST API / No Billing Required) ---
@@ -34,7 +38,7 @@ if (!admin.apps.length) {
     const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
 
     if (!fs.existsSync(serviceAccountPath)) {
-        console.error('[Firebase] serviceAccountKey.json not found at:', serviceAccountPath);
+        logger.error('[Firebase] serviceAccountKey.json not found at:', serviceAccountPath);
         process.exit(1);
     }
 
@@ -45,7 +49,7 @@ if (!admin.apps.length) {
         projectId: serviceAccount.project_id
     });
 
-    console.log('[Firebase] Admin initialized with project:', serviceAccount.project_id);
+    logger.info('[Firebase] Admin initialized with project:', serviceAccount.project_id);
 }
 
 const app = express();
@@ -55,7 +59,7 @@ app.use(cors({ origin: true, credentials: false }));
 app.options('*', cors({ origin: true, credentials: false }));
 
 app.use((req, res, next) => {
-    console.log(`[Incoming] ${req.method} ${req.url}`);
+    logger.debug(`[Incoming] ${req.method} ${req.url}`);
     next();
 });
 
@@ -73,7 +77,7 @@ app.use((req, res, next) => {
     const start = Date.now();
     res.on('finish', () => {
         const duration = Date.now() - start;
-        console.log(`[${req.method}] ${req.path} ${res.statusCode} ${duration}ms`);
+        logger.debug(`[${req.method}] ${req.path} ${res.statusCode} ${duration}ms`);
     });
     next();
 });
@@ -96,7 +100,7 @@ app.use('/api', require('./routes/studybuddy'));
 
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
-    console.error(`[Error] ${req.method} ${req.path}: ${err.message}`);
+    logger.error(`[Error] ${req.method} ${req.path}: ${err.message}`);
     if (res.headersSent) {
         return next(err);
     }
@@ -136,15 +140,16 @@ if (httpsOptions) {
 }
 
 server.listen(settings.PORT, settings.HOST, () => {
-    console.log(`==================================================`);
-    console.log(`[INFO] Unified Server running on port ${settings.PORT}`);
-    console.log(`[INFO] Protocol: ${protocol.toUpperCase()}`);
-    console.log(`[INFO] Address:  ${protocol}://localhost:${settings.PORT}`);
-    console.log(`[INFO] Storage:  ${settings.BACKUP_DIR}`);
+    logger.info('==================================================');
+    logger.info(`[INFO] Unified Server running on port ${settings.PORT}`);
+    logger.info(`[INFO] Protocol: ${protocol.toUpperCase()}`);
+    logger.info(`[INFO] Address:  ${protocol}://localhost:${settings.PORT}`);
+    logger.info(`[INFO] Storage:  ${settings.BACKUP_DIR}`);
+    logger.info(`[INFO] Log level: ${logger.level}`);
     if (protocol === 'http') {
-        console.log(`[TIP]  To enable HTTPS, generate certs in ${settings.CERT_DIR}`);
+        logger.info(`[TIP]  To enable HTTPS, generate certs in ${settings.CERT_DIR}`);
     }
-    console.log(`==================================================`);
+    logger.info('==================================================');
     
     // Initialize Library
     try {
@@ -152,14 +157,14 @@ server.listen(settings.PORT, settings.HOST, () => {
         rebuildAllUserVocabularySearchIndices();
         coursesModule.exportAllCoursesToBackup();
     } catch (e) {
-        console.error("[Startup] Failed to load library:", e);
+        logger.error("[Startup] Failed to load library:", e);
     }
 });
 
 // --- Auto Start Cloudflare Tunnel (if available) ---
 function startCloudflareTunnel() {
     try {
-        console.log('[Cloudflare] Attempting to start tunnel...');
+        logger.info('[Cloudflare] Attempting to start tunnel...');
         const tunnel = spawn('cloudflared', [
             'tunnel',
             '--url',
@@ -169,14 +174,16 @@ function startCloudflareTunnel() {
         let hostUpdated = false;
 
         function handleTunnelOutput(raw) {
-            const output = raw.toString();
-            process.stdout.write(`[Cloudflare] ${output}`);
+            const output = raw.toString().trim();
+            if (output) {
+                logger.debug(`[Cloudflare] ${output}`);
+            }
 
             const match = output.match(/https:\/\/[-a-zA-Z0-9]+\.trycloudflare\.com/);
             if (match && !hostUpdated) {
                 hostUpdated = true;
                 const publicUrl = match[0];
-                console.log(`[Cloudflare] Public URL detected: ${publicUrl}`);
+                logger.info(`[Cloudflare] Public URL detected: ${publicUrl}`);
 
                 // --- Update Firestore with new host ---
                 updateHostInFirestore(publicUrl);
@@ -187,17 +194,17 @@ function startCloudflareTunnel() {
         tunnel.stderr.on('data', handleTunnelOutput);
 
         tunnel.on('close', (code) => {
-            console.log(`[Cloudflare] Tunnel process exited with code ${code}`);
+            logger.info(`[Cloudflare] Tunnel process exited with code ${code}`);
         });
 
     } catch (err) {
-        console.warn('[Cloudflare] cloudflared not found or failed to start:', err.message);
+        logger.warn('[Cloudflare] cloudflared not found or failed to start:', err.message);
     }
 }
 
 async function updateHostInFirestore(hostUrl) {
     try {
-        console.log('[Firebase] Updating host in Firestore (Admin SDK)...');
+        logger.info('[Firebase] Updating host in Firestore (Admin SDK)...');
 
         const db = admin.firestore();
 
@@ -226,9 +233,9 @@ async function updateHostInFirestore(hostUrl) {
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
-        console.log('[Firebase] Host updated successfully.');
+        logger.info('[Firebase] Host updated successfully.');
     } catch (err) {
-        console.error('[Firebase] Admin update failed:', err.message);
+        logger.error('[Firebase] Admin update failed:', err.message);
     }
 }
 
@@ -236,28 +243,28 @@ async function updateHostInFirestore(hostUrl) {
 const isPublicMode = process.argv.includes('--public');
 
 if (isPublicMode) {
-    console.log('[Cloudflare] Public mode enabled via --public');
+    logger.info('[Cloudflare] Public mode enabled via --public');
     startCloudflareTunnel();
 } else {
-    console.log('[Cloudflare] Skipped (run with --public to enable)');
+    logger.info('[Cloudflare] Skipped (run with --public to enable)');
 }
 
 function gracefulShutdown(signal) {
-    console.log(`\n[Shutdown] Received ${signal}. Backing up courses...`);
+    logger.info(`\n[Shutdown] Received ${signal}. Backing up courses...`);
 
     try {
         coursesModule.exportAllCoursesToBackup();
     } catch (e) {
-        console.error('[Shutdown] Backup failed:', e);
+        logger.error('[Shutdown] Backup failed:', e);
     }
 
     server.close(() => {
-        console.log('[Shutdown] Server closed.');
+        logger.info('[Shutdown] Server closed.');
         process.exit(0);
     });
 
     setTimeout(() => {
-        console.error('[Shutdown] Force exit.');
+        logger.error('[Shutdown] Force exit.');
         process.exit(1);
     }, 5000);
 }
@@ -284,17 +291,17 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));   // Ctrl+C
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM')); // PM2 / Docker
 process.on('uncaughtException', (err) => {
     if (isIgnorableTransientNetworkError(err)) {
-        console.warn('[Warn] Ignored transient uncaught network error:', err);
+        logger.warn('[Warn] Ignored transient uncaught network error:', err);
         return;
     }
-    console.error('[Fatal] Uncaught Exception:', err);
+    logger.error('[Fatal] Uncaught Exception:', err);
     gracefulShutdown('uncaughtException');
 });
 process.on('unhandledRejection', (reason) => {
     if (isIgnorableTransientNetworkError(reason)) {
-        console.warn('[Warn] Ignored transient unhandled network rejection:', reason);
+        logger.warn('[Warn] Ignored transient unhandled network rejection:', reason);
         return;
     }
-    console.error('[Fatal] Unhandled Rejection:', reason);
+    logger.error('[Fatal] Unhandled Rejection:', reason);
     gracefulShutdown('unhandledRejection');
 });

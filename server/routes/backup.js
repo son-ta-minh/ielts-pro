@@ -6,6 +6,7 @@ const path = require('path');
 const { settings } = require('../config');
 const { sanitizeToAscii, getAppBackupPath, loadMetadata, saveMetadata } = require('../utils');
 const { rebuildUserVocabularySearchIndexFromFile } = require('../vocabularySearchIndex');
+const logger = require('../logger');
 
 function resolveBackupPaths(appName, identifier, createIfNotExist = false) {
     const appDir = getAppBackupPath(appName, createIfNotExist);
@@ -50,7 +51,7 @@ function archiveCurrentBackupFile({ filePath, fileName, archiveDir, safeIdentifi
     }
 
     fs.copyFileSync(filePath, archivePath);
-    console.log(`[Backup] Archived '${fileName}' to '${archivePath}'`);
+    logger.info(`[Backup] Archived '${fileName}' to '${archivePath}'`);
     return { archiveFileName, archivePath };
 }
 
@@ -74,7 +75,7 @@ router.get('/backups', async (req, res) => {
                 return files.map(file => ({ file, dir }));
             }
         } catch (e) {
-            console.error(`[Backup] Error reading dir ${dir}:`, e.message);
+            logger.error(`[Backup] Error reading dir ${dir}:`, e.message);
         }
         return [];
     };
@@ -103,7 +104,7 @@ router.get('/backups', async (req, res) => {
         res.json({ backups });
 
     } catch (err) {
-        console.error(`[Backup] List error: ${err.message}`);
+        logger.error(`[Backup] List error: ${err.message}`);
         return res.status(500).json({ error: 'Failed to scan backup directories' });
     }
 });
@@ -140,7 +141,7 @@ router.get('/archives', async (req, res) => {
 
         return res.json({ archives });
     } catch (err) {
-        console.error(`[Backup] Failed to list archives: ${err.message}`);
+        logger.error(`[Backup] Failed to list archives: ${err.message}`);
         return res.status(500).json({ error: 'Failed to list archive files.' });
     }
 });
@@ -163,7 +164,7 @@ router.post('/archive', (req, res) => {
         if (err.code === 'BACKUP_NOT_FOUND') {
             return res.status(404).json({ error: `No current backup found for ${identifier}.` });
         }
-        console.error(`[Backup] Failed to archive current backup: ${err.message}`);
+        logger.error(`[Backup] Failed to archive current backup: ${err.message}`);
         return res.status(500).json({ error: 'Failed to archive current backup.' });
     }
 });
@@ -201,10 +202,10 @@ router.post('/archive/restore', (req, res) => {
             rebuildUserVocabularySearchIndexFromFile(resolved.filePath, String(identifier || '').trim());
         }
 
-        console.log(`[Backup] Restored archive '${archiveId}' as current backup for '${identifier}'.`);
+        logger.info(`[Backup] Restored archive '${archiveId}' as current backup for '${identifier}'.`);
         return res.json({ success: true });
     } catch (err) {
-        console.error(`[Backup] Failed to restore archive: ${err.message}`);
+        logger.error(`[Backup] Failed to restore archive: ${err.message}`);
         return res.status(500).json({ error: 'Failed to restore archive.' });
     }
 });
@@ -228,10 +229,10 @@ router.delete('/archive', (req, res) => {
         }
 
         fs.unlinkSync(archivePath);
-        console.log(`[Backup] Deleted archive '${archiveId}' for '${identifier}'.`);
+        logger.info(`[Backup] Deleted archive '${archiveId}' for '${identifier}'.`);
         return res.json({ success: true });
     } catch (err) {
-        console.error(`[Backup] Failed to delete archive: ${err.message}`);
+        logger.error(`[Backup] Failed to delete archive: ${err.message}`);
         return res.status(500).json({ error: 'Failed to delete archive.' });
     }
 });
@@ -263,7 +264,7 @@ router.post('/backup', (req, res) => {
             const lastModDate = new Date(stats.mtime).toISOString().split('T')[0];
 
             if (today !== lastModDate) {
-                console.log(`[Backup] New day detected. Archiving previous day's data for ${safeIdentifier}.`);
+                logger.info(`[Backup] New day detected. Archiving previous day's data for ${safeIdentifier}.`);
                 
                 const archiveDir = path.join(appDir, 'archive');
                 if (!fs.existsSync(archiveDir)) {
@@ -274,7 +275,7 @@ router.post('/backup', (req, res) => {
                 const archivePath = path.join(archiveDir, archiveFileName);
                 
                 fs.copyFileSync(filePath, archivePath);
-                console.log(`[Backup] Archived '${fileName}' to '${archivePath}'`);
+                logger.info(`[Backup] Archived '${fileName}' to '${archivePath}'`);
 
                 // Retention policy
                 const allArchivedFiles = fs.readdirSync(archiveDir);
@@ -286,17 +287,17 @@ router.post('/backup', (req, res) => {
                     const filesToDelete = userArchives.slice(0, userArchives.length - settings.DAILY_BACKUP_RETENTION);
                     filesToDelete.forEach(fileToDelete => {
                         fs.unlinkSync(path.join(archiveDir, fileToDelete));
-                        console.log(`[Backup] Rotated out old backup: ${fileToDelete} from archive.`);
+                        logger.info(`[Backup] Rotated out old backup: ${fileToDelete} from archive.`);
                     });
                 }
             }
         }
     } catch (backupErr) {
-        console.error(`[Backup] Daily archival process failed: ${backupErr.message}. The main backup will still proceed.`);
+        logger.error(`[Backup] Daily archival process failed: ${backupErr.message}. The main backup will still proceed.`);
     }
 
     const writeStream = fs.createWriteStream(filePath);
-    console.log(`[Backup] Receiving stream for: ${identifier} -> ${fileName}`);
+    logger.info(`[Backup] Receiving stream for: ${identifier} -> ${fileName}`);
     req.pipe(writeStream);
 
     writeStream.on('finish', () => {
@@ -316,16 +317,16 @@ router.post('/backup', (req, res) => {
                 rebuildUserVocabularySearchIndexFromFile(filePath, String(identifier || '').trim());
             }
 
-            console.log(`[Backup] Saved ${sizeMB} MB for ${identifier} in app '${appName}'`);
+            logger.info(`[Backup] Saved ${sizeMB} MB for ${identifier} in app '${appName}'`);
             res.json({ success: true, size: stats.size, timestamp: Date.now() });
         } catch (err) {
-            console.error(`[Backup] Stat error: ${err.message}`);
+            logger.error(`[Backup] Stat error: ${err.message}`);
             res.status(500).json({ error: 'Backup saved but failed to verify size.' });
         }
     });
 
     writeStream.on('error', (err) => {
-        console.error(`[Backup] Write error: ${err.message}`);
+        logger.error(`[Backup] Write error: ${err.message}`);
         res.status(500).json({ error: 'Failed to write backup file.' });
     });
 });
@@ -342,22 +343,22 @@ router.get('/backup/:identifier', (req, res) => {
     }
 
     const identifier = req.params.identifier;
-    console.log(`[Backup] Request received for restore: ${identifier} in app '${appName}'`);
+    logger.info(`[Backup] Request received for restore: ${identifier} in app '${appName}'`);
     
     const safeIdentifier = sanitizeToAscii(identifier);
     const fileName = `backup_${safeIdentifier}.json`;
     const filePath = path.join(appDir, fileName);
 
     if (!fs.existsSync(filePath)) {
-        console.warn(`[Backup] No backup file found for identifier '${identifier}' in app '${appName}'. Looked for: ${filePath}`);
+        logger.warn(`[Backup] No backup file found for identifier '${identifier}' in app '${appName}'. Looked for: ${filePath}`);
         return res.status(404).json({ error: `No backup found for ${identifier}.` });
     }
 
-    console.log(`[Backup] Streaming download for: ${filePath}`);
+    logger.info(`[Backup] Streaming download for: ${filePath}`);
 
     const readStream = fs.createReadStream(filePath);
     readStream.on('error', (err) => {
-        console.error(`[Backup] Read error: ${err.message}`);
+        logger.error(`[Backup] Read error: ${err.message}`);
         if (!res.headersSent) res.status(500).json({ error: 'Failed to read backup file.' });
     });
 
