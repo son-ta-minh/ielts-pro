@@ -174,29 +174,30 @@
     li.style.background = "#ffffff";
     li.style.border = "1px solid #e5e7eb";
 
-    const addBtn = document.createElement("button");
-    addBtn.textContent = "+";
-    addBtn.style.cursor = "pointer";
-    addBtn.style.fontWeight = "700";
-    addBtn.style.padding = "0 4px";
-    addBtn.title = "Add to library";
+    // const addBtn = document.createElement("button");
+    // addBtn.textContent = "+";
+    // addBtn.style.cursor = "pointer";
+    // addBtn.style.fontWeight = "700";
+    // addBtn.style.padding = "0 4px";
+    // addBtn.title = "Add to library";
 
-    addBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const added = await runCommand("add_to_library", word, {
-        button: addBtn,
-        onSuccess: () => {
-          li.style.background = "#d1fae5";
-        },
-        onError: (error) => {
-          window.alert(error?.payload?.error || error?.message || "Mini Buddy request failed.");
-        }
-      });
+    // addBtn.addEventListener("click", async (event) => {
+    //   event.stopPropagation();
+    //   const added = await runCommand("add_to_library", word, {
+    //     button: addBtn,
+    //     onSuccess: () => {
+    //       li.style.background = "#d1fae5";
+    //     },
+    //     onError: (error) => {
+    //       window.alert(error?.payload?.error || error?.message || "Mini Buddy request failed.");
+    //     }
+    //   });
 
-      if (added) {
-        activeSelectionText = word;
-      }
-    });
+    //   if (added) {
+    //     activeSelectionText = word;
+    //   }
+    // }
+    // );
 
     // Delete button
     const deleteBtn = document.createElement("button");
@@ -218,7 +219,7 @@
     const textSpan = document.createElement("span");
     textSpan.textContent = word;
 
-    li.appendChild(addBtn);
+    // li.appendChild(addBtn);
     li.appendChild(deleteBtn);
     li.appendChild(textSpan);
 
@@ -722,7 +723,7 @@
 
     // Save All button
     const saveAllBtn = document.createElement("button");
-    saveAllBtn.textContent = "Save All";
+    saveAllBtn.textContent = "Add to Library";
     saveAllBtn.style.fontSize = "10px";
     saveAllBtn.style.padding = "1px 4px";
     saveAllBtn.style.borderRadius = "4px";
@@ -741,26 +742,29 @@
       saveAllBtn.textContent = "Saving...";
       saveAllBtn.style.opacity = "0.7";
 
-      let successCount = 0;
-      for (const word of words) {
-        const saved = await runCommand("add_to_library", word);
+      try {
+        // Send all words in a single request
+        const saved = await runCommand("add_to_library", words.join(";"));
         if (saved) {
-          successCount += 1;
+          saveAllBtn.textContent = "Saved";
+        } else {
+          saveAllBtn.textContent = "Failed";
         }
+      } catch (error) {
+        console.error(error);
+        saveAllBtn.textContent = "Failed";
       }
-
-      saveAllBtn.textContent = successCount === words.length ? "Saved" : `${successCount}/${words.length}`;
-      saveAllBtn.style.opacity = "1";
 
       window.setTimeout(() => {
         saveAllBtn.disabled = false;
         saveAllBtn.textContent = originalText;
+        saveAllBtn.style.opacity = "1";
       }, 1200);
     });
 
     // Clear All button
     const clearAllBtn = document.createElement("button");
-    clearAllBtn.textContent = "Clear All";
+    clearAllBtn.textContent = "Clear";
     clearAllBtn.style.fontSize = "10px";
     clearAllBtn.style.padding = "1px 4px";
     clearAllBtn.style.borderRadius = "4px";

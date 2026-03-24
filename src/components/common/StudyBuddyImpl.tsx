@@ -49,6 +49,7 @@ import {
 } from '../../utils/studyBuddyChatUtils';
 import { mergeStudyBuddyMemoryChunks, parseStudyBuddyMemoryDirectives } from '../../utils/studyBuddyMemoryUtils';
 import { normalizeStudyBuddyImageSettings } from '../../utils/studyBuddyImageUtils';
+import { stringToWordArray } from '../../utils/text';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
@@ -1945,6 +1946,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         const normalized = text.trim();
         if (!normalized) return;
         syncChatSelectionText(normalized);
+        setIsChatOpen(true);
         if (normalized.length > MAX_READ_LENGTH) {
             showToast("Text is too long to read!", "error");
             return;
@@ -2026,46 +2028,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     };
 
     const handleAddExplicitSelectionToLibrary = async (text: string) => {
-        const normalized = text.trim();
-        if (!normalized || isAlreadyInLibrary) return false;
-        syncChatSelectionText(normalized);
+        const wordsToProcess = stringToWordArray(text);
+        const newItems: VocabularyItem[] = [];
         setIsAddingToLibrary(true);
-        try {
-            let newItem: VocabularyItem;
-            let serverItem: VocabularyItem | null = null;
-            try {
-                const results = await lookupWordsInGlobalLibrary([normalized]);
-                if (results.length > 0) serverItem = results[0];
-            } catch {
-                // Silent fail is acceptable here
-            }
 
-            if (serverItem) {
-                newItem = {
-                    ...serverItem,
-                    id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-                    userId: user.id,
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
-                    quality: WordQuality.REFINED,
-                    source: 'refine',
-                    nextReview: Date.now(),
-                    interval: 0,
-                    easeFactor: 2.5,
-                    consecutiveCorrect: 0,
-                    forgotCount: 0,
-                    lastReview: undefined,
-                    lastGrade: undefined,
-                    lastTestResults: {},
-                    groups: [...(serverItem.groups || []), 'coach-added']
-                };
-                newItem.isPassive = false;
-                newItem.complexity = calculateComplexity(newItem);
-                newItem.masteryScore = calculateMasteryScore(newItem);
-                newItem.gameEligibility = calculateGameEligibility(newItem);
-            } else {
+        try {
+            for (const word of wordsToProcess) {
+                const existing = await dataStore.findWordByText(user.id, word);
+                if (existing) continue;
+
+                let newItem: VocabularyItem
                 const baseItem = await createNewWord(
-                    normalized,
+                    word,
                     '',
                     '',
                     '',
@@ -2074,7 +2048,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     false,
                     false,
                     false,
-                    normalized.includes(' '),
+                    word.includes(' '),
                     false
                 );
 
@@ -2084,9 +2058,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     quality: WordQuality.RAW
                 };
                 newItem.isPassive = false;
+                newItems.push(newItem);
             }
-            await dataStore.saveWord(newItem);
-            showToast(`"${normalized}" added!`);
+            await dataStore.bulkSaveWords(newItems);
+            showToast(`"${newItems.map((w) => w.word).join('", "')}" added!`);
             setIsAlreadyInLibrary(true);
             return true;
         } catch {

@@ -315,11 +315,11 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
     }
     if (newItems.length > 0) {
       await dataStore.bulkSaveWords(newItems);
-      try {
-        await autoRefineNewWords(newItems, user.nativeLanguage || 'Vietnamese');
-      } catch (error) {
-        console.warn('[WordList] Auto refine after add failed:', error);
-      }
+      // try {
+      //   await autoRefineNewWords(newItems, user.nativeLanguage || 'Vietnamese');
+      // } catch (error) {
+      //   console.warn('[WordList] Auto refine after add failed:', error);
+      // }
     }
   };
 
