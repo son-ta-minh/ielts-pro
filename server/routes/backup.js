@@ -317,7 +317,7 @@ router.post('/backup', (req, res) => {
                 rebuildUserVocabularySearchIndexFromFile(filePath, String(identifier || '').trim());
             }
 
-            logger.debug(`[Backup] Saved ${sizeMB} MB for ${identifier} in app '${appName}'`);
+            logger.info(`[Backup][${identifier}] Saved ${sizeMB} MB in app '${appName}'`);
             res.json({ success: true, size: stats.size, timestamp: Date.now() });
         } catch (err) {
             logger.error(`[Backup] Stat error: ${err.message}`);
@@ -343,7 +343,7 @@ router.get('/backup/:identifier', (req, res) => {
     }
 
     const identifier = req.params.identifier;
-    logger.debug(`[Backup] Request received for restore: ${identifier} in app '${appName}'`);
+    logger.info(`[Backup][${identifier}] Restore data for app '${appName}'`);
     
     const safeIdentifier = sanitizeToAscii(identifier);
     const fileName = `backup_${safeIdentifier}.json`;
