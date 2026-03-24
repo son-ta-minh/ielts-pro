@@ -8,76 +8,94 @@
   ];
 
   const ACTIONS = [
-    { command: "vi", label: "VI" },
-    { command: "speak", label: "Read" },
-    { command: "mimic", label: "Mimi" },
-    { command: "add_to_library", label: "Add" },
-    { command: "ask_ai", label: "Ask AI" },
-    { command: "examples", label: "Example" },
-    { command: "paraphrase", label: "Para" }
+    { command: "ask_ai", label: "Explain", icon: "🎓" },
+    { command: "vi", label: "Translate", icon: "🇻🇳" },
+    { command: "speak", label: "Listen", icon: "📢" },
+    { command: "mimic", label: "Speak", icon: "🎤" },
+    { command: "examples", label: "Example", icon: "📝" },
+    { command: "paraphrase", label: "Rephrase", icon: "♻️" },
+    { command: "add_to_library", label: "Add Library", icon: "🏛" },
+    { command: "copy", label: "Copy", icon: "📋" }
   ];
 
   let activeServerUrl = null;
   let activeSelectionText = "";
+  let currentAnchorEl = null;
+  let currentHighlightEl = null;
   let hideTimer = null;
+  let isInteractingWithUI = false;
 
   const root = document.createElement("div");
   root.style.position = "fixed";
   root.style.zIndex = "2147483647";
   root.style.display = "none";
-  root.style.padding = "6px";
-  root.style.borderRadius = "16px";
-  root.style.border = "1px solid rgba(17,24,39,0.12)";
-  root.style.background = "rgba(255,255,255,0.98)";
-  root.style.boxShadow = "0 18px 40px rgba(15,23,42,0.18)";
-  root.style.backdropFilter = "blur(14px)";
+  root.style.padding = "6px 8px";
+  root.style.borderRadius = "12px";
+  root.style.border = "1px solid rgba(0,0,0,0.06)";
+  root.style.background = "rgba(255,255,255,0.85)";
+  root.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
+  root.style.backdropFilter = "blur(12px)";
   root.style.fontFamily = "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
   root.style.userSelect = "none";
 
+  root.addEventListener("mousedown", () => {
+    isInteractingWithUI = true;
+  });
+
   const row = document.createElement("div");
-  row.style.display = "flex";
-  row.style.alignItems = "center";
+  row.style.display = "grid";
+  row.style.gridTemplateColumns = "repeat(4, auto)";
   row.style.gap = "6px";
-  row.style.flexWrap = "wrap";
-  row.style.maxWidth = "320px";
+  row.style.maxWidth = "280px";
   root.appendChild(row);
 
   const buttonMap = new Map();
 
   function setButtonState(button, state) {
     const baseLabel = button.dataset.label || "";
+    const icon = button.dataset.icon || "";
     button.disabled = state === "loading";
-    button.style.minWidth = "64px";
-    button.style.height = "34px";
+    button.style.minWidth = "auto";
+    button.style.height = "36px";
     button.style.padding = "0 12px";
-    button.style.borderRadius = "999px";
-    button.style.border = "1px solid rgba(17,24,39,0.10)";
-    button.style.fontSize = "12px";
-    button.style.fontWeight = "800";
-    button.style.letterSpacing = "0.04em";
+    button.style.borderRadius = "8px";
+    button.style.border = "1px solid transparent";
+    button.style.fontSize = "14px";
+    button.style.fontWeight = "700";
+    button.style.letterSpacing = "0.02em";
     button.style.cursor = state === "loading" ? "wait" : "pointer";
     button.style.transition = "all 120ms ease";
+    button.style.background = "transparent";
+    button.style.color = "#374151";
+    button.style.width = "100%";
+    button.style.textAlign = "center";
 
     if (state === "success") {
-      button.textContent = "Checked";
-      button.style.background = "#dcfce7";
-      button.style.color = "#166534";
-      button.style.borderColor = "#86efac";
+      button.textContent = "✓";
+      button.style.background = "rgba(34,197,94,0.12)";
+      button.style.color = "#16a34a";
       return;
     }
 
     if (state === "loading") {
-      button.textContent = "Sending";
-      button.style.background = "#111827";
-      button.style.color = "#ffffff";
-      button.style.borderColor = "#111827";
+      button.textContent = "...";
+      button.style.background = "rgba(0,0,0,0.08)";
+      button.style.color = "#111827";
       return;
     }
 
-    button.textContent = baseLabel;
-    button.style.background = "#ffffff";
-    button.style.color = "#111827";
-    button.style.borderColor = "rgba(17,24,39,0.10)";
+    button.textContent = icon;
+    button.style.background = "transparent";
+    button.style.color = "#374151";
+
+    button.onmouseenter = () => {
+      if (button.disabled) return;
+      button.style.background = "rgba(0,0,0,0.06)";
+    };
+    button.onmouseleave = () => {
+      if (button.disabled) return;
+      button.style.background = "transparent";
+    };
   }
 
   function flashButtonSuccess(button) {
@@ -85,6 +103,19 @@
     window.setTimeout(() => {
       setButtonState(button, "default");
     }, 900);
+  }
+
+  function removeAnchor() {
+    if (currentAnchorEl && currentAnchorEl.parentNode) {
+      currentAnchorEl.parentNode.removeChild(currentAnchorEl);
+    }
+    if (currentHighlightEl && currentHighlightEl.parentNode) {
+      const parent = currentHighlightEl.parentNode;
+      parent.replaceChild(document.createTextNode(currentHighlightEl.textContent), currentHighlightEl);
+      parent.normalize();
+    }
+    currentAnchorEl = null;
+    currentHighlightEl = null;
   }
 
   function hideToolbar() {
@@ -97,13 +128,76 @@
     }
     hideTimer = window.setTimeout(() => {
       hideToolbar();
-    }, 160);
+    }, 500);
   }
 
   function showToolbar(x, y) {
-    root.style.left = `${Math.max(12, x)}px`;
-    root.style.top = `${Math.max(12, y)}px`;
+    const padding = 12;
+    const toolbarWidth = root.offsetWidth || 280;
+    const viewportWidth = window.innerWidth;
+
+    let left = x;
+
+    if (left + toolbarWidth + padding > viewportWidth) {
+      left = viewportWidth - toolbarWidth - padding;
+    }
+
+    root.style.left = `${Math.max(padding, left)}px`;
+    root.style.top = `${Math.max(padding, y)}px`;
     root.style.display = "block";
+  }
+
+  function createAnchor(range) {
+    removeAnchor();
+
+    const highlight = document.createElement("span");
+    highlight.style.textDecoration = "underline";
+    highlight.style.textDecorationColor = "#22c55e";
+    highlight.style.textDecorationThickness = "2px";
+    highlight.style.textUnderlineOffset = "2px";
+
+    const selectedText = range.toString();
+    highlight.textContent = selectedText;
+
+    range.deleteContents();
+    range.insertNode(highlight);
+    currentHighlightEl = highlight;
+
+    const anchor = document.createElement("span");
+    anchor.textContent = " Vocab";
+    anchor.style.padding = "2px 8px";
+    anchor.style.height = "20px";
+    anchor.style.marginLeft = "6px";
+    anchor.style.fontSize = "11px";
+    anchor.style.fontWeight = "700";
+
+    anchor.style.display = "inline-flex";
+    anchor.style.alignItems = "center";
+    anchor.style.justifyContent = "center";
+    anchor.style.borderRadius = "999px";
+    anchor.style.whiteSpace = "nowrap";
+
+    anchor.style.background = "#22c55e";
+    anchor.style.color = "#ffffff";
+    anchor.style.cursor = "pointer";
+    anchor.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+
+    anchor.addEventListener("mousedown", () => {
+      isInteractingWithUI = true;
+    });
+
+    anchor.addEventListener("mouseenter", () => {
+      const rect = anchor.getBoundingClientRect();
+      showToolbar(rect.left, rect.top - 48);
+    });
+
+    anchor.addEventListener("mouseleave", scheduleHideToolbar);
+
+    const clone = document.createRange();
+    clone.setStartAfter(highlight);
+    clone.collapse(true);
+    clone.insertNode(anchor);
+    currentAnchorEl = anchor;
   }
 
   function uniqueUrls(items) {
@@ -214,6 +308,17 @@
     const text = activeSelectionText.trim();
     if (!button || !text) return;
 
+    if (command === "copy") {
+      try {
+        await navigator.clipboard.writeText(text);
+        flashButtonSuccess(button);
+      } catch (_) {
+        window.alert("Copy failed");
+        setButtonState(button, "default");
+      }
+      return;
+    }
+
     setButtonState(button, "loading");
 
     try {
@@ -243,6 +348,8 @@
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.label = action.label;
+    button.dataset.icon = action.icon;
+    button.title = action.label;
     setButtonState(button, "default");
     button.addEventListener("mousedown", (event) => {
       event.preventDefault();
@@ -268,8 +375,14 @@
   document.documentElement.appendChild(root);
 
   document.addEventListener("mouseup", () => {
+    if (isInteractingWithUI) {
+      isInteractingWithUI = false;
+      return;
+    }
+
     const selection = window.getSelection();
     const text = selection ? selection.toString().trim() : "";
+
     if (!text || !selection || selection.rangeCount === 0) {
       scheduleHideToolbar();
       return;
@@ -283,12 +396,13 @@
     }
 
     activeSelectionText = text;
+
     ACTIONS.forEach((action) => {
       const button = buttonMap.get(action.command);
       if (button) setButtonState(button, "default");
     });
 
-    showToolbar(rect.left + rect.width / 2 - 90, rect.top - 52);
+    createAnchor(range);
   });
 
   document.addEventListener("mousedown", (event) => {
