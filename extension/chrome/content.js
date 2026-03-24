@@ -15,7 +15,7 @@
     { command: "examples", label: "Example", icon: "📝" },
     { command: "paraphrase", label: "Rephrase", icon: "♻️" },
     { command: "add_to_library", label: "Add Library", icon: "🏛" },
-    { command: "copy", label: "Copy", icon: "📋" }
+    { command: "mark", label: "Mark", icon: "📌" }
   ];
 
   let activeServerUrl = null;
@@ -356,12 +356,16 @@
     const text = activeSelectionText.trim();
     if (!button || !text) return;
 
-    if (command === "copy") {
+    if (command === "mark") {
       try {
-        await navigator.clipboard.writeText(text);
+
+        const li = document.createElement("li");
+        li.textContent = text;
+        list.appendChild(li);
         flashButtonSuccess(button);
+
       } catch (_) {
-        window.alert("Copy failed");
+        window.alert("Mark failed");
         setButtonState(button, "default");
       }
       return;
@@ -472,4 +476,69 @@
   }
 
   void init();
+
+  /* Floating Copy Panel */
+  const floatingPanel = document.createElement("div");
+  floatingPanel.style.position = "fixed";
+  floatingPanel.style.bottom = "20px";
+  floatingPanel.style.right = "20px";
+  floatingPanel.style.width = "250px";
+  floatingPanel.style.maxHeight = "300px";
+  floatingPanel.style.overflowY = "auto";
+  floatingPanel.style.background = "white";
+  floatingPanel.style.border = "1px solid #ccc";
+  floatingPanel.style.borderRadius = "8px";
+  floatingPanel.style.boxShadow = "0 4px 12px rgba(0,0,0,0.2)";
+  floatingPanel.style.padding = "10px";
+  floatingPanel.style.zIndex = "2147483647";
+  floatingPanel.style.cursor = "move";
+  document.body.appendChild(floatingPanel);
+
+  // Header with title and close button
+  const header = document.createElement("div");
+  header.style.display = "flex";
+  header.style.justifyContent = "space-between";
+  header.style.alignItems = "center";
+  header.style.marginBottom = "6px";
+
+  const title = document.createElement("strong");
+  title.textContent = "Copied Words";
+  header.appendChild(title);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "×";
+  closeBtn.style.background = "transparent";
+  closeBtn.style.border = "none";
+  closeBtn.style.cursor = "pointer";
+  closeBtn.style.fontSize = "16px";
+  closeBtn.addEventListener("click", () => {
+    floatingPanel.style.display = "none";
+  });
+  header.appendChild(closeBtn);
+
+  floatingPanel.appendChild(header);
+
+  const list = document.createElement("ul");
+  floatingPanel.appendChild(list);
+
+  // Drag functionality
+  let isDragging = false;
+  let offsetX, offsetY;
+
+  header.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    offsetX = e.clientX - floatingPanel.getBoundingClientRect().left;
+    offsetY = e.clientY - floatingPanel.getBoundingClientRect().top;
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    floatingPanel.style.left = `${e.clientX - offsetX}px`;
+    floatingPanel.style.top = `${e.clientY - offsetY}px`;
+  });
+
+  document.addEventListener("mouseup", () => {
+    isDragging = false;
+  });
+
 })();
