@@ -195,6 +195,10 @@
       currentAnchorEl.parentNode.removeChild(currentAnchorEl);
     }
     if (currentHighlightEl && currentHighlightEl.parentNode) {
+      // Remove overlay if exists
+      if (currentHighlightEl._overlay) {
+        currentHighlightEl._overlay.remove();
+      }
       const parent = currentHighlightEl.parentNode;
       parent.replaceChild(document.createTextNode(currentHighlightEl.textContent), currentHighlightEl);
       parent.normalize();
@@ -205,6 +209,7 @@
 
   function hideToolbar() {
     root.style.display = "none";
+    triangle.style.display = "none";
   }
 
   function scheduleHideToolbar() {
@@ -216,49 +221,159 @@
     }, 500);
   }
 
-  function showToolbar(x, y) {
-    const padding = 12;
+  // Triangle element for toolbar pointer
+  const triangle = document.createElement("div");
+  triangle.style.position = "absolute";
+  triangle.style.width = "0";
+  triangle.style.height = "0";
+  triangle.style.borderLeft = "6px solid transparent";
+  triangle.style.borderRight = "6px solid transparent";
+  triangle.style.zIndex = "2147483648"; // above toolbar
+  document.body.appendChild(triangle);
+
+  function showToolbar(x, y, range, forceAbove) {
+    const padding = 8;
     const toolbarWidth = root.offsetWidth || 280;
     const toolbarHeight = root.offsetHeight || 40;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    let left = x;
-    if (left + toolbarWidth + padding > viewportWidth) {
-      left = viewportWidth - toolbarWidth - padding;
+    const rect = range.getBoundingClientRect();
+
+    let top;
+    let pointingUp;
+
+    if (forceAbove) {
+      top = rect.top - toolbarHeight - 6;
+      pointingUp = true;
+    } else {
+      top = rect.bottom + 6;
+      pointingUp = false;
     }
 
-    let top = y - toolbarHeight - 8; // default above selection
+    // Clamp top to viewport
     if (top < padding) {
-      // if not enough space above, display below selection
-      top = y + 8;
-      if (top + toolbarHeight + padding > viewportHeight) {
-        // if still exceeds viewport bottom, adjust top
-        top = viewportHeight - toolbarHeight - padding;
-      }
+      top = rect.bottom + 6;
+      pointingUp = false;
+    }
+    if (top + toolbarHeight + padding > viewportHeight) {
+      top = rect.top - toolbarHeight - 6;
+      pointingUp = true;
     }
 
-    root.style.left = `${Math.max(padding, left)}px`;
+    let left = rect.left + rect.width / 2 - toolbarWidth / 2;
+    if (left < padding) left = padding;
+    if (left + toolbarWidth + padding > viewportWidth) left = viewportWidth - toolbarWidth - padding;
+
+    root.style.left = `${left}px`;
     root.style.top = `${top}px`;
     root.style.display = "block";
+    triangle.style.display = "block";
+
+    const triangleX = Math.min(Math.max(rect.left + rect.width / 2, left + 6), left + toolbarWidth - 6);
+    triangle.style.left = `${triangleX - 6}px`;
+    if (pointingUp) {
+      triangle.style.top = `${top + toolbarHeight}px`;
+      triangle.style.borderTop = "6px solid rgba(255,255,255,0.85)";
+      triangle.style.borderBottom = "none";
+    } else {
+      triangle.style.top = `${top - 6}px`;
+      triangle.style.borderBottom = "6px solid rgba(255,255,255,0.85)";
+      triangle.style.borderTop = "none";
+    }
   }
 
   function createAnchor(range) {
     removeAnchor();
 
+    const selectedText = range.toString();
+
+    // Normal inline highlight
     const highlight = document.createElement("span");
+    highlight.textContent = selectedText;
     highlight.style.textDecoration = "underline";
     highlight.style.textDecorationColor = "#22c55e";
     highlight.style.textDecorationThickness = "2px";
     highlight.style.textUnderlineOffset = "2px";
 
-    const selectedText = range.toString();
-    highlight.textContent = selectedText;
-
+    // Insert highlight
     range.deleteContents();
     range.insertNode(highlight);
     currentHighlightEl = highlight;
 
+    // Create overlay for stable hover
+    const rect = highlight.getBoundingClientRect();
+    const overlay = document.createElement("div");
+    overlay.style.position = "absolute";
+    overlay.style.left = `${rect.left + window.scrollX}px`;
+    overlay.style.top = `${rect.top + window.scrollY}px`;
+    overlay.style.width = `${rect.width}px`;
+    overlay.style.height = `${rect.height}px`;
+    overlay.style.cursor = "pointer";
+    overlay.style.background = "transparent";
+    overlay.style.zIndex = 2147483646; // just below toolbar
+
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener("mouseenter", () => {
+      if (hideTimer !== null) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+
+      requestAnimationFrame(() => {
+        const rect = highlight.getBoundingClientRect();
+
+        // Expand rect slightly to avoid gaps
+        const expandedRect = {
+          top: rect.top - 2,
+          bottom: rect.bottom + 2,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height + 4,
+          getBoundingClientRect: () => rect
+        };
+
+        // Measure toolbar size without hiding it
+        const prevDisplay = root.style.display;
+        if (prevDisplay === "none") {
+          root.style.display = "block";
+        }
+        const toolbarHeight = root.offsetHeight;
+        const toolbarWidth = root.offsetWidth;
+
+        const spaceAbove = rect.top;
+        const spaceBelow = window.innerHeight - rect.bottom;
+
+        let forceAbove;
+        if (spaceAbove >= toolbarHeight + 8) {
+          forceAbove = true;
+        } else if (spaceBelow >= toolbarHeight + 8) {
+          forceAbove = false;
+        } else {
+          forceAbove = spaceAbove > spaceBelow;
+        }
+
+        showToolbar(null, null, { getBoundingClientRect: () => expandedRect }, forceAbove);
+
+        // Log real toolbar position
+        const realMenuRect = root.getBoundingClientRect();
+        console.log("Mouse enter overlay debug (REAL menu rect):");
+        console.log("Highlight rect:", rect);
+        console.log("Toolbar rect (actual):", realMenuRect);
+        console.log("Space above:", rect.top, "Space below:", spaceBelow);
+      });
+    });
+
+    overlay.addEventListener("mouseleave", () => {
+      if (hideTimer !== null) clearTimeout(hideTimer);
+      hideTimer = setTimeout(hideToolbar, 600);
+    });
+
+    // Save overlay to remove later
+    highlight._overlay = overlay;
+
+    // Create the anchor button next to the highlight
     const anchor = document.createElement("span");
     anchor.textContent = " Vocab";
     anchor.style.padding = "2px 8px";
@@ -283,11 +398,19 @@
     });
 
     anchor.addEventListener("mouseenter", () => {
-      const rect = anchor.getBoundingClientRect();
-      showToolbar(rect.left, rect.top - 48);
+      if (hideTimer !== null) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+      setTimeout(() => {
+        showToolbar(null, null, range);
+      }, 30);
     });
 
-    anchor.addEventListener("mouseleave", scheduleHideToolbar);
+    anchor.addEventListener("mouseleave", () => {
+      if (hideTimer !== null) clearTimeout(hideTimer);
+      hideTimer = setTimeout(hideToolbar, 600);
+    });
 
     const clone = document.createRange();
     clone.setStartAfter(highlight);
