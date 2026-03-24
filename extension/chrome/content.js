@@ -71,6 +71,95 @@
 
   const buttonMap = new Map();
 
+  function setMiniActionButtonState(button, state) {
+    if (!button) return;
+
+    button.disabled = state === "loading";
+
+    if (state === "loading") {
+      button.textContent = "...";
+      button.style.opacity = "0.7";
+      return;
+    }
+
+    if (state === "success") {
+      button.textContent = "✓";
+      button.style.opacity = "1";
+      return;
+    }
+
+    button.textContent = "+";
+    button.style.opacity = "1";
+  }
+
+  function flashMiniActionButtonSuccess(button) {
+    setMiniActionButtonState(button, "success");
+    window.setTimeout(() => {
+      setMiniActionButtonState(button, "default");
+    }, 900);
+  }
+
+  async function runCommand(command, text, options) {
+    const {
+      button,
+      onSuccess,
+      onError
+    } = options || {};
+
+    if (!text) return false;
+
+    if (button && button.disabled) {
+      return false;
+    }
+
+    if (button) {
+      setMiniActionButtonState(button, "loading");
+    }
+
+    try {
+      await sendInteractiveCommand(command, text);
+      if (button) {
+        flashMiniActionButtonSuccess(button);
+      }
+      if (typeof onSuccess === "function") {
+        onSuccess();
+      }
+      return true;
+    } catch (error) {
+      const requiresCode = error?.payload?.requiresConnectCode === true || error?.status === 409;
+      if (requiresCode) {
+        const manualCode = window.prompt("Mini Buddy detected multiple Full Buddy sessions. Enter Connect Code:");
+        if (manualCode && manualCode.trim()) {
+          try {
+            await sendInteractiveCommand(command, text, manualCode.trim());
+            if (button) {
+              flashMiniActionButtonSuccess(button);
+            }
+            if (typeof onSuccess === "function") {
+              onSuccess();
+            }
+            return true;
+          } catch (retryError) {
+            if (typeof onError === "function") {
+              onError(retryError);
+            } else {
+              window.alert(retryError?.payload?.error || retryError?.message || "Mini Buddy request failed.");
+            }
+          }
+        }
+      } else if (typeof onError === "function") {
+        onError(error);
+      } else {
+        window.alert(error?.payload?.error || error?.message || "Mini Buddy request failed.");
+      }
+
+      if (button) {
+        setMiniActionButtonState(button, "default");
+      }
+      return false;
+    }
+  }
+
   function addWordToPanel(word) {
     // Avoid duplicates
     const existing = Array.from(list.querySelectorAll("li span")).map(s => s.textContent.replace(/^\+ /, ""));
@@ -90,12 +179,23 @@
     addBtn.style.cursor = "pointer";
     addBtn.style.fontWeight = "700";
     addBtn.style.padding = "0 4px";
+    addBtn.title = "Add to library";
 
-    addBtn.addEventListener("click", (event) => {
+    addBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
-      activeSelectionText = word;
-      void handleAction("add_to_library");
-      li.style.background = "#d1fae5";
+      const added = await runCommand("add_to_library", word, {
+        button: addBtn,
+        onSuccess: () => {
+          li.style.background = "#d1fae5";
+        },
+        onError: (error) => {
+          window.alert(error?.payload?.error || error?.message || "Mini Buddy request failed.");
+        }
+      });
+
+      if (added) {
+        activeSelectionText = word;
+      }
     });
 
     // Delete button
@@ -282,10 +382,11 @@
     // Normal inline highlight
     const highlight = document.createElement("span");
     highlight.textContent = selectedText;
-    highlight.style.textDecoration = "underline";
-    highlight.style.textDecorationColor = "#22c55e";
-    highlight.style.textDecorationThickness = "2px";
-    highlight.style.textUnderlineOffset = "2px";
+    // highlight.style.textDecoration = "underline";
+    // highlight.style.textDecorationColor = "#22c55e";
+    // highlight.style.textDecorationThickness = "2px";
+    // highlight.style.textUnderlineOffset = "2px";
+    highlight.style.backgroundColor = "#e0d7f8"; // light purple background
 
     // Insert highlight
     range.deleteContents();
@@ -553,25 +654,16 @@
 
     setButtonState(button, "loading");
 
-    try {
-      await sendInteractiveCommand(command, text);
-      flashButtonSuccess(button);
-    } catch (error) {
-      const requiresCode = error?.payload?.requiresConnectCode === true || error?.status === 409;
-      if (requiresCode) {
-        const manualCode = window.prompt("Mini Buddy detected multiple Full Buddy sessions. Enter Connect Code:");
-        if (manualCode && manualCode.trim()) {
-          try {
-            await sendInteractiveCommand(command, text, manualCode.trim());
-            flashButtonSuccess(button);
-            return;
-          } catch (retryError) {
-            window.alert(retryError?.payload?.error || retryError?.message || "Mini Buddy request failed.");
-          }
-        }
-      } else {
+    const completed = await runCommand(command, text, {
+      onSuccess: () => {
+        flashButtonSuccess(button);
+      },
+      onError: (error) => {
         window.alert(error?.payload?.error || error?.message || "Mini Buddy request failed.");
       }
+    });
+
+    if (!completed) {
       setButtonState(button, "default");
     }
   }
@@ -638,9 +730,32 @@
     saveAllBtn.style.cursor = "pointer";
     saveAllBtn.style.background = "#ffffff";
     saveAllBtn.style.color = "#5340a1";
-    saveAllBtn.addEventListener("click", () => {
+    saveAllBtn.addEventListener("click", async () => {
+      if (saveAllBtn.disabled) return;
+
       const words = Array.from(list.querySelectorAll("li span")).map(s => s.textContent.replace(/^\+ /, ""));
-      console.log("Save all words:", words);
+      if (!words.length) return;
+
+      const originalText = saveAllBtn.textContent;
+      saveAllBtn.disabled = true;
+      saveAllBtn.textContent = "Saving...";
+      saveAllBtn.style.opacity = "0.7";
+
+      let successCount = 0;
+      for (const word of words) {
+        const saved = await runCommand("add_to_library", word);
+        if (saved) {
+          successCount += 1;
+        }
+      }
+
+      saveAllBtn.textContent = successCount === words.length ? "Saved" : `${successCount}/${words.length}`;
+      saveAllBtn.style.opacity = "1";
+
+      window.setTimeout(() => {
+        saveAllBtn.disabled = false;
+        saveAllBtn.textContent = originalText;
+      }, 1200);
     });
 
     // Clear All button
