@@ -70,6 +70,72 @@
 
   const buttonMap = new Map();
 
+  function addWordToPanel(word) {
+    // Avoid duplicates
+    const existing = Array.from(list.querySelectorAll("li span")).map(s => s.textContent.replace(/^\+ /, ""));
+    if (existing.includes(word)) return;
+
+    const li = document.createElement("li");
+    li.style.display = "flex";
+    li.style.alignItems = "center";
+    li.style.gap = "6px";
+    li.style.padding = "2px 4px";
+    li.style.borderRadius = "6px";
+    li.style.background = "#ffffff";
+    li.style.border = "1px solid #e5e7eb";
+
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "+";
+    addBtn.style.cursor = "pointer";
+    addBtn.style.fontWeight = "700";
+    addBtn.style.padding = "0 4px";
+
+    addBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      activeSelectionText = word;
+      void handleAction("add_to_library");
+      li.style.background = "#d1fae5";
+    });
+
+    // Delete button
+    const deleteBtn = document.createElement("button");
+    deleteBtn.textContent = "-";
+    deleteBtn.style.cursor = "pointer";
+    deleteBtn.style.fontWeight = "700";
+    deleteBtn.style.padding = "0 4px";
+    deleteBtn.style.color = "#ef4444";
+    deleteBtn.addEventListener("click", (event) => {
+      event.stopPropagation(); // prevent triggering li click
+      li.remove(); // remove from DOM
+
+      // Remove from localStorage
+      const savedWords = JSON.parse(localStorage.getItem("markedWords") || "[]");
+      const updatedWords = savedWords.filter(w => w !== word);
+      localStorage.setItem("markedWords", JSON.stringify(updatedWords));
+    });
+
+    const textSpan = document.createElement("span");
+    textSpan.textContent = word;
+
+    li.appendChild(addBtn);
+    li.appendChild(deleteBtn);
+    li.appendChild(textSpan);
+
+    li.addEventListener("click", () => {
+      activeSelectionText = word;
+      void handleAction("speak");
+    });
+
+    list.appendChild(li);
+
+    // Save updated list to localStorage
+    const savedWords = JSON.parse(localStorage.getItem("markedWords") || "[]");
+    if (!savedWords.includes(word)) {
+      savedWords.push(word);
+      localStorage.setItem("markedWords", JSON.stringify(savedWords));
+    }
+  }
+
   function setButtonState(button, state) {
     const baseLabel = button.dataset.label || "";
     const icon = button.dataset.icon || "";
@@ -359,9 +425,7 @@
     if (command === "mark") {
       try {
 
-        const li = document.createElement("li");
-        li.textContent = text;
-        list.appendChild(li);
+        addWordToPanel(text);
         flashButtonSuccess(button);
 
       } catch (_) {
@@ -483,7 +547,7 @@ floatingPanel.style.position = "fixed";
 floatingPanel.style.bottom = "20px";
 floatingPanel.style.right = "20px";
 floatingPanel.style.width = "260px";
-floatingPanel.style.maxHeight = "300px";
+floatingPanel.style.maxHeight = "600px";
 floatingPanel.style.overflowY = "auto";
 floatingPanel.style.background = "#f9fafb"; 
 floatingPanel.style.border = "1px solid #d1d5db";
@@ -494,6 +558,8 @@ floatingPanel.style.fontSize = "12px";
 floatingPanel.style.color = "#111827";
 floatingPanel.style.zIndex = "2147483647";
 floatingPanel.style.cursor = "default";
+floatingPanel.style.resize = "both"; // allow both horizontal and vertical resizing
+floatingPanel.style.overflow = "auto"; // ensures scrollbars appear if content overflows
 document.body.appendChild(floatingPanel);
 
 // Header
@@ -528,6 +594,7 @@ closeBtn.addEventListener("click", () => {
 });
 header.appendChild(closeBtn);
 floatingPanel.appendChild(header);
+floatingPanel.style.userSelect = "none";
 
 // Content list
 const list = document.createElement("ul");
@@ -538,6 +605,11 @@ list.style.display = "flex";
 list.style.flexDirection = "column";
 list.style.gap = "4px";
 floatingPanel.appendChild(list);
+list.style.userSelect = "none";
+
+// Load saved words after creating list
+const savedWords = JSON.parse(localStorage.getItem("markedWords") || "[]");
+savedWords.forEach(word => addWordToPanel(word));
 
   // Drag functionality
   let isDragging = false;
