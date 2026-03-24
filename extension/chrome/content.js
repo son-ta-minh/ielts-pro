@@ -562,37 +562,84 @@ floatingPanel.style.resize = "both"; // allow both horizontal and vertical resiz
 floatingPanel.style.overflow = "auto"; // ensures scrollbars appear if content overflows
 document.body.appendChild(floatingPanel);
 
-// Header
+// Compact, minimalist header
 const header = document.createElement("div");
-header.style.padding = "2px 8px";         // smaller top/bottom padding → shorter container
-header.style.height = "28px";             // optional explicit height
-header.style.lineHeight = "1";            // keeps text vertically centered
-header.style.fontSize = "12px";           // keep font size readable
-header.style.fontWeight = "700";          // keep bold
-header.style.background = "#5340a1";      // light, neutral background
-header.style.borderBottom = "1px solid #d1d5db";
-header.style.color = "#ffffff";      // light, neutral background
 header.style.display = "flex";
 header.style.justifyContent = "space-between";
 header.style.alignItems = "center";
+header.style.padding = "2px 6px"; // minimal padding
+header.style.background = "#5340a1"; // header color
 header.style.borderTopLeftRadius = "8px";
 header.style.borderTopRightRadius = "8px";
+header.style.color = "#ffffff";
+header.style.fontWeight = "700";
+header.style.fontSize = "12px";
+header.style.userSelect = "none";
+header.style.height = "28px"; // fixed compact height
 
+// Left: title
 const title = document.createElement("span");
-title.textContent = "Marked Words";
+title.textContent = "Words";
 header.appendChild(title);
 
+// Right: buttons container
+const actions = document.createElement("div");
+actions.style.display = "flex";
+actions.style.alignItems = "center";
+actions.style.gap = "4px"; // minimal gap
+
+// Save All button
+const saveAllBtn = document.createElement("button");
+saveAllBtn.textContent = "Save All";
+saveAllBtn.style.fontSize = "10px";
+saveAllBtn.style.padding = "1px 4px";
+saveAllBtn.style.borderRadius = "4px";
+saveAllBtn.style.border = "none";
+saveAllBtn.style.cursor = "pointer";
+saveAllBtn.style.background = "#ffffff";
+saveAllBtn.style.color = "#5340a1";
+saveAllBtn.addEventListener("click", () => {
+  const words = Array.from(list.querySelectorAll("li span")).map(s => s.textContent.replace(/^\+ /, ""));
+  console.log("Save all words:", words);
+});
+
+// Clear All button
+const clearAllBtn = document.createElement("button");
+clearAllBtn.textContent = "Clear All";
+clearAllBtn.style.fontSize = "10px";
+clearAllBtn.style.padding = "1px 4px";
+clearAllBtn.style.borderRadius = "4px";
+clearAllBtn.style.border = "none";
+clearAllBtn.style.cursor = "pointer";
+clearAllBtn.style.background = "#f87171";
+clearAllBtn.style.color = "#ffffff";
+clearAllBtn.addEventListener("click", () => {
+  list.innerHTML = "";
+  localStorage.removeItem("markedWords");
+});
+
+// Close button
 const closeBtn = document.createElement("button");
 closeBtn.textContent = "×";
 closeBtn.style.background = "transparent";
 closeBtn.style.border = "none";
 closeBtn.style.cursor = "pointer";
-closeBtn.style.fontSize = "16px";
+closeBtn.style.fontSize = "14px";
 closeBtn.style.fontWeight = "700";
+closeBtn.style.color = "#ffffff";
 closeBtn.addEventListener("click", () => {
   floatingPanel.style.display = "none";
 });
-header.appendChild(closeBtn);
+
+// Append buttons to actions container
+actions.appendChild(saveAllBtn);
+actions.appendChild(clearAllBtn);
+actions.appendChild(closeBtn);
+
+// Append actions to header
+header.appendChild(actions);
+
+// Add header to panel
 floatingPanel.appendChild(header);
 floatingPanel.style.userSelect = "none";
 
