@@ -479,47 +479,65 @@
 
   /* Floating Copy Panel */
   const floatingPanel = document.createElement("div");
-  floatingPanel.style.position = "fixed";
-  floatingPanel.style.bottom = "20px";
-  floatingPanel.style.right = "20px";
-  floatingPanel.style.width = "250px";
-  floatingPanel.style.maxHeight = "300px";
-  floatingPanel.style.overflowY = "auto";
-  floatingPanel.style.background = "white";
-  floatingPanel.style.border = "1px solid #ccc";
-  floatingPanel.style.borderRadius = "8px";
-  floatingPanel.style.boxShadow = "0 4px 12px rgba(0,0,0,0.2)";
-  floatingPanel.style.padding = "10px";
-  floatingPanel.style.zIndex = "2147483647";
-  floatingPanel.style.cursor = "move";
-  document.body.appendChild(floatingPanel);
+floatingPanel.style.position = "fixed";
+floatingPanel.style.bottom = "20px";
+floatingPanel.style.right = "20px";
+floatingPanel.style.width = "260px";
+floatingPanel.style.maxHeight = "300px";
+floatingPanel.style.overflowY = "auto";
+floatingPanel.style.background = "#f9fafb"; 
+floatingPanel.style.border = "1px solid #d1d5db";
+floatingPanel.style.borderRadius = "12px";
+floatingPanel.style.boxShadow = "0 8px 24px rgba(0,0,0,0.15)";
+floatingPanel.style.fontFamily = "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+floatingPanel.style.fontSize = "12px";
+floatingPanel.style.color = "#111827";
+floatingPanel.style.zIndex = "2147483647";
+floatingPanel.style.cursor = "default";
+document.body.appendChild(floatingPanel);
 
-  // Header with title and close button
-  const header = document.createElement("div");
-  header.style.display = "flex";
-  header.style.justifyContent = "space-between";
-  header.style.alignItems = "center";
-  header.style.marginBottom = "6px";
+// Header
+const header = document.createElement("div");
+header.style.padding = "2px 8px";         // smaller top/bottom padding → shorter container
+header.style.height = "28px";             // optional explicit height
+header.style.lineHeight = "1";            // keeps text vertically centered
+header.style.fontSize = "12px";           // keep font size readable
+header.style.fontWeight = "700";          // keep bold
+header.style.background = "#5340a1";      // light, neutral background
+header.style.borderBottom = "1px solid #d1d5db";
+header.style.color = "#ffffff";      // light, neutral background
+header.style.display = "flex";
+header.style.justifyContent = "space-between";
+header.style.alignItems = "center";
+header.style.borderTopLeftRadius = "8px";
+header.style.borderTopRightRadius = "8px";
 
-  const title = document.createElement("strong");
-  title.textContent = "Copied Words";
-  header.appendChild(title);
+const title = document.createElement("span");
+title.textContent = "Marked Words";
+header.appendChild(title);
 
-  const closeBtn = document.createElement("button");
-  closeBtn.textContent = "×";
-  closeBtn.style.background = "transparent";
-  closeBtn.style.border = "none";
-  closeBtn.style.cursor = "pointer";
-  closeBtn.style.fontSize = "16px";
-  closeBtn.addEventListener("click", () => {
-    floatingPanel.style.display = "none";
-  });
-  header.appendChild(closeBtn);
+const closeBtn = document.createElement("button");
+closeBtn.textContent = "×";
+closeBtn.style.background = "transparent";
+closeBtn.style.border = "none";
+closeBtn.style.cursor = "pointer";
+closeBtn.style.fontSize = "16px";
+closeBtn.style.fontWeight = "700";
+closeBtn.addEventListener("click", () => {
+  floatingPanel.style.display = "none";
+});
+header.appendChild(closeBtn);
+floatingPanel.appendChild(header);
 
-  floatingPanel.appendChild(header);
-
-  const list = document.createElement("ul");
-  floatingPanel.appendChild(list);
+// Content list
+const list = document.createElement("ul");
+list.style.listStyle = "none";
+list.style.margin = "0";
+list.style.padding = "6px 10px";
+list.style.display = "flex";
+list.style.flexDirection = "column";
+list.style.gap = "4px";
+floatingPanel.appendChild(list);
 
   // Drag functionality
   let isDragging = false;
