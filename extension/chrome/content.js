@@ -153,16 +153,27 @@
   function showToolbar(x, y) {
     const padding = 12;
     const toolbarWidth = root.offsetWidth || 280;
+    const toolbarHeight = root.offsetHeight || 40;
     const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
     let left = x;
-
     if (left + toolbarWidth + padding > viewportWidth) {
       left = viewportWidth - toolbarWidth - padding;
     }
 
+    let top = y - toolbarHeight - 8; // default above selection
+    if (top < padding) {
+      // if not enough space above, display below selection
+      top = y + 8;
+      if (top + toolbarHeight + padding > viewportHeight) {
+        // if still exceeds viewport bottom, adjust top
+        top = viewportHeight - toolbarHeight - padding;
+      }
+    }
+
     root.style.left = `${Math.max(padding, left)}px`;
-    root.style.top = `${Math.max(padding, y)}px`;
+    root.style.top = `${top}px`;
     root.style.display = "block";
   }
 

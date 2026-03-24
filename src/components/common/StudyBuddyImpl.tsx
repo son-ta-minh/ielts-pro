@@ -256,6 +256,25 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const imageSettingsPersistSnapshotRef = useRef(JSON.stringify(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings)));
     const imageSettingsPersistTimeoutRef = useRef<number | null>(null);
     const interactiveEventSourceRef = useRef<EventSource | null>(null);
+    const languageSwitchDebounceTimeoutRef = useRef<number | null>(null);
+    const hasInitializedLanguageSwitchRef = useRef(false);
+    const languageSwitchRequestRef = useRef<((prompt: string, targetOverride?: StudyBuddyChatTarget | null) => Promise<void>) | null>(null);
+    const lastLanguageInstructionSentRef = useRef<'vi' | 'en' | null>(null);
+    const interactiveCommandHandlersRef = useRef<{
+        translate: (text: string) => Promise<void>;
+        read: (text: string) => Promise<void>;
+        mimic: (text: string) => void;
+        addToLibrary: (text: string) => Promise<boolean | void>;
+        askAi: (text: string) => Promise<void>;
+        explain: (text: string) => Promise<void>;
+        examples: (text: string) => Promise<void>;
+        collocations: (text: string) => Promise<void>;
+        preposition: (text: string) => Promise<void>;
+        paraphrase: (text: string) => Promise<void>;
+        idioms: (text: string) => Promise<void>;
+        compare: (text: string) => Promise<void>;
+        wordFamily: (text: string) => Promise<void>;
+    } | null>(null);
     
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
@@ -321,61 +340,59 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 const command = String(payload?.command || '').trim().toLowerCase();
                 const text = String(payload?.text || '').trim();
                 if (!text) return;
+                const handlers = interactiveCommandHandlersRef.current;
+                if (!handlers) return;
 
                 if (command === 'vi') {
-                    void handleTranslateExplicitSelection(text);
+                    void handlers.translate(text);
                     return;
                 }
                 if (command === 'speak') {
-                    void handleReadExplicitSelection(text);
+                    void handlers.read(text);
                     return;
                 }
                 if (command === 'mimic') {
-                    handleSpeakExplicitSelection(text);
+                    handlers.mimic(text);
                     return;
                 }
                 if (command === 'add_to_library') {
-                    void handleAddExplicitSelectionToLibrary(text);
+                    void handlers.addToLibrary(text);
                     return;
                 }
                 if (command === 'ask_ai') {
-                    syncChatSelectionText(text);
-                    setIsChatOpen(true);
-                    window.setTimeout(() => {
-                        void handleBackgroundChatRequest(`Explain: ${text}`);
-                    }, 0);
+                    void handlers.askAi(text);
                     return;
                 }
                 if (command === 'explain') {
-                    void handleChatCoachExplain({ inputSource: 'selection', inputText: text });
+                    void handlers.explain(text);
                     return;
                 }
                 if (command === 'examples') {
-                    void handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'), { inputSource: 'selection', inputText: text });
+                    void handlers.examples(text);
                     return;
                 }
                 if (command === 'collocations') {
-                    void handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'), { inputSource: 'selection', inputText: text });
+                    void handlers.collocations(text);
                     return;
                 }
                 if (command === 'preposition') {
-                    void handleChatCoachPromptToChat('preposition', 'Dependent Preposition', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'preposition'), { inputSource: 'selection', inputText: text });
+                    void handlers.preposition(text);
                     return;
                 }
                 if (command === 'paraphrase') {
-                    void handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'), { inputSource: 'selection', inputText: text });
+                    void handlers.paraphrase(text);
                     return;
                 }
                 if (command === 'idioms') {
-                    void handleChatCoachPromptToChat('idioms', 'Idioms', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'idioms'), { inputSource: 'selection', inputText: text });
+                    void handlers.idioms(text);
                     return;
                 }
                 if (command === 'compare') {
-                    void handleChatCoachPromptToChat('compare', 'Compare', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'compare'), { inputSource: 'selection', inputText: text });
+                    void handlers.compare(text);
                     return;
                 }
                 if (command === 'word_family') {
-                    void handleChatCoachPromptToChat('wordFamily', 'Word Family', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'wordFamily'), { inputSource: 'selection', inputText: text });
+                    void handlers.wordFamily(text);
                 }
             } catch {
                 // Ignore malformed interactive payloads.
@@ -443,6 +460,15 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     useEffect(() => {
         activeChatTargetRef.current = activeChatTarget;
     }, [activeChatTarget]);
+
+    useEffect(() => {
+        return () => {
+            if (languageSwitchDebounceTimeoutRef.current !== null) {
+                window.clearTimeout(languageSwitchDebounceTimeoutRef.current);
+                languageSwitchDebounceTimeoutRef.current = null;
+            }
+        };
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
@@ -1818,6 +1844,37 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         saveMemoryTexts,
     });
 
+    useEffect(() => {
+        languageSwitchRequestRef.current = handleBackgroundChatRequest;
+    }, [handleBackgroundChatRequest]);
+
+    useEffect(() => {
+        if (!hasInitializedLanguageSwitchRef.current) {
+            hasInitializedLanguageSwitchRef.current = true;
+            lastLanguageInstructionSentRef.current = config.interface.studyBuddyLanguage;
+            return;
+        }
+
+        if (lastLanguageInstructionSentRef.current === config.interface.studyBuddyLanguage) {
+            return;
+        }
+
+        if (languageSwitchDebounceTimeoutRef.current !== null) {
+            window.clearTimeout(languageSwitchDebounceTimeoutRef.current);
+        }
+
+        const nextLanguage = config.interface.studyBuddyLanguage;
+        languageSwitchDebounceTimeoutRef.current = window.setTimeout(() => {
+            languageSwitchDebounceTimeoutRef.current = null;
+            lastLanguageInstructionSentRef.current = nextLanguage;
+            void languageSwitchRequestRef.current?.(
+                nextLanguage === 'vi'
+                    ? 'Ap dung cai dat ngon ngu: tu bay gio chi dung tieng Viet. Neu da ap dung, chi tra loi dung 1 câu: OK Tôi dùng tiếng Việt. Neu khong the, chi tra loi: NO and reason'
+                    : 'Apply the language setting: from now on use English only. If applied, reply with exactly one sentence: OK I use English. If you cannot comply, reply with exactly: NO and reason'
+            );
+        }, 600);
+    }, [config.interface.studyBuddyLanguage]);
+
     const handleReadAndIpa = async () => {
         const selectedText = getCoachActionText();
         if (!selectedText) return;
@@ -2086,6 +2143,52 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             setMimicTarget(normalized);
         }
     };
+
+    useEffect(() => {
+        interactiveCommandHandlersRef.current = {
+            translate: handleTranslateExplicitSelection,
+            read: handleReadExplicitSelection,
+            mimic: handleSpeakExplicitSelection,
+            addToLibrary: handleAddExplicitSelectionToLibrary,
+            askAi: async (text: string) => {
+                syncChatSelectionText(text);
+                setIsChatOpen(true);
+                await handleBackgroundChatRequest(`Explain briefly core usage, and IELTS tips for the vocabulary: ${text}`);
+            },
+            explain: async (text: string) => {
+                await handleChatCoachExplain({ inputSource: 'selection', inputText: text });
+            },
+            examples: async (text: string) => {
+                await handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'), { inputSource: 'selection', inputText: text });
+            },
+            collocations: async (text: string) => {
+                await handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'), { inputSource: 'selection', inputText: text });
+            },
+            preposition: async (text: string) => {
+                await handleChatCoachPromptToChat('preposition', 'Dependent Preposition', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'preposition'), { inputSource: 'selection', inputText: text });
+            },
+            paraphrase: async (text: string) => {
+                await handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'), { inputSource: 'selection', inputText: text });
+            },
+            idioms: async (text: string) => {
+                await handleChatCoachPromptToChat('idioms', 'Idioms', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'idioms'), { inputSource: 'selection', inputText: text });
+            },
+            compare: async (text: string) => {
+                await handleChatCoachPromptToChat('compare', 'Compare', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'compare'), { inputSource: 'selection', inputText: text });
+            },
+            wordFamily: async (text: string) => {
+                await handleChatCoachPromptToChat('wordFamily', 'Word Family', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'wordFamily'), { inputSource: 'selection', inputText: text });
+            }
+        };
+    }, [
+        handleTranslateExplicitSelection,
+        handleReadExplicitSelection,
+        handleSpeakExplicitSelection,
+        handleAddExplicitSelectionToLibrary,
+        handleBackgroundChatRequest,
+        handleChatCoachExplain,
+        handleChatCoachPromptToChat
+    ]);
     
     const handleOpenTools = () => {
         setIsOpen(false);

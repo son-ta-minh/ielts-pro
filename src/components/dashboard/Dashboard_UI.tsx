@@ -4,7 +4,7 @@ import {
   Download, History, BookCopy, Sparkles, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
   Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain, AlertTriangle,
   CloudUpload, Percent, MessagesSquare, Scale, Dumbbell, Crown,
-  Timer, Plus, Play, Pause, StopCircle, Clock4, Trash2
+  Timer, Plus, Play, Pause, StopCircle, Clock4, Trash2, Chrome
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
 import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
@@ -1486,6 +1486,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   onToggleServerMode
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
+  const [isChromeBrowser, setIsChromeBrowser] = useState(false);
   const [activeTab, setActiveTab] = useState<'STUDY' | 'PRACTICE' | 'INSIGHT'>(() => {
     const saved = sessionStorage.getItem('dashboard_active_tab');
     if (saved === 'STUDY' || saved === 'PRACTICE' || saved === 'INSIGHT') return saved;
@@ -1495,6 +1496,13 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
   useEffect(() => {
     sessionStorage.setItem('dashboard_active_tab', activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const ua = window.navigator.userAgent || '';
+    const isChrome = /Chrome/i.test(ua) && !/Edg|OPR|Opera/i.test(ua);
+    setIsChromeBrowser(isChrome);
+  }, []);
   
   const [focusTimers, setFocusTimers] = useState<FocusTimerRecord[]>([]);
   const [focusHistory, setFocusHistory] = useState<FocusTimerHistory[]>([]);
@@ -1768,52 +1776,83 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2 mt-1">
-        {serverStatus === 'connected' ? (
+      <div className="mt-1 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-            <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-[11px] font-semibold text-neutral-500">
-                    {activeServerMode === 'home' ? 'Private Server' : 'Public Server'}
-                </span>
-            </div>
-            <div className="inline-flex items-center gap-1">
-                <button
-                    onClick={() =>
-                        onToggleServerMode?.(
-                            activeServerMode === 'home' ? 'public' : 'home'
-                        )
-                    }
-                    disabled={!!isSwitchingServerMode}
-                    className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all duration-150 bg-blue-500 text-white hover:bg-blue-600 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
-                >
-                    {isSwitchingServerMode
-                        ? 'Switching...'
-                        : (activeServerMode === 'home'
-                            ? 'Switch to Public Server'
-                            : 'Switch to Private Server')}
-                </button>
-            </div>
+          {serverStatus === 'connected' ? (
+          <div className="flex flex-wrap items-center gap-2">
+              <div className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-50 border-emerald-200 text-emerald-700">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-[11px] font-semibold text-neutral-500">
+                      {activeServerMode === 'home' ? 'Private Server' : 'Public Server'}
+                  </span>
+              </div>
+              <div className="inline-flex items-center gap-1">
+                  <button
+                      onClick={() =>
+                          onToggleServerMode?.(
+                              activeServerMode === 'home' ? 'public' : 'home'
+                          )
+                      }
+                      disabled={!!isSwitchingServerMode}
+                      className="px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all duration-150 bg-blue-500 text-white hover:bg-blue-600 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                  >
+                      {isSwitchingServerMode
+                          ? 'Switching...'
+                          : (activeServerMode === 'home'
+                              ? 'Switch to Public Server'
+                              : 'Switch to Private Server')}
+                  </button>
+              </div>
+          </div>
+          ) : (
+          <div className="flex items-center gap-2 px-1.5 py-1.5 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm pr-1.5">
+              <div className="flex items-center gap-2 px-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Offline Mode</span>
+                  <div className="relative group/tooltip">
+                      <HelpCircle size={12} className="cursor-help opacity-70 hover:opacity-100" />
+                      <div className="absolute left-0 top-full mt-2 w-56 p-3 bg-neutral-900 text-white text-[10px] leading-relaxed font-medium rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-neutral-700">
+                          Disconnected from Vocab Server. Server backup and high-quality voices are unavailable.
+                          <div className="absolute -top-1 left-3 w-2 h-2 bg-neutral-900 rotate-45 border-l border-t border-neutral-700"></div>
+                      </div>
+                  </div>
+              </div>
+              <div className="w-px h-3 bg-red-200"></div>
+              <button onClick={() => { sessionStorage.setItem('vocab_pro_settings_tab', 'SERVER'); onNavigate('SETTINGS'); }} className="flex items-center gap-1 px-3 py-1 bg-blue-600 border border-blue-700 rounded-full shadow-sm hover:bg-blue-700 transition-all group/btn">
+                  <Link size={10} className="text-white"/><span className="text-[10px] font-black uppercase tracking-widest text-white">Connect</span>
+              </button>
+          </div>
+          )}
         </div>
-        ) : (
-        <div className="flex items-center gap-2 px-1.5 py-1.5 rounded-full border bg-red-50 border-red-200 text-red-700 shadow-sm pr-1.5">
-            <div className="flex items-center gap-2 px-2">
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Offline Mode</span>
-                <div className="relative group/tooltip">
-                    <HelpCircle size={12} className="cursor-help opacity-70 hover:opacity-100" />
-                    <div className="absolute left-0 top-full mt-2 w-56 p-3 bg-neutral-900 text-white text-[10px] leading-relaxed font-medium rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl border border-neutral-700">
-                        Disconnected from Vocab Server. Server backup and high-quality voices are unavailable.
-                        <div className="absolute -top-1 left-3 w-2 h-2 bg-neutral-900 rotate-45 border-l border-t border-neutral-700"></div>
-                    </div>
-                </div>
+        {isChromeBrowser && serverUrl ? (
+          <div className="w-full rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm lg:ml-auto lg:max-w-[28rem]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-400">Chrome Extension</p>
+                <h3 className="mt-1 text-sm font-black text-neutral-900">Download Chrome extension Here</h3>
+                <p className="mt-1 text-[11px] font-medium leading-relaxed text-neutral-500">
+                  Mini Study Buddy for websites outside the app.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-blue-50 p-2 text-blue-600">
+                <Chrome size={18} />
+              </div>
             </div>
-            <div className="w-px h-3 bg-red-200"></div>
-            <button onClick={() => { sessionStorage.setItem('vocab_pro_settings_tab', 'SERVER'); onNavigate('SETTINGS'); }} className="flex items-center gap-1 px-3 py-1 bg-blue-600 border border-blue-700 rounded-full shadow-sm hover:bg-blue-700 transition-all group/btn">
-                <Link size={10} className="text-white"/><span className="text-[10px] font-black uppercase tracking-widest text-white">Connect</span>
-            </button>
-        </div>
-        )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                href={`${serverUrl.replace(/\/$/, '')}/api/extension/chrome/download`}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-[11px] font-black uppercase tracking-wide text-white shadow-sm transition-colors hover:bg-blue-700"
+              >
+                <Download size={14} />
+                Download
+              </a>
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px] font-medium text-neutral-600">
+                How to Install.
+                <div>Unzip / chrome://extensions / EnableDeveloper mode / Load uppack</div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between">

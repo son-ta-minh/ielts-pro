@@ -4,6 +4,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { spawn } = require('child_process');
 const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
 const logger = require('../logger');
 
@@ -66,6 +67,48 @@ router.post('/config/backup-path', (req, res) => {
         logger.error(`[Config] Failed to set backup path: ${err.message}`);
         res.status(500).json({ error: err.message });
     }
+});
+
+router.get('/extension/chrome/download', (req, res) => {
+    const extensionDir = path.resolve(__dirname, '../../extension/chrome');
+    if (!fs.existsSync(extensionDir)) {
+        return res.status(404).json({ error: 'Chrome extension folder not found.' });
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="mini-study-buddy-chrome.zip"');
+
+    const zipProcess = spawn('zip', ['-r', '-', '.', '-x', '*.DS_Store'], {
+        cwd: extensionDir,
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    let stderr = '';
+    zipProcess.stdout.pipe(res);
+    zipProcess.stderr.on('data', (chunk) => {
+        stderr += chunk.toString('utf8');
+    });
+
+    zipProcess.on('error', (err) => {
+        logger.error(`[System] Failed to start zip for Chrome extension: ${err.message}`);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to package Chrome extension.' });
+        } else {
+            res.end();
+        }
+    });
+
+    zipProcess.on('close', (code) => {
+        if (code === 0) {
+            return;
+        }
+        logger.error(`[System] Chrome extension zip exited with code ${code}: ${stderr.trim()}`);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to package Chrome extension.' });
+        } else if (!res.writableEnded) {
+            res.end();
+        }
+    });
 });
 
 module.exports = router;
