@@ -3,6 +3,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { settings } = require('../config');
 const { FOLDER_MAPPINGS_FILE } = require('../config');
 const { searchUserVocabularyIndex } = require('../vocabularySearchIndex');
@@ -73,6 +74,9 @@ function filterHeaders(headers = {}) {
 let activeBaseUrl = null;
 let isProbing = false;
 let pendingActiveUrlCallbacks = [];
+const interactiveSessions = new Map();
+const interactiveSessionsByHost = new Map();
+const INTERACTIVE_KEEPALIVE_MS = 15000;
 
 function probeAndSelectActiveUrl(callback) {
     const urls = getCandidateUrls();
@@ -271,6 +275,59 @@ async function checkComfyUiAvailable() {
     } catch {
         return false;
     }
+}
+
+function normalizeClientHostKey(req) {
+    const forwarded = String(req.headers['x-forwarded-for'] || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)[0];
+    const remote = forwarded || req.socket?.remoteAddress || req.ip || 'unknown';
+    const normalized = String(remote || '')
+        .replace(/^::ffff:/, '')
+        .replace(/^::1$/, '127.0.0.1')
+        .trim();
+    return normalized || 'unknown';
+}
+
+function getInteractiveHostSessions(hostKey) {
+    const sessionIds = interactiveSessionsByHost.get(hostKey);
+    if (!sessionIds || sessionIds.size === 0) return [];
+    return Array.from(sessionIds)
+        .map((id) => interactiveSessions.get(id))
+        .filter(Boolean);
+}
+
+function removeInteractiveSession(sessionId) {
+    const existing = interactiveSessions.get(sessionId);
+    if (!existing) return;
+
+    if (existing.keepAliveTimer) {
+        clearInterval(existing.keepAliveTimer);
+    }
+
+    interactiveSessions.delete(sessionId);
+    const hostSessions = interactiveSessionsByHost.get(existing.hostKey);
+    if (hostSessions) {
+        hostSessions.delete(sessionId);
+        if (hostSessions.size === 0) {
+            interactiveSessionsByHost.delete(existing.hostKey);
+        }
+    }
+}
+
+function allocateInteractiveCode(hostKey) {
+    const usedCodes = new Set(getInteractiveHostSessions(hostKey).map((session) => session.code));
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+        const code = String(Math.floor(Math.random() * 90) + 10).padStart(2, '0');
+        if (!usedCodes.has(code)) return code;
+    }
+    throw new Error(`Could not allocate interactive code for host ${hostKey}`);
+}
+
+function sendInteractiveSse(res, event, payload) {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
 function loadFolderMappings() {
@@ -2186,6 +2243,149 @@ router.post('/studybuddy/search', (req, res) => {
             });
         }, 1, stages, sendStage);
     }, 1, searchSection);
+});
+
+router.get('/studybuddy/interactive/connect', (req, res) => {
+    const hostKey = normalizeClientHostKey(req);
+    const sessionId = crypto.randomUUID();
+    const code = allocateInteractiveCode(hostKey);
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive'
+    });
+
+    const keepAliveTimer = setInterval(() => {
+        if (res.writableEnded) return;
+        sendInteractiveSse(res, 'ping', { now: Date.now() });
+    }, INTERACTIVE_KEEPALIVE_MS);
+
+    const session = {
+        id: sessionId,
+        code,
+        hostKey,
+        connectedAt: Date.now(),
+        res,
+        keepAliveTimer
+    };
+
+    interactiveSessions.set(sessionId, session);
+    const hostSessions = interactiveSessionsByHost.get(hostKey) || new Set();
+    hostSessions.add(sessionId);
+    interactiveSessionsByHost.set(hostKey, hostSessions);
+
+    logger.info('[StudyBuddyInteractive] Full buddy connected:', {
+        sessionId,
+        code,
+        hostKey,
+        hostSessionCount: hostSessions.size
+    });
+
+    sendInteractiveSse(res, 'ready', {
+        sessionId,
+        code,
+        hostKey,
+        connectedAt: session.connectedAt
+    });
+
+    req.on('close', () => {
+        logger.info('[StudyBuddyInteractive] Full buddy disconnected:', {
+            sessionId,
+            code,
+            hostKey
+        });
+        removeInteractiveSession(sessionId);
+    });
+});
+
+router.post('/studybuddy/interactive/command', (req, res) => {
+    const hostKey = normalizeClientHostKey(req);
+    const command = String(req.body?.command || '').trim().toLowerCase();
+    const text = String(req.body?.text || '').trim();
+    const connectCode = String(req.body?.connectCode || '').trim();
+
+    if (!command) {
+        return res.status(400).json({ error: 'Missing command' });
+    }
+    if (!text) {
+        return res.status(400).json({ error: 'Missing text' });
+    }
+
+    const allowedCommands = new Set([
+        'vi',
+        'speak',
+        'mimic',
+        'add_to_library',
+        'explain',
+        'examples',
+        'collocations',
+        'preposition',
+        'paraphrase',
+        'idioms',
+        'compare',
+        'word_family'
+    ]);
+    if (!allowedCommands.has(command)) {
+        return res.status(400).json({ error: 'Unsupported command' });
+    }
+
+    const hostSessions = getInteractiveHostSessions(hostKey);
+    if (hostSessions.length === 0) {
+        return res.status(404).json({ error: 'No interactive full buddy found for this host.' });
+    }
+
+    let targetSession = null;
+    if (connectCode) {
+        targetSession = hostSessions.find((session) => session.code === connectCode) || null;
+        if (!targetSession) {
+            return res.status(404).json({ error: 'Invalid Connect Code.' });
+        }
+    } else if (hostSessions.length === 1) {
+        [targetSession] = hostSessions;
+    } else {
+        return res.status(409).json({
+            error: 'Multiple interactive full buddies found for this host. Connect Code required.',
+            requiresConnectCode: true,
+            hostSessionCount: hostSessions.length
+        });
+    }
+
+    const commandId = crypto.randomUUID();
+    try {
+        sendInteractiveSse(targetSession.res, 'command', {
+            id: commandId,
+            command,
+            text,
+            hostKey,
+            connectCode: targetSession.code,
+            createdAt: Date.now()
+        });
+        logger.info('[StudyBuddyInteractive] Forwarded command:', {
+            commandId,
+            command,
+            text,
+            hostKey,
+            sessionId: targetSession.id,
+            code: targetSession.code
+        });
+        return res.json({
+            ok: true,
+            commandId,
+            connectCode: targetSession.code
+        });
+    } catch (error) {
+        logger.error('[StudyBuddyInteractive] Failed to forward command:', {
+            command,
+            text,
+            hostKey,
+            sessionId: targetSession.id,
+            code: targetSession.code,
+            error: error?.message || error
+        });
+        removeInteractiveSession(targetSession.id);
+        return res.status(500).json({ error: 'Failed to forward command to interactive full buddy.' });
+    }
 });
 
 router.get('/studybuddy/status', async (req, res) => {

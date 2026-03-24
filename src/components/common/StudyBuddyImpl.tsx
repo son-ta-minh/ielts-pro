@@ -197,6 +197,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const [isChatListening, setIsChatListening] = useState(false);
     const [isConversationMode, setIsConversationMode] = useState(false);
     const [studyBuddyConnectionStatus, setStudyBuddyConnectionStatus] = useState<'image' | 'chat' | 'offline'>('offline');
+    const [isInteractiveModeEnabled, setIsInteractiveModeEnabled] = useState(false);
+    const [isInteractiveModeConnecting, setIsInteractiveModeConnecting] = useState(false);
+    const [interactiveConnectCode, setInteractiveConnectCode] = useState<string | null>(null);
     const [activeChatTarget, setActiveChatTarget] = useState<StudyBuddyChatTarget | null>(null);
     const [activeChatSelectionText, setActiveChatSelectionText] = useState('');
     const [activeChatCoachAction, setActiveChatCoachAction] = useState<string | null>(null);
@@ -251,6 +254,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const lastCoachLookupRef = useRef<{ word: string; at: number }>({ word: '', at: 0 });
     const imageSettingsPersistSnapshotRef = useRef(JSON.stringify(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings)));
     const imageSettingsPersistTimeoutRef = useRef<number | null>(null);
+    const interactiveEventSourceRef = useRef<EventSource | null>(null);
     
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
@@ -285,6 +289,123 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             cancelled = true;
         };
     }, []);
+
+    useEffect(() => {
+        if (!isInteractiveModeEnabled) {
+            interactiveEventSourceRef.current?.close();
+            interactiveEventSourceRef.current = null;
+            setIsInteractiveModeConnecting(false);
+            setInteractiveConnectCode(null);
+            return;
+        }
+
+        const serverUrl = getServerUrl(getConfig());
+        const eventSource = new EventSource(`${serverUrl}/api/studybuddy/interactive/connect`);
+        interactiveEventSourceRef.current = eventSource;
+        setIsInteractiveModeConnecting(true);
+
+        const handleReady = (event: MessageEvent) => {
+            try {
+                const payload = JSON.parse(String(event.data || '{}'));
+                setInteractiveConnectCode(String(payload?.code || '').trim() || null);
+                setIsInteractiveModeConnecting(false);
+            } catch {
+                setIsInteractiveModeConnecting(false);
+            }
+        };
+
+        const handleCommand = (event: MessageEvent) => {
+            try {
+                const payload = JSON.parse(String(event.data || '{}'));
+                const command = String(payload?.command || '').trim().toLowerCase();
+                const text = String(payload?.text || '').trim();
+                if (!text) return;
+
+                if (command === 'vi') {
+                    void handleTranslateExplicitSelection(text);
+                    return;
+                }
+                if (command === 'speak') {
+                    void handleReadExplicitSelection(text);
+                    return;
+                }
+                if (command === 'mimic') {
+                    handleSpeakExplicitSelection(text);
+                    return;
+                }
+                if (command === 'add_to_library') {
+                    void handleAddExplicitSelectionToLibrary(text);
+                    return;
+                }
+                if (command === 'explain') {
+                    void handleChatCoachExplain({ inputSource: 'selection', inputText: text });
+                    return;
+                }
+                if (command === 'examples') {
+                    void handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'), { inputSource: 'selection', inputText: text });
+                    return;
+                }
+                if (command === 'collocations') {
+                    void handleChatCoachPromptToChat('collocations', 'Collocations', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'collocations'), { inputSource: 'selection', inputText: text });
+                    return;
+                }
+                if (command === 'preposition') {
+                    void handleChatCoachPromptToChat('preposition', 'Dependent Preposition', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'preposition'), { inputSource: 'selection', inputText: text });
+                    return;
+                }
+                if (command === 'paraphrase') {
+                    void handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'paraphrase'), { inputSource: 'selection', inputText: text });
+                    return;
+                }
+                if (command === 'idioms') {
+                    void handleChatCoachPromptToChat('idioms', 'Idioms', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'idioms'), { inputSource: 'selection', inputText: text });
+                    return;
+                }
+                if (command === 'compare') {
+                    void handleChatCoachPromptToChat('compare', 'Compare', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'compare'), { inputSource: 'selection', inputText: text });
+                    return;
+                }
+                if (command === 'word_family') {
+                    void handleChatCoachPromptToChat('wordFamily', 'Word Family', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'wordFamily'), { inputSource: 'selection', inputText: text });
+                }
+            } catch {
+                // Ignore malformed interactive payloads.
+            }
+        };
+
+        const handleError = () => {
+            setIsInteractiveModeConnecting(false);
+            setInteractiveConnectCode(null);
+            if (interactiveEventSourceRef.current === eventSource) {
+                interactiveEventSourceRef.current = null;
+            }
+            eventSource.close();
+            setIsInteractiveModeEnabled(false);
+            showToast('Interactive connection closed.', 'error');
+        };
+
+        eventSource.addEventListener('ready', handleReady as EventListener);
+        eventSource.addEventListener('command', handleCommand as EventListener);
+        eventSource.onerror = handleError;
+
+        return () => {
+            eventSource.removeEventListener('ready', handleReady as EventListener);
+            eventSource.removeEventListener('command', handleCommand as EventListener);
+            eventSource.close();
+            if (interactiveEventSourceRef.current === eventSource) {
+                interactiveEventSourceRef.current = null;
+            }
+        };
+    }, [isInteractiveModeEnabled]);
+
+    useEffect(() => {
+        if (!isInteractiveModeEnabled) return;
+        setIsChatOpen(true);
+    }, [isInteractiveModeEnabled]);
+
+    const toggleInteractiveMode = () => {
+        setIsInteractiveModeEnabled((current) => !current);
+    };
 
     const handleChatResponseLanguageChange = (language: 'vi' | 'en') => {
         if (config.interface.studyBuddyLanguage === language) return;
@@ -1337,6 +1458,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
     useEffect(() => {
         const handleClickOutsidePanels = (e: MouseEvent) => {
+            if (isInteractiveModeEnabled) {
+                return;
+            }
             const target = e.target as Node;
             if (studyBuddyRootRef.current && studyBuddyRootRef.current.contains(target)) {
                 return;
@@ -1363,7 +1487,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
         document.addEventListener('mousedown', handleClickOutsidePanels);
         return () => document.removeEventListener('mousedown', handleClickOutsidePanels);
-    }, []);
+    }, [isInteractiveModeEnabled]);
 
     useEffect(() => {
         if (!config.interface.rightClickCommandEnabled) return;
@@ -1845,7 +1969,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
     const handleAddExplicitSelectionToLibrary = async (text: string) => {
         const normalized = text.trim();
-        if (!normalized || isAlreadyInLibrary) return;
+        if (!normalized || isAlreadyInLibrary) return false;
         syncChatSelectionText(normalized);
         setIsAddingToLibrary(true);
         try {
@@ -1906,8 +2030,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             await dataStore.saveWord(newItem);
             showToast(`"${normalized}" added!`);
             setIsAlreadyInLibrary(true);
+            return true;
         } catch {
             showToast("Add error!", "error");
+            return false;
         } finally {
             setIsAddingToLibrary(false);
         }
@@ -2101,7 +2227,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         }
     };
 
-    const chatHeaderTitle = (coach.name || 'StudyBuddy AI').trim();
+    const chatHeaderTitle = `${(coach.name || 'StudyBuddy AI').trim()}${interactiveConnectCode ? ` [${interactiveConnectCode}]` : ''}`;
     const coachIdentityLabel = formatCoachRole(coach.persona);
     const chatHeaderDescription = isConversationMode
         ? (isChatListening ? 'Conversation mode: listening...' : isChatLoading ? 'Conversation mode: AI is replying...' : 'Conversation mode: waiting for voice...')
@@ -2232,6 +2358,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 } : null}
                                 headerTitle={chatHeaderTitle}
                                 headerDescription={chatHeaderDescription}
+                                interactiveEnabled={isInteractiveModeEnabled}
+                                interactiveConnecting={isInteractiveModeConnecting}
                                 chatPlaceholder={chatPlaceholder}
                                 composerStudyMenu={renderStudyMenu('composer', !!chatInput.trim())}
                                 selectionStudyMenu={renderStudyMenu('selection', !!activeChatSelectionText.trim())}
@@ -2272,11 +2400,16 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 onToggleSearchEnabled={() => setIsSearchEnabled((prev) => !prev)}
                                 onToggleConversationMode={handleToggleConversationMode}
                                 onToggleChatAudio={() => setIsChatAudioEnabled((prev) => !prev)}
+                                onToggleInteractive={toggleInteractiveMode}
                                 onChatResponseLanguageChange={handleChatResponseLanguageChange}
                                 onOpenImageSettings={() => openAudioCoachSettingsSection('image')}
                                 onOpenMemorySettings={() => openAudioCoachSettingsSection('memory')}
                                 onClearChatHistory={handleClearChatHistory}
                                 onClose={() => {
+                                    if (isInteractiveModeEnabled) {
+                                        setIsInteractiveModeEnabled(false);
+                                        return;
+                                    }
                                     stopChatStream();
                                     setIsConversationMode(false);
                                     isConversationModeRef.current = false;
