@@ -2128,7 +2128,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             askAi: async (text: string) => {
                 syncChatSelectionText(text);
                 setIsChatOpen(true);
-                await handleBackgroundChatRequest(`Explain briefly core usage, and IELTS tips for the vocabulary: ${text}`);
+                await handleBackgroundChatRequest(`Go straight to explain briefly "${text}", no intro/outro. If input is vocabulary or short phrase, give 1 sentence for meaning, 1 sentence for usage context, 1 sentence for common collocations, and 1 sentence for IELTS tips. If input is long phrase or sentence, reply max 4 sentences focusing on grammar/idiom/special structure. Response should highlight key points in bold **markdown**. Response must be concise, focusing on "${text}" without adding extra/too general information.`);
             },
             explain: async (text: string) => {
                 await handleChatCoachExplain({ inputSource: 'selection', inputText: text });
