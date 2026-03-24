@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const cheerio = require('cheerio');
 const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
 const { runCommand } = require('../utils');
@@ -14,6 +15,16 @@ let selectedAccent = "";
 let voiceIndex = {};
 const QUALITY_SOUND_MAP_NAME = 'Quality_Sound';
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac', '.webm', '.aiff'];
+let FFMPEG_COMMAND = process.env.FFMPEG_PATH || 'ffmpeg';
+
+try {
+    const ffmpegStatic = require('ffmpeg-static');
+    if (ffmpegStatic) {
+        FFMPEG_COMMAND = ffmpegStatic;
+    }
+} catch {
+    logger.warn('[TTS] ffmpeg-static not installed, falling back to system ffmpeg');
+}
 
 function mapLanguage(accent) {
     if (!accent) return null;
@@ -120,6 +131,37 @@ function getLookupCachePath(word) {
     if (!qualityRoot) return null;
     const token = toSafeFileToken(word).toLowerCase() || 'word';
     return path.join(qualityRoot, `${token}.txt`);
+}
+
+function deleteIfExists(filePath) {
+    if (!filePath) return;
+    fs.unlink(filePath, (err) => {
+        if (err && err.code !== 'ENOENT') {
+            logger.error(`[TTS] Failed to delete temp file ${filePath}:`, err.message);
+        }
+    });
+}
+
+async function convertAudioToMp3(inputFile, outputFile) {
+    await new Promise((resolve, reject) => {
+        const ffmpeg = spawn(FFMPEG_COMMAND, ['-y', '-i', inputFile, '-f', 'mp3', '-q:a', '2', outputFile], {
+            stdio: ['ignore', 'ignore', 'pipe']
+        });
+        let stderr = '';
+
+        ffmpeg.stderr.on('data', (chunk) => {
+            stderr += chunk.toString('utf8');
+        });
+
+        ffmpeg.on('error', reject);
+        ffmpeg.on('close', (code) => {
+            if (code === 0) {
+                resolve(null);
+                return;
+            }
+            reject(new Error(stderr.trim() || `ffmpeg exited with code ${code}`));
+        });
+    });
 }
 
 function readLookupCache(word) {
@@ -651,6 +693,7 @@ router.post('/speak', async (req, res) => {
     
     const timestamp = Date.now();
     const outFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.aiff`);
+    const mp3File = path.join(settings.AUDIO_DIR, `tts_${timestamp}.mp3`);
     const txtFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.txt`);
 
     // Write to a temporary text file to handle special characters/hyphens safely
@@ -673,22 +716,27 @@ router.post('/speak', async (req, res) => {
             throw new Error("Output file was not generated.");
         }
 
+        await convertAudioToMp3(outFile, mp3File);
+        if (!fs.existsSync(mp3File)) {
+            throw new Error("MP3 output file was not generated.");
+        }
+
         res.setHeader("X-TTS-Source", "tts");
         res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));
-        res.setHeader("Content-Type", "audio/aiff");
-        const stream = fs.createReadStream(outFile);
+        res.setHeader("Content-Type", "audio/mpeg");
+        const stream = fs.createReadStream(mp3File);
         
         stream.pipe(res);
         
         stream.on('close', () => {
-            // Cleanup both files
-            fs.unlink(outFile, (err) => { if (err) logger.error("Failed to delete temp audio:", err); });
-            fs.unlink(txtFile, (err) => { if (err) logger.error("Failed to delete temp text:", err); });
+            deleteIfExists(outFile);
+            deleteIfExists(mp3File);
+            deleteIfExists(txtFile);
         });
     } catch (err) {
         logger.error("[TTS] Generation failed:", err.message);
-        // Attempt cleanup on error
         try { if (fs.existsSync(outFile)) fs.unlinkSync(outFile); } catch(e) {}
+        try { if (fs.existsSync(mp3File)) fs.unlinkSync(mp3File); } catch(e) {}
         try { if (fs.existsSync(txtFile)) fs.unlinkSync(txtFile); } catch(e) {}
         
         res.status(500).json({ error: "tts_generation_failed" });

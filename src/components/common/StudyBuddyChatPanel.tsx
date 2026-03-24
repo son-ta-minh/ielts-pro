@@ -924,19 +924,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                 </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-                <button
-                    type="button"
-                    onClick={onToggleInteractive}
-                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
-                        interactiveEnabled
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                            : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'
-                    }`}
-                    title={interactiveEnabled ? 'Interactive mode is ON' : 'Enable interactive mode'}
-                >
-                    {interactiveConnecting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                    {interactiveEnabled ? 'Interactive On' : 'Interactive'}
-                </button>
                 <div className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white p-1">
                     <button
                         type="button"
@@ -975,6 +962,21 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                     </button>
                     {isModeMenuOpen ? (
                         <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-56 rounded-2xl border border-neutral-200 bg-white/98 p-2 shadow-2xl backdrop-blur-xl">
+                            <ModeSettingButton
+                                label="Interactive"
+                                tooltip="Keep a live bridge open so Mini Buddy can forward commands into this Full Buddy."
+                                value={interactiveEnabled}
+                                className="mb-1"
+                                activeClassName="bg-emerald-50 text-emerald-700"
+                                inactiveClassName="bg-white text-neutral-700 hover:bg-neutral-50"
+                                isTooltipOpen={activeModeTooltip === 'interactive'}
+                                onTooltipEnter={() => setActiveModeTooltip('interactive')}
+                                onTooltipLeave={() => setActiveModeTooltip((current) => current === 'interactive' ? null : current)}
+                                onClick={() => {
+                                    onToggleInteractive();
+                                    setIsModeMenuOpen(false);
+                                }}
+                            />
                             <ModeSettingButton
                                 label="Library Access"
                                 tooltip="Let StudyBuddy inject your saved vocabulary and study context into replies."

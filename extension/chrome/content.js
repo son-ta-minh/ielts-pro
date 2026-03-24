@@ -25,6 +25,25 @@
   let hideTimer = null;
   let isInteractingWithUI = false;
 
+  function toOrigin(url) {
+    try {
+      return new URL(url).origin;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function looksLikeVocabProApp() {
+    const title = (document.title || "").trim().toLowerCase();
+    if (title === "vocab pro") return true;
+
+    const rootEl = document.getElementById("root");
+    const viteEntry = document.querySelector('script[type="module"][src="/index.tsx"]');
+    const appMarkers = document.querySelector('[data-app="vocab-pro"], [data-testid="vocab-pro-app"]');
+
+    return !!(rootEl && (viteEntry || appMarkers));
+  }
+
   const root = document.createElement("div");
   root.style.position = "fixed";
   root.style.zIndex = "2147483647";
@@ -251,6 +270,24 @@
     return uniqueUrls(candidates);
   }
 
+  async function shouldDisableOnCurrentPage() {
+    if (looksLikeVocabProApp()) {
+      return true;
+    }
+
+    const currentOrigin = window.location.origin;
+    const firebaseHost = await getCurrentHostConfig();
+    const knownOrigins = uniqueUrls([
+      firebaseHost?.host || "",
+      firebaseHost?.local || "",
+      ...FALLBACK_SERVER_CANDIDATES
+    ])
+      .map(toOrigin)
+      .filter(Boolean);
+
+    return knownOrigins.includes(currentOrigin);
+  }
+
   async function resolveServerUrl() {
     if (activeServerUrl) return activeServerUrl;
 
@@ -344,76 +381,84 @@
     }
   }
 
-  ACTIONS.forEach((action) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.label = action.label;
-    button.dataset.icon = action.icon;
-    button.title = action.label;
-    setButtonState(button, "default");
-    button.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    });
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void handleAction(action.command);
-    });
-    row.appendChild(button);
-    buttonMap.set(action.command, button);
-  });
-
-  root.addEventListener("mouseenter", () => {
-    if (hideTimer !== null) {
-      window.clearTimeout(hideTimer);
-      hideTimer = null;
-    }
-  });
-  root.addEventListener("mouseleave", scheduleHideToolbar);
-
-  document.documentElement.appendChild(root);
-
-  document.addEventListener("mouseup", () => {
-    if (isInteractingWithUI) {
-      isInteractingWithUI = false;
+  async function init() {
+    if (await shouldDisableOnCurrentPage()) {
       return;
     }
-
-    const selection = window.getSelection();
-    const text = selection ? selection.toString().trim() : "";
-
-    if (!text || !selection || selection.rangeCount === 0) {
-      scheduleHideToolbar();
-      return;
-    }
-
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    if (!rect.width && !rect.height) {
-      scheduleHideToolbar();
-      return;
-    }
-
-    activeSelectionText = text;
 
     ACTIONS.forEach((action) => {
-      const button = buttonMap.get(action.command);
-      if (button) setButtonState(button, "default");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.label = action.label;
+      button.dataset.icon = action.icon;
+      button.title = action.label;
+      setButtonState(button, "default");
+      button.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void handleAction(action.command);
+      });
+      row.appendChild(button);
+      buttonMap.set(action.command, button);
     });
 
-    createAnchor(range);
-  });
+    root.addEventListener("mouseenter", () => {
+      if (hideTimer !== null) {
+        window.clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+    });
+    root.addEventListener("mouseleave", scheduleHideToolbar);
 
-  document.addEventListener("mousedown", (event) => {
-    if (!root.contains(event.target)) {
-      scheduleHideToolbar();
-    }
-  });
+    document.documentElement.appendChild(root);
 
-  document.addEventListener("scroll", () => {
-    if (root.style.display === "block") {
-      scheduleHideToolbar();
-    }
-  }, true);
+    document.addEventListener("mouseup", () => {
+      if (isInteractingWithUI) {
+        isInteractingWithUI = false;
+        return;
+      }
+
+      const selection = window.getSelection();
+      const text = selection ? selection.toString().trim() : "";
+
+      if (!text || !selection || selection.rangeCount === 0) {
+        scheduleHideToolbar();
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      if (!rect.width && !rect.height) {
+        scheduleHideToolbar();
+        return;
+      }
+
+      activeSelectionText = text;
+
+      ACTIONS.forEach((action) => {
+        const button = buttonMap.get(action.command);
+        if (button) setButtonState(button, "default");
+      });
+
+      createAnchor(range);
+    });
+
+    document.addEventListener("mousedown", (event) => {
+      if (!root.contains(event.target)) {
+        scheduleHideToolbar();
+      }
+    });
+
+    document.addEventListener("scroll", () => {
+      if (root.style.display === "block") {
+        scheduleHideToolbar();
+      }
+    }, true);
+  }
+
+  void init();
 })();

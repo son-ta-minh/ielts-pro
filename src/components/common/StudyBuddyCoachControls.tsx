@@ -218,7 +218,7 @@ export const StudyBuddyCommandBox: React.FC<CommandBoxProps> = ({
         ref={commandBoxRef}
         onMouseDown={onRestoreSelectedRange}
         onMouseEnter={onRestoreSelectedRangeHover}
-        className="bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200"
+        className="select-none bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200"
     >
         <div className="grid grid-cols-8 gap-1">
             <button type="button" onClick={onTranslateSelection} className="col-span-2 aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" title="Đọc Tiếng Việt">VI</button>

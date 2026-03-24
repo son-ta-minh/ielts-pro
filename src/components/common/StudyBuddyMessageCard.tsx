@@ -45,7 +45,7 @@ export const StudyBuddyMessageCard: React.FC<StudyBuddyMessageCardProps> = ({
     onClose,
     playCambridgeAudio,
 }) => (
-    <div className="bg-white p-5 rounded-[2.5rem] shadow-2xl border border-neutral-200 w-[26rem] relative">
+    <div className="select-none bg-white p-5 rounded-[2.5rem] shadow-2xl border border-neutral-200 w-[26rem] relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-neutral-300 hover:text-neutral-900"><X size={14}/></button>
         <div className="flex items-start gap-3">
             <div className="shrink-0 mt-1">{message.icon || <MessageSquare size={18} />}</div>
