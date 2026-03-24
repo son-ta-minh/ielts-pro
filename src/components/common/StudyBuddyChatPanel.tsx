@@ -617,6 +617,7 @@ interface StudyBuddyChatPanelProps {
     isContextAware: boolean;
     isSearchEnabled: boolean;
     isChatAudioEnabled: boolean;
+    isAutoScrollEnabled: boolean;
     chatResponseLanguage: 'vi' | 'en';
     chatHistory: ChatTurn[];
     chatInput: string;
@@ -634,6 +635,7 @@ interface StudyBuddyChatPanelProps {
     onToggleSearchEnabled: () => void;
     onToggleConversationMode: () => void;
     onToggleChatAudio: () => void;
+    onToggleAutoScroll: () => void;
     onToggleInteractive: () => void;
     onChatResponseLanguageChange: (language: 'vi' | 'en') => void;
     onOpenImageSettings: () => void;
@@ -668,6 +670,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     isContextAware,
     isSearchEnabled,
     isChatAudioEnabled,
+    isAutoScrollEnabled,
     chatResponseLanguage,
     chatHistory,
     chatInput,
@@ -685,6 +688,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     onToggleSearchEnabled,
     onToggleConversationMode,
     onToggleChatAudio,
+    onToggleAutoScroll,
     onToggleInteractive,
     onChatResponseLanguageChange,
     onOpenImageSettings,
@@ -757,7 +761,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     };
 
     useEffect(() => {
-        if (interactiveEnabled) return;
         const panel = chatPanelRef.current;
         if (!panel) return;
 
@@ -814,7 +817,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
             resizeObserver.disconnect();
             window.removeEventListener('resize', scheduleClamp);
         };
-    }, [chatPanelRef, interactiveEnabled]);
+    }, [chatPanelRef]);
 
     useEffect(() => {
         const handlePointerDownOutsideMenus = (event: MouseEvent) => {
@@ -844,35 +847,22 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     useEffect(() => {
         const panel = chatPanelRef.current;
         if (!panel) return;
-        if (interactiveEnabled) {
-            panel.style.width = '';
-            return;
-        }
         panel.style.width = `${panelWidth}px`;
-    }, [chatPanelRef, panelWidth, interactiveEnabled]);
+    }, [chatPanelRef, panelWidth]);
 
     useEffect(() => {
         const panel = chatPanelRef.current;
         if (!panel) return;
-        if (interactiveEnabled) {
-            panel.style.height = '';
-            return;
-        }
         panel.style.height = `${panelHeight}px`;
-    }, [chatPanelRef, panelHeight, interactiveEnabled]);
+    }, [chatPanelRef, panelHeight]);
 
-    // Only auto-scroll ONCE when chat first loads, and do not scroll during streaming.
-    const hasInitializedScrollRef = React.useRef(false);
     useEffect(() => {
         const el = chatScrollRef.current;
         if (!el) return;
-
-        // Only auto scroll ONCE when chat first loads
-        if (!hasInitializedScrollRef.current) {
+        if (isAutoScrollEnabled) {
             el.scrollTop = el.scrollHeight;
-            hasInitializedScrollRef.current = true;
         }
-    }, [chatHistory]);
+    }, [chatHistory, isChatLoading, isAutoScrollEnabled, chatScrollRef]);
 
     const handleResizeWidth = () => {
         setPanelWidth((current) => {
@@ -903,12 +893,8 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     const connectionBadgeClassName = connectionStatus === 'image'
         ? 'h-3 w-3 rounded-full shrink-0'
         : `h-3 w-3 rounded-full shrink-0 ${connectionStatus === 'chat' ? 'bg-emerald-500' : 'bg-red-500'}`;
-    const panelClassName = interactiveEnabled
-        ? 'pointer-events-auto fixed inset-y-0 left-0 right-0 z-[2147483645] relative flex h-dvh max-h-dvh min-h-0 min-w-0 flex-col border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in duration-200'
-        : 'pointer-events-auto absolute bottom-8 left-0 z-50 flex h-[42rem] min-h-[32rem] w-[46rem] min-w-[28rem] max-w-[calc(100vw-1rem)] flex-col rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200 relative';
-    const panelStyle = interactiveEnabled
-        ? undefined
-        : { width: `${panelWidth}px`, height: `${panelHeight}px` };
+    const panelClassName = 'pointer-events-auto absolute bottom-8 left-0 z-50 flex h-[42rem] min-h-[32rem] w-[46rem] min-w-[28rem] max-w-[calc(100vw-1rem)] flex-col rounded-[2rem] border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur-xl overflow-hidden select-text animate-in fade-in slide-in-from-bottom-2 duration-200 relative';
+    const panelStyle = { width: `${panelWidth}px`, height: `${panelHeight}px` };
 
     return (
         <div
@@ -1045,6 +1031,21 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                                 onTooltipLeave={() => setActiveModeTooltip((current) => current === 'audio' ? null : current)}
                                 onClick={() => {
                                     onToggleChatAudio();
+                                    setIsModeMenuOpen(false);
+                                }}
+                            />
+                            <ModeSettingButton
+                                label="Auto-scroll"
+                                tooltip="Keep the chat pinned to the newest message while new content arrives."
+                                value={isAutoScrollEnabled}
+                                className="mt-1"
+                                activeClassName="bg-cyan-50 text-cyan-700"
+                                inactiveClassName="bg-white text-neutral-700 hover:bg-neutral-50"
+                                isTooltipOpen={activeModeTooltip === 'autoscroll'}
+                                onTooltipEnter={() => setActiveModeTooltip('autoscroll')}
+                                onTooltipLeave={() => setActiveModeTooltip((current) => current === 'autoscroll' ? null : current)}
+                                onClick={() => {
+                                    onToggleAutoScroll();
                                     setIsModeMenuOpen(false);
                                 }}
                             />

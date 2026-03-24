@@ -192,6 +192,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const [imageSettings, setImageSettings] = useState<StudyBuddyImageSettings>(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings));
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [isChatAudioEnabled, setIsChatAudioEnabled] = useState(false);
+    const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
     const [isContextAware, setIsContextAware] = useState(false);
     const [isSearchEnabled, setIsSearchEnabled] = useState(false);
     const [isChatListening, setIsChatListening] = useState(false);
@@ -337,6 +338,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     void handleAddExplicitSelectionToLibrary(text);
                     return;
                 }
+                if (command === 'ask_ai') {
+                    void handleBackgroundChatRequest(`Explain: ${text}`);
+                    return;
+                }
                 if (command === 'explain') {
                     void handleChatCoachExplain({ inputSource: 'selection', inputText: text });
                     return;
@@ -396,11 +401,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 interactiveEventSourceRef.current = null;
             }
         };
-    }, [isInteractiveModeEnabled]);
-
-    useEffect(() => {
-        if (!isInteractiveModeEnabled) return;
-        setIsChatOpen(true);
     }, [isInteractiveModeEnabled]);
 
     const toggleInteractiveMode = () => {
@@ -1458,9 +1458,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
     useEffect(() => {
         const handleClickOutsidePanels = (e: MouseEvent) => {
-            if (isInteractiveModeEnabled) {
-                return;
-            }
             const target = e.target as Node;
             if (studyBuddyRootRef.current && studyBuddyRootRef.current.contains(target)) {
                 return;
@@ -1487,7 +1484,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
         document.addEventListener('mousedown', handleClickOutsidePanels);
         return () => document.removeEventListener('mousedown', handleClickOutsidePanels);
-    }, [isInteractiveModeEnabled]);
+    }, []);
 
     useEffect(() => {
         if (!config.interface.rightClickCommandEnabled) return;
@@ -2348,6 +2345,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 isContextAware={isContextAware}
                                 isSearchEnabled={isSearchEnabled}
                                 isChatAudioEnabled={isChatAudioEnabled}
+                                isAutoScrollEnabled={isAutoScrollEnabled}
                                 chatResponseLanguage={config.interface.studyBuddyLanguage}
                                 chatHistory={chatHistory}
                                 chatInput={chatInput}
@@ -2400,16 +2398,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 onToggleSearchEnabled={() => setIsSearchEnabled((prev) => !prev)}
                                 onToggleConversationMode={handleToggleConversationMode}
                                 onToggleChatAudio={() => setIsChatAudioEnabled((prev) => !prev)}
+                                onToggleAutoScroll={() => setIsAutoScrollEnabled((prev) => !prev)}
                                 onToggleInteractive={toggleInteractiveMode}
                                 onChatResponseLanguageChange={handleChatResponseLanguageChange}
                                 onOpenImageSettings={() => openAudioCoachSettingsSection('image')}
                                 onOpenMemorySettings={() => openAudioCoachSettingsSection('memory')}
                                 onClearChatHistory={handleClearChatHistory}
                                 onClose={() => {
-                                    if (isInteractiveModeEnabled) {
-                                        setIsInteractiveModeEnabled(false);
-                                        return;
-                                    }
                                     stopChatStream();
                                     setIsConversationMode(false);
                                     isConversationModeRef.current = false;

@@ -2317,6 +2317,7 @@ router.post('/studybuddy/interactive/command', (req, res) => {
         'speak',
         'mimic',
         'add_to_library',
+        'ask_ai',
         'explain',
         'examples',
         'collocations',

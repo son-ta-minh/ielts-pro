@@ -12,14 +12,9 @@
     { command: "speak", label: "Read" },
     { command: "mimic", label: "Mimi" },
     { command: "add_to_library", label: "Add" },
-    { command: "explain", label: "Explain" },
+    { command: "ask_ai", label: "Ask AI" },
     { command: "examples", label: "Example" },
-    { command: "collocations", label: "Colloc" },
-    { command: "preposition", label: "Prep" },
-    { command: "paraphrase", label: "Para" },
-    { command: "idioms", label: "Idiom" },
-    { command: "compare", label: "Compare" },
-    { command: "word_family", label: "Family" }
+    { command: "paraphrase", label: "Para" }
   ];
 
   let activeServerUrl = null;
