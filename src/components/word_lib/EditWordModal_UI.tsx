@@ -66,6 +66,7 @@ export interface EditWordModalUIProps {
   hasSuggestions: boolean;
   handleCacheImages: () => void | Promise<void>;
   onGenImg: () => void | Promise<void>;
+  onSelectImage: () => void | Promise<void>;
 }
 
 type Tab = 'MAIN' | 'SOUND' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
@@ -111,10 +112,16 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
     familyHandler, prepList, collocList, idiomList, paraList, handleSubmit,
     onOpenAiRefine, onSuggestLearn, hasSuggestions,
     handleCacheImages,
-    onGenImg
+    onGenImg,
+    onSelectImage
   } = props;
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  useEffect(() => {
+    const imgs = (formData.img || []).filter((u: string) => (u || '').trim());
+    setSelectedImages(imgs);
+  }, [formData.img]);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchType, setBatchType] = useState<'collocations' | 'idioms' | 'paraphrases' | 'prepositions'>('collocations');
   const [batchText, setBatchText] = useState('');
@@ -402,6 +409,18 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                                     </button>
                                     <button
                                         type="button"
+                                        onClick={() => {
+                                          if (selectedImages.length > 0) {
+                                            setFormData('img', selectedImages);
+                                          }
+                                          onSelectImage();
+                                        }}
+                                        className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors"
+                                    >
+                                        Select Image
+                                    </button>
+                                    <button
+                                        type="button"
                                         onClick={handleCacheImages}
                                         className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors"
                                     >
@@ -414,7 +433,7 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                                 value={(formData.img || []).join('\n')}
                                 onChange={(e) => {
                                     const raw = e.target.value;
-                                    const arr = raw.split(/\r?\n/);
+                                    const arr = raw.split(/\r?\n/).map(s => s.trim());
                                     setFormData('img', arr);
                                 }}
                                 placeholder="https://...\nhttps://..."

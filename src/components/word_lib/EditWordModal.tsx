@@ -106,6 +106,21 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
   const [learningSuggestions, setLearningSuggestions] = useState<SuggestionsData | null>(null);
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
   const [isSuggestAiModalOpen, setIsSuggestAiModalOpen] = useState(false);
+  const [isSelectImgOpen, setIsSelectImgOpen] = useState(false);
+  const [selectedImgs, setSelectedImgs] = useState<string[]>([]);
+  const handleSelectImage = () => {
+    setSelectedImgs((formData.img || []).filter((i: string) => i && i.trim() !== ""));
+    setIsSelectImgOpen(true);
+  };
+
+  const handleConfirmSelectImage = () => {
+    dispatch({
+      type: 'SET_FIELD',
+      payload: { field: 'img', value: selectedImgs }
+    });
+    setIsSelectImgOpen(false);
+    showToast('Images updated!', 'success');
+  };
 
   useEffect(() => {
     dispatch({ type: 'REINITIALIZE', payload: word });
@@ -368,6 +383,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         hasSuggestions={!!learningSuggestions}
         handleCacheImages={handleCacheImages}
         onGenImg={handleGenerateImage}
+        onSelectImage={handleSelectImage}
       />
       <LearningSuggestionModal
         isOpen={isSuggestionModalOpen}
@@ -402,6 +418,58 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
             onJsonReceived={handleSuggestAiResult}
             hidePrimaryInput={true}
         />
+      )}
+      {isSelectImgOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-4 w-[600px] max-h-[80vh] overflow-auto">
+            <h3 className="font-bold mb-3">Select Images</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {(formData.img || []).filter((u: string) => u && u.trim() !== "").map((url: string, idx: number) => {
+                const clean = url.trim();
+                const isSelected = selectedImgs.includes(clean);
+                return (
+                  <div
+                    key={url + '-' + idx}
+                    onClick={() => {
+                      const clean = url.trim();
+                      setSelectedImgs(prev =>
+                        prev.includes(clean)
+                          ? prev.filter(i => i !== clean)
+                          : [...prev, clean]
+                      );
+                    }}
+                    className={`relative cursor-pointer border-2 rounded-lg overflow-hidden transition-all ${
+                      isSelected
+                        ? 'border-green-500 shadow-md'
+                        : 'border-transparent hover:border-neutral-300'
+                    }`}
+                  >
+                    <img
+                      src={url.startsWith('http') ? url : `${serverUrl}${url}`}
+                      className="w-full h-32 object-cover pointer-events-none"
+                    />
+
+                    {isSelected && (
+                      <>
+                        <div className="absolute inset-0 bg-green-500/20"></div>
+                        <div className="absolute top-1 right-1 z-10 bg-green-500 text-white text-xs font-black w-5 h-5 flex items-center justify-center rounded-full shadow">
+                          ✓
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setIsSelectImgOpen(false)}>Cancel</button>
+              <button onClick={handleConfirmSelectImage} className="bg-blue-500 text-white px-3 py-1 rounded">
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
