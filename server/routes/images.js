@@ -7,6 +7,7 @@ const { FOLDER_MAPPINGS_FILE } = require('../config');
 const https = require('https');
 const http = require('http');
 const logger = require('../logger');
+const fetch = require('node-fetch');
 
 // Load mappings (shared with Audio/Reading)
 let folderMappings = {};
@@ -234,6 +235,92 @@ router.post('/images/cache', express.json(), async (req, res) => {
     } catch (err) {
         logger.error('[Images] Cache error:', err);
         res.status(500).json({ error: 'Failed to cache image' });
+    }
+});
+
+/**
+ * Search images from Unsplash and cache locally
+ */
+router.get('/images/search', async (req, res) => {
+    try {
+        const query = req.query.q;
+        if (!query) {
+            return res.status(400).json({ error: 'Missing query param q' });
+        }
+
+        const ACCESS_KEY = global.imgAdmin?.imageKey;
+        if (!ACCESS_KEY) {
+            return res.status(500).json({ error: 'Missing imageKey (imgAdmin not initialized)' });
+        }
+
+        // Reload mappings
+        if (fs.existsSync(FOLDER_MAPPINGS_FILE())) {
+            folderMappings = JSON.parse(fs.readFileSync(FOLDER_MAPPINGS_FILE(), 'utf8'));
+        }
+
+        const targetDir = folderMappings['Image'];
+        if (!targetDir) {
+            return res.status(404).json({ error: 'Image mapping not found' });
+        }
+
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+
+        const apiUrl = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=8&client_id=${ACCESS_KEY}`;
+        const apiRes = await fetch(apiUrl);
+        const data = await apiRes.json();
+
+        if (!apiRes.ok) {
+            return res.status(apiRes.status).json(data);
+        }
+
+        const results = [];
+
+        const downloadImage = (imgUrl, filename) => {
+            return new Promise((resolve, reject) => {
+                const protocol = imgUrl.startsWith('https') ? https : http;
+                const filePath = path.join(targetDir, filename);
+                const fileStream = fs.createWriteStream(filePath);
+
+                protocol.get(imgUrl, response => {
+                    if (response.statusCode !== 200) {
+                        fs.unlink(filePath, () => {});
+                        return reject(new Error(`Failed ${response.statusCode}`));
+                    }
+
+                    response.pipe(fileStream);
+                    fileStream.on('finish', () => {
+                        fileStream.close(() => resolve(filename));
+                    });
+                }).on('error', err => {
+                    fs.unlink(filePath, () => {});
+                    reject(err);
+                });
+            });
+        };
+
+        const first = data.results[0];
+        if (first) {
+            const imgUrl = first.urls.small;
+            const filename = `${Date.now()}_${first.id}.jpg`;
+
+            try {
+                await downloadImage(imgUrl, filename);
+                results.push({
+                    id: first.id,
+                    url: `/api/images/stream/Image/${filename}`
+                });
+            } catch (e) {
+                logger.error('[Images] Download failed:', e.message);
+            }
+        }
+
+        res.json({ images: results });
+
+    } catch (err) {
+        logger.error('[Images] Search error:', err);
+        res.status(500).json({ error: 'Search failed' });
     }
 });
 

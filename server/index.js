@@ -44,6 +44,11 @@ if (!admin.apps.length) {
 
     const serviceAccount = require(serviceAccountPath);
 
+    // Expose image key globally (singleton like Firebase Admin)
+    global.imgAdmin = {
+        imageKey: serviceAccount.imageKey
+    };
+
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
         projectId: serviceAccount.project_id
