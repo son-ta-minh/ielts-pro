@@ -508,7 +508,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     </>
                                 )}
 
-                                {word.img && word.img.length > 0 && (
+                                {Array.isArray(word.img) && word.img.some(i => i && i.trim() !== "") && (
                                     <div className="relative inline-block group">
                                         <button
                                             className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
@@ -517,7 +517,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         </button>
                                         <div className="absolute top-full left-0 -translate-x-10 mt-2 w-max max-w-[28rem] overflow-x-hidden overflow-y-hidden p-4 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-20">
                                             <div className="flex flex-wrap gap-3">
-                                                {word.img.map((raw, idx) => {
+                                                {word.img.filter(i => i && i.trim() !== "").map((raw, idx) => {
                                                     let caption: string | null = null;
                                                     let imageUrl = raw;
 
@@ -530,13 +530,15 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
                                                     return (
                                                         <div key={idx} className="basis-1/2 sm:flex-none sm:w-48 flex flex-col gap-1">
-                                                            <img
-                                                                src={imageUrl.startsWith('http')
-                                                                    ? imageUrl
-                                                                    : `${serverUrl}${imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`}`}
-                                                                alt={`word-img-${idx}`}
-                                                                className="w-full h-36 object-cover rounded-lg border border-neutral-100"
-                                                            />
+                                                            {imageUrl && (
+                                                                <img
+                                                                    src={imageUrl.startsWith('http')
+                                                                        ? imageUrl
+                                                                        : `${serverUrl}${imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`}`}
+                                                                    alt={`word-img-${idx}: [${imageUrl}]`}
+                                                                    className="w-full h-36 object-cover rounded-lg border border-neutral-100"
+                                                                />
+                                                            )}
                                                             {caption && (
                                                                 <div className="text-[10px] font-semibold text-neutral-600 text-center truncate">
                                                                     {caption}
