@@ -359,7 +359,12 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       const results = await searchImages(currentTopic);
       if (cancelled) return;
       setTopicImages(results);
-      setCurrentImageIndex(0);
+      if (results.length > 0) {
+        const randomIndex = Math.floor(Math.random() * results.length);
+        setCurrentImageIndex(randomIndex);
+      } else {
+        setCurrentImageIndex(0);
+      }
     };
 
     void loadInitialTopicImage();
@@ -577,7 +582,12 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       const results = await searchImages(name);
       const savedWords = user.topicRecallData?.topics?.find((item) => item.topic === name.trim())?.words || [];
       setTopicImages(results);
-      setCurrentImageIndex(0);
+      if (results.length > 0) {
+        const randomIndex = Math.floor(Math.random() * results.length);
+        setCurrentImageIndex(randomIndex);
+      } else {
+        setCurrentImageIndex(0);
+      }
       setCurrentTopic(name.trim());
       setBrainstormWords(createBrainstormItems(savedWords));
       setNewTopicName(name.trim());
@@ -590,7 +600,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
   const refreshTopicImage = () => {
     if (topicImages.length > 0) {
-      setCurrentImageIndex((prev) => (prev + 1) % topicImages.length);
+      const randomIndex = Math.floor(Math.random() * topicImages.length);
+      setCurrentImageIndex(randomIndex);
     }
   };
 
@@ -619,7 +630,12 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       try {
         const results = await searchImages(fallbackTopic);
         setTopicImages(results);
-        setCurrentImageIndex(0);
+        if (results.length > 0) {
+          const randomIndex = Math.floor(Math.random() * results.length);
+          setCurrentImageIndex(randomIndex);
+        } else {
+          setCurrentImageIndex(0);
+        }
       } catch (_error) {
         setTopicImages([]);
         setCurrentImageIndex(0);
@@ -693,7 +709,10 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
                 <div className="flex items-center gap-2">
                   <button 
-                    onClick={() => setIsTopicModalOpen(true)}
+                    onClick={() => {
+                      setNewTopicName(''); // Clear textbox when modal opens
+                      setIsTopicModalOpen(true);
+                    }}
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-bold text-sm"
                   >
                     <Plus size={18} />
@@ -958,19 +977,18 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Select Topic</label>
                   <input
-                    list="topic-recall-topic-options"
                     type="text"
                     placeholder="e.g. Global Warming"
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                     value={newTopicName}
                     onChange={(e) => setNewTopicName(e.target.value)}
+                    onFocus={(e) => e.currentTarget.setAttribute('list', 'topic-recall-topic-options')}
+                    list="topic-recall-topic-options"
                     onKeyDown={(e) => e.key === 'Enter' && void addTopic()}
                   />
                   <datalist id="topic-recall-topic-options">
                     {availableTopics.map((topic) => (
-                      <option key={topic} value={topic}>
-                        {topic}
-                      </option>
+                      <option key={topic} value={topic} />
                     ))}
                   </datalist>
                 </div>
@@ -984,7 +1002,10 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                     </button>
                   )}
                   <button 
-                    onClick={() => addTopic()}
+                    onClick={() => {
+                      void addTopic();
+                      setNewTopicName('');
+                    }}
                     className="flex-1 py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
                   >
                     Set Topic
