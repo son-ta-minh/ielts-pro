@@ -267,6 +267,8 @@ const SortableWordCard = ({ item, onDelete, onEdit }: SortableWordCardProps) => 
 
 export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, onUpdateUser, onComplete, onExit }) => {
   // --- State ---
+  // Tab state for mobile/iPad view
+  const [activeTab, setActiveTab] = useState<'library' | 'canvas'>('library');
   const [vocab, setVocab] = useState<VocabItem[]>(() => normalizeLibraryWords(words || []));
   const [currentTopic, setCurrentTopic] = useState<string>(user.topicRecallData?.lastTopic || 'Environment');
   const [topicImages, setTopicImages] = useState<any[]>([]);
@@ -741,212 +743,241 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
-        {/* --- Left Panel: Word Library --- */}
-        <section className="lg:col-span-4 flex flex-col gap-6 max-h-[calc(93vh-10rem)]">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Word Library</h2>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => setShowMeaning(!showMeaning)} 
-                    className={cn("p-1.5 rounded-lg transition-colors", showMeaning ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
-                    title={showMeaning ? "Hide Meanings" : "Show Meanings"}
-                  >
-                    {showMeaning ? <Eye size={14} /> : <EyeOff size={14} />}
-                  </button>
-                  <button 
-                    onClick={() => setShowCollocation(!showCollocation)} 
-                    className={cn("p-1.5 rounded-lg transition-colors", showCollocation ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
-                    title={showCollocation ? "Hide Collocations" : "Show Collocations"}
-                  >
-                    {showCollocation ? <Info size={14} /> : <EyeOff size={14} />}
-                  </button>
-                </div>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input 
-                  type="text" 
-                  placeholder="Search words, meanings..." 
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className={cn("flex-1 max-h-[calc(93vh-10rem)]", filteredVocab.length > 0 ? "overflow-auto" : "")}>
-              {filteredVocab.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Search size={24} className="text-slate-300" />
-                  </div>
-                  <p className="text-sm text-slate-400">No words found in library.</p>
-                </div>
-              ) : (
-                <Virtuoso
-                  style={{ height: '100%' }}
-                  data={filteredVocab}
-                  itemContent={(index, item) => (
-                    <div className="px-4 py-2">
-                      <motion.div 
-                        layout
-                        onClick={() => addToBrainstorm(item.w)}
-                        className="group p-4 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer"
-                      >
-                        <div className="flex justify-between items-start mb-1">
-                          <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.w}</h3>
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedWord(item);
-                              }}
-                              className="p-1 text-slate-300 hover:text-indigo-500 transition-colors"
-                              title="View Details"
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                addToBrainstorm(item.w);
-                              }}
-                              className="p-1 text-slate-300 hover:text-indigo-500 transition-colors"
-                              title="Add to Brainstorm"
-                            >
-                              <Plus size={16} />
-                            </button>
-                          </div>
-                        </div>
-                        {showMeaning && (
-                          <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.m}</p>
-                        )}
-                        {showCollocation && item.col && Array.isArray(item.col) && item.col.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {item.col.slice(0, 2).map((c, i) => (
-                              <span key={i} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded uppercase tracking-tighter">
-                                {c.x}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </motion.div>
-                    </div>
-                  )}
-                />
-              )}
-            </div>
+      <main className="max-w-7xl mx-auto p-6 h-full">
+        <div className="lg:grid lg:grid-cols-12 gap-8 h-full">
+          {/* Mobile Tabs */}
+          <div className="lg:hidden flex mb-4 gap-2">
+            <button
+              onClick={() => setActiveTab('library')}
+              className={cn("flex-1 py-2 font-bold rounded-xl", activeTab === 'library' ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-600")}
+            >
+              Library
+            </button>
+            <button
+              onClick={() => setActiveTab('canvas')}
+              className={cn("flex-1 py-2 font-bold rounded-xl", activeTab === 'canvas' ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-600")}
+            >
+              Canvas
+            </button>
           </div>
-        </section>
 
-        {/* --- Right Panel: Brainstorm Panel --- */}
-        <section className="lg:col-span-8 flex flex-col gap-6 h-full">
-
-          {/* Brainstorm Area */}
-          <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col max-h-[calc(93vh-10rem)] relative overflow-auto">
-            {/* Artistic Background Pattern */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none select-none">
-              <div className="absolute top-0 left-0 w-full h-full" style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-            </div>
-
-            <div className="relative z-10 flex flex-col h-full">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900">Brainstorm Canvas</h3>
-                  <p className="text-sm text-slate-500">Drag to reorder, double click to edit</p>
-                </div>
-                <div className="flex items-center gap-2 relative">
-                  <div className="relative flex-1">
-                    <input 
-                      type="text" 
-                      placeholder="Type custom word..." 
-                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
-                      value={customWordInput}
-                      onChange={(e) => {
-                        setCustomWordInput(e.target.value);
-                        setShowSuggestions(true);
-                      }}
-                      onFocus={() => setShowSuggestions(true)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          addCustomWord(customWordInput);
-                        }
-                      }}
-                    />
-                    
-                    {/* Autosuggestions Dropdown */}
-                    <AnimatePresence>
-                      {showSuggestions && suggestions.length > 0 && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden"
-                        >
-                          {suggestions.map((s) => (
-                            <button
-                              key={s.id}
-                              onClick={() => {
-                                addToBrainstorm(s.w);
-                                setCustomWordInput('');
-                                setShowSuggestions(false);
-                              }}
-                              className="w-full px-4 py-2 text-left text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between group"
-                            >
-                              <span className="font-medium">{s.w}</span>
-                              <span className="text-[10px] text-slate-400 group-hover:text-indigo-400 uppercase font-bold">From Library</span>
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+          {/* Panels */}
+          <div
+            className={cn(
+              "lg:col-span-4 flex flex-col gap-6 h-full",
+              activeTab === 'library' ? "block" : "hidden",
+              "lg:block"
+            )}
+          >
+            {/* Word Library Section */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+              <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Word Library</h2>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setShowMeaning(!showMeaning)} 
+                      className={cn("p-1.5 rounded-lg transition-colors", showMeaning ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
+                      title={showMeaning ? "Hide Meanings" : "Show Meanings"}
+                    >
+                      {showMeaning ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                    <button 
+                      onClick={() => setShowCollocation(!showCollocation)} 
+                      className={cn("p-1.5 rounded-lg transition-colors", showCollocation ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
+                      title={showCollocation ? "Hide Collocations" : "Show Collocations"}
+                    >
+                      {showCollocation ? <Info size={14} /> : <EyeOff size={14} />}
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => addCustomWord(customWordInput)}
-                    className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors"
-                  >
-                    <Plus size={20} />
-                  </button>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Search words, meanings..." 
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
               </div>
 
-              <div className="flex-1 relative">
-                {brainstormWords.length === 0 ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 border-4 border-dashed border-slate-50 rounded-3xl">
-                    <Edit3 size={48} className="mb-4 opacity-20" />
-                    <p className="font-bold text-lg">Start adding words!</p>
-                    <p className="text-sm">Select from library or type above</p>
+              <div className={cn("flex-1 h-full", filteredVocab.length > 0 ? "overflow-auto" : "")}>
+                {filteredVocab.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Search size={24} className="text-slate-300" />
+                    </div>
+                    <p className="text-sm text-slate-400">No words found in library.</p>
                   </div>
                 ) : (
-                  <DndContext 
-                    sensors={sensors}
-                    collisionDetection={rectIntersection}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <SortableContext 
-                      items={brainstormWords.map(w => w.id)}
-                      strategy={rectSortingStrategy}
-                    >
-                      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {brainstormWords.map((item) => (
-                          <SortableWordCard 
-                            key={item.id} 
-                            item={item} 
-                            onDelete={(id) => setBrainstormWords(prev => prev.filter(w => w.id !== id))}
-                            onEdit={(id, text) => setBrainstormWords(prev => prev.map(w => w.id === id ? { ...w, text } : w))}
-                          />
-                        ))}
+                  <Virtuoso
+                    style={{ height: '100%' }}
+                    data={filteredVocab}
+                    itemContent={(index, item) => (
+                      <div className="px-4 py-2">
+                        <motion.div 
+                          layout
+                          onClick={() => addToBrainstorm(item.w)}
+                          className="group p-4 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer"
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.w}</h3>
+                            <div className="flex items-center gap-1">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedWord(item);
+                                }}
+                                className="p-1 text-slate-300 hover:text-indigo-500 transition-colors"
+                                title="View Details"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  addToBrainstorm(item.w);
+                                }}
+                                className="p-1 text-slate-300 hover:text-indigo-500 transition-colors"
+                                title="Add to Brainstorm"
+                              >
+                                <Plus size={16} />
+                              </button>
+                            </div>
+                          </div>
+                          {showMeaning && (
+                            <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.m}</p>
+                          )}
+                          {showCollocation && item.col && Array.isArray(item.col) && item.col.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {item.col.slice(0, 2).map((c, i) => (
+                                <span key={i} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded uppercase tracking-tighter">
+                                  {c.x}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </motion.div>
                       </div>
-                    </SortableContext>
-                  </DndContext>
+                    )}
+                  />
                 )}
               </div>
             </div>
           </div>
-        </section>
+
+          <div
+            className={cn(
+              "lg:col-span-8 flex flex-col gap-6 h-full",
+              activeTab === 'canvas' ? "block" : "hidden",
+              "lg:block"
+            )}
+          >
+            {/* Brainstorm Canvas Section */}
+            <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col h-full relative overflow-auto">
+              {/* Artistic Background Pattern */}
+              <div className="absolute inset-0 opacity-[0.03] pointer-events-none select-none">
+                <div className="absolute top-0 left-0 w-full h-full" style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+              </div>
+
+              <div className="relative z-10 flex flex-col h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Brainstorm Canvas</h3>
+                    <p className="text-sm text-slate-500">Drag to reorder, double click to edit</p>
+                  </div>
+                  <div className="flex items-center gap-2 relative">
+                    <div className="relative flex-1">
+                      <input 
+                        type="text" 
+                        placeholder="Type custom word..." 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                        value={customWordInput}
+                        onChange={(e) => {
+                          setCustomWordInput(e.target.value);
+                          setShowSuggestions(true);
+                        }}
+                        onFocus={() => setShowSuggestions(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            addCustomWord(customWordInput);
+                          }
+                        }}
+                      />
+                      
+                      {/* Autosuggestions Dropdown */}
+                      <AnimatePresence>
+                        {showSuggestions && suggestions.length > 0 && (
+                          <motion.div 
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden"
+                          >
+                            {suggestions.map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => {
+                                  addToBrainstorm(s.w);
+                                  setCustomWordInput('');
+                                  setShowSuggestions(false);
+                                }}
+                                className="w-full px-4 py-2 text-left text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between group"
+                              >
+                                <span className="font-medium">{s.w}</span>
+                                <span className="text-[10px] text-slate-400 group-hover:text-indigo-400 uppercase font-bold">From Library</span>
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                    <button 
+                      onClick={() => addCustomWord(customWordInput)}
+                      className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors"
+                    >
+                      <Plus size={20} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 relative">
+                  {brainstormWords.length === 0 ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 border-4 border-dashed border-slate-50 rounded-3xl">
+                      <Edit3 size={48} className="mb-4 opacity-20" />
+                      <p className="font-bold text-lg">Start adding words!</p>
+                      <p className="text-sm">Select from library or type above</p>
+                    </div>
+                  ) : (
+                    <DndContext 
+                      sensors={sensors}
+                      collisionDetection={rectIntersection}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext 
+                        items={brainstormWords.map(w => w.id)}
+                        strategy={rectSortingStrategy}
+                      >
+                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                          {brainstormWords.map((item) => (
+                            <SortableWordCard 
+                              key={item.id} 
+                              item={item} 
+                              onDelete={(id) => setBrainstormWords(prev => prev.filter(w => w.id !== id))}
+                              onEdit={(id, text) => setBrainstormWords(prev => prev.map(w => w.id === id ? { ...w, text } : w))}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
 
       {/* --- Modals & Toasts --- */}
