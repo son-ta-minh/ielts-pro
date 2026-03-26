@@ -653,7 +653,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   return (
     <div className="min-h-screen h-full bg-[#f8fafc] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* --- Header --- */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 py-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           {/* Left: Active Topic Box */}
           <div className="flex-1">
@@ -745,7 +745,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 h-full">
+      <main className="max-w-9xl mx-auto h-full">
         <div className="lg:grid lg:grid-cols-12 gap-8 h-full">
           {/* Mobile Tabs */}
           <div className="lg:hidden flex mb-4 gap-2">
@@ -766,9 +766,9 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
           {/* Panels */}
           <div
             className={cn(
-              "lg:col-span-4 flex flex-col gap-6 h-full",
+              "w-full flex flex-col gap-6 h-full",
               activeTab === 'library' ? "block" : "hidden",
-              "lg:block"
+              "lg:col-span-4 lg:block"
             )}
           >
             {/* Word Library Section */}
@@ -876,9 +876,9 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
           <div
             className={cn(
-              "lg:col-span-8 flex flex-col gap-6 h-full",
+              "w-full flex flex-col gap-6 h-full",
               activeTab === 'canvas' ? "block" : "hidden",
-              "lg:block"
+              "lg:col-span-8 lg:block"
             )}
           >
             {/* Brainstorm Canvas Section */}
