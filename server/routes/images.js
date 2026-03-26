@@ -277,42 +277,10 @@ router.get('/images/search', async (req, res) => {
 
         const results = [];
 
-        const downloadImage = (imgUrl, filename) => {
-            return new Promise((resolve, reject) => {
-                const protocol = imgUrl.startsWith('https') ? https : http;
-                const filePath = path.join(targetDir, filename);
-                const fileStream = fs.createWriteStream(filePath);
-
-                protocol.get(imgUrl, response => {
-                    if (response.statusCode !== 200) {
-                        fs.unlink(filePath, () => {});
-                        return reject(new Error(`Failed ${response.statusCode}`));
-                    }
-
-                    response.pipe(fileStream);
-                    fileStream.on('finish', () => {
-                        fileStream.close(() => resolve(filename));
-                    });
-                }).on('error', err => {
-                    fs.unlink(filePath, () => {});
-                    reject(err);
-                });
-            });
-        };
-
         for (const img of data.results) {
-            const imgUrl = img.urls.small;
-            const filename = `${Date.now()}_${img.id}.jpg`;
-
-            try {
-                await downloadImage(imgUrl, filename);
-                results.push({
-                    id: img.id,
-                    url: `/api/images/stream/Image/${filename}`
-                });
-            } catch (e) {
-                logger.error('[Images] Download failed:', e.message);
-            }
+            results.push({
+                url: img.urls.small
+            });
         }
 
         res.json({ images: results });

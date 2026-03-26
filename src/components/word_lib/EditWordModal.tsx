@@ -333,12 +333,9 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         return;
       }
 
-      const newUrl = images[0].url;
-
-      const updated = [
-        ...(formData.img || []),
-        newUrl
-      ];
+      const updated = images
+        .map((img: any) => img.url)
+        .filter((u: string) => u && u.trim() !== "");
 
       dispatch({
         type: 'SET_FIELD',
