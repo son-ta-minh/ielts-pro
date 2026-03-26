@@ -899,7 +899,6 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                       title={showUnusedOnly ? "Showing unused words only" : "Show words unused in all topics"}
                     >
                       <BookOpenCheck size={14} />
-                      <span className="text-xs font-medium hidden sm:inline">Unused Only</span>
                     </button>
                     <button 
                       onClick={() => setShowMeaning(!showMeaning)} 
@@ -907,7 +906,6 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                       title={showMeaning ? "Hide Meanings" : "Show Meanings"}
                     >
                       {showMeaning ? <Eye size={14} /> : <EyeOff size={14} />}
-                      <span className="text-xs font-medium hidden sm:inline">{showMeaning ? "Hide Meanings" : "Show Meanings"}</span>
                     </button>
                     <button 
                       onClick={() => setShowCollocation(!showCollocation)} 
@@ -915,7 +913,6 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                       title={showCollocation ? "Hide Collocations" : "Show Collocations"}
                     >
                       {showCollocation ? <Info size={14} /> : <EyeOff size={14} />}
-                      <span className="text-xs font-medium hidden sm:inline">{showCollocation ? "Hide Collocations" : "Show Collocations"}</span>
                     </button>
                   </div>
                 </div>
