@@ -1,14 +1,9 @@
-interface TopicRecallGameProps {
-  words: VocabItem[];
-  onComplete?: (score: number) => void;
-  onExit?: () => void;
-}
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useCallback, useEffect, useMemo, ChangeEvent } from 'react';
+import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
 import { 
   Plus, 
   Search, 
@@ -45,7 +40,6 @@ import {
   arrayMove, 
   SortableContext, 
   sortableKeyboardCoordinates, 
-  verticalListSortingStrategy,
   rectSortingStrategy,
   useSortable
 } from '@dnd-kit/sortable';
@@ -53,6 +47,15 @@ import { CSS } from '@dnd-kit/utilities';
 import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { getConfig, getServerUrl } from '../../../app/settingsManager';
+import { VocabularyItem as LibraryWord } from '../../../app/types';
+import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
+
+interface TopicRecallGameProps {
+  words: LibraryWord[];
+  onComplete?: (score: number) => void;
+  onExit?: () => void;
+}
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -60,6 +63,7 @@ export function cn(...inputs: ClassValue[]) {
 export interface Collocation {
   x: string;
   ds: string;
+  e?: string;
 }
 
 export interface VocabItem {
@@ -83,6 +87,88 @@ export interface BrainstormItem {
 // Configuration
 const DEFAULT_IMAGE_SERVER_PATH = 'https://images.unsplash.com/photo-';
 const DEFAULT_IMAGE = '1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=1000';
+const COMMON_TOPICS = ['Environment', 'Technology', 'Education', 'Health', 'Travel', 'Work', 'Society', 'Culture'];
+
+const normalizeLibraryWords = (words: LibraryWord[]): VocabItem[] => {
+  const deduped = new Map<string, VocabItem>();
+
+  words.forEach((word) => {
+    const headword = word.word?.trim();
+    if (!headword) return;
+
+    const key = headword.toLowerCase();
+    if (deduped.has(key)) return;
+
+    deduped.set(key, {
+      id: word.id,
+      w: headword,
+      m: word.meaningVi || word.note || '',
+      ex: word.example || '',
+      col: Array.isArray(word.collocationsArray)
+        ? word.collocationsArray
+            .filter((item) => item && !item.isIgnored)
+            .map((item) => ({
+              x: item.text || '',
+              ds: item.d || '',
+              e: word.example || ''
+            }))
+            .filter((item) => item.x || item.ds)
+        : []
+    });
+  });
+
+  return Array.from(deduped.values()).sort((a, b) => a.w.localeCompare(b.w));
+};
+
+const tokenize = (text: string) =>
+  text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 3);
+
+const rankLibraryCandidates = (topic: string, vocab: VocabItem[], brainstorm: BrainstormItem[]) => {
+  const topicTerms = tokenize(topic);
+  const brainstormTerms = tokenize(brainstorm.map((item) => item.text).join(' '));
+  const uniqueTerms = Array.from(new Set([...topicTerms, ...brainstormTerms]));
+
+  return [...vocab]
+    .map((item) => {
+      const haystack = `${item.w} ${item.m} ${item.ex} ${item.col.map((c) => `${c.x} ${c.ds}`).join(' ')}`.toLowerCase();
+      let score = 0;
+
+      uniqueTerms.forEach((term) => {
+        if (item.w.toLowerCase().includes(term)) score += 5;
+        if (item.m.toLowerCase().includes(term)) score += 3;
+        if (item.ex.toLowerCase().includes(term)) score += 2;
+        if (haystack.includes(term)) score += 1;
+      });
+
+      if (item.col.length > 0) score += 0.5;
+      return { item, score };
+    })
+    .sort((a, b) => b.score - a.score || a.item.w.localeCompare(b.item.w))
+    .slice(0, 40)
+    .map(({ item }) => item);
+};
+
+const extractImagesFromPayload = (payload: any): { url: string }[] => {
+  const rawItems = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.images)
+      ? payload.images
+      : Array.isArray(payload?.results)
+        ? payload.results
+        : [];
+
+  return rawItems
+    .map((item: any) => {
+      if (typeof item === 'string') return { url: item };
+      const url = item?.url || item?.src || item?.imageUrl || item?.image;
+      return typeof url === 'string' ? { url } : null;
+    })
+    .filter((item: { url: string } | null): item is { url: string } => !!item?.url);
+};
 
 // --- Components ---
 
@@ -166,7 +252,7 @@ const SortableWordCard = ({ item, onDelete, onEdit }: SortableWordCardProps) => 
 
 export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onComplete, onExit }) => {
   // --- State ---
-  const [vocab, setVocab] = useState<VocabItem[]>(words || []);
+  const [vocab, setVocab] = useState<VocabItem[]>(() => normalizeLibraryWords(words || []));
   const [currentTopic, setCurrentTopic] = useState<string>('Environment');
   const [topicImages, setTopicImages] = useState<any[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -199,6 +285,54 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onCompl
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setVocab(normalizeLibraryWords(words || []));
+  }, [words]);
+
+  const searchImages = async (query: string) => {
+    const serverUrl = getServerUrl(getConfig());
+    const normalizedQuery = query.trim();
+    if (!normalizedQuery) return [];
+
+    const endpoints = [
+      `${serverUrl}/image/search?q=${encodeURIComponent(normalizedQuery)}`,
+      `${serverUrl}/api/images/search?q=${encodeURIComponent(normalizedQuery)}`
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const res = await fetch(endpoint);
+        if (!res.ok) continue;
+        const payload = await res.json().catch(() => null);
+        const images = extractImagesFromPayload(payload);
+        if (images.length > 0) {
+          return images;
+        }
+      } catch (_error) {
+        // Try the next compatible endpoint.
+      }
+    }
+
+    return [];
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadInitialTopicImage = async () => {
+      const results = await searchImages(currentTopic);
+      if (cancelled) return;
+      setTopicImages(results);
+      setCurrentImageIndex(0);
+    };
+
+    void loadInitialTopicImage();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // --- Helpers ---
@@ -300,14 +434,42 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onCompl
   };
 
   const evaluateUserResponse = () => {
-    if (!currentTopic) return;
-    const words = brainstormWords.map(w => w.text).join(', ');
-    const prompt = `I am practicing IELTS vocabulary for the topic: "${currentTopic}". 
-Here are the words I brainstormed: ${words}. 
-Please evaluate my topic coverage and suggest 5 more advanced academic words I could use.`;
-    
-    navigator.clipboard.writeText(prompt);
-    showToast("AI Prompt copied to clipboard!");
+    if (!currentTopic.trim()) {
+      showToast("Please choose a topic first.", "error");
+      return;
+    }
+
+    if (brainstormWords.length === 0) {
+      showToast("Add a few words first before evaluating.", "error");
+      return;
+    }
+
+    const brainstormList = brainstormWords.map((item, index) => `${index + 1}. ${item.text}`).join('\n');
+    const candidateWords = rankLibraryCandidates(currentTopic, vocab, brainstormWords);
+    const candidateBlock = candidateWords.length > 0
+      ? candidateWords
+          .slice(0, 20)
+          .map((item, index) => `${index + 1}. ${item.w} - ${item.m || 'No meaning saved'}`)
+          .join('\n')
+      : 'No matching library words available.';
+
+    const prompt = [
+      `Ban la StudyBuddy dang ho tro mot nguoi hoc IELTS trong mini game Topic Recall.`,
+      `Topic: "${currentTopic}".`,
+      `Danh sach user da brainstorm:`,
+      brainstormList,
+      ``,
+      `Hay danh gia tung tu xem co relevant voi topic hay khong, giai thich rat ngan gon bang tieng Viet.`,
+      `Sau do de xuat khoang 10 tu chi duoc lay tu danh sach Word Library candidate ben duoi ma nguoi hoc co the dung cho topic nay.`,
+      `Neu mot tu khong phu hop, hay noi ngan gon vi sao.`,
+      `Trinh bay ngan gon, de doc, uu tien bullet list.`,
+      ``,
+      `Word Library candidate list:`,
+      candidateBlock
+    ].join('\n');
+
+    requestStudyBuddyChatResponse(prompt);
+    showToast("Sent to StudyBuddy chat!");
   };
 
   const downloadWordList = () => {
@@ -327,11 +489,10 @@ Please evaluate my topic coverage and suggest 5 more advanced academic words I c
   };
 
   const suggestTopic = () => {
-    const commonTopics = ['Environment', 'Technology', 'Education', 'Health', 'Travel', 'Work', 'Society', 'Culture'];
-    const randomIndex = Math.floor(Math.random() * commonTopics.length);
-    const topic = commonTopics[randomIndex];
+    const randomIndex = Math.floor(Math.random() * COMMON_TOPICS.length);
+    const topic = COMMON_TOPICS[randomIndex];
     setNewTopicName(topic);
-    addTopic(topic);
+    void addTopic(topic);
   };
 
   const addTopic = async (topicName?: string) => {
@@ -339,7 +500,7 @@ Please evaluate my topic coverage and suggest 5 more advanced academic words I c
     if (!name.trim()) return;
     
     try {
-      const results = await searchImages(name); // Use server /images/search endpoint
+      const results = await searchImages(name);
       setTopicImages(results);
       setCurrentImageIndex(0);
       setCurrentTopic(name);
@@ -358,7 +519,7 @@ Please evaluate my topic coverage and suggest 5 more advanced academic words I c
     }
   };
 
-  const currentImageUrl = topicImages[currentImageIndex]?.url || DEFAULT_IMAGE;
+  const currentImageUrl = topicImages[currentImageIndex]?.url || `${DEFAULT_IMAGE_SERVER_PATH}${DEFAULT_IMAGE}`;
 
   return (
     <div className="min-h-screen h-full bg-[#f8fafc] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
