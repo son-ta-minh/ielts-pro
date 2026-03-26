@@ -70,7 +70,7 @@ export const ResourceActions: React.FC<ResourceActionsProps> = ({
           className="px-6 py-3 bg-neutral-900 text-white rounded-xl font-black text-xs flex items-center space-x-2 transition-all hover:bg-neutral-800 active:scale-95 uppercase tracking-widest shadow-sm"
         >
           <Plus size={16} />
-          <span>Add</span>
+          <span>Action</span>
           <ChevronDown size={14} className={`transition-transform ${isAddMenuOpen ? 'rotate-180' : ''}`} />
         </button>
         {isAddMenuOpen && (
