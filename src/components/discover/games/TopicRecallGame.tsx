@@ -654,11 +654,11 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     <div className="min-h-screen h-full bg-[#f8fafc] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* --- Header --- */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           {/* Left: Active Topic Box */}
           <div className="flex-1">
-            <div className="relative h-20 rounded-3xl overflow-visible shadow-sm bg-white border border-slate-200 flex items-center px-6 min-w-[320px]">
-              <div className="flex-1 flex items-center justify-between">
+            <div className="relative min-h-[80px] rounded-3xl overflow-visible shadow-sm bg-white border border-slate-200 flex flex-wrap items-center px-6 py-4 min-w-[320px]">
+              <div className="flex-1 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-4">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Active Topic</span>
@@ -700,40 +700,42 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
                       <button 
                         onClick={suggestTopic}
-                        className="p-1.5 text-slate-300 hover:text-indigo-500 transition-colors"
+                        className="flex items-center gap-1 p-1.5 text-slate-300 hover:text-indigo-500 transition-colors"
                         title="Suggest Random Topic"
                       >
                         <RefreshCw size={16} />
+                        <span className="text-sm font-semibold hidden sm:inline">Suggest</span>
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button 
                     onClick={() => {
                       setNewTopicName(''); // Clear textbox when modal opens
                       setIsTopicModalOpen(true);
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-bold text-sm"
+                    className="flex items-center gap-1 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-bold text-sm"
                   >
                     <Plus size={18} />
-                    <span>Change Topic</span>
+                    <span className="hidden sm:inline">Change Topic</span>
                   </button>
                   {/* Inline Buttons: Evaluate and Quit */}
-                  <div className="flex items-center gap-2 ml-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button 
                       onClick={evaluateUserResponse}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 shadow-md transition-all text-sm font-semibold"
+                      className="flex items-center gap-1 px-4 py-2 bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 shadow-md transition-all text-sm font-semibold"
                     >
                       <Copy size={16} />
-                      <span>Evaluate</span>
+                      <span className="hidden sm:inline">Evaluate</span>
                     </button>
                     <button 
                       onClick={onExit}
-                      className="flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-800 rounded-lg hover:bg-rose-200 shadow-md transition-all text-sm font-semibold"
+                      className="flex items-center gap-1 px-4 py-2 bg-rose-100 text-rose-800 rounded-lg hover:bg-rose-200 shadow-md transition-all text-sm font-semibold"
                     >
-                      <ArrowLeft size={18}/> Quit
+                      <ArrowLeft size={18}/>
+                      <span className="hidden sm:inline">Quit</span>
                     </button>
                   </div>
                 </div>
@@ -777,17 +779,19 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={() => setShowMeaning(!showMeaning)} 
-                      className={cn("p-1.5 rounded-lg transition-colors", showMeaning ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
+                      className={cn("flex items-center gap-1 px-2 py-1 rounded-lg transition-colors", showMeaning ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
                       title={showMeaning ? "Hide Meanings" : "Show Meanings"}
                     >
                       {showMeaning ? <Eye size={14} /> : <EyeOff size={14} />}
+                      <span className="text-xs font-medium hidden sm:inline">{showMeaning ? "Hide Meanings" : "Show Meanings"}</span>
                     </button>
                     <button 
                       onClick={() => setShowCollocation(!showCollocation)} 
-                      className={cn("p-1.5 rounded-lg transition-colors", showCollocation ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
+                      className={cn("flex items-center gap-1 px-2 py-1 rounded-lg transition-colors", showCollocation ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
                       title={showCollocation ? "Hide Collocations" : "Show Collocations"}
                     >
                       {showCollocation ? <Info size={14} /> : <EyeOff size={14} />}
+                      <span className="text-xs font-medium hidden sm:inline">{showCollocation ? "Hide Collocations" : "Show Collocations"}</span>
                     </button>
                   </div>
                 </div>
@@ -830,20 +834,22 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                   e.stopPropagation();
                                   setSelectedWord(item);
                                 }}
-                                className="p-1 text-slate-300 hover:text-indigo-500 transition-colors"
+                                className="flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-indigo-600 rounded transition-colors"
                                 title="View Details"
                               >
                                 <Eye size={16} />
+                                <span className="text-xs font-medium hidden sm:inline">Details</span>
                               </button>
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   addToBrainstorm(item.w);
                                 }}
-                                className="p-1 text-slate-300 hover:text-indigo-500 transition-colors"
+                                className="flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-indigo-600 rounded transition-colors"
                                 title="Add to Brainstorm"
                               >
                                 <Plus size={16} />
+                                <span className="text-xs font-medium hidden sm:inline">Add</span>
                               </button>
                             </div>
                           </div>
