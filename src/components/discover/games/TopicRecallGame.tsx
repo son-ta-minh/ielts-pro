@@ -653,8 +653,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   return (
     <div className="min-h-screen h-full bg-[#f8fafc] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* --- Header --- */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 py-4">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 pt-0 pb-4">
+        <div className="max-w-9xl mx-auto flex flex-wrap items-center justify-between gap-4">
           {/* Left: Active Topic Box */}
           <div className="flex-1">
             <div className="relative min-h-[80px] rounded-3xl overflow-visible shadow-sm bg-white border border-slate-200 flex flex-wrap items-center px-6 py-4 min-w-[320px]">
@@ -891,8 +891,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
               <div className="relative z-10 flex flex-col h-full">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900">Brainstorm Canvas</h3>
-                    <p className="text-sm text-slate-500">Drag to reorder, double click to edit</p>
+                    <h3 className="hidden sm:block text-xl font-bold text-slate-900">Brainstorm Canvas</h3>
+                    <p className="hidden sm:block text-sm text-slate-500">Drag to reorder, double click to edit</p>
                   </div>
                   <div className="flex items-center gap-2 relative">
                     <div className="relative flex-1">
