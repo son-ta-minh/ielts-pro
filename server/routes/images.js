@@ -201,22 +201,44 @@ router.post('/images/cache', express.json(), async (req, res) => {
         }
 
         const parsedUrl = new URL(url);
-        const ext = path.extname(parsedUrl.pathname) || '.jpg';
-        const safeName = path.basename(parsedUrl.pathname)
-            .replace(/[^a-zA-Z0-9.\-_]/g, '_') || `img_${Date.now()}${ext}`;
 
-        const filename = `${Date.now()}_${safeName}`;
+        let ext = path.extname(parsedUrl.pathname);
+
+        // fallback if no extension in URL
+        if (!ext) {
+            const contentType = req.headers['content-type'] || '';
+            if (contentType.includes('png')) ext = '.png';
+            else if (contentType.includes('webp')) ext = '.webp';
+            else if (contentType.includes('gif')) ext = '.gif';
+            else ext = '.jpg';
+        }
+
+        const baseName = path.basename(parsedUrl.pathname).replace(/[^a-zA-Z0-9\-_]/g, '_');
+        const safeName = baseName || `img_${Date.now()}`;
+
+        const filename = `${Date.now()}_${safeName}${ext}`;
         const fullPath = path.join(targetDir, filename);
 
         const protocol = parsedUrl.protocol === 'https:' ? https : http;
 
-        const fileStream = fs.createWriteStream(fullPath);
+        const finalPath = path.extname(fullPath) ? fullPath : fullPath + ext;
+        const fileStream = fs.createWriteStream(finalPath);
 
         protocol.get(url, response => {
             if (response.statusCode !== 200) {
                 const reason = `Remote server responded with ${response.statusCode} ${response.statusMessage || ''}`.trim();
-                fs.unlink(fullPath, () => {});
+                fs.unlink(finalPath, () => {});
                 return res.status(400).json({ error: reason });
+            }
+
+            let responseExt = ext;
+            const contentType = response.headers['content-type'] || '';
+
+            if (!path.extname(filename)) {
+                if (contentType.includes('png')) responseExt = '.png';
+                else if (contentType.includes('webp')) responseExt = '.webp';
+                else if (contentType.includes('gif')) responseExt = '.gif';
+                else responseExt = '.jpg';
             }
 
             response.pipe(fileStream);
@@ -225,11 +247,11 @@ router.post('/images/cache', express.json(), async (req, res) => {
                 fileStream.close();
                 res.json({
                     success: true,
-                    url: `/api/images/stream/Image/${filename}`
+                    url: `/api/images/stream/Image/${path.basename(finalPath)}`
                 });
             });
         }).on('error', err => {
-            fs.unlink(fullPath, () => {});
+            fs.unlink(finalPath, () => {});
             res.status(500).json({ error: err.message });
         });
     } catch (err) {
