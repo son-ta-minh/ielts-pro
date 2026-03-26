@@ -143,6 +143,11 @@ export interface StudyBuddyImageSettings {
 export interface TopicRecallTopicState {
   topic: string;
   words: string[];
+  groups?: {
+    id: string;
+    name: string;
+    words: string[];
+  }[];
   updatedAt: number;
 }
 

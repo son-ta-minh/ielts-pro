@@ -26,24 +26,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Virtuoso } from 'react-virtuoso';
-import { 
-  DndContext, 
-  closestCenter, 
-  KeyboardSensor, 
-  PointerSensor, 
-  useSensor, 
-  useSensors,
-  DragEndEvent,
-  rectIntersection
-} from '@dnd-kit/core';
-import { 
-  arrayMove, 
-  SortableContext, 
-  sortableKeyboardCoordinates, 
-  rectSortingStrategy,
-  useSortable
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -86,10 +68,18 @@ export interface BrainstormItem {
   isCustom?: boolean;
 }
 
+export interface BrainstormGroup {
+  id: string;
+  name: string;
+  words: BrainstormItem[];
+  isDefault?: boolean;
+}
+
 // Configuration
 const DEFAULT_IMAGE_SERVER_PATH = 'https://images.unsplash.com/photo-';
 const DEFAULT_IMAGE = '1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=1000';
 const COMMON_TOPICS = ['Environment', 'Technology', 'Education', 'Health', 'Travel', 'Work', 'Society', 'Culture'];
+const DEFAULT_GROUP_NAME = 'Default Group';
 
 const normalizeLibraryWords = (words: LibraryWord[]): VocabItem[] => {
   const deduped = new Map<string, VocabItem>();
@@ -182,88 +172,42 @@ const createBrainstormItems = (words: string[]): BrainstormItem[] =>
       isCustom: true
     }));
 
+const createBrainstormGroup = (name = DEFAULT_GROUP_NAME, words: string[] = [], isDefault = false): BrainstormGroup => ({
+  id: `group-${Math.random().toString(36).slice(2, 10)}`,
+  name,
+  words: createBrainstormItems(words),
+  isDefault
+});
+
+const createBrainstormGroupsFromSavedTopic = (topicState?: User['topicRecallData'] extends { topics: infer T } ? any : never): BrainstormGroup[] => {
+  const savedGroups = Array.isArray(topicState?.groups) ? topicState.groups : [];
+
+  if (savedGroups.length > 0) {
+    return savedGroups.map((group: any, index: number) => ({
+      id: group.id || `group-${index}-${Date.now()}`,
+      name: group.name || (index === 0 ? DEFAULT_GROUP_NAME : `Group ${index + 1}`),
+      words: createBrainstormItems(Array.isArray(group.words) ? group.words : []),
+      isDefault: index === 0
+    }));
+  }
+
+  const legacyWords = Array.isArray(topicState?.words) ? topicState.words : [];
+  return [createBrainstormGroup(DEFAULT_GROUP_NAME, legacyWords, true)];
+};
+
 const areWordListsEqual = (left: string[], right: string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
-// --- Components ---
-
-interface SortableWordCardProps {
-  key?: string | number;
-  item: BrainstormItem;
-  onDelete: (id: string) => void;
-  onEdit: (id: string, text: string) => void;
-}
-
-const SortableWordCard = ({ item, onDelete, onEdit }: SortableWordCardProps) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: item.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : 1,
-  };
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState(item.text);
-
-  const handleSave = () => {
-    onEdit(item.id, editText);
-    setIsEditing(false);
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "group relative bg-white/90 backdrop-blur-sm border-2 border-primary/20 rounded-xl p-3 shadow-lg hover:shadow-xl transition-all duration-200 cursor-default",
-        isDragging && "opacity-50 scale-105 border-primary ring-2 ring-primary/50",
-        item.isCustom ? "border-amber-400/50 bg-amber-50/90" : "border-indigo-400/50 bg-indigo-50/90"
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-black/5 rounded">
-          <div className="w-4 h-4 flex flex-col gap-0.5">
-            <div className="w-full h-0.5 bg-gray-400 rounded-full" />
-            <div className="w-full h-0.5 bg-gray-400 rounded-full" />
-            <div className="w-full h-0.5 bg-gray-400 rounded-full" />
-          </div>
-        </div>
-
-        {isEditing ? (
-          <input
-            autoFocus
-            className="flex-1 bg-transparent border-b border-primary focus:outline-none font-bold text-indigo-900"
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-          />
-        ) : (
-          <span className="flex-1 font-bold text-indigo-900 select-none" onDoubleClick={() => setIsEditing(true)}>
-            {item.text}
-          </span>
-        )}
-
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => setIsEditing(!isEditing)} className="p-1 hover:text-indigo-600">
-            <Edit3 size={14} />
-          </button>
-          <button onClick={() => onDelete(item.id)} className="p-1 hover:text-rose-600">
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </div>
-    </div>
+const areGroupListsEqual = (
+  left: { name: string; words: string[] }[],
+  right: { name: string; words: string[] }[]
+) =>
+  left.length === right.length &&
+  left.every((group, index) =>
+    group.name === right[index]?.name && areWordListsEqual(group.words, right[index]?.words || [])
   );
-};
+
+// --- Components ---
 
 export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, onUpdateUser, onComplete, onExit }) => {
   // --- State ---
@@ -273,10 +217,15 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const [currentTopic, setCurrentTopic] = useState<string>(user.topicRecallData?.lastTopic || 'Environment');
   const [topicImages, setTopicImages] = useState<any[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [brainstormWords, setBrainstormWords] = useState<BrainstormItem[]>(() => {
+  const [brainstormGroups, setBrainstormGroups] = useState<BrainstormGroup[]>(() => {
     const initialTopic = user.topicRecallData?.lastTopic || 'Environment';
-    const savedWords = user.topicRecallData?.topics?.find((item) => item.topic === initialTopic)?.words || [];
-    return createBrainstormItems(savedWords);
+    const savedTopic = user.topicRecallData?.topics?.find((item) => item.topic === initialTopic);
+    return createBrainstormGroupsFromSavedTopic(savedTopic);
+  });
+  const [selectedGroupId, setSelectedGroupId] = useState<string>(() => {
+    const initialTopic = user.topicRecallData?.lastTopic || 'Environment';
+    const savedTopic = user.topicRecallData?.topics?.find((item) => item.topic === initialTopic);
+    return createBrainstormGroupsFromSavedTopic(savedTopic)[0]?.id || createBrainstormGroup().id;
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
@@ -287,14 +236,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const [customWordInput, setCustomWordInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-  // --- Sensors for DND ---
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const [newGroupName, setNewGroupName] = useState('');
+  const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
 
   // --- Effects ---
   useEffect(() => {
@@ -381,16 +324,41 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   }, [currentTopic]);
 
   useEffect(() => {
+    if (!brainstormGroups.some((group) => group.id === selectedGroupId)) {
+      setSelectedGroupId(brainstormGroups[0]?.id || '');
+    }
+  }, [brainstormGroups, selectedGroupId]);
+
+  const brainstormWords = useMemo(
+    () => brainstormGroups.flatMap((group) => group.words),
+    [brainstormGroups]
+  );
+
+  useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       const normalizedTopic = currentTopic.trim();
       if (!normalizedTopic) return;
 
-      const nextWords = brainstormWords.map((item) => item.text.trim()).filter(Boolean);
       const previousTopics = user.topicRecallData?.topics || [];
       const existingTopic = previousTopics.find((item) => item.topic === normalizedTopic);
       const lastTopic = user.topicRecallData?.lastTopic;
+      const serializedGroups = brainstormGroups.map((group) => ({
+        id: group.id,
+        name: group.name.trim() || DEFAULT_GROUP_NAME,
+        words: group.words.map((item) => item.text.trim()).filter(Boolean)
+      }));
+      const serializedWords = serializedGroups.flatMap((group) => group.words);
+      const existingGroups = (existingTopic?.groups || []).map((group) => ({
+        name: group.name,
+        words: group.words || []
+      }));
 
-      if (lastTopic === normalizedTopic && existingTopic && areWordListsEqual(existingTopic.words, nextWords)) {
+      if (
+        lastTopic === normalizedTopic &&
+        existingTopic &&
+        areWordListsEqual(existingTopic.words || [], serializedWords) &&
+        areGroupListsEqual(existingGroups, serializedGroups.map(({ name, words }) => ({ name, words })))
+      ) {
         return;
       }
 
@@ -398,7 +366,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       const nextTopics = [
         {
           topic: normalizedTopic,
-          words: nextWords,
+          words: serializedWords,
+          groups: serializedGroups,
           updatedAt: Date.now()
         },
         ...filteredTopics
@@ -414,7 +383,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     }, 400);
 
     return () => window.clearTimeout(timeoutId);
-  }, [brainstormWords, currentTopic, onUpdateUser, user]);
+  }, [brainstormGroups, currentTopic, onUpdateUser, user]);
 
   // --- Helpers ---
   const filteredVocab = useMemo(() => {
@@ -430,6 +399,20 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const wordExistsInTopic = (text: string) =>
+    brainstormWords.some((item) => item.text.toLowerCase() === text.trim().toLowerCase());
+
+  const updateWordInGroups = (wordId: string, updater: (word: BrainstormItem) => BrainstormItem | null) => {
+    setBrainstormGroups((prev) =>
+      prev.map((group) => ({
+        ...group,
+        words: group.words
+          .map((word) => (word.id === wordId ? updater(word) : word))
+          .filter((word): word is BrainstormItem => !!word)
+      }))
+    );
   };
 
   // --- Handlers ---
@@ -460,7 +443,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   };
 
   const addToBrainstorm = (word: string) => {
-    if (brainstormWords.some(w => w.text.toLowerCase() === word.toLowerCase())) {
+    if (wordExistsInTopic(word)) {
       showToast("Word already in brainstorm!", "error");
       return;
     }
@@ -469,7 +452,14 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       text: word,
       isCustom: false
     };
-    setBrainstormWords(prev => [...prev, newItem]);
+    setBrainstormGroups((prev) => {
+      const targetGroupId = selectedGroupId || prev[0]?.id;
+      return prev.map((group) =>
+        group.id === targetGroupId
+          ? { ...group, words: [...group.words, newItem] }
+          : group
+      );
+    });
     confetti({
       particleCount: 50,
       spread: 70,
@@ -480,7 +470,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
   const addCustomWord = (text: string) => {
     if (!text.trim()) return;
-    if (brainstormWords.some(w => w.text.toLowerCase() === text.trim().toLowerCase())) {
+    if (wordExistsInTopic(text)) {
       showToast("Word already in brainstorm!", "error");
       return;
     }
@@ -489,7 +479,14 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       text: text.trim(),
       isCustom: true
     };
-    setBrainstormWords(prev => [...prev, newItem]);
+    setBrainstormGroups((prev) => {
+      const targetGroupId = selectedGroupId || prev[0]?.id;
+      return prev.map((group) =>
+        group.id === targetGroupId
+          ? { ...group, words: [...group.words, newItem] }
+          : group
+      );
+    });
     setCustomWordInput('');
     setShowSuggestions(false);
   };
@@ -502,16 +499,100 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       .slice(0, 5);
   }, [vocab, customWordInput]);
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setBrainstormWords((items) => {
-        const oldIndex = items.findIndex((i) => i.id === active.id);
-        const newIndex = items.findIndex((i) => i.id === over.id);
-        if (oldIndex === -1 || newIndex === -1) return items;
-        return arrayMove(items, oldIndex, newIndex);
-      });
+  const addGroup = () => {
+    const name = newGroupName.trim() || `Group ${brainstormGroups.length + 1}`;
+    const nextGroup: BrainstormGroup = createBrainstormGroup(name);
+
+    setBrainstormGroups((prev) => {
+      const insertIndex = prev.findIndex((group) => group.id === selectedGroupId);
+      if (insertIndex === -1) return [...prev, nextGroup];
+      const next = [...prev];
+      next.splice(insertIndex + 1, 0, nextGroup);
+      return next;
+    });
+    setSelectedGroupId(nextGroup.id);
+    setNewGroupName('');
+  };
+
+  const renameGroup = (groupId: string, nextName: string) => {
+    const normalizedName = nextName.trim();
+    if (!normalizedName) return;
+    setBrainstormGroups((prev) =>
+      prev.map((group) => (group.id === groupId ? { ...group, name: normalizedName } : group))
+    );
+  };
+
+  const deleteGroup = (groupId: string) => {
+    if (brainstormGroups.length === 1) {
+      showToast("At least one group is required.", "error");
+      return;
     }
+
+    setBrainstormGroups((prev) => {
+      const groupToDelete = prev.find((group) => group.id === groupId);
+      const fallbackGroup = prev.find((group) => group.id !== groupId) || prev[0];
+      return prev
+        .filter((group) => group.id !== groupId)
+        .map((group) =>
+          group.id === fallbackGroup?.id
+            ? { ...group, words: [...group.words, ...(groupToDelete?.words || [])] }
+            : group
+        );
+    });
+
+    if (selectedGroupId === groupId) {
+      const fallbackGroupId = brainstormGroups.find((group) => group.id !== groupId)?.id || '';
+      setSelectedGroupId(fallbackGroupId);
+    }
+  };
+
+  const removeWordFromTopic = (wordId: string) => {
+    updateWordInGroups(wordId, () => null);
+  };
+
+  const editWordInTopic = (wordId: string, text: string) => {
+    const normalizedText = text.trim();
+    if (!normalizedText) {
+      removeWordFromTopic(wordId);
+      return;
+    }
+
+    const duplicate = brainstormWords.some(
+      (word) => word.id !== wordId && word.text.toLowerCase() === normalizedText.toLowerCase()
+    );
+    if (duplicate) {
+      showToast("Word already exists in this topic.", "error");
+      return;
+    }
+
+    updateWordInGroups(wordId, (word) => ({ ...word, text: normalizedText }));
+  };
+
+  const moveWordToGroup = (wordId: string, targetGroupId: string) => {
+    if (!targetGroupId) return;
+
+    let movedWord: BrainstormItem | null = null;
+
+    setBrainstormGroups((prev) => {
+      const removed = prev.map((group) => ({
+        ...group,
+        words: group.words.filter((word) => {
+          if (word.id === wordId) {
+            movedWord = word;
+            return false;
+          }
+          return true;
+        })
+      }));
+
+      if (!movedWord) return prev;
+
+      return removed.map((group) =>
+        group.id === targetGroupId
+          ? { ...group, words: [...group.words, movedWord as BrainstormItem] }
+          : group
+      );
+    });
   };
 
   const evaluateUserResponse = () => {
@@ -582,7 +663,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     
     try {
       const results = await searchImages(name);
-      const savedWords = user.topicRecallData?.topics?.find((item) => item.topic === name.trim())?.words || [];
+      const savedTopic = user.topicRecallData?.topics?.find((item) => item.topic === name.trim());
+      const restoredGroups = createBrainstormGroupsFromSavedTopic(savedTopic);
       setTopicImages(results);
       if (results.length > 0) {
         const randomIndex = Math.floor(Math.random() * results.length);
@@ -591,7 +673,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         setCurrentImageIndex(0);
       }
       setCurrentTopic(name.trim());
-      setBrainstormWords(createBrainstormItems(savedWords));
+      setBrainstormGroups(restoredGroups);
+      setSelectedGroupId(restoredGroups[0]?.id || '');
       setNewTopicName(name.trim());
       setIsTopicModalOpen(false);
       showToast(`Topic updated to: ${name.trim()}`);
@@ -626,9 +709,11 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     });
 
     if (currentTopic === targetTopic) {
-      const fallbackWords = remainingTopics.find((item) => item.topic === fallbackTopic)?.words || [];
+      const fallbackSavedTopic = remainingTopics.find((item) => item.topic === fallbackTopic);
+      const fallbackGroups = createBrainstormGroupsFromSavedTopic(fallbackSavedTopic);
       setCurrentTopic(fallbackTopic);
-      setBrainstormWords(createBrainstormItems(fallbackWords));
+      setBrainstormGroups(fallbackGroups);
+      setSelectedGroupId(fallbackGroups[0]?.id || '');
       try {
         const results = await searchImages(fallbackTopic);
         setTopicImages(results);
@@ -889,13 +974,59 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
               </div>
 
               <div className="relative z-10 flex flex-col h-full">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="hidden sm:block text-xl font-bold text-slate-900">Brainstorm Canvas</h3>
-                    <p className="hidden sm:block text-sm text-slate-500">Drag to reorder, double click to edit</p>
+                <div className="flex flex-col gap-4 mb-4">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <h3 className="hidden sm:block text-xl font-bold text-slate-900">Brainstorm Canvas</h3>
+                      <p className="hidden sm:block text-sm text-slate-500">
+                        {canvasMode === 'view'
+                          ? 'Browse your grouped ideas without edit controls.'
+                          : 'Organize your topic words into groups you can expand, rename, and prune.'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="inline-flex rounded-xl bg-slate-100 p-1">
+                        <button
+                          onClick={() => setCanvasMode('view')}
+                          className={cn(
+                            "px-4 py-2 rounded-lg text-sm font-semibold transition-colors",
+                            canvasMode === 'view' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                          )}
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => setCanvasMode('edit')}
+                          className={cn(
+                            "px-4 py-2 rounded-lg text-sm font-semibold transition-colors",
+                            canvasMode === 'edit' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                          )}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="New group name..."
+                        className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                        value={newGroupName}
+                        onChange={(e) => setNewGroupName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') addGroup();
+                        }}
+                      />
+                      <button
+                        onClick={addGroup}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors text-sm font-semibold"
+                      >
+                        <Plus size={16} />
+                        <span>Add Group</span>
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 relative">
-                    <div className="relative flex-1">
+
+                  <div className="flex flex-wrap items-center gap-2 relative">
+                    <div className="relative flex-1 min-w-[220px]">
                       <input 
                         type="text" 
                         placeholder="Type custom word..." 
@@ -913,7 +1044,6 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                         }}
                       />
                       
-                      {/* Autosuggestions Dropdown */}
                       <AnimatePresence>
                         {showSuggestions && suggestions.length > 0 && (
                           <motion.div 
@@ -940,11 +1070,23 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                         )}
                       </AnimatePresence>
                     </div>
+                    <select
+                      value={selectedGroupId}
+                      onChange={(e) => setSelectedGroupId(e.target.value)}
+                      className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    >
+                      {brainstormGroups.map((group) => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))}
+                    </select>
                     <button 
                       onClick={() => addCustomWord(customWordInput)}
-                      className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors text-sm font-semibold"
                     >
-                      <Plus size={20} />
+                      <Plus size={18} />
+                      <span>Add Word</span>
                     </button>
                   </div>
                 </div>
@@ -954,30 +1096,106 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 border-4 border-dashed border-slate-50 rounded-3xl">
                       <Edit3 size={48} className="mb-4 opacity-20" />
                       <p className="font-bold text-lg">Start adding words!</p>
-                      <p className="text-sm">Select from library or type above</p>
+                      <p className="text-sm">Select from library or type above, then organize them into groups</p>
                     </div>
                   ) : (
-                    <DndContext 
-                      sensors={sensors}
-                      collisionDetection={rectIntersection}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <SortableContext 
-                        items={brainstormWords.map(w => w.id)}
-                        strategy={rectSortingStrategy}
-                      >
-                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                          {brainstormWords.map((item) => (
-                            <SortableWordCard 
-                              key={item.id} 
-                              item={item} 
-                              onDelete={(id) => setBrainstormWords(prev => prev.filter(w => w.id !== id))}
-                              onEdit={(id, text) => setBrainstormWords(prev => prev.map(w => w.id === id ? { ...w, text } : w))}
-                            />
-                          ))}
+                    <div className="grid grid-cols-1 gap-4">
+                      {brainstormGroups.map((group) => (
+                        <div key={group.id} className="rounded-2xl border border-slate-200 bg-white/90 shadow-sm overflow-hidden">
+                          <div className="flex flex-wrap items-center gap-2 justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/70">
+                            <div className="flex items-center gap-2">
+                              {canvasMode === 'edit' ? (
+                                <input
+                                  type="text"
+                                  value={group.name}
+                                  onChange={(e) => renameGroup(group.id, e.target.value)}
+                                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                />
+                              ) : (
+                                <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-900">
+                                  {group.name}
+                                </div>
+                              )}
+                            </div>
+                            {canvasMode === 'edit' && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => setSelectedGroupId(group.id)}
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
+                                    selectedGroupId === group.id
+                                      ? "bg-indigo-600 text-white"
+                                      : "bg-white text-slate-600 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600"
+                                  )}
+                                >
+                                  Add Here
+                                </button>
+                                <button
+                                  onClick={() => deleteGroup(group.id)}
+                                  className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                                  title="Delete group"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="p-4">
+                            {group.words.length === 0 ? (
+                              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center text-sm text-slate-400">
+                                No words yet in this group.
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-3">
+                                {group.words.map((item) => (
+                                  <div
+                                    key={item.id}
+                                    className={cn(
+                                      "group inline-flex max-w-full flex-wrap items-center gap-2 rounded-xl border px-3 py-2 shadow-sm",
+                                      item.isCustom ? "border-amber-300 bg-amber-50/80" : "border-indigo-200 bg-indigo-50/70"
+                                    )}
+                                  >
+                                    {canvasMode === 'edit' ? (
+                                      <>
+                                        <input
+                                          value={item.text}
+                                          onChange={(e) => editWordInTopic(item.id, e.target.value)}
+                                          className="min-w-[80px] max-w-[220px] bg-transparent font-bold text-slate-900 focus:outline-none"
+                                          size={Math.max(item.text.length, 6)}
+                                        />
+                                        <select
+                                          value={group.id}
+                                          onChange={(e) => moveWordToGroup(item.id, e.target.value)}
+                                          className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                        >
+                                          {brainstormGroups.map((targetGroup) => (
+                                            <option key={targetGroup.id} value={targetGroup.id}>
+                                              {targetGroup.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          onClick={() => removeWordFromTopic(item.id)}
+                                          className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                                          title="Delete word from topic"
+                                        >
+                                          <Trash2 size={16} />
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <div className="font-bold text-slate-900 whitespace-nowrap">
+                                        {item.text}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </SortableContext>
-                    </DndContext>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
