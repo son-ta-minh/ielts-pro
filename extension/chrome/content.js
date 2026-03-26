@@ -25,6 +25,7 @@
   let hideTimer = null;
   let isInteractingWithUI = false;
   let list;
+  let isPanelVisible = localStorage.getItem("vocabPanelEnabled") !== "false";
 
   function toOrigin(url) {
     try {
@@ -694,6 +695,12 @@
     floatingPanel.style.resize = "both"; // allow both horizontal and vertical resizing
     floatingPanel.style.overflow = "auto"; // ensures scrollbars appear if content overflows
     document.body.appendChild(floatingPanel);
+    // Ensure visible state (optional/future re-enable)
+    floatingPanel.style.display = "block";
+    if (!isPanelVisible) {
+      floatingPanel.style.display = "none";
+      return; // stop entire feature init
+    }
 
     // Compact, minimalist header
     const header = document.createElement("div");
@@ -788,6 +795,11 @@ closeBtn.style.fontWeight = "700";
 closeBtn.style.color = "#ffffff";
 closeBtn.addEventListener("click", () => {
   floatingPanel.style.display = "none";
+  isPanelVisible = false;
+  // persist state
+  localStorage.setItem("vocabPanelEnabled", "false");
+  removeAnchor();
+  hideToolbar();
 });
 
 // Append buttons to actions container
@@ -868,6 +880,7 @@ savedWords.forEach(word => addWordToPanel(word));
     document.documentElement.appendChild(root);
 
     document.addEventListener("mouseup", () => {
+      if (!isPanelVisible) return;
       if (isInteractingWithUI) {
         isInteractingWithUI = false;
         return;
@@ -901,6 +914,7 @@ savedWords.forEach(word => addWordToPanel(word));
     });
 
     document.addEventListener("mousedown", (event) => {
+      if (!isPanelVisible) return;
       // Only remove anchor/toolbar if clicking outside the toolbar and NOT on the anchor or highlight
       if (!root.contains(event.target) &&
           (!currentAnchorEl || (event.target !== currentAnchorEl && event.target !== currentHighlightEl))) {
@@ -909,6 +923,7 @@ savedWords.forEach(word => addWordToPanel(word));
     });
 
     document.addEventListener("scroll", () => {
+      if (!isPanelVisible) return;
       if (root.style.display === "block") {
         scheduleHideToolbar();
       }
