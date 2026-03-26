@@ -48,11 +48,13 @@ import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
-import { VocabularyItem as LibraryWord } from '../../../app/types';
+import { User, VocabularyItem as LibraryWord } from '../../../app/types';
 import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
 
 interface TopicRecallGameProps {
   words: LibraryWord[];
+  user: User;
+  onUpdateUser: (user: User) => Promise<void>;
   onComplete?: (score: number) => void;
   onExit?: () => void;
 }
@@ -170,6 +172,19 @@ const extractImagesFromPayload = (payload: any): { url: string }[] => {
     .filter((item: { url: string } | null): item is { url: string } => !!item?.url);
 };
 
+const createBrainstormItems = (words: string[]): BrainstormItem[] =>
+  words
+    .map((word) => word.trim())
+    .filter(Boolean)
+    .map((word, index) => ({
+      id: `${word.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'item'}-${index}-${Date.now()}`,
+      text: word,
+      isCustom: true
+    }));
+
+const areWordListsEqual = (left: string[], right: string[]) =>
+  left.length === right.length && left.every((item, index) => item === right[index]);
+
 // --- Components ---
 
 interface SortableWordCardProps {
@@ -250,19 +265,23 @@ const SortableWordCard = ({ item, onDelete, onEdit }: SortableWordCardProps) => 
   );
 };
 
-export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onComplete, onExit }) => {
+export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, onUpdateUser, onComplete, onExit }) => {
   // --- State ---
   const [vocab, setVocab] = useState<VocabItem[]>(() => normalizeLibraryWords(words || []));
-  const [currentTopic, setCurrentTopic] = useState<string>('Environment');
+  const [currentTopic, setCurrentTopic] = useState<string>(user.topicRecallData?.lastTopic || 'Environment');
   const [topicImages, setTopicImages] = useState<any[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [brainstormWords, setBrainstormWords] = useState<BrainstormItem[]>([]);
+  const [brainstormWords, setBrainstormWords] = useState<BrainstormItem[]>(() => {
+    const initialTopic = user.topicRecallData?.lastTopic || 'Environment';
+    const savedWords = user.topicRecallData?.topics?.find((item) => item.topic === initialTopic)?.words || [];
+    return createBrainstormItems(savedWords);
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const [selectedWord, setSelectedWord] = useState<VocabItem | null>(null);
   const [showMeaning, setShowMeaning] = useState(true);
   const [showCollocation, setShowCollocation] = useState(true);
-  const [newTopicName, setNewTopicName] = useState('');
+  const [newTopicName, setNewTopicName] = useState(user.topicRecallData?.lastTopic || 'Environment');
   const [customWordInput, setCustomWordInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -290,6 +309,21 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onCompl
   useEffect(() => {
     setVocab(normalizeLibraryWords(words || []));
   }, [words]);
+
+  const savedTopicEntries = user.topicRecallData?.topics || [];
+  const availableTopics = useMemo(() => {
+    const combined = [
+      currentTopic,
+      ...savedTopicEntries.map((item) => item.topic),
+      ...COMMON_TOPICS
+    ];
+
+    return Array.from(new Set(combined.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }, [currentTopic, savedTopicEntries]);
+  const isSavedTopicSelection = useMemo(
+    () => savedTopicEntries.some((item) => item.topic === newTopicName.trim()),
+    [newTopicName, savedTopicEntries]
+  );
 
   const searchImages = async (query: string) => {
     const serverUrl = getServerUrl(getConfig());
@@ -334,6 +368,46 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onCompl
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    setNewTopicName(currentTopic);
+  }, [currentTopic]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const normalizedTopic = currentTopic.trim();
+      if (!normalizedTopic) return;
+
+      const nextWords = brainstormWords.map((item) => item.text.trim()).filter(Boolean);
+      const previousTopics = user.topicRecallData?.topics || [];
+      const existingTopic = previousTopics.find((item) => item.topic === normalizedTopic);
+      const lastTopic = user.topicRecallData?.lastTopic;
+
+      if (lastTopic === normalizedTopic && existingTopic && areWordListsEqual(existingTopic.words, nextWords)) {
+        return;
+      }
+
+      const filteredTopics = previousTopics.filter((item) => item.topic !== normalizedTopic);
+      const nextTopics = [
+        {
+          topic: normalizedTopic,
+          words: nextWords,
+          updatedAt: Date.now()
+        },
+        ...filteredTopics
+      ].slice(0, 30);
+
+      void onUpdateUser({
+        ...user,
+        topicRecallData: {
+          lastTopic: normalizedTopic,
+          topics: nextTopics
+        }
+      });
+    }, 400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [brainstormWords, currentTopic, onUpdateUser, user]);
 
   // --- Helpers ---
   const filteredVocab = useMemo(() => {
@@ -501,13 +575,14 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onCompl
     
     try {
       const results = await searchImages(name);
+      const savedWords = user.topicRecallData?.topics?.find((item) => item.topic === name.trim())?.words || [];
       setTopicImages(results);
       setCurrentImageIndex(0);
-      setCurrentTopic(name);
-      setBrainstormWords([]); // Clear brainstorm for new topic
-      setNewTopicName('');
+      setCurrentTopic(name.trim());
+      setBrainstormWords(createBrainstormItems(savedWords));
+      setNewTopicName(name.trim());
       setIsTopicModalOpen(false);
-      showToast(`Topic updated to: ${name}`);
+      showToast(`Topic updated to: ${name.trim()}`);
     } catch (error) {
       showToast("Failed to fetch image for topic.", "error");
     }
@@ -517,6 +592,42 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onCompl
     if (topicImages.length > 0) {
       setCurrentImageIndex((prev) => (prev + 1) % topicImages.length);
     }
+  };
+
+  const deleteTopic = async () => {
+    const targetTopic = newTopicName.trim();
+    if (!targetTopic) {
+      showToast("Choose a topic to delete.", "error");
+      return;
+    }
+
+    const remainingTopics = savedTopicEntries.filter((item) => item.topic !== targetTopic);
+    const fallbackTopic = remainingTopics[0]?.topic || COMMON_TOPICS[0] || 'Environment';
+
+    await onUpdateUser({
+      ...user,
+      topicRecallData: {
+        lastTopic: currentTopic === targetTopic ? fallbackTopic : (user.topicRecallData?.lastTopic === targetTopic ? fallbackTopic : user.topicRecallData?.lastTopic),
+        topics: remainingTopics
+      }
+    });
+
+    if (currentTopic === targetTopic) {
+      const fallbackWords = remainingTopics.find((item) => item.topic === fallbackTopic)?.words || [];
+      setCurrentTopic(fallbackTopic);
+      setBrainstormWords(createBrainstormItems(fallbackWords));
+      try {
+        const results = await searchImages(fallbackTopic);
+        setTopicImages(results);
+        setCurrentImageIndex(0);
+      } catch (_error) {
+        setTopicImages([]);
+        setCurrentImageIndex(0);
+      }
+    }
+
+    setNewTopicName(fallbackTopic);
+    showToast(`Deleted topic: ${targetTopic}`);
   };
 
   const currentImageUrl = topicImages[currentImageIndex]?.url || `${DEFAULT_IMAGE_SERVER_PATH}${DEFAULT_IMAGE}`;
@@ -723,7 +834,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onCompl
             </div>
 
             <div className="relative z-10 flex flex-col h-full">
-              <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">Brainstorm Canvas</h3>
                   <p className="text-sm text-slate-500">Drag to reorder, double click to edit</p>
@@ -845,22 +956,40 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onCompl
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Topic Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Global Warming" 
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Select Topic</label>
+                  <input
+                    list="topic-recall-topic-options"
+                    type="text"
+                    placeholder="e.g. Global Warming"
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                     value={newTopicName}
                     onChange={(e) => setNewTopicName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addTopic()}
+                    onKeyDown={(e) => e.key === 'Enter' && void addTopic()}
                   />
+                  <datalist id="topic-recall-topic-options">
+                    {availableTopics.map((topic) => (
+                      <option key={topic} value={topic}>
+                        {topic}
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
-                <button 
-                  onClick={() => addTopic()}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 mt-4"
-                >
-                  Set Topic
-                </button>
+                <div className="flex gap-3 mt-4">
+                  {isSavedTopicSelection && (
+                    <button
+                      onClick={() => void deleteTopic()}
+                      className="px-4 py-4 bg-rose-50 text-rose-700 rounded-xl font-bold hover:bg-rose-100 transition-all border border-rose-200"
+                    >
+                      Delete Topic
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => addTopic()}
+                    className="flex-1 py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                  >
+                    Set Topic
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

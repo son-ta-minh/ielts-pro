@@ -140,6 +140,17 @@ export interface StudyBuddyImageSettings {
   negative: string;
 }
 
+export interface TopicRecallTopicState {
+  topic: string;
+  words: string[];
+  updatedAt: number;
+}
+
+export interface TopicRecallUserData {
+  lastTopic?: string;
+  topics: TopicRecallTopicState[];
+}
+
 export interface User {
   id: string;
   name: string;
@@ -159,6 +170,7 @@ export interface User {
   note?: string;
   studyBuddyMemory?: StudyBuddyMemoryChunk[];
   studyBuddyImageSettings?: StudyBuddyImageSettings;
+  topicRecallData?: TopicRecallUserData;
 }
 
 export interface PrepositionPattern {
