@@ -1,0 +1,778 @@
+interface TopicRecallGameProps {
+  words: VocabItem[];
+  onComplete?: (score: number) => void;
+  onExit?: () => void;
+}
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { useState, useCallback, useEffect, useMemo, ChangeEvent } from 'react';
+import { 
+  Plus, 
+  Search, 
+  Upload, 
+  Download, 
+  Copy, 
+  Trash2, 
+  Edit3, 
+  Image as ImageIcon, 
+  RefreshCw,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  ChevronUp,
+  ChevronDown,
+  Info,
+  ArrowLeft
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Virtuoso } from 'react-virtuoso';
+import { 
+  DndContext, 
+  closestCenter, 
+  KeyboardSensor, 
+  PointerSensor, 
+  useSensor, 
+  useSensors,
+  DragEndEvent,
+  rectIntersection
+} from '@dnd-kit/core';
+import { 
+  arrayMove, 
+  SortableContext, 
+  sortableKeyboardCoordinates, 
+  verticalListSortingStrategy,
+  rectSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import confetti from 'canvas-confetti';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+export interface Collocation {
+  x: string;
+  ds: string;
+}
+
+export interface VocabItem {
+  id: string;
+  w: string; // headword
+  m: string; // meaning
+  ex: string; // example sentence(s)
+  col: Collocation[];
+}
+
+export interface VocabData {
+  vocab: VocabItem[];
+}
+
+export interface BrainstormItem {
+  id: string;
+  text: string;
+  isCustom?: boolean;
+}
+
+// Configuration
+const DEFAULT_IMAGE_SERVER_PATH = 'https://images.unsplash.com/photo-';
+const DEFAULT_IMAGE = '1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=1000';
+
+// --- Components ---
+
+interface SortableWordCardProps {
+  key?: string | number;
+  item: BrainstormItem;
+  onDelete: (id: string) => void;
+  onEdit: (id: string, text: string) => void;
+}
+
+const SortableWordCard = ({ item, onDelete, onEdit }: SortableWordCardProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 1,
+  };
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(item.text);
+
+  const handleSave = () => {
+    onEdit(item.id, editText);
+    setIsEditing(false);
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "group relative bg-white/90 backdrop-blur-sm border-2 border-primary/20 rounded-xl p-3 shadow-lg hover:shadow-xl transition-all duration-200 cursor-default",
+        isDragging && "opacity-50 scale-105 border-primary ring-2 ring-primary/50",
+        item.isCustom ? "border-amber-400/50 bg-amber-50/90" : "border-indigo-400/50 bg-indigo-50/90"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 hover:bg-black/5 rounded">
+          <div className="w-4 h-4 flex flex-col gap-0.5">
+            <div className="w-full h-0.5 bg-gray-400 rounded-full" />
+            <div className="w-full h-0.5 bg-gray-400 rounded-full" />
+            <div className="w-full h-0.5 bg-gray-400 rounded-full" />
+          </div>
+        </div>
+
+        {isEditing ? (
+          <input
+            autoFocus
+            className="flex-1 bg-transparent border-b border-primary focus:outline-none font-bold text-indigo-900"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+          />
+        ) : (
+          <span className="flex-1 font-bold text-indigo-900 select-none" onDoubleClick={() => setIsEditing(true)}>
+            {item.text}
+          </span>
+        )}
+
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => setIsEditing(!isEditing)} className="p-1 hover:text-indigo-600">
+            <Edit3 size={14} />
+          </button>
+          <button onClick={() => onDelete(item.id)} className="p-1 hover:text-rose-600">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, onComplete, onExit }) => {
+  // --- State ---
+  const [vocab, setVocab] = useState<VocabItem[]>(words || []);
+  const [currentTopic, setCurrentTopic] = useState<string>('Environment');
+  const [topicImages, setTopicImages] = useState<any[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [brainstormWords, setBrainstormWords] = useState<BrainstormItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
+  const [selectedWord, setSelectedWord] = useState<VocabItem | null>(null);
+  const [showMeaning, setShowMeaning] = useState(true);
+  const [showCollocation, setShowCollocation] = useState(true);
+  const [newTopicName, setNewTopicName] = useState('');
+  const [customWordInput, setCustomWordInput] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // --- Sensors for DND ---
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // --- Effects ---
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.relative.flex-1')) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // --- Helpers ---
+  const filteredVocab = useMemo(() => {
+    if (!searchQuery) return vocab;
+    const q = searchQuery.toLowerCase();
+    return vocab.filter(v => 
+      (v.w && v.w.toLowerCase().includes(q)) || 
+      (v.m && v.m.toLowerCase().includes(q)) || 
+      (v.col && Array.isArray(v.col) && v.col.some(c => (c.x && c.x.toLowerCase().includes(q)) || (c.ds && c.ds.toLowerCase().includes(q))))
+    );
+  }, [vocab, searchQuery]);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // --- Handlers ---
+  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string) as VocabData;
+        if (data.vocab && Array.isArray(data.vocab)) {
+          const sanitizedVocab = data.vocab.map(item => ({
+            ...item,
+            col: Array.isArray(item.col) ? item.col : []
+          }));
+          setVocab(sanitizedVocab);
+          showToast(`Successfully loaded ${sanitizedVocab.length} words!`);
+        } else {
+          showToast("Invalid JSON format. Missing 'vocab' array.", "error");
+        }
+      } catch (err) {
+        showToast("Failed to parse JSON file.", "error");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; // Reset input
+  };
+
+  const addToBrainstorm = (word: string) => {
+    if (brainstormWords.some(w => w.text.toLowerCase() === word.toLowerCase())) {
+      showToast("Word already in brainstorm!", "error");
+      return;
+    }
+    const newItem: BrainstormItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      text: word,
+      isCustom: false
+    };
+    setBrainstormWords(prev => [...prev, newItem]);
+    confetti({
+      particleCount: 50,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#4f46e5', '#818cf8', '#c7d2fe']
+    });
+  };
+
+  const addCustomWord = (text: string) => {
+    if (!text.trim()) return;
+    if (brainstormWords.some(w => w.text.toLowerCase() === text.trim().toLowerCase())) {
+      showToast("Word already in brainstorm!", "error");
+      return;
+    }
+    const newItem: BrainstormItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      text: text.trim(),
+      isCustom: true
+    };
+    setBrainstormWords(prev => [...prev, newItem]);
+    setCustomWordInput('');
+    setShowSuggestions(false);
+  };
+
+  const suggestions = useMemo(() => {
+    if (!customWordInput.trim()) return [];
+    const q = customWordInput.toLowerCase();
+    return vocab
+      .filter(v => v.w.toLowerCase().startsWith(q))
+      .slice(0, 5);
+  }, [vocab, customWordInput]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setBrainstormWords((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return items;
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
+  const evaluateUserResponse = () => {
+    if (!currentTopic) return;
+    const words = brainstormWords.map(w => w.text).join(', ');
+    const prompt = `I am practicing IELTS vocabulary for the topic: "${currentTopic}". 
+Here are the words I brainstormed: ${words}. 
+Please evaluate my topic coverage and suggest 5 more advanced academic words I could use.`;
+    
+    navigator.clipboard.writeText(prompt);
+    showToast("AI Prompt copied to clipboard!");
+  };
+
+  const downloadWordList = () => {
+    if (vocab.length === 0) {
+      showToast("No words in library to download.", "error");
+      return;
+    }
+    const content = vocab.map(v => v.w).join('\n');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ielts_word_list.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Word list downloaded!");
+  };
+
+  const suggestTopic = () => {
+    const commonTopics = ['Environment', 'Technology', 'Education', 'Health', 'Travel', 'Work', 'Society', 'Culture'];
+    const randomIndex = Math.floor(Math.random() * commonTopics.length);
+    const topic = commonTopics[randomIndex];
+    setNewTopicName(topic);
+    addTopic(topic);
+  };
+
+  const addTopic = async (topicName?: string) => {
+    const name = topicName || newTopicName;
+    if (!name.trim()) return;
+    
+    try {
+      const results = await searchImages(name); // Use server /images/search endpoint
+      setTopicImages(results);
+      setCurrentImageIndex(0);
+      setCurrentTopic(name);
+      setBrainstormWords([]); // Clear brainstorm for new topic
+      setNewTopicName('');
+      setIsTopicModalOpen(false);
+      showToast(`Topic updated to: ${name}`);
+    } catch (error) {
+      showToast("Failed to fetch image for topic.", "error");
+    }
+  };
+
+  const refreshTopicImage = () => {
+    if (topicImages.length > 0) {
+      setCurrentImageIndex((prev) => (prev + 1) % topicImages.length);
+    }
+  };
+
+  const currentImageUrl = topicImages[currentImageIndex]?.url || DEFAULT_IMAGE;
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+      {/* --- Header --- */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          {/* Active Topic Box - moved from Right Panel */}
+          <div className="relative h-20 rounded-3xl overflow-visible shadow-sm bg-white border border-slate-200 flex items-center px-6 min-w-[320px]">
+            <div className="flex-1 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Active Topic</span>
+                  <div className="flex items-center gap-2 group/topic">
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+                      {currentTopic || 'Select a Topic'}
+                    </h2>
+                    
+                    {/* Image Hover Icon */}
+                    <div className="relative">
+                      <div className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-help">
+                        <ImageIcon size={18} />
+                      </div>
+                      
+                      {/* Hover Preview */}
+                      <div className="absolute left-0 top-full mt-2 z-50 opacity-0 invisible group-hover/topic:opacity-100 group-hover/topic:visible transition-all duration-300 pointer-events-none group-hover/topic:pointer-events-auto">
+                        <div className="bg-white p-2 rounded-2xl shadow-2xl border border-slate-200 w-64 overflow-hidden">
+                          <div className="relative aspect-square rounded-xl overflow-hidden bg-slate-100">
+                            <img 
+                              src={currentImageUrl} 
+                              alt="Topic Preview" 
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                refreshTopicImage();
+                              }}
+                              className="absolute bottom-2 right-2 p-2 bg-black/50 hover:bg-black/70 backdrop-blur-md rounded-lg text-white transition-all shadow-lg"
+                              title="Load next image"
+                            >
+                              <RefreshCw size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={suggestTopic}
+                      className="p-1.5 text-slate-300 hover:text-indigo-500 transition-colors"
+                      title="Suggest Random Topic"
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsTopicModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-bold text-sm"
+                >
+                  <Plus size={18} />
+                  <span>Change Topic</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          {/* Evaluate button */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
+            <button 
+              onClick={evaluateUserResponse}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all text-sm font-semibold whitespace-nowrap"
+            >
+              <Copy size={16} />
+              <span>Evaluate</span>
+            </button>
+          </div>
+          {/* Quit button */}
+          <button onClick={onExit} className="flex items-center gap-2 text-neutral-400 hover:text-neutral-900 transition-colors font-bold text-sm whitespace-nowrap"><ArrowLeft size={18}/> Quit</button>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* --- Left Panel: Word Library --- */}
+        <section className="lg:col-span-4 flex flex-col gap-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-12rem)]">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Word Library</h2>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setShowMeaning(!showMeaning)} 
+                    className={cn("p-1.5 rounded-lg transition-colors", showMeaning ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
+                    title={showMeaning ? "Hide Meanings" : "Show Meanings"}
+                  >
+                    {showMeaning ? <Eye size={14} /> : <EyeOff size={14} />}
+                  </button>
+                  <button 
+                    onClick={() => setShowCollocation(!showCollocation)} 
+                    className={cn("p-1.5 rounded-lg transition-colors", showCollocation ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
+                    title={showCollocation ? "Hide Collocations" : "Show Collocations"}
+                  >
+                    {showCollocation ? <Info size={14} /> : <EyeOff size={14} />}
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Search words, meanings..." 
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+              {filteredVocab.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Search size={24} className="text-slate-300" />
+                  </div>
+                  <p className="text-sm text-slate-400">No words found in library.</p>
+                </div>
+              ) : (
+                <Virtuoso
+                  style={{ height: '100%' }}
+                  data={filteredVocab}
+                  itemContent={(index, item) => (
+                    <div className="px-4 py-2">
+                      <motion.div 
+                        layout
+                        onClick={() => addToBrainstorm(item.w)}
+                        className="group p-4 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer"
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.w}</h3>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedWord(item);
+                              }}
+                              className="p-1 text-slate-300 hover:text-indigo-500 transition-colors"
+                              title="View Details"
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addToBrainstorm(item.w);
+                              }}
+                              className="p-1 text-slate-300 hover:text-indigo-500 transition-colors"
+                              title="Add to Brainstorm"
+                            >
+                              <Plus size={16} />
+                            </button>
+                          </div>
+                        </div>
+                        {showMeaning && (
+                          <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.m}</p>
+                        )}
+                        {showCollocation && item.col && Array.isArray(item.col) && item.col.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {item.col.slice(0, 2).map((c, i) => (
+                              <span key={i} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded uppercase tracking-tighter">
+                                {c.x}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </motion.div>
+                    </div>
+                  )}
+                />
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* --- Right Panel: Brainstorm Panel --- */}
+        <section className="lg:col-span-8 flex flex-col gap-6">
+
+          {/* Brainstorm Area */}
+          <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col min-h-[500px] relative overflow-hidden">
+            {/* Artistic Background Pattern */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none select-none">
+              <div className="absolute top-0 left-0 w-full h-full" style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+            </div>
+
+            <div className="relative z-10 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">Brainstorm Canvas</h3>
+                  <p className="text-sm text-slate-500">Drag to reorder, double click to edit</p>
+                </div>
+                <div className="flex items-center gap-2 relative">
+                  <div className="relative flex-1">
+                    <input 
+                      type="text" 
+                      placeholder="Type custom word..." 
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                      value={customWordInput}
+                      onChange={(e) => {
+                        setCustomWordInput(e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          addCustomWord(customWordInput);
+                        }
+                      }}
+                    />
+                    
+                    {/* Autosuggestions Dropdown */}
+                    <AnimatePresence>
+                      {showSuggestions && suggestions.length > 0 && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden"
+                        >
+                          {suggestions.map((s) => (
+                            <button
+                              key={s.id}
+                              onClick={() => {
+                                addToBrainstorm(s.w);
+                                setCustomWordInput('');
+                                setShowSuggestions(false);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between group"
+                            >
+                              <span className="font-medium">{s.w}</span>
+                              <span className="text-[10px] text-slate-400 group-hover:text-indigo-400 uppercase font-bold">From Library</span>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  <button 
+                    onClick={() => addCustomWord(customWordInput)}
+                    className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors"
+                  >
+                    <Plus size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 relative">
+                {brainstormWords.length === 0 ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 border-4 border-dashed border-slate-50 rounded-3xl">
+                    <Edit3 size={48} className="mb-4 opacity-20" />
+                    <p className="font-bold text-lg">Start adding words!</p>
+                    <p className="text-sm">Select from library or type above</p>
+                  </div>
+                ) : (
+                  <DndContext 
+                    sensors={sensors}
+                    collisionDetection={rectIntersection}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext 
+                      items={brainstormWords.map(w => w.id)}
+                      strategy={rectSortingStrategy}
+                    >
+                      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {brainstormWords.map((item) => (
+                          <SortableWordCard 
+                            key={item.id} 
+                            item={item} 
+                            onDelete={(id) => setBrainstormWords(prev => prev.filter(w => w.id !== id))}
+                            onEdit={(id, text) => setBrainstormWords(prev => prev.map(w => w.id === id ? { ...w, text } : w))}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* --- Modals & Toasts --- */}
+      <AnimatePresence>
+        {isTopicModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsTopicModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-8"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-slate-900">Add New Topic</h2>
+                <button onClick={() => setIsTopicModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Topic Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Global Warming" 
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    value={newTopicName}
+                    onChange={(e) => setNewTopicName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addTopic()}
+                  />
+                </div>
+                <button 
+                  onClick={() => addTopic()}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 mt-4"
+                >
+                  Set Topic
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {selectedWord && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedWord(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-8 overflow-y-auto max-h-[90vh]"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-3xl font-black text-slate-900">{selectedWord.w}</h2>
+                <button onClick={() => setSelectedWord(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Meaning</h3>
+                  <p className="text-lg text-slate-700 leading-relaxed">{selectedWord.m}</p>
+                </div>
+
+                {selectedWord.col && selectedWord.col.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Collocations & Examples</h3>
+                    <div className="space-y-4">
+                      {selectedWord.col.map((c, i) => (
+                        <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-bold rounded uppercase tracking-tighter">
+                              {c.x}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-600 mb-2 italic">"{c.ds}"</p>
+                          {c.e && (
+                            <div className="pl-4 border-l-2 border-indigo-200">
+                              <p className="text-sm text-slate-500">{c.e}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {toast && (
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50"
+          >
+            <div className={cn(
+              "flex items-center gap-3 px-6 py-3 rounded-2xl shadow-2xl border backdrop-blur-md",
+              toast.type === 'success' ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"
+            )}>
+              {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+              <span className="font-bold text-sm">{toast.message}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default TopicRecallGame;

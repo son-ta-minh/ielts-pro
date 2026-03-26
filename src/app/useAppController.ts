@@ -1071,6 +1071,7 @@ export const useAppController = () => {
             case 'COMPARISON_LAB':
             case 'MISTAKE_RECOGNITION':
             case 'REGISTER_PICK':
+            case 'TOPIC_RECALL':
             case 'ADVENTURE':
                 sessionStorage.setItem('dashboard_active_tab', 'PRACTICE');
                 setTargetGameMode(action as DiscoverGame);

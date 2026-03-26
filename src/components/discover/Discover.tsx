@@ -17,6 +17,7 @@ import { IntensityScaleGame } from './games/IntensityScaleGame';
 import { ComparisonLabGame } from './games/ComparisonLabGame';
 import { MistakeRecognitionGame } from './games/MistakeRecognitionGame';
 import { RegisterPickGame } from './games/RegisterPickGame';
+import { TopicRecallGame } from './games/TopicRecallGame';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -113,6 +114,7 @@ const Discover: React.FC<Props> = ({ user, onExit, onRecalculateXp, xpToNextLeve
             case 'COMPARISON_LAB': return <ComparisonLabGame user={user} {...commonProps} />;
             case 'MISTAKE_RECOGNITION': return <MistakeRecognitionGame user={user} {...commonProps} />;
             case 'REGISTER_PICK': return <RegisterPickGame {...commonProps} words={allWords} />;
+            case 'TOPIC_RECALL': return <TopicRecallGame {...commonProps} words={allWords}/>;
             default: return <Adventure user={user} onUpdateUser={onUpdateUser} onStartSession={onStartSession} onExit={onExit} />;
         }
     };

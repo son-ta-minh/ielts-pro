@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  RotateCw, AlertCircle, Flame,
+  RotateCw, AlertCircle, Flame, SwatchBook,
   Download, History, BookCopy, Sparkles, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
   Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain, AlertTriangle,
   CloudUpload, Percent, MessagesSquare, Scale, Dumbbell, Crown,
@@ -1349,6 +1349,11 @@ const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({
                     label="Register Pick"
                     subLabel="Classify words as Academic, Casual, or Neutral."
                     largeSub icon={Sparkles} color="text-amber-600" bg="bg-amber-50" onClick={() => onAction('REGISTER_PICK')}
+                 />
+                <NavButton
+                    label="Topic Recall"
+                    subLabel="Recall words related to a given topic."
+                    largeSub icon={SwatchBook} color="text-green-600" bg="bg-green-50" onClick={() => onAction('TOPIC_RECALL')}
                  />
              </div>
         </div>
