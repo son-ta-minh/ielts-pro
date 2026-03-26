@@ -361,93 +361,99 @@ Please evaluate my topic coverage and suggest 5 more advanced academic words I c
   const currentImageUrl = topicImages[currentImageIndex]?.url || DEFAULT_IMAGE;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen h-full bg-[#f8fafc] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* --- Header --- */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          {/* Active Topic Box - moved from Right Panel */}
-          <div className="relative h-20 rounded-3xl overflow-visible shadow-sm bg-white border border-slate-200 flex items-center px-6 min-w-[320px]">
-            <div className="flex-1 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Active Topic</span>
-                  <div className="flex items-center gap-2 group/topic">
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-                      {currentTopic || 'Select a Topic'}
-                    </h2>
-                    
-                    {/* Image Hover Icon */}
-                    <div className="relative">
-                      <div className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-help">
-                        <ImageIcon size={18} />
-                      </div>
+          {/* Left: Active Topic Box */}
+          <div className="flex-1">
+            <div className="relative h-20 rounded-3xl overflow-visible shadow-sm bg-white border border-slate-200 flex items-center px-6 min-w-[320px]">
+              <div className="flex-1 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Active Topic</span>
+                    <div className="flex items-center gap-2 group/topic">
+                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+                        {currentTopic || 'Select a Topic'}
+                      </h2>
                       
-                      {/* Hover Preview */}
-                      <div className="absolute left-0 top-full mt-2 z-50 opacity-0 invisible group-hover/topic:opacity-100 group-hover/topic:visible transition-all duration-300 pointer-events-none group-hover/topic:pointer-events-auto">
-                        <div className="bg-white p-2 rounded-2xl shadow-2xl border border-slate-200 w-64 overflow-hidden">
-                          <div className="relative aspect-square rounded-xl overflow-hidden bg-slate-100">
-                            <img 
-                              src={currentImageUrl} 
-                              alt="Topic Preview" 
-                              className="w-full h-full object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                refreshTopicImage();
-                              }}
-                              className="absolute bottom-2 right-2 p-2 bg-black/50 hover:bg-black/70 backdrop-blur-md rounded-lg text-white transition-all shadow-lg"
-                              title="Load next image"
-                            >
-                              <RefreshCw size={14} />
-                            </button>
+                      {/* Image Hover Icon */}
+                      <div className="relative">
+                        <div className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-help">
+                          <ImageIcon size={18} />
+                        </div>
+                        
+                        {/* Hover Preview */}
+                        <div className="absolute left-0 top-full mt-2 z-50 opacity-0 invisible group-hover/topic:opacity-100 group-hover/topic:visible transition-all duration-300 pointer-events-none group-hover/topic:pointer-events-auto">
+                          <div className="bg-white p-2 rounded-2xl shadow-2xl border border-slate-200 w-64 overflow-hidden">
+                            <div className="relative aspect-square rounded-xl overflow-hidden bg-slate-100">
+                              <img 
+                                src={currentImageUrl} 
+                                alt="Topic Preview" 
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  refreshTopicImage();
+                                }}
+                                className="absolute bottom-2 right-2 p-2 bg-black/50 hover:bg-black/70 backdrop-blur-md rounded-lg text-white transition-all shadow-lg"
+                                title="Load next image"
+                              >
+                                <RefreshCw size={14} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
+                      <button 
+                        onClick={suggestTopic}
+                        className="p-1.5 text-slate-300 hover:text-indigo-500 transition-colors"
+                        title="Suggest Random Topic"
+                      >
+                        <RefreshCw size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setIsTopicModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-bold text-sm"
+                  >
+                    <Plus size={18} />
+                    <span>Change Topic</span>
+                  </button>
+                  {/* Inline Buttons: Evaluate and Quit */}
+                  <div className="flex items-center gap-2 ml-2">
                     <button 
-                      onClick={suggestTopic}
-                      className="p-1.5 text-slate-300 hover:text-indigo-500 transition-colors"
-                      title="Suggest Random Topic"
+                      onClick={evaluateUserResponse}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 shadow-md transition-all text-sm font-semibold"
                     >
-                      <RefreshCw size={16} />
+                      <Copy size={16} />
+                      <span>Evaluate</span>
+                    </button>
+                    <button 
+                      onClick={onExit}
+                      className="flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-800 rounded-lg hover:bg-rose-200 shadow-md transition-all text-sm font-semibold"
+                    >
+                      <ArrowLeft size={18}/> Quit
                     </button>
                   </div>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setIsTopicModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-bold text-sm"
-                >
-                  <Plus size={18} />
-                  <span>Change Topic</span>
-                </button>
-              </div>
             </div>
           </div>
-          {/* Evaluate button */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
-            <button 
-              onClick={evaluateUserResponse}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all text-sm font-semibold whitespace-nowrap"
-            >
-              <Copy size={16} />
-              <span>Evaluate</span>
-            </button>
-          </div>
-          {/* Quit button */}
-          <button onClick={onExit} className="flex items-center gap-2 text-neutral-400 hover:text-neutral-900 transition-colors font-bold text-sm whitespace-nowrap"><ArrowLeft size={18}/> Quit</button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
         {/* --- Left Panel: Word Library --- */}
-        <section className="lg:col-span-4 flex flex-col gap-6">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-12rem)]">
+        <section className="lg:col-span-4 flex flex-col gap-6 max-h-[calc(93vh-10rem)]">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
             <div className="p-4 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Word Library</h2>
@@ -480,7 +486,7 @@ Please evaluate my topic coverage and suggest 5 more advanced academic words I c
               </div>
             </div>
 
-            <div className="flex-1 overflow-hidden">
+            <div className={cn("flex-1 max-h-[calc(93vh-10rem)]", filteredVocab.length > 0 ? "overflow-auto" : "")}>
               {filteredVocab.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -546,10 +552,10 @@ Please evaluate my topic coverage and suggest 5 more advanced academic words I c
         </section>
 
         {/* --- Right Panel: Brainstorm Panel --- */}
-        <section className="lg:col-span-8 flex flex-col gap-6">
+        <section className="lg:col-span-8 flex flex-col gap-6 h-full">
 
           {/* Brainstorm Area */}
-          <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col min-h-[500px] relative overflow-hidden">
+          <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col max-h-[calc(93vh-10rem)] relative overflow-auto">
             {/* Artistic Background Pattern */}
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none select-none">
               <div className="absolute top-0 left-0 w-full h-full" style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
