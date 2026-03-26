@@ -22,7 +22,8 @@ import {
   ChevronUp,
   ChevronDown,
   Info,
-  ArrowLeft
+  ArrowLeft,
+  BookOpenCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Virtuoso } from 'react-virtuoso';
@@ -238,6 +239,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
+  const [showUnusedOnly, setShowUnusedOnly] = useState(false);
 
   // --- Effects ---
   useEffect(() => {
@@ -334,6 +336,26 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     [brainstormGroups]
   );
 
+  const wordTopicUsageMap = useMemo(() => {
+    const usage = new Map<string, string[]>();
+
+    savedTopicEntries.forEach((topicEntry) => {
+      const sourceWords = Array.isArray(topicEntry.groups) && topicEntry.groups.length > 0
+        ? topicEntry.groups.flatMap((group) => group.words || [])
+        : topicEntry.words || [];
+
+      Array.from(new Set(sourceWords.map((word) => word.trim()).filter(Boolean))).forEach((word) => {
+        const key = word.toLowerCase();
+        const existing = usage.get(key) || [];
+        if (!existing.includes(topicEntry.topic)) {
+          usage.set(key, [...existing, topicEntry.topic]);
+        }
+      });
+    });
+
+    return usage;
+  }, [savedTopicEntries]);
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       const normalizedTopic = currentTopic.trim();
@@ -387,14 +409,20 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
   // --- Helpers ---
   const filteredVocab = useMemo(() => {
-    if (!searchQuery) return vocab;
     const q = searchQuery.toLowerCase();
-    return vocab.filter(v => 
-      (v.w && v.w.toLowerCase().includes(q)) || 
-      (v.m && v.m.toLowerCase().includes(q)) || 
-      (v.col && Array.isArray(v.col) && v.col.some(c => (c.x && c.x.toLowerCase().includes(q)) || (c.ds && c.ds.toLowerCase().includes(q))))
-    );
-  }, [vocab, searchQuery]);
+    return vocab.filter(v => {
+      const matchesSearch = !searchQuery || (
+        (v.w && v.w.toLowerCase().includes(q)) || 
+        (v.m && v.m.toLowerCase().includes(q)) || 
+        (v.col && Array.isArray(v.col) && v.col.some(c => (c.x && c.x.toLowerCase().includes(q)) || (c.ds && c.ds.toLowerCase().includes(q))))
+      );
+
+      if (!matchesSearch) return false;
+      if (!showUnusedOnly) return true;
+
+      return (wordTopicUsageMap.get(v.w.toLowerCase()) || []).length === 0;
+    });
+  }, [searchQuery, showUnusedOnly, vocab, wordTopicUsageMap]);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -862,6 +890,17 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Word Library</h2>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowUnusedOnly((prev) => !prev)}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-1 rounded-lg transition-colors",
+                        showUnusedOnly ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"
+                      )}
+                      title={showUnusedOnly ? "Showing unused words only" : "Show words unused in all topics"}
+                    >
+                      <BookOpenCheck size={14} />
+                      <span className="text-xs font-medium hidden sm:inline">Unused Only</span>
+                    </button>
                     <button 
                       onClick={() => setShowMeaning(!showMeaning)} 
                       className={cn("flex items-center gap-1 px-2 py-1 rounded-lg transition-colors", showMeaning ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
@@ -1297,6 +1336,21 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Meaning</h3>
                   <p className="text-lg text-slate-700 leading-relaxed">{selectedWord.m}</p>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Used In Topics</h3>
+                  {(wordTopicUsageMap.get(selectedWord.w.toLowerCase()) || []).length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {(wordTopicUsageMap.get(selectedWord.w.toLowerCase()) || []).map((topic) => (
+                        <span key={topic} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200">
+                          {topic}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">This word is not used in any saved topic yet.</p>
+                  )}
                 </div>
 
                 {selectedWord.col && selectedWord.col.length > 0 && (
