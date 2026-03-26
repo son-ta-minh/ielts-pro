@@ -300,15 +300,14 @@ router.get('/images/search', async (req, res) => {
             });
         };
 
-        const first = data.results[0];
-        if (first) {
-            const imgUrl = first.urls.small;
-            const filename = `${Date.now()}_${first.id}.jpg`;
+        for (const img of data.results) {
+            const imgUrl = img.urls.small;
+            const filename = `${Date.now()}_${img.id}.jpg`;
 
             try {
                 await downloadImage(imgUrl, filename);
                 results.push({
-                    id: first.id,
+                    id: img.id,
                     url: `/api/images/stream/Image/${filename}`
                 });
             } catch (e) {

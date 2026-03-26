@@ -307,6 +307,50 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
       showToast(err?.message || 'Unexpected cache error', 'error');
     }
   };
+
+  const handleGenerateImage = async () => {
+    try {
+      const query = formData.word || '';
+      if (!query) return;
+
+      const res = await fetch(`${serverUrl}/api/images/search?q=${encodeURIComponent(query)}`);
+
+      if (!res.ok) {
+        let errorMessage = 'Image generate failed';
+        try {
+          const errData = await res.json();
+          if (errData?.error) errorMessage = errData.error;
+        } catch {}
+        showToast(errorMessage, 'error');
+        return;
+      }
+
+      const data = await res.json();
+      const images = data?.images || [];
+
+      if (!images.length) {
+        showToast('No image found', 'error');
+        return;
+      }
+
+      const newUrl = images[0].url;
+
+      const updated = [
+        ...(formData.img || []),
+        newUrl
+      ];
+
+      dispatch({
+        type: 'SET_FIELD',
+        payload: { field: 'img', value: updated }
+      });
+
+      showToast('Image generated!', 'success');
+    } catch (err: any) {
+      console.error('Generate image error:', err);
+      showToast(err?.message || 'Unexpected error', 'error');
+    }
+  };
   
   return (
     <>
@@ -326,6 +370,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         onSuggestLearn={handleSuggestLearn}
         hasSuggestions={!!learningSuggestions}
         handleCacheImages={handleCacheImages}
+        onGenImg={handleGenerateImage}
       />
       <LearningSuggestionModal
         isOpen={isSuggestionModalOpen}

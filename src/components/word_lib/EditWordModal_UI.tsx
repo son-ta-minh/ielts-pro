@@ -65,6 +65,7 @@ export interface EditWordModalUIProps {
   onSuggestLearn: () => void;
   hasSuggestions: boolean;
   handleCacheImages: () => void | Promise<void>;
+  onGenImg: () => void | Promise<void>;
 }
 
 type Tab = 'MAIN' | 'SOUND' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
@@ -109,7 +110,8 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
     onClose, onSwitchToView, formData, setFormData, setFlag,
     familyHandler, prepList, collocList, idiomList, paraList, handleSubmit,
     onOpenAiRefine, onSuggestLearn, hasSuggestions,
-    handleCacheImages
+    handleCacheImages,
+    onGenImg
   } = props;
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
@@ -390,13 +392,22 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">
                                     Image URLs (one per line)
                                 </label>
-                                <button
-                                    type="button"
-                                    onClick={handleCacheImages}
-                                    className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors"
-                                >
-                                    Cache Image
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={onGenImg}
+                                        className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors"
+                                    >
+                                        Generate
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleCacheImages}
+                                        className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors"
+                                    >
+                                        Cache Image
+                                    </button>
+                                </div>
                             </div>
                             <textarea
                                 rows={3}
