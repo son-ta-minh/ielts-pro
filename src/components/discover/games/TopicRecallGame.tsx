@@ -257,6 +257,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
+  const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
   const [showUnusedOnly, setShowUnusedOnly] = useState(false);
 
@@ -1155,12 +1156,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                 <div className="flex flex-col gap-4 mb-4">
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                      <h3 className="hidden sm:block text-xl font-bold text-slate-900">Brainstorm Canvas</h3>
-                      <p className="hidden sm:block text-sm text-slate-500">
-                        {canvasMode === 'view'
-                          ? 'Browse your grouped ideas without edit controls.'
-                          : 'Organize your topic words into groups you can expand, rename, and prune.'}
-                      </p>
+                      <h3 className="hidden sm:block text-xl font-bold text-slate-900">Brainstorm WordBoard</h3>
+          
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       <div className="inline-flex rounded-xl bg-slate-100 p-1">
@@ -1183,23 +1180,51 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                           Edit
                         </button>
                       </div>
-                      <input
-                        type="text"
-                        placeholder="New group name..."
-                        className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
-                        value={newGroupName}
-                        onChange={(e) => setNewGroupName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') addGroup();
-                        }}
-                      />
-                      <button
-                        onClick={addGroup}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors text-sm font-semibold"
-                      >
-                        <Plus size={16} />
-                        <span>Add Group</span>
-                      </button>
+                      {!isAddingGroup ? (
+                        <button
+                          onClick={() => setIsAddingGroup(true)}
+                          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors text-sm font-semibold"
+                        >
+                          <Plus size={16} />
+                          <span>Add Group</span>
+                        </button>
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            placeholder="New group name..."
+                            className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                            value={newGroupName}
+                            onChange={(e) => setNewGroupName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                addGroup();
+                                setIsAddingGroup(false);
+                              }
+                            }}
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => {
+                              addGroup();
+                              setIsAddingGroup(false);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors text-sm font-semibold"
+                          >
+                            <CheckCircle2 size={16} />
+                            <span>Confirm</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsAddingGroup(false);
+                              setNewGroupName('');
+                            }}
+                            className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                          >
+                            <X size={16} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
