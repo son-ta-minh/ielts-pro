@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
-import { Plus, Search, Copy, Trash2, Edit3, Image as ImageIcon, RefreshCw, X, CheckCircle2, AlertCircle, Eye, EyeOff, Info, ArrowLeft, BookOpenCheck } from 'lucide-react';
+import { Plus, Search, Copy, Trash2, Edit3, Image as ImageIcon, RefreshCw, X, CheckCircle2, AlertCircle, Eye, EyeOff, Info, ArrowLeft, BookOpenCheck, SlidersHorizontal, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Virtuoso } from 'react-virtuoso';
 import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
-import { User, VocabularyItem as LibraryWord } from '../../../app/types';
+import { User, VocabularyItem as LibraryWord, WordQuality } from '../../../app/types';
 import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
 import ConfirmationModal from '../../../components/common/ConfirmationModal';
 import { getTopicRecallEvaluationPrompt } from '../../../services/promptService';
@@ -34,6 +34,7 @@ export interface VocabItem {
   m: string; // meaning
   ex: string; // example sentence(s)
   col: Collocation[];
+  quality?: WordQuality;
 }
 
 export interface VocabData {
@@ -84,9 +85,10 @@ const normalizeLibraryWords = (words: LibraryWord[]): VocabItem[] => {
       w: headword,
       m: word.meaningVi || word.note || '',
       ex: word.example || '',
+      quality: word.quality,
       col: Array.isArray(word.collocationsArray)
         ? word.collocationsArray
-          .filter((item) => item && !item.isIgnored)
+            .filter((item) => item && !item.isIgnored)
           .map((item) => ({
             x: item.text || '',
             ds: item.d || '',
@@ -254,7 +256,9 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
   const [showUnusedOnly, setShowUnusedOnly] = useState(false);
+  const [showLearnedOnly, setShowLearnedOnly] = useState(false);
   const [highlightLibraryWords, setHighlightLibraryWords] = useState(false);
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [confirmState, setConfirmState] = useState<{
     type: 'delete-group' | 'delete-word' | null;
     groupId?: string;
@@ -267,6 +271,9 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       const target = event.target as HTMLElement;
       if (!target.closest('.relative.flex-1')) {
         setShowSuggestions(false);
+      }
+      if (!target.closest('.topic-recall-filter-menu')) {
+        setIsFilterMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -444,11 +451,18 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       );
 
       if (!matchesSearch) return false;
-      if (!showUnusedOnly) return true;
+      if (showUnusedOnly && (wordTopicUsageMap.get(v.w.toLowerCase()) || []).length > 0) {
+        return false;
+      }
+      if (showLearnedOnly && v.quality === WordQuality.RAW) {
+        return false;
+      }
 
-      return (wordTopicUsageMap.get(v.w.toLowerCase()) || []).length === 0;
+      return true;
     });
-  }, [searchQuery, showUnusedOnly, vocab, wordTopicUsageMap]);
+  }, [searchQuery, showLearnedOnly, showUnusedOnly, vocab, wordTopicUsageMap]);
+
+  const activeFilterCount = Number(showUnusedOnly) + Number(showLearnedOnly);
 
   const libraryWordSet = useMemo(
     () => new Set(vocab.map((item) => item.w.trim().toLowerCase()).filter(Boolean)),
@@ -1004,16 +1018,55 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Word Library ({filteredVocab.length})</h2>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setShowUnusedOnly((prev) => !prev)}
-                      className={cn(
-                        "flex items-center gap-1 px-2 py-1 rounded-lg transition-colors",
-                        showUnusedOnly ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"
+                    <div className="relative topic-recall-filter-menu">
+                      <button
+                        onClick={() => setIsFilterMenuOpen((prev) => !prev)}
+                        className={cn(
+                          "flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors text-xs font-semibold",
+                          activeFilterCount > 0 ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500 hover:text-slate-700"
+                        )}
+                        title={activeFilterCount > 0 ? `${activeFilterCount} filters active` : "Open filters"}
+                      >
+                        <SlidersHorizontal size={14} />
+                        <span>Filter</span>
+                        {activeFilterCount > 0 && (
+                          <span className="min-w-5 h-5 px-1 rounded-full bg-white/80 border border-emerald-200 text-[10px] font-bold flex items-center justify-center">
+                            {activeFilterCount}
+                          </span>
+                        )}
+                      </button>
+
+                      {isFilterMenuOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl p-2 z-20">
+                          <button
+                            onClick={() => setShowUnusedOnly((prev) => !prev)}
+                            className={cn(
+                              "w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-sm transition-colors",
+                              showUnusedOnly ? "bg-emerald-50 text-emerald-700" : "text-slate-600 hover:bg-slate-50"
+                            )}
+                          >
+                            <span className="flex items-center gap-2">
+                              <BookOpenCheck size={14} />
+                              <span>Unused words</span>
+                            </span>
+                            {showUnusedOnly && <Check size={14} />}
+                          </button>
+                          <button
+                            onClick={() => setShowLearnedOnly((prev) => !prev)}
+                            className={cn(
+                              "w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-sm transition-colors",
+                              showLearnedOnly ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50"
+                            )}
+                          >
+                            <span className="flex items-center gap-2">
+                              <CheckCircle2 size={14} />
+                              <span>Learned words</span>
+                            </span>
+                            {showLearnedOnly && <Check size={14} />}
+                          </button>
+                        </div>
                       )}
-                      title={showUnusedOnly ? "Showing unused words only" : "Show words unused in all topics"}
-                    >
-                      <BookOpenCheck size={14} />
-                    </button>
+                    </div>
                     <button
                       onClick={() => setShowMeaning(!showMeaning)}
                       className={cn("flex items-center gap-1 px-2 py-1 rounded-lg transition-colors", showMeaning ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
