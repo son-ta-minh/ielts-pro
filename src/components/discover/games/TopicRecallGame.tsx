@@ -6,7 +6,7 @@ import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
-import { User, VocabularyItem as LibraryWord, WordQuality } from '../../../app/types';
+import { User, VocabularyItem as LibraryWord } from '../../../app/types';
 import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
 import ConfirmationModal from '../../../components/common/ConfirmationModal';
 import { getTopicRecallEvaluationPrompt } from '../../../services/promptService';
@@ -34,7 +34,7 @@ export interface VocabItem {
   m: string; // meaning
   ex: string; // example sentence(s)
   col: Collocation[];
-  quality?: WordQuality;
+  learnStatus?: string;
 }
 
 export interface VocabData {
@@ -83,9 +83,9 @@ const normalizeLibraryWords = (words: LibraryWord[]): VocabItem[] => {
     deduped.set(key, {
       id: word.id,
       w: headword,
-      m: word.meaningVi || word.note || '',
+      m: word.meaningVi || '',
       ex: word.example || '',
-      quality: word.quality,
+      learnStatus: word.lastReview ? 'learned' : 'new',
       col: Array.isArray(word.collocationsArray)
         ? word.collocationsArray
             .filter((item) => item && !item.isIgnored)
@@ -108,31 +108,6 @@ const tokenize = (text: string) =>
     .split(/[^a-z0-9]+/)
     .map((item) => item.trim())
     .filter((item) => item.length >= 3);
-
-const rankLibraryCandidates = (topic: string, vocab: VocabItem[], brainstorm: BrainstormItem[]) => {
-  const topicTerms = tokenize(topic);
-  const brainstormTerms = tokenize(brainstorm.map((item) => item.text).join(' '));
-  const uniqueTerms = Array.from(new Set([...topicTerms, ...brainstormTerms]));
-
-  return [...vocab]
-    .map((item) => {
-      const haystack = `${item.w} ${item.m} ${item.ex} ${item.col.map((c) => `${c.x} ${c.ds}`).join(' ')}`.toLowerCase();
-      let score = 0;
-
-      uniqueTerms.forEach((term) => {
-        if (item.w.toLowerCase().includes(term)) score += 5;
-        if (item.m.toLowerCase().includes(term)) score += 3;
-        if (item.ex.toLowerCase().includes(term)) score += 2;
-        if (haystack.includes(term)) score += 1;
-      });
-
-      if (item.col.length > 0) score += 0.5;
-      return { item, score };
-    })
-    .sort((a, b) => b.score - a.score || a.item.w.localeCompare(b.item.w))
-    .slice(0, 40)
-    .map(({ item }) => item);
-};
 
 const extractImagesFromPayload = (payload: any): { url: string }[] => {
   const rawItems = Array.isArray(payload)
@@ -454,7 +429,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       if (showUnusedOnly && (wordTopicUsageMap.get(v.w.toLowerCase()) || []).length > 0) {
         return false;
       }
-      if (showLearnedOnly && v.quality === WordQuality.RAW) {
+      if (showLearnedOnly && v.learnStatus !== 'learned') {
         return false;
       }
 
