@@ -212,6 +212,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
     
     const [isAlreadyInLibrary, setIsAlreadyInLibrary] = useState(false);
+    const [currentLibraryWord, setCurrentLibraryWord] = useState<VocabularyItem | null>(null);
     const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
     
     // Tools Modal State
@@ -577,6 +578,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             void checkLibraryExistence(normalized);
         } else {
             setIsAlreadyInLibrary(false);
+            setCurrentLibraryWord(null);
         }
     };
 
@@ -593,6 +595,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         if (!word || !user.id) return;
         const exists = await dataStore.findWordByText(user.id, word);
         setIsAlreadyInLibrary(!!exists);
+        setCurrentLibraryWord(exists || null);
     };
 
     const getChatPanelSelectionText = () => {
@@ -2322,6 +2325,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             hasSelection={hasSelection}
             showIdiom={inputSource !== 'selection'}
             showCompare={inputSource !== 'selection'}
+            onImage={() => handleChatCoachImage()}
             onExamples={() => handleChatCoachPromptToChat('examples', 'Examples', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'examples'), { inputSource })}
             onExplain={() => handleChatCoachExplain({ inputSource })}
             onPreposition={() => handleChatCoachPromptToChat('preposition', 'Dependent Preposition', (selectedText) => getStudyBuddyCoachPrompt(selectedText, 'preposition'), { inputSource })}
@@ -2405,6 +2409,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                         onOpenChatPanel={openChatPanel}
                         onAddToLibrary={handleAddToLibrary}
                         onViewWord={handleViewWord}
+                        wordImageList={currentLibraryWord?.img || []}
+                        serverUrl={getServerUrl(config)}
                         onOpenNote={handleOpenNote}
                         onOpenTools={handleOpenTools}
                     />
@@ -2574,6 +2580,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                         onOpenChatPanel={openChatPanel}
                                         onAddToLibrary={handleAddToLibrary}
                                         onViewWord={handleViewWord}
+                                        wordImageList={currentLibraryWord?.img || []}
+                                        serverUrl={getServerUrl(config)}
                                         onOpenNote={handleOpenNote}
                                         onOpenTools={handleOpenTools}
                                     />

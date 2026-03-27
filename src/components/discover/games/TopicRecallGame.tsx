@@ -271,6 +271,10 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     () => savedTopicEntries.some((item) => item.topic === newTopicName.trim()),
     [newTopicName, savedTopicEntries]
   );
+  const isCurrentTopicSaved = useMemo(
+    () => savedTopicEntries.some((item) => item.topic === currentTopic.trim()),
+    [currentTopic, savedTopicEntries]
+  );
 
   const searchImages = async (query: string) => {
     const serverUrl = getServerUrl(getConfig());
@@ -761,6 +765,53 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     showToast(`Deleted topic: ${targetTopic}`);
   };
 
+  const renameTopic = async () => {
+    const sourceTopic = currentTopic.trim();
+    const targetTopic = newTopicName.trim();
+
+    if (!sourceTopic) {
+      showToast("No topic selected to rename.", "error");
+      return;
+    }
+
+    if (!targetTopic) {
+      showToast("Enter a new topic name.", "error");
+      return;
+    }
+
+    if (sourceTopic === targetTopic) {
+      showToast("Topic name is unchanged.", "error");
+      return;
+    }
+
+    if (savedTopicEntries.some((item) => item.topic.toLowerCase() === targetTopic.toLowerCase())) {
+      showToast("That topic name already exists.", "error");
+      return;
+    }
+
+    const renamedTopics = savedTopicEntries.map((item) =>
+      item.topic === sourceTopic
+        ? {
+            ...item,
+            topic: targetTopic,
+            updatedAt: Date.now()
+          }
+        : item
+    );
+
+    await onUpdateUser({
+      ...user,
+      topicRecallData: {
+        lastTopic: targetTopic,
+        topics: renamedTopics
+      }
+    });
+
+    setCurrentTopic(targetTopic);
+    setIsTopicModalOpen(false);
+    showToast(`Renamed topic to: ${targetTopic}`);
+  };
+
   const currentImageUrl = topicImages[currentImageIndex]?.url || `${DEFAULT_IMAGE_SERVER_PATH}${DEFAULT_IMAGE}`;
 
   return (
@@ -858,8 +909,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         </div>
       </header>
 
-      <main className="max-w-9xl mx-auto h-full">
-        <div className="lg:grid lg:grid-cols-12 gap-8 h-full">
+      <main className="max-w-9xl mx-auto h-[calc(100vh-8.5rem)] min-h-0">
+        <div className="lg:grid lg:grid-cols-12 gap-8 h-full min-h-0">
           {/* Mobile Tabs */}
           <div className="lg:hidden flex mb-4 gap-2">
             <button
@@ -879,7 +930,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
           {/* Panels */}
           <div
             className={cn(
-              "w-full flex flex-col gap-6 h-full",
+              "w-full flex flex-col gap-6 h-full min-h-0",
               activeTab === 'library' ? "block" : "hidden",
               "lg:col-span-4 lg:block"
             )}
@@ -997,19 +1048,19 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
           <div
             className={cn(
-              "w-full flex flex-col gap-6 h-full",
+              "w-full flex flex-col gap-6 h-full min-h-0",
               activeTab === 'canvas' ? "block" : "hidden",
               "lg:col-span-8 lg:block"
             )}
           >
             {/* Brainstorm Canvas Section */}
-            <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col h-full relative overflow-auto">
+            <div className="flex-1 min-h-0 max-h-full bg-white rounded-3xl border border-slate-200 shadow-sm p-8 flex flex-col h-full relative overflow-hidden">
               {/* Artistic Background Pattern */}
               <div className="absolute inset-0 opacity-[0.03] pointer-events-none select-none">
                 <div className="absolute top-0 left-0 w-full h-full" style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
               </div>
 
-              <div className="relative z-10 flex flex-col h-full">
+              <div className="relative z-10 flex min-h-0 flex-col h-full">
                 <div className="flex flex-col gap-4 mb-4">
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
@@ -1127,7 +1178,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                   </div>
                 </div>
 
-                <div className="flex-1 relative">
+                <div className="relative flex-1 min-h-0 overflow-y-auto pr-2">
                   {brainstormWords.length === 0 ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 border-4 border-dashed border-slate-50 rounded-3xl">
                       <Edit3 size={48} className="mb-4 opacity-20" />
@@ -1284,6 +1335,14 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                   </datalist>
                 </div>
                 <div className="flex gap-3 mt-4">
+                  {isCurrentTopicSaved && (
+                    <button
+                      onClick={() => void renameTopic()}
+                      className="px-4 py-4 bg-amber-50 text-amber-700 rounded-xl font-bold hover:bg-amber-100 transition-all border border-amber-200"
+                    >
+                      Rename Topic
+                    </button>
+                  )}
                   {isSavedTopicSelection && (
                     <button
                       onClick={() => void deleteTopic()}

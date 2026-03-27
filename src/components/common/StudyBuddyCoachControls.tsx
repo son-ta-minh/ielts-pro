@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, Eye, Loader2, Mic, PenTool, Plus, Volume2, Wrench } from 'lucide-react';
+import { Bot, Eye, Image as ImageIcon, Loader2, Mic, PenTool, Plus, Volume2, Wrench } from 'lucide-react';
 
 interface ChatCoachActionBarProps {
     hasSelection: boolean;
@@ -85,6 +85,7 @@ interface ChatStudyMenuProps {
     hasSelection: boolean;
     showIdiom?: boolean;
     showCompare?: boolean;
+    onImage: () => void;
     onExamples: () => void;
     onExplain: () => void;
     onPreposition: () => void;
@@ -104,6 +105,7 @@ export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
     hasSelection,
     showIdiom = true,
     showCompare = true,
+    onImage,
     onExamples,
     onExplain,
     onPreposition,
@@ -157,6 +159,9 @@ export const StudyBuddyChatStudyMenu: React.FC<ChatStudyMenuProps> = ({
                 <button type="button" onClick={onWordFamily} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}>
                     {renderButtonLabel('wordFamily', 'Word Family')}
                 </button>
+                <button type="button" onClick={onImage} disabled={!hasSelection || !!activeChatCoachAction} className={`${baseButtonClass} w-full bg-violet-50 text-violet-700 hover:bg-violet-100`}>
+                    {renderButtonLabel('image', 'Image')}
+                </button>
             </div>
             <div className="space-y-1">
                 <p className="px-1 text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">Test</p>
@@ -184,6 +189,8 @@ interface CommandBoxProps {
     isAddingToLibrary: boolean;
     isAnyModalOpen?: boolean;
     selectedText?: string;
+    wordImageList?: string[];
+    serverUrl?: string;
     onRestoreSelectedRange: (event: React.MouseEvent) => void;
     onRestoreSelectedRangeHover: () => void;
     onTranslateSelection: () => void;
@@ -203,6 +210,8 @@ export const StudyBuddyCommandBox: React.FC<CommandBoxProps> = ({
     isAddingToLibrary,
     isAnyModalOpen,
     selectedText,
+    wordImageList = [],
+    serverUrl = '',
     onRestoreSelectedRange,
     onRestoreSelectedRangeHover,
     onTranslateSelection,
@@ -213,27 +222,59 @@ export const StudyBuddyCommandBox: React.FC<CommandBoxProps> = ({
     onViewWord,
     onOpenNote,
     onOpenTools,
-}) => (
-    <div
-        ref={commandBoxRef}
-        onMouseDown={onRestoreSelectedRange}
-        onMouseEnter={onRestoreSelectedRangeHover}
-        className="select-none bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200"
-    >
-        <div className="grid grid-cols-8 gap-1">
-            <button type="button" onClick={onTranslateSelection} className="col-span-2 aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" title="Đọc Tiếng Việt">VI</button>
-            <button type="button" onClick={onReadAndIpa} className="col-span-2 aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="Read English"><Volume2 size={15}/></button>
-            <button type="button" onClick={onSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
-            {!isChatOpen && (
-                <button type="button" onClick={() => onOpenChatPanel(selectedText)} className="col-span-2 aspect-square bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shadow-sm" title="Ask AI"><Bot size={15}/></button>
-            )}
-            {!isAlreadyInLibrary ? (
-                <button type="button" onClick={onAddToLibrary} disabled={isAddingToLibrary} className="col-span-2 aspect-square bg-green-50 text-green-600 rounded-2xl flex items-center justify-center hover:bg-green-100 transition-all active:scale-90 shadow-sm" title="Add to Library">{isAddingToLibrary ? <Loader2 size={14} className="animate-spin"/> : <Plus size={15}/>}</button>
-            ) : (
-                <button type="button" onClick={onViewWord} disabled={isAnyModalOpen} className="col-span-2 aspect-square bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center hover:bg-sky-100 transition-all active:scale-90 shadow-sm" title="View Word Details"><Eye size={15}/></button>
-            )}
-            <button type="button" onClick={onOpenNote} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Open Note"><PenTool size={15}/></button>
-            <button type="button" onClick={onOpenTools} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Tools"><Wrench size={15}/></button>
+}) => {
+    const firstImage = (wordImageList || []).find((item) => item && item.trim());
+    let thumbnailUrl = '';
+
+    if (firstImage) {
+        const firstColonIndex = firstImage.indexOf(':');
+        const rawUrl = firstColonIndex > -1 && !firstImage.startsWith('http')
+            ? firstImage.slice(firstColonIndex + 1).trim()
+            : firstImage.trim();
+
+        thumbnailUrl = rawUrl.startsWith('http')
+            ? rawUrl
+            : `${serverUrl}${rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`}`;
+    }
+
+    return (
+        <div
+            ref={commandBoxRef}
+            onMouseDown={onRestoreSelectedRange}
+            onMouseEnter={onRestoreSelectedRangeHover}
+            className="select-none bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[160px] animate-in fade-in zoom-in-95 duration-200"
+        >
+            <div className="grid grid-cols-10 gap-1">
+                <button type="button" onClick={onTranslateSelection} className="col-span-2 aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" title="Đọc Tiếng Việt">VI</button>
+                <button type="button" onClick={onReadAndIpa} className="col-span-2 aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="Read English"><Volume2 size={15}/></button>
+                <button type="button" onClick={onSpeakSelection} className="col-span-2 aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
+                {!isChatOpen && (
+                    <button type="button" onClick={() => onOpenChatPanel(selectedText)} className="col-span-2 aspect-square bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shadow-sm" title="Ask AI"><Bot size={15}/></button>
+                )}
+                {!isAlreadyInLibrary ? (
+                    <button type="button" onClick={onAddToLibrary} disabled={isAddingToLibrary} className="col-span-2 aspect-square bg-green-50 text-green-600 rounded-2xl flex items-center justify-center hover:bg-green-100 transition-all active:scale-90 shadow-sm" title="Add to Library">{isAddingToLibrary ? <Loader2 size={14} className="animate-spin"/> : <Plus size={15}/>}</button>
+                ) : (
+                    <button type="button" onClick={onViewWord} disabled={isAnyModalOpen} className="col-span-2 aspect-square bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center hover:bg-sky-100 transition-all active:scale-90 shadow-sm" title="View Word Details"><Eye size={15}/></button>
+                )}
+                <button type="button" onClick={onOpenNote} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Open Note"><PenTool size={15}/></button>
+                <button type="button" onClick={onOpenTools} className="col-span-2 aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Tools"><Wrench size={15}/></button>
+                <div className="col-span-2 relative group/image">
+                    <button
+                        type="button"
+                        onClick={onViewWord}
+                        disabled={!isAlreadyInLibrary || isAnyModalOpen}
+                        className={`w-full aspect-square rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm ${thumbnailUrl ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-rose-50 text-rose-500 hover:bg-rose-100'} disabled:opacity-100`}
+                        title={thumbnailUrl ? 'This word has image. Hover to preview.' : 'This word has no image.'}
+                    >
+                        <ImageIcon size={15} />
+                    </button>
+                    {thumbnailUrl && (
+                        <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-44 -translate-x-1/2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl group-hover/image:block">
+                            <img src={thumbnailUrl} alt="Word thumbnail" className="h-28 w-full rounded-xl object-cover" />
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
-    </div>
-);
+    );
+};
