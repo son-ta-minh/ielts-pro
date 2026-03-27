@@ -1157,30 +1157,31 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                   <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                       <h3 className="hidden sm:block text-xl font-bold text-slate-900">Brainstorm WordBoard</h3>
-          
                     </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <div className="inline-flex rounded-xl bg-slate-100 p-1">
-                        <button
-                          onClick={() => setCanvasMode('view')}
-                          className={cn(
-                            "px-4 py-2 rounded-lg text-sm font-semibold transition-colors",
-                            canvasMode === 'view' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-                          )}
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => setCanvasMode('edit')}
-                          className={cn(
-                            "px-4 py-2 rounded-lg text-sm font-semibold transition-colors",
-                            canvasMode === 'edit' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-                          )}
-                        >
-                          Edit
-                        </button>
-                      </div>
-                      {!isAddingGroup ? (
+                    <div className="flex flex-col items-end gap-2 w-full">
+                      {/* --- Top Row: Buttons only --- */}
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <div className="inline-flex rounded-xl bg-slate-100 p-1">
+                          <button
+                            onClick={() => setCanvasMode('view')}
+                            className={cn(
+                              "px-4 py-2 rounded-lg text-sm font-semibold transition-colors",
+                              canvasMode === 'view' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                            )}
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => setCanvasMode('edit')}
+                            className={cn(
+                              "px-4 py-2 rounded-lg text-sm font-semibold transition-colors",
+                              canvasMode === 'edit' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                            )}
+                          >
+                            Edit
+                          </button>
+                        </div>
+
                         <button
                           onClick={() => setIsAddingGroup(true)}
                           className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors text-sm font-semibold"
@@ -1188,8 +1189,19 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                           <Plus size={16} />
                           <span>Add Group</span>
                         </button>
-                      ) : (
-                        <>
+
+                        <button
+                          onClick={() => setShowSuggestions(true)}
+                          className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors text-sm font-semibold"
+                        >
+                          <Plus size={18} />
+                          <span>Add Word</span>
+                        </button>
+                      </div>
+
+                      {/* --- Row 2: Add Group Input --- */}
+                      {isAddingGroup && (
+                        <div className="flex flex-wrap items-center gap-2 justify-end w-full">
                           <input
                             type="text"
                             placeholder="New group name..."
@@ -1223,74 +1235,90 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                           >
                             <X size={16} />
                           </button>
-                        </>
+                        </div>
+                      )}
+
+                      {/* --- Row 3: Add Word Input --- */}
+                      {showSuggestions && (
+                        <div className="flex flex-wrap items-center gap-2 justify-end w-full relative">
+                          <div className="relative flex-1 min-w-[220px]">
+                            <input 
+                              type="text" 
+                              placeholder="Type custom word..." 
+                              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
+                              value={customWordInput}
+                              onChange={(e) => setCustomWordInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  addCustomWord(customWordInput);
+                                  setShowSuggestions(false);
+                                }
+                              }}
+                              autoFocus
+                            />
+
+                            <AnimatePresence>
+                              {suggestions.length > 0 && (
+                                <motion.div 
+                                  initial={{ opacity: 0, y: -10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -10 }}
+                                  className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden"
+                                >
+                                  {suggestions.map((s) => (
+                                    <button
+                                      key={s.id}
+                                      onClick={() => {
+                                        addToBrainstorm(s.w);
+                                        setCustomWordInput('');
+                                        setShowSuggestions(false);
+                                      }}
+                                      className="w-full px-4 py-2 text-left text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between group"
+                                    >
+                                      <span className="font-medium">{s.w}</span>
+                                      <span className="text-[10px] text-slate-400 group-hover:text-indigo-400 uppercase font-bold">From Library</span>
+                                    </button>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+
+                          <select
+                            value={selectedGroupId}
+                            onChange={(e) => setSelectedGroupId(e.target.value)}
+                            className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          >
+                            {brainstormGroups.map((group) => (
+                              <option key={group.id} value={group.id}>
+                                {group.name}
+                              </option>
+                            ))}
+                          </select>
+
+                          <button 
+                            onClick={() => {
+                              addCustomWord(customWordInput);
+                              setShowSuggestions(false);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors text-sm font-semibold"
+                          >
+                            <CheckCircle2 size={18} />
+                            <span>Confirm</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setShowSuggestions(false);
+                              setCustomWordInput('');
+                            }}
+                            className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
                       )}
                     </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 relative">
-                    <div className="relative flex-1 min-w-[220px]">
-                      <input 
-                        type="text" 
-                        placeholder="Type custom word..." 
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
-                        value={customWordInput}
-                        onChange={(e) => {
-                          setCustomWordInput(e.target.value);
-                          setShowSuggestions(true);
-                        }}
-                        onFocus={() => setShowSuggestions(true)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            addCustomWord(customWordInput);
-                          }
-                        }}
-                      />
-                      
-                      <AnimatePresence>
-                        {showSuggestions && suggestions.length > 0 && (
-                          <motion.div 
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden"
-                          >
-                            {suggestions.map((s) => (
-                              <button
-                                key={s.id}
-                                onClick={() => {
-                                  addToBrainstorm(s.w);
-                                  setCustomWordInput('');
-                                  setShowSuggestions(false);
-                                }}
-                                className="w-full px-4 py-2 text-left text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between group"
-                              >
-                                <span className="font-medium">{s.w}</span>
-                                <span className="text-[10px] text-slate-400 group-hover:text-indigo-400 uppercase font-bold">From Library</span>
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                    <select
-                      value={selectedGroupId}
-                      onChange={(e) => setSelectedGroupId(e.target.value)}
-                      className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    >
-                      {brainstormGroups.map((group) => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button 
-                      onClick={() => addCustomWord(customWordInput)}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors text-sm font-semibold"
-                    >
-                      <Plus size={18} />
-                      <span>Add Word</span>
-                    </button>
                   </div>
                 </div>
 
