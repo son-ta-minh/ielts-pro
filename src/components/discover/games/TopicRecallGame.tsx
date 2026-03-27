@@ -1,30 +1,5 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Upload, 
-  Download, 
-  Copy, 
-  Trash2, 
-  Edit3, 
-  Image as ImageIcon, 
-  RefreshCw,
-  X,
-  CheckCircle2,
-  AlertCircle,
-  Eye,
-  EyeOff,
-  ChevronUp,
-  ChevronDown,
-  Info,
-  ArrowLeft,
-  BookOpenCheck
-} from 'lucide-react';
+import { Plus, Search, Copy, Trash2, Edit3, Image as ImageIcon, RefreshCw, X, CheckCircle2, AlertCircle, Eye, EyeOff, Info, ArrowLeft, BookOpenCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Virtuoso } from 'react-virtuoso';
 import confetti from 'canvas-confetti';
@@ -34,6 +9,7 @@ import { getConfig, getServerUrl } from '../../../app/settingsManager';
 import { User, VocabularyItem as LibraryWord } from '../../../app/types';
 import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
 import ConfirmationModal from '../../../components/common/ConfirmationModal';
+import { getTopicRecallEvaluationPrompt } from '../../../services/promptService';
 
 interface TopicRecallGameProps {
   words: LibraryWord[];
@@ -110,13 +86,13 @@ const normalizeLibraryWords = (words: LibraryWord[]): VocabItem[] => {
       ex: word.example || '',
       col: Array.isArray(word.collocationsArray)
         ? word.collocationsArray
-            .filter((item) => item && !item.isIgnored)
-            .map((item) => ({
-              x: item.text || '',
-              ds: item.d || '',
-              e: word.example || ''
-            }))
-            .filter((item) => item.x || item.ds)
+          .filter((item) => item && !item.isIgnored)
+          .map((item) => ({
+            x: item.text || '',
+            ds: item.d || '',
+            e: word.example || ''
+          }))
+          .filter((item) => item.x || item.ds)
         : []
     });
   });
@@ -462,8 +438,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     const q = searchQuery.toLowerCase();
     return vocab.filter(v => {
       const matchesSearch = !searchQuery || (
-        (v.w && v.w.toLowerCase().includes(q)) || 
-        (v.m && v.m.toLowerCase().includes(q)) || 
+        (v.w && v.w.toLowerCase().includes(q)) ||
+        (v.m && v.m.toLowerCase().includes(q)) ||
         (v.col && Array.isArray(v.col) && v.col.some(c => (c.x && c.x.toLowerCase().includes(q)) || (c.ds && c.ds.toLowerCase().includes(q))))
       );
 
@@ -569,32 +545,6 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   };
 
   // --- Handlers ---
-  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string) as VocabData;
-        if (data.vocab && Array.isArray(data.vocab)) {
-          const sanitizedVocab = data.vocab.map(item => ({
-            ...item,
-            col: Array.isArray(item.col) ? item.col : []
-          }));
-          setVocab(sanitizedVocab);
-          showToast(`Successfully loaded ${sanitizedVocab.length} words!`);
-        } else {
-          showToast("Invalid JSON format. Missing 'vocab' array.", "error");
-        }
-      } catch (err) {
-        showToast("Failed to parse JSON file.", "error");
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = ''; // Reset input
-  };
-
   const addToBrainstorm = (word: string) => {
     if (wordExistsInTopic(word)) {
       showToast("Word already in brainstorm!", "error");
@@ -780,6 +730,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         return `Group ${groupIndex + 1}: ${group.name}\n${words}`;
       })
       .join('\n\n');
+
     const candidateBlock = vocab.length > 0
       ? vocab
           .map((item) => item.w.trim())
@@ -788,91 +739,10 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
           .join('\n')
       : 'No words in library.';
 
-    const prompt = [
-      `You are StudyBuddy helping an IELTS learner in a Topic Recall game.`,
-
-      `Topic: "${currentTopic}"`,
-
-      `USER BRAINSTORM (grouped by categories):`,
-      brainstormList,
-
-      `WORD LIBRARY (reference only – DO NOT evaluate these words):`,
-      candidateBlock,
-
-      ``,
-      `====================`,
-      `EVALUATION RULES`,
-      `====================`,
-
-      `1. ONLY evaluate words from the USER BRAINSTORM.`,
-      `2. Group names define MEANING CONTEXT (e.g., Habitat, Causes, Effects, Behavior).`,
-
-      ``,
-      `CORE LOGIC (VERY IMPORTANT):`,
-      `A word is RELEVANT if:`,
-      `- It relates to the topic, OR`,
-      `- It logically fits its group meaning`,
-
-      ``,
-      `This means:`,
-      `- Words do NOT need to directly mention the topic`,
-      `- Group context ALONE is enough to make a word relevant`,
-
-      ``,
-      `STRICT FILTER:`,
-      `Mark a word as NOT relevant ONLY IF:`,
-      `- It does NOT relate to the topic`,
-      `AND`,
-      `- It does NOT fit its group meaning`,
-
-      ``,
-      `If there is ANY reasonable connection → KEEP the word`,
-      `When unsure → KEEP the word`,
-
-      ``,
-      `====================`,
-      `OUTPUT FORMAT`,
-      `====================`,
-
-      `A. NOT RELEVANT WORDS (if any):`,
-      `- word → short reason (max 1 line)`,
-
-      ``,
-      `B. NEW SUGGESTED WORDS (max 10):`,
-      `- Must be useful for this topic`,
-      `- Must NOT repeat any brainstorm words`,
-      `- PRIORITIZE words from the Word Library`,
-      `- Output as a simple bullet list`,
-
-      ``,
-      `====================`,
-      `STRICT OUTPUT RULES`,
-      `====================`,
-
-      `- DO NOT mention relevant words`,
-      `- DO NOT explain your reasoning process`,
-      `- DO NOT evaluate Word Library words`,
-      `- KEEP everything concise`,
-    ].join('\n');
+    const prompt = getTopicRecallEvaluationPrompt({ currentTopic, brainstormList, candidateBlock });
 
     requestStudyBuddyChatResponse(prompt);
     showToast("Sent to StudyBuddy chat!");
-  };
-
-  const downloadWordList = () => {
-    if (vocab.length === 0) {
-      showToast("No words in library to download.", "error");
-      return;
-    }
-    const content = vocab.map(v => v.w).join('\n');
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ielts_word_list.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("Word list downloaded!");
   };
 
   const suggestTopic = () => {
@@ -885,7 +755,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const addTopic = async (topicName?: string) => {
     const name = topicName || newTopicName;
     if (!name.trim()) return;
-    
+
     try {
       const results = await searchImages(name);
       const savedTopic = user.topicRecallData?.topics?.find((item) => item.topic === name.trim());
@@ -985,10 +855,10 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     const renamedTopics = savedTopicEntries.map((item) =>
       item.topic === sourceTopic
         ? {
-            ...item,
-            topic: targetTopic,
-            updatedAt: Date.now()
-          }
+          ...item,
+          topic: targetTopic,
+          updatedAt: Date.now()
+        }
         : item
     );
 
@@ -1023,24 +893,24 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                       <h2 className="text-2xl font-black text-slate-900 tracking-tight">
                         {currentTopic || 'Select a Topic'}
                       </h2>
-                      
+
                       {/* Image Hover Icon */}
                       <div className="relative">
                         <div className="p-1.5 bg-slate-100 text-slate-400 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 transition-colors cursor-help">
                           <ImageIcon size={18} />
                         </div>
-                        
+
                         {/* Hover Preview */}
                         <div className="absolute left-0 top-full mt-2 z-50 opacity-0 invisible group-hover/topic:opacity-100 group-hover/topic:visible transition-all duration-300 pointer-events-none group-hover/topic:pointer-events-auto">
                           <div className="bg-white p-2 rounded-2xl shadow-2xl border border-slate-200 w-64 overflow-hidden">
                             <div className="relative aspect-square rounded-xl overflow-hidden bg-slate-100">
-                              <img 
-                                src={currentImageUrl} 
-                                alt="Topic Preview" 
+                              <img
+                                src={currentImageUrl}
+                                alt="Topic Preview"
                                 className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"
                               />
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   refreshTopicImage();
@@ -1055,7 +925,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                         </div>
                       </div>
 
-                      <button 
+                      <button
                         onClick={suggestTopic}
                         className="flex items-center gap-1 p-1.5 text-slate-300 hover:text-indigo-500 transition-colors"
                         title="Suggest Random Topic"
@@ -1068,7 +938,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button 
+                  <button
                     onClick={() => {
                       setNewTopicName(''); // Clear textbox when modal opens
                       setIsTopicModalOpen(true);
@@ -1080,18 +950,18 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                   </button>
                   {/* Inline Buttons: Evaluate and Quit */}
                   <div className="flex flex-wrap items-center gap-2">
-                    <button 
+                    <button
                       onClick={evaluateUserResponse}
                       className="flex items-center gap-1 px-4 py-2 bg-emerald-100 text-emerald-800 rounded-lg hover:bg-emerald-200 shadow-md transition-all text-sm font-semibold"
                     >
                       <Copy size={16} />
                       <span className="hidden sm:inline">Evaluate</span>
                     </button>
-                    <button 
+                    <button
                       onClick={onExit}
                       className="flex items-center gap-1 px-4 py-2 bg-rose-100 text-rose-800 rounded-lg hover:bg-rose-200 shadow-md transition-all text-sm font-semibold"
                     >
-                      <ArrowLeft size={18}/>
+                      <ArrowLeft size={18} />
                       <span className="hidden sm:inline">Quit</span>
                     </button>
                   </div>
@@ -1144,15 +1014,15 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                     >
                       <BookOpenCheck size={14} />
                     </button>
-                    <button 
-                      onClick={() => setShowMeaning(!showMeaning)} 
+                    <button
+                      onClick={() => setShowMeaning(!showMeaning)}
                       className={cn("flex items-center gap-1 px-2 py-1 rounded-lg transition-colors", showMeaning ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
                       title={showMeaning ? "Hide Meanings" : "Show Meanings"}
                     >
                       {showMeaning ? <Eye size={14} /> : <EyeOff size={14} />}
                     </button>
-                    <button 
-                      onClick={() => setShowCollocation(!showCollocation)} 
+                    <button
+                      onClick={() => setShowCollocation(!showCollocation)}
                       className={cn("flex items-center gap-1 px-2 py-1 rounded-lg transition-colors", showCollocation ? "bg-indigo-50 text-indigo-600" : "bg-slate-100 text-slate-400")}
                       title={showCollocation ? "Hide Collocations" : "Show Collocations"}
                     >
@@ -1162,9 +1032,9 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                 </div>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input 
-                    type="text" 
-                    placeholder="Search words, meanings..." 
+                  <input
+                    type="text"
+                    placeholder="Search words, meanings..."
                     className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -1186,7 +1056,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                     data={filteredVocab}
                     itemContent={(index, item) => (
                       <div className="px-4 py-2">
-                        <motion.div 
+                        <motion.div
                           layout
                           onClick={() => addToBrainstorm(item.w)}
                           className="group p-4 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer"
@@ -1194,7 +1064,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                           <div className="flex justify-between items-start mb-1">
                             <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.w}</h3>
                             <div className="flex items-center gap-1">
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedWord(item);
@@ -1205,7 +1075,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                 <Eye size={16} />
                                 <span className="text-xs font-medium hidden sm:inline">Details</span>
                               </button>
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   addToBrainstorm(item.w);
@@ -1297,11 +1167,11 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                           <span>Add Word</span>
                         </button>
 
-                        <button 
+                        <button
                           onClick={() => setHighlightLibraryWords(prev => !prev)}
                           className={cn(
                             "flex items-center gap-1 px-2 py-1 rounded-lg transition-colors",
-                            highlightLibraryWords ?  "bg-slate-100 text-slate-400" : "bg-green-50 text-green-600"
+                            highlightLibraryWords ? "bg-slate-100 text-slate-400" : "bg-green-50 text-green-600"
                           )}
                           title={highlightLibraryWords ? "Disable highlight" : "Enable highlight"}
                         >
@@ -1356,9 +1226,9 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                     {showSuggestions && (
                       <div className="flex flex-wrap items-center gap-2 justify-end w-full relative">
                         <div className="relative flex-1 min-w-[220px]">
-                          <input 
-                            type="text" 
-                            placeholder="Type custom word..." 
+                          <input
+                            type="text"
+                            placeholder="Type custom word..."
                             className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm"
                             value={customWordInput}
                             onChange={(e) => setCustomWordInput(e.target.value)}
@@ -1373,7 +1243,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
                           <AnimatePresence>
                             {suggestions.length > 0 && (
-                              <motion.div 
+                              <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -10 }}
@@ -1410,7 +1280,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                           ))}
                         </select>
 
-                        <button 
+                        <button
                           onClick={() => {
                             addCustomWord(customWordInput);
                             setShowSuggestions(false);
@@ -1630,14 +1500,14 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         )}
         {isTopicModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsTopicModalOpen(false)}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -1649,7 +1519,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                   <X size={20} />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Select Topic</label>
@@ -1686,7 +1556,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                       Delete Topic
                     </button>
                   )}
-                  <button 
+                  <button
                     onClick={() => {
                       void addTopic();
                       setNewTopicName('');
@@ -1703,14 +1573,14 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
         {selectedWord && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedWord(null)}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -1722,7 +1592,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                   <X size={20} />
                 </button>
               </div>
-              
+
               <div className="space-y-6">
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Meaning</h3>
@@ -1772,7 +1642,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         )}
 
         {toast && (
-          <motion.div 
+          <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}

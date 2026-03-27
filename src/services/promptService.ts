@@ -29,6 +29,9 @@ export * from './prompts/getIntensityRefinePrompt';
 export * from './prompts/getComparisonRefinePrompt';
 export * from './prompts/getMistakeRefinePrompt';
 export * from './prompts/getRefineFreeTalkPrompt';
+export * from './prompts/getTopicRecallEvaluationPrompt';
+export * from './prompts/getStudyBuddyTestPrompt';
+export * from './prompts/getSpeakingEvaluationPrompt';
 
 // Speaking feature prompts
 export { getTranscriptionForSpeakingPrompt, getFullSpeakingTestPrompt, getRefineSpeakingTopicPrompt } from './prompts/getSpeakingPart1QuestionsPrompt';
