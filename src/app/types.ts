@@ -147,6 +147,7 @@ export interface TopicRecallTopicState {
     id: string;
     name: string;
     words: string[];
+    color?: string;
   }[];
   updatedAt: number;
 }

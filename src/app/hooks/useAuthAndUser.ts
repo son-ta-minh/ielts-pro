@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { User } from '../types';
 import { getAllUsers, saveUser, seedDatabaseIfEmpty } from '../db';
+import * as dataStore from '../dataStore';
 import { ADVENTURE_CHAPTERS } from '../../data/adventure_content';
 import { generateMap } from '../../data/adventure_map';
 import { restoreFromServer } from '../../services/backupService';
@@ -160,7 +161,7 @@ export const useAuthAndUser = () => {
     };
 
     const handleUpdateUser = async (updatedUser: User) => {
-        await saveUser(updatedUser);
+        await dataStore.saveUser(updatedUser);
         setCurrentUser(updatedUser);
         // Sync local storage name if active user
         if (updatedUser.id === localStorage.getItem('vocab_pro_current_user_id')) {

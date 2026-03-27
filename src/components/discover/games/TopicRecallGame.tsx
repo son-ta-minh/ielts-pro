@@ -185,14 +185,14 @@ const createBrainstormItems = (words: string[]): BrainstormItem[] =>
     }));
 
 const colors = ['green', 'red', 'purple', 'yellow', 'gray', 'pink', 'blue'];
-const randomColor = colors[Math.floor(Math.random() * colors.length)];
+const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
 
 const createBrainstormGroup = (name = DEFAULT_GROUP_NAME, words: string[] = [], isDefault = false): BrainstormGroup => ({
   id: `group-${Math.random().toString(36).slice(2, 10)}`,
   name,
   words: createBrainstormItems(words),
   isDefault,
-  color: randomColor
+  color: getRandomColor()
 });
 
 const createBrainstormGroupsFromSavedTopic = (topicState?: User['topicRecallData'] extends { topics: infer T } ? any : never): BrainstormGroup[] => {
@@ -203,7 +203,8 @@ const createBrainstormGroupsFromSavedTopic = (topicState?: User['topicRecallData
       id: group.id || `group-${index}-${Date.now()}`,
       name: group.name || (index === 0 ? DEFAULT_GROUP_NAME : `Group ${index + 1}`),
       words: createBrainstormItems(Array.isArray(group.words) ? group.words : []),
-      isDefault: index === 0
+      isDefault: index === 0,
+      color: typeof group.color === 'string' ? group.color : 'gray'
     }));
   }
 
@@ -215,12 +216,14 @@ const areWordListsEqual = (left: string[], right: string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
 const areGroupListsEqual = (
-  left: { name: string; words: string[] }[],
-  right: { name: string; words: string[] }[]
+  left: { name: string; words: string[]; color?: string }[],
+  right: { name: string; words: string[]; color?: string }[]
 ) =>
   left.length === right.length &&
   left.every((group, index) =>
-    group.name === right[index]?.name && areWordListsEqual(group.words, right[index]?.words || [])
+    group.name === right[index]?.name &&
+    (group.color || 'gray') === (right[index]?.color || 'gray') &&
+    areWordListsEqual(group.words, right[index]?.words || [])
   );
 
 const splitBrainstormText = (text: string) => text.match(/[A-Za-z0-9']+|[^A-Za-z0-9']+/g) || [text];
@@ -412,19 +415,21 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       const serializedGroups = brainstormGroups.map((group) => ({
         id: group.id,
         name: group.name.trim() || DEFAULT_GROUP_NAME,
-        words: group.words.map((item) => item.text.trim()).filter(Boolean)
+        words: group.words.map((item) => item.text.trim()).filter(Boolean),
+        color: group.color || 'gray'
       }));
       const serializedWords = serializedGroups.flatMap((group) => group.words);
       const existingGroups = (existingTopic?.groups || []).map((group) => ({
         name: group.name,
-        words: group.words || []
+        words: group.words || [],
+        color: group.color || 'gray'
       }));
 
       if (
         lastTopic === normalizedTopic &&
         existingTopic &&
         areWordListsEqual(existingTopic.words || [], serializedWords) &&
-        areGroupListsEqual(existingGroups, serializedGroups.map(({ name, words }) => ({ name, words })))
+        areGroupListsEqual(existingGroups, serializedGroups.map(({ name, words, color }) => ({ name, words, color })))
       ) {
         return;
       }

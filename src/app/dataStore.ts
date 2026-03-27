@@ -498,6 +498,7 @@ export async function saveUser(user: User): Promise<void> {
          _updateLocalLastModified();
          await db.saveUser(user);
          _triggerBackup();
+         _notifyChanges();
     }
 }
 
