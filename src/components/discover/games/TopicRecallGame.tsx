@@ -33,6 +33,7 @@ import { twMerge } from 'tailwind-merge';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
 import { User, VocabularyItem as LibraryWord } from '../../../app/types';
 import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
+import ConfirmationModal from '../../../components/common/ConfirmationModal';
 
 interface TopicRecallGameProps {
   words: LibraryWord[];
@@ -74,7 +75,17 @@ export interface BrainstormGroup {
   name: string;
   words: BrainstormItem[];
   isDefault?: boolean;
+  color?: string;
 }
+const GROUP_COLOR_STYLES: Record<string, string> = {
+  green: 'border-green-200',
+  red: 'border-red-200',
+  purple: 'border-purple-200',
+  yellow: 'border-yellow-200',
+  gray: 'border-slate-200',
+  pink: 'border-pink-200',
+  blue: 'border-blue-200'
+};
 
 // Configuration
 const DEFAULT_IMAGE_SERVER_PATH = 'https://images.unsplash.com/photo-';
@@ -173,11 +184,15 @@ const createBrainstormItems = (words: string[]): BrainstormItem[] =>
       isCustom: true
     }));
 
+const colors = ['green', 'red', 'purple', 'yellow', 'gray', 'pink', 'blue'];
+const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
 const createBrainstormGroup = (name = DEFAULT_GROUP_NAME, words: string[] = [], isDefault = false): BrainstormGroup => ({
   id: `group-${Math.random().toString(36).slice(2, 10)}`,
   name,
   words: createBrainstormItems(words),
-  isDefault
+  isDefault,
+  color: randomColor
 });
 
 const createBrainstormGroupsFromSavedTopic = (topicState?: User['topicRecallData'] extends { topics: infer T } ? any : never): BrainstormGroup[] => {
@@ -261,6 +276,11 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
   const [showUnusedOnly, setShowUnusedOnly] = useState(false);
   const [highlightLibraryWords, setHighlightLibraryWords] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    type: 'delete-group' | 'delete-word' | null;
+    groupId?: string;
+    wordId?: string;
+  }>({ type: null });
 
   // --- Effects ---
   useEffect(() => {
@@ -651,31 +671,46 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   };
 
   const deleteGroup = (groupId: string) => {
-    if (brainstormGroups.length === 1) {
-      showToast("At least one group is required.", "error");
-      return;
-    }
-
-    setBrainstormGroups((prev) => {
-      const groupToDelete = prev.find((group) => group.id === groupId);
-      const fallbackGroup = prev.find((group) => group.id !== groupId) || prev[0];
-      return prev
-        .filter((group) => group.id !== groupId)
-        .map((group) =>
-          group.id === fallbackGroup?.id
-            ? { ...group, words: [...group.words, ...(groupToDelete?.words || [])] }
-            : group
-        );
-    });
-
-    if (selectedGroupId === groupId) {
-      const fallbackGroupId = brainstormGroups.find((group) => group.id !== groupId)?.id || '';
-      setSelectedGroupId(fallbackGroupId);
-    }
+    setConfirmState({ type: 'delete-group', groupId });
   };
 
   const removeWordFromTopic = (wordId: string) => {
-    updateWordInGroups(wordId, () => null);
+    setConfirmState({ type: 'delete-word', wordId });
+  };
+
+  const confirmDelete = () => {
+    if (confirmState.type === 'delete-group' && confirmState.groupId) {
+      const groupId = confirmState.groupId;
+
+      if (brainstormGroups.length === 1) {
+        showToast("At least one group is required.", "error");
+        setConfirmState({ type: null, groupId: undefined, wordId: undefined });
+        return;
+      }
+
+      setBrainstormGroups((prev) => {
+        const groupToDelete = prev.find((group) => group.id === groupId);
+        const fallbackGroup = prev.find((group) => group.id !== groupId) || prev[0];
+        return prev
+          .filter((group) => group.id !== groupId)
+          .map((group) =>
+            group.id === fallbackGroup?.id
+              ? { ...group, words: [...group.words, ...(groupToDelete?.words || [])] }
+              : group
+          );
+      });
+
+      if (selectedGroupId === groupId) {
+        const fallbackGroupId = brainstormGroups.find((group) => group.id !== groupId)?.id || '';
+        setSelectedGroupId(fallbackGroupId);
+      }
+    }
+
+    if (confirmState.type === 'delete-word' && confirmState.wordId) {
+      updateWordInGroups(confirmState.wordId, () => null);
+    }
+
+    setConfirmState({ type: null, groupId: undefined, wordId: undefined });
   };
 
   const editWordInTopic = (wordId: string, text: string) => {
@@ -734,28 +769,85 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       return;
     }
 
-    const brainstormList = brainstormWords.map((item, index) => `${index + 1}. ${item.text}`).join('\n');
-    const candidateWords = rankLibraryCandidates(currentTopic, vocab, brainstormWords);
-    const candidateBlock = candidateWords.length > 0
-      ? candidateWords
-          .slice(0, 20)
-          .map((item, index) => `${index + 1}. ${item.w} - ${item.m || 'No meaning saved'}`)
+    const brainstormList = brainstormGroups
+      .map((group, groupIndex) => {
+        const words = group.words.map((item, index) => `${index + 1}. ${item.text}`).join('\n');
+        return `Group ${groupIndex + 1}: ${group.name}\n${words}`;
+      })
+      .join('\n\n');
+    const candidateBlock = vocab.length > 0
+      ? vocab
+          .map((item) => item.w.trim())
+          .filter((word) => word && !word.includes(' '))
+          .slice(0, 3000)
           .join('\n')
-      : 'No matching library words available.';
+      : 'No words in library.';
 
     const prompt = [
-      `Ban la StudyBuddy dang ho tro mot nguoi hoc IELTS trong mini game Topic Recall.`,
-      `Topic: "${currentTopic}".`,
-      `Danh sach user da brainstorm:`,
+      `You are StudyBuddy helping an IELTS learner in a Topic Recall game.`,
+
+      `Topic: "${currentTopic}"`,
+
+      `USER BRAINSTORM (grouped by categories):`,
       brainstormList,
+
+      `WORD LIBRARY (reference only – DO NOT evaluate these words):`,
+      candidateBlock,
+
       ``,
-      `Hay danh gia tung tu xem co relevant voi topic hay khong, giai thich rat ngan gon bang tieng Viet.`,
-      `Sau do de xuat khoang 10 tu chi duoc lay tu danh sach Word Library candidate ben duoi ma nguoi hoc co the dung cho topic nay.`,
-      `Neu mot tu khong phu hop, hay noi ngan gon vi sao.`,
-      `Trinh bay ngan gon, de doc, uu tien bullet list.`,
+      `====================`,
+      `EVALUATION RULES`,
+      `====================`,
+
+      `1. ONLY evaluate words from the USER BRAINSTORM.`,
+      `2. Group names define MEANING CONTEXT (e.g., Habitat, Causes, Effects, Behavior).`,
+
       ``,
-      `Word Library candidate list:`,
-      candidateBlock
+      `CORE LOGIC (VERY IMPORTANT):`,
+      `A word is RELEVANT if:`,
+      `- It relates to the topic, OR`,
+      `- It logically fits its group meaning`,
+
+      ``,
+      `This means:`,
+      `- Words do NOT need to directly mention the topic`,
+      `- Group context ALONE is enough to make a word relevant`,
+
+      ``,
+      `STRICT FILTER:`,
+      `Mark a word as NOT relevant ONLY IF:`,
+      `- It does NOT relate to the topic`,
+      `AND`,
+      `- It does NOT fit its group meaning`,
+
+      ``,
+      `If there is ANY reasonable connection → KEEP the word`,
+      `When unsure → KEEP the word`,
+
+      ``,
+      `====================`,
+      `OUTPUT FORMAT`,
+      `====================`,
+
+      `A. NOT RELEVANT WORDS (if any):`,
+      `- word → short reason (max 1 line)`,
+
+      ``,
+      `B. NEW SUGGESTED WORDS (max 10):`,
+      `- Must be useful for this topic`,
+      `- Must NOT repeat any brainstorm words`,
+      `- PRIORITIZE words from the Word Library`,
+      `- Output as a simple bullet list`,
+
+      ``,
+      `====================`,
+      `STRICT OUTPUT RULES`,
+      `====================`,
+
+      `- DO NOT mention relevant words`,
+      `- DO NOT explain your reasoning process`,
+      `- DO NOT evaluate Word Library words`,
+      `- KEEP everything concise`,
     ].join('\n');
 
     requestStudyBuddyChatResponse(prompt);
@@ -1348,18 +1440,59 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                   ) : (
                     <div className="grid grid-cols-1 gap-4">
                       {brainstormGroups.map((group) => (
-                        <div key={group.id} className="rounded-2xl border border-slate-200 bg-white/90 shadow-sm overflow-hidden">
-                          <div className="flex flex-wrap items-center gap-2 justify-between px-1 py-1 border-b border-slate-100 bg-slate-50/70">
+                        <div
+                          key={group.id}
+                          className={cn(
+                            "rounded-2xl border shadow-sm overflow-hidden",
+                            GROUP_COLOR_STYLES[group.color || 'gray'] || GROUP_COLOR_STYLES.gray
+                          )}
+                        >
+                          <div className={cn(
+                            "flex flex-wrap items-center gap-2 justify-between px-1 py-1 border-b border-slate-100",
+                            {
+                              'bg-green-50': (group.color || 'gray') === 'green',
+                              'bg-red-50': (group.color || 'gray') === 'red',
+                              'bg-purple-50': (group.color || 'gray') === 'purple',
+                              'bg-yellow-50': (group.color || 'gray') === 'yellow',
+                              'bg-slate-50': (group.color || 'gray') === 'gray',
+                              'bg-pink-50': (group.color || 'gray') === 'pink',
+                              'bg-blue-50': (group.color || 'gray') === 'blue'
+                            }
+                          )}>
                             <div className="flex items-center gap-2">
                               {canvasMode === 'edit' ? (
                                 <input
                                   type="text"
                                   value={group.name}
                                   onChange={(e) => renameGroup(group.id, e.target.value)}
-                                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                  className={cn(
+                                    "px-3 py-1.5 border rounded-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
+                                    {
+                                      'bg-green-50 text-green-800 border-green-200': (group.color || 'gray') === 'green',
+                                      'bg-red-50 text-red-800 border-red-200': (group.color || 'gray') === 'red',
+                                      'bg-purple-50 text-purple-800 border-purple-200': (group.color || 'gray') === 'purple',
+                                      'bg-yellow-50 text-yellow-800 border-yellow-200': (group.color || 'gray') === 'yellow',
+                                      'bg-slate-50 text-slate-800 border-slate-300': (group.color || 'gray') === 'gray',
+                                      'bg-pink-50 text-pink-800 border-pink-200': (group.color || 'gray') === 'pink',
+                                      'bg-blue-50 text-blue-800 border-blue-200': (group.color || 'gray') === 'blue'
+                                    }
+                                  )}
                                 />
                               ) : (
-                                <div className="px-3 py-1.5 bg-white rounded-lg font-bold text-slate-900">
+                                <div
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-lg font-bold",
+                                    {
+                                      'bg-green-50 text-green-800': (group.color || 'gray') === 'green',
+                                      'bg-red-50 text-red-800': (group.color || 'gray') === 'red',
+                                      'bg-purple-50 text-purple-800': (group.color || 'gray') === 'purple',
+                                      'bg-yellow-50 text-yellow-800': (group.color || 'gray') === 'yellow',
+                                      'bg-slate-50 text-slate-800': (group.color || 'gray') === 'gray',
+                                      'bg-pink-50 text-pink-800': (group.color || 'gray') === 'pink',
+                                      'bg-blue-50 text-blue-800': (group.color || 'gray') === 'blue'
+                                    }
+                                  )}
+                                >
                                   {group.name}
                                 </div>
                               )}
@@ -1375,8 +1508,26 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                       : "bg-white text-slate-600 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600"
                                   )}
                                 >
-                                  Add Here
+                                  Set default
                                 </button>
+                                <select
+                                  value={group.color || 'gray'}
+                                  onChange={(e) => {
+                                    const color = e.target.value;
+                                    setBrainstormGroups((prev) =>
+                                      prev.map((g) => (g.id === group.id ? { ...g, color } : g))
+                                    );
+                                  }}
+                                  className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-600"
+                                >
+                                  <option value="green">Green</option>
+                                  <option value="red">Red</option>
+                                  <option value="purple">Purple</option>
+                                  <option value="yellow">Yellow</option>
+                                  <option value="gray">Gray</option>
+                                  <option value="pink">Pink</option>
+                                  <option value="blue">Blue</option>
+                                </select>
                                 <button
                                   onClick={() => deleteGroup(group.id)}
                                   className="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
@@ -1456,6 +1607,22 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
       {/* --- Modals & Toasts --- */}
       <AnimatePresence>
+        {confirmState.type && (
+          <ConfirmationModal
+            isOpen={true}
+            title={confirmState.type === 'delete-group' ? "Delete Group" : "Delete Word"}
+            description={
+              confirmState.type === 'delete-group'
+                ? "Are you sure you want to delete this group? Words will be moved to another group."
+                : "Are you sure you want to remove this word?"
+            }
+            confirmText="Delete"
+            cancelText="Cancel"
+            onConfirm={confirmDelete}
+            onCancel={() => setConfirmState({ type: null })}
+            onClose={() => setConfirmState({ type: null })}
+          />
+        )}
         {isTopicModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div 
