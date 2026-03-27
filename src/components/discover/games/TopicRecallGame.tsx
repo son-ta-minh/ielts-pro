@@ -179,7 +179,16 @@ const areGroupListsEqual = (
     areWordListsEqual(group.words, right[index]?.words || [])
   );
 
-const splitBrainstormText = (text: string) => text.match(/[A-Za-z0-9']+|[^A-Za-z0-9']+/g) || [text];
+const normalizeBrainstormWordText = (text: string) =>
+  text
+    .replace(/\s*-\s*/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const toLibraryMatchKey = (text: string) =>
+  (text.match(/[A-Za-z0-9']+/g) || [])
+    .map((part) => part.toLowerCase())
+    .join(' ');
 
 const tokenizeBrainstormWords = (text: string) => {
   const tokens: Array<{ raw: string; normalized: string; start: number; end: number }> = [];
@@ -230,8 +239,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const [newGroupName, setNewGroupName] = useState('');
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
-  const [showUnusedOnly, setShowUnusedOnly] = useState(false);
-  const [showLearnedOnly, setShowLearnedOnly] = useState(false);
+  const [showUnusedOnly, setShowUnusedOnly] = useState(true);
+  const [showLearnedOnly, setShowLearnedOnly] = useState(true);
   const [highlightLibraryWords, setHighlightLibraryWords] = useState(false);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [confirmState, setConfirmState] = useState<{
@@ -440,7 +449,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const activeFilterCount = Number(showUnusedOnly) + Number(showLearnedOnly);
 
   const libraryWordSet = useMemo(
-    () => new Set(vocab.map((item) => item.w.trim().toLowerCase()).filter(Boolean)),
+    () => new Set(vocab.map((item) => toLibraryMatchKey(item.w)).filter(Boolean)),
     [vocab]
   );
 
@@ -520,7 +529,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   };
 
   const wordExistsInTopic = (text: string) =>
-    brainstormWords.some((item) => item.text.toLowerCase() === text.trim().toLowerCase());
+    brainstormWords.some((item) => normalizeBrainstormWordText(item.text).toLowerCase() === normalizeBrainstormWordText(text).toLowerCase());
 
   const updateWordInGroups = (wordId: string, updater: (word: BrainstormItem) => BrainstormItem | null) => {
     setBrainstormGroups((prev) =>
@@ -561,14 +570,15 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   };
 
   const addCustomWord = (text: string) => {
-    if (!text.trim()) return;
-    if (wordExistsInTopic(text)) {
+    const normalizedText = normalizeBrainstormWordText(text);
+    if (!normalizedText) return;
+    if (wordExistsInTopic(normalizedText)) {
       showToast("Word already in brainstorm!", "error");
       return;
     }
     const newItem: BrainstormItem = {
       id: Math.random().toString(36).substr(2, 9),
-      text: text.trim(),
+      text: normalizedText,
       isCustom: true
     };
     setBrainstormGroups((prev) => {
@@ -658,14 +668,14 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   };
 
   const editWordInTopic = (wordId: string, text: string) => {
-    const normalizedText = text.trim();
+    const normalizedText = normalizeBrainstormWordText(text);
     if (!normalizedText) {
       removeWordFromTopic(wordId);
       return;
     }
 
     const duplicate = brainstormWords.some(
-      (word) => word.id !== wordId && word.text.toLowerCase() === normalizedText.toLowerCase()
+      (word) => word.id !== wordId && normalizeBrainstormWordText(word.text).toLowerCase() === normalizedText.toLowerCase()
     );
     if (duplicate) {
       showToast("Word already exists in this topic.", "error");
