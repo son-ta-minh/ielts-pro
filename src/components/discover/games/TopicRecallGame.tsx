@@ -208,6 +208,25 @@ const areGroupListsEqual = (
     group.name === right[index]?.name && areWordListsEqual(group.words, right[index]?.words || [])
   );
 
+const splitBrainstormText = (text: string) => text.match(/[A-Za-z0-9']+|[^A-Za-z0-9']+/g) || [text];
+
+const tokenizeBrainstormWords = (text: string) => {
+  const tokens: Array<{ raw: string; normalized: string; start: number; end: number }> = [];
+  const regex = /[A-Za-z0-9']+/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    tokens.push({
+      raw: match[0],
+      normalized: match[0].toLowerCase(),
+      start: match.index,
+      end: match.index + match[0].length
+    });
+  }
+
+  return tokens;
+};
+
 // --- Components ---
 
 export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, onUpdateUser, onComplete, onExit }) => {
@@ -427,6 +446,78 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       return (wordTopicUsageMap.get(v.w.toLowerCase()) || []).length === 0;
     });
   }, [searchQuery, showUnusedOnly, vocab, wordTopicUsageMap]);
+
+  const libraryWordSet = useMemo(
+    () => new Set(vocab.map((item) => item.w.trim().toLowerCase()).filter(Boolean)),
+    [vocab]
+  );
+
+  const renderHighlightedBrainstormText = (text: string) => {
+    const wordTokens = tokenizeBrainstormWords(text);
+    if (wordTokens.length === 0) {
+      return <span className="inline-flex flex-wrap items-center gap-1">{text}</span>;
+    }
+
+    const nodes: React.ReactNode[] = [];
+    let cursor = 0;
+    let index = 0;
+
+    while (index < wordTokens.length) {
+      let bestMatchLength = 0;
+      let bestMatchEnd = wordTokens[index].end;
+
+      for (let end = wordTokens.length - 1; end >= index; end -= 1) {
+        const slice = wordTokens.slice(index, end + 1);
+        const candidate = slice.map((part) => part.normalized).join(' ');
+        if (libraryWordSet.has(candidate)) {
+          bestMatchLength = slice.length;
+          bestMatchEnd = slice[slice.length - 1].end;
+          break;
+        }
+      }
+
+      const tokenStart = wordTokens[index].start;
+      if (cursor < tokenStart) {
+        nodes.push(
+          <span key={`gap-${cursor}`} className="whitespace-pre-wrap">
+            {text.slice(cursor, tokenStart)}
+          </span>
+        );
+      }
+
+      if (bestMatchLength > 0) {
+        nodes.push(
+          <span
+            key={`match-${index}`}
+            className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-emerald-700"
+          >
+            {text.slice(tokenStart, bestMatchEnd)}
+          </span>
+        );
+        cursor = bestMatchEnd;
+        index += bestMatchLength;
+        continue;
+      }
+
+      nodes.push(
+        <span key={`word-${index}`} className="whitespace-pre-wrap">
+          {wordTokens[index].raw}
+        </span>
+      );
+      cursor = wordTokens[index].end;
+      index += 1;
+    }
+
+    if (cursor < text.length) {
+      nodes.push(
+        <span key={`tail-${cursor}`} className="whitespace-pre-wrap">
+          {text.slice(cursor)}
+        </span>
+      );
+    }
+
+    return <span className="inline-flex flex-wrap items-center gap-1">{nodes}</span>;
+  };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -939,7 +1030,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Word Library</h2>
+                  <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Word Library ({filteredVocab.length})</h2>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setShowUnusedOnly((prev) => !prev)}
@@ -1248,7 +1339,10 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                         <input
                                           value={item.text}
                                           onChange={(e) => editWordInTopic(item.id, e.target.value)}
-                                          className="min-w-[80px] max-w-[220px] bg-transparent font-bold text-slate-900 focus:outline-none"
+                                          className={cn(
+                                            "min-w-[80px] max-w-[220px] bg-transparent font-bold focus:outline-none",
+                                            libraryWordSet.has(item.text.trim().toLowerCase()) ? "text-emerald-700" : "text-slate-900"
+                                          )}
                                           size={Math.max(item.text.length, 6)}
                                         />
                                         <select
@@ -1269,10 +1363,13 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                         >
                                           <Trash2 size={16} />
                                         </button>
+                                        <div className="basis-full text-xs font-semibold leading-relaxed text-slate-500">
+                                          {renderHighlightedBrainstormText(item.text)}
+                                        </div>
                                       </>
                                     ) : (
-                                      <div className="font-bold text-slate-900 whitespace-nowrap">
-                                        {item.text}
+                                      <div className="font-bold text-slate-900">
+                                        {renderHighlightedBrainstormText(item.text)}
                                       </div>
                                     )}
                                   </div>
