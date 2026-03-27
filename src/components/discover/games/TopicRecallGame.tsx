@@ -1280,7 +1280,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                     <div className="grid grid-cols-1 gap-4">
                       {brainstormGroups.map((group) => (
                         <div key={group.id} className="rounded-2xl border border-slate-200 bg-white/90 shadow-sm overflow-hidden">
-                          <div className="flex flex-wrap items-center gap-2 justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/70">
+                          <div className="flex flex-wrap items-center gap-2 justify-between px-1 py-1 border-b border-slate-100 bg-slate-50/70">
                             <div className="flex items-center gap-2">
                               {canvasMode === 'edit' ? (
                                 <input
@@ -1290,7 +1290,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                   className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                                 />
                               ) : (
-                                <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-900">
+                                <div className="px-3 py-1.5 bg-white rounded-lg font-bold text-slate-900">
                                   {group.name}
                                 </div>
                               )}
@@ -1329,10 +1329,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                 {group.words.map((item) => (
                                   <div
                                     key={item.id}
-                                    className={cn(
-                                      "group inline-flex max-w-full flex-wrap items-center gap-2 rounded-xl border px-3 py-2 shadow-sm",
-                                      item.isCustom ? "border-amber-300 bg-amber-50/80" : "border-indigo-200 bg-indigo-50/70"
-                                    )}
+                                    className="group inline-flex max-w-full flex-wrap items-center gap-2 rounded-xl border px-3 py-2 shadow-sm"
                                   >
                                     {canvasMode === 'edit' ? (
                                       <>
