@@ -617,10 +617,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   };
 
   const renameGroup = (groupId: string, nextName: string) => {
-    const normalizedName = nextName.trim();
-    if (!normalizedName) return;
     setBrainstormGroups((prev) =>
-      prev.map((group) => (group.id === groupId ? { ...group, name: normalizedName } : group))
+      prev.map((group) => (group.id === groupId ? { ...group, name: nextName } : group))
     );
   };
 
@@ -1096,23 +1094,12 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                       <div className="px-4 py-2">
                         <motion.div
                           layout
-                          onClick={() => addToBrainstorm(item.w)}
+                          onClick={() => setSelectedWord(item)}
                           className="group p-4 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer"
                         >
                           <div className="flex justify-between items-start mb-1">
                             <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.w}</h3>
                             <div className="flex items-center gap-1">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedWord(item);
-                                }}
-                                className="flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-indigo-600 rounded transition-colors"
-                                title="View Details"
-                              >
-                                <Eye size={16} />
-                                <span className="text-xs font-medium hidden sm:inline">Details</span>
-                              </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1378,6 +1365,14 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                   type="text"
                                   value={group.name}
                                   onChange={(e) => renameGroup(group.id, e.target.value)}
+                                  onBlur={() => {
+                                    const trimmed = group.name.trim();
+                                    if (!trimmed) {
+                                      renameGroup(group.id, DEFAULT_GROUP_NAME);
+                                    } else if (trimmed !== group.name) {
+                                      renameGroup(group.id, trimmed);
+                                    }
+                                  }}
                                   className={cn(
                                     "px-3 py-1.5 border rounded-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
                                     {
