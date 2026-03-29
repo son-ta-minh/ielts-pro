@@ -606,35 +606,39 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
         <div className="min-h-[500px]">
             {activeTab === 'MEDIA' && renderMediaPanel()}
 
-            {activeTab === 'ESSAY' && (
-                <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white overflow-hidden flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    {!isLinkedFileUnit && isPracticeMode && (
-                        <div className="absolute top-4 right-6 z-20 flex items-center gap-2 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full border border-amber-200 animate-in fade-in slide-in-from-top-2 shadow-sm">
-                            <BrainCircuit size={12} />
-                            <span className="text-[10px] font-black uppercase tracking-tighter">Active Recall</span>
-                        </div>
-                    )}
-                    {isLinkedFileUnit ? (
-                        renderLinkedFile(essayFileContent)
-                    ) : (
-                        <EssayReader 
-                            className="min-h-[60vh]"
-                            text={unit.essay || ''} 
-                            vocabString={unit.customVocabString} 
-                            wordsByText={wordsByText} 
-                            onHoverWord={handleHoverWord} 
-                            onWordAction={onWordAction} 
-                            isPracticeMode={isPracticeMode} 
-                        />
-                    )}
+            <div className="space-y-4">
+                <div className={`${activeTab === 'ESSAY' ? 'block' : 'hidden'}`}>
+                    <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white overflow-hidden flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        {!isLinkedFileUnit && isPracticeMode && (
+                            <div className="absolute top-4 right-6 z-20 flex items-center gap-2 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full border border-amber-200 animate-in fade-in slide-in-from-top-2 shadow-sm">
+                                <BrainCircuit size={12} />
+                                <span className="text-[10px] font-black uppercase tracking-tighter">Active Recall</span>
+                            </div>
+                        )}
+                        {isLinkedFileUnit ? (
+                            renderLinkedFile(essayFileContent)
+                        ) : (
+                            <EssayReader 
+                                className="min-h-[60vh]"
+                                text={unit.essay || ''} 
+                                vocabString={unit.customVocabString} 
+                                wordsByText={wordsByText} 
+                                onHoverWord={handleHoverWord} 
+                                onWordAction={onWordAction} 
+                                isPracticeMode={isPracticeMode} 
+                            />
+                        )}
+                    </div>
                 </div>
-            )}
 
-            {activeTab === 'ANSWER' && isLinkedFileUnit && (
-                <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white overflow-hidden flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    {renderLinkedFile(answerFileContent)}
-                </div>
-            )}
+                {isLinkedFileUnit && hasAnswerFile && (
+                    <div className={`${activeTab === 'ANSWER' ? 'block' : 'hidden'}`}>
+                        <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white overflow-hidden flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {renderLinkedFile(answerFileContent)}
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {activeTab === 'VOCAB' && !isLinkedFileUnit && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
