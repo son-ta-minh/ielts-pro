@@ -191,7 +191,18 @@ export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ allWords, 
 
   const handleAddAudio = (fileData: any) => {
     if (!fileData?.url) return;
-    setEditAudioLinks(prev => prev.includes(fileData.url) ? prev : [...prev, fileData.url]);
+
+    let storedUrl = fileData.url as string;
+    if (storedUrl.startsWith('http://') || storedUrl.startsWith('https://')) {
+      try {
+        const parsed = new URL(storedUrl);
+        storedUrl = `${parsed.pathname}${parsed.search}`;
+      } catch {
+        storedUrl = fileData.url;
+      }
+    }
+
+    setEditAudioLinks(prev => prev.includes(storedUrl) ? prev : [...prev, storedUrl]);
   };
 
   const handleRemoveAudio = (index: number) => {

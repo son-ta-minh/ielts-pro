@@ -12,6 +12,7 @@ import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { renderAsync } from 'docx-preview';
 import { parseMarkdown } from '../../utils/markdownParser';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 interface TooltipState { word: VocabularyItem; rect: DOMRect; }
 type LinkedFileContent =
@@ -427,6 +428,29 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
     );
   };
 
+  const normalizeAudioUrl = (rawUrl: string) => {
+    if (!rawUrl) return '';
+    if (rawUrl.startsWith('blob:')) return rawUrl;
+
+    try {
+      const currentBase = getServerUrl(getConfig());
+      let normalized = rawUrl;
+
+      if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+        const parsed = new URL(normalized);
+        normalized = `${parsed.pathname}${parsed.search}`;
+      }
+
+      if (normalized.startsWith('/')) {
+        normalized = `${currentBase}${normalized}`;
+      }
+
+      return normalized;
+    } catch {
+      return rawUrl;
+    }
+  };
+
   const renderMediaPanel = () => {
     if (!hasMedia) {
       return (
@@ -438,8 +462,8 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
       );
     }
 
-    const currentMediaUrl = mediaLinks[mediaTrackIndex];
-    const currentMediaName = decodeURIComponent(currentMediaUrl.split('/').pop() || `Track ${mediaTrackIndex + 1}`);
+    const currentMediaUrl = normalizeAudioUrl(mediaLinks[mediaTrackIndex]);
+    const currentMediaName = decodeURIComponent(mediaLinks[mediaTrackIndex].split('/').pop() || `Track ${mediaTrackIndex + 1}`);
 
     return (
       <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
