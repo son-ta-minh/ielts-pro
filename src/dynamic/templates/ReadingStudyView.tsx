@@ -35,7 +35,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
   const [isPracticeMode, setIsPracticeMode] = useState(false);
   const [note, setNote] = useState(unit.note ?? '');
   const noteSaveRef = useRef(unit.note ?? '');
-  const noteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isNoteSaving, setIsNoteSaving] = useState(false);
   
   const [unitTablePage, setUnitTablePage] = useState(0);
   const [unitTablePageSize, setUnitTablePageSize] = useState(10);
@@ -80,28 +80,6 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
   }, [unit.note]);
 
   useEffect(() => {
-    if (note === noteSaveRef.current) return;
-    if (noteSaveTimerRef.current) {
-      clearTimeout(noteSaveTimerRef.current);
-      noteSaveTimerRef.current = null;
-    }
-    noteSaveTimerRef.current = setTimeout(async () => {
-      noteSaveRef.current = note;
-      noteSaveTimerRef.current = null;
-      const updatedUnit = { ...unit, note, updatedAt: Date.now() };
-      await dataStore.saveUnit(updatedUnit);
-      onDataChange();
-    }, 600);
-
-    return () => {
-      if (noteSaveTimerRef.current) {
-        clearTimeout(noteSaveTimerRef.current);
-        noteSaveTimerRef.current = null;
-      }
-    };
-  }, [note, unit, onDataChange]);
-
-  useEffect(() => {
     const encodePathForApi = (relativePath: string) => relativePath.split('/').map(part => encodeURIComponent(part)).join('/');
 
     const loadLinkedFile = async (
@@ -141,7 +119,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
             extension: link.extension
           });
         }
-      } catch (_e) {
+      } catch {
         setState({ state: 'error', message: 'Connection error while loading file.' });
       }
     };
@@ -184,6 +162,20 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
         setIsComprehensionModalOpen(true);
     } else {
         showToast('This unit has no comprehension questions.', 'info');
+    }
+  };
+
+  const handleSaveNote = async () => {
+    if (isNoteSaving || note === noteSaveRef.current) return;
+    setIsNoteSaving(true);
+    try {
+      const updatedUnit = { ...unit, note, updatedAt: Date.now() };
+      await dataStore.saveUnit(updatedUnit);
+      noteSaveRef.current = note;
+      await onDataChange();
+      showToast('Note saved.', 'success');
+    } finally {
+      setIsNoteSaving(false);
     }
   };
 
@@ -327,7 +319,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
     try {
         await exportUnitsToJson([unit], user.id);
         showToast(`Unit "${unit.name}" exported successfully.`, 'success');
-    } catch (e) {
+    } catch {
         showToast('Failed to export unit.', 'error');
     }
   };
@@ -377,6 +369,9 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
       answerFileContent={answerFileContent}
       note={note}
       onNoteChange={setNote}
+      onSaveNote={handleSaveNote}
+      isNoteSaving={isNoteSaving}
+      isNoteDirty={note !== noteSaveRef.current}
     />
   );
 }

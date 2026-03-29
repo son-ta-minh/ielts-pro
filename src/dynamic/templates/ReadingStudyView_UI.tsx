@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Play, Edit3, ArrowLeft, BrainCircuit, BookOpen, Tag, HelpCircle, X, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText, Headphones, SkipBack, SkipForward, FileAudio } from 'lucide-react';
+import { Play, Edit3, ArrowLeft, BrainCircuit, BookOpen, Tag, HelpCircle, X, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText, Headphones, SkipBack, SkipForward, FileAudio, Save } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
 import EditWordModal from '../../components/word_lib/EditWordModal';
@@ -322,10 +322,13 @@ export interface ReadingStudyViewUIProps {
     answerFileContent: LinkedFileContent;
     note: string;
     onNoteChange: (value: string) => void;
+    onSaveNote: () => Promise<void>;
+    isNoteSaving: boolean;
+    isNoteDirty: boolean;
 }
 
 export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => {
-  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, setUnitTableQuery, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, isComprehensionModalOpen, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange, essayFileContent, answerFileContent, note, onNoteChange } = props;
+  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, setUnitTableQuery, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, isComprehensionModalOpen, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange, essayFileContent, answerFileContent, note, onNoteChange, onSaveNote, isNoteSaving, isNoteDirty } = props;
   const [noteMode, setNoteMode] = useState<'edit' | 'preview'>('edit');
   const previewHtml = useMemo(() => parseMarkdown(note), [note]);
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
@@ -691,51 +694,58 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
                 </div>
             )}
 
-            {activeTab === 'NOTE' && (
-                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col min-h-[calc(100vh-260px)]">
-                    <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white p-6 space-y-5 flex flex-col flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
-                                <p className="text-xs font-black uppercase tracking-[0.3em] text-neutral-400">Note</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setNoteMode('edit')}
-                                    className={`px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-[0.3em] transition ${noteMode === 'edit' ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}
-                                >
-                                    Raw
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setNoteMode('preview')}
-                                    className={`px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-[0.3em] transition ${noteMode === 'preview' ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}
-                                >
-                                    Preview
-                                </button>
-                            </div>
+            <div className={`${activeTab === 'NOTE' ? 'block' : 'hidden'} animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col min-h-[calc(100vh-260px)]`}>
+                <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white p-6 space-y-5 flex flex-col flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <p className="text-xs font-black uppercase tracking-[0.3em] text-neutral-400">Note</p>
                         </div>
-                        <div className="flex flex-col flex-1 min-h-0">
-                            {noteMode === 'edit' ? (
-                                <textarea
-                                    value={note}
-                                    onChange={(event) => onNoteChange(event.target.value)}
-                                    placeholder="Write your Markdown note here..."
-                                    className="w-full flex-1 h-full min-h-[300px] border border-neutral-300 rounded-md p-3 resize-none focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                                />
-                            ) : (
-                                <div className="w-full flex-1 min-h-[300px] border border-neutral-300 rounded-md px-4 pb-4 pt-2 overflow-auto bg-neutral-50 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 prose-headings:mt-2 prose-headings:mb-2 text-sm text-neutral-800">
-                                    {previewHtml ? (
-                                        <div className="text-neutral-900" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                                    ) : (
-                                        <p className="text-xs text-neutral-500">Markdown preview will appear here while you type.</p>
-                                    )}
-                                </div>
-                            )}
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void onSaveNote()}
+                                disabled={!isNoteDirty || isNoteSaving}
+                                className={`px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-[0.3em] transition flex items-center gap-2 ${isNoteDirty && !isNoteSaving ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'bg-neutral-100 text-neutral-400'}`}
+                            >
+                                {isNoteSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                                Save
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setNoteMode('edit')}
+                                className={`px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-[0.3em] transition ${noteMode === 'edit' ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}
+                            >
+                                Raw
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setNoteMode('preview')}
+                                className={`px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-[0.3em] transition ${noteMode === 'preview' ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'}`}
+                            >
+                                Preview
+                            </button>
                         </div>
                     </div>
+                    <div className="flex flex-col flex-1 min-h-0">
+                        {noteMode === 'edit' ? (
+                            <textarea
+                                value={note}
+                                onChange={(event) => onNoteChange(event.target.value)}
+                                placeholder="Write your Markdown note here..."
+                                className="w-full flex-1 h-full min-h-[300px] border border-neutral-300 rounded-md p-3 resize-none focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                            />
+                        ) : (
+                            <div className="w-full flex-1 min-h-[300px] border border-neutral-300 rounded-md px-4 pb-4 pt-2 overflow-auto bg-neutral-50 prose prose-sm max-w-none prose-p:text-neutral-600 prose-strong:text-neutral-900 prose-a:text-indigo-600 prose-headings:mt-2 prose-headings:mb-2 text-sm text-neutral-800">
+                                {previewHtml ? (
+                                    <div className="text-neutral-900" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                                ) : (
+                                    <p className="text-xs text-neutral-500">Markdown preview will appear here while you type.</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
 
       </div>
