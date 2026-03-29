@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, ChangeEvent } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Copy, Trash2, Edit3, Image as ImageIcon, RefreshCw, X, CheckCircle2, AlertCircle, Eye, EyeOff, Info, ArrowLeft, BookOpenCheck, SlidersHorizontal, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Virtuoso } from 'react-virtuoso';
@@ -6,13 +6,14 @@ import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
-import { User, VocabularyItem as LibraryWord } from '../../../app/types';
+import { User, VocabularyItem } from '../../../app/types';
 import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
 import ConfirmationModal from '../../../components/common/ConfirmationModal';
 import { getTopicRecallEvaluationPrompt } from '../../../services/promptService';
+import ViewWordModal from '../../word_lib/ViewWordModal';
 
 interface TopicRecallGameProps {
-  words: LibraryWord[];
+  words: VocabularyItem[];
   user: User;
   onUpdateUser: (user: User) => Promise<void>;
   onComplete?: (score: number) => void;
@@ -28,23 +29,11 @@ export interface Collocation {
   e?: string;
 }
 
-export interface VocabItem {
-  id: string;
-  w: string; // headword
-  m: string; // meaning
-  ex: string; // example sentence(s)
-  col: Collocation[];
-  learnStatus?: string;
-}
-
-export interface VocabData {
-  vocab: VocabItem[];
-}
-
 export interface BrainstormItem {
   id: string;
   text: string;
   isCustom?: boolean;
+  note?: string;
 }
 
 export interface BrainstormGroup {
@@ -70,8 +59,8 @@ const DEFAULT_IMAGE = '1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=10
 const COMMON_TOPICS = ['Environment', 'Technology', 'Education', 'Health', 'Travel', 'Work', 'Society', 'Culture'];
 const DEFAULT_GROUP_NAME = 'Default Group';
 
-const normalizeLibraryWords = (words: LibraryWord[]): VocabItem[] => {
-  const deduped = new Map<string, VocabItem>();
+const normalizeLibraryWords = (words: VocabularyItem[]): VocabularyItem[] => {
+  const deduped = new Map<string, VocabularyItem>();
 
   words.forEach((word) => {
     const headword = word.word?.trim();
@@ -81,25 +70,12 @@ const normalizeLibraryWords = (words: LibraryWord[]): VocabItem[] => {
     if (deduped.has(key)) return;
 
     deduped.set(key, {
-      id: word.id,
-      w: headword,
-      m: word.meaningVi || '',
-      ex: word.example || '',
-      learnStatus: word.lastReview ? 'learned' : 'new',
-      col: Array.isArray(word.collocationsArray)
-        ? word.collocationsArray
-            .filter((item) => item && !item.isIgnored)
-          .map((item) => ({
-            x: item.text || '',
-            ds: item.d || '',
-            e: word.example || ''
-          }))
-          .filter((item) => item.x || item.ds)
-        : []
+      ...word,
+      word: headword
     });
   });
 
-  return Array.from(deduped.values()).sort((a, b) => a.w.localeCompare(b.w));
+  return Array.from(deduped.values()).sort((a, b) => a.word.localeCompare(b.word));
 };
 
 const tokenize = (text: string) =>
@@ -127,15 +103,22 @@ const extractImagesFromPayload = (payload: any): { url: string }[] => {
     .filter((item: { url: string } | null): item is { url: string } => !!item?.url);
 };
 
-const createBrainstormItems = (words: string[]): BrainstormItem[] =>
+const createBrainstormItems = (words: Array<string | { id?: string; text?: string; note?: string }>): BrainstormItem[] =>
   words
-    .map((word) => word.trim())
-    .filter(Boolean)
-    .map((word, index) => ({
-      id: `${word.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'item'}-${index}-${Date.now()}`,
-      text: word,
-      isCustom: true
-    }));
+    .map((entry, index) => {
+      const text = typeof entry === 'string' ? entry.trim() : (entry.text || '').trim();
+      if (!text) return null;
+
+      return {
+        id: typeof entry === 'string'
+          ? `${text.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'item'}-${index}-${Date.now()}`
+          : entry.id || `${text.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'item'}-${index}-${Date.now()}`,
+        text,
+        note: typeof entry === 'string' ? '' : entry.note || '',
+        isCustom: true
+      };
+    })
+    .filter((item): item is BrainstormItem => !!item);
 
 const colors = ['green', 'red', 'purple', 'yellow', 'gray', 'pink', 'blue'];
 const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
@@ -155,7 +138,13 @@ const createBrainstormGroupsFromSavedTopic = (topicState?: User['topicRecallData
     return savedGroups.map((group: any, index: number) => ({
       id: group.id || `group-${index}-${Date.now()}`,
       name: group.name || (index === 0 ? DEFAULT_GROUP_NAME : `Group ${index + 1}`),
-      words: createBrainstormItems(Array.isArray(group.words) ? group.words : []),
+      words: createBrainstormItems(
+        Array.isArray(group.items) && group.items.length > 0
+          ? group.items
+          : Array.isArray(group.words)
+            ? group.words
+            : []
+      ),
       isDefault: index === 0,
       color: typeof group.color === 'string' ? group.color : 'gray'
     }));
@@ -169,14 +158,15 @@ const areWordListsEqual = (left: string[], right: string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
 const areGroupListsEqual = (
-  left: { name: string; words: string[]; color?: string }[],
-  right: { name: string; words: string[]; color?: string }[]
+  left: { name: string; words: string[]; color?: string; notes?: string[] }[],
+  right: { name: string; words: string[]; color?: string; notes?: string[] }[]
 ) =>
   left.length === right.length &&
   left.every((group, index) =>
     group.name === right[index]?.name &&
     (group.color || 'gray') === (right[index]?.color || 'gray') &&
-    areWordListsEqual(group.words, right[index]?.words || [])
+    areWordListsEqual(group.words, right[index]?.words || []) &&
+    areWordListsEqual(group.notes || [], right[index]?.notes || [])
   );
 
 const normalizeBrainstormWordText = (text: string) =>
@@ -213,7 +203,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   // --- State ---
   // Tab state for mobile/iPad view
   const [activeTab, setActiveTab] = useState<'library' | 'canvas'>('library');
-  const [vocab, setVocab] = useState<VocabItem[]>(() => normalizeLibraryWords(words || []));
+  const [vocab, setVocab] = useState<VocabularyItem[]>(() => normalizeLibraryWords(words || []));
   const [currentTopic, setCurrentTopic] = useState<string>(user.topicRecallData?.lastTopic || 'Environment');
   const [topicImages, setTopicImages] = useState<any[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -229,7 +219,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
-  const [selectedWord, setSelectedWord] = useState<VocabItem | null>(null);
+  const [selectedWord, setSelectedWord] = useState<VocabularyItem | null>(null);
   const [showMeaning, setShowMeaning] = useState(true);
   const [showCollocation, setShowCollocation] = useState(true);
   const [newTopicName, setNewTopicName] = useState(user.topicRecallData?.lastTopic || 'Environment');
@@ -383,12 +373,18 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         id: group.id,
         name: group.name.trim() || DEFAULT_GROUP_NAME,
         words: group.words.map((item) => item.text.trim()).filter(Boolean),
+        items: group.words.map((item) => ({
+          id: item.id,
+          text: item.text.trim(),
+          note: item.note?.trim() || ''
+        })).filter((item) => item.text),
         color: group.color || 'gray'
       }));
       const serializedWords = serializedGroups.flatMap((group) => group.words);
       const existingGroups = (existingTopic?.groups || []).map((group) => ({
         name: group.name,
         words: group.words || [],
+        notes: (group.items || []).map((item) => item.note || ''),
         color: group.color || 'gray'
       }));
 
@@ -396,7 +392,15 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         lastTopic === normalizedTopic &&
         existingTopic &&
         areWordListsEqual(existingTopic.words || [], serializedWords) &&
-        areGroupListsEqual(existingGroups, serializedGroups.map(({ name, words, color }) => ({ name, words, color })))
+        areGroupListsEqual(
+          existingGroups,
+          serializedGroups.map(({ name, words, items, color }) => ({
+            name,
+            words,
+            notes: items.map((item) => item.note || ''),
+            color
+          }))
+        )
       ) {
         return;
       }
@@ -429,16 +433,16 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     const q = searchQuery.toLowerCase();
     return vocab.filter(v => {
       const matchesSearch = !searchQuery || (
-        (v.w && v.w.toLowerCase().includes(q)) ||
-        (v.m && v.m.toLowerCase().includes(q)) ||
-        (v.col && Array.isArray(v.col) && v.col.some(c => (c.x && c.x.toLowerCase().includes(q)) || (c.ds && c.ds.toLowerCase().includes(q))))
+        (v.word && v.word.toLowerCase().includes(q)) ||
+        (v.meaningVi && v.meaningVi.toLowerCase().includes(q)) ||
+        (v.collocationsArray && Array.isArray(v.collocationsArray) && v.collocationsArray.some(c => ((c.text || '').toLowerCase().includes(q)) || ((c.d || '').toLowerCase().includes(q))))
       );
 
       if (!matchesSearch) return false;
-      if (showUnusedOnly && (wordTopicUsageMap.get(v.w.toLowerCase()) || []).length > 0) {
+      if (showUnusedOnly && (wordTopicUsageMap.get(v.word.toLowerCase()) || []).length > 0) {
         return false;
       }
-      if (showLearnedOnly && v.learnStatus !== 'learned') {
+      if (showLearnedOnly && !v.lastReview) {
         return false;
       }
 
@@ -449,14 +453,14 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   const activeFilterCount = Number(showUnusedOnly) + Number(showLearnedOnly);
 
   const libraryWordSet = useMemo(
-    () => new Set(vocab.map((item) => toLibraryMatchKey(item.w)).filter(Boolean)),
+    () => new Set(vocab.map((item) => toLibraryMatchKey(item.word)).filter(Boolean)),
     [vocab]
   );
 
   const renderHighlightedBrainstormText = (text: string) => {
     const wordTokens = tokenizeBrainstormWords(text);
     if (wordTokens.length === 0) {
-      return <span className="inline-flex flex-wrap items-center gap-0">{text}</span>;
+      return <span className="whitespace-pre-wrap">{text}</span>;
     }
 
     const nodes: React.ReactNode[] = [];
@@ -520,7 +524,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
       );
     }
 
-    return <span className="inline-flex flex-wrap items-center gap-0">{nodes}</span>;
+    return <span className="whitespace-pre-wrap">{nodes}</span>;
   };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -551,7 +555,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     const newItem: BrainstormItem = {
       id: Math.random().toString(36).substr(2, 9),
       text: word,
-      isCustom: false
+      isCustom: false,
+      note: ''
     };
     setBrainstormGroups((prev) => {
       const targetGroupId = selectedGroupId || prev[0]?.id;
@@ -579,7 +584,8 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     const newItem: BrainstormItem = {
       id: Math.random().toString(36).substr(2, 9),
       text: normalizedText,
-      isCustom: true
+      isCustom: true,
+      note: ''
     };
     setBrainstormGroups((prev) => {
       const targetGroupId = selectedGroupId || prev[0]?.id;
@@ -597,7 +603,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     if (!customWordInput.trim()) return [];
     const q = customWordInput.toLowerCase();
     return vocab
-      .filter(v => v.w.toLowerCase().startsWith(q))
+      .filter(v => v.word.toLowerCase().startsWith(q))
       .slice(0, 5);
   }, [vocab, customWordInput]);
 
@@ -683,6 +689,10 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
     updateWordInGroups(wordId, (word) => ({ ...word, text: normalizedText }));
   };
 
+  const editWordNoteInTopic = (wordId: string, note: string) => {
+    updateWordInGroups(wordId, (word) => ({ ...word, note }));
+  };
+
   const moveWordToGroup = (wordId: string, targetGroupId: string) => {
     if (!targetGroupId) return;
 
@@ -730,7 +740,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
 
     const candidateBlock = vocab.length > 0
       ? vocab
-          .map((item) => item.w.trim())
+          .map((item) => item.word.trim())
           .filter((word) => word && !word.includes(' '))
           .slice(0, 3000)
           .join('\n')
@@ -1098,12 +1108,12 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                           className="group p-4 bg-white border border-slate-100 rounded-xl hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer"
                         >
                           <div className="flex justify-between items-start mb-1">
-                            <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.w}</h3>
+                            <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.word}</h3>
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  addToBrainstorm(item.w);
+                                  addToBrainstorm(item.word);
                                 }}
                                 className="flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-indigo-600 rounded transition-colors"
                                 title="Add to Brainstorm"
@@ -1114,13 +1124,16 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                             </div>
                           </div>
                           {showMeaning && (
-                            <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.m}</p>
+                            <p className="text-xs text-slate-500 line-clamp-2 mb-2">{item.meaningVi}</p>
                           )}
-                          {showCollocation && item.col && Array.isArray(item.col) && item.col.length > 0 && (
+                          {showCollocation && item.collocationsArray && Array.isArray(item.collocationsArray) && item.collocationsArray.length > 0 && (
                             <div className="flex flex-wrap gap-1">
-                              {item.col.slice(0, 2).map((c, i) => (
+                              {item.collocationsArray
+                                .filter((c) => c && !c.isIgnored && c.text)
+                                .slice(0, 2)
+                                .map((c, i) => (
                                 <span key={i} className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded uppercase tracking-tighter">
-                                  {c.x}
+                                  {c.text}
                                 </span>
                               ))}
                             </div>
@@ -1278,13 +1291,13 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                   <button
                                     key={s.id}
                                     onClick={() => {
-                                      addToBrainstorm(s.w);
+                                      addToBrainstorm(s.word);
                                       setCustomWordInput('');
                                       setShowSuggestions(false);
                                     }}
                                     className="w-full px-4 py-2 text-left text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-between group"
                                   >
-                                    <span className="font-medium">{s.w}</span>
+                                    <span className="font-medium">{s.word}</span>
                                     <span className="text-[10px] text-slate-400 group-hover:text-indigo-400 uppercase font-bold">From Library</span>
                                   </button>
                                 ))}
@@ -1343,7 +1356,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                         <div
                           key={group.id}
                           className={cn(
-                            "rounded-2xl border shadow-sm overflow-hidden",
+                            "rounded-2xl border shadow-sm overflow-visible",
                             GROUP_COLOR_STYLES[group.color || 'gray'] || GROUP_COLOR_STYLES.gray
                           )}
                         >
@@ -1466,7 +1479,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                           onChange={(e) => editWordInTopic(item.id, e.target.value)}
                                           className={cn(
                                             "min-w-[80px] max-w-[220px] bg-transparent font-bold focus:outline-none",
-                                            libraryWordSet.has(item.text.trim().toLowerCase()) ? "text-emerald-700" : "text-slate-900"
+                                            libraryWordSet.has(toLibraryMatchKey(item.text)) ? "text-emerald-700" : "text-slate-900"
                                           )}
                                           size={Math.max(item.text.length, 6)}
                                         />
@@ -1491,10 +1504,28 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
                                         <div className="basis-full text-xs font-semibold leading-relaxed text-slate-500">
                                           {renderHighlightedBrainstormText(item.text)}
                                         </div>
+                                        <input
+                                          value={item.note || ''}
+                                          onChange={(e) => editWordNoteInTopic(item.id, e.target.value)}
+                                          placeholder="Add note for this phrase..."
+                                          className="basis-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                        />
                                       </>
                                     ) : (
                                       <div className="font-bold text-slate-900">
-                                        {renderHighlightedBrainstormText(item.text)}
+                                        <div className="flex items-center gap-2">
+                                          {renderHighlightedBrainstormText(item.text)}
+                                          {item.note?.trim() && (
+                                            <div className="group/note relative inline-flex">
+                                              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                                                Note
+                                              </span>
+                                              <div className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-72 rounded-2xl border border-slate-200 bg-white p-3 text-sm font-medium normal-case tracking-normal text-slate-600 shadow-2xl group-hover/note:block">
+                                                {item.note}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
                                     )}
                                   </div>
@@ -1605,73 +1636,15 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         )}
 
         {selectedWord && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedWord(null)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-8 overflow-y-auto max-h-[90vh]"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-black text-slate-900">{selectedWord.w}</h2>
-                <button onClick={() => setSelectedWord(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Meaning</h3>
-                  <p className="text-lg text-slate-700 leading-relaxed">{selectedWord.m}</p>
-                </div>
-
-                <div>
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Used In Topics</h3>
-                  {(wordTopicUsageMap.get(selectedWord.w.toLowerCase()) || []).length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {(wordTopicUsageMap.get(selectedWord.w.toLowerCase()) || []).map((topic) => (
-                        <span key={topic} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200">
-                          {topic}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-400">This word is not used in any saved topic yet.</p>
-                  )}
-                </div>
-
-                {selectedWord.col && selectedWord.col.length > 0 && (
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Collocations & Examples</h3>
-                    <div className="space-y-4">
-                      {selectedWord.col.map((c, i) => (
-                        <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-bold rounded uppercase tracking-tighter">
-                              {c.x}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-600 mb-2 italic">"{c.ds}"</p>
-                          {c.e && (
-                            <div className="pl-4 border-l-2 border-indigo-200">
-                              <p className="text-sm text-slate-500">{c.e}</p>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
+          <ViewWordModal
+            word={selectedWord}
+            onClose={() => setSelectedWord(null)}
+            onNavigateToWord={(word) => setSelectedWord(word)}
+            onEditRequest={() => {}}
+            onGainXp={async () => 0}
+            onUpdate={() => {}}
+            isViewOnly
+          />
         )}
 
         {toast && (
