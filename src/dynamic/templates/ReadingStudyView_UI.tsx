@@ -1,13 +1,13 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Play, Edit3, ArrowLeft, BrainCircuit, BookOpen, Tag, HelpCircle, X, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText, Headphones, SkipBack, SkipForward, FileAudio, Save } from 'lucide-react';
+import { Play, Edit3, ArrowLeft, BrainCircuit, BookOpen, Tag, HelpCircle, X, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText, Headphones, SkipBack, SkipForward, FileAudio, Save, Pause } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
 import EditWordModal from '../../components/word_lib/EditWordModal';
 import ViewWordModal from '../../components/word_lib/ViewWordModal';
 import WordTable from '../../components/word_lib/WordTable';
 import { EssayReader } from './EssayReader';
-import { speak } from '../../utils/audio';
+import { speak, playSound, pauseSpeaking, resumeSpeaking, getAudioProgress, seekAudio, getIsSpeaking, getIsAudioPaused } from '../../utils/audio';
 import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { renderAsync } from 'docx-preview';
@@ -338,6 +338,10 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
   const [pdfViewportHeight, setPdfViewportHeight] = useState(90);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const [mediaTrackIndex, setMediaTrackIndex] = useState(0);
+  const [mountedMediaUrl, setMountedMediaUrl] = useState<string | null>(null);
+  const [isMountedMediaPlaying, setIsMountedMediaPlaying] = useState(false);
+  const [isMountedMediaPaused, setIsMountedMediaPaused] = useState(false);
+  const [mountedMediaProgress, setMountedMediaProgress] = useState({ currentTime: 0, duration: 0 });
   const mediaLinks = unit.audioLinks || [];
   const hasAnswerFile = !!unit.answerFileLink;
   const hasMedia = mediaLinks.length > 0;
@@ -383,6 +387,33 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
       setMediaTrackIndex(0);
     }
   }, [mediaLinks.length, mediaTrackIndex]);
+
+  useEffect(() => {
+    const handleAudioStatus = () => {
+      if (!mountedMediaUrl) return;
+      setIsMountedMediaPlaying(getIsSpeaking());
+      setIsMountedMediaPaused(getIsAudioPaused());
+      if (!getIsSpeaking()) {
+        setMountedMediaProgress(prev => ({ ...prev, currentTime: 0 }));
+      }
+    };
+
+    window.addEventListener('audio-status-changed', handleAudioStatus);
+    return () => window.removeEventListener('audio-status-changed', handleAudioStatus);
+  }, [mountedMediaUrl]);
+
+  useEffect(() => {
+    if (!mountedMediaUrl || !isMountedMediaPlaying) return;
+    const timer = window.setInterval(() => {
+      const progress = getAudioProgress();
+      if (!progress) return;
+      setMountedMediaProgress({
+        currentTime: progress.currentTime || 0,
+        duration: progress.duration || 0
+      });
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [mountedMediaUrl, isMountedMediaPlaying]);
 
   const renderLinkedFile = (content: LinkedFileContent) => {
     if (content.state === 'loading' || content.state === 'idle') {
@@ -454,6 +485,56 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
     }
   };
 
+  const currentMediaRawUrl = hasMedia ? mediaLinks[mediaTrackIndex] : '';
+  const currentMediaUrl = currentMediaRawUrl ? normalizeAudioUrl(currentMediaRawUrl) : '';
+  const isCurrentMediaMounted = !!currentMediaUrl && mountedMediaUrl === currentMediaUrl;
+
+  const handleToggleMountedMedia = async (targetIndex = mediaTrackIndex) => {
+    const rawUrl = mediaLinks[targetIndex];
+    if (!rawUrl) return;
+
+    const normalizedUrl = normalizeAudioUrl(rawUrl);
+    setMediaTrackIndex(targetIndex);
+
+    if (mountedMediaUrl === normalizedUrl) {
+      if (getIsSpeaking()) {
+        if (getIsAudioPaused()) {
+          await resumeSpeaking().catch(() => undefined);
+        } else {
+          pauseSpeaking();
+        }
+        setIsMountedMediaPlaying(getIsSpeaking());
+        setIsMountedMediaPaused(getIsAudioPaused());
+        return;
+      }
+    }
+
+    setMountedMediaUrl(normalizedUrl);
+    setMountedMediaProgress({ currentTime: 0, duration: 0 });
+    setIsMountedMediaPlaying(true);
+    setIsMountedMediaPaused(false);
+
+    try {
+      await playSound(normalizedUrl);
+    } catch {
+      setIsMountedMediaPlaying(false);
+      setIsMountedMediaPaused(false);
+    }
+  };
+
+  const handleMountedMediaSeek = (time: number) => {
+    if (!isCurrentMediaMounted) return;
+    seekAudio(time);
+    setMountedMediaProgress(prev => ({ ...prev, currentTime: time }));
+  };
+
+  const formatTime = (seconds: number) => {
+    if (!seconds || Number.isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const renderMediaPanel = () => {
     if (!hasMedia) {
       return (
@@ -465,7 +546,6 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
       );
     }
 
-    const currentMediaUrl = normalizeAudioUrl(mediaLinks[mediaTrackIndex]);
     const currentMediaName = decodeURIComponent(mediaLinks[mediaTrackIndex].split('/').pop() || `Track ${mediaTrackIndex + 1}`);
 
     return (
@@ -481,18 +561,31 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
               <button onClick={() => setMediaTrackIndex(i => Math.max(0, i - 1))} disabled={mediaTrackIndex === 0} className="p-2 rounded-xl border border-neutral-200 bg-white text-neutral-600 disabled:opacity-40">
                 <SkipBack size={16} />
               </button>
+              <button onClick={() => void handleToggleMountedMedia()} className="w-10 h-10 rounded-full bg-neutral-900 text-white flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all">
+                {isCurrentMediaMounted && isMountedMediaPlaying && !isMountedMediaPaused ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+              </button>
               <button onClick={() => setMediaTrackIndex(i => Math.min(mediaLinks.length - 1, i + 1))} disabled={mediaTrackIndex === mediaLinks.length - 1} className="p-2 rounded-xl border border-neutral-200 bg-white text-neutral-600 disabled:opacity-40">
                 <SkipForward size={16} />
               </button>
             </div>
           </div>
-          <audio key={currentMediaUrl} controls className="w-full" src={currentMediaUrl}>
-            Your browser does not support audio playback.
-          </audio>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-mono font-bold text-neutral-400 w-8 text-right">{isCurrentMediaMounted ? formatTime(mountedMediaProgress.currentTime) : '0:00'}</span>
+            <input
+              type="range"
+              min="0"
+              max={isCurrentMediaMounted && mountedMediaProgress.duration > 0 ? mountedMediaProgress.duration : 100}
+              value={isCurrentMediaMounted ? mountedMediaProgress.currentTime : 0}
+              onChange={(event) => handleMountedMediaSeek(Number(event.target.value))}
+              className="flex-1 h-1.5 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+            />
+            <span className="text-[10px] font-mono font-bold text-neutral-400 w-8 text-left">{isCurrentMediaMounted ? formatTime(mountedMediaProgress.duration) : '0:00'}</span>
+          </div>
+          <p className="text-[11px] text-neutral-500">This track is routed through Coach playback, so the Coach button can pause/resume the same audio.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {mediaLinks.map((url, idx) => (
-            <button key={`${url}-${idx}`} onClick={() => setMediaTrackIndex(idx)} className={`text-left p-4 rounded-2xl border transition-all ${idx === mediaTrackIndex ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-neutral-200 hover:bg-neutral-50'}`}>
+            <button key={`${url}-${idx}`} onClick={() => setMediaTrackIndex(idx)} onDoubleClick={() => void handleToggleMountedMedia(idx)} className={`text-left p-4 rounded-2xl border transition-all ${idx === mediaTrackIndex ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-neutral-200 hover:bg-neutral-50'}`}>
               <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-xl ${idx === mediaTrackIndex ? 'bg-indigo-100 text-indigo-600' : 'bg-neutral-100 text-neutral-500'}`}>
                   <FileAudio size={16} />
@@ -631,7 +724,9 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
 
         {/* --- CONTENT AREA --- */}
         <div className="min-h-[500px]">
-            {activeTab === 'MEDIA' && renderMediaPanel()}
+            <div className={`${activeTab === 'MEDIA' ? 'block' : 'hidden'}`}>
+                {renderMediaPanel()}
+            </div>
 
             <div className="space-y-4">
                 <div className={`${activeTab === 'ESSAY' ? 'block' : 'hidden'}`}>
