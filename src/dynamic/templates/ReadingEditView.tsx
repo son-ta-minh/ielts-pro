@@ -23,6 +23,9 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
   const [editTags, setEditTags] = useState((unit.tags || []).join(', '));
   const [editWords, setEditWords] = useState('');
   const [editEssay, setEditEssay] = useState(unit.essay || '');
+  const [editEssayFileLink, setEditEssayFileLink] = useState<Unit['essayFileLink']>(unit.essayFileLink);
+  const [editAnswerFileLink, setEditAnswerFileLink] = useState<Unit['answerFileLink']>(unit.answerFileLink);
+  const [editAudioLinks, setEditAudioLinks] = useState<string[]>(unit.audioLinks || []);
   const [editComprehensionQuestions, setEditComprehensionQuestions] = useState<{ question: string; answer: string; }[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -45,6 +48,9 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
     }
     
     setEditEssay(unit.essay || '');
+    setEditEssayFileLink(unit.essayFileLink);
+    setEditAnswerFileLink(unit.answerFileLink);
+    setEditAudioLinks(unit.audioLinks || []);
     setEditComprehensionQuestions(unit.comprehensionQuestions || []);
     if (unit.customVocabString) {
         setEditWords(unit.customVocabString);
@@ -82,6 +88,7 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
         
         const finalTags = editTags.split(',').map(t => t.trim()).filter(Boolean);
         const finalQuestions = editComprehensionQuestions.filter(q => q.question.trim() && q.answer.trim());
+        const hasLinkedReading = !!editEssayFileLink;
         
         const updatedUnit: Unit = { 
             ...unit, 
@@ -93,6 +100,10 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
             path: editPath,
             tags: finalTags, 
             comprehensionQuestions: finalQuestions, 
+            readingSourceType: hasLinkedReading ? 'server_file_pair' : 'inline',
+            essayFileLink: hasLinkedReading ? editEssayFileLink : undefined,
+            answerFileLink: hasLinkedReading ? editAnswerFileLink : undefined,
+            audioLinks: editAudioLinks,
             // Preserve existing learned status or default to false, as UI control is removed
             isLearned: unit.isLearned || false, 
             updatedAt: Date.now() 
@@ -130,6 +141,12 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
       setEditWords={setEditWords}
       editEssay={editEssay}
       setEditEssay={setEditEssay}
+      editEssayFileLink={editEssayFileLink}
+      setEditEssayFileLink={setEditEssayFileLink}
+      editAnswerFileLink={editAnswerFileLink}
+      setEditAnswerFileLink={setEditAnswerFileLink}
+      editAudioLinks={editAudioLinks}
+      setEditAudioLinks={setEditAudioLinks}
       editComprehensionQuestions={editComprehensionQuestions}
       setEditComprehensionQuestions={setEditComprehensionQuestions}
       isSaving={isSaving}

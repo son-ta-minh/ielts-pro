@@ -7,7 +7,7 @@ interface FileSelectorProps {
     isOpen: boolean;
     onClose: () => void;
     onSelect: (fileData: any) => void; 
-    type: 'audio' | 'reading' | 'planning' | 'reading_pair';
+    type: 'audio' | 'reading' | 'planning' | 'reading_pair' | 'reading_file';
     title: string;
 }
 
@@ -55,7 +55,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
             if (type === 'reading' || type === 'planning') {
                 setMode('master');
                 fetchMasterLibrary();
-            } else if (type === 'reading_pair') {
+            } else if (type === 'reading_pair' || type === 'reading_file') {
                 setMode('folders');
                 fetchMappings(true);
             } else {
@@ -175,7 +175,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
     };
 
     const handleModeChange = (newMode: 'folders' | 'master') => {
-        if (type === 'reading_pair' && newMode === 'master') return;
+        if ((type === 'reading_pair' || type === 'reading_file') && newMode === 'master') return;
         setMode(newMode);
         setCurrentMap(null);
         setCurrentPath('');
@@ -219,6 +219,19 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
 
         if (!currentMap) return;
 
+        if (type === 'reading_file') {
+            const pathPart = currentPath ? `${currentPath}/${item.name}` : item.name;
+            const ext = (item.name.split('.').pop() || '').toLowerCase();
+            onSelect({
+                mapName: currentMap,
+                relativePath: pathPart,
+                fileName: item.name,
+                extension: ext,
+            });
+            onClose();
+            return;
+        }
+
         if (type === 'reading_pair') {
             const pathPart = currentPath ? `${currentPath}/${item.name}` : item.name;
             const ext = (item.name.split('.').pop() || '').toLowerCase();
@@ -257,7 +270,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                 } else {
                     showToast("Failed to load file content", "error");
                 }
-            } catch (_e) {
+            } catch {
                 showToast("Error reading file", "error");
             } finally {
                 setLoading(false);
@@ -266,8 +279,8 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
     };
 
     const handleConfirmReadingPair = () => {
-        if (!selectedEssayFile || !selectedAnswerFile) {
-            showToast("Please select Essay file and Answer file.", "info");
+        if (!selectedEssayFile) {
+            showToast("Please select the main reading file.", "info");
             return;
         }
         onSelect({
@@ -366,7 +379,11 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                         </div>
                     ) : type === 'reading_pair' ? (
                         <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 font-medium">
-                            Select 2 files from mapped folder <strong>Reading</strong>: first for Essay, second for Answer.
+                            Select the main reading file first. Answer file is optional and can be added now or later.
+                        </div>
+                    ) : type === 'reading_file' ? (
+                        <div className="p-3 bg-sky-50 border border-sky-100 rounded-xl text-xs text-sky-800 font-medium">
+                            Choose one file from mapped folder <strong>Reading</strong>.
                         </div>
                     ) : (
                         <div className="flex bg-neutral-100 p-1 rounded-xl">
@@ -486,10 +503,10 @@ export const FileSelector: React.FC<FileSelectorProps> = ({ isOpen, onClose, onS
                     <div className="pointer-events-auto bg-white border border-neutral-200 rounded-2xl p-3 shadow-lg">
                         <button
                             onClick={handleConfirmReadingPair}
-                            disabled={!selectedEssayFile || !selectedAnswerFile}
+                            disabled={!selectedEssayFile}
                             className="w-full py-2.5 rounded-xl bg-neutral-900 text-white text-xs font-black uppercase tracking-wider disabled:bg-neutral-300 disabled:cursor-not-allowed"
                         >
-                            Import File Pair
+                            Import Main File
                         </button>
                     </div>
                 </div>

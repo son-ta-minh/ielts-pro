@@ -1,10 +1,11 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { Loader2, Save, Sparkles, Eye, BookText, PenLine, FileText, ArrowLeft, Tag, HelpCircle, X, Plus, CheckCircle2, Circle, Layers, AlertCircle } from 'lucide-react';
+import { Loader2, Save, Sparkles, Eye, BookText, PenLine, FileText, ArrowLeft, Tag, HelpCircle, X, Plus, AlertCircle, Link2, FileAudio, Headphones, Trash2 } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
 import { EssayReader } from './EssayReader';
 import { stringToWordArray } from '../../utils/text';
+import { FileSelector } from '../../components/common/FileSelector';
 
 const UnitHeaderEditModal: React.FC<{ isOpen: boolean; onClose: () => void; initialName: string; initialDesc: string; onSave: (name: string, desc: string) => void; }> = ({ isOpen, onClose, initialName, initialDesc, onSave }) => {
     const [localName, setLocalName] = useState(initialName);
@@ -45,6 +46,12 @@ export interface ReadingEditViewUIProps {
     setEditWords: (words: string) => void;
     editEssay: string;
     setEditEssay: (essay: string) => void;
+    editEssayFileLink?: Unit['essayFileLink'];
+    setEditEssayFileLink: React.Dispatch<React.SetStateAction<Unit['essayFileLink'] | undefined>>;
+    editAnswerFileLink?: Unit['answerFileLink'];
+    setEditAnswerFileLink: React.Dispatch<React.SetStateAction<Unit['answerFileLink'] | undefined>>;
+    editAudioLinks: string[];
+    setEditAudioLinks: React.Dispatch<React.SetStateAction<string[]>>;
     editComprehensionQuestions: { question: string; answer: string; }[];
     setEditComprehensionQuestions: React.Dispatch<React.SetStateAction<{ question: string; answer: string; }[]>>;
     isSaving: boolean;
@@ -53,11 +60,15 @@ export interface ReadingEditViewUIProps {
     handleApplyRefinement: (refined: any) => void;
 }
 
-export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ user, allWords, allLibraryTags, onCancel, editName, setEditName, editDesc, setEditDesc, editPath, setEditPath, editTags, setEditTags, editWords, setEditWords, editEssay, setEditEssay, editComprehensionQuestions, setEditComprehensionQuestions, isSaving, handleSaveUnitChanges, handleGenerateUnitRefinePrompt, handleApplyRefinement }) => {
+export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ allWords, allLibraryTags, onCancel, editName, setEditName, editDesc, setEditDesc, editTags, setEditTags, editWords, setEditWords, editEssay, setEditEssay, editEssayFileLink, setEditEssayFileLink, editAnswerFileLink, setEditAnswerFileLink, editAudioLinks, setEditAudioLinks, editComprehensionQuestions, setEditComprehensionQuestions, isSaving, handleSaveUnitChanges, handleGenerateUnitRefinePrompt, handleApplyRefinement }) => {
   const [isPassagePreview, setIsPassagePreview] = useState(false);
   const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
   const [showRefineAiModal, setShowRefineAiModal] = useState(false);
+  const [isMainFileSelectorOpen, setIsMainFileSelectorOpen] = useState(false);
+  const [isAnswerFileSelectorOpen, setIsAnswerFileSelectorOpen] = useState(false);
+  const [isAudioSelectorOpen, setIsAudioSelectorOpen] = useState(false);
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
+  const isLinkedFileUnit = !!editEssayFileLink;
 
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
@@ -160,6 +171,33 @@ export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ user, allW
     setEditComprehensionQuestions(editComprehensionQuestions.filter((_, i) => i !== index));
   };
 
+  const handleSelectMainFile = (fileData: any) => {
+    setEditEssayFileLink({
+      mapName: fileData.mapName,
+      relativePath: fileData.relativePath,
+      fileName: fileData.fileName,
+      extension: fileData.extension
+    });
+  };
+
+  const handleSelectAnswerFile = (fileData: any) => {
+    setEditAnswerFileLink({
+      mapName: fileData.mapName,
+      relativePath: fileData.relativePath,
+      fileName: fileData.fileName,
+      extension: fileData.extension
+    });
+  };
+
+  const handleAddAudio = (fileData: any) => {
+    if (!fileData?.url) return;
+    setEditAudioLinks(prev => prev.includes(fileData.url) ? prev : [...prev, fileData.url]);
+  };
+
+  const handleRemoveAudio = (index: number) => {
+    setEditAudioLinks(prev => prev.filter((_, i) => i !== index));
+  };
+
   return (
     <>
       <div className="max-w-[1600px] mx-auto space-y-4 pb-12 relative animate-in fade-in duration-500">
@@ -188,8 +226,71 @@ export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ user, allW
           </div>
           <button onClick={() => setIsHeaderModalOpen(true)} className="shrink-0 flex items-center space-x-2 px-4 py-2.5 bg-neutral-50 hover:bg-neutral-100 text-neutral-600 rounded-xl font-bold text-xs transition-all active:scale-95"><FileText size={16} /><span>Edit Name & Desc</span></button>
         </div>
+        <div className="bg-white rounded-3xl border border-neutral-200 shadow-sm p-5 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                    <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2"><Link2 size={12}/> Server Attachments</label>
+                    <p className="text-xs text-neutral-500 mt-1">Main file is enough to create a linked Reading unit. Answer sheet is optional and media can include multiple server audio tracks.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setIsMainFileSelectorOpen(true)} type="button" className="px-4 py-2 bg-neutral-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest">Add Main File</button>
+                    <button onClick={() => setIsAnswerFileSelectorOpen(true)} type="button" disabled={!editEssayFileLink} className="px-4 py-2 bg-white border border-neutral-200 text-neutral-700 rounded-xl font-black text-[10px] uppercase tracking-widest disabled:opacity-50">Add Answer</button>
+                    <button onClick={() => setIsAudioSelectorOpen(true)} type="button" className="px-4 py-2 bg-white border border-neutral-200 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2"><Headphones size={12}/> Add Media</button>
+                </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                <div className={`rounded-2xl border p-4 space-y-2 ${editEssayFileLink ? 'bg-emerald-50 border-emerald-200' : 'bg-neutral-50 border-neutral-200'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Main File</p>
+                            <p className="text-sm font-bold text-neutral-800 break-all">{editEssayFileLink?.fileName || 'Not attached yet'}</p>
+                        </div>
+                        {editEssayFileLink && (
+                            <button type="button" onClick={() => { setEditEssayFileLink(undefined); setEditAnswerFileLink(undefined); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-white rounded-lg">
+                                <Trash2 size={14} />
+                            </button>
+                        )}
+                    </div>
+                    <p className="text-[11px] text-neutral-500 break-all">{editEssayFileLink ? `${editEssayFileLink.mapName}/${editEssayFileLink.relativePath}` : 'Import one file from the Reading mapping.'}</p>
+                </div>
+                <div className={`rounded-2xl border p-4 space-y-2 ${editAnswerFileLink ? 'bg-indigo-50 border-indigo-200' : 'bg-neutral-50 border-neutral-200'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Answer Sheet</p>
+                            <p className="text-sm font-bold text-neutral-800 break-all">{editAnswerFileLink?.fileName || 'Optional'}</p>
+                        </div>
+                        {editAnswerFileLink && (
+                            <button type="button" onClick={() => setEditAnswerFileLink(undefined)} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-white rounded-lg">
+                                <Trash2 size={14} />
+                            </button>
+                        )}
+                    </div>
+                    <p className="text-[11px] text-neutral-500 break-all">{editAnswerFileLink ? `${editAnswerFileLink.mapName}/${editAnswerFileLink.relativePath}` : 'You can attach this later.'}</p>
+                </div>
+                <div className="rounded-2xl border border-neutral-200 p-4 space-y-3 bg-neutral-50">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Media</p>
+                            <p className="text-sm font-bold text-neutral-800">{editAudioLinks.length} audio file{editAudioLinks.length === 1 ? '' : 's'}</p>
+                        </div>
+                    </div>
+                    <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
+                        {editAudioLinks.length === 0 && <p className="text-[11px] text-neutral-400 italic">No media attached.</p>}
+                        {editAudioLinks.map((link, idx) => (
+                            <div key={`${link}-${idx}`} className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-neutral-200">
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                    <FileAudio size={14} className="text-emerald-500 shrink-0" />
+                                    <span className="text-xs font-mono text-neutral-600 truncate">{decodeURIComponent(link.split('/').pop() || `Track ${idx + 1}`)}</span>
+                                </div>
+                                <button type="button" onClick={() => handleRemoveAudio(idx)} className="p-1 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-full"><X size={14}/></button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[calc(100vh-420px)] min-h-[600px]">
-            <div className="flex flex-col gap-2 h-full"><div className="flex justify-between items-center px-1 shrink-0"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2"><BookText size={12}/> Reading Passage</label><button onClick={() => setIsPassagePreview(!isPassagePreview)} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm">{isPassagePreview ? <PenLine size={12}/> : <Eye size={12}/>}<span>{isPassagePreview ? 'Edit Text' : 'Preview'}</span></button></div><div className="flex-1 rounded-3xl border border-neutral-200 bg-white shadow-sm relative flex flex-col">{isPassagePreview ? (<EssayReader className="rounded-3xl" text={editEssay} vocabString={editWords} wordsByText={wordsByText} onWordAction={handleEssayWordAction} />) : (<textarea value={editEssay} onChange={(e) => setEditEssay(e.target.value)} placeholder="Paste or write your reading material here..." className="w-full h-full p-6 bg-white resize-none focus:bg-neutral-50/30 outline-none transition-all text-sm font-medium leading-relaxed text-neutral-900 placeholder:text-neutral-300 overflow-y-auto stable-scrollbar rounded-3xl" />)}</div></div>
+            <div className="flex flex-col gap-2 h-full"><div className="flex justify-between items-center px-1 shrink-0"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-2"><BookText size={12}/> Reading Passage</label>{!isLinkedFileUnit && <button onClick={() => setIsPassagePreview(!isPassagePreview)} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-200 hover:bg-neutral-50 transition-all text-[10px] font-black uppercase text-neutral-500 hover:text-neutral-900 shadow-sm">{isPassagePreview ? <PenLine size={12}/> : <Eye size={12}/>}<span>{isPassagePreview ? 'Edit Text' : 'Preview'}</span></button>}</div><div className="flex-1 rounded-3xl border border-neutral-200 bg-white shadow-sm relative flex flex-col">{isLinkedFileUnit ? (<div className="h-full p-6 flex flex-col justify-center items-center text-center bg-gradient-to-br from-emerald-50 via-white to-sky-50 rounded-3xl"><div className="p-3 bg-white rounded-2xl shadow-sm border border-neutral-200 mb-4"><Link2 size={24} className="text-emerald-600" /></div><h3 className="text-lg font-black text-neutral-900">This unit reads from a server file</h3><p className="mt-2 text-sm text-neutral-500 max-w-md">Main content is linked to <span className="font-mono text-neutral-700">{editEssayFileLink?.fileName}</span>. Use Study view to preview the file, and use the attachment tools above if you want to replace the main file or add an answer sheet.</p></div>) : isPassagePreview ? (<EssayReader className="rounded-3xl" text={editEssay} vocabString={editWords} wordsByText={wordsByText} onWordAction={handleEssayWordAction} />) : (<textarea value={editEssay} onChange={(e) => setEditEssay(e.target.value)} placeholder="Paste or write your reading material here..." className="w-full h-full p-6 bg-white resize-none focus:bg-neutral-50/30 outline-none transition-all text-sm font-medium leading-relaxed text-neutral-900 placeholder:text-neutral-300 overflow-y-auto stable-scrollbar rounded-3xl" />)}</div></div>
             <div className="flex flex-col gap-4 h-full overflow-y-auto pr-2 custom-scrollbar">
                 {/* Vocabulary Area - Prioritized with flex-[3] */}
                 <div className="flex flex-col gap-2 flex-[3] min-h-[350px]">
@@ -249,6 +350,9 @@ export const ReadingEditViewUI: React.FC<ReadingEditViewUIProps> = ({ user, allW
       </div>
       <UnitHeaderEditModal isOpen={isHeaderModalOpen} onClose={() => setIsHeaderModalOpen(false)} initialName={editName} initialDesc={editDesc} onSave={(name, desc) => { setEditName(name); setEditDesc(desc); }} />
       {showRefineAiModal && (<UniversalAiModal isOpen={showRefineAiModal} onClose={() => setShowRefineAiModal(false)} type="REFINE_UNIT" title="Refine Unit" description="Update vocabulary and essay content with AI context." initialData={{ request: '' }} onGeneratePrompt={handleGenerateUnitRefinePrompt} onJsonReceived={handleApplyRefinement} actionLabel="Apply Changes" closeOnSuccess={true} />)}
+      <FileSelector isOpen={isMainFileSelectorOpen} onClose={() => setIsMainFileSelectorOpen(false)} onSelect={handleSelectMainFile} type="reading_file" title="Select Main File" />
+      <FileSelector isOpen={isAnswerFileSelectorOpen} onClose={() => setIsAnswerFileSelectorOpen(false)} onSelect={handleSelectAnswerFile} type="reading_file" title="Select Answer File" />
+      <FileSelector isOpen={isAudioSelectorOpen} onClose={() => setIsAudioSelectorOpen(false)} onSelect={handleAddAudio} type="audio" title="Select Audio" />
     </>
   );
 };

@@ -296,6 +296,7 @@ export interface Unit {
     fileName: string;
     extension?: string;
   };
+  audioLinks?: string[];
   focusColor?: FocusColor;
   isFocused?: boolean;
   note?: string;

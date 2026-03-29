@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Play, Edit3, ArrowLeft, CheckCircle2, Circle, BrainCircuit, BookOpen, Tag, HelpCircle, X, Check, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText } from 'lucide-react';
+import { Play, Edit3, ArrowLeft, BrainCircuit, BookOpen, Tag, HelpCircle, X, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText, Headphones, SkipBack, SkipForward, FileAudio } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
 import EditWordModal from '../../components/word_lib/EditWordModal';
@@ -85,7 +85,7 @@ const PdfJsViewer: React.FC<{ fileUrl: string; viewportHeight: number }> = ({ fi
                 }
 
                 if (!isCancelled) setIsLoading(false);
-            } catch (_e) {
+            } catch {
                 if (!isCancelled) {
                     setError('Failed to render PDF with pdf.js.');
                     setIsLoading(false);
@@ -167,7 +167,7 @@ const DocxViewer: React.FC<{ fileUrl: string; title?: string }> = ({ fileUrl }) 
                 container.innerHTML = '';
 
                 await renderAsync(blob, container);
-            } catch (e) {
+            } catch {
                 if (!cancelled) setError('Failed to render DOCX file.');
             }
         };
@@ -324,15 +324,19 @@ export interface ReadingStudyViewUIProps {
 }
 
 export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => {
-  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, unitTableQuery, setUnitTableQuery, unitTableFilters, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, handleExportUnit, isComprehensionModalOpen, onOpenComprehensionModal, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange, essayFileContent, answerFileContent, note, onNoteChange } = props;
+  const { user, unit, allWords, unitWords, pagedUnitWords, filteredUnitWords, viewingWord, setViewingWord, editingWord, setEditingWord, isPracticeMode, setIsPracticeMode, unitTablePage, setUnitTablePage, unitTablePageSize, setUnitTablePageSize, setUnitTableQuery, setUnitTableFilters, onBack, onStartSession, onSwitchToEdit, handleRemoveWordFromUnit, onBulkDelete, onHardDelete, onBulkHardDelete, handleSaveWordUpdate, onWordAction, isComprehensionModalOpen, onCloseComprehensionModal, comprehensionAnswers, onComprehensionAnswerChange, comprehensionResults, onComprehensionResultChange, essayFileContent, answerFileContent, note, onNoteChange } = props;
   const [noteMode, setNoteMode] = useState<'edit' | 'preview'>('edit');
   const previewHtml = useMemo(() => parseMarkdown(note), [note]);
   const [activeTooltip, setActiveTooltip] = useState<TooltipState | null>(null);
   const isLinkedFileUnit = unit.readingSourceType === 'server_file_pair';
-  const [activeTab, setActiveTab] = useState<'ESSAY' | 'ANSWER' | 'VOCAB' | 'NOTE'>('ESSAY');
+  const [activeTab, setActiveTab] = useState<'ESSAY' | 'ANSWER' | 'VOCAB' | 'MEDIA' | 'NOTE'>('ESSAY');
   const [pdfRenderMode, setPdfRenderMode] = useState<'iframe' | 'pdfjs'>('pdfjs');
   const [pdfViewportHeight, setPdfViewportHeight] = useState(90);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
+  const [mediaTrackIndex, setMediaTrackIndex] = useState(0);
+  const mediaLinks = unit.audioLinks || [];
+  const hasAnswerFile = !!unit.answerFileLink;
+  const hasMedia = mediaLinks.length > 0;
 
   const wordsByText = useMemo(() => new Map(allWords.map(w => [w.word.toLowerCase().trim(), w])), [allWords]);
 
@@ -365,7 +369,16 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
     if (isLinkedFileUnit && activeTab === 'VOCAB') {
       setActiveTab('ESSAY');
     }
-  }, [isLinkedFileUnit, activeTab]);
+    if (!hasAnswerFile && activeTab === 'ANSWER') {
+      setActiveTab('ESSAY');
+    }
+  }, [isLinkedFileUnit, activeTab, hasAnswerFile]);
+
+  useEffect(() => {
+    if (mediaTrackIndex > mediaLinks.length - 1) {
+      setMediaTrackIndex(0);
+    }
+  }, [mediaLinks.length, mediaTrackIndex]);
 
   const renderLinkedFile = (content: LinkedFileContent) => {
     if (content.state === 'loading' || content.state === 'idle') {
@@ -410,6 +423,61 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
     return (
       <div className="min-h-[60vh] p-6 md:p-8 overflow-auto">
         <pre className="whitespace-pre-wrap text-sm font-medium leading-relaxed text-neutral-800">{content.text}</pre>
+      </div>
+    );
+  };
+
+  const renderMediaPanel = () => {
+    if (!hasMedia) {
+      return (
+        <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white min-h-[60vh] flex flex-col items-center justify-center gap-3 p-8 text-center">
+          <Headphones size={28} className="text-neutral-300" />
+          <h3 className="text-lg font-black text-neutral-900">No media attached</h3>
+          <p className="text-sm text-neutral-500 max-w-md">Add audio files from the Reading edit page and they will appear here for playback.</p>
+        </div>
+      );
+    }
+
+    const currentMediaUrl = mediaLinks[mediaTrackIndex];
+    const currentMediaName = decodeURIComponent(currentMediaUrl.split('/').pop() || `Track ${mediaTrackIndex + 1}`);
+
+    return (
+      <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white p-5 md:p-6 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Current Track</p>
+              <h3 className="text-lg font-black text-neutral-900 break-all">{currentMediaName}</h3>
+              <p className="text-xs text-neutral-500 mt-1">Track {mediaTrackIndex + 1} / {mediaLinks.length}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setMediaTrackIndex(i => Math.max(0, i - 1))} disabled={mediaTrackIndex === 0} className="p-2 rounded-xl border border-neutral-200 bg-white text-neutral-600 disabled:opacity-40">
+                <SkipBack size={16} />
+              </button>
+              <button onClick={() => setMediaTrackIndex(i => Math.min(mediaLinks.length - 1, i + 1))} disabled={mediaTrackIndex === mediaLinks.length - 1} className="p-2 rounded-xl border border-neutral-200 bg-white text-neutral-600 disabled:opacity-40">
+                <SkipForward size={16} />
+              </button>
+            </div>
+          </div>
+          <audio key={currentMediaUrl} controls className="w-full" src={currentMediaUrl}>
+            Your browser does not support audio playback.
+          </audio>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {mediaLinks.map((url, idx) => (
+            <button key={`${url}-${idx}`} onClick={() => setMediaTrackIndex(idx)} className={`text-left p-4 rounded-2xl border transition-all ${idx === mediaTrackIndex ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-neutral-200 hover:bg-neutral-50'}`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl ${idx === mediaTrackIndex ? 'bg-indigo-100 text-indigo-600' : 'bg-neutral-100 text-neutral-500'}`}>
+                  <FileAudio size={16} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Track {idx + 1}</p>
+                  <p className="text-sm font-bold text-neutral-800 truncate">{decodeURIComponent(url.split('/').pop() || `Track ${idx + 1}`)}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
     );
   };
@@ -477,7 +545,8 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
             </button>
             <button 
                 onClick={() => setActiveTab('ANSWER')}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'ANSWER' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'} ${!isLinkedFileUnit ? 'hidden' : ''}`}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'ANSWER' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                style={{ display: isLinkedFileUnit && hasAnswerFile ? 'flex' : 'none' }}
             >
                 <FileText size={14} /> Answer
             </button>
@@ -487,6 +556,12 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
                 style={{ display: isLinkedFileUnit ? 'none' : 'flex' }}
             >
                 <LayoutList size={14} /> Vocabulary
+            </button>
+            <button
+                onClick={() => setActiveTab('MEDIA')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === 'MEDIA' ? 'bg-white text-indigo-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+            >
+                <Headphones size={14} /> Media
             </button>
             <button
                 onClick={() => setActiveTab('NOTE')}
@@ -529,6 +604,8 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
 
         {/* --- CONTENT AREA --- */}
         <div className="min-h-[500px]">
+            {activeTab === 'MEDIA' && renderMediaPanel()}
+
             {activeTab === 'ESSAY' && (
                 <div className="rounded-[2.5rem] border border-neutral-200 shadow-sm bg-white overflow-hidden flex flex-col relative animate-in fade-in slide-in-from-bottom-2 duration-300">
                     {!isLinkedFileUnit && isPracticeMode && (

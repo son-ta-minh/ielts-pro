@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, Unit, VocabularyItem, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
-import { Edit3, Trash2, BookOpen, Plus, Sparkles, FolderTree, Tag, Target, Download, Search, ExternalLink, X } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Plus, Sparkles, FolderTree, Tag, Target, Download, ExternalLink, X } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import ReadingStudyView from './ReadingStudyView';
@@ -39,8 +39,8 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
   
   const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null);
   const [showRefineAiModal, setShowRefineAiModal] = useState(false);
-  const [showFileSelector, setShowFileSelector] = useState(false);
-  const [showFilePairSelector, setShowFilePairSelector] = useState(false);
+  const [showServerUnitSelector, setShowServerUnitSelector] = useState(false);
+  const [showServerFileSelector, setShowServerFileSelector] = useState(false);
   const [showUrlImporter, setShowUrlImporter] = useState(false);
   const [importUrl, setImportUrl] = useState('');
   const [isImportingUrl, setIsImportingUrl] = useState(false);
@@ -184,16 +184,14 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
           await loadData();
           setActiveUnit(newUnit);
           setViewMode('EDIT');
-      } catch (e) {
+      } catch {
           showToast("Failed to save imported unit.", "error");
       }
   };
 
-  const handleImportFilePairFromServer = async (fileData: any) => {
-      const essayFile = fileData?.essayFile;
-      const answerFile = fileData?.answerFile;
-      if (!essayFile || !answerFile) {
-          showToast("Please choose both Essay and Answer files.", "error");
+  const handleImportLinkedFileFromServer = async (essayFile: any) => {
+      if (!essayFile) {
+          showToast("Please choose a main reading file.", "error");
           return;
       }
 
@@ -216,12 +214,6 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
               relativePath: essayFile.relativePath,
               fileName: essayFile.fileName,
               extension: essayFile.extension
-          },
-          answerFileLink: {
-              mapName: answerFile.mapName,
-              relativePath: answerFile.relativePath,
-              fileName: answerFile.fileName,
-              extension: answerFile.extension
           }
       };
 
@@ -231,8 +223,8 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
           await loadData();
           setActiveUnit(newUnit);
           setViewMode('READ');
-      } catch (_e) {
-          showToast("Failed to save imported file pair.", "error");
+      } catch {
+          showToast("Failed to save imported file.", "error");
       }
   };
 
@@ -413,8 +405,8 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                 browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); setIsGroupBrowserOpen(false); } }}
                 addActions={[
                     { label: 'AI Unit', icon: Sparkles, onClick: () => setShowRefineAiModal(true) },
-                    { label: 'Import File from Server', icon: Download, onClick: () => setShowFilePairSelector(true) },
-                    { label: 'Import Unit from Server', icon: Download, onClick: () => setShowFileSelector(true) },
+                    { label: 'Add File from Server', icon: Download, onClick: () => setShowServerFileSelector(true) },
+                    { label: 'Import Unit from Server', icon: Download, onClick: () => setShowServerUnitSelector(true) },
                     { label: 'Add from URL', icon: ExternalLink, onClick: openUrlImporter },
                     { label: 'New Unit', icon: Plus, onClick: handleCreateEmptyUnit }
                 ]}
@@ -453,7 +445,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       <ConfirmationModal
         isOpen={!!unitToDelete}
         title="Delete Unit?"
-        message={<>Are you sure you want to delete <strong>"{unitToDelete?.name}"</strong>?</>}
+        message={<>Are you sure you want to delete <strong>&quot;{unitToDelete?.name}&quot;</strong>?</>}
         confirmText="Delete"
         isProcessing={false}
         onConfirm={handleDeleteUnit}
@@ -495,18 +487,18 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
       )}
       
       <FileSelector 
-          isOpen={showFileSelector}
-          onClose={() => setShowFileSelector(false)}
+          isOpen={showServerUnitSelector}
+          onClose={() => setShowServerUnitSelector(false)}
           onSelect={handleImportFromServer}
           type="reading"
           title="Import Reading from Server"
       />
       <FileSelector 
-          isOpen={showFilePairSelector}
-          onClose={() => setShowFilePairSelector(false)}
-          onSelect={handleImportFilePairFromServer}
-          type="reading_pair"
-          title="Import File Pair from Server"
+          isOpen={showServerFileSelector}
+          onClose={() => setShowServerFileSelector(false)}
+          onSelect={handleImportLinkedFileFromServer}
+          type="reading_file"
+          title="Add File from Server"
       />
       {showUrlImporter && (
           <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40">
@@ -520,7 +512,7 @@ export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdat
                           <X size={18} />
                       </button>
                   </div>
-                  <p className="text-sm text-neutral-500">Paste the public article URL and we’ll extract the reading content for a new unit.</p>
+                  <p className="text-sm text-neutral-500">Paste the public article URL and we&apos;ll extract the reading content for a new unit.</p>
                   <input
                       value={importUrl}
                       onChange={(e) => setImportUrl(e.target.value)}
