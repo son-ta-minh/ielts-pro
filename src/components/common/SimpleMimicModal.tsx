@@ -38,7 +38,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const isRecordingRef = useRef(false);
     const [isMinimized, setIsMinimized] = useState(() => {
         if (target && target.trim()) return false;
-        return getStoredJSON<boolean>(MIMIC_MINIMIZED_KEY, false);
+        return getStoredJSON<boolean>(MIMIC_MINIMIZED_KEY, true);
     });
     const [editedTarget, setEditedTarget] = useState(target || '');
     const [isEditing, setIsEditing] = useState(false);
@@ -465,6 +465,9 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         setHistory((prev) => {
             const next = prev.filter((item) => item.id !== id);
             setStoredJSON(MIMIC_HISTORY_KEY, next);
+            if (next.length === 0) {
+                setUserAudio(null);
+            }
             return next;
         });
         if (renamingId === id) {
@@ -666,8 +669,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     <Minimize2 size={18} />
                 </button>
 
-                <div className="flex w-full items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
-                    <div className="flex flex-wrap items-center gap-2">
+                <div className="flex w-fit max-w-full items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
+                    <div className="flex items-center gap-2">
                         <button
                             onClick={() => {
                                 setActiveTab('session');
@@ -693,9 +696,6 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                             History ({history.length})
                         </button>
                     </div>
-                    {activeTab === 'history' && (
-                        <span className="text-xs font-medium text-neutral-400">Latest 10 recordings</span>
-                    )}
                 </div>
 
                 {activeTab === 'session' && (!isFreeTalkMode || isEditing) && (
@@ -956,18 +956,6 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                                             )}
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <button
-                                                onClick={() => {
-                                                    setEditedTarget(item.target);
-                                                    setTranscript(item.transcript);
-                                                    setUserAudio({ base64: item.base64, mimeType: item.mimeType });
-                                                    setAnalysis(item.target.trim() ? analyzeSpeechLocally(item.target, item.transcript) : null);
-                                                    setActiveTab('session');
-                                                }}
-                                                className="rounded-xl border border-neutral-200 px-3 py-2 text-xs font-bold text-neutral-700 transition-all hover:bg-neutral-50"
-                                            >
-                                                Open
-                                            </button>
                                             <button
                                                 onClick={() => {
                                                     setUserAudio({ base64: item.base64, mimeType: item.mimeType });
