@@ -78,6 +78,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     }, [transcript, isRecording, editedTarget, isFreeTalkMode]);
 
     const fetchIpa = useCallback(async () => {
+        if (isFreeTalkMode) return;
         if (!editedTarget) return;
         if (ipa) {
             setShowIpa(!showIpa);
@@ -113,7 +114,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         } finally {
             setIsIpaLoading(false);
         }
-    }, [editedTarget, ipa, showIpa, showToast]);
+    }, [editedTarget, ipa, showIpa, showToast, isFreeTalkMode]);
 
     const stopSession = useCallback(async (currentTranscript: string) => {
         if (stopInFlightRef.current) return;
@@ -246,7 +247,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
 
                 recognitionManager.current.start(
                     (final, interim) => {
-                        const fullText = final + interim;
+                        const fullText = [final, interim].filter(Boolean).join(' ').trim();
                         setTranscript(fullText);
                         const hasRecognizedText = fullText
                             .toLowerCase()
@@ -270,7 +271,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     },
                     (final) => {
                         if (isRecordingRef.current) {
-                            setTranscript(final);
+                            setTranscript(final.trim());
                             stopSession(final);
                         }
                     }
@@ -491,7 +492,18 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                         <Mic size={24} className="relative z-10" />
                     )}
                 </button>
-
+                {userAudio && (
+                    <button
+                        onClick={handlePlayUserAudio}
+                        disabled={isRecording}
+                        className={`flex h-12 w-12 items-center justify-center rounded-full transition-all ${
+                            !isRecording ? 'bg-indigo-100 text-indigo-600 hover:text-indigo-900' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'
+                        }`}
+                        title="Play recording"
+                    >
+                        <Play size={18} fill={!isRecording ? "currentColor" : "none"} />
+                    </button>
+                )}
                 <button
                     onClick={() => setIsMinimized(false)}
                     className="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition-all hover:bg-neutral-200 hover:text-neutral-900"
@@ -517,12 +529,27 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     <X size={20} />
                 </button>
 
-                <div className="text-center space-y-1 mt-2">
-                    <h3 className="text-xl font-bold text-neutral-900 leading-tight">
-                        Recording Studio
-                    </h3>
+                <div className="text-center space-y-2 mt-2">
+                    <div className="flex items-center justify-center gap-3">
+                        <h3 className="text-xl font-bold text-neutral-900 leading-tight">
+                            Recording Studio
+                        </h3>
+                        <button
+                            onClick={() => {
+                                if (isFreeTalkMode) {
+                                    setIsEditing(true);
+                                } else {
+                                    handleEnterFreeTalkMode();
+                                }
+                            }}
+                            className="px-3 py-1.5 text-[11px] font-bold rounded-full border border-neutral-200 bg-white text-neutral-700 hover:text-neutral-900 shadow-sm"
+                        >
+                            {isFreeTalkMode ? 'Add Text' : 'Free Talk'}
+                        </button>
+                    </div>
                 </div>
 
+                {!isFreeTalkMode && (
                 <div className="w-full p-6 bg-neutral-50 rounded-[2rem] border border-neutral-200 flex flex-col items-center gap-3 min-h-[120px] overflow-hidden relative group">
                     {isEditing ? (
                         <div className="w-full relative">
@@ -544,38 +571,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                                 </button>
                             </div>
                         </div>
-                    ) : isFreeTalkMode ? (
-                        <div className="w-full min-h-[120px] flex flex-col items-center justify-center gap-3 text-center">
-                            <div className="text-sm font-semibold text-neutral-800">Free Talk Mode</div>
-                            <p className="max-w-xl text-sm text-neutral-500">Start recording without selected text, or add a phrase to switch back to mimic practice.</p>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setIsEditing(true)}
-                                    className="px-4 py-2 bg-white text-neutral-700 border border-neutral-200 rounded-xl text-xs font-bold shadow-sm hover:bg-neutral-50"
-                                >
-                                    Add Text
-                                </button>
-                                <button
-                                    onClick={handleEnterFreeTalkMode}
-                                    className="px-4 py-2 bg-neutral-900 text-white rounded-xl text-xs font-bold shadow-sm"
-                                >
-                                    Free Talk
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
+                    ) : isFreeTalkMode ? null : (
                         <>
-                            <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                    onClick={handleEnterFreeTalkMode}
-                                    className="px-3 py-1.5 text-[11px] font-bold text-neutral-600 hover:text-neutral-900 bg-white rounded-full shadow-sm border border-neutral-200"
-                                >
-                                    Free Talk
-                                </button>
-                                <button onClick={() => setIsEditing(true)} className="p-2 text-neutral-400 hover:text-indigo-600 transition-colors bg-white rounded-full shadow-sm">
-                                    <Edit2 size={16} />
-                                </button>
-                            </div>
                             <div className="flex flex-wrap justify-center gap-x-1.5 gap-y-1 w-full">
                                 {editedTarget
                                     .split(/\s+/)
@@ -633,13 +630,20 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                         </div>
                     )}
                 </div>
+                )}
 
                 <div className="flex flex-col items-center gap-4 w-full">
                     {isRecording ? (
-                        <div className="flex items-center gap-2 text-rose-500 animate-pulse">
-                            <Waves size={20} />
-                            <span className="text-xs font-black uppercase tracking-widest">Listening...</span>
-                        </div>
+                        isFreeTalkMode && transcript ? (
+                            <p className="max-w-full whitespace-pre-wrap break-words text-center text-sm font-medium italic text-neutral-500">
+                                &quot;{transcript}&quot;
+                            </p>
+                        ) : (
+                            <div className="flex items-center gap-2 text-rose-500 animate-pulse">
+                                <Waves size={20} />
+                                <span className="text-xs font-black uppercase tracking-widest">Listening...</span>
+                            </div>
+                        )
                     ) : transcript && (
                         <p className="max-w-full whitespace-pre-wrap break-words text-center text-sm font-medium italic text-neutral-500">
                             &quot;{transcript}&quot;
@@ -657,47 +661,55 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 </div>
 
                 <div className="flex items-center gap-4 pt-2">
-                    <button onClick={() => speak(editedTarget)} disabled={!editedTarget.trim()} className="p-4 rounded-2xl bg-neutral-100 text-neutral-600 hover:text-neutral-900 transition-all" title="Listen">
-                        <Volume2 size={24} />
-                    </button>
+                    {/* Speak button */}
+                    {!isFreeTalkMode && (
+                        <button onClick={() => speak(editedTarget)} disabled={!editedTarget.trim()} className="p-4 rounded-2xl bg-neutral-100 text-neutral-600 hover:text-neutral-900 transition-all" title="Listen">
+                            <Volume2 size={24} />
+                        </button>
+                    )}
                     
-                    <button 
-                        onClick={fetchIpa} 
-                        disabled={isIpaLoading}
-                        className={`p-4 rounded-2xl transition-all ${showIpa ? 'bg-indigo-600 text-white shadow-md' : 'bg-neutral-100 text-neutral-600 hover:text-indigo-600'}`} 
-                        title="Show Phonetic (IPA)"
-                    >
-                        {isIpaLoading ? <Loader2 size={24} className="animate-spin" /> : <AudioLines size={24} />}
-                    </button>
+                    {/* Show IPA button */}
+                    {!isFreeTalkMode && (
+                        <button 
+                            onClick={fetchIpa} 
+                            disabled={isIpaLoading}
+                            className={`p-4 rounded-2xl transition-all ${showIpa ? 'bg-indigo-600 text-white shadow-md' : 'bg-neutral-100 text-neutral-600 hover:text-indigo-600'}`} 
+                            title="Show Phonetic (IPA)"
+                        >
+                            {isIpaLoading ? <Loader2 size={24} className="animate-spin" /> : <AudioLines size={24} />}
+                        </button>
+                    )}
 
                     {/* Play Highlight and Speed Selector */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleAutoPlay}
-                            disabled={!editedTarget.trim()}
-                            className={`p-4 rounded-2xl transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:text-indigo-600'}`}
-                            title="Play Highlight"
-                        >
-                            <Waves size={24} />
-                        </button>
-                        <select
-                            value={playSpeed}
-                            onChange={(e) => setPlaySpeed(Number(e.target.value))}
-                            className="text-xs border border-neutral-200 rounded-lg px-2 py-1 bg-white"
-                        >
-                            <option value={0.5}>75 WPM</option>
-                            <option value={0.75}>110 WPM</option>
-                            <option value={1}>150 WPM</option>
-                            <option value={1.25}>190 WPM</option>
-                            <option value={1.5}>225 WPM</option>
-                            <option value={1.75}>260 WPM</option>
-                            <option value={2}>300 WPM</option>
-                            <option value={2.25}>325 WPM</option>
-                            <option value={2.5}>350 WPM</option>
-                            <option value={2.75}>375 WPM</option>
-                            <option value={3}>400 WPM</option>
-                        </select>
-                    </div>
+                    {!isFreeTalkMode && (
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleAutoPlay}
+                                disabled={!editedTarget.trim()}
+                                className={`p-4 rounded-2xl transition-all ${isAutoPlaying ? 'bg-indigo-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:text-indigo-600'}`}
+                                title="Play Highlight"
+                            >
+                                <Waves size={24} />
+                            </button>
+                            <select
+                                value={playSpeed}
+                                onChange={(e) => setPlaySpeed(Number(e.target.value))}
+                                className="text-xs border border-neutral-200 rounded-lg px-2 py-1 bg-white"
+                            >
+                                <option value={0.5}>75 WPM</option>
+                                <option value={0.75}>110 WPM</option>
+                                <option value={1}>150 WPM</option>
+                                <option value={1.25}>190 WPM</option>
+                                <option value={1.5}>225 WPM</option>
+                                <option value={1.75}>260 WPM</option>
+                                <option value={2}>300 WPM</option>
+                                <option value={2.25}>325 WPM</option>
+                                <option value={2.5}>350 WPM</option>
+                                <option value={2.75}>375 WPM</option>
+                                <option value={3}>400 WPM</option>
+                            </select>
+                        </div>
+                    )}
 
                     <button 
                         onClick={handleToggleRecord} 
@@ -714,25 +726,31 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                             <Mic size={28} />
                         )}
                     </button>
-                    <button 
-                        onClick={handlePlayUserAudio}
-                        disabled={!userAudio || isRecording}
-                        className={`p-4 rounded-2xl transition-all ${userAudio && !isRecording ? 'bg-indigo-100 text-indigo-600 hover:text-indigo-900' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`}
-                        title="Play recording"
-                    >
-                        <Play size={24} fill={userAudio && !isRecording ? "currentColor" : "none"} />
-                    </button>
-                    <button
-                        onClick={handleSaveUserAudio}
-                        disabled={!userAudio || isRecording}
-                        className={`p-4 rounded-2xl transition-all ${userAudio && !isRecording ? 'bg-emerald-100 text-emerald-600 hover:text-emerald-900' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`}
-                        title="Save audio"
-                    >
-                        <Download size={24} />
-                    </button>
-                    <button onClick={handleAddToQueue} disabled={!editedTarget.trim()} className="p-4 rounded-2xl bg-neutral-100 text-neutral-600 hover:text-indigo-600 transition-all" title="Save to Pronunciation Page">
-                        <ListPlus size={24} />
-                    </button>
+                    {userAudio && (
+                        <button 
+                            onClick={handlePlayUserAudio}
+                            disabled={isRecording}
+                            className={`p-4 rounded-2xl transition-all ${!isRecording ? 'bg-indigo-100 text-indigo-600 hover:text-indigo-900' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`}
+                            title="Play recording"
+                        >
+                            <Play size={24} fill={!isRecording ? "currentColor" : "none"} />
+                        </button>
+                    )}
+                    {userAudio && (
+                        <button
+                            onClick={handleSaveUserAudio}
+                            disabled={isRecording}
+                            className={`p-4 rounded-2xl transition-all ${!isRecording ? 'bg-emerald-100 text-emerald-600 hover:text-emerald-900' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`}
+                            title="Save audio"
+                        >
+                            <Download size={24} />
+                        </button>
+                    )}
+                    {!isFreeTalkMode && (
+                        <button onClick={handleAddToQueue} disabled={!editedTarget.trim()} className="p-4 rounded-2xl bg-neutral-100 text-neutral-600 hover:text-indigo-600 transition-all" title="Save to Pronunciation Page">
+                            <ListPlus size={24} />
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
