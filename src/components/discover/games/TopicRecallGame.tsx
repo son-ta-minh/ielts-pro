@@ -753,8 +753,9 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   };
 
   const suggestTopic = () => {
-    const randomIndex = Math.floor(Math.random() * COMMON_TOPICS.length);
-    const topic = COMMON_TOPICS[randomIndex];
+    const existingTopics = new Set(savedTopicEntries.map((item) => item.topic));
+    const randomIndex = Math.floor(Math.random() * existingTopics.size);
+    const topic = Array.from(existingTopics)[randomIndex];
     setNewTopicName(topic);
     void addTopic(topic);
   };

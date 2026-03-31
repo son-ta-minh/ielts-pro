@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { X, Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2, Edit2 } from 'lucide-react';
+import { X, Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2, Edit2, Minimize2, Maximize2, Download } from 'lucide-react';
 import { speak, stopRecording, startRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { analyzeSpeechLocally, AnalysisResult, CharDiff } from '../../utils/speechAnalysis';
@@ -22,8 +22,9 @@ interface Props {
 export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore }) => {
     const [isRecording, setIsRecording] = useState(false);
     const isRecordingRef = useRef(false);
+    const [isMinimized, setIsMinimized] = useState(false);
     const [editedTarget, setEditedTarget] = useState(target || '');
-    const [isEditing, setIsEditing] = useState(!target);
+    const [isEditing, setIsEditing] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [userAudio, setUserAudio] = useState<{base64: string, mimeType: string} | null>(null);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -50,7 +51,9 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const singleWordStopTimerRef = useRef<any>(null);
     const lastActivityRef = useRef(Date.now());
     const autoStopTriggeredRef = useRef(false);
+    const stopInFlightRef = useRef(false);
     const { showToast } = useToast();
+    const isFreeTalkMode = !editedTarget.trim();
     const isSingleWordTarget = useMemo(() => {
         const tokens = (editedTarget || '')
             .toLowerCase()
@@ -63,6 +66,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
 
     // Real-time analysis during recording
     useEffect(() => {
+        if (isFreeTalkMode) return;
         if (isRecording && editedTarget && transcript) {
             const result = analyzeSpeechLocally(editedTarget, transcript);
             setAnalysis(result);
@@ -71,7 +75,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 stopSession(transcript);
             }
         }
-    }, [transcript, isRecording, editedTarget]);
+    }, [transcript, isRecording, editedTarget, isFreeTalkMode]);
 
     const fetchIpa = useCallback(async () => {
         if (!editedTarget) return;
@@ -112,7 +116,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     }, [editedTarget, ipa, showIpa, showToast]);
 
     const stopSession = useCallback(async (currentTranscript: string) => {
-        if (!editedTarget) return; // Should not happen if isEditingTarget is false
+        if (stopInFlightRef.current) return;
+        stopInFlightRef.current = true;
         if (silenceTimerRef.current) {
             clearInterval(silenceTimerRef.current);
             silenceTimerRef.current = null;
@@ -122,19 +127,25 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             singleWordStopTimerRef.current = null;
         }
         recognitionManager.current.stop();
-        const audioResult = await stopRecording();
-        if (audioResult) {
-            setUserAudio(audioResult);
-        }
         setIsRecording(false);
         isRecordingRef.current = false;
         autoStopTriggeredRef.current = false;
-        const result = analyzeSpeechLocally(editedTarget, currentTranscript);
-        setAnalysis(result);
-        if (onSaveScore) {
-            onSaveScore(result.score);
+        try {
+            const audioResult = await stopRecording();
+            if (audioResult) {
+                setUserAudio(audioResult);
+            }
+            if (!isFreeTalkMode && editedTarget) {
+                const result = analyzeSpeechLocally(editedTarget, currentTranscript);
+                setAnalysis(result);
+                if (onSaveScore) {
+                    onSaveScore(result.score);
+                }
+            }
+        } finally {
+            stopInFlightRef.current = false;
         }
-    }, [editedTarget, onSaveScore]);
+    }, [editedTarget, onSaveScore, isFreeTalkMode]);
 
     const resetActivity = useCallback(() => {
         lastActivityRef.current = Date.now();
@@ -142,7 +153,18 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     }, []);
 
     const startSilenceCountdown = useCallback((currentText: string) => {
+        if (isFreeTalkMode) return;
         if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
+
+        const hasRecognizedText = currentText
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}]+/gu, ' ')
+            .trim()
+            .length > 0;
+        if (!hasRecognizedText) {
+            setTimeLeft(SILENCE_TIMEOUT);
+            return;
+        }
         
         lastActivityRef.current = Date.now();
         setTimeLeft(SILENCE_TIMEOUT);
@@ -158,7 +180,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 stopSession(currentText);
             }
         }, 50); 
-    }, [stopSession]);
+    }, [stopSession, isFreeTalkMode]);
 
     useEffect(() => {
         return () => {
@@ -194,7 +216,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     }, [stopPlayback]);
 
     const handleToggleRecord = async () => {
-        if (!editedTarget) return; // Cannot record without a target
+        if (!isFreeTalkMode && !editedTarget) return;
         if (isEditing) setIsEditing(false); // Switch to view mode when recording starts
 
         if (isRecording) {
@@ -221,20 +243,22 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 }, 500);
                 
                 resetActivity();
-                startSilenceCountdown('');
 
                 recognitionManager.current.start(
                     (final, interim) => {
                         const fullText = final + interim;
                         setTranscript(fullText);
-                        resetActivity();
-                        if (isSingleWordTarget && !singleWordStopTimerRef.current) {
-                            const hasAnyWord = fullText
-                                .toLowerCase()
-                                .replace(/[^\p{L}\p{N}]+/gu, ' ')
-                                .trim()
-                                .length > 0;
-                            if (hasAnyWord) {
+                        const hasRecognizedText = fullText
+                            .toLowerCase()
+                            .replace(/[^\p{L}\p{N}]+/gu, ' ')
+                            .trim()
+                            .length > 0;
+                        if (!isFreeTalkMode && hasRecognizedText) {
+                            resetActivity();
+                            startSilenceCountdown(fullText);
+                        }
+                        if (!isFreeTalkMode && isSingleWordTarget && !singleWordStopTimerRef.current) {
+                            if (hasRecognizedText) {
                                 singleWordStopTimerRef.current = setTimeout(() => {
                                     singleWordStopTimerRef.current = null;
                                     if (isRecordingRef.current) {
@@ -255,6 +279,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 console.error(_e);
                 setIsRecording(false);
                 isRecordingRef.current = false;
+                stopInFlightRef.current = false;
             }
         }
     };
@@ -308,6 +333,42 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             }
         }
     }, [userAudio, stopPlayback]);
+
+    const handleSaveUserAudio = useCallback(() => {
+        if (!userAudio) {
+            showToast('No recording to save.', 'info');
+            return;
+        }
+
+        try {
+            const raw = atob(userAudio.base64);
+            const view = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) {
+                view[i] = raw.charCodeAt(i);
+            }
+
+            const blob = new Blob([view.buffer], { type: userAudio.mimeType });
+            const url = URL.createObjectURL(blob);
+            const extension = userAudio.mimeType.includes('mp4')
+                ? 'm4a'
+                : userAudio.mimeType.includes('wav')
+                    ? 'wav'
+                    : 'webm';
+            const label = editedTarget.trim()
+                ? editedTarget.trim().slice(0, 32).replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '')
+                : 'free-talk';
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `mimic-${label || 'recording'}-${Date.now()}.${extension}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch {
+            showToast('Unable to save recording.', 'error');
+        }
+    }, [editedTarget, showToast, userAudio]);
 
     const handleAddToQueue = () => {
         if (!editedTarget) return;
@@ -388,16 +449,78 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         playNext();
     };
 
+    const handleEnterFreeTalkMode = () => {
+        setEditedTarget('');
+        setIsEditing(false);
+        setAnalysis(null);
+        setShowIpa(false);
+        setIpa(null);
+        setIpaWords(null);
+        setHoverIndex(null);
+        if (isAutoPlaying) {
+            clearTimeout(autoPlayRef.current);
+            setIsAutoPlaying(false);
+        }
+    };
+
+    if (isMinimized) {
+        return (
+            <div className="fixed bottom-5 right-5 z-[10000] flex items-center gap-3 rounded-full border border-neutral-200 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-md">
+                <button
+                    onClick={handleToggleRecord}
+                    className={`relative flex h-16 w-16 items-center justify-center rounded-full transition-all transform active:scale-105 ${
+                        isRecording
+                            ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/40 ring-8 ring-rose-500/10'
+                            : 'bg-neutral-900 text-white shadow-lg hover:scale-105'
+                    }`}
+                    title={isRecording ? 'Stop recording' : 'Start recording'}
+                >
+                    {isRecording && (
+                        <>
+                            <span className="absolute inset-0 rounded-full border-4 border-rose-300/70 animate-ping" />
+                            <span className="absolute inset-0 rounded-full border border-white/30 animate-pulse" />
+                        </>
+                    )}
+                    {isRecording ? (
+                        timeLeft <= 1000 ? (
+                            <span className="relative z-10 text-lg font-black tabular-nums">{(timeLeft / 1000).toFixed(1)}</span>
+                        ) : (
+                            <Waves size={24} className="relative z-10 animate-pulse" />
+                        )
+                    ) : (
+                        <Mic size={24} className="relative z-10" />
+                    )}
+                </button>
+
+                <button
+                    onClick={() => setIsMinimized(false)}
+                    className="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition-all hover:bg-neutral-200 hover:text-neutral-900"
+                    title="Restore window"
+                >
+                    <Maximize2 size={18} />
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-5xl rounded-[2.5rem] shadow-2xl border border-neutral-200 p-8 flex flex-col items-center gap-6 relative">
+                <button
+                    onClick={() => setIsMinimized(true)}
+                    className="absolute top-6 right-20 p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-all"
+                    title="Minimize"
+                >
+                    <Minimize2 size={18} />
+                </button>
                 <button onClick={onClose} className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-all">
                     <X size={20} />
                 </button>
 
                 <div className="text-center space-y-1 mt-2">
-                    <span className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">Mimic Practice</span>
-                    <h3 className="text-xl font-bold text-neutral-900 leading-tight">Practice Selected Phrase</h3>
+                    <h3 className="text-xl font-bold text-neutral-900 leading-tight">
+                        Recording Studio
+                    </h3>
                 </div>
 
                 <div className="w-full p-6 bg-neutral-50 rounded-[2rem] border border-neutral-200 flex flex-col items-center gap-3 min-h-[120px] overflow-hidden relative group">
@@ -409,18 +532,54 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                                 placeholder="Enter text to practice..." 
                                 className="w-full h-32 p-4 bg-white border border-neutral-200 rounded-xl font-medium resize-none focus:ring-2 focus:ring-neutral-900 outline-none text-base leading-relaxed"
                             />
-                            <button onClick={() => setIsEditing(false)} className="absolute bottom-4 right-4 px-3 py-1.5 bg-neutral-900 text-white rounded-lg text-xs font-bold shadow-sm">
-                                Done
-                            </button>
+                            <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                                <button
+                                    onClick={handleEnterFreeTalkMode}
+                                    className="px-3 py-1.5 bg-white text-neutral-700 border border-neutral-200 rounded-lg text-xs font-bold shadow-sm hover:bg-neutral-50"
+                                >
+                                    Free Talk
+                                </button>
+                                <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 bg-neutral-900 text-white rounded-lg text-xs font-bold shadow-sm">
+                                    Done
+                                </button>
+                            </div>
+                        </div>
+                    ) : isFreeTalkMode ? (
+                        <div className="w-full min-h-[120px] flex flex-col items-center justify-center gap-3 text-center">
+                            <div className="text-sm font-semibold text-neutral-800">Free Talk Mode</div>
+                            <p className="max-w-xl text-sm text-neutral-500">Start recording without selected text, or add a phrase to switch back to mimic practice.</p>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setIsEditing(true)}
+                                    className="px-4 py-2 bg-white text-neutral-700 border border-neutral-200 rounded-xl text-xs font-bold shadow-sm hover:bg-neutral-50"
+                                >
+                                    Add Text
+                                </button>
+                                <button
+                                    onClick={handleEnterFreeTalkMode}
+                                    className="px-4 py-2 bg-neutral-900 text-white rounded-xl text-xs font-bold shadow-sm"
+                                >
+                                    Free Talk
+                                </button>
+                            </div>
                         </div>
                     ) : (
                         <>
-                            <button onClick={() => setIsEditing(true)} className="absolute top-4 right-4 p-2 text-neutral-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full shadow-sm">
-                                <Edit2 size={16} />
-                            </button>
+                            <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={handleEnterFreeTalkMode}
+                                    className="px-3 py-1.5 text-[11px] font-bold text-neutral-600 hover:text-neutral-900 bg-white rounded-full shadow-sm border border-neutral-200"
+                                >
+                                    Free Talk
+                                </button>
+                                <button onClick={() => setIsEditing(true)} className="p-2 text-neutral-400 hover:text-indigo-600 transition-colors bg-white rounded-full shadow-sm">
+                                    <Edit2 size={16} />
+                                </button>
+                            </div>
                             <div className="flex flex-wrap justify-center gap-x-1.5 gap-y-1 w-full">
                                 {editedTarget
                                     .split(/\s+/)
+                                    .filter(Boolean)
                                     .map((word, wIdx) => {
                                         const wordAnalysis = analysis?.words[wIdx];
                                         let colorClass = 'text-neutral-800';
@@ -450,7 +609,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                         </>
                     )}
                     
-                    {showIpa && ipa && !isEditing && (
+                    {showIpa && ipa && !isEditing && !isFreeTalkMode && (
                         <div className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-mono font-normal text-neutral-600 leading-relaxed animate-in slide-in-from-top-2 duration-300 flex flex-wrap gap-x-2 gap-y-1 text-left">
                             {(ipaWords && ipaWords.length > 0
                                 ? ipaWords
@@ -482,7 +641,9 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                             <span className="text-xs font-black uppercase tracking-widest">Listening...</span>
                         </div>
                     ) : transcript && (
-                        <p className="text-sm font-medium italic text-neutral-500 line-clamp-2">&quot;{transcript}&quot;</p>
+                        <p className="max-w-full whitespace-pre-wrap break-words text-center text-sm font-medium italic text-neutral-500">
+                            &quot;{transcript}&quot;
+                        </p>
                     )}
 
                     {analysis && (
@@ -560,6 +721,14 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                         title="Play recording"
                     >
                         <Play size={24} fill={userAudio && !isRecording ? "currentColor" : "none"} />
+                    </button>
+                    <button
+                        onClick={handleSaveUserAudio}
+                        disabled={!userAudio || isRecording}
+                        className={`p-4 rounded-2xl transition-all ${userAudio && !isRecording ? 'bg-emerald-100 text-emerald-600 hover:text-emerald-900' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`}
+                        title="Save audio"
+                    >
+                        <Download size={24} />
                     </button>
                     <button onClick={handleAddToQueue} disabled={!editedTarget.trim()} className="p-4 rounded-2xl bg-neutral-100 text-neutral-600 hover:text-indigo-600 transition-all" title="Save to Pronunciation Page">
                         <ListPlus size={24} />

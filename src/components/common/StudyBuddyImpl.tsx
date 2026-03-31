@@ -2240,6 +2240,34 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         }, messageRef.current?.cambridge ? 3000 : 300);
     };
 
+    const handleCoachAvatarClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation();
+
+        if (showPlaybackControls) {
+            stopSpeaking();
+            return;
+        }
+
+        if (closeMenuTimeoutRef.current) {
+            window.clearTimeout(closeMenuTimeoutRef.current);
+            closeMenuTimeoutRef.current = null;
+        }
+
+        if (isOpen && !menuPos) {
+            disableSelectionPreservation();
+            setIsOpen(false);
+            setMessage(null);
+            return;
+        }
+
+        isCoachHoveredRef.current = true;
+        shouldPreserveSelectionRef.current = true;
+        restoreSelectedRange();
+        setMenuPos(null);
+        setMessage(null);
+        setIsOpen(true);
+    };
+
     useEffect(() => {
         if (!isOpen || !message?.cambridge) return;
         if (isCoachHoveredRef.current) return;
@@ -2601,7 +2629,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                         >
                             {isChatLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                         </button>
-                        <button onClick={(e) => { if (showPlaybackControls) { e.stopPropagation(); stopSpeaking(); } }} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-0 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}>
+                        <button onClick={handleCoachAvatarClick} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-300 transform shadow-2xl relative z-0 ${avatarInfo.bg} ${isOpen ? 'ring-4 ring-white' : 'hover:scale-110 mb-1'}`}>
                             {isThinking ? <Loader2 size={20} className="animate-spin text-neutral-400"/> : (
                                 <>
                                     <img src={avatarInfo.url} className={`w-10 h-10 object-contain ${showPlaybackControls ? 'opacity-30 scale-90 blur-[1px]' : ''}`} alt="Coach" />
