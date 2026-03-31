@@ -385,6 +385,11 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
             word={viewingWord} 
             onClose={() => setViewingWord(null)} 
             onNavigateToWord={setViewingWord} 
+            onOpenWordFamilyGroup={(groupId) => {
+              sessionStorage.setItem('vocab_pro_word_family_target_group_id', groupId);
+              setViewingWord(null);
+              onNavigate?.('WORD_FAMILY');
+            }}
             onEditRequest={(w) => { setViewingWord(null); setEditingWord(w); }} 
             onUpdate={onUpdate} 
             onGainXp={async () => 0}

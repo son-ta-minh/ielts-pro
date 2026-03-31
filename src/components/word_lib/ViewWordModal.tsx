@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { VocabularyItem, Unit, ReviewGrade } from '../../app/types';
+import { VocabularyItem, Unit, ReviewGrade, WordFamilyGroup } from '../../app/types';
 import { findWordByText, saveWord, getUnitsContainingWord, getAllWords } from '../../app/dataStore';
 import { ViewWordModalUI } from './ViewWordModal_UI';
 import { createNewWord, calculateMasteryScore } from '../../utils/srs';
@@ -9,22 +9,25 @@ import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/te
 import { getConfig } from '../../app/settingsManager';
 import { StudyBuddyTargetSection } from '../../utils/studyBuddyChatUtils';
 import { clearStaleWordFamilyGroupLink } from '../../utils/wordFamilyGroupLinking';
+import * as db from '../../app/db';
 
 interface Props {
   word: VocabularyItem;
   onClose: () => void;
   onNavigateToWord: (word: VocabularyItem) => void;
+  onOpenWordFamilyGroup?: (groupId: string) => void;
   onEditRequest: (word: VocabularyItem) => void;
   onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => Promise<number>;
   onUpdate: (word: VocabularyItem) => void;
   isViewOnly?: boolean;
 }
 
-const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEditRequest, onUpdate, isViewOnly = false }) => {
+const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpenWordFamilyGroup, onEditRequest, onUpdate, isViewOnly = false }) => {
   const [currentWord, setCurrentWord] = useState<VocabularyItem>({
     ...word,
     lastTestResults: normalizeTestResultKeys(word.lastTestResults)
   });
+  const [currentWordFamilyGroup, setCurrentWordFamilyGroup] = useState<WordFamilyGroup | null>(null);
   const [isChallenging, setIsChallenging] = useState(false);
   const [isMimicOpen, setIsMimicOpen] = useState(false);
 
@@ -51,6 +54,27 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
       isActive = false;
     };
   }, [word]);
+
+  useEffect(() => {
+    let isActive = true;
+    const run = async () => {
+      const groupId = currentWord.wordFamilyGroupId || null;
+      if (!groupId) {
+        if (isActive) setCurrentWordFamilyGroup(null);
+        return;
+      }
+
+      const groups = await db.getWordFamilyGroupsByUserId(currentWord.userId);
+      const matchedGroup = groups.find((group) => group.id === groupId) || null;
+      if (isActive) {
+        setCurrentWordFamilyGroup(matchedGroup);
+      }
+    };
+    void run();
+    return () => {
+      isActive = false;
+    };
+  }, [currentWord.userId, currentWord.wordFamilyGroupId]);
   
   const handleChallengeComplete = async (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => {
     const updated = { ...currentWord };
@@ -203,6 +227,8 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
     )}
     <ViewWordModalUI
       word={currentWord}
+      wordFamilyGroup={currentWordFamilyGroup}
+      onOpenWordFamilyGroupRequest={onOpenWordFamilyGroup}
       onClose={onClose}
       onChallengeRequest={() => setIsChallenging(true)}
       onMimicRequest={() => setIsMimicOpen(true)}

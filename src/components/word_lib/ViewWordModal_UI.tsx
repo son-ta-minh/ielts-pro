@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image } from 'lucide-react';
-import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, WordQuality, ParaphraseTone, WordFamily } from '../../app/types';
+import { LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image } from 'lucide-react';
+import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
 import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
@@ -180,6 +180,8 @@ const UsageTable: React.FC<{
 
 export interface ViewWordModalUIProps {
     word: VocabularyItem;
+    wordFamilyGroup?: WordFamilyGroup | null;
+    onOpenWordFamilyGroupRequest?: (groupId: string) => void;
     onClose: () => void;
     onChallengeRequest: () => void;
     onMimicRequest: () => void;
@@ -197,7 +199,7 @@ export interface ViewWordModalUIProps {
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
-    word, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
+    word, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onNavigateToWord, isViewOnly = false,
     onAddAIExample,
     onAskAiRequest,
@@ -421,7 +423,19 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     );
 
     const reviewStatus = getRemainingTime(word.nextReview);
-    const hasAnyFamilyData = !!(word.wordFamily && (word.wordFamily.nouns?.length || word.wordFamily.verbs?.length || word.wordFamily.adjs?.length || word.wordFamily.advs?.length));
+    const effectiveWordFamily = useMemo<WordFamily | undefined>(() => {
+        if (wordFamilyGroup) {
+            return {
+                nouns: (wordFamilyGroup.nouns || []).map((item) => ({ word: item, isIgnored: false })),
+                verbs: (wordFamilyGroup.verbs || []).map((item) => ({ word: item, isIgnored: false })),
+                adjs: (wordFamilyGroup.adjectives || []).map((item) => ({ word: item, isIgnored: false })),
+                advs: (wordFamilyGroup.adverbs || []).map((item) => ({ word: item, isIgnored: false }))
+            };
+        }
+        return word.wordFamily;
+    }, [word.wordFamily, wordFamilyGroup]);
+
+    const hasAnyFamilyData = !!(effectiveWordFamily && (effectiveWordFamily.nouns?.length || effectiveWordFamily.verbs?.length || effectiveWordFamily.adjs?.length || effectiveWordFamily.advs?.length));
     const displayedPreps = (word.prepositions || []).filter(p => viewSettings.showHidden || !p.isIgnored);
     const displayedCollocs = (word.collocationsArray || []).filter(c => viewSettings.showHidden || !c.isIgnored);
     const displayedIdioms = (word.idiomsList || []).filter(c => viewSettings.showHidden || !c.isIgnored);
@@ -439,20 +453,20 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
       );
 
     const wordFamilyItems = useMemo(() => {
-        if (!word.wordFamily) return [];
+        if (!effectiveWordFamily) return [];
         const result: { word: string; type: string; ipa?: string }[] = [];
         const types: (keyof WordFamily)[] = ['nouns', 'verbs', 'adjs', 'advs'];
         const typeLabels: Record<string, string> = { nouns: 'Noun', verbs: 'Verb', adjs: 'Adjective', advs: 'Adverb' };
         
         types.forEach(t => {
-            (word.wordFamily![t] || []).forEach(m => {
+            (effectiveWordFamily[t] || []).forEach(m => {
                 if (viewSettings.showHidden || !m.isIgnored) {
                     result.push({ word: m.word, type: typeLabels[t], ipa: m.ipaUs });
                 }
             });
         });
         return result;
-    }, [word.wordFamily, viewSettings.showHidden]);
+    }, [effectiveWordFamily, viewSettings.showHidden]);
 
     const lessonUsageHtml = useMemo(() => word.lesson?.essay ? parseMarkdown(word.lesson.essay) : null, [word.lesson?.essay]);
     const lessonTestHtml = useMemo(() => word.lesson?.test ? parseMarkdown(word.lesson.test) : null, [word.lesson?.test]);
@@ -727,13 +741,23 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                     <span>Ask AI</span>
                                                 </button>
                                             ) : null}
+                                            {wordFamilyGroup?.id && onOpenWordFamilyGroupRequest ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onOpenWordFamilyGroupRequest(wordFamilyGroup.id)}
+                                                    className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-cyan-700 transition-colors hover:bg-cyan-100 hover:text-cyan-900"
+                                                >
+                                                    <LibraryBig size={10} />
+                                                    <span>Go</span>
+                                                </button>
+                                            ) : null}
                                         </div>
                                         <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100">
                                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                                                {renderFamilyCardGroup("Nouns", word.wordFamily?.nouns, "blue", "nouns")}
-                                                {renderFamilyCardGroup("Verbs", word.wordFamily?.verbs, "green", "verbs")}
-                                                {renderFamilyCardGroup("Adjectives", word.wordFamily?.adjs, "orange", "adjs")}
-                                                {renderFamilyCardGroup("Adverbs", word.wordFamily?.advs, "purple", "advs")}
+                                                {renderFamilyCardGroup("Nouns", effectiveWordFamily?.nouns, "blue", "nouns")}
+                                                {renderFamilyCardGroup("Verbs", effectiveWordFamily?.verbs, "green", "verbs")}
+                                                {renderFamilyCardGroup("Adjectives", effectiveWordFamily?.adjs, "orange", "adjs")}
+                                                {renderFamilyCardGroup("Adverbs", effectiveWordFamily?.advs, "purple", "advs")}
                                             </div>
                                         </div>
                                     </div>

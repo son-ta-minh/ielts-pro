@@ -70,6 +70,21 @@ const WordFamily: React.FC<Props> = ({ user }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { showToast } = useToast();
 
+  useEffect(() => {
+    const targetGroupId = sessionStorage.getItem('vocab_pro_word_family_target_group_id');
+    if (!targetGroupId || groups.length === 0) return;
+
+    const targetIndex = groups.findIndex((group) => group.id === targetGroupId);
+    if (targetIndex === -1) {
+      sessionStorage.removeItem('vocab_pro_word_family_target_group_id');
+      return;
+    }
+
+    setSelectedIds(new Set([targetGroupId]));
+    setPage(Math.floor(targetIndex / pageSize));
+    sessionStorage.removeItem('vocab_pro_word_family_target_group_id');
+  }, [groups, pageSize]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
