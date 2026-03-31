@@ -234,13 +234,14 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
 
   const renderCard = (item: GalleryItem) => {
     const imageUrl = buildImageUrl(item.imagePath);
+    const isEditingItem = editing?.id === item.id;
     return (
       <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="cursor-pointer" onClick={() => setShowDetail(item)}>
           <img
             src={imageUrl}
             alt={item.title}
-            className="w-full h-48 object-cover"
+            className={`w-full ${isEditingItem ? 'h-72 p-3 bg-neutral-50 object-contain' : 'h-48 p-2 bg-neutral-50 object-contain'}`}
             onError={(e) => {
               const img = e.currentTarget;
               if (img.src.endsWith('.png')) {
@@ -299,6 +300,22 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
           <input name="collection" value={formState.collection} onChange={(e) => setFormState(f => ({ ...f, collection: e.target.value }))} placeholder="Collection" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
           <input name="imagePath" value={formState.imagePath} onChange={(e) => setFormState(f => ({ ...f, imagePath: e.target.value }))} placeholder="Image path or URL (server path works like [IMG])" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-mono" required />
           <input name="words" value={formState.words} onChange={(e) => setFormState(f => ({ ...f, words: e.target.value }))} placeholder="Words (comma separated)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium md:col-span-2" />
+          {editing && formState.imagePath && (
+            <div className="md:col-span-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
+              <p className="mb-3 text-xs font-bold uppercase tracking-widest text-neutral-400">Editing Preview</p>
+              <img
+                src={buildImageUrl(formState.imagePath)}
+                alt={editing.title}
+                className="h-72 w-full rounded-xl object-contain bg-white"
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (img.src.endsWith('.png')) {
+                    img.src = img.src.replace('.png', '.jpg');
+                  }
+                }}
+              />
+            </div>
+          )}
         </form>
       )}
 
@@ -306,8 +323,8 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
         <div className="border border-neutral-200 rounded-2xl p-6 text-center text-neutral-500 bg-white shadow-sm">Loading gallery...</div>
       ) : visibleItems.length === 0 ? (
         <div className="border border-neutral-200 rounded-2xl p-6 text-center text-neutral-500 bg-white shadow-sm">No images yet. Add one above.</div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      ) : editing ? null : (
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {visibleItems.map(renderCard)}
         </div>
       )}
