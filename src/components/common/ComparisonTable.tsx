@@ -1,6 +1,7 @@
 import React from 'react';
 import { ComparisonRow } from '../../app/types';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { parseMarkdown } from '../../utils/markdownParser';
 
 interface Props {
     rows: ComparisonRow[];
@@ -30,14 +31,16 @@ export const ComparisonTable: React.FC<Props> = ({ rows }) => {
                                 </div>
                             </td>
                             <td className="px-6 py-4 align-top">
-                                <p className="text-xs text-neutral-600 font-medium italic leading-relaxed">
-                                    {row.nuance || '-'}
-                                </p>
+                                <p
+                                    className="text-xs text-neutral-600 font-medium italic leading-relaxed"
+                                    dangerouslySetInnerHTML={{ __html: parseMarkdown(row.nuance || '-') }}
+                                />
                             </td>
                             <td className="px-6 py-4 align-top bg-neutral-50/20">
-                                <p className="text-xs text-neutral-800 leading-relaxed font-medium">
-                                    {row.example || '-'}
-                                </p>
+                                <p
+                                    className="text-xs text-neutral-800 leading-relaxed font-medium"
+                                    dangerouslySetInnerHTML={{ __html: parseMarkdown(row.example || '-') }}
+                                />
                             </td>
                         </tr>
                     ))}

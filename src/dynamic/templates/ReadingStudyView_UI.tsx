@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useId } from 'react';
 import { Play, Edit3, ArrowLeft, BrainCircuit, BookOpen, Tag, HelpCircle, X, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText, Headphones, SkipBack, SkipForward, FileAudio, Save, Pause } from 'lucide-react';
 import { VocabularyItem, Unit, User } from '../../app/types';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
@@ -27,6 +27,7 @@ const PdfJsViewer: React.FC<{ fileUrl: string; viewportHeight: number }> = ({ fi
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [renderVersion, setRenderVersion] = useState(0);
+    const instanceId = useId().replace(/:/g, '');
 
     useEffect(() => {
         let isCancelled = false;
@@ -42,7 +43,7 @@ const PdfJsViewer: React.FC<{ fileUrl: string; viewportHeight: number }> = ({ fi
                 const pdf = await loadingTask.promise;
                 if (isCancelled) return;
 
-                const container = document.getElementById(`pdfjs-viewer-${renderVersion}`);
+                const container = document.getElementById(`pdfjs-viewer-${instanceId}-${renderVersion}`);
                 if (!container) return;
                 container.innerHTML = '';
 
@@ -101,7 +102,7 @@ const PdfJsViewer: React.FC<{ fileUrl: string; viewportHeight: number }> = ({ fi
             if (loadingTask) loadingTask.destroy();
             textLayers.forEach(layer => layer.cancel());
         };
-    }, [fileUrl, renderVersion]);
+    }, [fileUrl, renderVersion, instanceId]);
 
     return (
         <div
@@ -142,7 +143,7 @@ const PdfJsViewer: React.FC<{ fileUrl: string; viewportHeight: number }> = ({ fi
                 </div>
             ) : (
                 <div
-                  id={`pdfjs-viewer-${renderVersion}`}
+                  id={`pdfjs-viewer-${instanceId}-${renderVersion}`}
                   className="h-full w-full overflow-auto pr-2"
                   style={{ overscrollBehavior: 'contain' }}
                 />
@@ -153,6 +154,7 @@ const PdfJsViewer: React.FC<{ fileUrl: string; viewportHeight: number }> = ({ fi
 
 const DocxViewer: React.FC<{ fileUrl: string; title?: string }> = ({ fileUrl }) => {
     const [error, setError] = useState<string | null>(null);
+    const instanceId = useId().replace(/:/g, '');
 
     useEffect(() => {
         let cancelled = false;
@@ -163,7 +165,7 @@ const DocxViewer: React.FC<{ fileUrl: string; title?: string }> = ({ fileUrl }) 
                 const blob = await res.blob();
                 if (cancelled) return;
 
-                const container = document.getElementById('docx-viewer-container');
+                const container = document.getElementById(`docx-viewer-container-${instanceId}`);
                 if (!container) return;
                 container.innerHTML = '';
 
@@ -178,7 +180,7 @@ const DocxViewer: React.FC<{ fileUrl: string; title?: string }> = ({ fileUrl }) 
         return () => {
             cancelled = true;
         };
-    }, [fileUrl]);
+    }, [fileUrl, instanceId]);
 
     if (error) {
         return (
@@ -190,7 +192,7 @@ const DocxViewer: React.FC<{ fileUrl: string; title?: string }> = ({ fileUrl }) 
 
     return (
         <div className="min-h-[60vh] overflow-auto bg-white p-6">
-            <div id="docx-viewer-container" className="prose max-w-none" />
+            <div id={`docx-viewer-container-${instanceId}`} className="prose max-w-none" />
         </div>
     );
 };
