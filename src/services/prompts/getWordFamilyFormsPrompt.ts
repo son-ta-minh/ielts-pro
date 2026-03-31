@@ -8,7 +8,7 @@ export function getWordFamilyFormsPrompt(seed: {
 
     return `You are an expert English linguist.
 
-TASK: Given a word family group, infer the related forms and fill any missing entries.
+TASK: Given a word family group, infer the related forms based only on the root words provided. Do not introduce new root words.
 
 CURRENT GROUP:
 - Verbs: [${normalize(seed.verbs)}]
@@ -19,10 +19,14 @@ CURRENT GROUP:
 RULES:
 1. Return one coherent English word family for the same root/meaning.
 2. Preserve valid existing words whenever possible.
-3. Fill missing forms when they exist naturally in common English usage.
-4. Each field may contain multiple words if that family commonly has multiple options.
-5. Do not invent rare, obscure, or unnatural words just to fill every slot.
-6. If a form truly does not exist or is not natural, return an empty array for that field.
+3. Fill missing forms if they naturally derive from the given root words.
+4. Return base forms only:
+   - verbs must be infinitive/base form (e.g., "satisfy", not "satisfies", "satisfying", "satisfied")
+   - nouns must be singular lemma (e.g., "satisfaction")
+   - adjectives must be base form (e.g., "satisfying", "satisfactory")
+   - adverbs must be base form (e.g., "satisfactorily")
+5. Do not invent root words or unrelated forms.
+6. If a form does not exist or is not natural, return an empty array for that field.
 7. Remove duplicates.
 8. Return data only, not code.
 
@@ -35,9 +39,9 @@ OUTPUT RULES:
 
 Response Example:
 {
-  "verbs": ["decide"],
-  "nouns": ["decision"],
-  "adjectives": ["decisive"],
-  "adverbs": ["decisively"]
+  "verbs": ["satisfy"],
+  "nouns": ["satisfaction"],
+  "adjectives": ["satisfying", "satisfactory"],
+  "adverbs": ["satisfactorily"]
 }`;
 }
