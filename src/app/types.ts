@@ -212,6 +212,7 @@ export interface VocabularyItem {
   id: string;
   userId: string; 
   word: string; 
+  wordFamilyGroupId?: string | null;
   ipaUs?: string;
   ipaUk?: string;
   pronSim?: 'same' | 'near' | 'different';

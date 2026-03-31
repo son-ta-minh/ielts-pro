@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { User, WordFamilyGroup } from '../../../app/types';
 import * as db from '../../../app/db';
+import * as dataStore from '../../../app/dataStore';
 import { useToast } from '../../../contexts/ToastContext';
 import { WordFamilyUI } from './WordFamily_UI';
 import { getConfig, getStudyBuddyAiUrl } from '../../../app/settingsManager';
 import { getWordFamilyFormsPrompt } from '../../../services/promptService';
+import { syncLibraryWordsForSavedGroup, unlinkLibraryWordsFromDeletedGroup } from '../../../utils/wordFamilyGroupLinking';
 
 interface Props {
   user: User;
@@ -215,6 +217,10 @@ const WordFamily: React.FC<Props> = ({ user }) => {
     try {
       setIsSaving(true);
       await db.saveWordFamilyGroup(nextGroup);
+      const libraryUpdates = syncLibraryWordsForSavedGroup(nextGroup, dataStore.getAllWords());
+      if (libraryUpdates.length > 0) {
+        await dataStore.bulkSaveWords(libraryUpdates);
+      }
       showToast(editingGroup ? 'Word family updated.' : 'Word family created.', 'success');
       setIsModalOpen(false);
       setEditingGroup(null);
@@ -229,6 +235,10 @@ const WordFamily: React.FC<Props> = ({ user }) => {
   const handleDelete = async (group: WordFamilyGroup) => {
     try {
       await db.deleteWordFamilyGroup(group.id);
+      const libraryUpdates = unlinkLibraryWordsFromDeletedGroup(group.id, dataStore.getAllWords());
+      if (libraryUpdates.length > 0) {
+        await dataStore.bulkSaveWords(libraryUpdates);
+      }
       showToast('Word family deleted.', 'success');
       await loadData();
     } catch {
@@ -255,6 +265,10 @@ const WordFamily: React.FC<Props> = ({ user }) => {
         updatedAt: Date.now()
       };
       await db.saveWordFamilyGroup(nextGroup);
+      const libraryUpdates = syncLibraryWordsForSavedGroup(nextGroup, dataStore.getAllWords());
+      if (libraryUpdates.length > 0) {
+        await dataStore.bulkSaveWords(libraryUpdates);
+      }
       showToast('Word family refined.', 'success');
       await loadData();
     } catch (error: any) {
@@ -297,6 +311,10 @@ const WordFamily: React.FC<Props> = ({ user }) => {
             updatedAt: Date.now()
           };
           await db.saveWordFamilyGroup(nextGroup);
+          const libraryUpdates = syncLibraryWordsForSavedGroup(nextGroup, dataStore.getAllWords());
+          if (libraryUpdates.length > 0) {
+            await dataStore.bulkSaveWords(libraryUpdates);
+          }
           successCount += 1;
           showToast(`Refined "${getGroupLabel(group)}".`, 'success', 1800);
         } catch {

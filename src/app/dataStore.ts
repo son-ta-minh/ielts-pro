@@ -6,6 +6,7 @@ import { calculateGameEligibility } from '../utils/gameEligibility';
 import { performAutoBackup } from '../services/backupService';
 import { getConfig } from './settingsManager';
 import { readDailyGoalHistory, readDailyStreaks, writeDailyStreaks } from '../utils/dailyStreaks';
+import { linkWordsToExistingWordFamilyGroups } from '../utils/wordFamilyGroupLinking';
 
 // --- Store State ---
 let _isInitialized = false;
@@ -417,6 +418,8 @@ export async function findWordByText(userId: string, word: string) {
 export async function saveWordAndUser(word: VocabularyItem, user: User) {
     if (!canWrite()) return;
     _updateLocalLastModified();
+    const [linkedWord] = await linkWordsToExistingWordFamilyGroups([word]);
+    if (linkedWord) word = linkedWord;
     word.complexity = calculateComplexity(word);
     word.masteryScore = calculateMasteryScore(word);
     word.gameEligibility = calculateGameEligibility(word);
@@ -431,6 +434,8 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
     if (!canWrite()) return;
     _updateLocalLastModified();
     if (word) {
+        const [linkedWord] = await linkWordsToExistingWordFamilyGroups([word]);
+        if (linkedWord) word = linkedWord;
         word.complexity = calculateComplexity(word);
         word.masteryScore = calculateMasteryScore(word);
         word.gameEligibility = calculateGameEligibility(word);
@@ -445,6 +450,8 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
 export async function saveWord(item: VocabularyItem) {
     if (!canWrite()) return;
     _updateLocalLastModified();
+    const [linkedItem] = await linkWordsToExistingWordFamilyGroups([item]);
+    if (linkedItem) item = linkedItem;
     item.complexity = calculateComplexity(item);
     item.masteryScore = calculateMasteryScore(item);
     item.gameEligibility = calculateGameEligibility(item);
@@ -458,6 +465,11 @@ export async function saveWord(item: VocabularyItem) {
 export async function bulkSaveWords(items: VocabularyItem[]) {
     if (items.length === 0) return;
     _updateLocalLastModified();
+    const linkedItems = await linkWordsToExistingWordFamilyGroups(items);
+    if (linkedItems.length > 0) {
+        const linkedMap = new Map(linkedItems.map((item) => [item.id, item]));
+        items = items.map((item) => linkedMap.get(item.id) || item);
+    }
     items.forEach(item => {
         item.complexity = calculateComplexity(item);
         item.masteryScore = calculateMasteryScore(item);

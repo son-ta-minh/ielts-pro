@@ -3,6 +3,7 @@ import * as dataStore from '../app/dataStore';
 import { createNewWord } from '../utils/srs';
 import { mergeAiResultIntoWord, normalizeAiResponse } from '../utils/vocabUtils';
 import { runWordRefineWithRetry } from './wordRefineApi';
+import { syncRefinedWordsToWordFamilyGroups, linkWordsToExistingWordFamilyGroups } from '../utils/wordFamilyGroupLinking';
 
 export const applyAiRefinementResultsToWords = async (
     results: any[],
@@ -98,14 +99,19 @@ export const applyAiRefinementResultsToWords = async (
         }
     }
 
+    const syncedItemsToSave = await syncRefinedWordsToWordFamilyGroups(itemsToSave);
     if (itemsToDeleteIds.length > 0) await dataStore.bulkDeleteWords(itemsToDeleteIds);
-    if (itemsToSave.length > 0) {
-        await dataStore.bulkSaveWords(itemsToSave);
+    if (syncedItemsToSave.length > 0) {
+        await dataStore.bulkSaveWords(syncedItemsToSave);
+        const relinkedLibraryWords = await linkWordsToExistingWordFamilyGroups(dataStore.getAllWords().filter((word) => word.userId === syncedItemsToSave[0].userId));
+        if (relinkedLibraryWords.length > 0) {
+            await dataStore.bulkSaveWords(relinkedLibraryWords);
+        }
         if (renames.length > 0 && onWordRenamed) onWordRenamed(renames);
     }
 
     return {
-        itemsSaved: itemsToSave.length,
+        itemsSaved: syncedItemsToSave.length,
         itemsDeleted: itemsToDeleteIds.length,
         renamedCount: renames.length
     };

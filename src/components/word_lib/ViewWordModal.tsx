@@ -8,6 +8,7 @@ import { SimpleMimicModal } from '../common/SimpleMimicModal';
 import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { getConfig } from '../../app/settingsManager';
 import { StudyBuddyTargetSection } from '../../utils/studyBuddyChatUtils';
+import { clearStaleWordFamilyGroupLink } from '../../utils/wordFamilyGroupLinking';
 
 interface Props {
   word: VocabularyItem;
@@ -30,6 +31,25 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onEdi
   useEffect(() => {
     const normalizedResults = normalizeTestResultKeys(word.lastTestResults);
     setCurrentWord({ ...word, lastTestResults: normalizedResults });
+  }, [word]);
+
+  useEffect(() => {
+    let isActive = true;
+    const run = async () => {
+      const cleaned = await clearStaleWordFamilyGroupLink({
+        ...word,
+        lastTestResults: normalizeTestResultKeys(word.lastTestResults)
+      });
+      if (!isActive) return;
+      setCurrentWord(cleaned);
+      if ((word.wordFamilyGroupId || null) !== (cleaned.wordFamilyGroupId || null)) {
+        await saveWord(cleaned);
+      }
+    };
+    void run();
+    return () => {
+      isActive = false;
+    };
   }, [word]);
   
   const handleChallengeComplete = async (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => {
