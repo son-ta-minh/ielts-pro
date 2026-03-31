@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -12,6 +12,7 @@ const SPEAKING_TOPIC_STORE = 'speaking_topics';
 const WRITING_TOPIC_STORE = 'writing_topics';
 const WRITING_LOG_STORE = 'writing_logs';
 const IRREGULAR_VERBS_STORE = 'irregular_verbs';
+const WORD_FAMILY_STORE = 'word_family';
 const LESSON_STORE = 'lessons';
 const LISTENING_STORE = 'listening_items';
 const NATIVE_SPEAK_STORE = 'native_speak_items';
@@ -27,7 +28,7 @@ const SPEAKING_BOOK_STORE = 'speaking_books';
 const WRITING_BOOK_STORE = 'writing_books';
 const PLANNING_STORE = 'planning_goals';
 
-const DB_VERSION = 29; // Bumped version to force migration for QA store
+const DB_VERSION = 30; // Bumped version for Word Family store
 
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -290,6 +291,13 @@ const openDB = (): Promise<IDBDatabase> => {
              }
         }
 
+        if (event.oldVersion < 30) {
+             if (!db.objectStoreNames.contains(WORD_FAMILY_STORE)) {
+                 const wordFamilyStore = db.createObjectStore(WORD_FAMILY_STORE, { keyPath: 'id' });
+                 wordFamilyStore.createIndex('userId', 'userId', { unique: false });
+             }
+        }
+
         // Cleanup deprecated stores if they exist
         if (db.objectStoreNames.contains('comparison_groups')) {
             db.deleteObjectStore('comparison_groups');
@@ -335,7 +343,7 @@ export const clearVocabularyOnly = async (): Promise<void> => {
   return withRetry(async () => {
       const db = await openDB();
       return new Promise((resolve, reject) => {
-        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, FREE_TALK_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
+        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, WORD_FAMILY_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, FREE_TALK_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
         const tx = db.transaction(stores, 'readwrite');
         stores.forEach(s => {
              if (db.objectStoreNames.contains(s)) {
@@ -839,6 +847,13 @@ export const getIrregularVerbsByUserId = async (): Promise<IrregularVerb[]> => a
 export const deleteIrregularVerb = async (id: string): Promise<void> => { await crudTemplate(IRREGULAR_VERBS_STORE, tx => tx.objectStore(IRREGULAR_VERBS_STORE).delete(id)); };
 export const bulkSaveIrregularVerbs = async (items: IrregularVerb[]): Promise<void> => { await crudTemplate(IRREGULAR_VERBS_STORE, tx => { const store = tx.objectStore(IRREGULAR_VERBS_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteIrregularVerbs = async (ids: string[]): Promise<void> => { await crudTemplate(IRREGULAR_VERBS_STORE, tx => { const store = tx.objectStore(IRREGULAR_VERBS_STORE); ids.forEach(id => store.delete(id)); }); };
+
+// --- Word Family Feature ---
+export const saveWordFamilyGroup = async (group: WordFamilyGroup): Promise<void> => { group.updatedAt = Date.now(); await crudTemplate(WORD_FAMILY_STORE, tx => tx.objectStore(WORD_FAMILY_STORE).put(group)); };
+export const getWordFamilyGroupsByUserId = async (): Promise<WordFamilyGroup[]> => await crudTemplate(WORD_FAMILY_STORE, tx => tx.objectStore(WORD_FAMILY_STORE).getAll(), 'readonly');
+export const deleteWordFamilyGroup = async (id: string): Promise<void> => { await crudTemplate(WORD_FAMILY_STORE, tx => tx.objectStore(WORD_FAMILY_STORE).delete(id)); };
+export const bulkSaveWordFamilyGroups = async (items: WordFamilyGroup[]): Promise<void> => { await crudTemplate(WORD_FAMILY_STORE, tx => { const store = tx.objectStore(WORD_FAMILY_STORE); items.forEach(i => store.put(i)); }); };
+export const bulkDeleteWordFamilyGroups = async (ids: string[]): Promise<void> => { await crudTemplate(WORD_FAMILY_STORE, tx => { const store = tx.objectStore(WORD_FAMILY_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- Lessons Feature ---
 export const saveLesson = async (lesson: Lesson): Promise<void> => { lesson.updatedAt = Date.now(); await crudTemplate(LESSON_STORE, tx => tx.objectStore(LESSON_STORE).put(lesson)); };

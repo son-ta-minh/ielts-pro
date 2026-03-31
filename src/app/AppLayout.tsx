@@ -22,6 +22,7 @@ const SettingsView = React.lazy(() => import('../components/setting/SettingsView
 const Discover = React.lazy(() => import('../components/discover/Discover'));
 const WritingStudioPage = React.lazy(() => import('../dynamic/templates/WritingStudioPage').then(module => ({ default: module.WritingStudioPage })));
 const IrregularVerbs = React.lazy(() => import('../components/labs/irregular_verbs/IrregularVerbs'));
+const WordFamily = React.lazy(() => import('../components/labs/word_family/WordFamily'));
 const MimicPractice = React.lazy(() => import('../components/labs/MimicPractice').then(module => ({ default: module.MimicPractice })));
 const WordGalleryPage = React.lazy(() => import('../components/gallery/WordGalleryPage').then(module => ({ default: module.WordGalleryPage })));
 // const ListeningCardPage = React.lazy(() => import('../dynamic/templates/ListeningCardPage').then(module => ({ default: module.ListeningCardPage })));
@@ -186,6 +187,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'SPEAKING': return <ExpressionPage user={currentUser} onNavigate={setView} />;
     case 'WRITING': return <WritingStudioPage controller={controller} user={currentUser} initialContextWord={writingContextWord} onConsumeContext={consumeWritingContext} />;
     case 'IRREGULAR_VERBS': return <IrregularVerbs user={currentUser} onGlobalViewWord={setGlobalViewWord} />;
+    case 'WORD_FAMILY': return <WordFamily user={currentUser} />;
     case 'MIMIC': return <MimicPractice />;
     case 'WORD_GALLERY': return <WordGalleryPage user={currentUser} />;
     default: return <div>Unknown view: {view}</div>;

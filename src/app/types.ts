@@ -1,4 +1,4 @@
-export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT' | 'COURSE' | 'SEARCH' | 'WORD_GALLERY';
+export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'WORD_FAMILY' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT' | 'COURSE' | 'SEARCH' | 'WORD_GALLERY';
 
 export enum ReviewGrade {
   FORGOT = 'FORGOT',
@@ -412,6 +412,17 @@ export interface IrregularVerb {
   lastTestResult?: 'pass' | 'fail';
   lastTestTimestamp?: number;
   lastTestIncorrectForms?: ('v1' | 'v2' | 'v3')[];
+}
+
+export interface WordFamilyGroup {
+  id: string;
+  userId: string;
+  verbs: string[];
+  nouns: string[];
+  adjectives: string[];
+  adverbs: string[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export type LessonType = 'essay' | 'word' | 'intensity' | 'comparison' | 'mistake';

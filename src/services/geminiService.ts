@@ -15,6 +15,7 @@ import {
   getWritingEvaluationPrompt,
   getIpaAccentsPrompt,
   getIrregularVerbFormsPrompt,
+  getWordFamilyFormsPrompt,
   getPronunciationAnalysisPrompt,
   getGenerateLessonPrompt,
   LessonGenerationParams,
@@ -535,6 +536,34 @@ export async function generateIrregularVerbForms(verbs: string[]): Promise<{v1: 
         }
     });
     return safeJsonParse(response.text, []);
+}
+
+export async function generateWordFamilyForms(seed: {
+    verbs?: string[];
+    nouns?: string[];
+    adjectives?: string[];
+    adverbs?: string[];
+}): Promise<{ verbs: string[]; nouns: string[]; adjectives: string[]; adverbs: string[] }> {
+    const config = getConfig();
+    const prompt = getWordFamilyFormsPrompt(seed);
+    const response = await callAiWithRetry({
+        model: config.ai.modelForBasicTasks,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    verbs: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    nouns: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    adjectives: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    adverbs: { type: Type.ARRAY, items: { type: Type.STRING } }
+                },
+                required: ["verbs", "nouns", "adjectives", "adverbs"]
+            }
+        }
+    });
+    return safeJsonParse(response.text, { verbs: [], nouns: [], adjectives: [], adverbs: [] });
 }
 
 export async function generateLessonContent(params: LessonGenerationParams): Promise<{ title: string; description: string; content: string }> {

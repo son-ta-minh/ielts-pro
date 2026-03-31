@@ -3,7 +3,7 @@ import {
   RotateCw, AlertCircle, Flame, SwatchBook,
   Download, History, BookCopy, Sparkles, Wand2, ShieldCheck, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
   Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain, AlertTriangle,
-  CloudUpload, Percent, MessagesSquare, Scale, Dumbbell, Crown,
+  CloudUpload, Percent, MessagesSquare, Scale, Dumbbell, Crown, LibraryBig,
   Timer, Plus, Play, Pause, StopCircle, Clock4, Trash2, Chrome
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
@@ -499,6 +499,7 @@ const StudyNowPanel: React.FC<{
                 <NavButton largeSub label="Lesson" subLabel="Explore all learning materials." icon={BookOpen} color="text-blue-600" bg="bg-blue-50" onClick={() => onAction('LESSON_ONLY')} />
                 <NavButton largeSub label="Grammar" subLabel="Deep dive into essential grammar rules." icon={BookText} color="text-purple-600" bg="bg-purple-50" onClick={() => onAction('LESSON_GRAMMAR')} />
                 <NavButton largeSub label="Irregular Verb" subLabel="Master tricky verb forms and usage." icon={FileClock} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('IRREGULAR_VERBS')} />
+                <NavButton largeSub label="Word Family" subLabel="Build verb, noun, adjective, and adverb groups." icon={LibraryBig} color="text-cyan-700" bg="bg-cyan-50" onClick={() => onAction('WORD_FAMILY')} />
                 <NavButton largeSub label="Pronunciation" subLabel="Perfect your accent and intonation." icon={AudioLines} color="text-emerald-600" bg="bg-emerald-50" onClick={() => onAction('PRONUNCIATION_ROADMAP')} />
                 <NavButton largeSub label="Word Intensity" subLabel="Master nuanced words by their scale." icon={Scale} color="text-orange-600" bg="bg-orange-50" onClick={() => onAction('LESSON_SCALE')} />
                 <NavButton largeSub label="Confusing Words" subLabel="Contrast and identify confusing pairs." icon={Split} color="text-indigo-600" bg="bg-indigo-50" onClick={() => onAction('LESSON_DIFF')} />

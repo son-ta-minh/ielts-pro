@@ -1045,6 +1045,7 @@ export const useAppController = () => {
                 setView('LESSON');
                 break;
             case 'IRREGULAR_VERBS': setView('IRREGULAR_VERBS'); break;
+            case 'WORD_FAMILY': setView('WORD_FAMILY'); break;
             case 'MIMIC': 
                 setView('MIMIC'); 
                 break; 

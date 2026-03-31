@@ -11,6 +11,7 @@ export * from './prompts/getParaphraseTaskPrompt';
 export * from './prompts/getParaphraseEvaluationPrompt';
 export * from './prompts/getSpeechGenerationParts';
 export * from './prompts/getIrregularVerbFormsPrompt';
+export * from './prompts/getWordFamilyFormsPrompt';
 export * from './prompts/getLearningSuggestionsPrompt';
 export * from './prompts/getHintsPrompt';
 export * from './prompts/getGenerateLessonPrompt';
