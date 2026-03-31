@@ -3,7 +3,6 @@ import * as dataStore from '../app/dataStore';
 import { createNewWord } from '../utils/srs';
 import { mergeAiResultIntoWord, normalizeAiResponse } from '../utils/vocabUtils';
 import { runWordRefineWithRetry } from './wordRefineApi';
-import { refineAndLinkWordFamilyGroupsForWords } from './wordFamilyRefineService';
 
 export const applyAiRefinementResultsToWords = async (
     results: any[],
@@ -102,7 +101,6 @@ export const applyAiRefinementResultsToWords = async (
     if (itemsToDeleteIds.length > 0) await dataStore.bulkDeleteWords(itemsToDeleteIds);
     if (itemsToSave.length > 0) {
         await dataStore.bulkSaveWords(itemsToSave);
-        await refineAndLinkWordFamilyGroupsForWords(itemsToSave);
         if (renames.length > 0 && onWordRenamed) onWordRenamed(renames);
     }
 

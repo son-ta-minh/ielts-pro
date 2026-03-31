@@ -14,7 +14,6 @@ import { createNewWord } from '../../utils/srs';
 import { TagTreeNode } from '../common/TagBrowser';
 import * as db from '../../app/db';
 import { runWordRefineWithRetry, WordRefineProgressSnapshot } from '../../services/wordRefineApi';
-import { refineAndLinkWordFamilyGroupsForWords } from '../../services/wordFamilyRefineService';
 
 const MAX_API_REFINE_HISTORY_ITEMS = 120;
 
@@ -489,7 +488,6 @@ const WordTable: React.FC<Props> = ({
     if (itemsToDeleteIds.length > 0) await dataStore.bulkDeleteWords(itemsToDeleteIds);
     if (itemsToSave.length > 0) {
         await dataStore.bulkSaveWords(itemsToSave);
-        await refineAndLinkWordFamilyGroupsForWords(itemsToSave);
         if (renames.length > 0 && onWordRenamed) onWordRenamed(renames);
         let msg = options?.successMessage || `Refined ${itemsToSave.length} words.`;
         if (itemsToDeleteIds.length > 0) msg += ` Merged ${itemsToDeleteIds.length} duplicates.`;
