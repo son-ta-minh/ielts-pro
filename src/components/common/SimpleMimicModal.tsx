@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { X, Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2, Edit2, Minimize2, Maximize2, Download } from 'lucide-react';
+import { Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2, Minimize2, Maximize2, Download, History, Pencil, Trash2, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import { speak, stopRecording, startRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { analyzeSpeechLocally, AnalysisResult, CharDiff } from '../../utils/speechAnalysis';
@@ -12,6 +12,20 @@ import * as dataStore from '../../app/dataStore';
 
 const SILENCE_TIMEOUT = 3000;
 const SINGLE_WORD_AUTOSTOP_DELAY = 1000;
+const MIMIC_HISTORY_KEY = 'vocab_pro_mimic_audio_history';
+const MIMIC_MINIMIZED_KEY = 'vocab_pro_mimic_modal_minimized';
+const MIMIC_MINIMIZED_POSITION_KEY = 'vocab_pro_mimic_modal_minimized_position';
+const MAX_HISTORY_ITEMS = 10;
+
+interface MimicAudioItem {
+    id: string;
+    name: string;
+    target: string;
+    transcript: string;
+    base64: string;
+    mimeType: string;
+    createdAt: number;
+}
 
 interface Props {
     target: string | null; // Allow null for manual input
@@ -22,13 +36,24 @@ interface Props {
 export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore }) => {
     const [isRecording, setIsRecording] = useState(false);
     const isRecordingRef = useRef(false);
-    const [isMinimized, setIsMinimized] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(() => {
+        if (target && target.trim()) return false;
+        return getStoredJSON<boolean>(MIMIC_MINIMIZED_KEY, false);
+    });
     const [editedTarget, setEditedTarget] = useState(target || '');
     const [isEditing, setIsEditing] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [userAudio, setUserAudio] = useState<{base64: string, mimeType: string} | null>(null);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [timeLeft, setTimeLeft] = useState(SILENCE_TIMEOUT);
+    const [activeTab, setActiveTab] = useState<'session' | 'history'>('session');
+    const [history, setHistory] = useState<MimicAudioItem[]>(() => getStoredJSON<MimicAudioItem[]>(MIMIC_HISTORY_KEY, []));
+    const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [renameDraft, setRenameDraft] = useState('');
+    const [minimizedPosition, setMinimizedPosition] = useState<'top' | 'bottom'>(() =>
+        getStoredJSON<'top' | 'bottom'>(MIMIC_MINIMIZED_POSITION_KEY, 'bottom')
+    );
+    const [skipRestoreAnimation, setSkipRestoreAnimation] = useState(false);
     
     // IPA States
     const [ipa, setIpa] = useState<string | null>(null);
@@ -63,6 +88,28 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             .filter(Boolean);
         return tokens.length === 1;
     }, [editedTarget]);
+
+    useEffect(() => {
+        setStoredJSON(MIMIC_MINIMIZED_KEY, isMinimized);
+    }, [isMinimized]);
+
+    useEffect(() => {
+        setStoredJSON(MIMIC_MINIMIZED_POSITION_KEY, minimizedPosition);
+    }, [minimizedPosition]);
+
+    useEffect(() => {
+        if (target === null) return;
+        setEditedTarget(target);
+        setIsEditing(false);
+        setAnalysis(null);
+        setTranscript('');
+        setUserAudio(null);
+        setShowIpa(false);
+        setHoverIndex(null);
+        setActiveTab('session');
+        setSkipRestoreAnimation(false);
+        setIsMinimized(false);
+    }, [target]);
 
     // Real-time analysis during recording
     useEffect(() => {
@@ -115,38 +162,6 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             setIsIpaLoading(false);
         }
     }, [editedTarget, ipa, showIpa, showToast, isFreeTalkMode]);
-
-    const stopSession = useCallback(async (currentTranscript: string) => {
-        if (stopInFlightRef.current) return;
-        stopInFlightRef.current = true;
-        if (silenceTimerRef.current) {
-            clearInterval(silenceTimerRef.current);
-            silenceTimerRef.current = null;
-        }
-        if (singleWordStopTimerRef.current) {
-            clearTimeout(singleWordStopTimerRef.current);
-            singleWordStopTimerRef.current = null;
-        }
-        recognitionManager.current.stop();
-        setIsRecording(false);
-        isRecordingRef.current = false;
-        autoStopTriggeredRef.current = false;
-        try {
-            const audioResult = await stopRecording();
-            if (audioResult) {
-                setUserAudio(audioResult);
-            }
-            if (!isFreeTalkMode && editedTarget) {
-                const result = analyzeSpeechLocally(editedTarget, currentTranscript);
-                setAnalysis(result);
-                if (onSaveScore) {
-                    onSaveScore(result.score);
-                }
-            }
-        } finally {
-            stopInFlightRef.current = false;
-        }
-    }, [editedTarget, onSaveScore, isFreeTalkMode]);
 
     const resetActivity = useCallback(() => {
         lastActivityRef.current = Date.now();
@@ -215,6 +230,92 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             stopPlayback();
         };
     }, [stopPlayback]);
+
+    const getRecordingExtension = useCallback((mimeType: string) => {
+        if (mimeType.includes('mp4')) return 'm4a';
+        if (mimeType.includes('wav')) return 'wav';
+        return 'webm';
+    }, []);
+
+    const getRecordingLabel = useCallback((text: string) => {
+        const normalized = text.trim().slice(0, 32).replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
+        return normalized || 'free-talk';
+    }, []);
+
+    const decodeAudioBytes = useCallback((base64: string) => {
+        const raw = atob(base64);
+        const view = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) {
+            view[i] = raw.charCodeAt(i);
+        }
+        return view;
+    }, []);
+
+    const saveAudioToDevice = useCallback((audio: { base64: string; mimeType: string }, label: string, createdAt = Date.now()) => {
+        const bytes = decodeAudioBytes(audio.base64);
+        const blob = new Blob([bytes.buffer], { type: audio.mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `mimic-${getRecordingLabel(label)}-${createdAt}.${getRecordingExtension(audio.mimeType)}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }, [decodeAudioBytes, getRecordingExtension, getRecordingLabel]);
+
+    const saveAudioToHistory = useCallback((audio: { base64: string; mimeType: string }, currentTranscript: string) => {
+        const trimmedTarget = editedTarget.trim();
+        const trimmedTranscript = currentTranscript.trim();
+        const item: MimicAudioItem = {
+            id: `mimic-audio-${Date.now()}`,
+            name: trimmedTarget || trimmedTranscript.split(/\s+/).slice(0, 6).join(' ') || 'Free Talk',
+            target: trimmedTarget,
+            transcript: trimmedTranscript,
+            base64: audio.base64,
+            mimeType: audio.mimeType,
+            createdAt: Date.now()
+        };
+
+        setHistory((prev) => {
+            const next = [item, ...prev].slice(0, MAX_HISTORY_ITEMS);
+            setStoredJSON(MIMIC_HISTORY_KEY, next);
+            return next;
+        });
+    }, [editedTarget]);
+
+    async function stopSession(currentTranscript: string) {
+        if (stopInFlightRef.current) return;
+        stopInFlightRef.current = true;
+        if (silenceTimerRef.current) {
+            clearInterval(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+        }
+        if (singleWordStopTimerRef.current) {
+            clearTimeout(singleWordStopTimerRef.current);
+            singleWordStopTimerRef.current = null;
+        }
+        recognitionManager.current.stop();
+        setIsRecording(false);
+        isRecordingRef.current = false;
+        autoStopTriggeredRef.current = false;
+        try {
+            const audioResult = await stopRecording();
+            if (audioResult) {
+                setUserAudio(audioResult);
+                saveAudioToHistory(audioResult, currentTranscript);
+            }
+            if (!isFreeTalkMode && editedTarget) {
+                const result = analyzeSpeechLocally(editedTarget, currentTranscript);
+                setAnalysis(result);
+                if (onSaveScore) {
+                    onSaveScore(result.score);
+                }
+            }
+        } finally {
+            stopInFlightRef.current = false;
+        }
+    }
 
     const handleToggleRecord = async () => {
         if (!isFreeTalkMode && !editedTarget) return;
@@ -285,21 +386,16 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         }
     };
 
-    const handlePlayUserAudio = useCallback(async () => {
-        if (!userAudio) return;
+    const playAudioData = useCallback(async (audio: { base64: string; mimeType: string }) => {
         stopPlayback();
 
         try {
-            const raw = atob(userAudio.base64);
-            const arrayBuffer = new ArrayBuffer(raw.length);
-            const view = new Uint8Array(arrayBuffer);
-            for (let i = 0; i < raw.length; i++) {
-                view[i] = raw.charCodeAt(i);
-            }
+            const view = decodeAudioBytes(audio.base64);
+            const arrayBuffer = view.buffer.slice(0) as ArrayBuffer;
 
             const audioCtx = new AudioContext();
             audioPlaybackRef.current = audioCtx;
-            const buffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+            const buffer = await audioCtx.decodeAudioData(arrayBuffer);
             const source = audioCtx.createBufferSource();
             source.buffer = buffer;
             const gainNode = audioCtx.createGain();
@@ -315,12 +411,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         } catch (_e) {
             console.error('Failed to play recorded audio via AudioContext, trying fallback', _e);
             try {
-                const raw = atob(userAudio.base64);
-                const view = new Uint8Array(raw.length);
-                for (let i = 0; i < raw.length; i++) {
-                    view[i] = raw.charCodeAt(i);
-                }
-                const blob = new Blob([view.buffer], { type: userAudio.mimeType });
+                const view = decodeAudioBytes(audio.base64);
+                const blob = new Blob([view.buffer], { type: audio.mimeType });
                 const url = URL.createObjectURL(blob);
                 const audioEl = new Audio(url);
                 audioElementRef.current = audioEl;
@@ -333,7 +425,12 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 console.error('Fallback playback also failed', fallbackError);
             }
         }
-    }, [userAudio, stopPlayback]);
+    }, [decodeAudioBytes, stopPlayback]);
+
+    const handlePlayUserAudio = useCallback(async () => {
+        if (!userAudio) return;
+        await playAudioData(userAudio);
+    }, [playAudioData, userAudio]);
 
     const handleSaveUserAudio = useCallback(() => {
         if (!userAudio) {
@@ -342,34 +439,39 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         }
 
         try {
-            const raw = atob(userAudio.base64);
-            const view = new Uint8Array(raw.length);
-            for (let i = 0; i < raw.length; i++) {
-                view[i] = raw.charCodeAt(i);
-            }
-
-            const blob = new Blob([view.buffer], { type: userAudio.mimeType });
-            const url = URL.createObjectURL(blob);
-            const extension = userAudio.mimeType.includes('mp4')
-                ? 'm4a'
-                : userAudio.mimeType.includes('wav')
-                    ? 'wav'
-                    : 'webm';
-            const label = editedTarget.trim()
-                ? editedTarget.trim().slice(0, 32).replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '')
-                : 'free-talk';
-
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `mimic-${label || 'recording'}-${Date.now()}.${extension}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            saveAudioToDevice(userAudio, editedTarget || transcript || 'recording');
         } catch {
             showToast('Unable to save recording.', 'error');
         }
-    }, [editedTarget, showToast, userAudio]);
+    }, [editedTarget, saveAudioToDevice, showToast, transcript, userAudio]);
+
+    const handleRenameHistory = useCallback((id: string) => {
+        const name = renameDraft.trim();
+        if (!name) {
+            showToast('Name cannot be empty.', 'info');
+            return;
+        }
+
+        setHistory((prev) => {
+            const next = prev.map((item) => item.id === id ? { ...item, name } : item);
+            setStoredJSON(MIMIC_HISTORY_KEY, next);
+            return next;
+        });
+        setRenamingId(null);
+        setRenameDraft('');
+    }, [renameDraft, showToast]);
+
+    const handleDeleteHistory = useCallback((id: string) => {
+        setHistory((prev) => {
+            const next = prev.filter((item) => item.id !== id);
+            setStoredJSON(MIMIC_HISTORY_KEY, next);
+            return next;
+        });
+        if (renamingId === id) {
+            setRenamingId(null);
+            setRenameDraft('');
+        }
+    }, [renamingId]);
 
     const handleAddToQueue = () => {
         if (!editedTarget) return;
@@ -464,14 +566,40 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         }
     };
 
+    const formatHistoryTime = (timestamp: number) =>
+        new Date(timestamp).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+    const handleRestore = useCallback(() => {
+        const selectedText = window.getSelection()?.toString().trim() || '';
+        if (selectedText) {
+            setEditedTarget(selectedText);
+            setIsEditing(false);
+            setAnalysis(null);
+            setTranscript('');
+            setUserAudio(null);
+            setShowIpa(false);
+            setIpa(null);
+            setIpaWords(null);
+            setHoverIndex(null);
+            setActiveTab('session');
+        }
+        setSkipRestoreAnimation(true);
+        setIsMinimized(false);
+    }, []);
+
     if (isMinimized) {
         return (
-            <div className="fixed bottom-5 right-5 z-[10000] flex items-center gap-3 rounded-full border border-neutral-200 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-md">
+            <div className={`fixed right-5 z-[10000] flex items-center gap-2 rounded-full border border-neutral-200 bg-white/95 px-3 py-2 shadow-2xl backdrop-blur-md ${minimizedPosition === 'top' ? 'top-5' : 'bottom-5'}`}>
                 <button
                     onClick={handleToggleRecord}
-                    className={`relative flex h-16 w-16 items-center justify-center rounded-full transition-all transform active:scale-105 ${
+                    className={`relative flex h-12 w-12 items-center justify-center rounded-full transition-all transform active:scale-105 ${
                         isRecording
-                            ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/40 ring-8 ring-rose-500/10'
+                            ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/40 ring-4 ring-rose-500/10'
                             : 'bg-neutral-900 text-white shadow-lg hover:scale-105'
                     }`}
                     title={isRecording ? 'Stop recording' : 'Start recording'}
@@ -484,72 +612,93 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     )}
                     {isRecording ? (
                         timeLeft <= 1000 ? (
-                            <span className="relative z-10 text-lg font-black tabular-nums">{(timeLeft / 1000).toFixed(1)}</span>
+                            <span className="relative z-10 text-sm font-black tabular-nums">{(timeLeft / 1000).toFixed(1)}</span>
                         ) : (
-                            <Waves size={24} className="relative z-10 animate-pulse" />
+                            <Waves size={18} className="relative z-10 animate-pulse" />
                         )
                     ) : (
-                        <Mic size={24} className="relative z-10" />
+                        <Mic size={18} className="relative z-10" />
                     )}
                 </button>
                 {userAudio && (
                     <button
                         onClick={handlePlayUserAudio}
                         disabled={isRecording}
-                        className={`flex h-12 w-12 items-center justify-center rounded-full transition-all ${
+                        className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
                             !isRecording ? 'bg-indigo-100 text-indigo-600 hover:text-indigo-900' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'
                         }`}
                         title="Play recording"
                     >
-                        <Play size={18} fill={!isRecording ? "currentColor" : "none"} />
+                        <Play size={15} fill={!isRecording ? "currentColor" : "none"} />
                     </button>
                 )}
-                <button
-                    onClick={() => setIsMinimized(false)}
-                    className="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition-all hover:bg-neutral-200 hover:text-neutral-900"
-                    title="Restore window"
-                >
-                    <Maximize2 size={18} />
-                </button>
+                <div className="overflow-hidden rounded-full border border-neutral-200 shadow-sm">
+                    <button
+                        onClick={() => setMinimizedPosition((current) => current === 'top' ? 'bottom' : 'top')}
+                        className="flex h-6 w-10 items-center justify-center bg-neutral-100 text-neutral-700 transition-all hover:bg-neutral-200 hover:text-neutral-900"
+                        title={minimizedPosition === 'top' ? 'Move down' : 'Move up'}
+                    >
+                        {minimizedPosition === 'top' ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                    </button>
+                    <button
+                        onClick={handleRestore}
+                        className="flex h-6 w-10 items-center justify-center border-t border-neutral-200 bg-emerald-100 text-emerald-700 transition-all hover:bg-emerald-200 hover:text-emerald-900"
+                        title="Restore window"
+                    >
+                        <Maximize2 size={14} />
+                    </button>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm ${skipRestoreAnimation ? '' : 'animate-in fade-in duration-200'}`}>
             <div className="bg-white w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-5xl rounded-[2.5rem] shadow-2xl border border-neutral-200 p-8 flex flex-col items-center gap-6 relative">
                 <button
-                    onClick={() => setIsMinimized(true)}
-                    className="absolute top-6 right-20 p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-all"
+                    onClick={() => {
+                        setSkipRestoreAnimation(false);
+                        setIsMinimized(true);
+                    }}
+                    className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-all"
                     title="Minimize"
                 >
                     <Minimize2 size={18} />
                 </button>
-                <button onClick={onClose} className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-all">
-                    <X size={20} />
-                </button>
 
-                <div className="text-center space-y-2 mt-2">
-                    <div className="flex items-center justify-center gap-3">
-                        <h3 className="text-xl font-bold text-neutral-900 leading-tight">
-                            Recording Studio
-                        </h3>
+                <div className="flex w-full items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <button
                             onClick={() => {
-                                if (isFreeTalkMode) {
-                                    setIsEditing(true);
-                                } else {
-                                    handleEnterFreeTalkMode();
-                                }
+                                setActiveTab('session');
+                                handleEnterFreeTalkMode();
                             }}
-                            className="px-3 py-1.5 text-[11px] font-bold rounded-full border border-neutral-200 bg-white text-neutral-700 hover:text-neutral-900 shadow-sm"
+                            className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${activeTab === 'session' && isFreeTalkMode && !isEditing ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
                         >
-                            {isFreeTalkMode ? 'Add Text' : 'Free Talk'}
+                            Free Talk
+                        </button>
+                        <button
+                            onClick={() => {
+                                setActiveTab('session');
+                                setIsEditing(true);
+                            }}
+                            className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${activeTab === 'session' && (!isFreeTalkMode || isEditing) ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+                        >
+                            Mimic
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={`rounded-xl px-4 py-2 text-sm font-bold transition-all ${activeTab === 'history' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+                        >
+                            History ({history.length})
                         </button>
                     </div>
+                    {activeTab === 'history' && (
+                        <span className="text-xs font-medium text-neutral-400">Latest 10 recordings</span>
+                    )}
                 </div>
 
-                {!isFreeTalkMode && (
+                {activeTab === 'session' && (!isFreeTalkMode || isEditing) && (
                 <div className="w-full p-6 bg-neutral-50 rounded-[2rem] border border-neutral-200 flex flex-col items-center gap-3 min-h-[120px] overflow-hidden relative group">
                     {isEditing ? (
                         <div className="w-full relative">
@@ -560,12 +709,6 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                                 className="w-full h-32 p-4 bg-white border border-neutral-200 rounded-xl font-medium resize-none focus:ring-2 focus:ring-neutral-900 outline-none text-base leading-relaxed"
                             />
                             <div className="absolute bottom-4 right-4 flex items-center gap-2">
-                                <button
-                                    onClick={handleEnterFreeTalkMode}
-                                    className="px-3 py-1.5 bg-white text-neutral-700 border border-neutral-200 rounded-lg text-xs font-bold shadow-sm hover:bg-neutral-50"
-                                >
-                                    Free Talk
-                                </button>
                                 <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 bg-neutral-900 text-white rounded-lg text-xs font-bold shadow-sm">
                                     Done
                                 </button>
@@ -632,6 +775,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 </div>
                 )}
 
+                {activeTab === 'session' && (
+                <>
                 <div className="flex flex-col items-center gap-4 w-full">
                     {isRecording ? (
                         isFreeTalkMode && transcript ? (
@@ -752,6 +897,108 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                         </button>
                     )}
                 </div>
+                </>
+                )}
+
+                {activeTab === 'history' && (
+                    <div className="w-full space-y-3">
+                        {history.length === 0 ? (
+                            <div className="rounded-[2rem] border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-center text-sm text-neutral-500">
+                                Your last 10 recordings will appear here.
+                            </div>
+                        ) : (
+                            history.map((item) => (
+                                <div key={item.id} className="rounded-[2rem] border border-neutral-200 bg-white px-5 py-4 shadow-sm">
+                                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                        <div className="min-w-0 flex-1 space-y-2">
+                                            {renamingId === item.id ? (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        value={renameDraft}
+                                                        onChange={(e) => setRenameDraft(e.target.value)}
+                                                        className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm font-semibold outline-none focus:border-neutral-900"
+                                                        placeholder="Recording name"
+                                                    />
+                                                    <button
+                                                        onClick={() => handleRenameHistory(item.id)}
+                                                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-900 text-white"
+                                                        title="Save name"
+                                                    >
+                                                        <Check size={16} />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <p className="truncate text-sm font-bold text-neutral-900">{item.name}</p>
+                                                    <button
+                                                        onClick={() => {
+                                                            setRenamingId(item.id);
+                                                            setRenameDraft(item.name);
+                                                        }}
+                                                        className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-all hover:bg-neutral-100 hover:text-neutral-900"
+                                                        title="Rename"
+                                                    >
+                                                        <Pencil size={14} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+                                                <span>{formatHistoryTime(item.createdAt)}</span>
+                                                <span className="rounded-full bg-neutral-100 px-2 py-1 font-semibold text-neutral-500">
+                                                    {item.target.trim() ? 'Mimic' : 'Free Talk'}
+                                                </span>
+                                            </div>
+                                            {item.target.trim() && (
+                                                <p className="line-clamp-2 text-sm font-medium text-neutral-700">{item.target}</p>
+                                            )}
+                                            {item.transcript.trim() && (
+                                                <p className="line-clamp-2 text-xs italic text-neutral-400">&quot;{item.transcript}&quot;</p>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setEditedTarget(item.target);
+                                                    setTranscript(item.transcript);
+                                                    setUserAudio({ base64: item.base64, mimeType: item.mimeType });
+                                                    setAnalysis(item.target.trim() ? analyzeSpeechLocally(item.target, item.transcript) : null);
+                                                    setActiveTab('session');
+                                                }}
+                                                className="rounded-xl border border-neutral-200 px-3 py-2 text-xs font-bold text-neutral-700 transition-all hover:bg-neutral-50"
+                                            >
+                                                Open
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setUserAudio({ base64: item.base64, mimeType: item.mimeType });
+                                                    void playAudioData({ base64: item.base64, mimeType: item.mimeType });
+                                                }}
+                                                className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 transition-all hover:bg-indigo-200"
+                                                title="Play"
+                                            >
+                                                <Play size={16} fill="currentColor" />
+                                            </button>
+                                            <button
+                                                onClick={() => saveAudioToDevice({ base64: item.base64, mimeType: item.mimeType }, item.name, item.createdAt)}
+                                                className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 transition-all hover:bg-emerald-200"
+                                                title="Save"
+                                            >
+                                                <Download size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteHistory(item.id)}
+                                                className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-600 transition-all hover:bg-rose-200"
+                                                title="Delete"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

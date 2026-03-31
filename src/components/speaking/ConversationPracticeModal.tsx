@@ -812,7 +812,7 @@ export const ConversationPracticeModal: React.FC<ConversationPracticeModalProps>
                     </div>
                 </footer>
             </div>
-            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} onSaveScore={handleSaveScore} />}
+            {mimicTarget !== null && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} onSaveScore={handleSaveScore} />}
             
             <ConfirmationModal
                  isOpen={!!roleChangeCandidate}

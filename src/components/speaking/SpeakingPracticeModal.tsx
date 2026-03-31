@@ -145,7 +145,7 @@ export const SpeakingPracticeModal: React.FC<Props> = ({ isOpen, onClose, item }
                     <button onClick={handleClose} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-md">Done</button>
                 </footer>
             </div>
-            {mimicTarget && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} onSaveScore={handleSaveScore} />}
+            {mimicTarget !== null && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} onSaveScore={handleSaveScore} />}
         </div>
     );
 };

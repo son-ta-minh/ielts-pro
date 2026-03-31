@@ -2098,7 +2098,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     };
 
     const handleSpeakSelection = () => {
-        const selectedText = selectedTextRef.current || window.getSelection()?.toString().trim();
+        const selectedText = window.getSelection()?.toString().trim() || selectedTextRef.current;
         setIsOpen(false);
         setMenuPos(null);
         if (selectedText && selectedText.length > MAX_MIMIC_LENGTH) {
