@@ -38,13 +38,7 @@ export function getWordDetailsPrompt(
 
     FIELD GENERATION RULES:
     - If the headword (hw) is a PHRASE, PHRASAL VERB, or IDIOM (e.g., "break the ice"):
-      - DO NOT generate 'fam' (word family). Return an empty object {} or null.
       - DO NOT generate 'col' (collocations). Return an empty array [].
-    - A-MUST / IMPORTANT FOR WORD FAMILY:
-      - 'fam' must contain ONLY real morphological family members of the exact headword/base headword.
-      - NEVER include synonyms, paraphrases, near-synonyms, semantic alternatives, or words derived from a paraphrase.
-      - Example: if paraphrase includes "resistance", do NOT put "resistant" into 'fam' unless it is also a true family member of the headword itself.
-      - If you are not confident a candidate belongs to the headword's own word family, omit it.
     - A-MUST / IMPORTANT:
       - 'reg' MUST be ONLY one of: "academic", "casual", "neutral".
       - NEVER output any other register label such as "formal", "informal", "synonym", "professional", or "general".
@@ -81,7 +75,6 @@ export function getWordDetailsPrompt(
         - A-MUST / IMPORTANT: 't' (tone) MUST be ONLY one of: "academic", "casual", "synonym"
         - NEVER output any other tone label
         - 'c' (context) = a short (2-5 words) situational recall cue (e.g., "job interview", "arguing with friend").
-    - fam: Word family. ONLY for single-word headwords. 'n'=nouns, 'v'=verbs, 'j'=adjectives, 'adv'=adverbs. Format: [{"w": "word"}].
     - type: The grammatical classification. MUST be one of: "idiom", "phrasal_verb", "collocation", "phrase", "vocabulary", "irregular_verb".
     - is_pas: Boolean. True if the word is "Passive" (vulgar, slang, or should be archived).
 
@@ -100,7 +93,6 @@ ${pronunciationExampleBlock}
         { "w": "miserable", "t": "synonym", "c": "sitting alone in the rain" }
       ],
       "type": "vocabulary",
-      "is_pas": false,
-      "fam": { "n": [{"w": "unhappiness"}], "adv": [{"w": "unhappily"}] }
+      "is_pas": false
     }]`;
 }
