@@ -13,8 +13,6 @@ const normalizeItems = (items: string[]): string[] => {
         });
 };
 
-const mergeItems = (left: string[], right: string[]) => normalizeItems([...left, ...right]);
-
 export const isSingleWordCandidate = (text: string): boolean => {
     const trimmed = String(text || '').trim();
     return !!trimmed && trimmed.split(/\s+/).length === 1;
@@ -27,32 +25,6 @@ export const extractGroupTerms = (group: Pick<WordFamilyGroup, 'verbs' | 'nouns'
         ...(group.adjectives || []),
         ...(group.adverbs || [])
     ]);
-};
-
-export const extractGroupDataFromWord = (word: VocabularyItem): Pick<WordFamilyGroup, 'verbs' | 'nouns' | 'adjectives' | 'adverbs'> => ({
-    verbs: normalizeItems((word.wordFamily?.verbs || []).map((item) => item.word)),
-    nouns: normalizeItems((word.wordFamily?.nouns || []).map((item) => item.word)),
-    adjectives: normalizeItems((word.wordFamily?.adjs || []).map((item) => item.word)),
-    adverbs: normalizeItems((word.wordFamily?.advs || []).map((item) => item.word))
-});
-
-const hasGroupData = (group: Pick<WordFamilyGroup, 'verbs' | 'nouns' | 'adjectives' | 'adverbs'>): boolean => {
-    return extractGroupTerms(group).length > 0;
-};
-
-const buildGroupFromWord = (word: VocabularyItem): WordFamilyGroup => {
-    const now = Date.now();
-    const data = extractGroupDataFromWord(word);
-    return {
-        id: `wf-${now}-${Math.random().toString(36).slice(2, 8)}`,
-        userId: word.userId,
-        verbs: data.verbs,
-        nouns: data.nouns,
-        adjectives: data.adjectives,
-        adverbs: data.adverbs,
-        createdAt: now,
-        updatedAt: now
-    };
 };
 
 const groupContainsWord = (group: WordFamilyGroup, word: string): boolean => {
@@ -73,63 +45,17 @@ export const linkWordsToExistingWordFamilyGroups = async (words: VocabularyItem[
             groupsByUser.set(word.userId, await getGroupsByUser(word.userId));
         }
         const userGroups = groupsByUser.get(word.userId) || [];
+        const currentGroup = word.wordFamilyGroupId
+            ? userGroups.find((group) => group.id === word.wordFamilyGroupId) || null
+            : null;
         const match = userGroups.find((group) => groupContainsWord(group, word.word));
-        const nextId = match?.id || null;
+        const nextId = currentGroup?.id || match?.id || null;
         if ((word.wordFamilyGroupId || null) !== nextId) {
             updates.push({ ...word, wordFamilyGroupId: nextId });
         }
     }
 
     return updates;
-};
-
-export const syncRefinedWordsToWordFamilyGroups = async (words: VocabularyItem[]): Promise<VocabularyItem[]> => {
-    const results = [...words];
-    const groupsByUser = new Map<string, WordFamilyGroup[]>();
-
-    for (let index = 0; index < results.length; index += 1) {
-        const word = results[index];
-        if (!isSingleWordCandidate(word.word)) continue;
-
-        if (!groupsByUser.has(word.userId)) {
-            groupsByUser.set(word.userId, await getGroupsByUser(word.userId));
-        }
-        const userGroups = groupsByUser.get(word.userId) || [];
-        const extracted = extractGroupDataFromWord(word);
-
-        let group = userGroups.find((item) => item.id === word.wordFamilyGroupId)
-            || userGroups.find((item) => groupContainsWord(item, word.word))
-            || null;
-
-        if (!group && !hasGroupData(extracted)) {
-            continue;
-        }
-
-        if (!group) {
-            group = buildGroupFromWord(word);
-            await db.saveWordFamilyGroup(group);
-            userGroups.unshift(group);
-        } else if (hasGroupData(extracted)) {
-            const nextGroup: WordFamilyGroup = {
-                ...group,
-                verbs: mergeItems(group.verbs, extracted.verbs),
-                nouns: mergeItems(group.nouns, extracted.nouns),
-                adjectives: mergeItems(group.adjectives, extracted.adjectives),
-                adverbs: mergeItems(group.adverbs, extracted.adverbs),
-                updatedAt: Date.now()
-            };
-            await db.saveWordFamilyGroup(nextGroup);
-            const targetIndex = userGroups.findIndex((item) => item.id === nextGroup.id);
-            if (targetIndex >= 0) userGroups[targetIndex] = nextGroup;
-            group = nextGroup;
-        }
-
-        if (group && word.wordFamilyGroupId !== group.id) {
-            results[index] = { ...word, wordFamilyGroupId: group.id };
-        }
-    }
-
-    return results;
 };
 
 export const syncLibraryWordsForSavedGroup = (group: WordFamilyGroup, libraryWords: VocabularyItem[]): VocabularyItem[] => {

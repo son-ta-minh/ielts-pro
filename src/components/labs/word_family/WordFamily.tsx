@@ -4,8 +4,7 @@ import * as db from '../../../app/db';
 import * as dataStore from '../../../app/dataStore';
 import { useToast } from '../../../contexts/ToastContext';
 import { WordFamilyUI } from './WordFamily_UI';
-import { getConfig, getStudyBuddyAiUrl } from '../../../app/settingsManager';
-import { getWordFamilyFormsPrompt } from '../../../services/promptService';
+import { requestWordFamilyGroupRefine } from '../../../services/wordFamilyRefineService';
 import { syncLibraryWordsForSavedGroup, unlinkLibraryWordsFromDeletedGroup } from '../../../utils/wordFamilyGroupLinking';
 
 interface Props {
@@ -41,83 +40,6 @@ const getGroupLabel = (group: WordFamilyGroup) => (
   group.adverbs[0] ||
   'group'
 );
-
-const extractJsonBlock = (rawText: string): any => {
-  const fencedMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = (fencedMatch?.[1] || rawText).trim();
-  const firstBrace = candidate.indexOf('{');
-  const lastBrace = candidate.lastIndexOf('}');
-  const firstBracket = candidate.indexOf('[');
-  const lastBracket = candidate.lastIndexOf(']');
-  const objectSlice = firstBrace >= 0 && lastBrace > firstBrace ? candidate.slice(firstBrace, lastBrace + 1) : null;
-  const arraySlice = firstBracket >= 0 && lastBracket > firstBracket ? candidate.slice(firstBracket, lastBracket + 1) : null;
-  return JSON.parse(objectSlice || arraySlice || candidate);
-};
-
-const extractWordFamilyJson = (rawText: string): { verbs: string[]; nouns: string[]; adjectives: string[]; adverbs: string[] } => {
-  const parsed = extractJsonBlock(rawText);
-  const candidate = Array.isArray(parsed) ? parsed[0] : parsed;
-  if (candidate && typeof candidate === 'object') {
-    return normalizeGroup({
-      verbs: Array.isArray(candidate?.verbs) ? candidate.verbs : [],
-      nouns: Array.isArray(candidate?.nouns) ? candidate.nouns : [],
-      adjectives: Array.isArray(candidate?.adjectives) ? candidate.adjectives : [],
-      adverbs: Array.isArray(candidate?.adverbs) ? candidate.adverbs : []
-    });
-  }
-  throw new Error('AI response is not a valid word family object.');
-};
-
-const requestLocalWordFamilyRefine = async (group: WordFamilyGroup): Promise<{ verbs: string[]; nouns: string[]; adjectives: string[]; adverbs: string[] }> => {
-  const aiUrl = getStudyBuddyAiUrl(getConfig());
-  const response = await fetch(aiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      messages: [{ role: 'user', content: getWordFamilyFormsPrompt(group) }],
-      temperature: 0.2,
-      top_p: 0.85,
-      repetition_penalty: 1.15,
-      stream: false
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`AI server error ${response.status}`);
-  }
-
-  const payload = await response.json().catch(() => null);
-  const rawText = payload?.choices?.[0]?.message?.content;
-  if (typeof rawText !== 'string' || !rawText.trim()) {
-    throw new Error('AI server returned empty content.');
-  }
-  try {
-    return extractWordFamilyJson(rawText);
-  } catch {
-    const jsonDumpsMatch = rawText.match(/json\.dumps\s*\(\s*({[\s\S]*?})\s*\)/i);
-    if (jsonDumpsMatch?.[1]) {
-      const normalizedJson = jsonDumpsMatch[1]
-        .replace(/'/g, '"')
-        .replace(/,\s*([}\]])/g, '$1');
-      return extractWordFamilyJson(normalizedJson);
-    }
-
-    const pythonDictMatch = rawText.match(/return\s+({[\s\S]*?})/i) || rawText.match(/result\s*=\s*({[\s\S]*?})/i);
-    if (pythonDictMatch?.[1]) {
-      const normalizedJson = pythonDictMatch[1]
-        .replace(/'/g, '"')
-        .replace(/\bTrue\b/g, 'true')
-        .replace(/\bFalse\b/g, 'false')
-        .replace(/\bNone\b/g, 'null')
-        .replace(/,\s*([}\]])/g, '$1');
-      return extractWordFamilyJson(normalizedJson);
-    }
-
-    throw new Error('AI response could not be parsed as word family JSON.');
-  }
-};
 
 const groupSearchText = (group: WordFamilyGroup) =>
   [group.verbs, group.nouns, group.adjectives, group.adverbs].flat().join(' ').toLowerCase();
@@ -255,7 +177,7 @@ const WordFamily: React.FC<Props> = ({ user }) => {
 
     try {
       setIsSaving(true);
-      const refined = await requestLocalWordFamilyRefine(group);
+      const refined = await requestWordFamilyGroupRefine(group);
       const nextGroup: WordFamilyGroup = {
         ...group,
         verbs: mergeItems(group.verbs, refined.verbs),
@@ -301,7 +223,7 @@ const WordFamily: React.FC<Props> = ({ user }) => {
     try {
       for (const group of validGroups) {
         try {
-          const refined = await requestLocalWordFamilyRefine(group);
+          const refined = await requestWordFamilyGroupRefine(group);
           const nextGroup: WordFamilyGroup = {
             ...group,
             verbs: mergeItems(group.verbs, refined.verbs),

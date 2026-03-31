@@ -14,7 +14,7 @@ import { createNewWord } from '../../utils/srs';
 import { TagTreeNode } from '../common/TagBrowser';
 import * as db from '../../app/db';
 import { runWordRefineWithRetry, WordRefineProgressSnapshot } from '../../services/wordRefineApi';
-import { syncRefinedWordsToWordFamilyGroups, linkWordsToExistingWordFamilyGroups } from '../../utils/wordFamilyGroupLinking';
+import { refineAndLinkWordFamilyGroupsForWords } from '../../services/wordFamilyRefineService';
 
 const MAX_API_REFINE_HISTORY_ITEMS = 120;
 
@@ -486,16 +486,12 @@ const WordTable: React.FC<Props> = ({
         }
     }
 
-    const syncedItemsToSave = await syncRefinedWordsToWordFamilyGroups(itemsToSave);
     if (itemsToDeleteIds.length > 0) await dataStore.bulkDeleteWords(itemsToDeleteIds);
-    if (syncedItemsToSave.length > 0) {
-        await dataStore.bulkSaveWords(syncedItemsToSave);
-        const relinkedLibraryWords = await linkWordsToExistingWordFamilyGroups(dataStore.getAllWords().filter((word) => word.userId === user.id));
-        if (relinkedLibraryWords.length > 0) {
-          await dataStore.bulkSaveWords(relinkedLibraryWords);
-        }
+    if (itemsToSave.length > 0) {
+        await dataStore.bulkSaveWords(itemsToSave);
+        await refineAndLinkWordFamilyGroupsForWords(itemsToSave);
         if (renames.length > 0 && onWordRenamed) onWordRenamed(renames);
-        let msg = options?.successMessage || `Refined ${syncedItemsToSave.length} words.`;
+        let msg = options?.successMessage || `Refined ${itemsToSave.length} words.`;
         if (itemsToDeleteIds.length > 0) msg += ` Merged ${itemsToDeleteIds.length} duplicates.`;
         else if (renames.length > 0) msg += ` Renamed ${renames.length} to base forms.`;
         setNotification({ type: 'success', message: msg });
