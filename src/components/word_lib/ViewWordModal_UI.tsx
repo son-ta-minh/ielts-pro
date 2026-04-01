@@ -244,12 +244,18 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const viewMenuRef = useRef<HTMLDivElement>(null);
     const [badgeReady, setBadgeReady] = useState(false);
+    const examplesRef = useRef<HTMLDivElement>(null);
+    const [activeExampleHighlight, setActiveExampleHighlight] = useState<string | null>(null);
 
     useEffect(() => {
     //   console.log('=== ViewWordModalUI LOAD ===');
     //   console.log('word.id:', word?.id);
     //   console.log('lastTestResults:', word?.lastTestResults);
     }, [word]);
+
+    useEffect(() => {
+        setActiveExampleHighlight(null);
+    }, [word.id]);
 
     const handlePronounceWithCoachLookup = (targetWord: string) => {
         speak(targetWord);
@@ -322,6 +328,110 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     }, []);
 
     const toggleGroupExpansion = (group: string) => { setExpandedGroups(prev => { const next = new Set(prev); if (next.has(group)) next.delete(group); else next.add(group); return next; }); };
+
+    const EXAMPLE_MATCH_THRESHOLD = 0.7;
+
+    const normalizeExampleSearch = (value: string) =>
+        value
+            .toLowerCase()
+            .replace(/\[[^\]]+\]/g, ' ')
+            .replace(/[^\p{L}\p{N}\s']/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+    const stemExampleToken = (token: string) => {
+        let stem = token.toLowerCase();
+
+        if (stem.length > 4 && stem.endsWith('ies')) {
+            return `${stem.slice(0, -3)}y`;
+        }
+        if (stem.length > 5 && stem.endsWith('ing')) {
+            stem = stem.slice(0, -3);
+        } else if (stem.length > 4 && stem.endsWith('ed')) {
+            stem = stem.slice(0, -2);
+        } else if (stem.length > 4 && stem.endsWith('es')) {
+            stem = stem.slice(0, -2);
+        } else if (stem.length > 3 && stem.endsWith('s')) {
+            stem = stem.slice(0, -1);
+        }
+
+        // Handle doubled final consonants after suffix stripping: slipped -> slip, running -> run
+        if (/(bb|dd|ff|gg|ll|mm|nn|pp|rr|tt)$/.test(stem)) {
+            stem = stem.slice(0, -1);
+        }
+
+        return stem;
+    };
+
+    const tokenizeExampleSearch = (value: string) =>
+        normalizeExampleSearch(value)
+            .split(' ')
+            .map(token => stemExampleToken(token.trim()))
+            .filter(Boolean);
+
+    const calculateTokenSimilarity = (left: string[], right: string[]) => {
+        if (left.length === 0 || right.length === 0) return 0;
+        const maxLength = Math.max(left.length, right.length);
+        let matches = 0;
+        const used = new Set<number>();
+
+        left.forEach(token => {
+            const matchIndex = right.findIndex((candidate, index) => !used.has(index) && candidate === token);
+            if (matchIndex >= 0) {
+                used.add(matchIndex);
+                matches += 1;
+            }
+        });
+
+        return matches / maxLength;
+    };
+
+    const getBestExampleMatchScore = (target: string, source: string) => {
+        const targetTokens = tokenizeExampleSearch(target);
+        const sourceTokens = tokenizeExampleSearch(source);
+        if (targetTokens.length === 0 || sourceTokens.length === 0) return 0;
+
+        const minWindowSize = Math.max(1, targetTokens.length - 1);
+        const maxWindowSize = Math.min(sourceTokens.length, targetTokens.length + 2);
+        let bestScore = calculateTokenSimilarity(targetTokens, sourceTokens);
+
+        for (let windowSize = minWindowSize; windowSize <= maxWindowSize; windowSize += 1) {
+            for (let start = 0; start <= sourceTokens.length - windowSize; start += 1) {
+                const windowTokens = sourceTokens.slice(start, start + windowSize);
+                bestScore = Math.max(bestScore, calculateTokenSimilarity(targetTokens, windowTokens));
+            }
+        }
+
+        return bestScore;
+    };
+
+    const doesExampleContain = (target?: string, sourceText?: string) => {
+        if (!target?.trim()) return false;
+        const searchableSource = sourceText || word.example;
+        if (!searchableSource?.trim()) return false;
+        return getBestExampleMatchScore(target, searchableSource) >= EXAMPLE_MATCH_THRESHOLD;
+    };
+
+    const handleExampleHighlightToggle = (target: string) => {
+        if (!target.trim()) return;
+        setActiveExampleHighlight((prev) => (prev === target ? null : target));
+        requestAnimationFrame(() => {
+            examplesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+    };
+
+    const splitExampleIntoSentences = (text: string) => {
+        const blocks = text
+            .replace(/\r\n/g, '\n')
+            .split(/\n{2,}/)
+            .map(block => block.trim())
+            .filter(Boolean);
+
+        return blocks.flatMap(block => {
+            const matches = block.match(/[^.!?\n]+(?:[.!?]+["')\]]*)?|[^.!?\n]+$/g);
+            return (matches || [block]).map(sentence => sentence.trim()).filter(Boolean);
+        });
+    };
 
     const learnStatusOptions = [
         { id: 'NEW', label: 'New', icon: <div className="w-3 h-3 rounded-full bg-blue-500"/> },
@@ -476,6 +586,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     );
     const hasUsage = Boolean(lessonUsageHtml?.trim());
     const hasTest = Boolean(lessonTestHtml?.trim());
+    const exampleSentences = useMemo(() => splitExampleIntoSentences(word.example || ''), [word.example]);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
@@ -711,6 +822,15 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
                                                         {p.usage && (
                                                             <div className="absolute top-1 right-1 flex items-center gap-1">
+                                                                {doesExampleContain(p.usage) && (
+                                                                    <button
+                                                                        onClick={() => handleExampleHighlightToggle(p.usage)}
+                                                                        className={`transition-colors p-0.5 ${activeExampleHighlight === p.usage ? 'text-sky-600' : 'text-neutral-300 hover:text-sky-500'}`}
+                                                                        title="Highlight matching examples"
+                                                                    >
+                                                                        <AtSign size={10}/>
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={() => speak(p.usage)}
                                                                     className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
@@ -789,6 +909,15 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                             )}
                                                         </div>
                                                         <div className="absolute top-1 right-1 flex items-center gap-1">
+                                                            {doesExampleContain(c.text) && (
+                                                                <button
+                                                                    onClick={() => handleExampleHighlightToggle(c.text)}
+                                                                    className={`transition-colors p-0.5 ${activeExampleHighlight === c.text ? 'text-sky-600' : 'text-neutral-300 hover:text-sky-500'}`}
+                                                                    title="Highlight matching examples"
+                                                                >
+                                                                    <AtSign size={10}/>
+                                                                </button>
+                                                            )}
                                                             <button onClick={() => speak(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5">
                                                                 <Volume2 size={10}/>
                                                             </button>
@@ -834,6 +963,15 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                             <div className={`text-[10px] italic truncate text-neutral-400`} title={para.context}>{para.context}</div>
                                                         </div>
                                                         <div className="absolute top-1 right-1 flex items-center gap-1">
+                                                            {doesExampleContain(para.word) && (
+                                                                <button
+                                                                    onClick={() => handleExampleHighlightToggle(para.word)}
+                                                                    className={`transition-colors p-0.5 ${activeExampleHighlight === para.word ? 'text-sky-600' : 'text-neutral-300 hover:text-sky-500'}`}
+                                                                    title="Highlight matching examples"
+                                                                >
+                                                                    <AtSign size={10}/>
+                                                                </button>
+                                                            )}
                                                             <button onClick={() => speak(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
                                                         </div>
                                                     </div>
@@ -892,7 +1030,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     </div>
                                 )}
                                 {word.example && (                                        
-                                    <div className="md:col-span-4">
+                                    <div className="md:col-span-4" ref={examplesRef}>
                                         <div className="mb-2 flex items-center justify-between">
                                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                                 <AtSign size={10}/> Examples
@@ -919,10 +1057,18 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 )}
                                             </div>
                                         </div>
-                                        <div
-                                            className="w-full text-sm leading-relaxed text-neutral-700"
-                                            dangerouslySetInnerHTML={renderExample(word.example)}
-                                        />
+                                        <div className="w-full space-y-2 text-sm leading-relaxed text-neutral-700">
+                                            {exampleSentences.map((sentence, index) => {
+                                                const isHighlighted = activeExampleHighlight ? doesExampleContain(activeExampleHighlight, sentence) : false;
+                                                return (
+                                                    <div
+                                                        key={`${sentence}-${index}`}
+                                                        className={isHighlighted ? 'rounded-xl border border-sky-200 bg-sky-50 px-3 py-2' : undefined}
+                                                        dangerouslySetInnerHTML={renderExample(sentence)}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 )}
                             </div>
