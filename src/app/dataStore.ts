@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem } from './types';
+import { VocabularyItem, User, Unit, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
@@ -624,6 +624,30 @@ export async function deleteLesson(id: string) {
     if (!canWrite()) return;
     _updateLocalLastModified();
     await db.deleteLesson(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveWordFamilyGroup(group: WordFamilyGroup) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveWordFamilyGroup(group);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function bulkSaveWordFamilyGroups(groups: WordFamilyGroup[]) {
+    if (groups.length === 0 || !canWrite()) return;
+    _updateLocalLastModified();
+    await db.bulkSaveWordFamilyGroups(groups);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteWordFamilyGroup(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteWordFamilyGroup(id);
     _triggerBackup();
     _notifyChanges();
 }

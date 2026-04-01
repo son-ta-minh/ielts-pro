@@ -161,7 +161,7 @@ export const upsertWordFamilyGroupForWord = async (word: VocabularyItem): Promis
             updatedAt: now
         };
 
-    await db.saveWordFamilyGroup(nextGroup);
+    await dataStore.saveWordFamilyGroup(nextGroup);
     return nextGroup;
 };
 

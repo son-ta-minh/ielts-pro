@@ -850,7 +850,7 @@ export const bulkDeleteIrregularVerbs = async (ids: string[]): Promise<void> => 
 
 // --- Word Family Feature ---
 export const saveWordFamilyGroup = async (group: WordFamilyGroup): Promise<void> => { group.updatedAt = Date.now(); await crudTemplate(WORD_FAMILY_STORE, tx => tx.objectStore(WORD_FAMILY_STORE).put(group)); };
-export const getWordFamilyGroupsByUserId = async (): Promise<WordFamilyGroup[]> => await crudTemplate(WORD_FAMILY_STORE, tx => tx.objectStore(WORD_FAMILY_STORE).getAll(), 'readonly');
+export const getWordFamilyGroupsByUserId = async (userId: string): Promise<WordFamilyGroup[]> => await crudTemplate(WORD_FAMILY_STORE, tx => tx.objectStore(WORD_FAMILY_STORE).index('userId').getAll(userId), 'readonly');
 export const deleteWordFamilyGroup = async (id: string): Promise<void> => { await crudTemplate(WORD_FAMILY_STORE, tx => tx.objectStore(WORD_FAMILY_STORE).delete(id)); };
 export const bulkSaveWordFamilyGroups = async (items: WordFamilyGroup[]): Promise<void> => { await crudTemplate(WORD_FAMILY_STORE, tx => { const store = tx.objectStore(WORD_FAMILY_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteWordFamilyGroups = async (ids: string[]): Promise<void> => { await crudTemplate(WORD_FAMILY_STORE, tx => { const store = tx.objectStore(WORD_FAMILY_STORE); ids.forEach(id => store.delete(id)); }); };

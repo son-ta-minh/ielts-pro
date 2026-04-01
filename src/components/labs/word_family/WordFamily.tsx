@@ -153,7 +153,7 @@ const WordFamily: React.FC<Props> = ({ user }) => {
 
     try {
       setIsSaving(true);
-      await db.saveWordFamilyGroup(nextGroup);
+      await dataStore.saveWordFamilyGroup(nextGroup);
       const libraryUpdates = syncLibraryWordsForSavedGroup(nextGroup, dataStore.getAllWords());
       if (libraryUpdates.length > 0) {
         await dataStore.bulkSaveWords(libraryUpdates);
@@ -171,7 +171,7 @@ const WordFamily: React.FC<Props> = ({ user }) => {
 
   const handleDelete = async (group: WordFamilyGroup) => {
     try {
-      await db.deleteWordFamilyGroup(group.id);
+      await dataStore.deleteWordFamilyGroup(group.id);
       const libraryUpdates = unlinkLibraryWordsFromDeletedGroup(group.id, dataStore.getAllWords());
       if (libraryUpdates.length > 0) {
         await dataStore.bulkSaveWords(libraryUpdates);
@@ -201,7 +201,7 @@ const WordFamily: React.FC<Props> = ({ user }) => {
         adverbs: mergeItems(group.adverbs, refined.adverbs),
         updatedAt: Date.now()
       };
-      await db.saveWordFamilyGroup(nextGroup);
+      await dataStore.saveWordFamilyGroup(nextGroup);
       const libraryUpdates = syncLibraryWordsForSavedGroup(nextGroup, dataStore.getAllWords());
       if (libraryUpdates.length > 0) {
         await dataStore.bulkSaveWords(libraryUpdates);
@@ -247,7 +247,7 @@ const WordFamily: React.FC<Props> = ({ user }) => {
             adverbs: mergeItems(group.adverbs, refined.adverbs),
             updatedAt: Date.now()
           };
-          await db.saveWordFamilyGroup(nextGroup);
+          await dataStore.saveWordFamilyGroup(nextGroup);
           const libraryUpdates = syncLibraryWordsForSavedGroup(nextGroup, dataStore.getAllWords());
           if (libraryUpdates.length > 0) {
             await dataStore.bulkSaveWords(libraryUpdates);

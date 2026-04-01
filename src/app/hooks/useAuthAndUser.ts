@@ -5,6 +5,7 @@ import * as dataStore from '../dataStore';
 import { ADVENTURE_CHAPTERS } from '../../data/adventure_content';
 import { generateMap } from '../../data/adventure_map';
 import { restoreFromServer } from '../../services/backupService';
+import { getConfig, saveConfig } from '../settingsManager';
 
 
 export const useAuthAndUser = () => {
@@ -43,10 +44,12 @@ export const useAuthAndUser = () => {
                 const result = await restoreFromServer(targetRestoreIdentifier);
                 if (result && result.type === 'success') {
                     
-                    // Update timestamp on auto-restore
-                    if (result.backupTimestamp) {
-                        localStorage.setItem('vocab_pro_last_backup_timestamp', String(result.backupTimestamp));
-                    }
+                    // Keep local sync markers aligned with the restored server backup.
+                    const syncTime = result.backupTimestamp || Date.now();
+                    localStorage.setItem('vocab_pro_last_backup_timestamp', String(syncTime));
+                    localStorage.setItem('vocab_pro_local_last_modified', String(syncTime));
+                    const config = getConfig();
+                    saveConfig({ ...config, sync: { ...config.sync, lastSyncTime: syncTime } }, true);
 
                     // Re-fetch users after successful restore to update state
                     currentUsers = (await getAllUsers()).filter(u => !u.name.toLowerCase().includes('book'));

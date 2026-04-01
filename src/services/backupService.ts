@@ -310,7 +310,7 @@ export const lookupWordsInGlobalLibrary = async (words: string[]): Promise<Vocab
 
 
 async function getFullExportData(userId: string, user: User) {
-     const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
+     const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
         db.getAllWordsForExport(userId),
         db.getUnitsByUserId(userId),
         db.getReadingBooksByUserId(userId),
@@ -324,6 +324,7 @@ async function getFullExportData(userId: string, user: User) {
         db.getAllWritingLogsForExport(userId),
         db.getCompositionsByUserId(userId),
         db.getIrregularVerbsByUserId(userId),
+        db.getWordFamilyGroupsByUserId(userId),
         db.getLessonsByUserId(userId),
         // getComparisonGroupsByUserId removed
         db.getListeningItemsByUserId(userId),
@@ -353,6 +354,7 @@ async function getFullExportData(userId: string, user: User) {
         wt: writingTopicsData,
         wl: writingLogsData,
         iv: irregularVerbsData,
+        wfg: wordFamilyGroupsData,
         lessons: lessonsData,
         listeningItems: listeningItemsData,
         nativeSpeakItems: nativeSpeakItemsDataRaw.map(w => _mapToShortKeys(w)),

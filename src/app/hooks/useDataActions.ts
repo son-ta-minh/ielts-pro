@@ -96,11 +96,6 @@ export const useDataActions = (props: UseDataActionsProps) => {
         sessionStorage.setItem('vocab_pro_just_restored', 'true');
         
         const syncTime = serverMtime || result.backupTimestamp || Date.now();
-        localStorage.setItem('vocab_pro_last_backup_timestamp', String(syncTime));
-        localStorage.setItem('vocab_pro_local_last_modified', String(syncTime));
-        
-        const config = getConfig();
-        saveConfig({ ...config, sync: { ...config.sync, lastSyncTime: syncTime } }, true);
 
         // CRITICAL FIX: Ensure DataStore reloads from IndexedDB into Memory immediately
         // This fixes the issue where local restore required a manual refresh
@@ -114,6 +109,13 @@ export const useDataActions = (props: UseDataActionsProps) => {
             localStorage.setItem('vocab_pro_current_user_name', result.updatedUser.name);
             await onUpdateUser(result.updatedUser);
         }
+
+        // Keep local sync markers aligned with the restored backup after any restore-time writes.
+        localStorage.setItem('vocab_pro_last_backup_timestamp', String(syncTime));
+        localStorage.setItem('vocab_pro_local_last_modified', String(syncTime));
+
+        const config = getConfig();
+        saveConfig({ ...config, sync: { ...config.sync, lastSyncTime: syncTime } }, true);
         
         showToast('Restore successful!', 'success', 2000);
         refreshGlobalStats();
