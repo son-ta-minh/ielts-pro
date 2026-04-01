@@ -988,7 +988,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             return (
                                                 <div
                                                     key={`${sentence}-${index}`}
-                                                    className={`inline-block mb-1 px-3 py-0.5 box-border border rounded-xl ${isHighlighted ? 'border-sky-200 bg-sky-50' : 'border-transparent bg-transparent'}`}
+              className={`w-full px-3 py-0.25 box-border border rounded-xl ${isHighlighted ? 'border-sky-200 bg-sky-50' : 'border-transparent bg-transparent'}`}
                                                     dangerouslySetInnerHTML={renderExample(sentence)}
                                                 />
                                             );
