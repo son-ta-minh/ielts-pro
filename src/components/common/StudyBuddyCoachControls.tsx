@@ -246,17 +246,17 @@ export const StudyBuddyCommandBox: React.FC<CommandBoxProps> = ({
             onMouseEnter={onRestoreSelectedRangeHover}
             className="select-none bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[198px] animate-in fade-in zoom-in-95 duration-200"
         >
-            <div className="grid grid-cols-5 gap-1">
+            <div className="grid grid-cols-4 gap-1">
                 <button type="button" onClick={onTranslateSelection} className="aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" title="Đọc Tiếng Việt">VI</button>
                 <button type="button" onClick={onReadAndIpa} className="aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="Read English"><Volume2 size={15}/></button>
                 <button type="button" onClick={onSpeakSelection} className="aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
-                {!isChatOpen && (
+                {/* {!isChatOpen && (
                     <button type="button" onClick={() => onOpenChatPanel(selectedText)} className="aspect-square bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95 shadow-sm" title="Ask AI"><Bot size={15}/></button>
                 )}
-                {isChatOpen && <div aria-hidden="true" className="aspect-square" />}
+                {isChatOpen && <div aria-hidden="true" className="aspect-square" />} */}
                 <button type="button" onClick={() => onOpenSearchPage(selectedText)} className="aspect-square bg-cyan-50 text-cyan-700 rounded-2xl flex items-center justify-center hover:bg-cyan-100 transition-all active:scale-95 shadow-sm" title="Open Search Page"><Search size={15}/></button>
             </div>
-            <div className="grid grid-cols-5 gap-1 mt-1">
+            <div className="grid grid-cols-4 gap-1">
                 <button type="button" onClick={onOpenNote} className="aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Open Note"><PenTool size={15}/></button>
                 <button type="button" onClick={onOpenTools} className="aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Tools"><Wrench size={15}/></button>
                 {!isAlreadyInLibrary ? (
@@ -296,7 +296,6 @@ export const StudyBuddyCommandBox: React.FC<CommandBoxProps> = ({
                         </div>
                     )}
                 </div>
-                <div aria-hidden="true" className="aspect-square" />
             </div>
         </div>
     );

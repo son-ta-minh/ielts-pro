@@ -260,8 +260,8 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
   }, [allWords, includeArchive, normalizedQuery, searchMode, exampleOnly]);
 
   const content = (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="bg-white border border-neutral-200 rounded-3xl p-6 md:p-8 shadow-sm">
+    <div className="max-w-6xl mx-auto">
+      <div className="bg-white shadow-sm p-6 md:p-8">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-neutral-900">Global Search</h1>
@@ -343,7 +343,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
         </div>
       </div>
 
-      <div className="bg-white border border-neutral-200 rounded-3xl p-6 md:p-8 shadow-sm">
+      <div className="bg-white p-6 md:p-8 shadow-sm">
         {!normalizedQuery && (
           <div className="text-center py-12 text-neutral-500">
             <FileText size={24} className="mx-auto mb-3 text-neutral-300" />
@@ -402,7 +402,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
   if (!isModal) return content;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-[2rem]" onClick={(e) => e.stopPropagation()}>
         {content}
       </div>
