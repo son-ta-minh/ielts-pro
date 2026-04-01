@@ -114,6 +114,13 @@ const IRREGULAR_LEMMA_MAP: Record<string, string> = {
 
 const DEFAULT_TOKEN_MATCH_THRESHOLD = 0.72;
 const MIN_QUERY_TOKEN_COVERAGE = 0.8;
+const CONTENT_TOKEN_MATCH_THRESHOLD = 0.84;
+const STOPWORD_TOKENS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'but', 'if', 'then', 'than', 'so',
+  'of', 'in', 'on', 'at', 'by', 'for', 'to', 'from', 'with', 'about',
+  'as', 'into', 'through', 'over', 'after', 'before', 'between', 'under',
+  'against', 'during', 'without', 'within', 'along', 'per'
+]);
 
 export const normalizeFuzzyText = (value: string) =>
   value
@@ -196,17 +203,21 @@ type WindowMatchStats = {
   score: number;
   matchedWeight: number;
   matchedCount: number;
+  contentMatchedCount: number;
+  contentTokenCount: number;
   coverage: number;
   precision: number;
 };
 
 const scoreTokenWindow = (queryTokens: string[], sourceTokens: string[]): WindowMatchStats => {
   if (queryTokens.length === 0 || sourceTokens.length === 0) {
-    return { score: 0, matchedWeight: 0, matchedCount: 0, coverage: 0, precision: 0 };
+    return { score: 0, matchedWeight: 0, matchedCount: 0, contentMatchedCount: 0, contentTokenCount: 0, coverage: 0, precision: 0 };
   }
 
   let matchedWeight = 0;
   let matchedCount = 0;
+  let contentMatchedCount = 0;
+  const contentTokenCount = queryTokens.filter((token) => !STOPWORD_TOKENS.has(token)).length;
   const used = new Set<number>();
 
   queryTokens.forEach((queryToken) => {
@@ -222,10 +233,16 @@ const scoreTokenWindow = (queryTokens: string[], sourceTokens: string[]): Window
       }
     });
 
-    if (bestIndex >= 0 && bestScore >= DEFAULT_TOKEN_MATCH_THRESHOLD) {
+    const isStopword = STOPWORD_TOKENS.has(queryToken);
+    const requiredThreshold = isStopword ? DEFAULT_TOKEN_MATCH_THRESHOLD : CONTENT_TOKEN_MATCH_THRESHOLD;
+
+    if (bestIndex >= 0 && bestScore >= requiredThreshold) {
       used.add(bestIndex);
       matchedWeight += bestScore;
       matchedCount += 1;
+      if (!isStopword) {
+        contentMatchedCount += 1;
+      }
     }
   });
 
@@ -235,6 +252,8 @@ const scoreTokenWindow = (queryTokens: string[], sourceTokens: string[]): Window
     score: coverage * 0.78 + precision * 0.22,
     matchedWeight,
     matchedCount,
+    contentMatchedCount,
+    contentTokenCount,
     coverage,
     precision
   };
@@ -244,7 +263,7 @@ const getBestWindowMatchStats = (query: string, source: string): WindowMatchStat
   const queryTokens = tokenizeFuzzyText(query);
   const sourceTokens = tokenizeFuzzyText(source);
   if (queryTokens.length === 0 || sourceTokens.length === 0) {
-    return { score: 0, matchedWeight: 0, matchedCount: 0, coverage: 0, precision: 0 };
+    return { score: 0, matchedWeight: 0, matchedCount: 0, contentMatchedCount: 0, contentTokenCount: 0, coverage: 0, precision: 0 };
   }
 
   const minWindowSize = Math.max(1, queryTokens.length - 1);
@@ -290,6 +309,7 @@ export const isFuzzyPhraseMatch = (query: string, source: string, threshold = 0.
   const bestStats = getBestWindowMatchStats(query, source);
   const requiredMatchCount = getRequiredMatchCount(queryTokens.length);
   if (bestStats.matchedCount < requiredMatchCount) return false;
+  if (bestStats.contentTokenCount > 0 && bestStats.contentMatchedCount < bestStats.contentTokenCount) return false;
 
   const finalScore = Math.max(bestStats.score, getPhraseCharacterSimilarity(query, source) * 0.88);
   return finalScore >= threshold;

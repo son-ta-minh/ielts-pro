@@ -151,6 +151,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
   );
   const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
   const [query, setQuery] = useState(initialQuery);
+  const [submittedQuery, setSubmittedQuery] = useState(initialQuery.trim());
   const [includeArchive, setIncludeArchive] = useState(Boolean(persistedPreferences.includeArchive));
   const [searchMode, setSearchMode] = useState<SearchMode>(persistedPreferences.searchMode === 'deep' ? 'deep' : 'fast');
   const [exampleOnly, setExampleOnly] = useState(Boolean(persistedPreferences.exampleOnly));
@@ -168,18 +169,23 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
 
   useEffect(() => {
     setQuery(initialQuery);
+    setSubmittedQuery(initialQuery.trim());
   }, [initialQuery]);
 
   useEffect(() => {
     setStoredJSON(SEARCH_PREFERENCES_KEY, { includeArchive, searchMode, exampleOnly });
   }, [includeArchive, searchMode, exampleOnly]);
 
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = submittedQuery.trim().toLowerCase();
+
+  const handleSearchSubmit = () => {
+    setSubmittedQuery(query.trim());
+  };
 
   const results = useMemo(() => {
     if (!normalizedQuery) return [] as Array<{ word: VocabularyItem; hits: SearchHit[]; score: number }>;
 
-    return allWords
+    const computedResults = allWords
       .filter(word => includeArchive || !word.isPassive)
       .map(word => {
         const entries: SearchHit[] = [];
@@ -232,6 +238,25 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
       .filter((item): item is { word: VocabularyItem; hits: SearchHit[]; score: number } => item !== null)
       .sort((a, b) => b.score - a.score || b.word.updatedAt - a.word.updatedAt)
       .slice(0, MAX_RESULTS);
+
+    if (searchMode === 'deep') {
+      console.groupCollapsed(`[Deep Search] "${normalizedQuery}" -> ${computedResults.length} results`);
+      computedResults.forEach((result) => {
+        console.log('Word:', result.word.word, 'score:', result.score);
+        result.hits.forEach((hit) => {
+          const matchScore = getFuzzyPhraseScore(normalizedQuery, hit.value);
+          console.log('  hit:', {
+            path: hit.path,
+            label: getFriendlyPathLabel(hit.path),
+            matchScore,
+            value: hit.value
+          });
+        });
+      });
+      console.groupEnd();
+    }
+
+    return computedResults;
   }, [allWords, includeArchive, normalizedQuery, searchMode, exampleOnly]);
 
   const content = (
@@ -290,16 +315,31 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
           </button>
         </div>
 
-        <div className="relative mt-5">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type keyword to search full-text..."
-            className="w-full pl-12 pr-4 py-4 rounded-2xl border border-neutral-200 bg-neutral-50 text-sm font-semibold text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-            autoFocus
-          />
+        <div className="mt-5 flex gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSearchSubmit();
+                }
+              }}
+              placeholder="Type keyword to search full-text..."
+              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-neutral-200 bg-neutral-50 text-sm font-semibold text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              autoFocus
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleSearchSubmit}
+            className="rounded-2xl bg-neutral-900 px-5 py-4 text-sm font-black text-white transition-colors hover:bg-neutral-800"
+          >
+            Search
+          </button>
         </div>
       </div>
 
