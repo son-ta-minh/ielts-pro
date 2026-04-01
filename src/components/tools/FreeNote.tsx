@@ -243,6 +243,7 @@ export const FreeNoteTool: React.FC<FreeNoteToolProps> = ({ user }) => {
                         ref={textareaRef}
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
+                        placeholder="Auto saves to your profile. You can write anything here, like notes, ideas, to-dos..."
                         className="w-full flex-1 border border-neutral-300 rounded-md p-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                 ) : (
