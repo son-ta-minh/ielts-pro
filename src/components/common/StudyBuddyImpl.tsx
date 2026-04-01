@@ -218,7 +218,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     
     // Tools Modal State
     const [isToolsModalOpen, setIsToolsModalOpen] = useState(false);
-    const [isNoteOnlyMode, setIsNoteOnlyMode] = useState(false);
 
     const commandBoxRef = useRef<HTMLDivElement>(null);
     const selectionMenuRef = useRef<HTMLDivElement>(null);
@@ -2179,14 +2178,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const handleOpenTools = () => {
         setIsOpen(false);
         setMenuPos(null);
-        setIsNoteOnlyMode(false);
         setIsToolsModalOpen(true);
     };
 
     const handleOpenNote = () => {
         setIsOpen(false);
         setMenuPos(null);
-        setIsNoteOnlyMode(true);
         setIsToolsModalOpen(true);
     };
 
@@ -2763,7 +2760,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 user={user}
                 isOpen={isToolsModalOpen}
                 onClose={() => setIsToolsModalOpen(false)}
-                noteOnly={isNoteOnlyMode}
             />
         </>
     );

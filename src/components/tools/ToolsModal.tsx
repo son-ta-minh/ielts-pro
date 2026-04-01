@@ -12,30 +12,27 @@ interface Props {
     isOpen: boolean;
     onClose: () => void;
     user: User;
-    noteOnly?: boolean;
 }
 
-export const ToolsModal: React.FC<Props> = ({ isOpen, onClose, user, noteOnly = false }) => {
+export const ToolsModal: React.FC<Props> = ({ isOpen, onClose, user }) => {
     const [activeTab, setActiveTab] = useState<'OCR' | 'IMAGES' | 'AUDIO' | 'WORD_LIBRARY' | 'FREE_NOTE' | 'PROMPT_HELPER'>('FREE_NOTE');
 
     const allTabs = [
         { id: 'FREE_NOTE', label: 'Note', icon: PenTool },
-        { id: 'WORD_LIBRARY', label: 'Word Library', icon: Library },
-        { id: 'PROMPT_HELPER', label: 'Prompt Helper', icon: Sparkles },
-        { id: 'OCR', label: 'Image to Text', icon: ScanLine },
+        { id: 'WORD_LIBRARY', label: 'Word Insert', icon: Library },
+        { id: 'PROMPT_HELPER', label: 'Prompts', icon: Sparkles },
+        // { id: 'OCR', label: 'Image to Text', icon: ScanLine },
         { id: 'IMAGES', label: 'Image Manager', icon: ImageIcon },
-        { id: 'AUDIO', label: 'Audio Tool', icon: Mic },
+        // { id: 'AUDIO', label: 'Audio Tool', icon: Mic },
     ] as const;
 
-    const tabs = noteOnly
-        ? allTabs.filter(tab => tab.id === 'FREE_NOTE')
-        : allTabs.filter(tab => tab.id !== 'FREE_NOTE');
+    const tabs = allTabs;
 
     useEffect(() => {
         if (tabs.length > 0) {
             setActiveTab(tabs[0].id);
         }
-    }, [noteOnly, isOpen]);
+    }, [isOpen]);
 
     if (!user) {
         console.warn('[ToolsModal] WARNING: user is undefined');
@@ -59,7 +56,7 @@ export const ToolsModal: React.FC<Props> = ({ isOpen, onClose, user, noteOnly = 
                                     className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeTab === tab.id ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
                                 >
                                     <Icon size={16} />
-                                    <span>{tab.label}</span>
+                                    <span className="whitespace-nowrap">{tab.label}</span>
                                 </button>
                             )
                         })}
