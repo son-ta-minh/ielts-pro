@@ -46,12 +46,12 @@ router.get('/gallery', (req, res) => {
 });
 
 router.post('/gallery', (req, res) => {
-  const { title = 'Untitled', collection = 'Unsorted', imagePath = '', words = [], note = '' } = req.body || {};
+  const { title = 'Untitled', collection = 'Unsorted', imagePath = '', words = [], note = '', text = '' } = req.body || {};
   const normalizedImagePath = normalizeGalleryImagePath(imagePath);
   if (!normalizedImagePath) return res.status(400).json({ error: 'imagePath is required' });
   const items = readItems();
   const id = `wg-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-  const payload = { id, title, collection, imagePath: normalizedImagePath, words, note };
+  const payload = { id, title, collection, imagePath: normalizedImagePath, words, note, text };
   items.unshift(payload);
   writeItems(items);
   return res.json(payload);
@@ -62,13 +62,14 @@ router.put('/gallery/:id', (req, res) => {
   const items = readItems();
   const idx = items.findIndex(i => i.id === id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  const { title, collection, imagePath, words, note } = req.body || {};
+  const { title, collection, imagePath, words, note, text } = req.body || {};
   const updated = { ...items[idx] };
   if (title !== undefined) updated.title = title;
   if (collection !== undefined) updated.collection = collection;
   if (imagePath !== undefined) updated.imagePath = normalizeGalleryImagePath(imagePath);
   if (words !== undefined) updated.words = Array.isArray(words) ? words : [];
   if (note !== undefined) updated.note = note;
+  if (text !== undefined) updated.text = typeof text === 'string' ? text : '';
   items[idx] = updated;
   writeItems(items);
   return res.json(updated);

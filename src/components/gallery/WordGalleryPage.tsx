@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Plus, Image as ImageIcon, Tag, Edit2, Link as LinkIcon, X, Search, FolderOpen, Trash2 } from 'lucide-react';
+import { Plus, Image as ImageIcon, Tag, X, Search, Trash2 } from 'lucide-react';
 import { User, ReviewGrade } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import ConfirmationModal from '../common/ConfirmationModal';
@@ -12,6 +12,14 @@ type GalleryItem = {
   imagePath: string;
   words: string[];
   note?: string;
+  text?: string;
+};
+
+type GalleryFormState = {
+  collection: string;
+  imagePath: string;
+  words: string;
+  text: string;
 };
 
 const buildImageUrl = (path: string) => {
@@ -69,11 +77,12 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const [editing, setEditing] = useState<GalleryItem | null>(null);
   const [showDetail, setShowDetail] = useState<GalleryItem | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formState, setFormState] = useState({ collection: '', imagePath: '', words: '' });
+  const [formState, setFormState] = useState<GalleryFormState>({ collection: '', imagePath: '', words: '', text: '' });
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState<'vocabulary' | 'text'>('vocabulary');
   const wordMap = useMemo(() => {
     const map = new Map<string, any>();
     dataStore.getAllWords().filter(w => w.userId === user.id).forEach(w => map.set(w.word.toLowerCase(), w));
@@ -138,11 +147,12 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
       setFormState({
         collection: editing.collection,
         imagePath: editing.imagePath,
-        words: editing.words.join(', ')
+        words: editing.words.join(', '),
+        text: editing.text || ''
       });
       setShowForm(true);
     } else {
-      setFormState({ collection: '', imagePath: '', words: '' });
+      setFormState({ collection: '', imagePath: '', words: '', text: '' });
     }
   }, [editing]);
 
@@ -159,9 +169,48 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
     });
   }, [items, filter, query]);
 
+  const groupedVisibleItems = useMemo(() => {
+    const groups = new Map<string, GalleryItem[]>();
+    visibleItems.forEach(item => {
+      const collectionName = item.collection || 'Unsorted';
+      const existing = groups.get(collectionName) || [];
+      existing.push(item);
+      groups.set(collectionName, existing);
+    });
+    return Array.from(groups.entries());
+  }, [visibleItems]);
+
   const resetForm = () => {
     setEditing(null);
     setShowForm(false);
+  };
+
+  const renderHighlightedText = (value?: string) => {
+    if (!value?.trim()) {
+      return <p className="text-sm leading-7 text-neutral-400">No text saved for this image yet.</p>;
+    }
+
+    const segments = value.split(/(\{[^}]+\})/g).filter(Boolean);
+
+    return (
+      <div className="whitespace-pre-wrap break-words text-sm leading-7 text-neutral-700">
+        {segments.map((segment, index) => {
+          const match = segment.match(/^\{([^}]+)\}$/);
+          if (!match) {
+            return <React.Fragment key={`${segment}-${index}`}>{segment}</React.Fragment>;
+          }
+
+          return (
+            <span
+              key={`${match[1]}-${index}`}
+              className="rounded-md bg-sky-100 px-1.5 py-0.5 text-sky-800"
+            >
+              {match[1]}
+            </span>
+          );
+        })}
+      </div>
+    );
   };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -175,13 +224,14 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
           .filter(Boolean)
       : [];
     const note = '';
+    const text = formState.text.trim();
 
     if (!imagePath) return;
 
     setIsSaving(true);
     setError(null);
     try {
-      const body = { collection, imagePath, words, note, title: fileNameFromPath(imagePath) };
+      const body = { collection, imagePath, words, note, text, title: fileNameFromPath(imagePath) };
       if (editing) {
         const res = await fetch(`${baseUrl}/api/gallery/${editing.id}`, {
           method: 'PUT',
@@ -236,8 +286,8 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
     const imageUrl = buildImageUrl(item.imagePath);
     const isEditingItem = editing?.id === item.id;
     return (
-      <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="cursor-pointer" onClick={() => setShowDetail(item)}>
+        <div key={item.id} className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="cursor-pointer" onClick={() => { setShowDetail(item); setDetailTab('vocabulary'); }}>
           <img
             src={imageUrl}
             alt={item.title}
@@ -300,6 +350,13 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
           <input name="collection" value={formState.collection} onChange={(e) => setFormState(f => ({ ...f, collection: e.target.value }))} placeholder="Collection" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
           <input name="imagePath" value={formState.imagePath} onChange={(e) => setFormState(f => ({ ...f, imagePath: e.target.value }))} placeholder="Image path or URL (server path works like [IMG])" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-mono" required />
           <input name="words" value={formState.words} onChange={(e) => setFormState(f => ({ ...f, words: e.target.value }))} placeholder="Words (comma separated)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium md:col-span-2" />
+          <textarea
+            name="text"
+            value={formState.text}
+            onChange={(e) => setFormState(f => ({ ...f, text: e.target.value }))}
+            placeholder="Text for this image. Use {curly braces} to mark phrases that should be highlighted."
+            className="min-h-[160px] px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium md:col-span-2"
+          />
           {editing && formState.imagePath && (
             <div className="md:col-span-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
               <p className="mb-3 text-xs font-bold uppercase tracking-widest text-neutral-400">Editing Preview</p>
@@ -324,9 +381,28 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
       ) : visibleItems.length === 0 ? (
         <div className="border border-neutral-200 rounded-2xl p-6 text-center text-neutral-500 bg-white shadow-sm">No images yet. Add one above.</div>
       ) : editing ? null : (
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleItems.map(renderCard)}
-        </div>
+        filter === 'all' ? (
+          <div className="space-y-8">
+            {groupedVisibleItems.map(([collectionName, collectionItems]) => (
+              <section key={collectionName} className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-px flex-1 bg-neutral-200" />
+                  <h2 className="shrink-0 text-xs font-black uppercase tracking-[0.25em] text-neutral-500">
+                    {collectionName}
+                  </h2>
+                  <div className="h-px flex-1 bg-neutral-200" />
+                </div>
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {collectionItems.map(renderCard)}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleItems.map(renderCard)}
+          </div>
+        )
       )}
 
       {showDetail && (
@@ -346,18 +422,41 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
                 }}
               />
               <div className="flex flex-wrap gap-2">
-                {showDetail.words.map(w => {
-                  const status = getWordStatus(w);
-                  const style = getWordStyles(status);
-                  return (
-                    <span key={w} className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${style.badge}`}>
-                      <span className={`w-2 h-2 rounded-full ${style.dot}`} />
-                      {w}
-                    </span>
-                  );
-                })}
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('vocabulary')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-black transition-colors ${detailTab === 'vocabulary' ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-600'}`}
+                >
+                  Vocabulary
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('text')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-black transition-colors ${detailTab === 'text' ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-600'}`}
+                >
+                  Text
+                </button>
               </div>
-              {/* note removed */}
+              {detailTab === 'vocabulary' ? (
+                <div className="flex flex-wrap gap-2">
+                  {showDetail.words.length > 0 ? showDetail.words.map(w => {
+                    const status = getWordStatus(w);
+                    const style = getWordStyles(status);
+                    return (
+                      <span key={w} className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${style.badge}`}>
+                        <span className={`w-2 h-2 rounded-full ${style.dot}`} />
+                        {w}
+                      </span>
+                    );
+                  }) : (
+                    <p className="text-sm text-neutral-400">No linked vocabulary for this image.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-sky-100 bg-sky-50/40 p-4">
+                  {renderHighlightedText(showDetail.text)}
+                </div>
+              )}
               <div className="flex items-center justify-between text-xs text-neutral-500">
                 <span className="flex items-center gap-2"><Tag size={12}/> {showDetail.collection}</span>
                 <button className="text-emerald-600 font-bold" onClick={() => { handleEdit(showDetail); setShowDetail(null); }}>Edit</button>
