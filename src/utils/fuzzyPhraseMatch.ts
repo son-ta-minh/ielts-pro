@@ -14,7 +14,8 @@ const STOPWORD_TOKENS = new Set([
 export const normalizeFuzzyText = (value: string) =>
   value
     .toLowerCase()
-    .replace(/\[[^\]]+\]/g, ' ')
+    .replace(/\[|\]|\{|\}/g, '')            // remove brackets but keep content
+    .replace(/-/g, ' ')                      // replace hyphens with spaces
     .replace(/[^\p{L}\p{N}\s']/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -38,7 +39,7 @@ export const normalizeFuzzyToken = (token: string) => {
 };
 
 export const tokenizeFuzzyText = (value: string) =>
-  normalizeFuzzyText(value)
+  normalizeFuzzyText(value)       // hyphens converted to spaces
     .split(' ')
     .map((token) => normalizeFuzzyToken(token))
     .filter(Boolean);
@@ -83,6 +84,27 @@ const getPhraseCharacterSimilarity = (left: string, right: string) => {
 
   const distance = getLevenshteinDistance(normalizedLeft, normalizedRight);
   return 1 - distance / Math.max(normalizedLeft.length, normalizedRight.length);
+};
+
+export const isSubsequenceMatch = (query: string, source: string, threshold = 0.8) => {
+  // normalize: lowercase, remove punctuation except spaces
+  const q = query.toLowerCase().replace(/[^\w\s]/g, '').trim();
+  const s = source.toLowerCase().replace(/[^\w\s]/g, '').trim();
+
+  if (!q || !s) return false;
+
+  let i = 0;
+  for (let j = 0; j < s.length && i < q.length; j++) {
+    if (q[i] === s[j]) {
+      i++;
+    }
+  }
+
+  const coverage = i / q.length;
+
+  console.log('[SubsequenceMatch]', { query, source, coverage, threshold, matched: i, total: q.length });
+
+  return coverage >= threshold;
 };
 
 type WindowMatchStats = {
@@ -148,6 +170,7 @@ const scoreTokenWindow = (queryTokens: string[], sourceTokens: string[]): Window
 const getBestWindowMatchStats = (query: string, source: string): WindowMatchStats => {
   const queryTokens = tokenizeFuzzyText(query);
   const sourceTokens = tokenizeFuzzyText(source);
+  console.log('[BestWindowMatch] Tokens:', { queryTokens, sourceTokens });
   if (queryTokens.length === 0 || sourceTokens.length === 0) {
     return { score: 0, matchedWeight: 0, matchedCount: 0, contentMatchedCount: 0, contentTokenCount: 0, coverage: 0, precision: 0 };
   }
@@ -189,17 +212,42 @@ export const getFuzzyPhraseScore = (query: string, source: string) => {
 };
 
 export const isFuzzyPhraseMatch = (query: string, source: string, threshold = 0.7) => {
+  // if (isSubsequenceMatch(query, source)) {
+  //   console.log('[FuzzyMatch] Subsequence early match:', { query, source });
+  //   return true;
+  // }
+
   const queryTokens = tokenizeFuzzyText(query);
-  if (queryTokens.length === 0) return false;
+  if (queryTokens.length === 0) {
+    console.log('[FuzzyMatch] No valid tokens in query:', { query, source });
+    return false;
+  }
 
   const bestStats = getBestWindowMatchStats(query, source);
   if (bestStats.contentTokenCount > 0) {
-    if (bestStats.contentMatchedCount < bestStats.contentTokenCount) return false;
+    const requiredContentMatches = Math.max(
+      1,
+      Math.floor(bestStats.contentTokenCount * 0.7)
+    );
+
+    if (bestStats.contentMatchedCount < requiredContentMatches) {
+      console.log('[FuzzyMatch] Content tokens not sufficiently matched:', {
+        query,
+        source,
+        bestStats,
+        requiredContentMatches
+      });
+      return false;
+    }
   } else {
     const requiredMatchCount = getRequiredMatchCount(queryTokens.length);
-    if (bestStats.matchedCount < requiredMatchCount) return false;
+    if (bestStats.matchedCount < requiredMatchCount) {
+      console.log('[FuzzyMatch] Required match count not met:', { query, source, bestStats, requiredMatchCount });
+      return false;
+    }
   }
 
   const finalScore = Math.max(bestStats.score, getPhraseCharacterSimilarity(query, source) * 0.88);
+  console.log('[FuzzyMatch] Final score:', { query, source, bestStats, finalScore, threshold });
   return finalScore >= threshold;
 };
