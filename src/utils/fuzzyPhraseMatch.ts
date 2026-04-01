@@ -1,117 +1,3 @@
-const IRREGULAR_LEMMA_MAP: Record<string, string> = {
-  am: 'be',
-  are: 'be',
-  is: 'be',
-  was: 'be',
-  were: 'be',
-  been: 'be',
-  being: 'be',
-  has: 'have',
-  had: 'have',
-  having: 'have',
-  does: 'do',
-  did: 'do',
-  done: 'do',
-  doing: 'do',
-  goes: 'go',
-  went: 'go',
-  gone: 'go',
-  going: 'go',
-  makes: 'make',
-  made: 'make',
-  making: 'make',
-  takes: 'take',
-  took: 'take',
-  taken: 'take',
-  taking: 'take',
-  comes: 'come',
-  came: 'come',
-  coming: 'come',
-  gets: 'get',
-  got: 'get',
-  gotten: 'get',
-  getting: 'get',
-  gives: 'give',
-  gave: 'give',
-  given: 'give',
-  giving: 'give',
-  sees: 'see',
-  saw: 'see',
-  seen: 'see',
-  seeing: 'see',
-  finds: 'find',
-  found: 'find',
-  finding: 'find',
-  thinks: 'think',
-  thought: 'think',
-  thinking: 'think',
-  tells: 'tell',
-  told: 'tell',
-  telling: 'tell',
-  feels: 'feel',
-  felt: 'feel',
-  feeling: 'feel',
-  leaves: 'leave',
-  left: 'leave',
-  leaving: 'leave',
-  means: 'mean',
-  meant: 'mean',
-  meaning: 'mean',
-  keeps: 'keep',
-  kept: 'keep',
-  keeping: 'keep',
-  begins: 'begin',
-  began: 'begin',
-  begun: 'begin',
-  beginning: 'begin',
-  writes: 'write',
-  wrote: 'write',
-  written: 'write',
-  writing: 'write',
-  speaks: 'speak',
-  spoke: 'speak',
-  spoken: 'speak',
-  speaking: 'speak',
-  runs: 'run',
-  ran: 'run',
-  running: 'run',
-  pays: 'pay',
-  paid: 'pay',
-  paying: 'pay',
-  meets: 'meet',
-  met: 'meet',
-  meeting: 'meet',
-  loses: 'lose',
-  lost: 'lose',
-  losing: 'lose',
-  grows: 'grow',
-  grew: 'grow',
-  grown: 'grow',
-  growing: 'grow',
-  sells: 'sell',
-  sold: 'sell',
-  selling: 'sell',
-  hears: 'hear',
-  heard: 'hear',
-  hearing: 'hear',
-  brings: 'bring',
-  brought: 'bring',
-  bringing: 'bring',
-  builds: 'build',
-  built: 'build',
-  building: 'build',
-  chooses: 'choose',
-  chose: 'choose',
-  chosen: 'choose',
-  choosing: 'choose',
-  becomes: 'become',
-  became: 'become',
-  becoming: 'become',
-  slips: 'slip',
-  slipped: 'slip',
-  slipping: 'slip'
-};
-
 const DEFAULT_TOKEN_MATCH_THRESHOLD = 0.72;
 const MIN_QUERY_TOKEN_COVERAGE = 0.8;
 const CONTENT_TOKEN_MATCH_THRESHOLD = 0.84;
@@ -119,7 +5,10 @@ const STOPWORD_TOKENS = new Set([
   'a', 'an', 'the', 'and', 'or', 'but', 'if', 'then', 'than', 'so',
   'of', 'in', 'on', 'at', 'by', 'for', 'to', 'from', 'with', 'about',
   'as', 'into', 'through', 'over', 'after', 'before', 'between', 'under',
-  'against', 'during', 'without', 'within', 'along', 'per'
+  'against', 'during', 'without', 'within', 'along', 'per', 'here', 'there',
+  'when', 'where', 'why', 'how', 'all', 'any', 'both', 'her', 'his', 'hers',
+  'its', 'they', 'them', 'their', 'what', 'which', 'who', 'whom', 'whose',
+  'my', 'your', 'our', 'us', 'me', 'he', 'she', 'it'
 ]);
 
 export const normalizeFuzzyText = (value: string) =>
@@ -134,9 +23,6 @@ export const normalizeFuzzyToken = (token: string) => {
   let stem = token.toLowerCase().trim();
   if (!stem) return '';
 
-  const irregular = IRREGULAR_LEMMA_MAP[stem];
-  if (irregular) return irregular;
-
   if (stem.length > 4 && stem.endsWith('ies')) return `${stem.slice(0, -3)}y`;
   if (stem.length > 5 && stem.endsWith('ing')) stem = stem.slice(0, -3);
   else if (stem.length > 4 && stem.endsWith('ied')) stem = `${stem.slice(0, -3)}y`;
@@ -148,7 +34,7 @@ export const normalizeFuzzyToken = (token: string) => {
     stem = stem.slice(0, -1);
   }
 
-  return IRREGULAR_LEMMA_MAP[stem] || stem;
+  return stem;
 };
 
 export const tokenizeFuzzyText = (value: string) =>
