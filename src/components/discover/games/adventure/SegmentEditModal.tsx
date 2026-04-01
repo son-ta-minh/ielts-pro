@@ -39,7 +39,7 @@ const WordListEditor: React.FC<{
                     let statusClass = 'bg-white border-neutral-200 text-neutral-800'; // Default: In library, to learn
                     if (!item) {
                         statusClass = 'bg-red-50 border-red-200 text-red-700'; // Not in library
-                    } else if (item.lastGrade === 'HARD') {
+                    } else if (item.learnedStatus === 'HARD') {
                         statusClass = 'bg-amber-50 border-amber-200 text-amber-700'; // Hard
                     } else if (item.consecutiveCorrect > 0) {
                         statusClass = 'bg-green-50 border-green-200 text-green-700'; // Learned

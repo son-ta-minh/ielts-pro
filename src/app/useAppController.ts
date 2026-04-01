@@ -949,7 +949,7 @@ export const useAppController = () => {
         const allWords = dataStore.getAllWords();
         const now = Date.now();
         const dueWords = allWords
-            .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality !== 'FAILED')
+            .filter(w => !w.isPassive && w.learnedStatus !== 'IGNORED' && w.lastReview && w.nextReview <= now && w.quality !== 'FAILED')
             .sort((a, b) => a.nextReview - b.nextReview)
             .slice(0, 30);
         
@@ -972,11 +972,11 @@ export const useAppController = () => {
                 if (w.isPassive) return false;
 
                 if (status === 'hard') {
-                    return w.lastGrade === 'HARD';
+                    return w.learnedStatus === 'HARD';
                 }
 
                 if (status === 'forgot') {
-                    return w.lastGrade === 'FORGOT';
+                    return w.learnedStatus === 'FORGOT';
                 }
 
                 return false;

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, PenLine, BookMarked, Image } from 'lucide-react';
-import { VocabularyItem, ReviewGrade, WordQuality, WordTypeOption, WordBook } from '../../app/types';
+import { VocabularyItem, LearnedStatus, WordQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
 import { WordRefineProgressSnapshot } from '../../services/wordRefineApi';
@@ -47,16 +47,18 @@ const VisibilityToggle = ({ label, checked, onChange, subItem }: { label: React.
 );
 
 const getStatusBadge = (item: VocabularyItem) => {
-  if (!item.lastReview) return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-100 whitespace-nowrap">New</span>;
+  if (!item.lastReview || item.learnedStatus === LearnedStatus.NEW) return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-100 whitespace-nowrap">New</span>;
   
-  switch (item.lastGrade) {
-    case ReviewGrade.FORGOT: 
+  switch (item.learnedStatus) {
+    case LearnedStatus.IGNORED:
+      return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-neutral-100 text-neutral-600 border border-neutral-200 whitespace-nowrap">Ignored</span>;
+    case LearnedStatus.FORGOT: 
       return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-rose-50 text-rose-600 border border-rose-100 whitespace-nowrap">Forgot</span>;
-    case ReviewGrade.LEARNED: 
+    case LearnedStatus.LEARNED: 
       return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-cyan-50 text-cyan-600 border border-cyan-100 whitespace-nowrap">Learned</span>;
-    case ReviewGrade.HARD: 
+    case LearnedStatus.HARD: 
       return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-orange-50 text-orange-600 border border-orange-100 whitespace-nowrap">Hard</span>;
-    case ReviewGrade.EASY: 
+    case LearnedStatus.EASY: 
       return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-green-50 text-green-600 border border-green-100 whitespace-nowrap">Easy</span>;
     default: 
       return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-neutral-50 text-neutral-400 border border-neutral-100 whitespace-nowrap">Studied</span>;

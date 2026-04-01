@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useReducer } from 'react';
-import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, PrepositionPattern, User } from '../../app/types';
-import { updateSRS, resetProgress, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
+import { VocabularyItem, WordFamilyMember, LearnedStatus, Unit, PrepositionPattern, User } from '../../app/types';
+import { applyLearnedStatus, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { getWordDetailsPrompt, getLearningSuggestionsPrompt } from '../../services/promptService';
 import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { EditWordModalUI } from './EditWordModal_UI';
@@ -12,7 +12,7 @@ import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 type FormState = VocabularyItem & {
     groupsString: string;
-    studiedStatus: ReviewGrade | 'NEW';
+    studiedStatus: LearnedStatus;
     prepositionsList: PrepositionPattern[];
     essayEdit?: string;
     testEdit?: string;
@@ -34,7 +34,7 @@ function formReducer(state: FormState, action: FormAction): FormState {
                 ...word,
                 register: word.register || 'raw',
                 groupsString: word.groups?.join(', ') || '',
-                studiedStatus: word.lastReview ? (word.lastGrade || 'NEW') : 'NEW',
+                studiedStatus: word.learnedStatus || LearnedStatus.NEW,
                 collocationsArray: word.collocationsArray || (word.collocations ? word.collocations.split('\n').map(t => ({text: t.trim(), isIgnored: false})) : []),
                 idiomsList: word.idiomsList || (word.idioms ? word.idioms.split('\n').map(t => ({text: t.trim(), isIgnored: false})) : []),
                 prepositionsList: word.prepositions || [],
@@ -216,14 +216,10 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
     }
     updatedWord.lastTestResults = finalResults;
 
-    const originalStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
+    const originalStatus = word.learnedStatus || LearnedStatus.NEW;
 
     if (studiedStatus !== originalStatus) {
-        if (studiedStatus === 'NEW') {
-            updatedWord = resetProgress(updatedWord);
-        } else {
-            updatedWord = updateSRS(updatedWord, studiedStatus as ReviewGrade);
-        }
+        updatedWord = applyLearnedStatus(updatedWord, studiedStatus);
     } else {
         updatedWord.complexity = calculateComplexity(updatedWord);
         updatedWord.masteryScore = calculateMasteryScore(updatedWord);

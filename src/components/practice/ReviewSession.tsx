@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
-import { updateSRS, calculateMasteryScore } from '../../utils/srs';
+import { VocabularyItem, ReviewGrade, SessionType, User, LearnedStatus } from '../../app/types';
+import { updateSRS, calculateMasteryScore, isSrsIgnored } from '../../utils/srs';
 import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { ReviewSessionUI } from './ReviewSession_UI';
 import { getStoredJSON } from '../../utils/storage';
@@ -42,16 +42,16 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         // Only remove words that are no longer 'New', keep order
         queue = queueIds
           .map(id => initialWords.find(w => w.id === id))
-          .filter(w => w && (!w.lastReview || w.lastGrade !== 'LEARNED')) as VocabularyItem[];
+          .filter(w => w && !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED)) as VocabularyItem[];
       } else {
         // Only create a new queue if none exists for today
-        const newWords = initialWords.filter(w => !w.lastReview || w.lastGrade !== 'LEARNED');
+        const newWords = initialWords.filter(w => !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED));
         queue = newWords.slice(0, 20);
       }
 
       // If queue is less than 20, append new 'New' words not already in queue
       const alreadyInQueue = new Set(queue.map(w => w.id));
-      const newWords = initialWords.filter(w => !w.lastReview || w.lastGrade !== 'LEARNED');
+      const newWords = initialWords.filter(w => !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED));
       for (const w of newWords) {
         if (queue.length >= 20) break;
         if (!alreadyInQueue.has(w.id)) queue.push(w);

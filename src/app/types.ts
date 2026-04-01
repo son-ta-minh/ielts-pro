@@ -7,6 +7,15 @@ export enum ReviewGrade {
   LEARNED = 'LEARNED',
 }
 
+export enum LearnedStatus {
+  IGNORED = 'IGNORED',
+  NEW = 'NEW',
+  FORGOT = 'FORGOT',
+  HARD = 'HARD',
+  EASY = 'EASY',
+  LEARNED = 'LEARNED',
+}
+
 export enum WordQuality {
   RAW = 'RAW',
   REFINED = 'REFINED',
@@ -251,7 +260,7 @@ export interface VocabularyItem {
   easeFactor: number; 
   consecutiveCorrect: number;
   lastReview?: number;
-  lastGrade?: ReviewGrade;
+  learnedStatus: LearnedStatus;
   lastReviewSessionType?: SessionType;
   forgotCount: number;
   complexity?: number;

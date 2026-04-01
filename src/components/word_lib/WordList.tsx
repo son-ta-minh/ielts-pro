@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
+import { VocabularyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import WordTable from './WordTable';
@@ -285,7 +285,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
                  consecutiveCorrect: 0,
                  forgotCount: 0,
                  lastReview: undefined,
-                 lastGrade: undefined,
+                 learnedStatus: LearnedStatus.NEW,
                  lastTestResults: {},
                  // Apply local flags on top
                  isIdiom: isIdiom || serverItem.isIdiom,

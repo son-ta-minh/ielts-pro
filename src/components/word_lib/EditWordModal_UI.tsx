@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Save, Sparkles, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, BookText, ClipboardList } from 'lucide-react';
-import { VocabularyItem, WordFamily, WordFamilyMember, ReviewGrade, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
+import { VocabularyItem, WordFamily, WordFamilyMember, LearnedStatus, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
 
 const StatusDropdown: React.FC<{
     label?: string;
@@ -204,11 +204,12 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
   ];
 
   const learnStatusOptions = [
-    { id: 'NEW', label: 'New', icon: <div className="w-3 h-3 rounded-full bg-blue-500"/> },
-    { id: ReviewGrade.LEARNED, label: 'Learned', icon: <div className="w-3 h-3 rounded-full bg-cyan-500"/> },
-    { id: ReviewGrade.FORGOT, label: 'Forgot', icon: <div className="w-3 h-3 rounded-full bg-rose-500"/> },
-    { id: ReviewGrade.HARD, label: 'Hard', icon: <div className="w-3 h-3 rounded-full bg-orange-500"/> },
-    { id: ReviewGrade.EASY, label: 'Easy', icon: <div className="w-3 h-3 rounded-full bg-green-500"/> },
+    { id: LearnedStatus.NEW, label: 'New', icon: <div className="w-3 h-3 rounded-full bg-blue-500"/> },
+    { id: LearnedStatus.IGNORED, label: 'Ignored', icon: <div className="w-3 h-3 rounded-full bg-neutral-500"/> },
+    { id: LearnedStatus.LEARNED, label: 'Learned', icon: <div className="w-3 h-3 rounded-full bg-cyan-500"/> },
+    { id: LearnedStatus.FORGOT, label: 'Forgot', icon: <div className="w-3 h-3 rounded-full bg-rose-500"/> },
+    { id: LearnedStatus.HARD, label: 'Hard', icon: <div className="w-3 h-3 rounded-full bg-orange-500"/> },
+    { id: LearnedStatus.EASY, label: 'Easy', icon: <div className="w-3 h-3 rounded-full bg-green-500"/> },
   ];
   
   const TONE_OPTIONS: ParaphraseTone[] = ['intensified', 'softened', 'synonym', 'academic', 'casual'];

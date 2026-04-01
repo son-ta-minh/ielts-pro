@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, ReviewGrade, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -638,11 +638,11 @@ export const filterItem = (
     }
 
     if (statusFilter !== 'all') {
-        const isNew = !item.lastReview;
-        const isLearned = !!item.lastReview && item.consecutiveCorrect === 1 && item.lastGrade !== ReviewGrade.FORGOT;
-        const isEasy = !!item.lastReview && item.consecutiveCorrect > 1 && item.lastGrade === ReviewGrade.EASY;
-        const isHard = !!item.lastReview && item.consecutiveCorrect > 1 && item.lastGrade === ReviewGrade.HARD;
-        const isForgot = !!item.lastReview && item.lastGrade === ReviewGrade.FORGOT;
+        const isNew = item.learnedStatus === LearnedStatus.NEW || !item.lastReview;
+        const isLearned = !!item.lastReview && item.consecutiveCorrect === 1 && item.learnedStatus !== LearnedStatus.FORGOT && item.learnedStatus !== LearnedStatus.IGNORED;
+        const isEasy = !!item.lastReview && item.consecutiveCorrect > 1 && item.learnedStatus === LearnedStatus.EASY;
+        const isHard = !!item.lastReview && item.consecutiveCorrect > 1 && item.learnedStatus === LearnedStatus.HARD;
+        const isForgot = !!item.lastReview && item.learnedStatus === LearnedStatus.FORGOT;
         if ((statusFilter === 'new' && !isNew) || (statusFilter === 'learned' && !isLearned) || (statusFilter === 'easy' && !isEasy) || (statusFilter === 'hard' && !isHard) || (statusFilter === 'forgot' && !isForgot)) return false;
     }
     if (registerFilter !== 'all' && (item.register || 'raw') !== registerFilter) return false;
@@ -685,9 +685,9 @@ export const getReviewCounts = async (): Promise<{ total: number, due: number, n
         const req = tx.objectStore(STORE_NAME).getAll();
         req.onsuccess = () => {
           const all = (req.result || []) as VocabularyItem[];
-          const active = all.filter(w => !w.isPassive);
-          const isDueWord = (w: VocabularyItem) => w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED;
-          const isNewWord = (w: VocabularyItem) => !w.lastReview && w.quality === WordQuality.VERIFIED;
+          const active = all.filter(w => !w.isPassive && w.learnedStatus !== LearnedStatus.IGNORED);
+          const isDueWord = (w: VocabularyItem) => w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED;
+          const isNewWord = (w: VocabularyItem) => !w.lastReview && w.quality === WordQuality.VERIFIED && w.learnedStatus !== LearnedStatus.IGNORED;
           resolve({ 
               total: active.length, 
               due: active.filter(isDueWord).length, 
@@ -711,7 +711,7 @@ export const getDueWords = async (limit: number = 30): Promise<VocabularyItem[]>
         req.onsuccess = () => {
           const allItems = (req.result || []) as VocabularyItem[];
           const dueWords = allItems
-            .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED)
+            .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED)
             .sort((a, b) => a.nextReview - b.nextReview)
             .slice(0, limit);
           resolve(dueWords);

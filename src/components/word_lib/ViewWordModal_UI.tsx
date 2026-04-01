@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
 import { LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image } from 'lucide-react';
-import { VocabularyItem, WordFamilyMember, ReviewGrade, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
-import { getRemainingTime, updateSRS, resetProgress } from '../../utils/srs';
+import { VocabularyItem, WordFamilyMember, LearnedStatus, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
+import { applyLearnedStatus, getRemainingTime } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { parseMarkdown } from '../../utils/markdownParser';
@@ -359,24 +359,20 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     };
 
     const learnStatusOptions = [
-        { id: 'NEW', label: 'New', icon: <div className="w-3 h-3 rounded-full bg-blue-500"/> },
-        { id: ReviewGrade.LEARNED, label: 'Learned', icon: <div className="w-3 h-3 rounded-full bg-cyan-500"/> },
-        { id: ReviewGrade.FORGOT, label: 'Forgot', icon: <div className="w-3 h-3 rounded-full bg-rose-500"/> },
-        { id: ReviewGrade.HARD, label: 'Hard', icon: <div className="w-3 h-3 rounded-full bg-orange-500"/> },
-        { id: ReviewGrade.EASY, label: 'Easy', icon: <div className="w-3 h-3 rounded-full bg-green-500"/> },
+        { id: LearnedStatus.NEW, label: 'New', icon: <div className="w-3 h-3 rounded-full bg-blue-500"/> },
+        { id: LearnedStatus.IGNORED, label: 'Ignored', icon: <div className="w-3 h-3 rounded-full bg-neutral-500"/> },
+        { id: LearnedStatus.LEARNED, label: 'Learned', icon: <div className="w-3 h-3 rounded-full bg-cyan-500"/> },
+        { id: LearnedStatus.FORGOT, label: 'Forgot', icon: <div className="w-3 h-3 rounded-full bg-rose-500"/> },
+        { id: LearnedStatus.HARD, label: 'Hard', icon: <div className="w-3 h-3 rounded-full bg-orange-500"/> },
+        { id: LearnedStatus.EASY, label: 'Easy', icon: <div className="w-3 h-3 rounded-full bg-green-500"/> },
     ];
     
-    const currentLearnStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
+    const currentLearnStatus = word.learnedStatus || LearnedStatus.NEW;
 
     const handleLearnStatusSelect = (statusId: string) => {
         if (isViewOnly) return;
-        if (statusId === 'NEW') {
-            const finalWord = resetProgress(word);
-            onUpdate(finalWord);
-        } else {
-            const finalWord = updateSRS(word, statusId as ReviewGrade);
-            onUpdate(finalWord);
-        }
+        const finalWord = applyLearnedStatus(word, statusId as LearnedStatus);
+        onUpdate(finalWord);
     };
 
     const qualityStatusOptions = [

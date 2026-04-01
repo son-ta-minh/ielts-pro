@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { VocabularyItem, ReviewGrade } from '../../app/types';
+import { VocabularyItem, ReviewGrade, LearnedStatus } from '../../app/types';
 import { TestModalUI } from './TestModal_UI';
 import { Challenge, ChallengeType, RecapData } from './TestModalTypes';
 import { generateAvailableChallenges, prepareChallenges } from '../../utils/challengeUtils';
@@ -543,7 +543,7 @@ const TestModal: React.FC<Props> = ({ word, onClose, onComplete, isQuickFire = f
            setTimeout(() => onComplete(finalGrade, resultHistory, stopSession, counts), 1000);
       } else {
           const oldMastery = word.masteryScore || 0;
-          const oldStatus = word.lastReview ? (word.lastGrade || 'NEW') : 'NEW';
+          const oldStatus = word.learnedStatus || LearnedStatus.NEW;
           const tempWord = { ...word, lastTestResults: mergeTestResultsByGroup(word.lastTestResults, resultHistory) };
           const newMastery = calculateMasteryScore(tempWord);
 

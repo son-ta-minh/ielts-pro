@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
+import { isSrsIgnored } from '../../utils/srs';
 import * as db from '../../app/db';
 import { DashboardUI, DashboardUIProps, StudyStats } from './Dashboard_UI';
 import { getConfig } from '../../app/settingsManager';
@@ -101,7 +102,7 @@ const Dashboard: React.FC<Props> = ({
           const words = dataStore.getAllWords().filter(w => w.userId === userId);
 
           // Vocab
-          const activeWords = words.filter(w => !w.isPassive);
+          const activeWords = words.filter(w => !w.isPassive && !isSrsIgnored(w));
           const newVocab = activeWords.filter(w => !w.lastReview && w.quality === 'VERIFIED').length;
           const dueVocab = activeWords.filter(w => w.lastReview && w.nextReview <= Date.now() && w.quality !== 'FAILED').length;
 

@@ -1,5 +1,6 @@
-import { ReviewGrade, VocabularyItem, WordQuality } from '../app/types';
+import { LearnedStatus, VocabularyItem, WordQuality } from '../app/types';
 import * as dataStore from '../app/dataStore';
+import { isSrsIgnored } from './srs';
 
 const DEFAULT_LIMIT = 12;
 const SEARCH_MAX_RESULTS = 8;
@@ -10,7 +11,7 @@ export interface StudyWordContext {
   meaningVi: string;
   example: string;
   note: string;
-  lastGrade?: ReviewGrade;
+  learnedStatus: LearnedStatus;
   forgotCount: number;
   consecutiveCorrect: number;
   masteryScore: number;
@@ -147,7 +148,7 @@ const normalizeWordContext = (word: VocabularyItem): StudyWordContext => ({
   meaningVi: word.meaningVi || '',
   example: word.example || '',
   note: word.note || '',
-  lastGrade: word.lastGrade,
+  learnedStatus: word.learnedStatus,
   forgotCount: word.forgotCount || 0,
   consecutiveCorrect: word.consecutiveCorrect || 0,
   masteryScore: word.masteryScore ?? 0,
@@ -164,7 +165,7 @@ const getActiveWordsForCurrentUser = (): VocabularyItem[] => {
 
   return dataStore
     .getAllWords()
-    .filter((word) => word.userId === userId && !word.isPassive && word.quality !== WordQuality.FAILED);
+    .filter((word) => word.userId === userId && !word.isPassive && word.quality !== WordQuality.FAILED && !isSrsIgnored(word));
 };
 
 const sortByRecentLearned = (words: VocabularyItem[]) =>
@@ -179,7 +180,7 @@ const sortByForgotSeverity = (words: VocabularyItem[]) =>
     const forgotDiff = (b.forgotCount || 0) - (a.forgotCount || 0);
     if (forgotDiff !== 0) return forgotDiff;
 
-    const gradeWeight = (item: VocabularyItem) => item.lastGrade === ReviewGrade.FORGOT ? 2 : item.lastGrade === ReviewGrade.HARD ? 1 : 0;
+    const gradeWeight = (item: VocabularyItem) => item.learnedStatus === LearnedStatus.FORGOT ? 2 : item.learnedStatus === LearnedStatus.HARD ? 1 : 0;
     const gradeDiff = gradeWeight(b) - gradeWeight(a);
     if (gradeDiff !== 0) return gradeDiff;
 
@@ -189,15 +190,15 @@ const sortByForgotSeverity = (words: VocabularyItem[]) =>
 const sortByHardness = (words: VocabularyItem[]) =>
   [...words].sort((a, b) => {
     const aScore = [
-      a.lastGrade === ReviewGrade.HARD ? 3 : 0,
-      a.lastGrade === ReviewGrade.FORGOT ? 2 : 0,
+      a.learnedStatus === LearnedStatus.HARD ? 3 : 0,
+      a.learnedStatus === LearnedStatus.FORGOT ? 2 : 0,
       a.isFocus ? 1 : 0,
       -(a.masteryScore ?? 0),
       a.forgotCount || 0,
     ];
     const bScore = [
-      b.lastGrade === ReviewGrade.HARD ? 3 : 0,
-      b.lastGrade === ReviewGrade.FORGOT ? 2 : 0,
+      b.learnedStatus === LearnedStatus.HARD ? 3 : 0,
+      b.learnedStatus === LearnedStatus.FORGOT ? 2 : 0,
       b.isFocus ? 1 : 0,
       -(b.masteryScore ?? 0),
       b.forgotCount || 0,
@@ -216,19 +217,19 @@ export const getStudyContextSnapshot = (): StudyContextSnapshot => {
   const now = Date.now();
 
   const recentlyLearnedWords = sortByRecentLearned(
-    words.filter((word) => word.lastGrade === ReviewGrade.LEARNED || (!word.lastGrade && !!word.lastReview))
+    words.filter((word) => word.learnedStatus === LearnedStatus.LEARNED || (word.learnedStatus === LearnedStatus.NEW && !!word.lastReview))
   )
     .slice(0, DEFAULT_LIMIT)
     .map(normalizeWordContext);
 
   const mostForgottenWords = sortByForgotSeverity(
-    words.filter((word) => (word.forgotCount || 0) > 0 || word.lastGrade === ReviewGrade.FORGOT)
+    words.filter((word) => (word.forgotCount || 0) > 0 || word.learnedStatus === LearnedStatus.FORGOT)
   )
     .slice(0, DEFAULT_LIMIT)
     .map(normalizeWordContext);
 
   const hardestWords = sortByHardness(
-    words.filter((word) => word.lastGrade === ReviewGrade.HARD || word.lastGrade === ReviewGrade.FORGOT || (word.masteryScore ?? 0) < 45)
+    words.filter((word) => word.learnedStatus === LearnedStatus.HARD || word.learnedStatus === LearnedStatus.FORGOT || (word.masteryScore ?? 0) < 45)
   )
     .slice(0, DEFAULT_LIMIT)
     .map(normalizeWordContext);
@@ -246,8 +247,8 @@ export const getStudyContextSnapshot = (): StudyContextSnapshot => {
       newWords: words.filter((word) => !word.lastReview).length,
       dueWords: words.filter((word) => !!word.lastReview && word.nextReview <= now).length,
       focusWords: words.filter((word) => !!word.isFocus).length,
-      hardWords: words.filter((word) => word.lastGrade === ReviewGrade.HARD).length,
-      forgotWords: words.filter((word) => word.lastGrade === ReviewGrade.FORGOT).length,
+      hardWords: words.filter((word) => word.learnedStatus === LearnedStatus.HARD).length,
+      forgotWords: words.filter((word) => word.learnedStatus === LearnedStatus.FORGOT).length,
     },
     recentlyLearnedWords,
     mostForgottenWords,
@@ -415,7 +416,7 @@ export const getAiStudyContextText = (): string => {
     return [
       `${title}:`,
       ...words.map((word, index) =>
-        `${index + 1}. ${word.word} | vi: ${word.meaningVi || '-'} | forgot=${word.forgotCount} | mastery=${word.masteryScore} | lastGrade=${word.lastGrade || 'N/A'}${word.isFocus ? ' | FOCUS' : ''}`
+        `${index + 1}. ${word.word} | vi: ${word.meaningVi || '-'} | forgot=${word.forgotCount} | mastery=${word.masteryScore} | learnedStatus=${word.learnedStatus || 'N/A'}${word.isFocus ? ' | FOCUS' : ''}`
       ),
     ].join('\n');
   };

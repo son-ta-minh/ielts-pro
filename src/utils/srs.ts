@@ -1,4 +1,4 @@
-import { VocabularyItem, ReviewGrade, WordQuality, WordSource, WordFamily } from '../app/types';
+import { VocabularyItem, ReviewGrade, WordQuality, WordSource, WordFamily, LearnedStatus } from '../app/types';
 import { ChallengeType } from '../components/practice/TestModalTypes';
 import { generateAvailableChallenges } from './challengeUtils';
 import { calculateGameEligibility } from './gameEligibility';
@@ -64,7 +64,7 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
       newItem.forgotCount += 1;
     } else if (grade === ReviewGrade.HARD) {
       // Hard: Standard penalty logic, no overdue bonus
-      if (item.lastGrade === ReviewGrade.EASY) {
+      if (item.learnedStatus === LearnedStatus.EASY) {
         nextInterval = Math.max(1, Math.floor(currentInterval * config.easyHardPenalty));
       } else {
         nextInterval = currentInterval === 0 ? config.initialHard : Math.max(1, Math.floor(currentInterval * config.hardHard));
@@ -82,7 +82,7 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
           baseIntervalForCalc = Math.max(currentInterval, elapsedDays);
       }
 
-      if (item.lastGrade === ReviewGrade.HARD) {
+      if (item.learnedStatus === LearnedStatus.HARD) {
         nextInterval = currentInterval === 0 ? config.initialEasy : Math.max(config.initialEasy, Math.floor(baseIntervalForCalc * config.hardEasy));
       } else {
         nextInterval = currentInterval === 0 ? config.initialEasy : Math.max(config.initialEasy, Math.floor(baseIntervalForCalc * config.easyEasy));
@@ -96,7 +96,7 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
     }
   }
 
-  newItem.lastGrade = grade;
+  newItem.learnedStatus = mapReviewGradeToLearnedStatus(grade);
   newItem.lastReview = now;
   newItem.updatedAt = now; 
   
@@ -117,7 +117,7 @@ export function resetProgress(item: VocabularyItem): VocabularyItem {
         easeFactor: 2.5,
         consecutiveCorrect: 0,
         forgotCount: 0,
-        lastGrade: undefined,
+        learnedStatus: LearnedStatus.NEW,
         lastReview: undefined,
         updatedAt: now,
         lastXpEarnedTime: undefined,
@@ -131,7 +131,51 @@ export function resetProgress(item: VocabularyItem): VocabularyItem {
 }
 
 export function isDue(item: VocabularyItem): boolean {
-  return item.nextReview <= Date.now();
+  return item.learnedStatus !== LearnedStatus.IGNORED && item.nextReview <= Date.now();
+}
+
+export function mapReviewGradeToLearnedStatus(grade: ReviewGrade): LearnedStatus {
+  switch (grade) {
+    case ReviewGrade.FORGOT:
+      return LearnedStatus.FORGOT;
+    case ReviewGrade.HARD:
+      return LearnedStatus.HARD;
+    case ReviewGrade.EASY:
+      return LearnedStatus.EASY;
+    case ReviewGrade.LEARNED:
+    default:
+      return LearnedStatus.LEARNED;
+  }
+}
+
+export function deriveLearnedStatus(item: Pick<VocabularyItem, 'learnedStatus' | 'lastReview'>): LearnedStatus {
+  if (item.learnedStatus) return item.learnedStatus;
+  return item.lastReview ? LearnedStatus.LEARNED : LearnedStatus.NEW;
+}
+
+export function isSrsIgnored(item: Pick<VocabularyItem, 'learnedStatus'>): boolean {
+  return item.learnedStatus === LearnedStatus.IGNORED;
+}
+
+export function applyLearnedStatus(item: VocabularyItem, status: LearnedStatus): VocabularyItem {
+  if (status === LearnedStatus.NEW) {
+    return resetProgress(item);
+  }
+
+  if (status === LearnedStatus.IGNORED) {
+    const now = Date.now();
+    const updatedItem: VocabularyItem = {
+      ...item,
+      learnedStatus: LearnedStatus.IGNORED,
+      updatedAt: now
+    };
+    updatedItem.complexity = calculateComplexity(updatedItem);
+    updatedItem.masteryScore = calculateMasteryScore(updatedItem);
+    updatedItem.gameEligibility = calculateGameEligibility(updatedItem);
+    return updatedItem;
+  }
+
+  return updateSRS(item, status as ReviewGrade);
 }
 
 export function getRemainingTime(nextReview: number): { label: string; urgency: 'due' | 'soon' | 'later' } {
@@ -231,6 +275,7 @@ export async function createNewWord(
     isFocus: false,
     register: 'raw', quality: WordQuality.RAW, source, isExampleLocked: false,
     createdAt: now, updatedAt: now, nextReview: now, interval: 0, easeFactor: 2.5, consecutiveCorrect: 0, forgotCount: 0,
+    learnedStatus: LearnedStatus.NEW,
     lastTestResults: {}
   };
   newItem.complexity = calculateComplexity(newItem);

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Plus, Image as ImageIcon, Tag, X, Search, Trash2 } from 'lucide-react';
-import { User, ReviewGrade } from '../../app/types';
+import { User, LearnedStatus } from '../../app/types';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import ConfirmationModal from '../common/ConfirmationModal';
 import * as dataStore from '../../app/dataStore';
@@ -120,11 +120,11 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
     const entry = wordMap.get(word.toLowerCase());
     if (!entry) return 'missing';
     if (!entry.lastReview) return 'new';
-    switch (entry.lastGrade) {
-      case ReviewGrade.LEARNED: return 'learned';
-      case ReviewGrade.FORGOT: return 'forgot';
-      case ReviewGrade.HARD: return 'hard';
-      case ReviewGrade.EASY: return 'easy';
+    switch (entry.learnedStatus) {
+      case LearnedStatus.LEARNED: return 'learned';
+      case LearnedStatus.FORGOT: return 'forgot';
+      case LearnedStatus.HARD: return 'hard';
+      case LearnedStatus.EASY: return 'easy';
       default: return 'new';
     }
   };

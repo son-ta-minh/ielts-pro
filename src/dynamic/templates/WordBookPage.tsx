@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { User, WordBook, WordBookItem, VocabularyItem, FocusColor, WordQuality, Unit, ReviewGrade } from '../../app/types';
+import { User, WordBook, WordBookItem, VocabularyItem, FocusColor, WordQuality, Unit, LearnedStatus } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
@@ -39,7 +39,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
     const searchRef = useRef<HTMLDivElement>(null);
 
     const [filterColor, setFilterColor] = useState<FocusColor | 'none' | 'all'>('all');
-    const [filterStatus, setFilterStatus] = useState<ReviewGrade | 'NEW' | 'all'>('all');
+    const [filterStatus, setFilterStatus] = useState<LearnedStatus | 'all'>('all');
     const [filterQuality, setFilterQuality] = useState<WordQuality | 'all'>('all');
 
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -86,12 +86,13 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
     // Logic to derive status badge info
     const getStatusInfo = (word: VocabularyItem | null): { text: string; classes: string } | null => {
         if (!word) return null;
-        if (!word.lastReview) return { text: 'New', classes: 'bg-blue-50 text-blue-700 border-blue-100' };
-        switch (word.lastGrade) {
-          case 'FORGOT': return { text: 'Forgot', classes: 'bg-rose-50 text-rose-700 border-rose-100' };
-          case 'HARD': return { text: 'Hard', classes: 'bg-orange-50 text-orange-700 border-orange-100' };
-          case 'EASY': return { text: 'Easy', classes: 'bg-green-50 text-green-700 border-green-100' };
-          case 'LEARNED': return { text: 'Learned', classes: 'bg-cyan-50 text-cyan-700 border-cyan-100' };
+        if (!word.lastReview || word.learnedStatus === LearnedStatus.NEW) return { text: 'New', classes: 'bg-blue-50 text-blue-700 border-blue-100' };
+        switch (word.learnedStatus) {
+          case LearnedStatus.IGNORED: return { text: 'Ignored', classes: 'bg-neutral-100 text-neutral-700 border-neutral-200' };
+          case LearnedStatus.FORGOT: return { text: 'Forgot', classes: 'bg-rose-50 text-rose-700 border-rose-100' };
+          case LearnedStatus.HARD: return { text: 'Hard', classes: 'bg-orange-50 text-orange-700 border-orange-100' };
+          case LearnedStatus.EASY: return { text: 'Easy', classes: 'bg-green-50 text-green-700 border-green-100' };
+          case LearnedStatus.LEARNED: return { text: 'Learned', classes: 'bg-cyan-50 text-cyan-700 border-cyan-100' };
           default: return { text: 'Studied', classes: 'bg-neutral-50 text-neutral-500 border-neutral-100' };
         }
     };
@@ -461,7 +462,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
             // Filter by Status (Requires Library Match)
             if (filterStatus !== 'all') {
                 const statusInfo = getStatusInfo(libraryWord || null);
-                const derivedStatus = statusInfo?.text.toUpperCase(); // NEW, LEARNED, HARD, EASY, FORGOT
+                const derivedStatus = statusInfo?.text.toUpperCase(); // NEW, IGNORED, LEARNED, HARD, EASY, FORGOT
                 if (derivedStatus !== filterStatus) return false;
             }
 
@@ -530,6 +531,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
                                 >
                                     <option value="all">Any Status</option>
                                     <option value="NEW">New</option>
+                                    <option value="IGNORED">Ignored</option>
                                     <option value="LEARNED">Learned</option>
                                     <option value="EASY">Easy</option>
                                     <option value="HARD">Hard</option>

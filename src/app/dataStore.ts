@@ -1,7 +1,7 @@
-import { VocabularyItem, User, Unit, WordQuality, ReviewGrade, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup } from './types';
+import { VocabularyItem, User, Unit, WordQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
-import { calculateMasteryScore, calculateComplexity } from '../utils/srs';
+import { calculateMasteryScore, calculateComplexity, isSrsIgnored } from '../utils/srs';
 import { calculateGameEligibility } from '../utils/gameEligibility';
 import { performAutoBackup } from '../services/backupService';
 import { getConfig } from './settingsManager';
@@ -98,7 +98,7 @@ function _triggerBackup() {
 function _recalculateStats(userId: string) {
     const now = Date.now();
     const wordsArray = Array.from(_allWords.values());
-    const activeWords = wordsArray.filter(w => !w.isPassive && w.userId === userId);
+    const activeWords = wordsArray.filter(w => !w.isPassive && w.userId === userId && !isSrsIgnored(w));
 
     const total = activeWords.length;
     
@@ -110,10 +110,10 @@ function _recalculateStats(userId: string) {
     const learningWords = activeWords.filter(w => !!w.lastReview && w.interval <= 21);
     const calculatedLearningCount = learningWords.length;
 
-    const statusForgot = learningWords.filter(w => w.lastGrade === ReviewGrade.FORGOT).length;
-    const statusHard = learningWords.filter(w => w.lastGrade === ReviewGrade.HARD).length;
-    const statusEasy = learningWords.filter(w => w.lastGrade === ReviewGrade.EASY).length;
-    const statusLearned = learningWords.filter(w => w.lastGrade === ReviewGrade.LEARNED).length;
+    const statusForgot = learningWords.filter(w => w.learnedStatus === LearnedStatus.FORGOT).length;
+    const statusHard = learningWords.filter(w => w.learnedStatus === LearnedStatus.HARD).length;
+    const statusEasy = learningWords.filter(w => w.learnedStatus === LearnedStatus.EASY).length;
+    const statusLearned = learningWords.filter(w => w.learnedStatus === LearnedStatus.LEARNED).length;
 
     const refinedCount = activeWords.filter(w => w.quality === WordQuality.REFINED).length;
     const rawCount = activeWords.filter(w => w.quality === WordQuality.RAW).length;
@@ -141,7 +141,7 @@ function _recalculateStats(userId: string) {
 
     activeWords.forEach(w => {
         if (w.lastReview && w.lastReview >= todayTimestamp && w.lastReviewSessionType !== 'boss_battle') {
-            if (w.lastGrade === ReviewGrade.LEARNED) {
+            if (w.learnedStatus === LearnedStatus.LEARNED) {
                 todayLearnedWords.push(w);
             } else {
                 todayReviewedWords.push(w);
@@ -275,6 +275,15 @@ export async function init(userId: string) {
             // REMOVAL: needsPronunciationFocus
             if ((word as any).needsPronunciationFocus !== undefined) {
                 delete (word as any).needsPronunciationFocus;
+                changed = true;
+            }
+            const legacyLastGrade = (word as any).lastGrade;
+            if (!word.learnedStatus) {
+                word.learnedStatus = legacyLastGrade || (word.lastReview ? LearnedStatus.LEARNED : LearnedStatus.NEW);
+                changed = true;
+            }
+            if (legacyLastGrade !== undefined) {
+                delete (word as any).lastGrade;
                 changed = true;
             }
 
