@@ -1,6 +1,6 @@
 const DEFAULT_TOKEN_MATCH_THRESHOLD = 0.72;
 const MIN_QUERY_TOKEN_COVERAGE = 0.8;
-const CONTENT_TOKEN_MATCH_THRESHOLD = 0.84;
+const CONTENT_TOKEN_MATCH_THRESHOLD = 0.75;
 const STOPWORD_TOKENS = new Set([
   'a', 'an', 'the', 'and', 'or', 'but', 'if', 'then', 'than', 'so',
   'of', 'in', 'on', 'at', 'by', 'for', 'to', 'from', 'with', 'about',
@@ -73,7 +73,9 @@ const getTokenSimilarity = (left: string, right: string) => {
   const maxLength = Math.max(left.length, right.length);
   if (maxLength === 0) return 1;
   const distance = getLevenshteinDistance(left, right);
-  return 1 - distance / maxLength;
+  const similarity = 1 - distance / maxLength;
+
+  return similarity;
 };
 
 const getPhraseCharacterSimilarity = (left: string, right: string) => {

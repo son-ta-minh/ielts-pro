@@ -982,17 +982,17 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="w-full space-y-2 text-sm leading-relaxed text-neutral-700">
-                                            {exampleSentences.map((sentence, index) => {
-                                                const isHighlighted = activeExampleHighlight ? doesExampleContain(activeExampleHighlight, sentence) : false;
-                                                return (
-                                                    <div
-                                                        key={`${sentence}-${index}`}
-                                                        className={isHighlighted ? 'rounded-xl border border-sky-200 bg-sky-50 px-3 py-2' : undefined}
-                                                        dangerouslySetInnerHTML={renderExample(sentence)}
-                                                    />
-                                                );
-                                            })}
+                                        <div className="w-full text-sm leading-snug text-neutral-700">
+                                        {exampleSentences.map((sentence, index) => {
+                                            const isHighlighted = activeExampleHighlight ? doesExampleContain(activeExampleHighlight, sentence) : false;
+                                            return (
+                                                <div
+                                                    key={`${sentence}-${index}`}
+                                                    className={`inline-block mb-1 px-3 py-0.5 box-border border rounded-xl ${isHighlighted ? 'border-sky-200 bg-sky-50' : 'border-transparent bg-transparent'}`}
+                                                    dangerouslySetInnerHTML={renderExample(sentence)}
+                                                />
+                                            );
+                                        })}
                                         </div>
                                     </div>
                                 )}
