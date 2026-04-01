@@ -2,10 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Search, FileText, Hash, Archive } from 'lucide-react';
 import { User, VocabularyItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
+import { getStoredJSON, setStoredJSON } from '../../utils/storage';
+import { getFuzzyPhraseScore, isFuzzyPhraseMatch } from '../../utils/fuzzyPhraseMatch';
 
 interface Props {
   user: User;
   onViewWord: (word: VocabularyItem) => void;
+  isModal?: boolean;
+  onClose?: () => void;
+  initialQuery?: string;
 }
 
 interface SearchHit {
@@ -13,8 +18,12 @@ interface SearchHit {
   value: string;
 }
 
+type SearchMode = 'fast' | 'deep';
+
 const MAX_RESULTS = 200;
 const MAX_HITS_PER_WORD = 6;
+const DEEP_MATCH_THRESHOLD = 0.7;
+const SEARCH_PREFERENCES_KEY = 'ielts_pro_search_preferences_v1';
 
 const collectTextNodes = (value: unknown, path: string, output: SearchHit[]) => {
   if (typeof value === 'string') {
@@ -135,10 +144,16 @@ const getFriendlyPathLabel = (path: string) => {
   return 'Text';
 };
 
-export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
+export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false, onClose, initialQuery = '' }) => {
+  const persistedPreferences = useMemo(
+    () => getStoredJSON(SEARCH_PREFERENCES_KEY, { includeArchive: false, searchMode: 'fast' as SearchMode, exampleOnly: false }),
+    []
+  );
   const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
-  const [query, setQuery] = useState('');
-  const [includeArchive, setIncludeArchive] = useState(false);
+  const [query, setQuery] = useState(initialQuery);
+  const [includeArchive, setIncludeArchive] = useState(Boolean(persistedPreferences.includeArchive));
+  const [searchMode, setSearchMode] = useState<SearchMode>(persistedPreferences.searchMode === 'deep' ? 'deep' : 'fast');
+  const [exampleOnly, setExampleOnly] = useState(Boolean(persistedPreferences.exampleOnly));
 
   useEffect(() => {
     const refresh = () => {
@@ -151,6 +166,14 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
     return () => window.removeEventListener('datastore-updated', refresh);
   }, [user.id]);
 
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
+
+  useEffect(() => {
+    setStoredJSON(SEARCH_PREFERENCES_KEY, { includeArchive, searchMode, exampleOnly });
+  }, [includeArchive, searchMode, exampleOnly]);
+
   const normalizedQuery = query.trim().toLowerCase();
 
   const results = useMemo(() => {
@@ -161,56 +184,110 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
       .map(word => {
         const entries: SearchHit[] = [];
         collectTextNodes(word, '', entries);
-        const hits = entries.filter(entry => {
+        const hits = entries
+          .map(entry => {
           const pathLower = entry.path.toLowerCase();
 
           // skip headword itself (already shown as the title)
           if (pathLower === 'word') {
-            return false;
+            return null;
           }
 
           // ignore raw collocations
           if (pathLower === 'collocations' || pathLower.startsWith('collocations.')) {
-            return false;
+            return null;
           }
 
           // ignore lesson content
           if (pathLower.startsWith('lesson')) {
-            return false;
+            return null;
           }
 
-          return entry.value.toLowerCase().includes(normalizedQuery);
-        });
+          if (exampleOnly && !pathLower.startsWith('example')) {
+            return null;
+          }
+
+          if (searchMode === 'fast') {
+            return entry.value.toLowerCase().includes(normalizedQuery)
+              ? { ...entry, matchScore: 1 }
+              : null;
+          }
+
+          const matchScore = getFuzzyPhraseScore(normalizedQuery, entry.value);
+          return isFuzzyPhraseMatch(normalizedQuery, entry.value, DEEP_MATCH_THRESHOLD)
+            ? { ...entry, matchScore }
+            : null;
+        })
+          .filter((entry): entry is SearchHit & { matchScore: number } => entry !== null)
+          .sort((a, b) => b.matchScore - a.matchScore);
 
         if (hits.length === 0) return null;
 
-        const wordStarts = word.word.toLowerCase().startsWith(normalizedQuery) ? 10 : 0;
-        const wordContains = word.word.toLowerCase().includes(normalizedQuery) ? 5 : 0;
-        const score = wordStarts + wordContains + hits.length;
+        const exactWordStarts = word.word.toLowerCase().startsWith(normalizedQuery) ? 10 : 0;
+        const exactWordContains = word.word.toLowerCase().includes(normalizedQuery) ? 5 : 0;
+        const deepWordScore = searchMode === 'deep' ? getFuzzyPhraseScore(normalizedQuery, word.word) * 10 : 0;
+        const score = exactWordStarts + exactWordContains + deepWordScore + hits.reduce((sum, hit) => sum + hit.matchScore, 0);
         return { word, hits: hits.slice(0, MAX_HITS_PER_WORD), score };
       })
       .filter((item): item is { word: VocabularyItem; hits: SearchHit[]; score: number } => item !== null)
       .sort((a, b) => b.score - a.score || b.word.updatedAt - a.word.updatedAt)
       .slice(0, MAX_RESULTS);
-  }, [allWords, includeArchive, normalizedQuery]);
+  }, [allWords, includeArchive, normalizedQuery, searchMode, exampleOnly]);
 
-  return (
+  const content = (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="bg-white border border-neutral-200 rounded-3xl p-6 md:p-8 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-neutral-900">Global Search</h1>
             <p className="text-sm text-neutral-500 mt-1">Search across word, meaning, example, collocation context, paraphrase, context, and all text fields.</p>
           </div>
-          <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
-            <input
-              type="checkbox"
-              checked={includeArchive}
-              onChange={(e) => setIncludeArchive(e.target.checked)}
-              className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-700"
-            />
-            Include archive
-          </label>
+          <div className="flex flex-col gap-2">
+            {isModal && onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="self-end rounded-xl border border-neutral-200 px-3 py-2 text-xs font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+              >
+                Close
+              </button>
+            ) : null}
+            <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
+              <input
+                type="checkbox"
+                checked={includeArchive}
+                onChange={(e) => setIncludeArchive(e.target.checked)}
+                className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-700"
+              />
+              Include archive
+            </label>
+            <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
+              <input
+                type="checkbox"
+                checked={exampleOnly}
+                onChange={(e) => setExampleOnly(e.target.checked)}
+                className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-700"
+              />
+              Example Only
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-4 inline-flex rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
+          <button
+            type="button"
+            onClick={() => setSearchMode('fast')}
+            className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${searchMode === 'fast' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+          >
+            Fast Search
+          </button>
+          <button
+            type="button"
+            onClick={() => setSearchMode('deep')}
+            className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${searchMode === 'deep' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+          >
+            Deep Search
+          </button>
         </div>
 
         <div className="relative mt-5">
@@ -237,7 +314,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
         {normalizedQuery && (
           <div className="space-y-4">
             <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider">
-              {results.length} result{results.length === 1 ? '' : 's'} for "{normalizedQuery}"
+              {results.length} result{results.length === 1 ? '' : 's'} for "{normalizedQuery}" · {searchMode === 'fast' ? 'Fast Search' : 'Deep Search'}{exampleOnly ? ' · Example Only' : ''}
             </p>
 
             {results.length === 0 && (
@@ -278,6 +355,16 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord }) => {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+
+  if (!isModal) return content;
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-[2rem]" onClick={(e) => e.stopPropagation()}>
+        {content}
       </div>
     </div>
   );

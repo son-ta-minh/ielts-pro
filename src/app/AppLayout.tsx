@@ -197,6 +197,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
   const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, selectedArchiveUser, archiveCandidates, isArchiveLoading, restoreFromServerAction, handleOpenArchivePicker, handleCloseArchivePicker, handleCreateArchiveForUser, handleRestoreFromArchive, handleDeleteArchive, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore, sslIssueUrl, setSslIssueUrl, retrySslConnection } = controller;
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
+  const [searchModalState, setSearchModalState] = useState<{ isOpen: boolean; initialQuery: string }>({ isOpen: false, initialQuery: '' });
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
   const [writingConfirmModal, setWritingConfirmModal] = useState<{ isOpen: boolean; targetView: AppView | null; action?: () => void }>({
     isOpen: false,
@@ -240,7 +241,21 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
           <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden fixed top-4 left-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md z-30"><Menu size={24} /></button>
           <Suspense fallback={<div className="flex justify-center p-20"><Loader2 className="animate-spin text-neutral-300" size={32} /></div>}><MainContent controller={controller} /></Suspense>
         </main>
-        {currentUser && <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={controller.handleSpecialAction} onViewWord={setGlobalViewWord} isAnyModalOpen={!!globalViewWord || !!editingWord} />}
+        {currentUser && <StudyBuddy user={currentUser} stats={stats} currentView={view} lastBackupTime={lastBackupTime} onNavigate={controller.handleSpecialAction} onViewWord={setGlobalViewWord} isAnyModalOpen={!!globalViewWord || !!editingWord || searchModalState.isOpen} onOpenSearchModal={(initialQuery) => setSearchModalState({ isOpen: true, initialQuery: initialQuery || '' })} />}
+        {currentUser && searchModalState.isOpen && (
+          <Suspense fallback={<div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50"><Loader2 className="animate-spin text-white" size={32} /></div>}>
+            <SearchPage
+              user={currentUser}
+              isModal
+              initialQuery={searchModalState.initialQuery}
+              onClose={() => setSearchModalState({ isOpen: false, initialQuery: '' })}
+              onViewWord={(word) => {
+                setSearchModalState({ isOpen: false, initialQuery: '' });
+                setGlobalViewWord(word);
+              }}
+            />
+          </Suspense>
+        )}
         {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onOpenWordFamilyGroup={(groupId) => { sessionStorage.setItem('vocab_pro_word_family_target_group_id', groupId); setGlobalViewWord(null); setView('WORD_FAMILY'); }} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
         {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
         <ConfirmationModal isOpen={endSessionModal.isOpen} title="End Current Session?" message="Navigating away will end your current study session. Are you sure you want to continue?" confirmText="End Session" isProcessing={false} onConfirm={confirmEndSession} onClose={cancelEndSession} icon={<AlertTriangle size={40} className="text-orange-50" />} confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" />

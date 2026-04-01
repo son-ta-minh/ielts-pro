@@ -7,6 +7,7 @@ import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
+import { isFuzzyPhraseMatch } from '../../utils/fuzzyPhraseMatch';
 
 // --- Visual Components ---
 
@@ -329,87 +330,11 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
     const toggleGroupExpansion = (group: string) => { setExpandedGroups(prev => { const next = new Set(prev); if (next.has(group)) next.delete(group); else next.add(group); return next; }); };
 
-    const EXAMPLE_MATCH_THRESHOLD = 0.7;
-
-    const normalizeExampleSearch = (value: string) =>
-        value
-            .toLowerCase()
-            .replace(/\[[^\]]+\]/g, ' ')
-            .replace(/[^\p{L}\p{N}\s']/gu, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-    const stemExampleToken = (token: string) => {
-        let stem = token.toLowerCase();
-
-        if (stem.length > 4 && stem.endsWith('ies')) {
-            return `${stem.slice(0, -3)}y`;
-        }
-        if (stem.length > 5 && stem.endsWith('ing')) {
-            stem = stem.slice(0, -3);
-        } else if (stem.length > 4 && stem.endsWith('ed')) {
-            stem = stem.slice(0, -2);
-        } else if (stem.length > 4 && stem.endsWith('es')) {
-            stem = stem.slice(0, -2);
-        } else if (stem.length > 3 && stem.endsWith('s')) {
-            stem = stem.slice(0, -1);
-        }
-
-        // Handle doubled final consonants after suffix stripping: slipped -> slip, running -> run
-        if (/(bb|dd|ff|gg|ll|mm|nn|pp|rr|tt)$/.test(stem)) {
-            stem = stem.slice(0, -1);
-        }
-
-        return stem;
-    };
-
-    const tokenizeExampleSearch = (value: string) =>
-        normalizeExampleSearch(value)
-            .split(' ')
-            .map(token => stemExampleToken(token.trim()))
-            .filter(Boolean);
-
-    const calculateTokenSimilarity = (left: string[], right: string[]) => {
-        if (left.length === 0 || right.length === 0) return 0;
-        const maxLength = Math.max(left.length, right.length);
-        let matches = 0;
-        const used = new Set<number>();
-
-        left.forEach(token => {
-            const matchIndex = right.findIndex((candidate, index) => !used.has(index) && candidate === token);
-            if (matchIndex >= 0) {
-                used.add(matchIndex);
-                matches += 1;
-            }
-        });
-
-        return matches / maxLength;
-    };
-
-    const getBestExampleMatchScore = (target: string, source: string) => {
-        const targetTokens = tokenizeExampleSearch(target);
-        const sourceTokens = tokenizeExampleSearch(source);
-        if (targetTokens.length === 0 || sourceTokens.length === 0) return 0;
-
-        const minWindowSize = Math.max(1, targetTokens.length - 1);
-        const maxWindowSize = Math.min(sourceTokens.length, targetTokens.length + 2);
-        let bestScore = calculateTokenSimilarity(targetTokens, sourceTokens);
-
-        for (let windowSize = minWindowSize; windowSize <= maxWindowSize; windowSize += 1) {
-            for (let start = 0; start <= sourceTokens.length - windowSize; start += 1) {
-                const windowTokens = sourceTokens.slice(start, start + windowSize);
-                bestScore = Math.max(bestScore, calculateTokenSimilarity(targetTokens, windowTokens));
-            }
-        }
-
-        return bestScore;
-    };
-
     const doesExampleContain = (target?: string, sourceText?: string) => {
         if (!target?.trim()) return false;
         const searchableSource = sourceText || word.example;
         if (!searchableSource?.trim()) return false;
-        return getBestExampleMatchScore(target, searchableSource) >= EXAMPLE_MATCH_THRESHOLD;
+        return isFuzzyPhraseMatch(target, searchableSource, 0.7);
     };
 
     const handleExampleHighlightToggle = (target: string) => {

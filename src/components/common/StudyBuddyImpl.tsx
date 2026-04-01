@@ -72,6 +72,7 @@ interface Props {
     onNavigate: (view: string, params?: any) => void;
     onViewWord?: (word: VocabularyItem, tab?: string) => void;
     isAnyModalOpen?: boolean;
+    onOpenSearchModal?: (initialQuery?: string) => void;
 }
 
 interface Message {
@@ -171,7 +172,7 @@ export const failStudyBuddyAssistantStream = (requestId: string, message: string
 };
 
 
-export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAnyModalOpen }) => {
+export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAnyModalOpen, onOpenSearchModal }) => {
     const { showToast } = useToast();
     const [config, setConfig] = useState<SystemConfig>(getConfig());
     const [isAudioPlaying, setIsAudioPlaying] = useState(getIsSpeaking());
@@ -615,6 +616,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         || window.getSelection()?.toString().trim()
         || ''
     ).trim();
+
+    const handleOpenSearchModal = (incomingText?: string) => {
+        const selectedText = (incomingText || getCoachActionText()).trim();
+        if (!selectedText || !onOpenSearchModal) return;
+        selectedTextRef.current = selectedText;
+        onOpenSearchModal(selectedText);
+    };
 
     const syncChatSelectionText = (text: string) => {
         const normalized = text.trim();
@@ -2437,6 +2445,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                         onOpenChatPanel={openChatPanel}
                         onAddToLibrary={handleAddToLibrary}
                         onViewWord={handleViewWord}
+                        onOpenSearchPage={handleOpenSearchModal}
                         wordImageList={currentLibraryWord?.img || []}
                         serverUrl={getServerUrl(config)}
                         onOpenNote={handleOpenNote}
