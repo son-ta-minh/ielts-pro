@@ -41,9 +41,8 @@ interface AppLayoutProps {
 
 const navItems = [
   { id: 'DASHBOARD', view: 'DASHBOARD', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Mobile%20Phone.png", label: 'Dashboard' },
-  { id: 'SEARCH', view: 'SEARCH', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Magnifying%20Glass%20Tilted%20Left.png", label: 'Search' },
   { id: 'BROWSE', view: 'BROWSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png", label: 'Word Library' },
-  { id: 'WORD_GALLERY', view: 'WORD_GALLERY', icon: "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Framed%20picture/3D/framed_picture_3d.png", label: 'Word Gallery' },
+  { id: 'WORD_GALLERY', view: 'WORD_GALLERY', icon: "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Framed%20picture/3D/framed_picture_3d.png", label: 'Gallery' },
   { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Knowledge Library' },
   { id: 'COURSE', view: 'COURSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Graduation%20Cap.png", label: 'Course' },
   { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },

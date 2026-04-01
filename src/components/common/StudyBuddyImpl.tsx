@@ -618,8 +618,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     ).trim();
 
     const handleOpenSearchModal = (incomingText?: string) => {
-        console.log('handleOpenSearchModal called with:', { incomingText });
-        const selectedText = (incomingText || getCoachActionText()).trim();
+        const selectedText = (incomingText || '').trim();
         if (!onOpenSearchModal) return;
         selectedTextRef.current = selectedText;
         onOpenSearchModal(selectedText);
@@ -2606,7 +2605,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                         isAlreadyInLibrary={isAlreadyInLibrary}
                                         isAddingToLibrary={isAddingToLibrary}
                                         isAnyModalOpen={isAnyModalOpen}
-                                        selectedText={selectedTextRef.current || undefined}
+                                        selectedText={undefined}
                                         onRestoreSelectedRange={(e) => {
                                             e.preventDefault();
                                             restoreSelectedRange();
