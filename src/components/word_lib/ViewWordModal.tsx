@@ -197,6 +197,11 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
 
   const config = getConfig();
   const appliedAccent = config.audio.appliedAccent;
+  const libraryWordSet = new Set(
+    getAllWords()
+      .filter((item) => item.userId === currentWord.userId)
+      .map((item) => item.word.trim().toLowerCase())
+  );
 
   const dispatchAskAiTarget = (section: StudyBuddyTargetSection, source: string) => {
     window.dispatchEvent(
@@ -235,6 +240,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       onEditRequest={() => onEditRequest(currentWord)}
       onUpdate={handleLocalUpdate}
       onNavigateToWord={onNavigateToWord}
+      libraryWordSet={libraryWordSet}
       appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}
       onAskAiRequest={handleAskAi}

@@ -181,6 +181,7 @@ const UsageTable: React.FC<{
 
 export interface ViewWordModalUIProps {
     word: VocabularyItem;
+    libraryWordSet?: Set<string>;
     wordFamilyGroup?: WordFamilyGroup | null;
     onOpenWordFamilyGroupRequest?: (groupId: string) => void;
     onClose: () => void;
@@ -200,15 +201,34 @@ export interface ViewWordModalUIProps {
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
-    word, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
+    word, libraryWordSet, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onNavigateToWord, isViewOnly = false,
     onAddAIExample,
     onAskAiRequest,
     onAskAiSectionRequest
 }) => {
+    const isLibraryWord = (value: string) => !!value.trim() && !!libraryWordSet?.has(value.trim().toLowerCase());
     // Helper to render examples with badge replacements
     const renderExample = (text: string) => {
         if (!text) return { __html: "" };
+
+        const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const highlightHeadword = (html: string, headword: string) => {
+            const normalizedHeadword = headword.trim();
+            if (!normalizedHeadword) return html;
+
+            const pattern = new RegExp(`\\b(${escapeRegex(normalizedHeadword)})\\b`, 'gi');
+            return html
+                .split(/(<[^>]+>)/g)
+                .map((segment) => {
+                    if (!segment || segment.startsWith('<')) return segment;
+                    return segment.replace(
+                        pattern,
+                        '<span class="rounded-md bg-amber-100 px-1 py-0.5 font-bold text-amber-900">$1</span>'
+                    );
+                })
+                .join('');
+        };
 
         let html = parseMarkdown(text);
 
@@ -234,6 +254,8 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
             return `<span class="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-md border ${style} mr-1">${tag}</span>`;
         });
+
+        html = highlightHeadword(html, word.word || '');
 
         return { __html: html };
     };
@@ -818,13 +840,14 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                     if (hasSpecificFailure(types, c.text)) isFailed = true;
                                                     else if (!types.some(type => getResult(`${type}:${c.text}`) !== undefined) && hasGroupFailure(types)) isFailed = true;
                                                 }
+                                                const isInLibrary = isLibraryWord(c.text);
                                                 let containerClass = "bg-white border border-neutral-100 text-indigo-900";
                                                 if (isFailed) containerClass = "bg-red-50 border border-red-200 text-red-700";
                                                 else if (c.isIgnored) containerClass = "bg-neutral-50 border border-neutral-100 text-neutral-400";
                                                 return (
                                                     <div key={i} className={`relative flex items-start gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
                                                         <div className="flex-1 overflow-hidden">
-                                                            <span className={`truncate ${c.isIgnored ? 'line-through' : ''}`} title={c.text}>{c.text}</span>
+                                                            <span className={`truncate ${c.isIgnored ? 'line-through' : isInLibrary ? 'text-green-600' : ''}`} title={c.text}>{c.text}</span>
                                                             {c.d && !c.isIgnored && (
                                                                 <div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>
                                                             )}
@@ -872,6 +895,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 const hasSpecific = types.some(type => getResult(`${type}:${para.word}`) !== undefined);
                                                 const isFailed = viewSettings.highlightFailed && !para.isIgnored && (hasSpecificFailure(types, para.word) || (!hasSpecific && hasGroupFailure(types)));
                                                 const isIgnored = para.isIgnored;
+                                                const isInLibrary = isLibraryWord(para.word);
                                                 return (
                                                     <div key={idx} className={`relative flex items-start gap-2 border px-3 py-2 rounded-xl shadow-sm ${isFailed ? 'bg-red-50 border-red-200' : isIgnored ? 'bg-neutral-50 border-neutral-100 opacity-60' : 'bg-white border-neutral-200'}`}>
                                                         <div className="flex-1 overflow-hidden">
@@ -879,7 +903,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                                 {renderParaphraseBadge(para.tone)}
                                                             </div>
                                                             <div className="flex items-center gap-1">
-                                                                <div className={`text-xs font-bold ${isFailed ? 'text-red-800' : 'text-indigo-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div>
+                                                                <div className={`text-xs font-bold ${isFailed ? 'text-red-800' : isInLibrary ? 'text-green-600' : 'text-indigo-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div>
                                                             </div>
                                                             <div className={`text-[10px] italic truncate text-neutral-400`} title={para.context}>{para.context}</div>
                                                         </div>
