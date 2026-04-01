@@ -262,7 +262,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
   const content = (
     <div className="max-w-6xl mx-auto">
       <div className="bg-white shadow-sm pt-6 pb-2 px-6 md:pt-4 md:pb-3 md:px-8">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-3">
           <div className="inline-flex rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
             <button
               type="button"
@@ -292,7 +292,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
         </div>
 
 
-        <div className="mt-1 mb-0 flex gap-3">
+        <div className="mt-3 mb-0 flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
             <input
@@ -318,7 +318,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
             Search
           </button>
         </div>
-        <div className="mt-2 flex gap-4">
+        <div className="mt-3 flex gap-4">
           <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
             <input
               type="checkbox"
@@ -362,28 +362,42 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
             {results.map(result => (
               <button
                 key={result.word.id}
-                onClick={() => onViewWord(result.word)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onViewWord(result.word);
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                }}
                 className="w-full text-left p-4 rounded-2xl border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-all"
               >
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.word.word, normalizedQuery)}</h3>
-                  {result.word.isPassive && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-neutral-100 text-neutral-500">
-                      <Archive size={12} />
-                      ARCHIVE
-                    </span>
-                  )}
-                </div>
+                {!exampleOnly && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.word.word, normalizedQuery)}</h3>
+                    {result.word.isPassive && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-neutral-100 text-neutral-500">
+                        <Archive size={12} />
+                        ARCHIVE
+                      </span>
+                    )}
+                  </div>
+                )}
 
-                <div className="mt-3 space-y-2">
+                <div className={`${exampleOnly ? 'mt-1 space-y-1' : 'mt-3 space-y-2'}`}>
                   {result.hits.map((hit, index) => {
-                    const snippet = getSnippet(hit.value, normalizedQuery);
+                    const snippet = exampleOnly ? hit.value : getSnippet(hit.value, normalizedQuery);
                     return (
-                      <div key={`${result.word.id}-${hit.path}-${index}`} className="text-sm text-neutral-600 leading-relaxed">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wide mr-2">
-                          <Hash size={11} />
-                          {getFriendlyPathLabel(hit.path)}
-                        </span>
+                      <div
+                        key={`${result.word.id}-${hit.path}-${index}`}
+                        className={`text-sm text-neutral-600 leading-relaxed ${exampleOnly ? 'py-1' : ''}`}
+                      >
+                        {!exampleOnly && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wide mr-2">
+                            <Hash size={11} />
+                            {getFriendlyPathLabel(hit.path)}
+                          </span>
+                        )}
                         <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
                       </div>
                     );

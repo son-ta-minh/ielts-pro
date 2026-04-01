@@ -307,9 +307,12 @@ export const isFuzzyPhraseMatch = (query: string, source: string, threshold = 0.
   if (queryTokens.length === 0) return false;
 
   const bestStats = getBestWindowMatchStats(query, source);
-  const requiredMatchCount = getRequiredMatchCount(queryTokens.length);
-  if (bestStats.matchedCount < requiredMatchCount) return false;
-  if (bestStats.contentTokenCount > 0 && bestStats.contentMatchedCount < bestStats.contentTokenCount) return false;
+  if (bestStats.contentTokenCount > 0) {
+    if (bestStats.contentMatchedCount < bestStats.contentTokenCount) return false;
+  } else {
+    const requiredMatchCount = getRequiredMatchCount(queryTokens.length);
+    if (bestStats.matchedCount < requiredMatchCount) return false;
+  }
 
   const finalScore = Math.max(bestStats.score, getPhraseCharacterSimilarity(query, source) * 0.88);
   return finalScore >= threshold;
