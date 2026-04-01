@@ -618,8 +618,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     ).trim();
 
     const handleOpenSearchModal = (incomingText?: string) => {
+        console.log('handleOpenSearchModal called with:', { incomingText });
         const selectedText = (incomingText || getCoachActionText()).trim();
-        if (!selectedText || !onOpenSearchModal) return;
+        if (!onOpenSearchModal) return;
         selectedTextRef.current = selectedText;
         onOpenSearchModal(selectedText);
     };
@@ -2617,6 +2618,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                         onOpenChatPanel={openChatPanel}
                                         onAddToLibrary={handleAddToLibrary}
                                         onViewWord={handleViewWord}
+                                        onOpenSearchPage={handleOpenSearchModal}
                                         wordImageList={currentLibraryWord?.img || []}
                                         serverUrl={getServerUrl(config)}
                                         onOpenNote={handleOpenNote}
