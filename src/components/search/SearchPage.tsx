@@ -261,61 +261,38 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
 
   const content = (
     <div className="max-w-6xl mx-auto">
-      <div className="bg-white shadow-sm p-6 md:p-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-neutral-900">Global Search</h1>
-            <p className="text-sm text-neutral-500 mt-1">Search across word, meaning, example, collocation context, paraphrase, context, and all text fields.</p>
+      <div className="bg-white shadow-sm pt-6 pb-2 px-6 md:pt-4 md:pb-3 md:px-8">
+        <div className="flex items-center justify-between">
+          <div className="inline-flex rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
+            <button
+              type="button"
+              onClick={() => setSearchMode('fast')}
+              className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${searchMode === 'fast' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+            >
+              Fast Search
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchMode('deep')}
+              className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${searchMode === 'deep' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+            >
+              Deep Search
+            </button>
           </div>
-          <div className="flex flex-col gap-2">
-            {isModal && onClose ? (
-              <button
-                type="button"
-                onClick={onClose}
-                className="self-end rounded-xl border border-neutral-200 px-3 py-2 text-xs font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-              >
-                Close
-              </button>
-            ) : null}
-            <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
-              <input
-                type="checkbox"
-                checked={includeArchive}
-                onChange={(e) => setIncludeArchive(e.target.checked)}
-                className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-700"
-              />
-              Include archive
-            </label>
-            <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
-              <input
-                type="checkbox"
-                checked={exampleOnly}
-                onChange={(e) => setExampleOnly(e.target.checked)}
-                className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-700"
-              />
-              Example Only
-            </label>
-          </div>
+
+          {isModal && onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-md border border-red-300 text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
+            >
+              X
+            </button>
+          ) : null}
         </div>
 
-        <div className="mt-4 inline-flex rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
-          <button
-            type="button"
-            onClick={() => setSearchMode('fast')}
-            className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${searchMode === 'fast' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
-          >
-            Fast Search
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchMode('deep')}
-            className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${searchMode === 'deep' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
-          >
-            Deep Search
-          </button>
-        </div>
 
-        <div className="mt-5 flex gap-3">
+        <div className="mt-1 mb-0 flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
             <input
@@ -329,21 +306,42 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
                 }
               }}
               placeholder="Type keyword to search full-text..."
-              className="w-full pl-12 pr-4 py-4 rounded-2xl border border-neutral-200 bg-neutral-50 text-sm font-semibold text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              className="w-full pl-12 pr-4 py-2 rounded-xl border border-neutral-200 bg-neutral-50 text-xs font-black text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
               autoFocus
             />
           </div>
           <button
             type="button"
             onClick={handleSearchSubmit}
-            className="rounded-2xl bg-neutral-900 px-5 py-4 text-sm font-black text-white transition-colors hover:bg-neutral-800"
+            className="rounded-xl bg-neutral-900 px-4 py-2 text-xs font-black uppercase tracking-wide text-white transition-colors hover:bg-neutral-800"
           >
             Search
           </button>
         </div>
+        <div className="mt-2 flex gap-4">
+          <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
+            <input
+              type="checkbox"
+              checked={includeArchive}
+              onChange={(e) => setIncludeArchive(e.target.checked)}
+              className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-700"
+            />
+            Include archive
+          </label>
+
+          <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
+            <input
+              type="checkbox"
+              checked={exampleOnly}
+              onChange={(e) => setExampleOnly(e.target.checked)}
+              className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-700"
+            />
+            Example Only
+          </label>
+        </div>
       </div>
 
-      <div className="bg-white p-6 md:p-8 shadow-sm">
+      <div className="bg-white pt-1 pb-6 px-6 md:pt-2 md:pb-8 md:px-8 shadow-sm">
         {!normalizedQuery && (
           <div className="text-center py-12 text-neutral-500">
             <FileText size={24} className="mx-auto mb-3 text-neutral-300" />
