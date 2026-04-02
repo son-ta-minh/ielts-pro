@@ -15,7 +15,7 @@ import { getConfig, getServerUrl } from '../app/settingsManager';
  * [Multi: Correct | Option 2 | Option 3] -> Multiple Choice Buttons (Inline buttons)
  * [Select: Correct | Option 2 | Option 3] -> Dropdown Selection (Locked after check)
  * [Formula: Part | Part] -> Amber box with badges
- * [Tip content] -> Blue info box with lightbulb icon
+ * [Tip: content] or [Tip content] -> Blue info box with lightbulb icon
  * [SOUND text|link|start|duration] -> Play sound button
  * [IMG link|width] -> Image with optional width scaling
  * [FOLLOWUP key|label] -> StudyBuddy follow-up button
@@ -599,12 +599,12 @@ export const parseMarkdown = (text: string): string => {
             continue;
         }
 
-        // Process [Tip Block] - Exclude Audio, HIDDEN, Quiz, Select, Multi, IMG tags (inline forms)
-        const tipMatch = lineTrim.match(/^\[(?!(HIDDEN:|Quiz:|Select:|QUIZ:|Multi:|Formula:|Audio-|IMG|(\/\])))(.*)\]$/);
+        // Process [Tip ...] blocks, supporting both [Tip: content] and [Tip content]
+        const tipMatch = lineTrim.match(/^\[Tip:?\s*(.+?)\]$/i);
         if (tipMatch) {
             closeLists(0);
             const lightbulbSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5 text-sky-500"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>`;
-            const tipContent = tipMatch[3].trim();
+            const tipContent = tipMatch[1].trim();
             output.push(`
                 <div class="flex items-start gap-3 my-4 p-4 bg-sky-50 border-l-4 border-sky-400 rounded-r-lg shadow-sm">
                     ${lightbulbSvg}
