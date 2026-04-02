@@ -234,22 +234,52 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
         if (!text) return { __html: "" };
 
         const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const OPTIONAL_GAP_TOKENS = [
+            'a', 'an', 'the',
+            'my', 'your', 'his', 'her', 'its', 'our', 'their',
+            'some', 'any', 'this', 'that', 'these', 'those'
+        ];
         const amberHighlightHtml = (value: string) =>
             `<span class="rounded-md bg-amber-100 px-1 py-0.5 font-bold text-amber-900">${value}</span>`;
         const highlightTerms = (html: string, terms: string[]) => {
             if (terms.length === 0) return html;
             const sortedTerms = Array.from(new Set(terms.map((term) => term.trim()).filter(Boolean)))
-                .sort((left, right) => right.length - left.length);
+                .sort((left, right) => {
+                    const tokenDiff = right.split(/\s+/).length - left.split(/\s+/).length;
+                    if (tokenDiff !== 0) return tokenDiff;
+                    return right.length - left.length;
+                });
             const isWordChar = (char?: string) => !!char && /[A-Za-z0-9_]/.test(char);
             const hasWordBoundary = (source: string, start: number, end: number) =>
                 !isWordChar(source[start - 1]) && !isWordChar(source[end]);
+            const optionalGapPattern = OPTIONAL_GAP_TOKENS.map(escapeRegex).join('|');
+            const buildTermPattern = (term: string) => {
+                const tokens = term
+                    .trim()
+                    .split(/\s+/)
+                    .map((token) => token.trim())
+                    .filter(Boolean);
+
+                if (tokens.length === 0) return null;
+                if (tokens.length === 1) return new RegExp(escapeRegex(tokens[0]), 'gi');
+
+                const tokenPattern = tokens
+                    .map((token, index) => {
+                        if (index === 0) return escapeRegex(token);
+                        return `(?:\\s+(?:(?:${optionalGapPattern})\\s+){0,2})${escapeRegex(token)}`;
+                    })
+                    .join('');
+
+                return new RegExp(tokenPattern, 'gi');
+            };
 
             const highlightSegment = (segment: string) => {
                 const matches: Array<{ start: number; end: number; text: string }> = [];
                 const occupied: boolean[] = new Array(segment.length).fill(false);
 
                 sortedTerms.forEach((term) => {
-                    const pattern = new RegExp(escapeRegex(term), 'gi');
+                    const pattern = buildTermPattern(term);
+                    if (!pattern) return;
                     let match: RegExpExecArray | null;
 
                     while ((match = pattern.exec(segment)) !== null) {
