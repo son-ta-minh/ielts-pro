@@ -200,7 +200,7 @@ export interface PrepositionPattern {
   lastResult?: 'correct' | 'incorrect';
 }
 
-export type ParaphraseTone = 'intensified' | 'softened' | 'synonym' | 'academic' | 'casual';
+export type ParaphraseTone = 'synonym' | 'academic' | 'casual' | 'neutral';
 
 export interface ParaphraseOption {
   word: string;

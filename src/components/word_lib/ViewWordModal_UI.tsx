@@ -67,6 +67,12 @@ const RegisterBadge: React.FC<{ register?: 'academic' | 'casual' | 'neutral' | '
     return <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${styles[register]}`}>{text[register]}</span>;
 };
 
+const IdiomBadge: React.FC = () => (
+    <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase border bg-pink-100 text-pink-800 border-pink-200">
+        IDIOM
+    </span>
+);
+
 const renderParaphraseBadge = (tone: ParaphraseTone) => {
     const styles: Record<ParaphraseTone, string> = {
         intensified: 'bg-orange-100 text-orange-700 border-orange-200',
@@ -719,7 +725,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 disabled={isViewOnly}
                             />
                             <StatusDropdown
-                                label="Quality"
                                 options={qualityStatusOptions}
                                 selectedId={word.quality}
                                 onSelect={(id) => onUpdate({ ...word, quality: id as WordQuality })}
@@ -752,6 +757,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                         {/* ROW 2 - LEFT: REGISTER + PRON */}
                         <div className="flex items-center gap-2 flex-wrap">
                             {word.register && <RegisterBadge register={word.register} />}
+                            {word.isIdiom && <IdiomBadge />}
 
                             {word.pronSim && (
                                 <div

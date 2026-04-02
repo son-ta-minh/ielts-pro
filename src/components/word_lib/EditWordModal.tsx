@@ -4,6 +4,7 @@ import { applyLearnedStatus, calculateComplexity, calculateMasteryScore } from '
 import { getWordDetailsPrompt, getLearningSuggestionsPrompt } from '../../services/promptService';
 import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { EditWordModalUI } from './EditWordModal_UI';
+import { getAllWords } from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
 import UniversalAiModal from '../common/UniversalAiModal';
 import LearningSuggestionModal from '../common/LearningSuggestionModal';
@@ -108,6 +109,14 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
   const [isSuggestAiModalOpen, setIsSuggestAiModalOpen] = useState(false);
   const [isSelectImgOpen, setIsSelectImgOpen] = useState(false);
   const [selectedImgs, setSelectedImgs] = useState<string[]>([]);
+  const availableGroups = Array.from(
+    new Set(
+      getAllWords()
+        .filter((item) => item.userId === user.id)
+        .flatMap((item) => item.groups || [])
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
   const handleSelectImage = () => {
     setSelectedImgs((formData.img || []).filter((i: string) => i && i.trim() !== ""));
     setIsSelectImgOpen(true);
@@ -400,6 +409,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         onGenImg={handleGenerateImage}
         onSelectImage={handleSelectImage}
         onFormatExamples={handleFormatExamples}
+        availableGroups={availableGroups}
       />
       <LearningSuggestionModal
         isOpen={isSuggestionModalOpen}

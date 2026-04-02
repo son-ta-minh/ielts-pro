@@ -15,6 +15,15 @@ interface ScannedParaphraseItem extends ParaphraseOption {
   sourceWord?: string;
 }
 
+const getParaphraseToneFromWordRegister = (
+  register?: VocabularyItem['register']
+): ParaphraseOption['tone'] => {
+  if (register === 'academic' || register === 'casual') {
+    return register;
+  }
+  return 'synonym';
+};
+
 interface Props {
   word: VocabularyItem;
   onClose: () => void;
@@ -261,7 +270,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
 
         addCandidate({
           word: sourceWord.word,
-          tone: 'synonym',
+          tone: getParaphraseToneFromWordRegister(sourceWord.register),
           context: sourceWord.example || sourceWord.meaningVi || '',
           isIgnored: false,
           sourceWord: sourceWord.word
@@ -270,15 +279,18 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
         (sourceWord.paraphrases || [])
           .filter((item) => !item.isIgnored && item.word.trim())
           .forEach((item) => {
+            const linkedWord = libraryMap.get(item.word.trim().toLowerCase());
+
             addCandidate({
               word: item.word,
-              tone: item.tone || 'synonym',
+              tone: linkedWord?.register === 'academic' || linkedWord?.register === 'casual' || linkedWord?.register === 'neutral'
+                ? linkedWord.register
+                : (item.tone || 'synonym'),
               context: item.context || sourceWord.example || sourceWord.meaningVi || '',
               isIgnored: false,
               sourceWord: sourceWord.word
             });
 
-            const linkedWord = libraryMap.get(item.word.trim().toLowerCase());
             if (linkedWord) {
               recursiveScan(linkedWord);
             }

@@ -68,6 +68,7 @@ export interface EditWordModalUIProps {
   onGenImg: () => void | Promise<void>;
   onSelectImage: () => void | Promise<void>;
   onFormatExamples: () => void;
+  availableGroups: string[];
 }
 
 type Tab = 'MAIN' | 'SOUND' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
@@ -115,7 +116,8 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
     handleCacheImages,
     onGenImg,
     onSelectImage,
-    onFormatExamples
+    onFormatExamples,
+    availableGroups
   } = props;
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
@@ -127,6 +129,19 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchType, setBatchType] = useState<'collocations' | 'idioms' | 'paraphrases' | 'prepositions'>('collocations');
   const [batchText, setBatchText] = useState('');
+  const [groupQuery, setGroupQuery] = useState('');
+  const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
+  const groupMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (groupMenuRef.current && !groupMenuRef.current.contains(event.target as Node)) {
+        setIsGroupMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const parseBatchLines = (text: string) => {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -214,7 +229,30 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
     { id: LearnedStatus.EASY, label: 'Easy', icon: <div className="w-3 h-3 rounded-full bg-green-500"/> },
   ];
   
-  const TONE_OPTIONS: ParaphraseTone[] = ['intensified', 'softened', 'synonym', 'academic', 'casual'];
+  const TONE_OPTIONS: ParaphraseTone[] = ['academic', 'casual', 'neutral'];
+  const currentGroups = useMemo(
+    () => formData.groupsString.split(',').map((item: string) => item.trim()).filter(Boolean),
+    [formData.groupsString]
+  );
+  const filteredGroupOptions = useMemo(() => {
+    const normalizedQuery = groupQuery.trim().toLowerCase();
+    return availableGroups
+      .filter((group) => !currentGroups.includes(group))
+      .filter((group) => !normalizedQuery || group.toLowerCase().includes(normalizedQuery))
+      .slice(0, 100);
+  }, [availableGroups, currentGroups, groupQuery]);
+
+  const addGroupToField = (group: string) => {
+    const normalized = group.trim();
+    if (!normalized || currentGroups.includes(normalized)) return;
+    setFormData('groupsString', [...currentGroups, normalized].join(', '));
+    setGroupQuery('');
+    setIsGroupMenuOpen(false);
+  };
+
+  const removeGroupFromField = (group: string) => {
+    setFormData('groupsString', currentGroups.filter((item: string) => item !== group).join(', '));
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -512,7 +550,73 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                            <div className="flex flex-wrap gap-2 p-3 bg-white border border-neutral-200 rounded-2xl">{[{ id: 'isIdiom', label: 'Idiom', icon: Quote }, { id: 'isCollocation', label: 'Colloc.', icon: Combine }, { id: 'isStandardPhrase', label: 'Phrase', icon: MessageSquare }, { id: 'isPhrasalVerb', label: 'Phrasal', icon: Layers }, { id: 'isIrregular', label: 'Irregular', icon: RotateCw }, { id: 'isPassive', label: 'Archive', icon: formData.isPassive ? Archive : Trash2 }, { id: 'isFocus', label: 'Focus', icon: Zap }].map(btn => (<button key={btn.id} type="button" onClick={() => setFlag(btn.id as any)} className={`flex items-center space-x-1.5 py-1.5 px-3 rounded-lg border transition-all font-bold text-[9px] uppercase tracking-wider ${formData[btn.id] ? 'bg-neutral-900 border-neutral-900 text-white shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-300'}`}><btn.icon size={10} /><span>{btn.label}</span></button>))}</div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                           <div className="space-y-1"><label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center"><Users2 size={10} className="mr-1"/>User Groups</label><input type="text" value={formData.groupsString} onChange={(e) => setFormData('groupsString', e.target.value)} placeholder="bird_species, env_academic..." className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm focus:ring-1 focus:ring-neutral-900 outline-none"/></div>
+                           <div className="space-y-2">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 flex items-center"><Users2 size={10} className="mr-1"/>User Groups</label>
+                                <input type="text" value={formData.groupsString} onChange={(e) => setFormData('groupsString', e.target.value)} placeholder="bird_species, env_academic..." className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm focus:ring-1 focus:ring-neutral-900 outline-none"/>
+                                {currentGroups.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {currentGroups.map((group: string) => (
+                                            <button
+                                                key={group}
+                                                type="button"
+                                                onClick={() => removeGroupFromField(group)}
+                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-neutral-100 text-neutral-700 text-[10px] font-black border border-neutral-200 hover:bg-neutral-200 transition-colors"
+                                                title="Remove group"
+                                            >
+                                                <span>{group}</span>
+                                                <X size={12} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="relative" ref={groupMenuRef}>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={groupQuery}
+                                            onChange={(e) => {
+                                                setGroupQuery(e.target.value);
+                                                setIsGroupMenuOpen(true);
+                                            }}
+                                            onFocus={() => setIsGroupMenuOpen(true)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (filteredGroupOptions[0]) addGroupToField(filteredGroupOptions[0]);
+                                                } else if (e.key === 'Escape') {
+                                                    setIsGroupMenuOpen(false);
+                                                }
+                                            }}
+                                            placeholder="Search and add existing group..."
+                                            className="w-full px-4 py-3 pr-10 bg-white border border-neutral-200 rounded-xl text-sm focus:ring-1 focus:ring-neutral-900 outline-none"
+                                        />
+                                        <ChevronDown size={14} className={`absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 transition-transform ${isGroupMenuOpen ? 'rotate-180' : ''}`} />
+                                    </div>
+                                    {isGroupMenuOpen && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-neutral-200 rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in-95">
+                                            <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1">
+                                                {filteredGroupOptions.length > 0 ? (
+                                                    filteredGroupOptions.map((group) => (
+                                                        <button
+                                                            key={group}
+                                                            type="button"
+                                                            onClick={() => addGroupToField(group)}
+                                                            className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-neutral-700 hover:bg-neutral-100 transition-colors"
+                                                            title={group}
+                                                        >
+                                                            <span className="block truncate">{group}</span>
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <div className="px-3 py-4 text-center text-[11px] font-bold text-neutral-400">
+                                                        No matching groups.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                           </div>
                            <div className="md:col-span-2 space-y-1">
                                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Register</label>
                                 <div className="flex bg-neutral-100 p-1 rounded-xl w-fit">

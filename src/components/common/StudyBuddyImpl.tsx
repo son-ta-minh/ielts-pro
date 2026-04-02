@@ -1994,7 +1994,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                      lastReview: undefined,
                      learnedStatus: LearnedStatus.NEW,
                      lastTestResults: {},
-                     groups: [...(serverItem.groups || []), 'coach-added']
+                     groups: [...(serverItem.groups || [])]
                 };
                 newItem.isPassive = false;
                 newItem.complexity = calculateComplexity(newItem);
@@ -2007,7 +2007,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     '',
                     '',
                     '',
-                    ['coach-added'],
+                    [],
                     false,
                     false,
                     false,
@@ -2052,7 +2052,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     '',
                     '',
                     '',
-                    ['coach-added'],
+                    [],
                     false,
                     false,
                     false,
