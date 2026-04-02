@@ -1,9 +1,26 @@
 const HEADWORD_TOKEN_VARIANTS: Record<string, string[]> = {
     be: ['am', 'is', 'are', 'was', 'were', 'been', 'being'],
-    a: ['an', 'the'],
-    an: ['a', 'the'],
-    the: ['a', 'an'],
 };
+
+const IGNORED_HEADWORD_TOKENS = new Set([
+    'a',
+    'an',
+    'the',
+    'someone',
+    'somebody',
+    'something',
+    'somewhere',
+    'somehow',
+    'somewhat',
+    'anyone',
+    'anybody',
+    'anything',
+    'anywhere',
+    'everyone',
+    'everybody',
+    'everything',
+    'everywhere',
+]);
 
 const normalize = (value: string): string => value.trim().toLowerCase();
 
@@ -15,6 +32,14 @@ export const expandHighlightTerms = (phrase: string): string[] => {
     const uniqueTerms = new Set<string>([normalizedPhrase]);
 
     tokens.forEach((token, index) => {
+        if (IGNORED_HEADWORD_TOKENS.has(token)) {
+            const nextTokens = tokens.filter((_, tokenIndex) => tokenIndex !== index);
+            if (nextTokens.length > 0) {
+                uniqueTerms.add(nextTokens.join(' '));
+            }
+            return;
+        }
+
         const variants = HEADWORD_TOKEN_VARIANTS[token];
         if (!variants || variants.length === 0) return;
 
