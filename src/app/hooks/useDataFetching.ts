@@ -9,7 +9,7 @@ import * as adventureService from '../../services/adventureService';
 interface UseDataFetchingProps {
     currentUser: User | null;
     view: AppView;
-    onUpdateUser: (user: User) => void;
+    onUpdateUser: (user: User) => Promise<void>;
 }
 
 export const useDataFetching = ({ currentUser, onUpdateUser }: UseDataFetchingProps) => {
@@ -111,7 +111,7 @@ export const useDataFetching = ({ currentUser, onUpdateUser }: UseDataFetchingPr
                     showToast("✨ Key Fragments assembled into a Magic Key!", "success", 4000);
                 }
                 const updatedUser = { ...currentUser, adventure: updatedProgress, adventureLastDailyStar: dailyStarAwarded ? todayStr : currentUser.adventureLastDailyStar };
-                onUpdateUser(updatedUser);
+                await onUpdateUser(updatedUser);
             }
         }
     }, [currentUser, showToast, onUpdateUser, randomWotd]);

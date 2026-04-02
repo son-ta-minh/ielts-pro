@@ -187,14 +187,23 @@ function _notifyChanges() {
     }, 100);
 }
 
-let _lastWriteTime = 0;
-const canWrite = (): boolean => {
+type WriteScope = 'word' | 'user' | 'unit' | 'composition' | 'bulk';
+
+const _lastWriteTimes: Record<WriteScope, number> = {
+    word: 0,
+    user: 0,
+    unit: 0,
+    composition: 0,
+    bulk: 0
+};
+
+const canWrite = (scope: WriteScope): boolean => {
     const now = Date.now();
-    if (now - _lastWriteTime < 1000) {
+    if (now - _lastWriteTimes[scope] < 1000) {
         window.dispatchEvent(new CustomEvent('datastore-cooldown'));
         return false;
     }
-    _lastWriteTime = now;
+    _lastWriteTimes[scope] = now;
     return true;
 };
 
@@ -434,7 +443,7 @@ export async function findWordByText(userId: string, word: string) {
 }
 
 export async function saveWordAndUser(word: VocabularyItem, user: User) {
-    if (!canWrite()) return;
+    if (!canWrite('bulk')) return;
     _updateLocalLastModified();
     Object.assign(word, withNormalizedVocabularyKeywords(word));
     word.complexity = calculateComplexity(word);
@@ -448,7 +457,7 @@ export async function saveWordAndUser(word: VocabularyItem, user: User) {
 }
 
 export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
-    if (!canWrite()) return;
+    if (!canWrite('bulk')) return;
     _updateLocalLastModified();
     if (word) {
         Object.assign(word, withNormalizedVocabularyKeywords(word));
@@ -464,7 +473,7 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
 }
 
 export async function saveWord(item: VocabularyItem) {
-    if (!canWrite()) return;
+    if (!canWrite('word')) return;
     _updateLocalLastModified();
     Object.assign(item, withNormalizedVocabularyKeywords(item));
     item.complexity = calculateComplexity(item);
@@ -495,7 +504,7 @@ export async function bulkSaveWords(items: VocabularyItem[]) {
 
 export async function deleteWord(id: string) {
     const item = _allWords.get(id);
-    if (!item || !canWrite()) return;
+    if (!item || !canWrite('word')) return;
     _updateLocalLastModified();
     await db.deleteWordFromDB(id);
     _allWords.delete(id);
@@ -517,7 +526,7 @@ export async function bulkDeleteWords(ids: string[]) {
 }
 
 export async function saveUser(user: User): Promise<void> { 
-    if (canWrite()) {
+    if (canWrite('user')) {
          _updateLocalLastModified();
          await db.saveUser(user);
          _triggerBackup();
@@ -525,10 +534,10 @@ export async function saveUser(user: User): Promise<void> {
     }
 }
 
-export async function saveUnit(unit: Unit): Promise<void> { if (canWrite()) { _updateLocalLastModified(); await db.saveUnit(unit); _triggerBackup(); _notifyChanges(); } }
+export async function saveUnit(unit: Unit): Promise<void> { if (canWrite('unit')) { _updateLocalLastModified(); await db.saveUnit(unit); _triggerBackup(); _notifyChanges(); } }
 
 export async function saveComposition(comp: Composition): Promise<void> {
-    if (canWrite()) {
+    if (canWrite('composition')) {
         _updateLocalLastModified();
         await db.saveComposition(comp);
         await notifyCompositionChange(comp.userId);
