@@ -665,7 +665,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             ...baseItem,
             userId: user.id,
             quality: WordQuality.RAW,
-            source: 'manual',
             isPassive: false
         };
     };
@@ -1987,7 +1986,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                      createdAt: Date.now(),
                      updatedAt: Date.now(),
                      quality: WordQuality.REFINED,
-                     source: 'refine',
                      nextReview: Date.now(),
                      interval: 0,
                      easeFactor: 2.5,

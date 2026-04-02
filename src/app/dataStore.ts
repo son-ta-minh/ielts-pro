@@ -277,6 +277,10 @@ export async function init(userId: string) {
                 delete (word as any).needsPronunciationFocus;
                 changed = true;
             }
+            if ((word as any).source !== undefined) {
+                delete (word as any).source;
+                changed = true;
+            }
             const legacyLastGrade = (word as any).lastGrade;
             if (!word.learnedStatus) {
                 word.learnedStatus = legacyLastGrade || (word.lastReview ? LearnedStatus.LEARNED : LearnedStatus.NEW);
@@ -381,7 +385,7 @@ export function getWordById(id: string): VocabularyItem | undefined { return _al
 export function getDailyStreakSnapshots(userId: string): DailyStreakSnapshot[] { return readDailyStreaks(userId); }
 export function getDailyGoalHistory(userId: string): DailyGoalSnapshot[] { return readDailyGoalHistory(userId); }
 
-export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', sourceFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = ''): { words: VocabularyItem[], totalCount: number } {
+export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = ''): { words: VocabularyItem[], totalCount: number } {
     const allItems = Array.from(_allWords.values()).filter(w => w.userId === userId);
     let baseItems = allItems;
     if (filterTypes.includes('duplicate')) {
@@ -401,7 +405,7 @@ export function getWordsPaged(userId: string, page: number, pageSize: number, qu
 
     const filtered = baseItems.filter(item => {
         // First check standard filters
-        if (!filterItem(item, query, otherFilterTypes, refinedFilter, statusFilter, registerFilter, sourceFilter, groupFilter, compositionFilter, _composedWordIds, bookFilter === 'specific' ? 'all' : bookFilter, _bookWordIds)) {
+        if (!filterItem(item, query, otherFilterTypes, refinedFilter, statusFilter, registerFilter, groupFilter, compositionFilter, _composedWordIds, bookFilter === 'specific' ? 'all' : bookFilter, _bookWordIds)) {
             return false;
         }
 

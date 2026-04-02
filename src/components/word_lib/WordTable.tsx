@@ -3,7 +3,7 @@ import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, Word
 import * as dataStore from '../../app/dataStore';
 import { getWordDetailsPrompt, getHintsPrompt, getBulkParaphrasePrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
-import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter, CompositionFilter, BookFilter } from './WordTable_UI';
+import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from './WordTable_UI';
 import { normalizeAiResponse, mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { stringToWordArray } from '../../utils/text';
@@ -31,7 +31,6 @@ interface PersistedFilters {
     refinedFilter?: RefinedFilter;
     statusFilter?: StatusFilter;
     registerFilter?: RegisterFilter;
-    sourceFilter?: SourceFilter;
     compositionFilter?: CompositionFilter;
     bookFilter?: BookFilter;
     specificBookId?: string;
@@ -50,7 +49,7 @@ interface Props {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onSearch: (query: string) => void;
-  onFilterChange: (filters: { types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, source: SourceFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }) => void;
+  onFilterChange: (filters: { types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }) => void;
   onAddWords: (wordsInput: string, types: Set<WordTypeOption>) => Promise<void>;
   onViewWord: (word: VocabularyItem) => void; // This is for OPENING the view modal
   onEditWord: (word: VocabularyItem) => void; // This is for OPENING the edit modal
@@ -70,6 +69,8 @@ interface Props {
   tagTree?: TagTreeNode[];
   selectedTag?: string | null;
   onSelectTag?: (tag: string | null) => void;
+  onRenameGroup?: (path: string, nextName: string) => Promise<void>;
+  onDeleteGroup?: (path: string) => Promise<void>;
   onOpenWordBook?: () => void;
 }
 
@@ -84,7 +85,7 @@ const WordTable: React.FC<Props> = ({
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
   onSearch, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onBulkHardDelete, onPractice,
   settingsKey, context, initialFilter, forceExpandAdd, onExpandAddConsumed, onWordRenamed,
-  showTagBrowserButton, tagTree, selectedTag, onSelectTag, onOpenWordBook
+  showTagBrowserButton, tagTree, selectedTag, onSelectTag, onRenameGroup, onDeleteGroup, onOpenWordBook
 }) => {
   // Load persisted filters with explicit typing to fix property access errors
   const persistedFilters = useMemo(() => getStoredJSON<PersistedFilters>(LIBRARY_FILTERS_KEY, {}), []);
@@ -99,7 +100,6 @@ const WordTable: React.FC<Props> = ({
   const [refinedFilter, setRefinedFilter] = useState<RefinedFilter>(persistedFilters.refinedFilter || 'all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(persistedFilters.statusFilter || 'all');
   const [registerFilter, setRegisterFilter] = useState<RegisterFilter>(persistedFilters.registerFilter || 'all');
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(persistedFilters.sourceFilter || 'all');
   const [compositionFilter, setCompositionFilter] = useState<CompositionFilter>(persistedFilters.compositionFilter || 'all');
   const [bookFilter, setBookFilter] = useState<BookFilter>(persistedFilters.bookFilter || 'all');
   const [specificBookId, setSpecificBookId] = useState<string>(persistedFilters.specificBookId || '');
@@ -121,7 +121,6 @@ const WordTable: React.FC<Props> = ({
         refinedFilter,
         statusFilter,
         registerFilter,
-        sourceFilter,
         compositionFilter,
         bookFilter,
         specificBookId,
@@ -129,7 +128,7 @@ const WordTable: React.FC<Props> = ({
         page,      // Save current page
         pageSize   // Save current pageSize
     });
-  }, [query, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, specificBookId, isFilterMenuOpen, page, pageSize]);
+  }, [query, activeFilters, refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, isFilterMenuOpen, page, pageSize]);
 
   // New state for Word Type selection in Quick Add
   // Default to 'vocab' selected
@@ -232,7 +231,7 @@ const WordTable: React.FC<Props> = ({
   }, [query]);
 
   useEffect(() => {
-      onFilterChange({ types: activeFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, source: sourceFilter, composition: compositionFilter, book: bookFilter, specificBookId });
+      onFilterChange({ types: activeFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, composition: compositionFilter, book: bookFilter, specificBookId });
       
       // If it's the first mount, do NOT reset the page to 0. 
       // Allow WordList to initialize it from storage.
@@ -242,7 +241,7 @@ const WordTable: React.FC<Props> = ({
           onPageChange(0);
           setSelectedIds(new Set());
       }
-  }, [activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, specificBookId]);
+  }, [activeFilters, refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId]);
 
   useEffect(() => { if (notification) { const t = setTimeout(() => setNotification(null), 4000); return () => clearTimeout(t); } }, [notification]);
 
@@ -455,8 +454,7 @@ const WordTable: React.FC<Props> = ({
                     const mergedItem = mergeAiResultIntoWord(existingHeadwordItem, rawAiResult);
                     itemsToSave.push(mergedItem);
                 } else {
-                    // Fix: createNewWord expects 12 arguments if source is refined. Added 'false' for isPassive.
-                    const newItem = await createNewWord(suggestedHeadword, '', '', '', '', [], false, false, false, false, false, 'refine');
+                    const newItem = await createNewWord(suggestedHeadword, '', '', '', '', [], false, false, false, false, false);
                     newItem.userId = originalItem.userId;
                     const finalNewItem = mergeAiResultIntoWord(newItem, rawAiResult);
                     itemsToSave.push(finalNewItem);
@@ -791,7 +789,7 @@ const WordTable: React.FC<Props> = ({
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
     onPractice, context, onDelete,
     onViewWord, onEditWord,
-    query, setQuery, activeFilters, refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, specificBookId, onSpecificBookChange: setSpecificBookId, isAddExpanded,
+    query, setQuery, activeFilters, refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, onSpecificBookChange: setSpecificBookId, isAddExpanded,
     isFilterMenuOpen, quickAddInput, setQuickAddInput, isAdding, isViewMenuOpen,
     selectedIds, setSelectedIds, 
     wordToDelete, setWordToDelete, isDeleting, setIsDeleting,
@@ -816,13 +814,15 @@ const WordTable: React.FC<Props> = ({
     onOpenApiRefineLog: () => setIsApiRefineLogOpen(true),
     onCloseApiRefineLog: () => setIsApiRefineLogOpen(false),
     onStopApiRefine: handleStopApiRefine,
-    setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen, setIsFilterMenuOpen,
+    setStatusFilter, setRefinedFilter, setRegisterFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen, setIsFilterMenuOpen,
     setIsAddExpanded,
     settingsKey,
     showTagBrowserButton,
     tagTree,
     selectedTag,
     onSelectTag,
+    onRenameGroup,
+    onDeleteGroup,
     selectedTypes: selectedWordTypes,
     toggleType: handleTypeToggle,
     onOpenWordBook,

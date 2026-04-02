@@ -5,7 +5,7 @@ import { createNewWord } from '../../utils/srs';
 import WordTable from './WordTable';
 import ViewWordModal from './ViewWordModal';
 import EditWordModal from './EditWordModal';
-import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, SourceFilter, CompositionFilter, BookFilter } from './WordTable_UI';
+import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from './WordTable_UI';
 import { stringToWordArray } from '../../utils/text';
 import { TagTreeNode } from '../common/TagBrowser';
 import { getStoredJSON } from '../../utils/storage';
@@ -29,6 +29,26 @@ interface Props {
 
 const LIBRARY_FILTERS_KEY = 'vocab_pro_library_filters_v2';
 
+const dedupeGroups = (groups: string[]): string[] => Array.from(new Set(groups.filter(Boolean)));
+
+const buildRenamedGroupPath = (oldPath: string, nextName: string): string => {
+  const parts = oldPath.split('/');
+  parts[parts.length - 1] = nextName;
+  return parts.join('/');
+};
+
+const renameGroupPathValue = (groupPath: string, oldPath: string, renamedPath: string): string => {
+  if (groupPath === oldPath) return renamedPath;
+  if (groupPath.startsWith(`${oldPath}/`)) return `${renamedPath}${groupPath.slice(oldPath.length)}`;
+  return groupPath;
+};
+
+const deleteGroupPathValue = (groupPath: string, targetPath: string): string | null => {
+  if (groupPath === targetPath) return null;
+  if (!groupPath.startsWith(`${targetPath}/`)) return groupPath;
+  return groupPath.slice(targetPath.length + 1) || null;
+};
+
 const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed, onNavigate }) => {
   const [words, setWords] = useState<VocabularyItem[]>([]);
   
@@ -41,7 +61,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
   const [loading, setLoading] = useState(true);
   
   const [currentQuery, setCurrentQuery] = useState(savedState.query || '');
-  const [currentFilters, setCurrentFilters] = useState<{ types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, source: SourceFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }>({ types: new Set(['all']), refined: 'all', status: 'all', register: 'all', source: 'all', composition: 'all', book: 'all', specificBookId: '' });
+  const [currentFilters, setCurrentFilters] = useState<{ types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }>({ types: new Set(['all']), refined: 'all', status: 'all', register: 'all', composition: 'all', book: 'all', specificBookId: '' });
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   
   const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
@@ -191,7 +211,6 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
         currentFilters.refined, 
         currentFilters.status, 
         currentFilters.register, 
-        currentFilters.source, 
         selectedTag, 
         currentFilters.composition, 
         currentFilters.book,
@@ -224,6 +243,62 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
   const handleSelectTag = (tag: string | null) => {
     setSelectedTag(tag);
     setPage(0);
+  };
+
+  const handleRenameGroup = async (path: string, nextName: string) => {
+    const trimmedName = nextName.trim();
+    if (!trimmedName || trimmedName.includes('/')) return;
+
+    const renamedPath = buildRenamedGroupPath(path, trimmedName);
+    if (renamedPath === path) return;
+
+    const affectedWords = dataStore.getAllWords()
+      .filter(word => word.userId === user.id)
+      .filter(word => word.groups?.some(group => group === path || group.startsWith(`${path}/`)));
+
+    if (affectedWords.length === 0) {
+      if (selectedTag === path) setSelectedTag(renamedPath);
+      return;
+    }
+
+    const updatedWords = affectedWords.map(word => ({
+      ...word,
+      groups: dedupeGroups((word.groups || []).map(group => renameGroupPathValue(group, path, renamedPath))),
+      updatedAt: Date.now()
+    }));
+
+    await dataStore.bulkSaveWords(updatedWords);
+
+    if (selectedTag === path || selectedTag?.startsWith(`${path}/`)) {
+      setSelectedTag(renameGroupPathValue(selectedTag, path, renamedPath));
+    }
+  };
+
+  const handleDeleteGroup = async (path: string) => {
+    const affectedWords = dataStore.getAllWords()
+      .filter(word => word.userId === user.id)
+      .filter(word => word.groups?.some(group => group === path || group.startsWith(`${path}/`)));
+
+    if (affectedWords.length === 0) {
+      if (selectedTag === path) setSelectedTag(null);
+      return;
+    }
+
+    const updatedWords = affectedWords.map(word => ({
+      ...word,
+      groups: dedupeGroups((word.groups || [])
+        .map(group => deleteGroupPathValue(group, path))
+        .filter((group): group is string => Boolean(group))),
+      updatedAt: Date.now()
+    }));
+
+    await dataStore.bulkSaveWords(updatedWords);
+
+    if (selectedTag === path) {
+      setSelectedTag(null);
+    } else if (selectedTag?.startsWith(`${path}/`)) {
+      setSelectedTag(deleteGroupPathValue(selectedTag, path));
+    }
   };
 
   const handleAddWords = async (input: string, types: Set<WordTypeOption>) => {
@@ -277,7 +352,6 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
                  createdAt: Date.now(),
                  updatedAt: Date.now(),
                  quality: WordQuality.REFINED,
-                 source: 'refine',
                  // Reset SRS
                  nextReview: Date.now(),
                  interval: 0,
@@ -356,7 +430,6 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
                  refined: f.refined, 
                  status: f.status, 
                  register: f.register,
-                 source: f.source,
                  composition: f.composition,
                  book: f.book,
                  specificBookId: f.specificBookId
@@ -378,6 +451,8 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
           tagTree={tagTree}
           selectedTag={selectedTag}
           onSelectTag={handleSelectTag}
+          onRenameGroup={handleRenameGroup}
+          onDeleteGroup={handleDeleteGroup}
           onOpenWordBook={() => onNavigate && onNavigate('WORDBOOK')}
       />
       {viewingWord && (

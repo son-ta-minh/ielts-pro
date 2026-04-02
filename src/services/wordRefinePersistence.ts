@@ -67,8 +67,7 @@ export const applyAiRefinementResultsToWords = async (
                         false,
                         false,
                         false,
-                        false,
-                        'refine'
+                        false
                     );
                     newItem.userId = originalItem.userId;
                     const finalNewItem = mergeAiResultIntoWord(newItem, rawAiResult);
@@ -120,8 +119,7 @@ export const autoRefineNewWords = async (
     finalIssuesCount: number;
 }> => {
     const wordsToRefine = words.filter((word) =>
-        word.quality === WordQuality.RAW ||
-        word.source === 'manual'
+        word.quality === WordQuality.RAW
     );
 
     if (wordsToRefine.length === 0) {

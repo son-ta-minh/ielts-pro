@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, WordSource, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
+import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -538,8 +538,7 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
             // userId: targetUser.id, // Stop mapping to specific user to keep data global
             nextReview: item.nextReview || Date.now(),
             lastXpEarnedTime: item.lastXpEarnedTime || undefined, 
-            quality: item.quality || WordQuality.VERIFIED,
-            source: 'app' as WordSource
+            quality: item.quality || WordQuality.VERIFIED
           }));
           await bulkSaveWords(finalVocab);
       }
@@ -618,7 +617,6 @@ export const filterItem = (
     refinedFilter: string, 
     statusFilter: string, 
     registerFilter: string, 
-    sourceFilter: string = 'all', 
     groupFilter: string | null = null,
     compositionFilter: string = 'all',
     composedWordIds: Set<string> | null = null,
@@ -646,8 +644,6 @@ export const filterItem = (
         if ((statusFilter === 'new' && !isNew) || (statusFilter === 'learned' && !isLearned) || (statusFilter === 'easy' && !isEasy) || (statusFilter === 'hard' && !isHard) || (statusFilter === 'forgot' && !isForgot)) return false;
     }
     if (registerFilter !== 'all' && (item.register || 'raw') !== registerFilter) return false;
-    if (sourceFilter !== 'all' && (item.source || 'raw') !== sourceFilter) return false;
-    
     if (groupFilter) {
         if (groupFilter === 'Uncategorized') {
             if (item.groups && item.groups.length > 0) return false;

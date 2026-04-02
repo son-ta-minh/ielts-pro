@@ -113,8 +113,7 @@ export const WordLibraryTool: React.FC<WordLibraryToolProps> = ({ user }) => {
                         false,
                         false,
                         false,
-                        false,
-                        "manual"                 // source
+                        false
                     );
 
                     newItem.userId = user.id;

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, PenLine, BookMarked, Image } from 'lucide-react';
 import { VocabularyItem, LearnedStatus, WordQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
@@ -9,7 +9,6 @@ export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phr
 export type RefinedFilter = 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined';
 export type StatusFilter = 'all' | 'new' | 'forgot' | 'hard' | 'easy' | 'learned';
 export type RegisterFilter = 'all' | 'academic' | 'casual' | 'neutral' | 'raw';
-export type SourceFilter = 'all' | 'app' | 'manual' | 'refine';
 export type CompositionFilter = 'all' | 'composed' | 'not_composed';
 export type BookFilter = 'all' | 'in_book' | 'not_in_book' | 'specific';
 
@@ -45,6 +44,130 @@ const VisibilityToggle = ({ label, checked, onChange, subItem }: { label: React.
         {checked ? <CheckCircle2 size={14} className="text-green-500" /> : <div className="w-3.5 h-3.5 rounded-full border border-neutral-200"></div>}
     </button>
 );
+
+const GroupFilterCombobox: React.FC<{
+    value: string | null | undefined;
+    options: string[];
+    onChange: (value: string | null) => void;
+}> = ({ value, options, onChange }) => {
+    const [query, setQuery] = useState(value || '');
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        setQuery(value || '');
+    }, [value]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredOptions = useMemo(() => {
+        const normalized = query.trim().toLowerCase();
+        const uniqueOptions = Array.from(new Set(options));
+        if (!normalized) return uniqueOptions;
+        return uniqueOptions.filter((option) => option.toLowerCase().includes(normalized));
+    }, [options, query]);
+
+    const commitValue = (nextValue: string | null) => {
+        onChange(nextValue && nextValue.trim() ? nextValue.trim() : null);
+        setIsOpen(false);
+    };
+
+    return (
+        <div ref={containerRef} className="relative">
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
+                <input
+                    id="group-filter"
+                    value={query}
+                    onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setQuery(nextValue);
+                        setIsOpen(true);
+                        if (!nextValue.trim()) onChange(null);
+                    }}
+                    onFocus={() => setIsOpen(true)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const exactMatch = filteredOptions.find((option) => option.toLowerCase() === query.trim().toLowerCase());
+                            commitValue(exactMatch || (query.trim() || null));
+                        } else if (e.key === 'Escape') {
+                            setIsOpen(false);
+                            setQuery(value || '');
+                        }
+                    }}
+                    placeholder="Type to filter groups..."
+                    className="w-full pl-9 pr-16 py-2 rounded-lg text-xs font-bold text-neutral-900 placeholder:text-neutral-400 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {value && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setQuery('');
+                                onChange(null);
+                                setIsOpen(false);
+                            }}
+                            className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+                            title="Clear group filter"
+                        >
+                            <X size={12} />
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen((prev) => !prev)}
+                        className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition-colors"
+                        title="Toggle group suggestions"
+                    >
+                        <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                </div>
+            </div>
+            {isOpen && (
+                <div className="absolute left-0 right-0 top-full mt-2 z-50 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl animate-in fade-in zoom-in-95">
+                    <div className="max-h-64 overflow-y-auto custom-scrollbar p-2">
+                        {filteredOptions.length > 0 ? (
+                            filteredOptions.map((option) => {
+                                const isSelected = value === option;
+                                return (
+                                    <button
+                                        key={option}
+                                        type="button"
+                                        onClick={() => {
+                                            setQuery(option);
+                                            commitValue(option);
+                                        }}
+                                        className={`w-full rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${
+                                            isSelected
+                                                ? 'bg-neutral-900 text-white'
+                                                : 'text-neutral-800 hover:bg-neutral-100'
+                                        }`}
+                                        title={option}
+                                    >
+                                        <span className="block truncate">{option}</span>
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <div className="px-3 py-6 text-center text-xs font-bold text-neutral-400">
+                                No groups match "{query.trim()}".
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const getStatusBadge = (item: VocabularyItem) => {
   if (!item.lastReview || item.learnedStatus === LearnedStatus.NEW) return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-100 whitespace-nowrap">New</span>;
@@ -214,7 +337,6 @@ export interface WordTableUIProps {
   refinedFilter: RefinedFilter;
   statusFilter: StatusFilter;
   registerFilter: RegisterFilter;
-  sourceFilter: SourceFilter;
   compositionFilter: CompositionFilter;
   bookFilter: BookFilter;
   specificBookId: string;
@@ -263,7 +385,6 @@ export interface WordTableUIProps {
   setStatusFilter: (sf: StatusFilter) => void;
   setRefinedFilter: (rf: RefinedFilter) => void;
   setRegisterFilter: (rf: RegisterFilter) => void;
-  setSourceFilter: (sf: SourceFilter) => void;
   setCompositionFilter: (cf: CompositionFilter) => void;
   setBookFilter: (bf: BookFilter) => void;
   setIsViewMenuOpen: (o: boolean) => void;
@@ -275,6 +396,8 @@ export interface WordTableUIProps {
   tagTree?: TagTreeNode[];
   selectedTag?: string | null;
   onSelectTag?: (tag: string | null) => void;
+  onRenameGroup?: (path: string, nextName: string) => Promise<void>;
+  onDeleteGroup?: (path: string) => Promise<void>;
   
   // Updated props for Type Selector
   selectedTypes: Set<WordTypeOption>;
@@ -296,23 +419,35 @@ export interface WordTableUIProps {
 export const WordTableUI: React.FC<WordTableUIProps> = ({
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
   onPractice, context, onViewWord, onEditWord, onDelete, onHardDelete, query, setQuery, activeFilters,
-  refinedFilter, statusFilter, registerFilter, sourceFilter, compositionFilter, bookFilter, specificBookId, onSpecificBookChange, isAddExpanded, isFilterMenuOpen, quickAddInput,
+  refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, onSpecificBookChange, isAddExpanded, isFilterMenuOpen, quickAddInput,
   setQuickAddInput, isAdding, isViewMenuOpen, selectedIds, setSelectedIds,
   wordToDelete, setWordToDelete, isDeleting, setIsDeleting,
   wordToHardDelete, setWordToHardDelete, isHardDeleting, setIsHardDeleting,
   isAiModalOpen, setIsAiModalOpen,
   notification, viewMenuRef, visibility, setVisibility, handleToggleFilter,
   handleBatchAddSubmit, onOpenBulkDeleteModal, onOpenBulkHardDeleteModal, onBulkVerify, selectedWordsToRefine, selectedRawWordsCount, handleGenerateRefinePrompt,
-  handleAiRefinementResult, onApiRefineSelected, isApiRefining, apiRefineProgress, apiRefineHistory, isApiRefineLogOpen, onOpenApiRefineLog, onCloseApiRefineLog, onStopApiRefine, setStatusFilter, setRefinedFilter, setRegisterFilter, setSourceFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen,
+  handleAiRefinementResult, onApiRefineSelected, isApiRefining, apiRefineProgress, apiRefineHistory, isApiRefineLogOpen, onOpenApiRefineLog, onCloseApiRefineLog, onStopApiRefine, setStatusFilter, setRefinedFilter, setRegisterFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen,
   apiRefineFlushedCount, apiRefineTotalWords,
   setIsFilterMenuOpen, setIsAddExpanded, selectedWordsMissingHintsCount, onOpenHintModal,
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
+  onRenameGroup, onDeleteGroup,
   selectedTypes, toggleType, onOpenWordBook,
   onOpenAddToBookModal, isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook,
   onAddToPronunciation,
   onOpenParaModal
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
+  const groupSuggestions = useMemo(() => {
+    const values: string[] = [];
+    const visit = (nodes: TagTreeNode[]) => {
+      nodes.forEach((node) => {
+        values.push(node.path);
+        if (node.children.length > 0) visit(node.children);
+      });
+    };
+    if (tagTree) visit(tagTree);
+    return values;
+  }, [tagTree]);
   const totalPages = Math.ceil(total / pageSize);
   const totalApiRefineWords = apiRefineTotalWords || selectedWordsToRefine.length;
   const remainingApiRefineWords = Math.max(totalApiRefineWords - apiRefineFlushedCount, 0);
@@ -388,6 +523,8 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 onSelectTag={onSelectTag} 
                 title="Group Browser" 
                 icon={<FolderTree size={16} />} 
+                onRenameGroup={onRenameGroup}
+                onDeleteGroup={onDeleteGroup}
             />
         )}
         {isFilterMenuOpen && (
@@ -409,31 +546,33 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     <div>
                         <label htmlFor="status-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1">Status</label>
-                        <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
+                        <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold text-neutral-900 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
                             {[ { id: 'all', label: 'Any' }, { id: 'new', label: 'New' }, { id: 'learned', label: 'Learned' }, { id: 'easy', label: 'Easy' }, { id: 'hard', label: 'Hard' }, { id: 'forgot', label: 'Forgot' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                         </select>
                     </div>
                     <div>
                         <label htmlFor="quality-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1">Quality</label>
-                        <select id="quality-filter" value={refinedFilter} onChange={(e) => setRefinedFilter(e.target.value as RefinedFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
+                        <select id="quality-filter" value={refinedFilter} onChange={(e) => setRefinedFilter(e.target.value as RefinedFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold text-neutral-900 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
                              {[ { id: 'all', label: 'Any' }, { id: 'verified', label: 'Verified' }, { id: 'refined', label: 'Refined' }, { id: 'raw', label: 'Raw' }, { id: 'failed', label: 'Failed' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                         </select>
                     </div>
                     <div>
                         <label htmlFor="register-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1">Register</label>
-                        <select id="register-filter" value={registerFilter} onChange={(e) => setRegisterFilter(e.target.value as RegisterFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
+                        <select id="register-filter" value={registerFilter} onChange={(e) => setRegisterFilter(e.target.value as RegisterFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold text-neutral-900 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
                             {[ { id: 'all', label: 'Any' }, { id: 'raw', label: 'Raw' }, { id: 'academic', label: 'Academic' }, { id: 'casual', label: 'Casual' }, { id: 'neutral', label: 'Neutral' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="source-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1">Source</label>
-                        <select id="source-filter" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as SourceFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
-                            {[ { id: 'all', label: 'Any' }, { id: 'app', label: 'App' }, { id: 'manual', label: 'Manual' }, { id: 'refine', label: 'Refine' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
-                        </select>
+                        <label htmlFor="group-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1">Group</label>
+                        <GroupFilterCombobox
+                            value={selectedTag}
+                            options={groupSuggestions}
+                            onChange={(nextValue) => onSelectTag?.(nextValue)}
+                        />
                     </div>
                     <div>
                         <label htmlFor="composition-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1 flex items-center gap-1"><PenLine size={10}/> Usage</label>
-                        <select id="composition-filter" value={compositionFilter} onChange={(e) => setCompositionFilter(e.target.value as CompositionFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
+                        <select id="composition-filter" value={compositionFilter} onChange={(e) => setCompositionFilter(e.target.value as CompositionFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold text-neutral-900 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
                             {[ { id: 'all', label: 'Any' }, { id: 'composed', label: 'Used in Writing' }, { id: 'not_composed', label: 'Not Used' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                         </select>
                     </div>
@@ -444,7 +583,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                                 id="book-filter" 
                                 value={bookFilter} 
                                 onChange={(e) => setBookFilter(e.target.value as BookFilter)} 
-                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none ${bookFilter === 'specific' ? 'w-24' : ''}`}
+                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold text-neutral-900 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none ${bookFilter === 'specific' ? 'w-24' : ''}`}
                             >
                                 {[ { id: 'all', label: 'Any' }, { id: 'in_book', label: 'In a Book' }, { id: 'not_in_book', label: 'Not in Book' }, { id: 'specific', label: 'Specific Book' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                             </select>
@@ -452,7 +591,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                                 <select 
                                     value={specificBookId} 
                                     onChange={(e) => onSpecificBookChange(e.target.value)}
-                                    className="flex-[2] px-3 py-2 rounded-lg text-xs font-bold bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none animate-in slide-in-from-left-2"
+                                    className="flex-[2] px-3 py-2 rounded-lg text-xs font-bold text-neutral-900 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none animate-in slide-in-from-left-2"
                                 >
                                     <option value="">Select Book...</option>
                                     {wordBooks.map(book => {

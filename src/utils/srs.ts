@@ -1,4 +1,4 @@
-import { VocabularyItem, ReviewGrade, WordQuality, WordSource, WordFamily, LearnedStatus } from '../app/types';
+import { VocabularyItem, ReviewGrade, WordQuality, WordFamily, LearnedStatus } from '../app/types';
 import { ChallengeType } from '../components/practice/TestModalTypes';
 import { generateAvailableChallenges } from './challengeUtils';
 import { calculateGameEligibility } from './gameEligibility';
@@ -190,7 +190,7 @@ export function getRemainingTime(nextReview: number): { label: string; urgency: 
 export async function createNewWord(
   word: string, ipaUs: string, meaningVi: string, example: string, note: string, groups: string[],
   isIdiom = false, isPhrasalVerb = false,
-  isCollocation = false, isStandardPhrase = false, isPassive = false, source: WordSource = 'manual'
+  isCollocation = false, isStandardPhrase = false, isPassive = false
 ): Promise<VocabularyItem> {
   let finalIpaUs = ipaUs.trim();
   let finalMeaningVi = meaningVi.trim();
@@ -273,7 +273,7 @@ export async function createNewWord(
     userId: '', word: word.trim(), ipaUs: finalIpaUs, meaningVi: finalMeaningVi, example: example.trim(), note, groups,
     isIdiom, isPhrasalVerb, isCollocation, isStandardPhrase, isPassive,
     isFocus: false,
-    register: 'raw', quality: WordQuality.RAW, source, isExampleLocked: false,
+    register: 'raw', quality: WordQuality.RAW, isExampleLocked: false,
     createdAt: now, updatedAt: now, nextReview: now, interval: 0, easeFactor: 2.5, consecutiveCorrect: 0, forgotCount: 0,
     learnedStatus: LearnedStatus.NEW,
     lastTestResults: {}

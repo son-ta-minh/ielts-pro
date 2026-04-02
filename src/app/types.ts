@@ -215,8 +215,6 @@ export interface CollocationDetail {
   d?: string;
 }
 
-export type WordSource = 'app' | 'manual' | 'refine';
-
 export interface VocabularyItem {
   id: string;
   userId: string; 
@@ -253,7 +251,6 @@ export interface VocabularyItem {
   isPassive?: boolean;
   isFocus?: boolean;
   quality: WordQuality;
-  source?: WordSource;
   img?: string;
   nextReview: number; 
   interval: number; 
