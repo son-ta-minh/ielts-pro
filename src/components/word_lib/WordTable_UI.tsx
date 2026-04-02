@@ -478,7 +478,25 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
         <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
-                <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search words..." className="w-full pl-10 pr-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-neutral-900 transition-all shadow-sm" />
+                <div className="relative w-full">
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search words..."
+                        className="w-full pl-10 pr-10 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-neutral-900 transition-all shadow-sm"
+                    />
+                    
+                    {query && (
+                        <button
+                        type="button"
+                        onClick={() => setQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-900"
+                        >
+                        ✕
+                        </button>
+                    )}
+                </div>            
             </div>
             <div className="flex gap-2">
                 <div className="relative" ref={viewMenuRef}>
