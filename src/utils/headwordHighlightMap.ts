@@ -2,7 +2,7 @@ const HEADWORD_TOKEN_VARIANTS: Record<string, string[]> = {
     be: ['am', 'is', 'are', 'was', 'were', 'been', 'being'],
 };
 
-const IGNORED_HEADWORD_TOKENS = new Set([
+export const IGNORED_HEADWORD_TOKENS = new Set([
     'a',
     'an',
     'the',
@@ -24,6 +24,34 @@ const IGNORED_HEADWORD_TOKENS = new Set([
 
 const normalize = (value: string): string => value.trim().toLowerCase();
 
+export const buildIgnoredTokenRemovalVariants = (phrase: string): string[] => {
+    const normalizedPhrase = normalize(phrase);
+    if (!normalizedPhrase) return [];
+
+    const tokens = normalizedPhrase.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return [];
+
+    const variants = new Set<string>();
+    const queue: string[][] = [tokens];
+    const visited = new Set<string>([tokens.join(' ')]);
+
+    while (queue.length > 0) {
+        const currentTokens = queue.shift() || [];
+        currentTokens.forEach((token, index) => {
+            if (!IGNORED_HEADWORD_TOKENS.has(token)) return;
+            const nextTokens = currentTokens.filter((_, tokenIndex) => tokenIndex !== index);
+            if (nextTokens.length === 0) return;
+            const nextPhrase = nextTokens.join(' ');
+            if (visited.has(nextPhrase)) return;
+            visited.add(nextPhrase);
+            variants.add(nextPhrase);
+            queue.push(nextTokens);
+        });
+    }
+
+    return Array.from(variants).sort((left, right) => right.length - left.length);
+};
+
 export const expandHighlightTerms = (phrase: string): string[] => {
     const normalizedPhrase = normalize(phrase);
     if (!normalizedPhrase) return [];
@@ -31,14 +59,12 @@ export const expandHighlightTerms = (phrase: string): string[] => {
     const tokens = normalizedPhrase.split(/\s+/).filter(Boolean);
     const uniqueTerms = new Set<string>([normalizedPhrase]);
 
+    buildIgnoredTokenRemovalVariants(normalizedPhrase).forEach((variant) => {
+        uniqueTerms.add(variant);
+    });
+
     tokens.forEach((token, index) => {
-        if (IGNORED_HEADWORD_TOKENS.has(token)) {
-            const nextTokens = tokens.filter((_, tokenIndex) => tokenIndex !== index);
-            if (nextTokens.length > 0) {
-                uniqueTerms.add(nextTokens.join(' '));
-            }
-            return;
-        }
+        if (IGNORED_HEADWORD_TOKENS.has(token)) return;
 
         const variants = HEADWORD_TOKEN_VARIANTS[token];
         if (!variants || variants.length === 0) return;

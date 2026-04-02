@@ -131,6 +131,7 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
   const [batchText, setBatchText] = useState('');
   const [groupQuery, setGroupQuery] = useState('');
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
+  const [keywordInput, setKeywordInput] = useState('');
   const groupMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -241,6 +242,10 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
       .filter((group) => !normalizedQuery || group.toLowerCase().includes(normalizedQuery))
       .slice(0, 100);
   }, [availableGroups, currentGroups, groupQuery]);
+  const currentKeywords = useMemo(
+    () => (formData.keywords || []).map((item: string) => item.trim()).filter(Boolean),
+    [formData.keywords]
+  );
 
   const addGroupToField = (group: string) => {
     const normalized = group.trim();
@@ -252,6 +257,18 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
 
   const removeGroupFromField = (group: string) => {
     setFormData('groupsString', currentGroups.filter((item: string) => item !== group).join(', '));
+  };
+
+  const addKeyword = (value: string) => {
+    const normalized = value.trim().replace(/\s+/g, ' ');
+    if (!normalized) return;
+    if (currentKeywords.some((item: string) => item.toLowerCase() === normalized.toLowerCase())) return;
+    setFormData('keywords', [...currentKeywords, normalized]);
+    setKeywordInput('');
+  };
+
+  const removeKeyword = (keyword: string) => {
+    setFormData('keywords', currentKeywords.filter((item: string) => item !== keyword));
   };
 
   return (
@@ -616,6 +633,50 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                                         </div>
                                     )}
                                 </div>
+                           </div>
+                           <div className="space-y-2">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Keywords</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={keywordInput}
+                                        onChange={(e) => setKeywordInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ',') {
+                                                e.preventDefault();
+                                                addKeyword(keywordInput);
+                                            }
+                                        }}
+                                        placeholder="build rapport, social bonding..."
+                                        className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm focus:ring-1 focus:ring-neutral-900 outline-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => addKeyword(keywordInput)}
+                                        className="px-4 py-3 bg-neutral-900 text-white rounded-xl text-xs font-black uppercase tracking-wide hover:bg-neutral-800 transition-colors"
+                                    >
+                                        Add
+                                    </button>
+                                </div>
+                                {currentKeywords.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {currentKeywords.map((keyword: string) => (
+                                            <button
+                                                key={keyword}
+                                                type="button"
+                                                onClick={() => removeKeyword(keyword)}
+                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-50 text-cyan-800 text-[10px] font-black border border-cyan-200 hover:bg-cyan-100 transition-colors"
+                                                title="Remove keyword"
+                                            >
+                                                <span>{keyword}</span>
+                                                <X size={12} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <p className="text-[11px] font-medium text-neutral-400 px-1">
+                                    Search Page and StudyBuddy will use these as extra keyword matches when the headword itself does not match.
+                                </p>
                            </div>
                            <div className="md:col-span-2 space-y-1">
                                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Register</label>

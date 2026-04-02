@@ -10,10 +10,11 @@ import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
 import { getDailyGoalHistoryKey, getDailyStreakKey, readDailyStreaks } from './dailyStreaks';
 import { getStoredJSON, setStoredJSON } from './storage';
+import { normalizeVocabularyKeywords } from './vocabularyKeywordUtils';
 
 const keyMap: { [key: string]: string } = {
     // VocabularyItem top-level - 'ipa' removed, 'ipaUs' uses 'i_us'
-    userId: 'uid', word: 'w', wordFamilyGroupId: 'wfgid', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'nt', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', isExampleLocked: 'is_exl', isPassive: 'is_pas', isFocus: 'is_foc', quality: 'q', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', learnedStatus: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
+    userId: 'uid', word: 'w', keywords: 'kw', wordFamilyGroupId: 'wfgid', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'nt', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', isExampleLocked: 'is_exl', isPassive: 'is_pas', isFocus: 'is_foc', quality: 'q', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', learnedStatus: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
     masteryScore: 'ms',
     complexity: 'cx',
 
@@ -380,6 +381,7 @@ function cleanImportedItem(item: any): any {
     if (cleaned.isIrregular === undefined) cleaned.isIrregular = false;
     if (cleaned.isPassive === undefined) cleaned.isPassive = false;
     if (cleaned.isFocus === undefined) cleaned.isFocus = false;
+    cleaned.keywords = normalizeVocabularyKeywords(cleaned.keywords, cleaned.word);
 
     // Remove obsolete family member fields
     if (cleaned.wordFamily) {

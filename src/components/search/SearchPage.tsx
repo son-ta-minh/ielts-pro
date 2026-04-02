@@ -5,6 +5,7 @@ import * as dataStore from '../../app/dataStore';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { getFuzzyPhraseScore, isFuzzyPhraseMatch } from '../../utils/fuzzyPhraseMatch';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
+import { normalizeKeywordText } from '../../utils/vocabularyKeywordUtils';
 
 interface Props {
   user: User;
@@ -158,6 +159,10 @@ const getFriendlyPathLabel = (path: string) => {
     return 'Meaning';
   }
 
+  if (lower.startsWith('keywords')) {
+    return 'Keyword';
+  }
+
   if (lower.startsWith('example')) {
     return 'Example';
   }
@@ -290,8 +295,15 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
 
         const exactWordStarts = word.word.toLowerCase().startsWith(normalizedQuery) ? 10 : 0;
         const exactWordContains = word.word.toLowerCase().includes(normalizedQuery) ? 5 : 0;
+        const normalizedKeywords = (word.keywords || []).map((keyword) => normalizeKeywordText(keyword));
+        const exactKeywordMatch = normalizedKeywords.some((keyword) => keyword === normalizedQuery) ? 9 : 0;
+        const exactKeywordStarts = normalizedKeywords.some((keyword) => keyword.startsWith(normalizedQuery)) ? 6 : 0;
+        const exactKeywordContains = normalizedKeywords.some((keyword) => keyword.includes(normalizedQuery)) ? 3 : 0;
+        const deepKeywordScore = searchMode === 'deep'
+          ? Math.max(0, ...normalizedKeywords.map((keyword) => getFuzzyPhraseScore(normalizedQuery, keyword))) * 8
+          : 0;
         const deepWordScore = searchMode === 'deep' ? getFuzzyPhraseScore(normalizedQuery, word.word) * 10 : 0;
-        const score = exactWordStarts + exactWordContains + deepWordScore + hits.reduce((sum, hit) => sum + hit.matchScore, 0);
+        const score = exactWordStarts + exactWordContains + exactKeywordMatch + exactKeywordStarts + exactKeywordContains + deepWordScore + deepKeywordScore + hits.reduce((sum, hit) => sum + hit.matchScore, 0);
         return { word, hits: hits.slice(0, MAX_HITS_PER_WORD), score };
       })
       .filter((item): item is { word: VocabularyItem; hits: SearchHit[]; score: number } => item !== null)

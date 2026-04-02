@@ -6,6 +6,7 @@ import { calculateGameEligibility } from '../utils/gameEligibility';
 import { performAutoBackup } from '../services/backupService';
 import { getConfig } from './settingsManager';
 import { readDailyGoalHistory, readDailyStreaks, writeDailyStreaks } from '../utils/dailyStreaks';
+import { withNormalizedVocabularyKeywords } from '../utils/vocabularyKeywordUtils';
 
 // --- Store State ---
 let _isInitialized = false;
@@ -299,6 +300,11 @@ export async function init(userId: string) {
             if (word.masteryScore !== currentMastery) { word.masteryScore = currentMastery; changed = true; }
             if (JSON.stringify(word.gameEligibility) !== JSON.stringify(currentGameEligibility)) { word.gameEligibility = currentGameEligibility; changed = true; }
             if (typeof word.register === 'undefined') { word.register = 'raw'; changed = true; }
+            const normalizedKeywords = withNormalizedVocabularyKeywords(word).keywords;
+            if (JSON.stringify(word.keywords || []) !== JSON.stringify(normalizedKeywords)) {
+                word.keywords = normalizedKeywords;
+                changed = true;
+            }
             if (changed) wordsToMigrate.push(word);
         }
 
@@ -430,6 +436,7 @@ export async function findWordByText(userId: string, word: string) {
 export async function saveWordAndUser(word: VocabularyItem, user: User) {
     if (!canWrite()) return;
     _updateLocalLastModified();
+    Object.assign(word, withNormalizedVocabularyKeywords(word));
     word.complexity = calculateComplexity(word);
     word.masteryScore = calculateMasteryScore(word);
     word.gameEligibility = calculateGameEligibility(word);
@@ -444,6 +451,7 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
     if (!canWrite()) return;
     _updateLocalLastModified();
     if (word) {
+        Object.assign(word, withNormalizedVocabularyKeywords(word));
         word.complexity = calculateComplexity(word);
         word.masteryScore = calculateMasteryScore(word);
         word.gameEligibility = calculateGameEligibility(word);
@@ -458,6 +466,7 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
 export async function saveWord(item: VocabularyItem) {
     if (!canWrite()) return;
     _updateLocalLastModified();
+    Object.assign(item, withNormalizedVocabularyKeywords(item));
     item.complexity = calculateComplexity(item);
     item.masteryScore = calculateMasteryScore(item);
     item.gameEligibility = calculateGameEligibility(item);
@@ -472,6 +481,7 @@ export async function bulkSaveWords(items: VocabularyItem[]) {
     if (items.length === 0) return;
     _updateLocalLastModified();
     items.forEach(item => {
+        Object.assign(item, withNormalizedVocabularyKeywords(item));
         item.complexity = calculateComplexity(item);
         item.masteryScore = calculateMasteryScore(item);
         item.gameEligibility = calculateGameEligibility(item);

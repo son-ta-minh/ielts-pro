@@ -10,6 +10,7 @@ import UniversalAiModal from '../common/UniversalAiModal';
 import LearningSuggestionModal from '../common/LearningSuggestionModal';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
+import { normalizeVocabularyKeywords } from '../../utils/vocabularyKeywordUtils';
 
 type FormState = VocabularyItem & {
     groupsString: string;
@@ -33,6 +34,7 @@ function formReducer(state: FormState, action: FormAction): FormState {
             const word = action.payload;
             return {
                 ...word,
+                keywords: normalizeVocabularyKeywords(word.keywords, word.word),
                 register: word.register || 'raw',
                 groupsString: word.groups?.join(', ') || '',
                 studiedStatus: word.learnedStatus || LearnedStatus.NEW,
@@ -200,6 +202,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
     
     let updatedWord: VocabularyItem = { 
         ...rest, 
+        keywords: normalizeVocabularyKeywords(rest.keywords, rest.word),
         wordFamily: finalFamily, 
         prepositions: prepositionsList.filter(p => p.prep.trim()).length > 0 ? prepositionsList.filter(p => p.prep.trim()) : undefined,
         collocationsArray: collocationsArray.filter(c => c.text.trim()),

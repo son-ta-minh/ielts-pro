@@ -50,6 +50,7 @@ import {
 import { mergeStudyBuddyMemoryChunks, parseStudyBuddyMemoryDirectives } from '../../utils/studyBuddyMemoryUtils';
 import { normalizeStudyBuddyImageSettings } from '../../utils/studyBuddyImageUtils';
 import { stringToWordArray } from '../../utils/text';
+import { findWordByStudyBuddyLookup } from '../../utils/vocabularyKeywordUtils';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
@@ -593,7 +594,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
     const checkLibraryExistence = async (word: string) => {
         if (!word || !user.id) return;
-        const exists = await dataStore.findWordByText(user.id, word);
+        const exists = findWordByStudyBuddyLookup(dataStore.getAllWords(), user.id, word);
         setIsAlreadyInLibrary(!!exists);
         setCurrentLibraryWord(exists || null);
     };
@@ -2087,7 +2088,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             console.log("cannot view word");
             return;
         }
-        const wordObj = await dataStore.findWordByText(user.id, text);
+        const wordObj = findWordByStudyBuddyLookup(dataStore.getAllWords(), user.id, text);
         if (wordObj) {
             setIsOpen(false);
             setMenuPos(null);

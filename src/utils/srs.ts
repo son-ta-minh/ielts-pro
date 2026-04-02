@@ -3,6 +3,7 @@ import { ChallengeType } from '../components/practice/TestModalTypes';
 import { generateAvailableChallenges } from './challengeUtils';
 import { calculateGameEligibility } from './gameEligibility';
 import { getConfig, SystemConfig, getServerUrl } from '../app/settingsManager';
+import { normalizeVocabularyKeywords } from './vocabularyKeywordUtils';
 
 /**
  * Calculates a future review timestamp, anchored to midnight (00:00:00).
@@ -271,6 +272,7 @@ export async function createNewWord(
   const newItem: VocabularyItem = {
     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
     userId: '', word: word.trim(), ipaUs: finalIpaUs, meaningVi: finalMeaningVi, example: example.trim(), note, groups,
+    keywords: [],
     isIdiom, isPhrasalVerb, isCollocation, isStandardPhrase, isPassive,
     isFocus: false,
     register: 'raw', quality: WordQuality.RAW, isExampleLocked: false,
@@ -278,6 +280,7 @@ export async function createNewWord(
     learnedStatus: LearnedStatus.NEW,
     lastTestResults: {}
   };
+  newItem.keywords = normalizeVocabularyKeywords(newItem.keywords, newItem.word);
   newItem.complexity = calculateComplexity(newItem);
   newItem.masteryScore = calculateMasteryScore(newItem);
   newItem.gameEligibility = calculateGameEligibility(newItem);
