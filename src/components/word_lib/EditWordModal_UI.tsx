@@ -67,6 +67,7 @@ export interface EditWordModalUIProps {
   handleCacheImages: () => void | Promise<void>;
   onGenImg: () => void | Promise<void>;
   onSelectImage: () => void | Promise<void>;
+  onFormatExamples: () => void;
 }
 
 type Tab = 'MAIN' | 'SOUND' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
@@ -113,7 +114,8 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
     onOpenAiRefine, onSuggestLearn, hasSuggestions,
     handleCacheImages,
     onGenImg,
-    onSelectImage
+    onSelectImage,
+    onFormatExamples
   } = props;
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
@@ -317,7 +319,16 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                             <input type="text" value={formData.meaningVi} onChange={(e) => setFormData('meaningVi', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-base font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
                         <div className="md:col-span-2 space-y-1">
-                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Examples</label>
+                            <div className="flex items-center justify-between px-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Examples</label>
+                                <button
+                                    type="button"
+                                    onClick={onFormatExamples}
+                                    className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors"
+                                >
+                                    Format
+                                </button>
+                            </div>
                             <textarea rows={5} value={formData.example} onChange={(e) => setFormData('example', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
                         {/* Prepositions / Patterns */}

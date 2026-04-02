@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { VocabularyItem, Unit, ReviewGrade, WordFamilyGroup } from '../../app/types';
+import React, { useState, useEffect, useRef } from 'react';
+import { VocabularyItem, Unit, ReviewGrade, WordFamilyGroup, ParaphraseOption } from '../../app/types';
 import { findWordByText, saveWord, getUnitsContainingWord, getAllWords } from '../../app/dataStore';
 import { ViewWordModalUI } from './ViewWordModal_UI';
 import { createNewWord, calculateMasteryScore } from '../../utils/srs';
@@ -10,6 +10,10 @@ import { getConfig } from '../../app/settingsManager';
 import { StudyBuddyTargetSection } from '../../utils/studyBuddyChatUtils';
 import { clearStaleWordFamilyGroupLink } from '../../utils/wordFamilyGroupLinking';
 import * as db from '../../app/db';
+
+interface ScannedParaphraseItem extends ParaphraseOption {
+  sourceWord?: string;
+}
 
 interface Props {
   word: VocabularyItem;
@@ -30,11 +34,26 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
   const [currentWordFamilyGroup, setCurrentWordFamilyGroup] = useState<WordFamilyGroup | null>(null);
   const [isChallenging, setIsChallenging] = useState(false);
   const [isMimicOpen, setIsMimicOpen] = useState(false);
+  const [scannedParaphrases, setScannedParaphrases] = useState<ScannedParaphraseItem[]>([]);
+  const [isScanningParaphrases, setIsScanningParaphrases] = useState(false);
+  const [scanParaphraseResultCount, setScanParaphraseResultCount] = useState<number | null>(null);
+  const scanParaphraseResetTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const normalizedResults = normalizeTestResultKeys(word.lastTestResults);
     setCurrentWord({ ...word, lastTestResults: normalizedResults });
+    setScannedParaphrases([]);
+    setScanParaphraseResultCount(null);
   }, [word]);
+
+  useEffect(() => {
+    return () => {
+      if (scanParaphraseResetTimerRef.current) {
+        window.clearTimeout(scanParaphraseResetTimerRef.current);
+        scanParaphraseResetTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -197,11 +216,123 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
 
   const config = getConfig();
   const appliedAccent = config.audio.appliedAccent;
+  const libraryWords = getAllWords().filter((item) => item.userId === currentWord.userId);
   const libraryWordSet = new Set(
-    getAllWords()
-      .filter((item) => item.userId === currentWord.userId)
-      .map((item) => item.word.trim().toLowerCase())
+    libraryWords.map((item) => item.word.trim().toLowerCase())
   );
+
+  const handleScanParaphrases = () => {
+    setIsScanningParaphrases(true);
+    setScanParaphraseResultCount(null);
+    if (scanParaphraseResetTimerRef.current) {
+      window.clearTimeout(scanParaphraseResetTimerRef.current);
+      scanParaphraseResetTimerRef.current = null;
+    }
+
+    try {
+      const normalizedHeadword = currentWord.word.trim().toLowerCase();
+      const existingWords = new Set(
+        [
+          normalizedHeadword,
+          ...(currentWord.paraphrases || []).map((item) => item.word.trim().toLowerCase())
+        ].filter(Boolean)
+      );
+      const libraryMap = new Map<string, VocabularyItem>();
+      libraryWords.forEach((item) => {
+        const normalizedWord = item.word.trim().toLowerCase();
+        if (normalizedWord) libraryMap.set(normalizedWord, item);
+      });
+
+      const visited = new Set<string>();
+      const resultMap = new Map<string, ScannedParaphraseItem>();
+
+      const addCandidate = (candidate: ScannedParaphraseItem) => {
+        const normalizedWord = candidate.word.trim().toLowerCase();
+        if (!normalizedWord || existingWords.has(normalizedWord)) return;
+        if (!resultMap.has(normalizedWord)) {
+          resultMap.set(normalizedWord, candidate);
+        }
+      };
+
+      const recursiveScan = (sourceWord: VocabularyItem) => {
+        const normalizedSource = sourceWord.word.trim().toLowerCase();
+        if (!normalizedSource || visited.has(normalizedSource)) return;
+        visited.add(normalizedSource);
+
+        addCandidate({
+          word: sourceWord.word,
+          tone: 'synonym',
+          context: sourceWord.example || sourceWord.meaningVi || '',
+          isIgnored: false,
+          sourceWord: sourceWord.word
+        });
+
+        (sourceWord.paraphrases || [])
+          .filter((item) => !item.isIgnored && item.word.trim())
+          .forEach((item) => {
+            addCandidate({
+              word: item.word,
+              tone: item.tone || 'synonym',
+              context: item.context || sourceWord.example || sourceWord.meaningVi || '',
+              isIgnored: false,
+              sourceWord: sourceWord.word
+            });
+
+            const linkedWord = libraryMap.get(item.word.trim().toLowerCase());
+            if (linkedWord) {
+              recursiveScan(linkedWord);
+            }
+          });
+      };
+
+      libraryWords.forEach((libraryWord) => {
+        const hasCurrentAsParaphrase = (libraryWord.paraphrases || []).some(
+          (item) => !item.isIgnored && item.word.trim().toLowerCase() === normalizedHeadword
+        );
+        if (hasCurrentAsParaphrase) {
+          recursiveScan(libraryWord);
+        }
+      });
+
+      const results = Array.from(resultMap.values());
+      setScannedParaphrases(results);
+      setScanParaphraseResultCount(results.length);
+      scanParaphraseResetTimerRef.current = window.setTimeout(() => {
+        setScanParaphraseResultCount(null);
+        scanParaphraseResetTimerRef.current = null;
+      }, 5000);
+    } finally {
+      setIsScanningParaphrases(false);
+    }
+  };
+
+  const handleAddScannedParaphrase = (item: ScannedParaphraseItem) => {
+    const normalizedWord = item.word.trim().toLowerCase();
+    if (!normalizedWord) return;
+
+    const currentParaphrases = currentWord.paraphrases || [];
+    if (currentParaphrases.some((entry) => entry.word.trim().toLowerCase() === normalizedWord)) {
+      setScannedParaphrases((prev) => prev.filter((entry) => entry.word.trim().toLowerCase() !== normalizedWord));
+      return;
+    }
+
+    const updatedWord: VocabularyItem = {
+      ...currentWord,
+      paraphrases: [
+        ...currentParaphrases,
+        {
+          word: item.word,
+          tone: item.tone,
+          context: item.context,
+          isIgnored: false
+        }
+      ],
+      updatedAt: Date.now()
+    };
+
+    handleLocalUpdate(updatedWord);
+    setScannedParaphrases((prev) => prev.filter((entry) => entry.word.trim().toLowerCase() !== normalizedWord));
+  };
 
   const dispatchAskAiTarget = (section: StudyBuddyTargetSection, source: string) => {
     window.dispatchEvent(
@@ -241,6 +372,11 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       onUpdate={handleLocalUpdate}
       onNavigateToWord={onNavigateToWord}
       libraryWordSet={libraryWordSet}
+      scannedParaphrases={scannedParaphrases}
+      isScanningParaphrases={isScanningParaphrases}
+      scanParaphraseResultCount={scanParaphraseResultCount}
+      onScanParaphrases={handleScanParaphrases}
+      onAddScannedParaphrase={handleAddScannedParaphrase}
       appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}
       onAskAiRequest={handleAskAi}

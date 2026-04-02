@@ -19,7 +19,7 @@ export const ScrambleChallenge: React.FC<Props> = ({
 }) => {
     const [insertionIndex, setInsertionIndex] = React.useState(0);
     const currentSelection = userAnswer || [];
-    const cleanToken = (token: string) => token.replace(/[\[\]]/g, '');
+    const cleanToken = (token: string) => token.replace(/[\[\]\{\}]/g, '');
     
     // Calculate used indices based on current selection
     const usedIndices = new Set<number>();

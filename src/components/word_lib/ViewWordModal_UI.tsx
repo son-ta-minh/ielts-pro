@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image } from 'lucide-react';
+import { Search, LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image, Loader2, CheckCircle2 } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, LearnedStatus, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
 import { applyLearnedStatus, getRemainingTime } from '../../utils/srs';
 import { speak } from '../../utils/audio';
@@ -8,6 +8,7 @@ import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { isFuzzyPhraseMatch } from '../../utils/fuzzyPhraseMatch';
+import { expandHighlightTerms, getHeadwordHighlightTerms } from '../../utils/headwordHighlightMap';
 
 // --- Visual Components ---
 
@@ -182,6 +183,9 @@ const UsageTable: React.FC<{
 export interface ViewWordModalUIProps {
     word: VocabularyItem;
     libraryWordSet?: Set<string>;
+    scannedParaphrases?: Array<ParaphraseOption & { sourceWord?: string }>;
+    isScanningParaphrases?: boolean;
+    scanParaphraseResultCount?: number | null;
     wordFamilyGroup?: WordFamilyGroup | null;
     onOpenWordFamilyGroupRequest?: (groupId: string) => void;
     onClose: () => void;
@@ -198,14 +202,18 @@ export interface ViewWordModalUIProps {
     onAddAIExample?: () => void;
     onAskAiRequest?: () => void;
     onAskAiSectionRequest?: (section: 'wordFamily' | 'collocation' | 'paraphrase' | 'idiom' | 'example' | 'preposition') => void;
+    onScanParaphrases?: () => void;
+    onAddScannedParaphrase?: (item: ParaphraseOption & { sourceWord?: string }) => void;
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
-    word, libraryWordSet, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
+    word, libraryWordSet, scannedParaphrases = [], isScanningParaphrases = false, scanParaphraseResultCount = null, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onNavigateToWord, isViewOnly = false,
     onAddAIExample,
     onAskAiRequest,
-    onAskAiSectionRequest
+    onAskAiSectionRequest,
+    onScanParaphrases,
+    onAddScannedParaphrase
 }) => {
     const isLibraryWord = (value: string) => !!value.trim() && !!libraryWordSet?.has(value.trim().toLowerCase());
     // Helper to render examples with badge replacements
@@ -213,22 +221,79 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
         if (!text) return { __html: "" };
 
         const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const highlightHeadword = (html: string, headword: string) => {
-            const normalizedHeadword = headword.trim();
-            if (!normalizedHeadword) return html;
+        const amberHighlightHtml = (value: string) =>
+            `<span class="rounded-md bg-amber-100 px-1 py-0.5 font-bold text-amber-900">${value}</span>`;
+        const highlightTerms = (html: string, terms: string[]) => {
+            if (terms.length === 0) return html;
+            const sortedTerms = Array.from(new Set(terms.map((term) => term.trim()).filter(Boolean)))
+                .sort((left, right) => right.length - left.length);
+            const isWordChar = (char?: string) => !!char && /[A-Za-z0-9_]/.test(char);
+            const hasWordBoundary = (source: string, start: number, end: number) =>
+                !isWordChar(source[start - 1]) && !isWordChar(source[end]);
 
-            const pattern = new RegExp(`\\b(${escapeRegex(normalizedHeadword)})\\b`, 'gi');
+            const highlightSegment = (segment: string) => {
+                const matches: Array<{ start: number; end: number; text: string }> = [];
+                const occupied: boolean[] = new Array(segment.length).fill(false);
+
+                sortedTerms.forEach((term) => {
+                    const pattern = new RegExp(escapeRegex(term), 'gi');
+                    let match: RegExpExecArray | null;
+
+                    while ((match = pattern.exec(segment)) !== null) {
+                        const matchedText = match[0];
+                        const start = match.index;
+                        const end = start + matchedText.length;
+
+                        if (!hasWordBoundary(segment, start, end)) continue;
+
+                        let overlaps = false;
+                        for (let index = start; index < end; index += 1) {
+                            if (occupied[index]) {
+                                overlaps = true;
+                                break;
+                            }
+                        }
+                        if (overlaps) continue;
+
+                        matches.push({ start, end, text: matchedText });
+                        for (let index = start; index < end; index += 1) {
+                            occupied[index] = true;
+                        }
+                    }
+                });
+
+                if (matches.length === 0) return segment;
+
+                matches.sort((left, right) => left.start - right.start);
+                let cursor = 0;
+                let result = '';
+
+                matches.forEach((match) => {
+                    result += segment.slice(cursor, match.start);
+                    result += amberHighlightHtml(match.text);
+                    cursor = match.end;
+                });
+
+                result += segment.slice(cursor);
+                return result;
+            };
+
             return html
                 .split(/(<[^>]+>)/g)
                 .map((segment) => {
                     if (!segment || segment.startsWith('<')) return segment;
-                    return segment.replace(
-                        pattern,
-                        '<span class="rounded-md bg-amber-100 px-1 py-0.5 font-bold text-amber-900">$1</span>'
-                    );
+                    return highlightSegment(segment);
                 })
                 .join('');
         };
+        const highlightCurlyBraceText = (html: string) =>
+            html
+                .split(/(<[^>]+>)/g)
+                .map((segment) => {
+                    if (!segment || segment.startsWith('<')) return segment;
+                    return segment.replace(/\{([^{}]+)\}/g, (_match, value) => amberHighlightHtml(value.trim()));
+                })
+                .join('');
 
         let html = parseMarkdown(text);
 
@@ -255,7 +320,13 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
             return `<span class="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-md border ${style} mr-1">${tag}</span>`;
         });
 
-        html = highlightHeadword(html, word.word || '');
+        html = highlightCurlyBraceText(html);
+        html = highlightTerms(html, [
+            ...getHeadwordHighlightTerms(word.word || ''),
+            ...(word.collocationsArray || [])
+                .flatMap((item) => expandHighlightTerms(item.text.trim()))
+                .filter(Boolean),
+        ]);
 
         return { __html: html };
     };
@@ -399,7 +470,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
     const qualityStatusOptions = [
         { id: WordQuality.RAW, label: 'Raw', icon: <Ghost size={14} className="text-neutral-400" /> },
-        { id: WordQuality.REFINED, label: 'Needs Review', icon: <Wand2 size={14} className="text-indigo-500" /> },
+        { id: WordQuality.REFINED, label: 'To Review', icon: <Wand2 size={14} className="text-indigo-500" /> },
         { id: WordQuality.VERIFIED, label: 'Verified', icon: <ShieldCheck size={14} className="text-emerald-500" /> },
         { id: WordQuality.FAILED, label: 'Incorrect', icon: <ShieldX size={14} className="text-rose-500" /> },
     ];
@@ -847,7 +918,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 return (
                                                     <div key={i} className={`relative flex items-start gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
                                                         <div className="flex-1 overflow-hidden">
-                                                            <span className={`truncate ${c.isIgnored ? 'line-through' : isInLibrary ? 'text-green-600' : ''}`} title={c.text}>{c.text}</span>
+                                                            <span className={`truncate ${c.isIgnored ? 'line-through' : isInLibrary ? 'text-green-900' : ''}`} title={c.text}>{c.text}</span>
                                                             {c.d && !c.isIgnored && (
                                                                 <div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>
                                                             )}
@@ -879,14 +950,43 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 <Zap size={10} className="text-amber-500"/> Variations
                                             </label>
                                             {onAskAiSectionRequest ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onAskAiSectionRequest('paraphrase')}
-                                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                                                >
-                                                    <MessageSquare size={10} />
-                                                    <span>Ask AI</span>
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onAskAiSectionRequest('paraphrase')}
+                                                        className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                                    >
+                                                        <MessageSquare size={10} />
+                                                        <span>Ask AI</span>
+                                                    </button>
+                                                    {onScanParaphrases ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={onScanParaphrases}
+                                                            disabled={isScanningParaphrases}
+                                                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wide transition-colors disabled:cursor-wait disabled:opacity-60 ${
+                                                                scanParaphraseResultCount !== null
+                                                                    ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                                                                    : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                                            }`}
+                                                        >
+                                                            {isScanningParaphrases ? (
+                                                                <Loader2 size={10} className="animate-spin" />
+                                                            ) : scanParaphraseResultCount !== null ? (
+                                                                <CheckCircle2 size={10} />
+                                                            ) : (
+                                                                <Search size={10} />
+                                                            )}
+                                                            <span>
+                                                                {isScanningParaphrases
+                                                                    ? 'Scanning...'
+                                                                    : scanParaphraseResultCount !== null
+                                                                        ? `Found ${scanParaphraseResultCount}`
+                                                                        : 'Scan Paraphrase'}
+                                                            </span>
+                                                        </button>
+                                                    ) : null}
+                                                </div>
                                             ) : null}
                                         </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -903,7 +1003,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                                 {renderParaphraseBadge(para.tone)}
                                                             </div>
                                                             <div className="flex items-center gap-1">
-                                                                <div className={`text-xs font-bold ${isFailed ? 'text-red-800' : isInLibrary ? 'text-green-600' : 'text-indigo-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div>
+                                                                <div className={`text-xs font-bold ${isFailed ? 'text-red-800' : isInLibrary ? 'text-green-900' : 'text-indigo-800'} ${isIgnored ? 'line-through' : ''}`}>{para.word}</div>
                                                             </div>
                                                             <div className={`text-[10px] italic truncate text-neutral-400`} title={para.context}>{para.context}</div>
                                                         </div>
@@ -923,6 +1023,52 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 );
                                             })}
                                         </div>
+                                        {scannedParaphrases.length > 0 && (
+                                            <div className="mt-3 rounded-xl border border-dashed border-amber-300 bg-amber-50/40 p-3">
+                                                <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                                                    <Search size={10} />
+                                                    <span>Scanned Paraphrases</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+                                                    {scannedParaphrases.map((para, idx) => {
+                                                        const isInLibrary = isLibraryWord(para.word);
+                                                        return (
+                                                            <div
+                                                                key={`${para.word}-${idx}`}
+                                                                className="relative rounded-xl border border-dashed border-amber-300 bg-white px-3 py-2 shadow-sm"
+                                                            >
+                                                                {onAddScannedParaphrase && !isViewOnly ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => onAddScannedParaphrase(para)}
+                                                                        title="Add to Word Data"
+                                                                        className="absolute right-1 top-1 rounded-md p-1 text-neutral-400 transition-colors hover:bg-amber-100 hover:text-amber-700"
+                                                                    >
+                                                                        <Plus size={12} />
+                                                                    </button>
+                                                                ) : null}
+                                                                <div className="pr-6">
+                                                                    <div className={`text-xs font-bold ${isInLibrary ? 'text-green-900' : 'text-amber-900'}`}>
+                                                                        {para.word}
+                                                                    </div>
+                                                                    <div className="mt-1">
+                                                                        {renderParaphraseBadge(para.tone)}
+                                                                    </div>
+                                                                    <div className="mt-1 truncate text-[10px] italic text-neutral-500" title={para.context}>
+                                                                        {para.context}
+                                                                    </div>
+                                                                    {para.sourceWord ? (
+                                                                        <div className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-amber-600">
+                                                                            from {para.sourceWord}
+                                                                        </div>
+                                                                    ) : null}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 {displayedIdioms.length > 0 && (

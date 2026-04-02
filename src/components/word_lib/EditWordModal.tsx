@@ -159,6 +159,25 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
     }
   };
 
+  const handleFormatExamples = () => {
+    const formattedExamples = (formData.example || '')
+      .split(/\r?\n/)
+      .map((line) =>
+        line
+          .replace(/^\s*(?:[-*•]+|\d+[.)])\s*/, '')
+          .trim()
+          .replace(/\[([^\]]+)\]/g, '{$1}')
+      )
+      .filter(Boolean)
+      .join('\n');
+
+    dispatch({
+      type: 'SET_FIELD',
+      payload: { field: 'example', value: formattedExamples }
+    });
+    showToast('Examples formatted.', 'success');
+  };
+
   const handleSubmit = (e?: React.FormEvent) => {
     if(e) e.preventDefault();
     const { groupsString, studiedStatus, collocationsArray, idiomsList, prepositionsList, essayEdit, testEdit, ...rest } = formData;
@@ -380,6 +399,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         handleCacheImages={handleCacheImages}
         onGenImg={handleGenerateImage}
         onSelectImage={handleSelectImage}
+        onFormatExamples={handleFormatExamples}
       />
       <LearningSuggestionModal
         isOpen={isSuggestionModalOpen}

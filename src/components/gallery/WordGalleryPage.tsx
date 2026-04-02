@@ -7,7 +7,7 @@ import * as dataStore from '../../app/dataStore';
 
 type GalleryItem = {
   id: string;
-  title: string;
+  title?: string;
   collection: string;
   imagePath: string;
   words: string[];
@@ -16,6 +16,7 @@ type GalleryItem = {
 };
 
 type GalleryFormState = {
+  title: string;
   collection: string;
   imagePath: string;
   words: string;
@@ -77,7 +78,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const [editing, setEditing] = useState<GalleryItem | null>(null);
   const [showDetail, setShowDetail] = useState<GalleryItem | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formState, setFormState] = useState<GalleryFormState>({ collection: '', imagePath: '', words: '', text: '' });
+  const [formState, setFormState] = useState<GalleryFormState>({ title: '', collection: '', imagePath: '', words: '', text: '' });
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -145,6 +146,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   useEffect(() => {
     if (editing) {
       setFormState({
+        title: editing.title || '',
         collection: editing.collection,
         imagePath: editing.imagePath,
         words: editing.words.join(', '),
@@ -152,7 +154,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
       });
       setShowForm(true);
     } else {
-      setFormState({ collection: '', imagePath: '', words: '', text: '' });
+      setFormState({ title: '', collection: '', imagePath: '', words: '', text: '' });
     }
   }, [editing]);
 
@@ -164,7 +166,9 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const visibleItems = useMemo(() => {
     return items.filter(item => {
       const matchCollection = filter === 'all' || item.collection === filter;
-      const matchQuery = query.trim() === '' || item.title.toLowerCase().includes(query.toLowerCase()) || item.words.some(w => w.toLowerCase().includes(query.toLowerCase()));
+      const effectiveTitle = (item.title || '').toLowerCase();
+      const loweredQuery = query.toLowerCase();
+      const matchQuery = query.trim() === '' || effectiveTitle.includes(loweredQuery) || item.words.some(w => w.toLowerCase().includes(loweredQuery));
       return matchCollection && matchQuery;
     });
   }, [items, filter, query]);
@@ -215,6 +219,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const title = formState.title.trim();
     const collection = (formState.collection || 'Unsorted').trim() || 'Unsorted';
     const imagePath = normalizeGalleryImagePath(formState.imagePath);
     const words = formState.words
@@ -231,7 +236,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
     setIsSaving(true);
     setError(null);
     try {
-      const body = { collection, imagePath, words, note, text, title: fileNameFromPath(imagePath) };
+      const body = { collection, imagePath, words, note, text, title: title || undefined };
       if (editing) {
         const res = await fetch(`${baseUrl}/api/gallery/${editing.id}`, {
           method: 'PUT',
@@ -290,7 +295,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
         <div className="cursor-pointer" onClick={() => { setShowDetail(item); setDetailTab('vocabulary'); }}>
           <img
             src={imageUrl}
-            alt={item.title}
+            alt={item.title || ''}
             className={`w-full ${isEditingItem ? 'h-72 p-3 bg-neutral-50 object-contain' : 'h-48 p-2 bg-neutral-50 object-contain'}`}
             onError={(e) => {
               const img = e.currentTarget;
@@ -347,6 +352,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
             )}
             <button type="submit" className="px-4 py-2 rounded-lg text-xs font-black bg-neutral-900 text-white flex items-center gap-2"><Plus size={14}/> {editing ? 'Update' : 'Add'}</button>
           </div>
+          <input name="title" value={formState.title} onChange={(e) => setFormState(f => ({ ...f, title: e.target.value }))} placeholder="Title (optional)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
           <input name="collection" value={formState.collection} onChange={(e) => setFormState(f => ({ ...f, collection: e.target.value }))} placeholder="Collection" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium" />
           <input name="imagePath" value={formState.imagePath} onChange={(e) => setFormState(f => ({ ...f, imagePath: e.target.value }))} placeholder="Image path or URL (server path works like [IMG])" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-mono" required />
           <input name="words" value={formState.words} onChange={(e) => setFormState(f => ({ ...f, words: e.target.value }))} placeholder="Words (comma separated)" className="px-3 py-2 rounded-lg border border-neutral-200 text-sm font-medium md:col-span-2" />
@@ -362,7 +368,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
               <p className="mb-3 text-xs font-bold uppercase tracking-widest text-neutral-400">Editing Preview</p>
               <img
                 src={buildImageUrl(formState.imagePath)}
-                alt={editing.title}
+                alt={formState.title.trim() || editing.title || ''}
                 className="h-72 w-full rounded-xl object-contain bg-white"
                 onError={(e) => {
                   const img = e.currentTarget;
@@ -412,7 +418,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
             <div className="flex flex-col gap-3">
               <img
                 src={buildImageUrl(showDetail.imagePath)}
-                alt={showDetail.title}
+                alt={showDetail.title || ''}
                 className="w-full max-h-[480px] object-contain rounded-xl border border-neutral-200"
                 onError={(e) => {
                   const img = e.currentTarget;
@@ -421,6 +427,13 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
                   }
                 }}
               />
+              {(showDetail.title?.trim() || showDetail.collection?.trim()) && (
+                <div className="space-y-1">
+                  {showDetail.title?.trim() && (
+                    <h2 className="text-lg font-black text-neutral-900">{showDetail.title}</h2>
+                  )}
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -458,7 +471,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
                 </div>
               )}
               <div className="flex items-center justify-between text-xs text-neutral-500">
-                <span className="flex items-center gap-2"><Tag size={12}/> {showDetail.collection}</span>
+                <span className="flex items-center gap-2">{showDetail.collection?.trim() ? <><Tag size={12}/> {showDetail.collection}</> : null}</span>
                 <button className="text-emerald-600 font-bold" onClick={() => { handleEdit(showDetail); setShowDetail(null); }}>Edit</button>
               </div>
             </div>
