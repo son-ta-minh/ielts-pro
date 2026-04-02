@@ -429,7 +429,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
               />
               {(showDetail.title?.trim() || showDetail.collection?.trim()) && (
                 <div className="space-y-1">
-                  {showDetail.title?.trim() && (
+                  {showDetail.title?.trim() && showDetail.title.trim() !== fileNameFromPath(showDetail.imagePath) && (
                     <h2 className="text-lg font-black text-neutral-900">{showDetail.title}</h2>
                   )}
                 </div>
