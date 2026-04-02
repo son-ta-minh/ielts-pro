@@ -9,6 +9,7 @@ import { parseMarkdown } from '../../utils/markdownParser';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 import { isFuzzyPhraseMatch } from '../../utils/fuzzyPhraseMatch';
 import { expandHighlightTerms, getHeadwordHighlightTerms } from '../../utils/headwordHighlightMap';
+import { findWordByStudyBuddyLookup } from '../../utils/vocabularyKeywordUtils';
 
 // --- Visual Components ---
 
@@ -189,6 +190,7 @@ const UsageTable: React.FC<{
 export interface ViewWordModalUIProps {
     word: VocabularyItem;
     libraryWordSet?: Set<string>;
+    libraryWords?: VocabularyItem[];
     scannedParaphrases?: Array<ParaphraseOption & { sourceWord?: string }>;
     isScanningParaphrases?: boolean;
     scanParaphraseResultCount?: number | null;
@@ -213,7 +215,7 @@ export interface ViewWordModalUIProps {
 }
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
-    word, libraryWordSet, scannedParaphrases = [], isScanningParaphrases = false, scanParaphraseResultCount = null, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
+    word, libraryWordSet, libraryWords = [], scannedParaphrases = [], isScanningParaphrases = false, scanParaphraseResultCount = null, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onNavigateToWord, isViewOnly = false,
     onAddAIExample,
     onAskAiRequest,
@@ -221,7 +223,12 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     onScanParaphrases,
     onAddScannedParaphrase
 }) => {
-    const isLibraryWord = (value: string) => !!value.trim() && !!libraryWordSet?.has(value.trim().toLowerCase());
+    const isLibraryWord = (value: string) => {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) return false;
+        if (libraryWordSet?.has(normalized)) return true;
+        return !!findWordByStudyBuddyLookup(libraryWords, word.userId, value);
+    };
     // Helper to render examples with badge replacements
     const renderExample = (text: string) => {
         if (!text) return { __html: "" };

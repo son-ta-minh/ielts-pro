@@ -384,6 +384,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       onUpdate={handleLocalUpdate}
       onNavigateToWord={onNavigateToWord}
       libraryWordSet={libraryWordSet}
+      libraryWords={libraryWords}
       scannedParaphrases={scannedParaphrases}
       isScanningParaphrases={isScanningParaphrases}
       scanParaphraseResultCount={scanParaphraseResultCount}
