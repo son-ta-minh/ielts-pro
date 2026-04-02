@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, FileText, Hash, Archive } from 'lucide-react';
+import { Search, FileText, Hash, Archive, Image as ImageIcon } from 'lucide-react';
 import { User, VocabularyItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { getFuzzyPhraseScore, isFuzzyPhraseMatch } from '../../utils/fuzzyPhraseMatch';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 interface Props {
   user: User;
@@ -18,12 +19,44 @@ interface SearchHit {
   value: string;
 }
 
+interface GallerySearchItem {
+  id: string;
+  title?: string;
+  collection: string;
+  imagePath: string;
+  words: string[];
+  note?: string;
+  text?: string;
+}
+
 type SearchMode = 'fast' | 'deep';
+type SearchResultTab = 'text' | 'gallery';
 
 const MAX_RESULTS = 200;
 const MAX_HITS_PER_WORD = 6;
 const DEEP_MATCH_THRESHOLD = 0.7;
 const SEARCH_PREFERENCES_KEY = 'ielts_pro_search_preferences_v1';
+
+const buildGalleryImageUrl = (path: string) => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+
+  const config = getConfig();
+  const baseUrl = getServerUrl(config);
+
+  if (!path.includes('/')) {
+    const hasExt = /\.[a-zA-Z0-9]+$/.test(path);
+    const fileName = hasExt ? path : `${path}.png`;
+    return `${baseUrl}/api/images/stream/Gallery/${fileName}`;
+  }
+
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  if (!cleanPath.startsWith('api/')) {
+    return `${baseUrl}/api/audio/stream/${cleanPath}`;
+  }
+
+  return `${baseUrl}/${cleanPath}`;
+};
 
 const collectTextNodes = (value: unknown, path: string, output: SearchHit[]) => {
   if (typeof value === 'string') {
@@ -150,11 +183,13 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
     []
   );
   const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
+  const [galleryItems, setGalleryItems] = useState<GallerySearchItem[]>([]);
   const [query, setQuery] = useState(initialQuery);
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery.trim());
   const [includeArchive, setIncludeArchive] = useState(Boolean(persistedPreferences.includeArchive));
   const [searchMode, setSearchMode] = useState<SearchMode>(persistedPreferences.searchMode === 'deep' ? 'deep' : 'fast');
   const [exampleOnly, setExampleOnly] = useState(Boolean(persistedPreferences.exampleOnly));
+  const [activeTab, setActiveTab] = useState<SearchResultTab>('text');
 
   useEffect(() => {
     const refresh = () => {
@@ -166,6 +201,30 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
     window.addEventListener('datastore-updated', refresh);
     return () => window.removeEventListener('datastore-updated', refresh);
   }, [user.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadGallery = async () => {
+      try {
+        const baseUrl = getServerUrl(getConfig());
+        const res = await fetch(`${baseUrl}/api/gallery`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && Array.isArray(data)) {
+          setGalleryItems(data);
+        }
+      } catch {
+        // Ignore gallery fetch failures in search modal.
+      }
+    };
+
+    loadGallery();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     setQuery(initialQuery);
@@ -259,6 +318,27 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
     return computedResults;
   }, [allWords, includeArchive, normalizedQuery, searchMode, exampleOnly]);
 
+  const galleryResults = useMemo(() => {
+    if (!normalizedQuery) return [] as GallerySearchItem[];
+
+    return galleryItems
+      .filter((item) => item.words.some((word) => word.toLowerCase().includes(normalizedQuery)))
+      .sort((a, b) => {
+        const aStarts = a.words.some((word) => word.toLowerCase().startsWith(normalizedQuery)) ? 1 : 0;
+        const bStarts = b.words.some((word) => word.toLowerCase().startsWith(normalizedQuery)) ? 1 : 0;
+        if (aStarts !== bStarts) return bStarts - aStarts;
+        return a.imagePath.localeCompare(b.imagePath);
+      });
+  }, [galleryItems, normalizedQuery]);
+
+  useEffect(() => {
+    if (!normalizedQuery || galleryResults.length === 0) {
+      setActiveTab('text');
+    }
+  }, [normalizedQuery, galleryResults.length]);
+
+  const shouldShowGalleryTab = isModal && normalizedQuery && galleryResults.length > 0;
+
   const content = (
     <div className="max-w-6xl mx-auto">
       <div className="bg-white shadow-sm pt-6 pb-2 px-6 md:pt-4 md:pb-3 md:px-8">
@@ -351,60 +431,129 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
 
         {normalizedQuery && (
           <div className="space-y-4">
-            <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider">
-              {results.length} result{results.length === 1 ? '' : 's'} for "{normalizedQuery}" · {searchMode === 'fast' ? 'Fast Search' : 'Deep Search'}{exampleOnly ? ' · Example Only' : ''}
-            </p>
-
-            {results.length === 0 && (
-              <div className="text-center py-10 text-sm font-semibold text-neutral-400">No match found.</div>
+            {shouldShowGalleryTab && (
+              <div className="inline-flex rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('text')}
+                  className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${activeTab === 'text' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+                >
+                  Text
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('gallery')}
+                  className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${activeTab === 'gallery' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+                >
+                  Gallery
+                </button>
+              </div>
             )}
 
-            {results.map(result => (
-              <button
-                key={result.word.id}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onViewWord(result.word);
-                }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                className="w-full text-left p-4 rounded-2xl border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-all"
-              >
-                {!exampleOnly && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.word.word, normalizedQuery)}</h3>
-                    {result.word.isPassive && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-neutral-100 text-neutral-500">
-                        <Archive size={12} />
-                        ARCHIVE
-                      </span>
-                    )}
-                  </div>
+            <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider">
+              {activeTab === 'gallery' && shouldShowGalleryTab
+                ? `${galleryResults.length} image result${galleryResults.length === 1 ? '' : 's'} for "${normalizedQuery}" · Gallery`
+                : `${results.length} result${results.length === 1 ? '' : 's'} for "${normalizedQuery}" · ${searchMode === 'fast' ? 'Fast Search' : 'Deep Search'}${exampleOnly ? ' · Example Only' : ''}`}
+            </p>
+
+            {activeTab === 'gallery' && shouldShowGalleryTab ? (
+              <>
+                {galleryResults.length === 0 && (
+                  <div className="text-center py-10 text-sm font-semibold text-neutral-400">No image match found.</div>
                 )}
 
-                <div className={`${exampleOnly ? 'mt-1 space-y-1' : 'mt-3 space-y-2'}`}>
-                  {result.hits.map((hit, index) => {
-                    const snippet = exampleOnly ? hit.value : getSnippet(hit.value, normalizedQuery);
-                    return (
-                      <div
-                        key={`${result.word.id}-${hit.path}-${index}`}
-                        className={`text-sm text-neutral-600 leading-relaxed ${exampleOnly ? 'py-1' : ''}`}
-                      >
-                        {!exampleOnly && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wide mr-2">
-                            <Hash size={11} />
-                            {getFriendlyPathLabel(hit.path)}
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {galleryResults.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+                      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+                        <img
+                          src={buildGalleryImageUrl(item.imagePath)}
+                          alt={item.title || ''}
+                          className="h-48 w-full object-contain"
+                          onError={(e) => {
+                            const img = e.currentTarget;
+                            if (img.src.endsWith('.png')) {
+                              img.src = img.src.replace('.png', '.jpg');
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="mt-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-wide text-neutral-400">
+                        <ImageIcon size={12} />
+                        Gallery
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {item.words.map((word) => (
+                          <span
+                            key={`${item.id}-${word}`}
+                            className={`rounded-full px-2 py-1 text-xs font-bold ${
+                              word.toLowerCase().includes(normalizedQuery)
+                                ? 'bg-amber-100 text-amber-900'
+                                : 'bg-neutral-100 text-neutral-600'
+                            }`}
+                          >
+                            {renderWithHighlight(word, normalizedQuery)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                {results.length === 0 && (
+                  <div className="text-center py-10 text-sm font-semibold text-neutral-400">No match found.</div>
+                )}
+
+                {results.map(result => (
+                  <button
+                    key={result.word.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onViewWord(result.word);
+                    }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                    className="w-full text-left p-4 rounded-2xl border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-all"
+                  >
+                    {!exampleOnly && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.word.word, normalizedQuery)}</h3>
+                        {result.word.isPassive && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-neutral-100 text-neutral-500">
+                            <Archive size={12} />
+                            ARCHIVE
                           </span>
                         )}
-                        <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
                       </div>
-                    );
-                  })}
-                </div>
-              </button>
-            ))}
+                    )}
+
+                    <div className={`${exampleOnly ? 'mt-1 space-y-1' : 'mt-3 space-y-2'}`}>
+                      {result.hits.map((hit, index) => {
+                        const snippet = exampleOnly ? hit.value : getSnippet(hit.value, normalizedQuery);
+                        return (
+                          <div
+                            key={`${result.word.id}-${hit.path}-${index}`}
+                            className={`text-sm text-neutral-600 leading-relaxed ${exampleOnly ? 'py-1' : ''}`}
+                          >
+                            {!exampleOnly && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wide mr-2">
+                                <Hash size={11} />
+                                {getFriendlyPathLabel(hit.path)}
+                              </span>
+                            )}
+                            <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
