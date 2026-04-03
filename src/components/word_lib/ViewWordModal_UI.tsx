@@ -366,6 +366,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
         html = highlightCurlyBraceText(html);
         html = highlightTerms(html, [
             ...getHeadwordHighlightTerms(word.word || ''),
+            ...(word.keywords || [])
+                .flatMap((keyword) => expandHighlightTerms(keyword.trim()))
+                .filter(Boolean),
             ...(word.collocationsArray || [])
                 .flatMap((item) => expandHighlightTerms(item.text.trim()))
                 .filter(Boolean),
