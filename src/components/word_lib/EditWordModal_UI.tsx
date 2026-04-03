@@ -69,6 +69,12 @@ export interface EditWordModalUIProps {
   onSelectImage: () => void | Promise<void>;
   onFormatExamples: () => void;
   availableGroups: string[];
+  onFillMeaningVi: () => void;
+  onFillMeaningEn: () => void;
+  isMeaningLoading: 'vi' | 'en' | null;
+  onFillCambridgeIpa: () => void;
+  onFillGeneratedIpa: () => void;
+  isIpaLoading: 'cambridge' | 'generated' | null;
 }
 
 type Tab = 'MAIN' | 'SOUND' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
@@ -117,7 +123,13 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
     onGenImg,
     onSelectImage,
     onFormatExamples,
-    availableGroups
+    availableGroups,
+    onFillMeaningVi,
+    onFillMeaningEn,
+    isMeaningLoading,
+    onFillCambridgeIpa,
+    onFillGeneratedIpa,
+    isIpaLoading
   } = props;
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
@@ -370,7 +382,27 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                             <input type="text" value={formData.word} onChange={(e) => setFormData('word', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Definition / Meaning</label>
+                            <div className="flex items-center justify-between px-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Definition / Meaning</label>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={onFillMeaningVi}
+                                        disabled={isMeaningLoading !== null}
+                                        className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors disabled:opacity-50"
+                                    >
+                                        {isMeaningLoading === 'vi' ? 'Loading...' : 'VI Meaning'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={onFillMeaningEn}
+                                        disabled={isMeaningLoading !== null}
+                                        className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors disabled:opacity-50"
+                                    >
+                                        {isMeaningLoading === 'en' ? 'Loading...' : 'EN Meaning'}
+                                    </button>
+                                </div>
+                            </div>
                             <input type="text" value={formData.meaningVi} onChange={(e) => setFormData('meaningVi', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-base font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
                         <div className="md:col-span-2 space-y-1">
@@ -514,7 +546,27 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-300">
                         <div className="space-y-4">
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Primary IPA / US</label>
+                                <div className="flex items-center justify-between px-1">
+                                    <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Primary IPA / US</label>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={onFillCambridgeIpa}
+                                            disabled={isIpaLoading !== null}
+                                            className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors disabled:opacity-50"
+                                        >
+                                            {isIpaLoading === 'cambridge' ? 'Loading...' : 'Cambridge IPA'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={onFillGeneratedIpa}
+                                            disabled={isIpaLoading !== null}
+                                            className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors disabled:opacity-50"
+                                        >
+                                            {isIpaLoading === 'generated' ? 'Loading...' : 'Generated IPA'}
+                                        </button>
+                                    </div>
+                                </div>
                                 <input type="text" value={formData.ipaUs || ''} onChange={(e) => setFormData('ipaUs', e.target.value)} placeholder="/.../" className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -9,8 +9,9 @@ import { useToast } from '../../contexts/ToastContext';
 import UniversalAiModal from '../common/UniversalAiModal';
 import LearningSuggestionModal from '../common/LearningSuggestionModal';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
-import { getConfig, getServerUrl } from '../../app/settingsManager';
+import { getConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { normalizeVocabularyKeywords } from '../../utils/vocabularyKeywordUtils';
+import { normalizeCambridgePronunciations } from '../../utils/studyBuddyUtils';
 
 type FormState = VocabularyItem & {
     groupsString: string;
@@ -111,6 +112,8 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
   const [isSuggestAiModalOpen, setIsSuggestAiModalOpen] = useState(false);
   const [isSelectImgOpen, setIsSelectImgOpen] = useState(false);
   const [selectedImgs, setSelectedImgs] = useState<string[]>([]);
+  const [isMeaningLoading, setIsMeaningLoading] = useState<'vi' | 'en' | null>(null);
+  const [isIpaLoading, setIsIpaLoading] = useState<'cambridge' | 'generated' | null>(null);
   const availableGroups = Array.from(
     new Set(
       getAllWords()
@@ -137,6 +140,187 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
     dispatch({ type: 'REINITIALIZE', payload: word });
     setLearningSuggestions(null);
   }, [word]);
+
+  const cleanSingleLineAiText = (value: string): string => String(value || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s*[-*•]+\s*/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const requestStudyBuddyText = async (prompt: string, language: 'vi' | 'en'): Promise<string> => {
+    const response = await fetch(getStudyBuddyAiUrl(config), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: language === 'vi'
+              ? 'You are StudyBuddy. Reply in Vietnamese only. Return only the final answer text with no bullets, no quotes, no markdown, no labels.'
+              : 'You are StudyBuddy. Reply in English only. Return only the final answer text with no bullets, no quotes, no markdown, no labels.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        searchEnabled: false,
+        temperature: 0.2,
+        top_p: 0.85,
+        repetition_penalty: 1.15,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`StudyBuddy request failed (${response.status})`);
+    }
+
+    const payload = await response.json().catch(() => null);
+    const rawText = payload?.choices?.[0]?.message?.content;
+    const cleaned = cleanSingleLineAiText(rawText || '');
+    if (!cleaned) {
+      throw new Error('StudyBuddy returned empty content.');
+    }
+    return cleaned;
+  };
+
+  const stripIpaDelimiters = (value?: string | null): string => String(value || '').replace(/^\/+|\/+$/g, '').trim();
+  const formatPhraseIpa = (parts: Array<string | null | undefined>): string | undefined => {
+    const cleaned = parts
+      .map((part) => stripIpaDelimiters(part))
+      .filter(Boolean);
+    if (cleaned.length === 0) return undefined;
+    return `/${cleaned.join(' ')}/`;
+  };
+
+  const tokenizeHeadwordForIpa = (value: string): string[] =>
+    String(value || '')
+      .split(/\s+/)
+      .map((token) => token.trim().replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, ''))
+      .filter(Boolean);
+
+  const fetchCambridgeTokenIpa = async (token: string): Promise<{ ipaUs?: string; ipaUk?: string } | null> => {
+    const response = await fetch(`${serverUrl}/api/lookup/cambridge/simple?word=${encodeURIComponent(token)}`, {
+      cache: 'no-store'
+    });
+    if (!response.ok) return null;
+
+    const payload = await response.json().catch(() => null);
+    if (!payload?.exists || !Array.isArray(payload.pronunciations)) return null;
+
+    const pronunciations = normalizeCambridgePronunciations(payload.pronunciations);
+    const pronunciation = pronunciations.find((item) => item.ipaUs || item.ipaUk);
+    if (!pronunciation) return null;
+
+    const ipaUs = stripIpaDelimiters(pronunciation.ipaUs || '');
+    const ipaUk = stripIpaDelimiters(pronunciation.ipaUk || '');
+
+    return {
+      ipaUs: ipaUs ? `/${ipaUs}/` : undefined,
+      ipaUk: ipaUk ? `/${ipaUk}/` : undefined
+    };
+  };
+
+  const handleFillMeaning = async (mode: 'vi' | 'en') => {
+    const headword = String(formData.word || '').trim();
+    if (!headword) {
+      showToast('Please enter a headword first.', 'info');
+      return;
+    }
+
+    setIsMeaningLoading(mode);
+    try {
+      const prompt = mode === 'vi'
+        ? `For the English headword "${headword}", give one concise natural Vietnamese meaning for a learner. Keep it minimal, descriptive, and under 12 words if possible. Return only the Vietnamese meaning.`
+        : `For the English headword "${headword}", give one concise English definition in minimal descriptive text. Keep it short, natural, and under 12 words if possible. Return only the definition.`;
+      const nextMeaning = await requestStudyBuddyText(prompt, mode);
+      dispatch({ type: 'SET_FIELD', payload: { field: 'meaningVi', value: nextMeaning } });
+      showToast(mode === 'vi' ? 'Vietnamese meaning filled.' : 'English meaning filled.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast(mode === 'vi' ? 'Failed to get Vietnamese meaning.' : 'Failed to get English meaning.', 'error');
+    } finally {
+      setIsMeaningLoading(null);
+    }
+  };
+
+  const handleFillCambridgeIpa = async () => {
+    const headword = String(formData.word || '').trim();
+    if (!headword) {
+      showToast('Please enter a headword first.', 'info');
+      return;
+    }
+
+    const tokens = tokenizeHeadwordForIpa(headword);
+    if (tokens.length === 0) {
+      showToast('No valid tokens found for IPA lookup.', 'info');
+      return;
+    }
+
+    setIsIpaLoading('cambridge');
+    try {
+      const tokenResults = await Promise.all(tokens.map((token) => fetchCambridgeTokenIpa(token)));
+      const usPhrase = formatPhraseIpa(tokenResults.map((item) => item?.ipaUs));
+      const ukPhrase = formatPhraseIpa(tokenResults.map((item) => item?.ipaUk || item?.ipaUs));
+
+      if (!usPhrase && !ukPhrase) {
+        showToast('Cambridge IPA not found for this headword.', 'info');
+        return;
+      }
+
+      if (usPhrase) {
+        dispatch({ type: 'SET_FIELD', payload: { field: 'ipaUs', value: usPhrase } });
+      }
+      if (ukPhrase) {
+        dispatch({ type: 'SET_FIELD', payload: { field: 'ipaUk', value: ukPhrase } });
+      }
+
+      showToast('Cambridge IPA filled.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to fetch Cambridge IPA.', 'error');
+    } finally {
+      setIsIpaLoading(null);
+    }
+  };
+
+  const handleFillGeneratedIpa = async () => {
+    const headword = String(formData.word || '').trim();
+    if (!headword) {
+      showToast('Please enter a headword first.', 'info');
+      return;
+    }
+
+    setIsIpaLoading('generated');
+    try {
+      const response = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(headword)}`);
+      if (!response.ok) {
+        throw new Error(`IPA server error ${response.status}`);
+      }
+
+      const payload = await response.json().catch(() => null);
+      const ipaUs = String(payload?.ipa || '').trim();
+      if (!ipaUs) {
+        showToast('Generated IPA is empty.', 'info');
+        return;
+      }
+
+      dispatch({ type: 'SET_FIELD', payload: { field: 'ipaUs', value: ipaUs } });
+      showToast('Generated US IPA filled.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to generate IPA.', 'error');
+    } finally {
+      setIsIpaLoading(null);
+    }
+  };
 
   const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(inputs.words.split(/[,\n]+/).map(w => w.trim()).filter(Boolean), user.nativeLanguage || 'Vietnamese');
   
@@ -411,9 +595,15 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         handleCacheImages={handleCacheImages}
         onGenImg={handleGenerateImage}
         onSelectImage={handleSelectImage}
-        onFormatExamples={handleFormatExamples}
-        availableGroups={availableGroups}
-      />
+      onFormatExamples={handleFormatExamples}
+      availableGroups={availableGroups}
+      onFillMeaningVi={() => void handleFillMeaning('vi')}
+      onFillMeaningEn={() => void handleFillMeaning('en')}
+      isMeaningLoading={isMeaningLoading}
+      onFillCambridgeIpa={() => void handleFillCambridgeIpa()}
+      onFillGeneratedIpa={() => void handleFillGeneratedIpa()}
+      isIpaLoading={isIpaLoading}
+    />
       <LearningSuggestionModal
         isOpen={isSuggestionModalOpen}
         onClose={() => setIsSuggestionModalOpen(false)}

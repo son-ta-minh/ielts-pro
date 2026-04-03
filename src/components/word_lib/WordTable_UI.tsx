@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, PenLine, BookMarked, Image } from 'lucide-react';
+import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, PenLine, BookMarked, Image, Play } from 'lucide-react';
 import { VocabularyItem, LearnedStatus, WordQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
@@ -700,6 +700,15 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
           <div className="bg-neutral-900 text-white rounded-[2rem] p-4 shadow-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border border-neutral-800">
             <div className="flex items-center space-x-4 pl-2 shrink-0"><button onClick={() => setSelectedIds(new Set())} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button><div><div className="text-sm font-black">{selectedIds.size} selected</div></div></div>
             <div className="flex flex-wrap items-center gap-2 sm:ml-4">
+              {context === 'library' && (
+                <button
+                  onClick={() => onPractice(selectedIds)}
+                  className="px-4 py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"
+                >
+                  <Play size={14} />
+                  <span>Practice</span>
+                </button>
+              )}
               {onOpenBulkDeleteModal && (<button onClick={onOpenBulkDeleteModal} className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${context === 'unit' ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-500' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'}`}>{context === 'unit' ? <Unlink size={14} /> : <Trash2 size={14} />}<span>{context === 'unit' ? 'Unlink' : 'Delete'}</span></button>)}
               {context === 'unit' && onOpenBulkHardDeleteModal && selectedRawWordsCount > 0 && (
                   <button 
