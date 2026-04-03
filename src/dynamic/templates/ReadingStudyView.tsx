@@ -6,7 +6,7 @@ import { createNewWord } from '../../utils/srs';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from '../../components/word_lib/WordTable_UI';
 import { ReadingStudyViewUI } from './ReadingStudyView_UI';
 import { useToast } from '../../contexts/ToastContext';
-import { stringToWordArray } from '../../utils/text';
+import { parseVocabMapping, stringToWordArray } from '../../utils/text';
 import { filterItem } from '../../app/db';
 import { exportUnitsToJson } from '../../utils/dataHandler';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
@@ -55,6 +55,20 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
       composition: 'all',
       book: 'all'
   });
+
+  useEffect(() => {
+    setUnitTablePage(0);
+    setUnitTablePageSize(10);
+    setUnitTableQuery('');
+    setUnitTableFilters({
+      types: new Set(['all']),
+      refined: 'all',
+      status: 'all',
+      register: 'all',
+      composition: 'all',
+      book: 'all'
+    });
+  }, [unit.id]);
   
   const [isComprehensionModalOpen, setIsComprehensionModalOpen] = useState(false);
   const [comprehensionAnswers, setComprehensionAnswers] = useState<Record<number, string>>({});
@@ -65,7 +79,24 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
   const wordsById = useMemo(() => new Map(allWords.map(w => [w.id, w])), [allWords]);
   const { showToast } = useToast();
 
-  const unitWords = useMemo(() => (unit.wordIds.map(id => wordsById.get(id)).filter(Boolean) as VocabularyItem[]), [unit, wordsById]);
+  const unitWords = useMemo(() => {
+    const collected = new Map<string, VocabularyItem>();
+
+    unit.wordIds.forEach((id) => {
+      const word = wordsById.get(id);
+      if (word) collected.set(word.id, word);
+    });
+
+    const vocabMapping = parseVocabMapping(unit.customVocabString);
+    vocabMapping.forEach((baseWord) => {
+      const matchedWord = allWords.find((item) => item.word.trim().toLowerCase() === baseWord.trim().toLowerCase());
+      if (matchedWord) {
+        collected.set(matchedWord.id, matchedWord);
+      }
+    });
+
+    return Array.from(collected.values());
+  }, [unit.wordIds, unit.customVocabString, wordsById, allWords]);
   
   useEffect(() => {
     window.addEventListener('datastore-updated', onDataChange);
@@ -188,7 +219,6 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
             unitTableFilters.refined,
             unitTableFilters.status,
             unitTableFilters.register,
-            'all',
             null,
             unitTableFilters.composition,
             dataStore.getComposedWordIds(),

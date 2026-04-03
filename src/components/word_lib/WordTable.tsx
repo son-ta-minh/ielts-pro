@@ -87,8 +87,13 @@ const WordTable: React.FC<Props> = ({
   settingsKey, context, initialFilter, forceExpandAdd, onExpandAddConsumed, onWordRenamed,
   showTagBrowserButton, tagTree, selectedTag, onSelectTag, onRenameGroup, onDeleteGroup, onOpenWordBook
 }) => {
+  const filterStorageKey = useMemo(
+    () => `${LIBRARY_FILTERS_KEY}_${context}_${settingsKey}`,
+    [context, settingsKey]
+  );
+
   // Load persisted filters with explicit typing to fix property access errors
-  const persistedFilters = useMemo(() => getStoredJSON<PersistedFilters>(LIBRARY_FILTERS_KEY, {}), []);
+  const persistedFilters = useMemo(() => getStoredJSON<PersistedFilters>(filterStorageKey, {}), [filterStorageKey]);
 
   const [query, setQuery] = useState(persistedFilters.query || '');
   const [activeFilters, setActiveFilters] = useState<Set<FilterType>>(() => {
@@ -115,7 +120,7 @@ const WordTable: React.FC<Props> = ({
 
   // Persistence effect
   useEffect(() => {
-    setStoredJSON(LIBRARY_FILTERS_KEY, {
+    setStoredJSON(filterStorageKey, {
         query,
         activeFilters: Array.from(activeFilters),
         refinedFilter,
@@ -128,7 +133,7 @@ const WordTable: React.FC<Props> = ({
         page,      // Save current page
         pageSize   // Save current pageSize
     });
-  }, [query, activeFilters, refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, isFilterMenuOpen, page, pageSize]);
+  }, [filterStorageKey, query, activeFilters, refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, isFilterMenuOpen, page, pageSize]);
 
   // New state for Word Type selection in Quick Add
   // Default to 'vocab' selected
