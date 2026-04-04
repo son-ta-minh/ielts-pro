@@ -91,32 +91,62 @@ const renderParaphraseBadge = (tone: ParaphraseTone) => {
 
 const StatusDropdown: React.FC<{
     label?: string;
+    tooltip?: string; // optional tooltip
     options: { id: string; label: string; icon: React.ReactNode; }[];
     selectedId: string;
     onSelect: (id: string) => void;
     buttonClass?: string;
     disabled?: boolean;
-}> = ({ label, options, selectedId, onSelect, buttonClass, disabled = false }) => {
+}> = ({ label, tooltip, options, selectedId, onSelect, buttonClass, disabled = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const selectedOption = options.find(o => o.id === selectedId) || options[0];
+
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(event.target as Node)) setIsOpen(false); };
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
     return (
         <div className="relative" ref={menuRef}>
-            <button type="button" onClick={() => setIsOpen(!isOpen)} className={buttonClass} disabled={disabled}>
-                {label && <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400 mr-2">{label}</span>}
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className={buttonClass}
+                disabled={disabled}
+                title={tooltip} // simple tooltip on hover
+            >
+                {label && (
+                    <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400 mr-2">
+                        {label}
+                    </span>
+                )}
                 {selectedOption.icon}
                 <span className="text-xs font-black uppercase tracking-wider">{selectedOption.label}</span>
-                <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                    size={14}
+                    className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                />
             </button>
+
             {isOpen && !disabled && (
                 <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-neutral-100 z-50 p-2 overflow-hidden animate-in fade-in zoom-in-95 flex flex-col gap-1">
                     {options.map(option => (
-                        <button key={option.id} type="button" onClick={() => { onSelect(option.id); setIsOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${selectedId === option.id ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>
+                        <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => { onSelect(option.id); setIsOpen(false); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${
+                                selectedId === option.id
+                                    ? 'bg-neutral-100 text-neutral-900'
+                                    : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
+                            }`}
+                        >
                             {option.icon}
                             <span>{option.label}</span>
                         </button>
@@ -762,6 +792,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 selectedId={currentLearnStatus}
                                 onSelect={handleLearnStatusSelect}
                                 buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200"
+                                tooltip="This will not affect the daily progress, please start Practice session instead to record Review status"
                                 disabled={isViewOnly}
                             />
                             <StatusDropdown
