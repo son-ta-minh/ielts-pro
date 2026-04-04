@@ -768,29 +768,9 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             ) : null}
                                             {onAskAiSectionRequest ? (
                                                 <>
-                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('collocation'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
-                                                        <Combine size={12} />
-                                                        <span>Explain Collocations</span>
-                                                    </button>
-                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('paraphrase'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
-                                                        <Zap size={12} />
-                                                        <span>Explain Paraphrases</span>
-                                                    </button>
-                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('preposition'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
-                                                        <AtSign size={12} />
-                                                        <span>Explain Prepositions</span>
-                                                    </button>
-                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('wordFamily'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
-                                                        <Network size={12} />
-                                                        <span>Explain Word Family</span>
-                                                    </button>
-                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('idiom'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
-                                                        <MessageSquare size={12} />
-                                                        <span>Explain Idioms</span>
-                                                    </button>
                                                     <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('example'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
                                                         <BookOpen size={12} />
-                                                        <span>More Example</span>
+                                                        <span>Explain selected text</span>
                                                     </button>
                                                 </>
                                             ) : null}
