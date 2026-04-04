@@ -491,6 +491,13 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
                   }}
                   onComplete={() => {
                     console.log('[InlineReview][WordList] onComplete -> closing overlay');
+                    const reviewedWordId = inlineReviewWords[0]?.id;
+                    if (reviewedWordId) {
+                      const latestWord = dataStore.getWordById(reviewedWordId);
+                      if (latestWord) {
+                        setViewingWord((current) => current?.id === reviewedWordId ? latestWord : current);
+                      }
+                    }
                     setInlineReviewWords(null);
                   }}
                   onRetry={() => setInlineReviewWords((current) => current ? [...current] : current)}

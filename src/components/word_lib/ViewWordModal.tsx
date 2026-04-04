@@ -376,6 +376,21 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
     setScannedParaphrases((prev) => prev.filter((entry) => entry.word.trim().toLowerCase() !== normalizedWord));
   };
 
+  const handleResetMastery = async () => {
+    const updatedWord: VocabularyItem = {
+      ...currentWord,
+      lastTestResults: {},
+      masteryScore: calculateMasteryScore({
+        ...currentWord,
+        lastTestResults: {}
+      }),
+      updatedAt: Date.now()
+    };
+
+    await onUpdate(updatedWord);
+    setCurrentWord(updatedWord);
+  };
+
   const dispatchAskAiTarget = (section: StudyBuddyTargetSection, source: string) => {
     window.dispatchEvent(
       new CustomEvent('studybuddy-chat-request', {
@@ -421,6 +436,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       }}
       onMimicRequest={() => setIsMimicOpen(true)}
       onEditRequest={() => onEditRequest(currentWord)}
+      onResetMasteryRequest={handleResetMastery}
       onUpdate={handleLocalUpdate}
       onNavigateToWord={onNavigateToWord}
       libraryWordSet={libraryWordSet}

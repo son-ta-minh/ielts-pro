@@ -219,6 +219,7 @@ export interface VocabularyItem {
   id: string;
   userId: string; 
   word: string; 
+  display?: string;
   keywords?: string[];
   wordFamilyGroupId?: string | null;
   ipaUs?: string;

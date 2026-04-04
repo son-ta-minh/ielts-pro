@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AppView, VocabularyItem } from './types';
 import { useAppController } from './useAppController';
+import * as dataStore from './dataStore';
 import EditWordModal from '../components/word_lib/EditWordModal';
 import ViewWordModal from '../components/word_lib/ViewWordModal';
 import ConfirmationModal from '../components/common/ConfirmationModal';
@@ -272,6 +273,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
                   onBulkUpdate={bulkUpdateWords}
                   onComplete={() => {
                     console.log('[InlineReview][AppLayout] onComplete -> closing overlay');
+                    const reviewedWordId = inlineReviewWords[0]?.id;
+                    if (reviewedWordId) {
+                      const latestWord = dataStore.getWordById(reviewedWordId);
+                      if (latestWord) {
+                        setGlobalViewWord((current) => current?.id === reviewedWordId ? latestWord : current);
+                      }
+                    }
                     setInlineReviewWords(null);
                   }}
                   onRetry={() => setInlineReviewWords((current) => current ? [...current] : current)}

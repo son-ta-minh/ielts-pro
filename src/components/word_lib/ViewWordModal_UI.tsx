@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { Search, LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BookOpenText, Image, Loader2, CheckCircle2 } from 'lucide-react';
+import { Search, LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BookOpenText, Image, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, LearnedStatus, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { speak } from '../../utils/audio';
@@ -160,6 +160,7 @@ export interface ViewWordModalUIProps {
     onChallengeRequest: () => void;
     onMimicRequest: () => void;
     onEditRequest: () => void;
+    onResetMasteryRequest?: () => void;
     onUpdate: (word: VocabularyItem) => void;
     linkedUnits: Unit[];
     relatedWords: Record<string, VocabularyItem[]>;
@@ -177,6 +178,7 @@ export interface ViewWordModalUIProps {
 
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
     word, libraryWordSet, libraryWords = [], scannedParaphrases = [], isScanningParaphrases = false, scanParaphraseResultCount = null, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
+    onResetMasteryRequest,
     onNavigateToWord, isViewOnly = false,
     onAddAIExample,
     onAskAiRequest,
@@ -185,6 +187,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     onScanParaphrases,
     onAddScannedParaphrase
 }) => {
+    const displayHeadword = (word.display || '').trim() || word.word;
     const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
     const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
     const aiMenuRef = useRef<HTMLDivElement>(null);
@@ -623,7 +626,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const hasTest = Boolean(lessonTestHtml?.trim());
     const exampleSentences = useMemo(() => splitExampleIntoSentences(word.example || ''), [word.example]);
     const hasAiActions = Boolean(onAskAiRequest || onVerifyWordRequest || onAskAiSectionRequest || onAddAIExample);
-    const hasActionMenu = !isViewOnly && Boolean(onChallengeRequest || onEditRequest || onScanParaphrases);
+    const hasActionMenu = !isViewOnly && Boolean(onChallengeRequest || onEditRequest || onScanParaphrases || onResetMasteryRequest);
     const wordGroups = (word.groups || []).map((group) => group.trim()).filter(Boolean);
     const handleAiMenuAction = (action: () => void) => {
         setIsAiMenuOpen(false);
@@ -645,7 +648,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                             <div className="flex items-start gap-3">
                                 <div className="min-w-0 flex flex-1 flex-wrap items-center gap-3">
                                     <h2 className={`min-w-0 break-words text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>
-                                        {word.word}
+                                        {displayHeadword}
                                     </h2>
                                     {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100 shrink-0" />}
                                 </div>
@@ -748,6 +751,16 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                     <Edit3 size={12} />
                                                     <span>Edit</span>
                                                 </button>
+                                                {onResetMasteryRequest ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleActionMenuAction(onResetMasteryRequest)}
+                                                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-rose-50"
+                                                    >
+                                                        <RefreshCw size={12} />
+                                                        <span>Reset Mastery</span>
+                                                    </button>
+                                                ) : null}
                                                 {onScanParaphrases ? (
                                                     <button
                                                         type="button"

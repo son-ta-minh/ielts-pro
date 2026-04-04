@@ -193,7 +193,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
           return (
             <div className="max-w-2xl mx-auto py-10 text-center animate-in zoom-in-95 duration-500">
               <div className="mb-6"><div className={`mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-4 ${isQuickFire ? 'bg-amber-100 text-amber-600' : 'bg-neutral-100 text-neutral-900'}`}>{isQuickFire ? <Zap size={40} fill="currentColor" /> : <BookCopy size={40} />}</div><h2 className="text-3xl font-black text-neutral-900">{isQuickFire ? 'Test Result' : 'Session Recap'}</h2>{isQuickFire && <p className="text-xs font-black text-neutral-400 uppercase tracking-[0.2em] mt-2">Score: {passCount} / {sessionWords.length}</p>}<p className="text-neutral-500 mt-2 font-medium">You've completed this focused session.</p></div>
-              <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm mb-8 overflow-hidden"><div className="max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-2">{sessionWords.map(word => (<div key={word.id} className="flex justify-between items-center bg-neutral-50/70 p-2.5 rounded-xl border border-neutral-100"><span className="font-bold text-neutral-800 text-xs truncate pr-2">{word.word}</span>{renderStatusBadge(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)}</div>))}</div></div>
+              <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm mb-8 overflow-hidden"><div className="max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-2">{sessionWords.map(word => (<div key={word.id} className="flex justify-between items-center bg-neutral-50/70 p-2.5 rounded-xl border border-neutral-100"><span className="font-bold text-neutral-800 text-xs truncate pr-2">{(word.display || '').trim() || word.word}</span>{renderStatusBadge(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)}</div>))}</div></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><button onClick={onComplete} className="px-6 py-4 bg-white border border-neutral-200 text-neutral-500 rounded-2xl font-bold text-xs hover:bg-neutral-50 hover:border-neutral-900 transition-all active:scale-95 uppercase tracking-widest">Finish Session</button><button onClick={handleRetry} className="px-6 py-4 bg-neutral-900 text-white rounded-2xl font-black text-xs flex items-center justify-center space-x-2 shadow-lg hover:bg-neutral-800 transition-all active:scale-95 uppercase tracking-widest"><RotateCw size={14} /><span>Retry This Session</span></button></div>
             </div>
           );
@@ -204,9 +204,10 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     if (!currentWord) return null;
     const HeaderIcon = isNewWord ? Lightbulb : BookOpen;
     const headerColor = isNewWord ? 'text-blue-500' : 'text-neutral-500';
+    const reviewHeadword = (currentWord.display || '').trim() || currentWord.word;
     const displayText = isNewWord
-    ? currentWord.word
-    : currentWord.ipaUs || currentWord.word;
+    ? reviewHeadword
+    : currentWord.ipaUs || reviewHeadword;
     const vietnameseMeaning = currentWord.meaningVi?.trim() || 'No Vietnamese meaning available';
     const visiblePrepositions = (currentWord.prepositions || []).filter(p => !p.isIgnored);
     const visibleCollocations = (currentWord.collocationsArray || []).filter(c => !c.isIgnored);

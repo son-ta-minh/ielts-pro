@@ -388,6 +388,10 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                             <input type="text" value={formData.word} onChange={(e) => setFormData('word', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
                         <div className="space-y-1">
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Display Text</label>
+                            <input type="text" value={formData.display || ''} onChange={(e) => setFormData('display', e.target.value)} placeholder="Optional display text..." className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"/>
+                        </div>
+                        <div className="space-y-1">
                             <div className="flex items-center justify-between px-1">
                                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Definition / Meaning</label>
                                 <div className="flex items-center gap-2">
