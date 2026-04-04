@@ -79,7 +79,7 @@ ${baseRules}
 - If there are no good natural paraphrases, output exactly:
 - No strong natural paraphrases for this word.
 - Format: - **paraphrase**(Register): short explanation
-- Register must be one of: Academic, Casual, Synonym
+- Register must be one of: Academic, Casual, Neutral
 - Always put Register immediately after the paraphrase, before the colon
 - Do NOT put Register at the end of the explanation
 - If unsure, use Synonym`;

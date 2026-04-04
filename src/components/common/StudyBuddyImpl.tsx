@@ -2446,6 +2446,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                         serverUrl={getServerUrl(config)}
                         onOpenNote={handleOpenNote}
                         onOpenTools={handleOpenTools}
+                        onExamples={(selectedText) => handleChatCoachPromptToChat('examples', 'Examples', (text) => getStudyBuddyCoachPrompt(text, 'examples'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
+                        onExplain={(selectedText) => handleChatCoachExplain(selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
+                        onCollocations={(selectedText) => handleChatCoachPromptToChat('collocations', 'Collocations', (text) => getStudyBuddyCoachPrompt(text, 'collocations'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
+                        onParaphrase={(selectedText) => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (text) => getStudyBuddyCoachPrompt(text, 'paraphrase'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                     />
                 </div>
             )}
@@ -2618,6 +2622,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                         serverUrl={getServerUrl(config)}
                                         onOpenNote={handleOpenNote}
                                         onOpenTools={handleOpenTools}
+                                        onExamples={(selectedText) => handleChatCoachPromptToChat('examples', 'Examples', (text) => getStudyBuddyCoachPrompt(text, 'examples'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
+                                        onExplain={(selectedText) => handleChatCoachExplain(selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
+                                        onCollocations={(selectedText) => handleChatCoachPromptToChat('collocations', 'Collocations', (text) => getStudyBuddyCoachPrompt(text, 'collocations'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
+                                        onParaphrase={(selectedText) => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (text) => getStudyBuddyCoachPrompt(text, 'paraphrase'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                                     />
                                 )}
                             </div>

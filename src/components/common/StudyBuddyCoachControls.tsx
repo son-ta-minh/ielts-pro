@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, Eye, Image as ImageIcon, Loader2, Mic, PenTool, Plus, Search, Volume2, Wrench } from 'lucide-react';
+import { Bot, Eye, GraduationCap, Image as ImageIcon, Loader2, Mic, PenTool, Plus, Search, Volume2, Wand, Wrench } from 'lucide-react';
 
 interface ChatCoachActionBarProps {
     hasSelection: boolean;
@@ -200,6 +200,10 @@ interface CommandBoxProps {
     onViewWord: () => void;
     onOpenSearchPage: (selectedText?: string) => void;
     onOpenTools: () => void;
+    onExamples: (selectedText?: string) => void;
+    onExplain: (selectedText?: string) => void;
+    onCollocations: (selectedText?: string) => void;
+    onParaphrase: (selectedText?: string) => void;
 }
 
 export const StudyBuddyCommandBox: React.FC<CommandBoxProps> = ({
@@ -220,20 +224,94 @@ export const StudyBuddyCommandBox: React.FC<CommandBoxProps> = ({
     onViewWord,
     onOpenSearchPage,
     onOpenTools,
+    onExamples,
+    onExplain,
+    onCollocations,
+    onParaphrase,
 }) => {
+    const [isAiMenuOpen, setIsAiMenuOpen] = React.useState(false);
+    const hasSelection = Boolean(selectedText?.trim());
+    const handleAiAction = (action: (selectedText?: string) => void) => {
+        setIsAiMenuOpen(false);
+        onRestoreSelectedRangeHover();
+        const latestSelectedText = (
+            window.getSelection?.()?.toString().trim()
+            || selectedText?.trim()
+            || ''
+        ).trim();
+        onOpenChatPanel();
+        window.setTimeout(() => {
+            action(latestSelectedText);
+        }, 0);
+    };
+
     return (
         <div
             ref={commandBoxRef}
             onMouseDown={onRestoreSelectedRange}
             onMouseEnter={onRestoreSelectedRangeHover}
-            className="select-none bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[140px] animate-in fade-in zoom-in-95 duration-200"
+            className="select-none bg-white/95 backdrop-blur-xl p-1.5 rounded-[1.8rem] shadow-2xl border border-neutral-200 flex flex-col gap-1 w-[150px] animate-in fade-in zoom-in-95 duration-200"
         >
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-4 gap-1">
                 <button type="button" onClick={onTranslateSelection} className="aspect-square bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center hover:bg-indigo-100 transition-all active:scale-90 shadow-sm font-black text-xs" title="Đọc Tiếng Việt">VI</button>
                 <button type="button" onClick={onReadAndIpa} className="aspect-square bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 shadow-sm" title="Read English"><Volume2 size={15}/></button>
                 <button type="button" onClick={onSpeakSelection} className="aspect-square bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center hover:bg-amber-100 transition-all active:scale-95 shadow-sm" title="Mimic Practice"><Mic size={15}/></button>
+                <div
+                    onMouseEnter={() => setIsAiMenuOpen(true)}
+                    onMouseLeave={() => setIsAiMenuOpen(false)}
+                    className="relative"
+                >
+                    <button
+                        type="button"
+                        onMouseDown={onRestoreSelectedRange}
+                        disabled={!hasSelection}
+                        className="aspect-square w-full rounded-2xl bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400 flex items-center justify-center text-white shadow-lg transition-all hover:brightness-105 hover:shadow-2xl hover:backdrop-blur-sm active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                        title="AI Menu"
+                    >
+                        <Bot size={18} className="text-white drop-shadow-md"/>
+                    </button>
+                    {isAiMenuOpen ? (
+                        <div
+                            className="absolute left-full top-0 z-10 grid min-w-[128px] gap-1 rounded-2xl border border-neutral-200 bg-white p-2 shadow-2xl"
+                            onMouseDown={onRestoreSelectedRange}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => handleAiAction(onExplain)}
+                                disabled={!hasSelection}
+                                className="rounded-xl bg-cyan-50 px-3 py-2 text-left text-[11px] font-bold text-cyan-700 transition-colors hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Explain
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleAiAction(onExamples)}
+                                disabled={!hasSelection}
+                                className="rounded-xl bg-blue-50 px-3 py-2 text-left text-[11px] font-bold text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Example
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleAiAction(onCollocations)}
+                                disabled={!hasSelection}
+                                className="rounded-xl bg-amber-50 px-3 py-2 text-left text-[11px] font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Collocations
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleAiAction(onParaphrase)}
+                                disabled={!hasSelection}
+                                className="rounded-xl bg-rose-50 px-3 py-2 text-left text-[11px] font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Paraphrase
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
             </div>
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-4 gap-1">
                 <button type="button" onClick={onOpenTools} className="aspect-square bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-100 transition-all active:scale-95 shadow-sm" title="Tools"><Wrench size={15}/></button>
                 {!isAlreadyInLibrary ? (
                     <button
