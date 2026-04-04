@@ -80,13 +80,30 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
   useEffect(() => {
     let isActive = true;
     const run = async () => {
+      console.log('[InlineReview][ViewWordModal] clearStaleWordFamilyGroupLink:start', {
+        word: word.word,
+        id: word.id,
+        wordFamilyGroupId: word.wordFamilyGroupId || null
+      });
       const cleaned = await clearStaleWordFamilyGroupLink({
         ...normalizeWordParaphrases(word),
         lastTestResults: normalizeTestResultKeys(word.lastTestResults)
       });
       if (!isActive) return;
+      console.log('[InlineReview][ViewWordModal] clearStaleWordFamilyGroupLink:done', {
+        word: word.word,
+        id: word.id,
+        before: word.wordFamilyGroupId || null,
+        after: cleaned.wordFamilyGroupId || null
+      });
       setCurrentWord(cleaned);
       if ((word.wordFamilyGroupId || null) !== (cleaned.wordFamilyGroupId || null)) {
+        console.log('[InlineReview][ViewWordModal] saving cleaned word after stale link removal', {
+          word: cleaned.word,
+          id: cleaned.id,
+          before: word.wordFamilyGroupId || null,
+          after: cleaned.wordFamilyGroupId || null
+        });
         await saveWord(cleaned);
       }
     };
@@ -386,15 +403,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
 
   return (
     <>
-    {isChallenging && (
-      <TestModal
-        word={currentWord}
-        onComplete={handleChallengeComplete}
-        onClose={() => setIsChallenging(false)}
-        skipSetup={true}
-        skipRecap={true}
-      />
-    )}
+    {isChallenging && <TestModal word={currentWord} onComplete={handleChallengeComplete} onClose={() => setIsChallenging(false)} />}
     {isMimicOpen && (
         <SimpleMimicModal target={currentWord.word} onClose={() => setIsMimicOpen(false)} />
     )}
@@ -404,6 +413,10 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       onOpenWordFamilyGroupRequest={onOpenWordFamilyGroup}
       onClose={onClose}
       onChallengeRequest={() => {
+        if (onStartReviewSession) {
+          onStartReviewSession(currentWord);
+          return;
+        }
         setIsChallenging(true);
       }}
       onMimicRequest={() => setIsMimicOpen(true)}

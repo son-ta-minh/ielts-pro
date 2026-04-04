@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { Suspense, useState, useCallback, useEffect, useMemo } from 'react';
 import { VocabularyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import WordTable from './WordTable';
 import ViewWordModal from './ViewWordModal';
 import EditWordModal from './EditWordModal';
+import ReviewSession from '../practice/ReviewSession';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from './WordTable_UI';
 import { stringToWordArray } from '../../utils/text';
 import { TagTreeNode } from '../common/TagBrowser';
@@ -13,6 +14,7 @@ import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { autoRefineNewWords } from '../../services/wordRefinePersistence';
+import { Loader2 } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -66,6 +68,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
   
   const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
   const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
+  const [inlineReviewWords, setInlineReviewWords] = useState<VocabularyItem[] | null>(null);
   const [tagTree, setTagTree] = useState<TagTreeNode[]>([]);
 
   const { id: userId } = user;
@@ -468,8 +471,34 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
             onEditRequest={(w) => { setViewingWord(null); setEditingWord(w); }} 
             onUpdate={onUpdate} 
             onGainXp={async () => 0}
-            onStartReviewSession={(word) => onStartSession([word])}
+            onStartReviewSession={(word) => {
+              console.log('[InlineReview][WordList] open from ViewWordModal', { word: word.word, id: word.id });
+              setInlineReviewWords([word]);
+            }}
           /> 
+      )}
+      {inlineReviewWords && (
+          <div className="fixed inset-0 z-[130] bg-black/35 backdrop-blur-sm">
+            <Suspense fallback={<div className="fixed inset-0 z-[131] flex items-center justify-center"><Loader2 className="animate-spin text-white" size={32} /></div>}>
+              <div className="h-full overflow-y-auto p-4 md:p-8">
+                <ReviewSession
+                  user={user}
+                  sessionWords={inlineReviewWords}
+                  sessionType="custom"
+                  onUpdate={onUpdate}
+                  onBulkUpdate={async (updatedWords) => {
+                    await dataStore.bulkSaveWords(updatedWords);
+                  }}
+                  onComplete={() => {
+                    console.log('[InlineReview][WordList] onComplete -> closing overlay');
+                    setInlineReviewWords(null);
+                  }}
+                  onRetry={() => setInlineReviewWords((current) => current ? [...current] : current)}
+                  autoCloseOnFinish={true}
+                />
+              </div>
+            </Suspense>
+          </div>
       )}
       {editingWord && (
           <EditWordModal 

@@ -1001,8 +1001,8 @@ const LineStreakChart: React.FC<{
   const today = new Date().toISOString().slice(0, 10);
   // --- DEBUG LOGGING for today's row and trend values ---
   const todayRow = rows.find(r => r.date === today);
-  console.log("[DailyStreak Debug] today =", today);
-  console.log("[DailyStreak Debug] todayRow =", todayRow);
+//   console.log("[DailyStreak Debug] today =", today);
+//   console.log("[DailyStreak Debug] todayRow =", todayRow);
   // -----------------------------------------------------
 
   rows.forEach((r, i) => {
@@ -1022,16 +1022,16 @@ const LineStreakChart: React.FC<{
     }
 
     // --- DEBUG LOGGING for trend calculation values ---
-    if (isToday) {
-      console.log("[DailyStreak Debug] trend today values", {
-        learned: r.learned,
-        review: r.reviewed,
-        learnGoal: r.learnGoal,
-        reviewGoal: r.reviewGoal,
-        learnValue,
-        reviewValue
-      });
-    }
+    // if (isToday) {
+    //   console.log("[DailyStreak Debug] trend today values", {
+    //     learned: r.learned,
+    //     review: r.reviewed,
+    //     learnGoal: r.learnGoal,
+    //     reviewGoal: r.reviewGoal,
+    //     learnValue,
+    //     reviewValue
+    //   });
+    // }
     // -------------------------------------------------
 
     cumLearn += learnValue;

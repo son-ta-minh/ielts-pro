@@ -42,6 +42,7 @@ export interface ReviewSessionUIProps {
   handleQuickReview?: () => void;
   handleManualPractice: () => void;
   isQuickReviewMode?: boolean;
+  autoCloseOnFinish?: boolean;
 }
 
 const renderStatusBadge = (outcome: string | undefined, wasNew: boolean, isQuickFire: boolean) => {
@@ -136,7 +137,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         sessionOutcomes, sessionFinished, wordInModal, setWordInModal, onOpenWordDetails, editingWordInModal, setEditingWordInModal,
         isTesting, setIsTesting, currentWord, isNewWord, onUpdate, onComplete,
         nextItem, handleReview, handleTestComplete, handleRetry, handleEndSession,
-        handleQuickReview, handleManualPractice, isQuickReviewMode
+        handleQuickReview, handleManualPractice, isQuickReviewMode, autoCloseOnFinish = false
     } = props;
 
     const { current: currentIndex, max: maxIndexVisited } = progress;
@@ -175,7 +176,18 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         return <div className="flex flex-col items-center justify-center space-y-6 py-20 text-center animate-in fade-in duration-500"><div className="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center shadow-inner"><Check size={32} /></div><h2 className="text-xl font-bold text-neutral-900">All clear!</h2><button onClick={onComplete} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-semibold text-sm hover:bg-neutral-800 transition-colors">Back to Dashboard</button></div>;
     }
     
+    if (sessionFinished && autoCloseOnFinish) {
+        console.log('[InlineReview][ReviewSessionUI] return null because sessionFinished && autoCloseOnFinish');
+        return null;
+    }
+
     if (sessionFinished) {
+        console.log('[InlineReview][ReviewSessionUI] rendering recap screen', {
+            sessionType,
+            autoCloseOnFinish,
+            isQuickFire,
+            outcomes: sessionOutcomes
+        });
         if (sessionType === 'new' || sessionType === 'due' || sessionType === 'new_study' || sessionType === 'custom' || isQuickFire) {
           const passCount = Object.values(sessionOutcomes).filter(v => v === 'PASS' || v === ReviewGrade.EASY || v === ReviewGrade.LEARNED).length;
           return (
@@ -564,7 +576,10 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
             </div>
             {wordInModal && <ViewWordModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={async () => 0} isViewOnly={false} />}
             {editingWordInModal && <EditWordModal user={user} word={editingWordInModal} onSave={handleSaveEdit} onClose={() => setEditingWordInModal(null)} onSwitchToView={(word) => { setEditingWordInModal(null); setWordInModal(word); }} />}
-            {isTesting && currentWord && <TestModal word={currentWord} isQuickFire={isQuickFire} sessionPosition={isQuickFire ? { current: currentIndex + 1, total: sessionWords.length } : undefined} onPrevWord={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} onClose={() => { if (isQuickFire) onComplete(); else setIsTesting(false); }} onComplete={handleTestComplete} skipSetup={isQuickReviewMode} />}
+            {isTesting && currentWord && <TestModal word={currentWord} isQuickFire={isQuickFire} sessionPosition={isQuickFire ? { current: currentIndex + 1, total: sessionWords.length } : undefined} onPrevWord={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} onClose={() => {
+                console.log('[InlineReview][ReviewSessionUI] TestModal onClose', { isQuickFire, currentWord: currentWord.word });
+                if (isQuickFire) onComplete(); else setIsTesting(false);
+            }} onComplete={handleTestComplete} skipSetup={isQuickReviewMode} skipRecap={autoCloseOnFinish} />}
             {mimicTarget !== null && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
         </>
     );

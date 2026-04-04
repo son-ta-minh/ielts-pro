@@ -473,6 +473,11 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
 }
 
 export async function saveWord(item: VocabularyItem) {
+    console.log('[InlineReview][DataStore] saveWord:start', {
+        id: item.id,
+        word: item.word,
+        scope: 'word'
+    });
     if (!canWrite('word')) return;
     _updateLocalLastModified();
     Object.assign(item, withNormalizedVocabularyKeywords(item));
@@ -484,10 +489,18 @@ export async function saveWord(item: VocabularyItem) {
     _recalculateStats(item.userId);
     _triggerBackup();
     _notifyChanges();
+    console.log('[InlineReview][DataStore] saveWord:done', {
+        id: item.id,
+        word: item.word
+    });
 }
 
 export async function bulkSaveWords(items: VocabularyItem[]) {
     if (items.length === 0) return;
+    console.log('[InlineReview][DataStore] bulkSaveWords:start', {
+        count: items.length,
+        words: items.map((item) => ({ id: item.id, word: item.word }))
+    });
     _updateLocalLastModified();
     items.forEach(item => {
         Object.assign(item, withNormalizedVocabularyKeywords(item));
@@ -500,6 +513,10 @@ export async function bulkSaveWords(items: VocabularyItem[]) {
     if (items[0]) _recalculateStats(items[0].userId);
     _triggerBackup();
     _notifyChanges();
+    console.log('[InlineReview][DataStore] bulkSaveWords:done', {
+        count: items.length,
+        words: items.map((item) => ({ id: item.id, word: item.word }))
+    });
 }
 
 export async function deleteWord(id: string) {

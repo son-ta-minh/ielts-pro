@@ -104,7 +104,7 @@ export const isSubsequenceMatch = (query: string, source: string, threshold = 0.
 
   const coverage = i / q.length;
 
-  console.log('[SubsequenceMatch]', { query, source, coverage, threshold, matched: i, total: q.length });
+  // console.log('[SubsequenceMatch]', { query, source, coverage, threshold, matched: i, total: q.length });
 
   return coverage >= threshold;
 };
@@ -172,7 +172,7 @@ const scoreTokenWindow = (queryTokens: string[], sourceTokens: string[]): Window
 const getBestWindowMatchStats = (query: string, source: string): WindowMatchStats => {
   const queryTokens = tokenizeFuzzyText(query);
   const sourceTokens = tokenizeFuzzyText(source);
-  console.log('[BestWindowMatch] Tokens:', { queryTokens, sourceTokens });
+  // console.log('[BestWindowMatch] Tokens:', { queryTokens, sourceTokens });
   if (queryTokens.length === 0 || sourceTokens.length === 0) {
     return { score: 0, matchedWeight: 0, matchedCount: 0, contentMatchedCount: 0, contentTokenCount: 0, coverage: 0, precision: 0 };
   }
@@ -221,7 +221,7 @@ export const isFuzzyPhraseMatch = (query: string, source: string, threshold = 0.
 
   const queryTokens = tokenizeFuzzyText(query);
   if (queryTokens.length === 0) {
-    console.log('[FuzzyMatch] No valid tokens in query:', { query, source });
+    // console.log('[FuzzyMatch] No valid tokens in query:', { query, source });
     return false;
   }
 
@@ -233,23 +233,23 @@ export const isFuzzyPhraseMatch = (query: string, source: string, threshold = 0.
     );
 
     if (bestStats.contentMatchedCount < requiredContentMatches) {
-      console.log('[FuzzyMatch] Content tokens not sufficiently matched:', {
-        query,
-        source,
-        bestStats,
-        requiredContentMatches
-      });
+      // console.log('[FuzzyMatch] Content tokens not sufficiently matched:', {
+      //   query,
+      //   source,
+      //   bestStats,
+      //   requiredContentMatches
+      // });
       return false;
     }
   } else {
     const requiredMatchCount = getRequiredMatchCount(queryTokens.length);
     if (bestStats.matchedCount < requiredMatchCount) {
-      console.log('[FuzzyMatch] Required match count not met:', { query, source, bestStats, requiredMatchCount });
+      // console.log('[FuzzyMatch] Required match count not met:', { query, source, bestStats, requiredMatchCount });
       return false;
     }
   }
 
   const finalScore = Math.max(bestStats.score, getPhraseCharacterSimilarity(query, source) * 0.88);
-  console.log('[FuzzyMatch] Final score:', { query, source, bestStats, finalScore, threshold });
+  // console.log('[FuzzyMatch] Final score:', { query, source, bestStats, finalScore, threshold });
   return finalScore >= threshold;
 };

@@ -230,6 +230,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
   const handleEditRequest = (word: VocabularyItem) => { setGlobalViewWord(null); setEditingWord(word); };
   const handleSaveEdit = (updated: VocabularyItem) => { updateWord(updated); setEditingWord(null); };
   const [isRestoring, setIsRestoring] = useState(false);
+  const [inlineReviewWords, setInlineReviewWords] = useState<VocabularyItem[] | null>(null);
 
   return (
     <AutoRefineProvider currentUser={currentUser}>
@@ -255,7 +256,31 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
             />
           </Suspense>
         )}
-        {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onOpenWordFamilyGroup={(groupId) => { sessionStorage.setItem('vocab_pro_word_family_target_group_id', groupId); setGlobalViewWord(null); setView('WORD_FAMILY'); }} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} onStartReviewSession={(word) => startSession([word], 'custom')} />}
+        {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onOpenWordFamilyGroup={(groupId) => { sessionStorage.setItem('vocab_pro_word_family_target_group_id', groupId); setGlobalViewWord(null); setView('WORD_FAMILY'); }} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} onStartReviewSession={(word) => {
+          console.log('[InlineReview][AppLayout] open from ViewWordModal', { word: word.word, id: word.id });
+          setInlineReviewWords([word]);
+        }} />}
+        {currentUser && inlineReviewWords && (
+          <div className="fixed inset-0 z-[130] bg-black/35 backdrop-blur-sm">
+            <Suspense fallback={<div className="fixed inset-0 z-[131] flex items-center justify-center"><Loader2 className="animate-spin text-white" size={32} /></div>}>
+              <div className="h-full overflow-y-auto p-4 md:p-8">
+                <ReviewSession
+                  user={currentUser}
+                  sessionWords={inlineReviewWords}
+                  sessionType="custom"
+                  onUpdate={updateWord}
+                  onBulkUpdate={bulkUpdateWords}
+                  onComplete={() => {
+                    console.log('[InlineReview][AppLayout] onComplete -> closing overlay');
+                    setInlineReviewWords(null);
+                  }}
+                  onRetry={() => setInlineReviewWords((current) => current ? [...current] : current)}
+                  autoCloseOnFinish={true}
+                />
+              </div>
+            </Suspense>
+          </div>
+        )}
         {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
         <ConfirmationModal isOpen={endSessionModal.isOpen} title="End Current Session?" message="Navigating away will end your current study session. Are you sure you want to continue?" confirmText="End Session" isProcessing={false} onConfirm={confirmEndSession} onClose={cancelEndSession} icon={<AlertTriangle size={40} className="text-orange-50" />} confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" />
         <ConfirmationModal
