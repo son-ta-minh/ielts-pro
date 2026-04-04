@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
 import { Search, LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image, Loader2, CheckCircle2 } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, LearnedStatus, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
-import { applyLearnedStatus, getRemainingTime } from '../../utils/srs';
+import { getRemainingTime } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { parseMarkdown } from '../../utils/markdownParser';
@@ -76,84 +76,14 @@ const IdiomBadge: React.FC = () => (
 
 const renderParaphraseBadge = (tone: ParaphraseTone) => {
     const styles: Record<ParaphraseTone, string> = {
-        intensified: 'bg-orange-100 text-orange-700 border-orange-200',
-        softened: 'bg-blue-100 text-blue-700 border-blue-200',
-        synonym: 'bg-neutral-100 text-neutral-600 border-neutral-200',
         academic: 'bg-purple-100 text-purple-700 border-purple-200',
-        casual: 'bg-sky-100 text-sky-700 border-sky-200'
+        casual: 'bg-sky-100 text-sky-700 border-sky-200',
+        neutral: 'bg-neutral-100 text-neutral-600 border-neutral-200'
     };
     return (
-        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${styles[tone] || styles.synonym}`}>
+        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${styles[tone]}`}>
             {tone}
         </span>
-    );
-};
-
-const StatusDropdown: React.FC<{
-    label?: string;
-    tooltip?: string; // optional tooltip
-    options: { id: string; label: string; icon: React.ReactNode; }[];
-    selectedId: string;
-    onSelect: (id: string) => void;
-    buttonClass?: string;
-    disabled?: boolean;
-}> = ({ label, tooltip, options, selectedId, onSelect, buttonClass, disabled = false }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
-    const selectedOption = options.find(o => o.id === selectedId) || options[0];
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    return (
-        <div className="relative" ref={menuRef}>
-            <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className={buttonClass}
-                disabled={disabled}
-                title={tooltip} // simple tooltip on hover
-            >
-                {label && (
-                    <span className="text-[9px] font-black uppercase tracking-widest text-neutral-400 mr-2">
-                        {label}
-                    </span>
-                )}
-                {selectedOption.icon}
-                <span className="text-xs font-black uppercase tracking-wider">{selectedOption.label}</span>
-                <ChevronDown
-                    size={14}
-                    className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                />
-            </button>
-
-            {isOpen && !disabled && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-neutral-100 z-50 p-2 overflow-hidden animate-in fade-in zoom-in-95 flex flex-col gap-1">
-                    {options.map(option => (
-                        <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => { onSelect(option.id); setIsOpen(false); }}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${
-                                selectedId === option.id
-                                    ? 'bg-neutral-100 text-neutral-900'
-                                    : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-                            }`}
-                        >
-                            {option.icon}
-                            <span>{option.label}</span>
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
     );
 };
 
@@ -239,6 +169,7 @@ export interface ViewWordModalUIProps {
     appliedAccent?: 'US' | 'UK';
     onAddAIExample?: () => void;
     onAskAiRequest?: () => void;
+    onVerifyWordRequest?: () => void;
     onAskAiSectionRequest?: (section: 'wordFamily' | 'collocation' | 'paraphrase' | 'idiom' | 'example' | 'preposition') => void;
     onScanParaphrases?: () => void;
     onAddScannedParaphrase?: (item: ParaphraseOption & { sourceWord?: string }) => void;
@@ -249,10 +180,15 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     onNavigateToWord, isViewOnly = false,
     onAddAIExample,
     onAskAiRequest,
+    onVerifyWordRequest,
     onAskAiSectionRequest,
     onScanParaphrases,
     onAddScannedParaphrase
 }) => {
+    const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
+    const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+    const aiMenuRef = useRef<HTMLDivElement>(null);
+    const actionMenuRef = useRef<HTMLDivElement>(null);
     const isLibraryWord = (value: string) => {
         const normalized = value.trim().toLowerCase();
         if (!normalized) return false;
@@ -441,6 +377,19 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     }, []);
 
     useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (aiMenuRef.current && !aiMenuRef.current.contains(event.target as Node)) {
+                setIsAiMenuOpen(false);
+            }
+            if (actionMenuRef.current && !actionMenuRef.current.contains(event.target as Node)) {
+                setIsActionMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
         (window as any).handleLessonSpeak = (text: string, lang?: 'en' | 'vi') => {
             speak(text, false, lang);
         };
@@ -538,18 +487,14 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     
     const currentLearnStatus = word.learnedStatus || LearnedStatus.NEW;
 
-    const handleLearnStatusSelect = (statusId: string) => {
-        if (isViewOnly) return;
-        const finalWord = applyLearnedStatus(word, statusId as LearnedStatus);
-        onUpdate(finalWord);
-    };
-
     const qualityStatusOptions = [
         { id: WordQuality.RAW, label: 'Raw', icon: <Ghost size={14} className="text-neutral-400" /> },
         { id: WordQuality.REFINED, label: 'To Review', icon: <Wand2 size={14} className="text-indigo-500" /> },
         { id: WordQuality.VERIFIED, label: 'Verified', icon: <ShieldCheck size={14} className="text-emerald-500" /> },
         { id: WordQuality.FAILED, label: 'Incorrect', icon: <ShieldX size={14} className="text-rose-500" /> },
     ];
+    const selectedLearnStatus = learnStatusOptions.find((option) => option.id === currentLearnStatus) || learnStatusOptions[0];
+    const selectedQualityStatus = qualityStatusOptions.find((option) => option.id === word.quality) || qualityStatusOptions[0];
     
     const renderFamilyCardGroup = (label: string, members: WordFamilyMember[] | undefined, color: string, typeKey: string) => {
         const visibleMembers = Array.isArray(members) ? members.filter(m => viewSettings.showHidden || !m.isIgnored) : [];
@@ -677,6 +622,16 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const hasUsage = Boolean(lessonUsageHtml?.trim());
     const hasTest = Boolean(lessonTestHtml?.trim());
     const exampleSentences = useMemo(() => splitExampleIntoSentences(word.example || ''), [word.example]);
+    const hasAiActions = Boolean(onAskAiRequest || onVerifyWordRequest || onAskAiSectionRequest || onAddAIExample);
+    const hasActionMenu = !isViewOnly && Boolean(onChallengeRequest || onEditRequest || onScanParaphrases);
+    const handleAiMenuAction = (action: () => void) => {
+        setIsAiMenuOpen(false);
+        action();
+    };
+    const handleActionMenuAction = (action: () => void) => {
+        setIsActionMenuOpen(false);
+        action();
+    };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
@@ -686,99 +641,12 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                         
                         {/* ROW 1 - LEFT: WORD + ACTION ICONS */}
                         <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <h2 className={`text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>
-                                    {word.word}
-                                </h2>
-                                {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100" />}
-
-                                {!word.isPassive && (
-                                    <>
-                                        <button
-                                            onClick={() => handlePronounceWithCoachLookup(word.word)}
-                                            className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                        >
-                                            <Volume2 size={18} />
-                                        </button>
-                                        {/* BEGIN: VI MEANING AUDIO BUTTON */}
-                                        <div className="relative group">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); speak(word.meaningVi, false, 'vi'); }}
-                                                className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                            >
-                                                <BookOpen size={18} />
-                                            </button>
-                                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs px-3 py-2 bg-neutral-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                                {word.meaningVi}
-                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
-                                            </div>
-                                        </div>
-                                        {/* END: VI MEANING AUDIO BUTTON */}
-                                        <button
-                                            onClick={onMimicRequest}
-                                            className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                        >
-                                            <Mic size={18} />
-                                        </button>
-                                    </>
-                                )}
-
-                                {Array.isArray(word.img) && word.img.some(i => i && i.trim() !== "") && (
-                                    <div className="relative inline-block group">
-                                        <button
-                                            className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                        >
-                                            <Image size={18} />
-                                        </button>
-                                        <div className="absolute top-full left-0 -translate-x-10 mt-2 w-max max-w-[28rem] overflow-x-hidden overflow-y-hidden p-4 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-20">
-                                            <div className="flex flex-wrap gap-3">
-                                                {word.img.filter(i => i && i.trim() !== "").map((raw, idx) => {
-                                                    let caption: string | null = null;
-                                                    let imageUrl = raw;
-
-                                                    // Support format: "text:url"
-                                                    const firstColonIndex = raw.indexOf(':');
-                                                    if (firstColonIndex > -1 && raw.startsWith('http') === false) {
-                                                        caption = raw.slice(0, firstColonIndex).trim();
-                                                        imageUrl = raw.slice(firstColonIndex + 1).trim();
-                                                    }
-
-                                                    return (
-                                                        <div key={idx} className="basis-1/2 sm:flex-none sm:w-48 flex flex-col gap-1">
-                                                            {imageUrl && (
-                                                                <img
-                                                                    src={imageUrl.startsWith('http')
-                                                                        ? imageUrl
-                                                                        : `${serverUrl}${imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`}`}
-                                                                    alt={`word-img-${idx}: [${imageUrl}]`}
-                                                                    className="w-full h-36 object-cover rounded-lg border border-neutral-100"
-                                                                />
-                                                            )}
-                                                            {caption && (
-                                                                <div className="text-[10px] font-semibold text-neutral-600 text-center truncate">
-                                                                    {caption}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                                <div className="flex items-center gap-2">
-                                    <MasteryScoreCalculator word={word} />
-                                    {onAskAiRequest ? (
-                                        <button
-                                            type="button"
-                                            onClick={onAskAiRequest}
-                                            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                                            title="Ask StudyBuddy to explain this word using its saved content"
-                                        >
-                                            <MessageSquare size={12} />
-                                            <span>Ask AI</span>
-                                        </button>
-                                    ) : null}
+                            <div className="flex items-start gap-3">
+                                <div className="min-w-0 flex flex-1 flex-wrap items-center gap-3">
+                                    <h2 className={`min-w-0 break-words text-2xl font-black tracking-tight leading-none ${isSpellingFailed ? 'text-red-600' : 'text-neutral-900'}`}>
+                                        {word.word}
+                                    </h2>
+                                    {isSpellingFailed && <AlertCircle size={16} className="text-red-500 fill-red-100 shrink-0" />}
                                 </div>
                             </div>
 
@@ -787,39 +655,157 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
 
                         {/* ROW 1 - RIGHT: STATUS + ACTIONS */}
                         <div className="flex items-start justify-start md:justify-end gap-2 flex-wrap">
-                            <StatusDropdown
-                                options={learnStatusOptions}
-                                selectedId={currentLearnStatus}
-                                onSelect={handleLearnStatusSelect}
-                                buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200"
-                                tooltip="This will not affect the daily progress, please start Practice session instead to record Review status"
-                                disabled={isViewOnly}
-                            />
-                            <StatusDropdown
-                                options={qualityStatusOptions}
-                                selectedId={word.quality}
-                                onSelect={(id) => onUpdate({ ...word, quality: id as WordQuality })}
-                                buttonClass="flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:bg-neutral-100 transition-colors shadow-sm border border-neutral-200"
-                                disabled={isViewOnly}
-                            />
-                            {!word.isPassive && (
-                                <div className="flex items-center gap-1.5 px-3 py-2 bg-white border border-neutral-200 rounded-lg text-xs font-bold text-neutral-500 shadow-sm">
-                                    <Clock size={14} />
-                                    <span className={`text-[11px] font-black uppercase ${reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'}`}>
-                                        {reviewStatus.label}
-                                    </span>
+                            <div className="relative shrink-0 group/status">
+                                <button
+                                    type="button"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 shadow-sm transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                    title="View word status details"
+                                >
+                                    <CheckCircle2 size={14} />
+                                    <span>Status</span>
+                                    <ChevronDown size={12} />
+                                </button>
+                                <div className="pointer-events-none invisible absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border border-neutral-100 bg-white p-3 opacity-0 shadow-xl transition-all duration-150 group-hover/status:pointer-events-auto group-hover/status:visible group-hover/status:opacity-100">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Mastery</span>
+                                            <div className="flex items-center gap-2">
+                                                <MasteryScoreGauge score={word.masteryScore ?? 0} />
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Learned</span>
+                                            <div className="flex items-center gap-2 text-xs font-black uppercase text-neutral-800">
+                                                {selectedLearnStatus.icon}
+                                                <span>{selectedLearnStatus.label}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Quality</span>
+                                            <div className="flex items-center gap-2 text-xs font-black uppercase text-neutral-800">
+                                                {selectedQualityStatus.icon}
+                                                <span>{selectedQualityStatus.label}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                                            <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Due</span>
+                                            <div className="flex items-center gap-2 text-[11px] font-black uppercase">
+                                                <Clock size={12} className={reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'} />
+                                                <span className={reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'}>
+                                                    {reviewStatus.label}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
-                            {!isViewOnly && (
-                                <>
-                                    <button onClick={onChallengeRequest} className="p-2 bg-amber-100 text-amber-600 hover:text-amber-900 rounded-lg hover:bg-amber-200 transition-colors">
-                                        <BrainCircuit size={16} />
+                            </div>
+                            {hasActionMenu ? (
+                                <div className="relative shrink-0" ref={actionMenuRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsActionMenuOpen((prev) => !prev)}
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900 shadow-sm"
+                                    >
+                                        <Wand2 size={14} />
+                                        <span>Action</span>
+                                        <ChevronDown size={12} className={`transition-transform duration-200 ${isActionMenuOpen ? 'rotate-180' : ''}`} />
                                     </button>
-                                    <button onClick={onEditRequest} className="p-2 bg-neutral-100 text-neutral-600 hover:text-neutral-900 rounded-lg hover:bg-neutral-200 transition-colors">
-                                        <Edit3 size={16} />
+                                    {isActionMenuOpen ? (
+                                        <div className="absolute right-0 top-full z-50 mt-2 flex w-52 flex-col gap-1 overflow-hidden rounded-2xl border border-neutral-100 bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleActionMenuAction(onChallengeRequest)}
+                                                className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-amber-700 transition-colors hover:bg-amber-50"
+                                            >
+                                                <BrainCircuit size={12} />
+                                                <span>Test It</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleActionMenuAction(onEditRequest)}
+                                                className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100"
+                                            >
+                                                <Edit3 size={12} />
+                                                <span>Edit</span>
+                                            </button>
+                                            {onScanParaphrases ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleActionMenuAction(onScanParaphrases)}
+                                                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-amber-700 transition-colors hover:bg-amber-50"
+                                                >
+                                                    {isScanningParaphrases ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                                                    <span>{isScanningParaphrases ? 'Scanning...' : 'Scan Paraphrases'}</span>
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    ) : null}
+                                </div>
+                            ) : null}
+                            {hasAiActions ? (
+                                <div className="relative shrink-0" ref={aiMenuRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAiMenuOpen((prev) => !prev)}
+                                        className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900 shadow-sm"
+                                        title="Open StudyBuddy actions for this word"
+                                    >
+                                        <MessageSquare size={12} />
+                                        <span>Ask AI</span>
+                                        <ChevronDown size={12} className={`transition-transform duration-200 ${isAiMenuOpen ? 'rotate-180' : ''}`} />
                                     </button>
-                                </>
-                            )}
+                                    {isAiMenuOpen ? (
+                                        <div className="absolute right-0 top-full z-50 mt-2 flex w-56 max-w-[calc(100vw-2rem)] flex-col gap-1 overflow-hidden rounded-2xl border border-neutral-100 bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
+                                            {onVerifyWordRequest ? (
+                                                <button type="button" onClick={() => handleAiMenuAction(onVerifyWordRequest)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-amber-700 transition-colors hover:bg-amber-50">
+                                                    <Search size={12} />
+                                                    <span>Verify Word</span>
+                                                </button>
+                                            ) : null}
+                                            {onAskAiRequest ? (
+                                                <button type="button" onClick={() => handleAiMenuAction(onAskAiRequest)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
+                                                    <MessageSquare size={12} />
+                                                    <span>Explain Core Usage</span>
+                                                </button>
+                                            ) : null}
+                                            {onAskAiSectionRequest ? (
+                                                <>
+                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('collocation'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
+                                                        <Combine size={12} />
+                                                        <span>Explain Collocations</span>
+                                                    </button>
+                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('paraphrase'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
+                                                        <Zap size={12} />
+                                                        <span>Explain Paraphrases</span>
+                                                    </button>
+                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('preposition'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
+                                                        <AtSign size={12} />
+                                                        <span>Explain Prepositions</span>
+                                                    </button>
+                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('wordFamily'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
+                                                        <Network size={12} />
+                                                        <span>Explain Word Family</span>
+                                                    </button>
+                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('idiom'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
+                                                        <MessageSquare size={12} />
+                                                        <span>Explain Idioms</span>
+                                                    </button>
+                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('example'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
+                                                        <BookOpen size={12} />
+                                                        <span>More Example</span>
+                                                    </button>
+                                                </>
+                                            ) : null}
+                                            {onAddAIExample ? (
+                                                <button type="button" onClick={() => handleAiMenuAction(onAddAIExample)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-indigo-700 transition-colors hover:bg-indigo-50">
+                                                    <Plus size={12} />
+                                                    <span>Add AI Example</span>
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    ) : null}
+                                </div>
+                            ) : null}
                             <button onClick={onClose} className="p-2 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-lg transition-colors">
                                 <X size={16} />
                             </button>
@@ -846,7 +832,81 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     </span>
                                 </div>
                             )}
+
+                            {!word.isPassive && (
+                                <>
+                                    <button
+                                        onClick={() => handlePronounceWithCoachLookup(word.word)}
+                                        className="shrink-0 p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                    >
+                                        <Volume2 size={18} />
+                                    </button>
+                                    <div className="relative group shrink-0">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); speak(word.meaningVi, false, 'vi'); }}
+                                            className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                        >
+                                            <BookOpen size={18} />
+                                        </button>
+                                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs px-3 py-2 bg-neutral-800 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                            {word.meaningVi}
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={onMimicRequest}
+                                        className="shrink-0 p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                    >
+                                        <Mic size={18} />
+                                    </button>
+                                </>
+                            )}
+
+                            {Array.isArray(word.img) && word.img.some(i => i && i.trim() !== "") && (
+                                <div className="relative inline-block group shrink-0">
+                                    <button
+                                        className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                    >
+                                        <Image size={18} />
+                                    </button>
+                                    <div className="absolute top-full left-0 -translate-x-10 mt-2 w-max max-w-[28rem] overflow-x-hidden overflow-y-hidden p-4 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-20">
+                                        <div className="flex flex-wrap gap-3">
+                                            {word.img.filter(i => i && i.trim() !== "").map((raw, idx) => {
+                                                let caption: string | null = null;
+                                                let imageUrl = raw;
+
+                                                const firstColonIndex = raw.indexOf(':');
+                                                if (firstColonIndex > -1 && raw.startsWith('http') === false) {
+                                                    caption = raw.slice(0, firstColonIndex).trim();
+                                                    imageUrl = raw.slice(firstColonIndex + 1).trim();
+                                                }
+
+                                                return (
+                                                    <div key={idx} className="basis-1/2 sm:flex-none sm:w-48 flex flex-col gap-1">
+                                                        {imageUrl && (
+                                                            <img
+                                                                src={imageUrl.startsWith('http')
+                                                                    ? imageUrl
+                                                                    : `${serverUrl}${imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`}`}
+                                                                alt={`word-img-${idx}: [${imageUrl}]`}
+                                                                className="w-full h-36 object-cover rounded-lg border border-neutral-100"
+                                                            />
+                                                        )}
+                                                        {caption && (
+                                                            <div className="text-[10px] font-semibold text-neutral-600 text-center truncate">
+                                                                {caption}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
+
+                        <div className="flex items-start justify-start md:justify-end gap-2 flex-wrap" />
 
                     </div>
                 </header>
@@ -874,16 +934,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                                 <AtSign size={10}/> Prepositions
                                             </label>
-                                            {onAskAiSectionRequest ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onAskAiSectionRequest('preposition')}
-                                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                                                >
-                                                    <MessageSquare size={10} />
-                                                    <span>Ask AI</span>
-                                                </button>
-                                            ) : null}
                                         </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 bg-white border border-neutral-100 p-3 rounded-xl shadow-sm">
                                             {displayedPreps.map((p, i) => {
@@ -969,16 +1019,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                                 <Combine size={10}/> Collocations
                                             </label>
-                                            {onAskAiSectionRequest ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onAskAiSectionRequest('collocation')}
-                                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                                                >
-                                                    <MessageSquare size={10} />
-                                                    <span>Ask AI</span>
-                                                </button>
-                                            ) : null}
                                         </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedCollocs.map((c, i) => {
@@ -1026,45 +1066,12 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                                 <Zap size={10} className="text-amber-500"/> Variations
                                             </label>
-                                            {onAskAiSectionRequest ? (
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => onAskAiSectionRequest('paraphrase')}
-                                                        className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                                                    >
-                                                        <MessageSquare size={10} />
-                                                        <span>Ask AI</span>
-                                                    </button>
-                                                    {onScanParaphrases ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={onScanParaphrases}
-                                                            disabled={isScanningParaphrases}
-                                                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wide transition-colors disabled:cursor-wait disabled:opacity-60 ${
-                                                                scanParaphraseResultCount !== null
-                                                                    ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
-                                                                    : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                                            }`}
-                                                        >
-                                                            {isScanningParaphrases ? (
-                                                                <Loader2 size={10} className="animate-spin" />
-                                                            ) : scanParaphraseResultCount !== null ? (
-                                                                <CheckCircle2 size={10} />
-                                                            ) : (
-                                                                <Search size={10} />
-                                                            )}
-                                                            <span>
-                                                                {isScanningParaphrases
-                                                                    ? 'Scanning...'
-                                                                    : scanParaphraseResultCount !== null
-                                                                        ? `Found ${scanParaphraseResultCount}`
-                                                                        : 'Scan Paraphrase'}
-                                                            </span>
-                                                        </button>
-                                                    ) : null}
+                                            {scanParaphraseResultCount !== null ? (
+                                                <div className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-green-700">
+                                                    <CheckCircle2 size={10} />
+                                                    <span>Found {scanParaphraseResultCount}</span>
                                                 </div>
-                                            ) : null}
+                                            ) : <div />}
                                         </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedParas.map((para, idx) => {
@@ -1154,16 +1161,6 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                                 <MessageSquare size={10}/> Related Idioms
                                             </label>
-                                            {onAskAiSectionRequest ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onAskAiSectionRequest('idiom')}
-                                                    className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                                                >
-                                                    <MessageSquare size={10} />
-                                                    <span>Ask AI</span>
-                                                </button>
-                                            ) : null}
                                         </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                                             {displayedIdioms.map((idiom, i) => {
@@ -1203,27 +1200,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
                                                 <AtSign size={10}/> Examples
                                             </label>
-                                            <div className="flex items-center gap-2">
-                                                {onAskAiSectionRequest ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => onAskAiSectionRequest('example')}
-                                                        className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                                                    >
-                                                        <MessageSquare size={10} />
-                                                        <span>Ask AI</span>
-                                                    </button>
-                                                ) : null}
-                                                {onAddAIExample && (
-                                                    <button
-                                                        onClick={() => onAddAIExample()}
-                                                        className="flex items-center justify-center w-5 h-5 rounded-md bg-neutral-100 hover:bg-indigo-100 text-neutral-500 hover:text-indigo-600 transition-colors"
-                                                        title="Add AI Example"
-                                                    >
-                                                        <Plus size={12}/>
-                                                    </button>
-                                                )}
-                                            </div>
+                                            <div />
                                         </div>
                                         <div className="w-full text-sm leading-snug text-neutral-700">
                                         {exampleSentences.map((sentence, index) => {

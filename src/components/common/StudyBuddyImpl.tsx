@@ -873,7 +873,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                         existing[index] = {
                             ...existing[index],
                             context: mergeTextBlock(existing[index].context, nextEntry.context || ''),
-                            tone: nextEntry.tone || existing[index].tone || 'synonym',
+                            tone: nextEntry.tone || existing[index].tone || 'neutral',
                             isIgnored: false
                         };
                     } else {

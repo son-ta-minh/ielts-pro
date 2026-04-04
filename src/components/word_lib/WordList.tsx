@@ -468,6 +468,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
             onEditRequest={(w) => { setViewingWord(null); setEditingWord(w); }} 
             onUpdate={onUpdate} 
             onGainXp={async () => 0}
+            onStartReviewSession={(word) => onStartSession([word])}
           /> 
       )}
       {editingWord && (

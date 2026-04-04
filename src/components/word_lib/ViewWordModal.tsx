@@ -15,14 +15,26 @@ interface ScannedParaphraseItem extends ParaphraseOption {
   sourceWord?: string;
 }
 
+const normalizeParaphraseTone = (tone?: string): ParaphraseOption['tone'] => {
+  if (tone === 'academic' || tone === 'casual' || tone === 'neutral') {
+    return tone;
+  }
+  return 'neutral';
+};
+
 const getParaphraseToneFromWordRegister = (
   register?: VocabularyItem['register']
 ): ParaphraseOption['tone'] => {
-  if (register === 'academic' || register === 'casual') {
-    return register;
-  }
-  return 'synonym';
+  return normalizeParaphraseTone(register);
 };
+
+const normalizeWordParaphrases = (item: VocabularyItem): VocabularyItem => ({
+  ...item,
+  paraphrases: (item.paraphrases || []).map((paraphrase) => ({
+    ...paraphrase,
+    tone: normalizeParaphraseTone(paraphrase.tone)
+  }))
+});
 
 interface Props {
   word: VocabularyItem;
@@ -33,11 +45,12 @@ interface Props {
   onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => Promise<number>;
   onUpdate: (word: VocabularyItem) => void;
   isViewOnly?: boolean;
+  onStartReviewSession?: (word: VocabularyItem) => void;
 }
 
-const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpenWordFamilyGroup, onEditRequest, onUpdate, isViewOnly = false }) => {
+const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpenWordFamilyGroup, onEditRequest, onUpdate, isViewOnly = false, onStartReviewSession }) => {
   const [currentWord, setCurrentWord] = useState<VocabularyItem>({
-    ...word,
+    ...normalizeWordParaphrases(word),
     lastTestResults: normalizeTestResultKeys(word.lastTestResults)
   });
   const [currentWordFamilyGroup, setCurrentWordFamilyGroup] = useState<WordFamilyGroup | null>(null);
@@ -50,7 +63,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
 
   useEffect(() => {
     const normalizedResults = normalizeTestResultKeys(word.lastTestResults);
-    setCurrentWord({ ...word, lastTestResults: normalizedResults });
+    setCurrentWord({ ...normalizeWordParaphrases(word), lastTestResults: normalizedResults });
     setScannedParaphrases([]);
     setScanParaphraseResultCount(null);
   }, [word]);
@@ -68,7 +81,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
     let isActive = true;
     const run = async () => {
       const cleaned = await clearStaleWordFamilyGroupLink({
-        ...word,
+        ...normalizeWordParaphrases(word),
         lastTestResults: normalizeTestResultKeys(word.lastTestResults)
       });
       if (!isActive) return;
@@ -140,7 +153,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
   const handleLocalUpdate = (updatedWord: VocabularyItem) => {
       onUpdate(updatedWord);
       setCurrentWord({
-        ...updatedWord,
+        ...normalizeWordParaphrases(updatedWord),
         lastTestResults: normalizeTestResultKeys(updatedWord.lastTestResults)
       });
   };
@@ -285,7 +298,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
               word: item.word,
               tone: linkedWord?.register === 'academic' || linkedWord?.register === 'casual' || linkedWord?.register === 'neutral'
                 ? linkedWord.register
-                : (item.tone || 'synonym'),
+                : normalizeParaphraseTone(item.tone),
               context: item.context || sourceWord.example || sourceWord.meaningVi || '',
               isIgnored: false,
               sourceWord: sourceWord.word
@@ -334,7 +347,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
         ...currentParaphrases,
         {
           word: item.word,
-          tone: item.tone,
+          tone: normalizeParaphraseTone(item.tone),
           context: item.context,
           isIgnored: false
         }
@@ -363,6 +376,10 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
     dispatchAskAiTarget('coreUsage', 'WordViewModal top Ask AI');
   };
 
+  const handleVerifyWord = () => {
+    dispatchAskAiTarget('verifyData', 'WordViewModal top Verify Word');
+  };
+
   const handleAskAiSection = (section: 'wordFamily' | 'collocation' | 'paraphrase' | 'idiom' | 'example' | 'preposition') => {
     dispatchAskAiTarget(section, `WordViewModal ${section}`);
   };
@@ -378,7 +395,14 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       wordFamilyGroup={currentWordFamilyGroup}
       onOpenWordFamilyGroupRequest={onOpenWordFamilyGroup}
       onClose={onClose}
-      onChallengeRequest={() => setIsChallenging(true)}
+      onChallengeRequest={() => {
+        if (onStartReviewSession) {
+          onStartReviewSession(currentWord);
+          onClose();
+          return;
+        }
+        setIsChallenging(true);
+      }}
       onMimicRequest={() => setIsMimicOpen(true)}
       onEditRequest={() => onEditRequest(currentWord)}
       onUpdate={handleLocalUpdate}
@@ -393,6 +417,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       appliedAccent={appliedAccent}
       isViewOnly={isViewOnly}
       onAskAiRequest={handleAskAi}
+      onVerifyWordRequest={handleVerifyWord}
       onAskAiSectionRequest={handleAskAiSection}
     />
     </>

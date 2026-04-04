@@ -171,17 +171,15 @@ export function normalizeParaphraseTone(value?: string): ParaphraseOption['tone'
     const normalized = String(value || '').trim().toLowerCase();
     if (normalized === 'academic') return 'academic';
     if (normalized === 'casual') return 'casual';
-    if (normalized === 'intensified') return 'intensified';
-    if (normalized === 'softened') return 'softened';
-    return 'synonym';
+    return 'neutral';
 }
 
 export function extractRegisterFromParaphraseLine(item: string, context: string) {
     const patterns = [
-        /\((academic|casual|synonym)\)\s*$/i,
-        /\b(academic|casual|synonym)\b\s*$/i,
-        /^\((academic|casual|synonym)\)\s*/i,
-        /^(academic|casual|synonym)\b[\s-]*/i
+        /\((academic|casual|neutral|synonym)\)\s*$/i,
+        /\b(academic|casual|neutral|synonym)\b\s*$/i,
+        /^\((academic|casual|neutral|synonym)\)\s*/i,
+        /^(academic|casual|neutral|synonym)\b[\s-]*/i
     ];
 
     let nextItem = item.trim();
@@ -209,10 +207,10 @@ export function extractRegisterFromParaphraseLine(item: string, context: string)
     }
 
     if (!register) {
-        const trailingContextMatch = nextContext.match(/[\s,;/-]*\(?\b(academic|casual|synonym)\b\)?\s*$/i);
+        const trailingContextMatch = nextContext.match(/[\s,;/-]*\(?\b(academic|casual|neutral|synonym)\b\)?\s*$/i);
         if (trailingContextMatch) {
             register = trailingContextMatch[1];
-            nextContext = nextContext.replace(/[\s,;/-]*\(?\b(academic|casual|synonym)\b\)?\s*$/i, '').trim();
+            nextContext = nextContext.replace(/[\s,;/-]*\(?\b(academic|casual|neutral|synonym)\b\)?\s*$/i, '').trim();
         }
     }
 

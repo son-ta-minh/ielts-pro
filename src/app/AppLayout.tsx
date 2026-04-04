@@ -255,7 +255,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
             />
           </Suspense>
         )}
-        {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onOpenWordFamilyGroup={(groupId) => { sessionStorage.setItem('vocab_pro_word_family_target_group_id', groupId); setGlobalViewWord(null); setView('WORD_FAMILY'); }} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} />}
+        {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onOpenWordFamilyGroup={(groupId) => { sessionStorage.setItem('vocab_pro_word_family_target_group_id', groupId); setGlobalViewWord(null); setView('WORD_FAMILY'); }} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} onStartReviewSession={(word) => startSession([word], 'custom')} />}
         {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
         <ConfirmationModal isOpen={endSessionModal.isOpen} title="End Current Session?" message="Navigating away will end your current study session. Are you sure you want to continue?" confirmText="End Session" isProcessing={false} onConfirm={confirmEndSession} onClose={cancelEndSession} icon={<AlertTriangle size={40} className="text-orange-50" />} confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" />
         <ConfirmationModal

@@ -5,7 +5,7 @@ import { getAiStudyContextText } from './context_util';
 export type ChatSaveSection = 'example' | 'preposition' | 'collocation' | 'paraphrase' | 'wordFamily' | 'idiom' | 'userNote';
 export type ChatSaveActionType = 'examples' | 'collocations' | 'paraphrase' | 'wordFamily' | 'preposition' | 'idioms' | 'compare';
 export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain' | 'image' | 'infographic' | 'preposition' | 'idioms' | 'compare';
-export type StudyBuddyTargetSection = 'coreUsage' | 'collocation' | 'wordFamily' | 'idiom' | 'paraphrase' | 'example' | 'preposition';
+export type StudyBuddyTargetSection = 'coreUsage' | 'collocation' | 'wordFamily' | 'idiom' | 'paraphrase' | 'example' | 'preposition' | 'verifyData';
 
 export interface StudyBuddyChatTarget {
     word: VocabularyItem;
@@ -51,7 +51,8 @@ export const STUDY_BUDDY_TARGET_LABELS: Record<StudyBuddyTargetSection, string> 
     idiom: 'Idiom',
     paraphrase: 'Paraphrase',
     example: 'Example',
-    preposition: 'Dependent Preposition'
+    preposition: 'Dependent Preposition',
+    verifyData: 'Verify Word Data'
 };
 
 export const SAVE_SECTION_LABELS: Record<ChatSaveSection, string> = {
@@ -180,7 +181,7 @@ export function buildStudyBuddyTargetRecord(word: VocabularyItem) {
         word.paraphrases?.length
             ? `Paraphrases:\n${word.paraphrases
                 .filter((item) => !item.isIgnored)
-                .map((item) => `- ${item.word}${item.context ? `: ${item.context}` : ''}`)
+                .map((item) => `- ${item.word}${item.context ? `: ${item.context}` : ''}${item.tone ? ` [${item.tone}]` : ''}`)
                 .join('\n')}`
             : '',
         formatWordFamilySection(word.wordFamily)
@@ -278,13 +279,35 @@ Rules:
 
 Vocabulary record:
 ${record}`;
+        case 'verifyData':
+            return `Audit the saved vocabulary data for "${headword}" and report only what should be improved.
+
+Strict output rules:
+- Do not write any intro, outro, praise, summary, or confirmation that items are correct
+- Report only problems, doubtful items, awkward items, misleading items, or low-value items
+- If there are no issues worth fixing, reply exactly: No critical data issues found.
+- Keep each point concrete and action-oriented
+
+What to verify:
+- whether the main register is accurate
+- whether collocations are natural, common enough, and worth learning
+- whether paraphrases are natural and truly usable paraphrases for this headword
+- whether each paraphrase register is accurate
+- whether any item is too broad, too narrow, misleading, duplicate, or unnecessary for study
+- whether any item should be ignored or removed
+
+Preferred format:
+- [Field] issue -> suggested fix
+
+Vocabulary record:
+${record}`;
         default:
             return `Help the learner with "${headword}" using the vocabulary record below.\n\n${record}`;
     }
 }
 
 export function buildStudyBuddyTargetFollowUpMarkdown() {
-    return `[FOLLOWUP:coreUsage|Core] [FOLLOWUP:collocation|Collo] [FOLLOWUP:wordFamily|Family] [FOLLOWUP:preposition|Prep] [FOLLOWUP:idiom|Idiom] [FOLLOWUP:paraphrase|Para] [FOLLOWUP:example|Example]`;
+    return `[FOLLOWUP:coreUsage|Core] [FOLLOWUP:collocation|Collo] [FOLLOWUP:wordFamily|Family] [FOLLOWUP:preposition|Prep] [FOLLOWUP:idiom|Idiom] [FOLLOWUP:paraphrase|Para] [FOLLOWUP:example|Example] [FOLLOWUP:verifyData|Verify]`;
 }
 
 export function formatStudyBuddyTargetAssistantPreview(content: string, target: StudyBuddyChatTarget | null) {

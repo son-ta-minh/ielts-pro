@@ -201,7 +201,7 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
       const payload = items.map(it => ({
         word: it.text,
         context: it.desc || '',
-        tone: 'synonym',
+        tone: 'neutral',
         isIgnored: false
       }));
       payload.forEach(item => paraList.add(item));
@@ -813,7 +813,7 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                               ))}
                               <button 
                                 type="button" 
-                                onClick={() => paraList.add({ word: '', context: '', tone: 'synonym', isIgnored: false })} 
+                                onClick={() => paraList.add({ word: '', context: '', tone: 'neutral', isIgnored: false })} 
                                 className="w-full text-center py-2 bg-neutral-50 hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border border-neutral-200 shadow-sm"
                               >
                                 <Plus size={12}/> Add Variation
