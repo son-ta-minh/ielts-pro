@@ -1,4 +1,5 @@
 import { StudyBuddyMemoryChunk, User, VocabularyItem, WordFamily } from '../app/types';
+import { getAllWords } from '../app/dataStore';
 import { detectLanguage } from './audio';
 import { getAiStudyContextText } from './context_util';
 
@@ -157,6 +158,18 @@ function formatWordFamilySection(wordFamily?: WordFamily | null) {
     ].join('\n');
 }
 
+function getAllAppGroupsForWord(word: VocabularyItem) {
+    return Array.from(
+        new Set(
+            getAllWords()
+                .filter((item) => item.userId === word.userId)
+                .flatMap((item) => item.groups || [])
+                .map((group) => String(group || '').trim())
+                .filter(Boolean)
+        )
+    ).sort((left, right) => left.localeCompare(right));
+}
+
 export function buildStudyBuddyTargetRecord(word: VocabularyItem) {
     return [
         `Word: ${word.word}`,
@@ -197,12 +210,14 @@ export function buildStudyBuddyTargetRecord(word: VocabularyItem) {
 }
 
 export function buildStudyBuddyVerifyRecord(word: VocabularyItem) {
+    const currentGroups = (word.groups || []).map((group) => String(group || '').trim()).filter(Boolean);
+    const allAppGroups = getAllAppGroupsForWord(word);
     return [
         `Word: ${word.word}`,
-        word.meaning ? `Meaning (English): ${word.meaning}` : '',
         word.meaningVi ? `Meaning (Vietnamese): ${word.meaningVi}` : '',
         word.register ? `Register: ${word.register}` : '',
-        word.type ? `Word type: ${word.type}` : '',
+        currentGroups.length ? `Current groups:\n${currentGroups.map((group) => `- ${group}`).join('\n')}` : 'Current groups: none',
+        allAppGroups.length ? `All app groups:\n${allAppGroups.map((group) => `- ${group}`).join('\n')}` : '',
         word.note ? `Private note:\n${word.note}` : '',
         word.prepositions?.length
             ? `Prepositions:\n${word.prepositions
@@ -219,13 +234,13 @@ export function buildStudyBuddyVerifyRecord(word: VocabularyItem) {
         word.idiomsList?.length
             ? `Idioms:\n${word.idiomsList
                 .filter((item) => !item.isIgnored)
-                .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
+                .map((item) => `- ${item.text}`)
                 .join('\n')}`
             : '',
         word.paraphrases?.length
             ? `Paraphrases:\n${word.paraphrases
                 .filter((item) => !item.isIgnored)
-                .map((item) => `- ${item.word}${item.tone ? ` [${item.tone}]` : ''}`)
+                .map((item) => `- ${item.word}`)
                 .join('\n')}`
             : '',
         formatWordFamilySection(word.wordFamily)
@@ -339,15 +354,22 @@ Strict output rules:
 - Keep each point concrete and action-oriented
 
 What to verify:
-- whether the main register is accurate: Academic, Casual, Neutral (both Academic and Casual are fine)
+- whether the main register is accurate. The app only support to choose one of Academic, Casual, Neutral (meaning both Academic and Casual are fine). You don't need to suggest me, you only tell me whether the Register is accurate or not based on the meaning, usage, and examples of the word. If the register is inaccurate, just say "Register issue -> the correct register should be [the correct register]".
 - whether collocations are natural, common enough, and worth learning. Only verify collection text, and skip the descriptive text ("d").
 - whether paraphrases are natural and truly usable paraphrases for this headword
 - whether each paraphrase register is accurate
+- whether the current groups fit this word well
+- whether this word is missing one or more useful groups from the available app groups
 - whether any item is too broad, too narrow, misleading, duplicate, or unnecessary for study
 - whether any item should be ignored or removed
 
+IMPORTANT:
+- Register "Neutral" in this app content means "can be used in both academic and casual depend on context."
+- Don't forget to feedback for "Group" field, which is important for the learner's organization and review. If the word is currently in groups that don't fit well, point it out. If there are useful groups that the word is missing from, mention them.
+
 Preferred format:
 - [Field] issue -> suggested fix
+- [Groups] weak/missing grouping -> suggested app group(s)
 
 Vocabulary record:
 ${record}`;
