@@ -480,7 +480,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
       {inlineReviewWords && (
           <div className="fixed inset-0 z-[130] bg-black/35 backdrop-blur-sm">
             <Suspense fallback={<div className="fixed inset-0 z-[131] flex items-center justify-center"><Loader2 className="animate-spin text-white" size={32} /></div>}>
-              <div className="h-full overflow-y-auto p-4 md:p-8">
+              <div className="h-full overflow-y-auto p-4 md:p-8 bg-white">
                 <ReviewSession
                   user={user}
                   sessionWords={inlineReviewWords}
