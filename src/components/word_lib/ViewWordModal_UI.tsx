@@ -624,6 +624,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const exampleSentences = useMemo(() => splitExampleIntoSentences(word.example || ''), [word.example]);
     const hasAiActions = Boolean(onAskAiRequest || onVerifyWordRequest || onAskAiSectionRequest || onAddAIExample);
     const hasActionMenu = !isViewOnly && Boolean(onChallengeRequest || onEditRequest || onScanParaphrases);
+    const wordGroups = (word.groups || []).map((group) => group.trim()).filter(Boolean);
     const handleAiMenuAction = (action: () => void) => {
         setIsAiMenuOpen(false);
         action();
@@ -694,14 +695,34 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 </span>
                                             </div>
                                         </div>
+                                        {wordGroups.length > 0 ? (
+                                            <div className="space-y-1 rounded-xl">
+                                                <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Groups</span>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {wordGroups.map((group) => (
+                                                        <span
+                                                            key={group}
+                                                            className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-cyan-700"
+                                                        >
+                                                            {group}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : null}
                                     </div>
                                 </div>
                             </div>
                             {hasActionMenu ? (
-                                <div className="relative shrink-0" ref={actionMenuRef}>
+                                <div
+                                    className="relative shrink-0"
+                                    ref={actionMenuRef}
+                                    onMouseEnter={() => setIsActionMenuOpen(true)}
+                                    onMouseLeave={() => setIsActionMenuOpen(false)}
+                                >
                                     <button
                                         type="button"
-                                        onClick={() => setIsActionMenuOpen((prev) => !prev)}
+                                        onClick={() => handleActionMenuAction(onEditRequest)}       
                                         className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900 shadow-sm"
                                     >
                                         <Edit3 size={12} />
@@ -709,42 +730,48 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         <ChevronDown size={12} className={`transition-transform duration-200 ${isActionMenuOpen ? 'rotate-180' : ''}`} />
                                     </button>
                                     {isActionMenuOpen ? (
-                                        <div className="absolute right-0 top-full z-50 mt-2 flex w-52 flex-col gap-1 overflow-hidden rounded-2xl border border-neutral-100 bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleActionMenuAction(onChallengeRequest)}
-                                                className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-amber-50"
-                                            >
-                                                <BookOpenText size={12} />
-                                                <span>Review</span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleActionMenuAction(onEditRequest)}
-                                                className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100"
-                                            >
-                                                <Edit3 size={12} />
-                                                <span>Edit</span>
-                                            </button>
-                                            {onScanParaphrases ? (
+                                        <div className="absolute right-0 top-full z-50 w-52 pt-2">
+                                            <div className="flex flex-col gap-1 overflow-hidden rounded-2xl border border-neutral-100 bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleActionMenuAction(onScanParaphrases)}
+                                                    onClick={() => handleActionMenuAction(onChallengeRequest)}
                                                     className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-amber-50"
                                                 >
-                                                    {isScanningParaphrases ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
-                                                    <span>{isScanningParaphrases ? 'Scanning...' : 'Scan Paraphrases'}</span>
+                                                    <BookOpenText size={12} />
+                                                    <span>Review</span>
                                                 </button>
-                                            ) : null}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleActionMenuAction(onEditRequest)}
+                                                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100"
+                                                >
+                                                    <Edit3 size={12} />
+                                                    <span>Edit</span>
+                                                </button>
+                                                {onScanParaphrases ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleActionMenuAction(onScanParaphrases)}
+                                                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-amber-50"
+                                                    >
+                                                        {isScanningParaphrases ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                                                        <span>{isScanningParaphrases ? 'Scanning...' : 'Scan Paraphrases'}</span>
+                                                    </button>
+                                                ) : null}
+                                            </div>
                                         </div>
                                     ) : null}
                                 </div>
                             ) : null}
                             {hasAiActions ? (
-                                <div className="relative shrink-0" ref={aiMenuRef}>
+                                <div
+                                    className="relative shrink-0"
+                                    ref={aiMenuRef}
+                                    onMouseEnter={() => setIsAiMenuOpen(true)}
+                                    onMouseLeave={() => setIsAiMenuOpen(false)}
+                                >
                                     <button
                                         type="button"
-                                        onClick={() => setIsAiMenuOpen((prev) => !prev)}
                                         className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900 shadow-sm"
                                         title="Open StudyBuddy actions for this word"
                                     >
@@ -753,19 +780,21 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         <ChevronDown size={12} className={`transition-transform duration-200 ${isAiMenuOpen ? 'rotate-180' : ''}`} />
                                     </button>
                                     {isAiMenuOpen ? (
-                                        <div className="absolute right-0 top-full z-50 mt-2 flex w-56 max-w-[calc(100vw-2rem)] flex-col gap-1 overflow-hidden rounded-2xl border border-neutral-100 bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
-                                            {onVerifyWordRequest ? (
-                                                <button type="button" onClick={() => handleAiMenuAction(onVerifyWordRequest)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-50">
-                                                    <Search size={12} />
-                                                    <span>Verify Word</span>
-                                                </button>
-                                            ) : null}
-                                            {onAskAiRequest ? (
-                                                <button type="button" onClick={() => handleAiMenuAction(onAskAiRequest)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
-                                                    <MessageSquare size={12} />
-                                                    <span>Explain Word</span>
-                                                </button>
-                                            ) : null}
+                                        <div className="absolute right-0 top-full z-50 w-56 max-w-[calc(100vw-2rem)] pt-2">
+                                            <div className="flex flex-col gap-1 overflow-hidden rounded-2xl border border-neutral-100 bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
+                                                {onVerifyWordRequest ? (
+                                                    <button type="button" onClick={() => handleAiMenuAction(onVerifyWordRequest)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-50">
+                                                        <Search size={12} />
+                                                        <span>Verify Word</span>
+                                                    </button>
+                                                ) : null}
+                                                {onAskAiRequest ? (
+                                                    <button type="button" onClick={() => handleAiMenuAction(onAskAiRequest)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
+                                                        <MessageSquare size={12} />
+                                                        <span>Explain Word</span>
+                                                    </button>
+                                                ) : null}
+                                            </div>
                                         </div>
                                     ) : null}
                                 </div>

@@ -386,7 +386,15 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
 
   return (
     <>
-    {isChallenging && <TestModal word={currentWord} onComplete={handleChallengeComplete} onClose={() => setIsChallenging(false)} />}
+    {isChallenging && (
+      <TestModal
+        word={currentWord}
+        onComplete={handleChallengeComplete}
+        onClose={() => setIsChallenging(false)}
+        skipSetup={true}
+        skipRecap={true}
+      />
+    )}
     {isMimicOpen && (
         <SimpleMimicModal target={currentWord.word} onClose={() => setIsMimicOpen(false)} />
     )}
@@ -396,11 +404,6 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       onOpenWordFamilyGroupRequest={onOpenWordFamilyGroup}
       onClose={onClose}
       onChallengeRequest={() => {
-        if (onStartReviewSession) {
-          onStartReviewSession(currentWord);
-          onClose();
-          return;
-        }
         setIsChallenging(true);
       }}
       onMimicRequest={() => setIsMimicOpen(true)}
