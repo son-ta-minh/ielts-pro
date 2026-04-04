@@ -75,6 +75,9 @@ export interface EditWordModalUIProps {
   onFillCambridgeIpa: () => void;
   onFillGeneratedIpa: () => void;
   isIpaLoading: 'cambridge' | 'generated' | null;
+  onGenerateExamples: () => void;
+  onGenerateCollocations: () => void;
+  isStudyBuddyGenerating: 'examples' | 'collocations' | null;
 }
 
 type Tab = 'MAIN' | 'SOUND' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
@@ -129,7 +132,10 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
     isMeaningLoading,
     onFillCambridgeIpa,
     onFillGeneratedIpa,
-    isIpaLoading
+    isIpaLoading,
+    onGenerateExamples,
+    onGenerateCollocations,
+    isStudyBuddyGenerating
   } = props;
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
@@ -406,16 +412,26 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                             <input type="text" value={formData.meaningVi} onChange={(e) => setFormData('meaningVi', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-base font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
                         <div className="md:col-span-2 space-y-1">
-                            <div className="flex items-center justify-between px-1">
-                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Examples</label>
-                                <button
-                                    type="button"
-                                    onClick={onFormatExamples}
-                                    className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors"
-                                >
-                                    Format
-                                </button>
-                            </div>
+                                <div className="flex items-center justify-between px-1">
+                                    <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Examples</label>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={onGenerateExamples}
+                                            disabled={isStudyBuddyGenerating !== null}
+                                            className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors disabled:opacity-50"
+                                        >
+                                            {isStudyBuddyGenerating === 'examples' ? 'Generating...' : 'Generate'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={onFormatExamples}
+                                            className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors"
+                                        >
+                                            Format
+                                        </button>
+                                    </div>
+                                </div>
                             <textarea rows={5} value={formData.example} onChange={(e) => setFormData('example', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm leading-relaxed resize-y focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
                         {/* Prepositions / Patterns */}
@@ -751,16 +767,28 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
 
                 {activeTab === 'CONNECTIONS' && (
                     <div className="space-y-6 animate-in fade-in duration-300">
-                        <ListEditorSection 
-                            title="Collocations" 
-                            items={formData.collocationsArray} 
-                            onUpdate={(i, f, v) => collocList.update(i, { [f]: v })} 
-                            onToggleIgnore={collocList.toggleIgnore} 
-                            onRemove={collocList.remove} 
-                            onAdd={() => collocList.add({ text: '', d: '', isIgnored: false })} 
-                            placeholders={{ text: "Collocation phrase...", d: "Descriptive hint..." }} 
-                            showDescription={true}
-                        />
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between px-1">
+                                <button
+                                    type="button"
+                                    onClick={onGenerateCollocations}
+                                    disabled={isStudyBuddyGenerating !== null}
+                                    className="px-3 py-1 text-[10px] font-bold rounded-md border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600 transition-colors disabled:opacity-50"
+                                >
+                                    {isStudyBuddyGenerating === 'collocations' ? 'Generating...' : 'Generate Collocations'}
+                                </button>
+                            </div>
+                            <ListEditorSection 
+                                title="Collocations" 
+                                items={formData.collocationsArray} 
+                                onUpdate={(i, f, v) => collocList.update(i, { [f]: v })} 
+                                onToggleIgnore={collocList.toggleIgnore} 
+                                onRemove={collocList.remove} 
+                                onAdd={() => collocList.add({ text: '', d: '', isIgnored: false })} 
+                                placeholders={{ text: "Collocation phrase...", d: "Descriptive hint..." }} 
+                                showDescription={true}
+                            />
+                        </div>
                         <ListEditorSection 
                             title="Related Idioms" 
                             items={formData.idiomsList} 

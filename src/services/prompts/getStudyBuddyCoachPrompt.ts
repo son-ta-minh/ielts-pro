@@ -11,14 +11,16 @@ export function getStudyBuddyCoachPrompt(
 - Follow the format STRICTLY`;
 
     if (type === 'examples') {
-        return `Give max 3 example sentences for '"${selectedText}' use the exact words provided, do not paraphrases".
+        return `Give max 3 example sentences for '"${selectedText}' use the words provided, do not paraphrases".
 
 ${baseRules}
 - Each bullet = 1 natural sentence`;
     }
 
     if (type === 'collocations') {
-        return `Give max 5 popular natural collocations for "${selectedText}".
+        return `Generate max 5 natural collocations for "${selectedText}" following common usage patterns.
+Replace placeholders like 'something' with realistic words/phrases, and include variations for reflexive pronouns or tenses where applicable.
+Do not paraphrase.
 
 ${baseRules}
 - Format: - **collocation**: short explanation`;
@@ -29,11 +31,12 @@ ${baseRules}
 
 ${baseRules}
 - Only include real idioms that native speakers naturally use.
-- Idioms are fixed expressions whose meanings are not predictable from the meanings of its individual words. Idioms often rely on metaphors, similes, or other literary devices to create a unique meaning.
-- Do NOT give collocations, ordinary example phrases, or loose word combinations
+- Idioms are fixed expressions whose meanings are not predictable from the meanings of its individual words.
+- Idioms often rely on metaphors, similes, or other literary devices to create a unique meaning.
+- Do NOT give collocations, ordinary example phrases, or loose word combinations.
 - If there are idioms, format: - idiom: short explanation
 - If there are no natural idioms for this word/phrase, output exactly: No common natural idioms for this word.`;
-}
+    }
 
     if (type === 'wordFamily') {
         return `Give the most useful word family forms for "${selectedText}".
@@ -56,7 +59,8 @@ ${baseRules}
 ${baseRules}
 - Output ONLY the list, no greeting, no intro, no conclusion
 - Max 5 lines, no duplicated prepositions.
-- Format: - **preposition**: context to use it in, and context must include the mentioned preposition. For example, if the preposition of "interest" is "in", the context could be "interested in sports".`;
+- Format: - **preposition**: context to use it in, and context must include the mentioned preposition.
+For example, if the preposition of "interest" is "in", the context could be "interested in sports".`;
     }
 
     if (type === 'compare') {
@@ -68,7 +72,7 @@ ${baseRules}
 - Each cell must be concise
 - In the Example column, include 2-3 natural collocations
 - Use </br> for line breaks inside a cell
-- Do NOT add any text before or after the table`;
+- Do NOT give any text before or after the table`;
     }
 
     return `Give natural paraphrases for "${selectedText}".

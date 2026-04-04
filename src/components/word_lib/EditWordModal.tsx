@@ -12,6 +12,7 @@ import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { getConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { normalizeVocabularyKeywords } from '../../utils/vocabularyKeywordUtils';
 import { normalizeCambridgePronunciations } from '../../utils/studyBuddyUtils';
+import { getStudyBuddyCoachPrompt } from '../../services/prompts/getStudyBuddyCoachPrompt';
 
 type FormState = VocabularyItem & {
     groupsString: string;
@@ -114,6 +115,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
   const [selectedImgs, setSelectedImgs] = useState<string[]>([]);
   const [isMeaningLoading, setIsMeaningLoading] = useState<'vi' | 'en' | null>(null);
   const [isIpaLoading, setIsIpaLoading] = useState<'cambridge' | 'generated' | null>(null);
+  const [isStudyBuddyGenerating, setIsStudyBuddyGenerating] = useState<'examples' | 'collocations' | null>(null);
   const availableGroups = Array.from(
     new Set(
       getAllWords()
@@ -190,6 +192,61 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
     }
     return cleaned;
   };
+
+  const requestStudyBuddyContent = async (prompt: string): Promise<string> => {
+    const response = await fetch(getStudyBuddyAiUrl(config), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are StudyBuddy. Reply with only the requested content. No greeting, no intro, no conclusion.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        searchEnabled: false,
+        temperature: 0.2,
+        top_p: 0.85,
+        repetition_penalty: 1.15,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`StudyBuddy request failed (${response.status})`);
+    }
+
+    const payload = await response.json().catch(() => null);
+    return String(payload?.choices?.[0]?.message?.content || '').trim();
+  };
+
+  const parseStudyBuddyExamples = (content: string): string[] =>
+    content
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*[-*•]+\s*/, '').trim())
+      .map((line) => line.replace(/\*\*(.*?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').trim())
+      .filter(Boolean);
+
+  const parseStudyBuddyCollocations = (content: string) =>
+    content
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*[-*•]+\s*/, '').trim())
+      .map((line) => line.replace(/\*\*(.*?)\*\*/g, '$1').trim())
+      .map((line) => {
+        const [text, ...rest] = line.split(':');
+        return {
+          text: (text || '').trim(),
+          d: rest.join(':').trim(),
+          isIgnored: false
+        };
+      })
+      .filter((item) => item.text);
 
   const stripIpaDelimiters = (value?: string | null): string => String(value || '').replace(/^\/+|\/+$/g, '').trim();
   const formatPhraseIpa = (parts: Array<string | null | undefined>): string | undefined => {
@@ -371,6 +428,90 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
       payload: { field: 'example', value: formattedExamples }
     });
     showToast('Examples formatted.', 'success');
+  };
+
+  const handleGenerateExamples = async () => {
+    const headword = String(formData.word || '').trim();
+    if (!headword) {
+      showToast('Please enter a headword first.', 'info');
+      return;
+    }
+
+    setIsStudyBuddyGenerating('examples');
+    try {
+      const content = await requestStudyBuddyContent(getStudyBuddyCoachPrompt(headword, 'examples'));
+      const incomingExamples = parseStudyBuddyExamples(content);
+      if (incomingExamples.length === 0) {
+        showToast('No examples returned from StudyBuddy.', 'info');
+        return;
+      }
+
+      const currentExamples = String(formData.example || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const existingSet = new Set(currentExamples.map((line) => line.toLowerCase()));
+      const mergedExamples = [...currentExamples];
+
+      incomingExamples.forEach((line) => {
+        if (!existingSet.has(line.toLowerCase())) {
+          mergedExamples.push(line);
+          existingSet.add(line.toLowerCase());
+        }
+      });
+
+      dispatch({
+        type: 'SET_FIELD',
+        payload: { field: 'example', value: mergedExamples.join('\n') }
+      });
+      showToast('Examples added from StudyBuddy.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to generate examples.', 'error');
+    } finally {
+      setIsStudyBuddyGenerating(null);
+    }
+  };
+
+  const handleGenerateCollocations = async () => {
+    const headword = String(formData.word || '').trim();
+    if (!headword) {
+      showToast('Please enter a headword first.', 'info');
+      return;
+    }
+
+    setIsStudyBuddyGenerating('collocations');
+    try {
+      const content = await requestStudyBuddyContent(getStudyBuddyCoachPrompt(headword, 'collocations'));
+      const incomingCollocations = parseStudyBuddyCollocations(content);
+      if (incomingCollocations.length === 0) {
+        showToast('No collocations returned from StudyBuddy.', 'info');
+        return;
+      }
+
+      const currentCollocations = formData.collocationsArray || [];
+      const existingSet = new Set(currentCollocations.map((item) => String(item.text || '').trim().toLowerCase()).filter(Boolean));
+      const mergedCollocations = [...currentCollocations];
+
+      incomingCollocations.forEach((item) => {
+        const normalized = item.text.toLowerCase();
+        if (!existingSet.has(normalized)) {
+          mergedCollocations.push(item);
+          existingSet.add(normalized);
+        }
+      });
+
+      dispatch({
+        type: 'SET_LIST_ITEM',
+        payload: { list: 'collocationsArray', data: mergedCollocations }
+      });
+      showToast('Collocations added from StudyBuddy.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to generate collocations.', 'error');
+    } finally {
+      setIsStudyBuddyGenerating(null);
+    }
   };
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -603,6 +744,9 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
       onFillCambridgeIpa={() => void handleFillCambridgeIpa()}
       onFillGeneratedIpa={() => void handleFillGeneratedIpa()}
       isIpaLoading={isIpaLoading}
+      onGenerateExamples={() => void handleGenerateExamples()}
+      onGenerateCollocations={() => void handleGenerateCollocations()}
+      isStudyBuddyGenerating={isStudyBuddyGenerating}
     />
       <LearningSuggestionModal
         isOpen={isSuggestionModalOpen}
