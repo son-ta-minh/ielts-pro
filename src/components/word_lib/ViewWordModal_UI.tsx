@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
-import { Search, LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BrainCircuit, Image, Loader2, CheckCircle2 } from 'lucide-react';
+import { Search, LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BookOpenText, Image, Loader2, CheckCircle2 } from 'lucide-react';
 import { VocabularyItem, WordFamilyMember, LearnedStatus, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { speak } from '../../utils/audio';
@@ -659,37 +659,35 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                 <button
                                     type="button"
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 shadow-sm transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                                    title="View word status details"
                                 >
-                                    <CheckCircle2 size={14} />
+                                    {selectedLearnStatus.icon}
                                     <span>Status</span>
-                                    <ChevronDown size={12} />
                                 </button>
                                 <div className="pointer-events-none invisible absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border border-neutral-100 bg-white p-3 opacity-0 shadow-xl transition-all duration-150 group-hover/status:pointer-events-auto group-hover/status:visible group-hover/status:opacity-100">
                                     <div className="space-y-2">
-                                        <div className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                                        <div className="flex items-center justify-between gap-3 rounded-xl">
                                             <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Mastery</span>
                                             <div className="flex items-center gap-2">
                                                 <MasteryScoreGauge score={word.masteryScore ?? 0} />
                                             </div>
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                                        <div className="flex items-center justify-between gap-3 rounded-xl">
                                             <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Learned</span>
-                                            <div className="flex items-center gap-2 text-xs font-black uppercase text-neutral-800">
+                                            <div className="flex items-center gap-2 text-xs uppercase text-neutral-500">
                                                 {selectedLearnStatus.icon}
                                                 <span>{selectedLearnStatus.label}</span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                                        <div className="flex items-center justify-between gap-3 rounded-xl">
                                             <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Quality</span>
-                                            <div className="flex items-center gap-2 text-xs font-black uppercase text-neutral-800">
+                                            <div className="flex items-center gap-2 text-xs uppercase text-neutral-500">
                                                 {selectedQualityStatus.icon}
                                                 <span>{selectedQualityStatus.label}</span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                                        <div className="flex items-center justify-between gap-3 rounded-xl">
                                             <span className="text-[10px] font-black uppercase tracking-wide text-neutral-500">Due</span>
-                                            <div className="flex items-center gap-2 text-[11px] font-black uppercase">
+                                            <div className="flex items-center gap-2 text-[10px] uppercase">
                                                 <Clock size={12} className={reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'} />
                                                 <span className={reviewStatus.urgency === 'due' ? 'text-rose-500' : 'text-green-600'}>
                                                     {reviewStatus.label}
@@ -706,7 +704,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                         onClick={() => setIsActionMenuOpen((prev) => !prev)}
                                         className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900 shadow-sm"
                                     >
-                                        <Wand2 size={14} />
+                                        <Edit3 size={12} />
                                         <span>Action</span>
                                         <ChevronDown size={12} className={`transition-transform duration-200 ${isActionMenuOpen ? 'rotate-180' : ''}`} />
                                     </button>
@@ -715,10 +713,10 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             <button
                                                 type="button"
                                                 onClick={() => handleActionMenuAction(onChallengeRequest)}
-                                                className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-amber-700 transition-colors hover:bg-amber-50"
+                                                className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-amber-50"
                                             >
-                                                <BrainCircuit size={12} />
-                                                <span>Test It</span>
+                                                <BookOpenText size={12} />
+                                                <span>Review</span>
                                             </button>
                                             <button
                                                 type="button"
@@ -732,7 +730,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => handleActionMenuAction(onScanParaphrases)}
-                                                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-amber-700 transition-colors hover:bg-amber-50"
+                                                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-amber-50"
                                                 >
                                                     {isScanningParaphrases ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
                                                     <span>{isScanningParaphrases ? 'Scanning...' : 'Scan Paraphrases'}</span>
