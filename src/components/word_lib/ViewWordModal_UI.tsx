@@ -755,7 +755,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                     {isAiMenuOpen ? (
                                         <div className="absolute right-0 top-full z-50 mt-2 flex w-56 max-w-[calc(100vw-2rem)] flex-col gap-1 overflow-hidden rounded-2xl border border-neutral-100 bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
                                             {onVerifyWordRequest ? (
-                                                <button type="button" onClick={() => handleAiMenuAction(onVerifyWordRequest)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-amber-700 transition-colors hover:bg-amber-50">
+                                                <button type="button" onClick={() => handleAiMenuAction(onVerifyWordRequest)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-50">
                                                     <Search size={12} />
                                                     <span>Verify Word</span>
                                                 </button>
@@ -763,21 +763,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             {onAskAiRequest ? (
                                                 <button type="button" onClick={() => handleAiMenuAction(onAskAiRequest)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
                                                     <MessageSquare size={12} />
-                                                    <span>Explain Core Usage</span>
-                                                </button>
-                                            ) : null}
-                                            {onAskAiSectionRequest ? (
-                                                <>
-                                                    <button type="button" onClick={() => handleAiMenuAction(() => onAskAiSectionRequest('example'))} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100">
-                                                        <BookOpen size={12} />
-                                                        <span>Explain selected text</span>
-                                                    </button>
-                                                </>
-                                            ) : null}
-                                            {onAddAIExample ? (
-                                                <button type="button" onClick={() => handleAiMenuAction(onAddAIExample)} className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-indigo-700 transition-colors hover:bg-indigo-50">
-                                                    <Plus size={12} />
-                                                    <span>Add AI Example</span>
+                                                    <span>Explain Word</span>
                                                 </button>
                                             ) : null}
                                         </div>

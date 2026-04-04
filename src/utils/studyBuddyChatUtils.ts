@@ -80,6 +80,9 @@ export function buildStudyBuddyMessages(
     coachIdentity?: {
         name?: string;
         persona?: string;
+    },
+    options?: {
+        includeStudyContext?: boolean;
     }
 ) {
     const profileLines = [
@@ -98,6 +101,9 @@ export function buildStudyBuddyMessages(
     ].filter(Boolean);
 
     const contextMessage = (() => {
+        if (options?.includeStudyContext === false) {
+            return 'Study context injection is disabled for this request. Use only the explicitly provided target record and instructions.';
+        }
         if (!isContextAware) {
             return 'Fast mode is active, so no study context from the learner\'s Word Library is attached. This only affects library/context-aware study data. It does not disable long-term chat memory. If the user asks about their own learning status, recent learned words, hard/forgotten words, or focus words from the library, explicitly tell them to switch the toggle from "Fast mode" to "Context aware".';
         }
@@ -190,7 +196,49 @@ export function buildStudyBuddyTargetRecord(word: VocabularyItem) {
     ].filter(Boolean).join('\n\n');
 }
 
+export function buildStudyBuddyVerifyRecord(word: VocabularyItem) {
+    return [
+        `Word: ${word.word}`,
+        word.meaning ? `Meaning (English): ${word.meaning}` : '',
+        word.meaningVi ? `Meaning (Vietnamese): ${word.meaningVi}` : '',
+        word.register ? `Register: ${word.register}` : '',
+        word.type ? `Word type: ${word.type}` : '',
+        word.note ? `Private note:\n${word.note}` : '',
+        word.prepositions?.length
+            ? `Prepositions:\n${word.prepositions
+                .filter((item) => !item.isIgnored)
+                .map((item) => `- ${item.prep}${item.usage ? `: ${item.usage}` : ''}`)
+                .join('\n')}`
+            : '',
+        word.collocationsArray?.length
+            ? `Collocations:\n${word.collocationsArray
+                .filter((item) => !item.isIgnored)
+                .map((item) => `- ${item.text}`)
+                .join('\n')}`
+            : '',
+        word.idiomsList?.length
+            ? `Idioms:\n${word.idiomsList
+                .filter((item) => !item.isIgnored)
+                .map((item) => `- ${item.text}${item.d ? `: ${item.d}` : ''}`)
+                .join('\n')}`
+            : '',
+        word.paraphrases?.length
+            ? `Paraphrases:\n${word.paraphrases
+                .filter((item) => !item.isIgnored)
+                .map((item) => `- ${item.word}${item.tone ? ` [${item.tone}]` : ''}`)
+                .join('\n')}`
+            : '',
+        formatWordFamilySection(word.wordFamily)
+            ? `Word family:\n${formatWordFamilySection(word.wordFamily)}`
+            : '',
+    ].filter(Boolean).join('\n\n');
+}
+
 export function buildStudyBuddyTargetSystemMessage(target: StudyBuddyChatTarget) {
+    const record = target.section === 'verifyData'
+        ? buildStudyBuddyVerifyRecord(target.word)
+        : buildStudyBuddyTargetRecord(target.word);
+
     return [
         `Current target word for this chat: ${target.word.word}`,
         `Current focus section: ${STUDY_BUDDY_TARGET_LABELS[target.section]}`,
@@ -198,13 +246,15 @@ export function buildStudyBuddyTargetSystemMessage(target: StudyBuddyChatTarget)
         '',
         'Use the vocabulary record below as persistent context for this target word until the target changes or is cleared.',
         '',
-        buildStudyBuddyTargetRecord(target.word)
+        record
     ].filter(Boolean).join('\n');
 }
 
 export function buildStudyBuddyTargetPrompt(target: StudyBuddyChatTarget) {
     const headword = target.word.word;
-    const record = buildStudyBuddyTargetRecord(target.word);
+    const record = target.section === 'verifyData'
+        ? buildStudyBuddyVerifyRecord(target.word)
+        : buildStudyBuddyTargetRecord(target.word);
 
     switch (target.section) {
         case 'coreUsage':
@@ -289,8 +339,8 @@ Strict output rules:
 - Keep each point concrete and action-oriented
 
 What to verify:
-- whether the main register is accurate
-- whether collocations are natural, common enough, and worth learning
+- whether the main register is accurate: Academic, Casual, Neutral (both Academic and Casual are fine)
+- whether collocations are natural, common enough, and worth learning. Only verify collection text, and skip the descriptive text ("d").
 - whether paraphrases are natural and truly usable paraphrases for this headword
 - whether each paraphrase register is accurate
 - whether any item is too broad, too narrow, misleading, duplicate, or unnecessary for study

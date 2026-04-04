@@ -585,11 +585,9 @@ export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
                                 </div>
                                 <input type="text" value={formData.ipaUs || ''} onChange={(e) => setFormData('ipaUs', e.target.value)} placeholder="/.../" className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">IPA UK (Optional)</label>
-                                    <input type="text" value={formData.ipaUk || ''} onChange={(e) => setFormData('ipaUk', e.target.value)} placeholder="/.../" className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
-                                </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">IPA UK (Optional)</label>
+                                <input type="text" value={formData.ipaUk || ''} onChange={(e) => setFormData('ipaUk', e.target.value)} placeholder="/.../" className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl font-mono text-base text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none"/>
                             </div>
                         </div>
                         <div className="space-y-4">

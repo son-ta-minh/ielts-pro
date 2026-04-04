@@ -527,7 +527,8 @@ export function useStudyBuddyChat({
                             buildChatLanguageSystemMessage(chatResponseLanguage)
                         ],
                         memoryChunks,
-                        { name: coach.name, persona: coach.persona }
+                        { name: coach.name, persona: coach.persona },
+                        { includeStudyContext: nextTarget.section !== 'verifyData' }
                     ),
                     searchEnabled: isSearchEnabled,
                     ...studyBuddyAiRequestConfig,
@@ -671,7 +672,8 @@ Return a fresh corrected JSON array only. Do not explain.`;
                         nextHistory.map((turn) => ({ role: turn.role, content: turn.content })),
                         extraSystemMessages,
                         memoryChunks,
-                        { name: coach.name, persona: coach.persona }
+                        { name: coach.name, persona: coach.persona },
+                        { includeStudyContext: activeTarget?.section !== 'verifyData' }
                     ),
                     searchEnabled: isSearchEnabled,
                     ...studyBuddyAiRequestConfig,
@@ -1034,7 +1036,8 @@ Return a fresh corrected JSON array only. Do not explain.`;
                         [{ role: 'user', content: cleanPrompt }],
                         extraSystemMessages,
                         memoryChunks,
-                        { name: coach.name, persona: coach.persona }
+                        { name: coach.name, persona: coach.persona },
+                        { includeStudyContext: activeTarget?.section !== 'verifyData' }
                     ),
                     searchEnabled: isSearchEnabled,
                     ...studyBuddyAiRequestConfig,
@@ -1497,7 +1500,8 @@ Rules:
                             buildChatLanguageSystemMessage(chatResponseLanguage)
                         ],
                         memoryChunks,
-                        { name: coach.name, persona: coach.persona }
+                        { name: coach.name, persona: coach.persona },
+                        { includeStudyContext: nextTarget.section !== 'verifyData' }
                     ),
                     searchEnabled: isSearchEnabled,
                     ...studyBuddyAiRequestConfig,
