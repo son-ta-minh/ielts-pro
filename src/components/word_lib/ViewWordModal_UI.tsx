@@ -161,6 +161,8 @@ export interface ViewWordModalUIProps {
     onMimicRequest: () => void;
     onEditRequest: () => void;
     onResetMasteryRequest?: () => void;
+    onSetDisplayRequest?: (selectedText?: string) => void | Promise<void>;
+    isSettingDisplay?: boolean;
     onUpdate: (word: VocabularyItem) => void;
     linkedUnits: Unit[];
     relatedWords: Record<string, VocabularyItem[]>;
@@ -179,6 +181,8 @@ export interface ViewWordModalUIProps {
 export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
     word, libraryWordSet, libraryWords = [], scannedParaphrases = [], isScanningParaphrases = false, scanParaphraseResultCount = null, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onResetMasteryRequest,
+    onSetDisplayRequest,
+    isSettingDisplay = false,
     onNavigateToWord, isViewOnly = false,
     onAddAIExample,
     onAskAiRequest,
@@ -190,8 +194,18 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const displayHeadword = (word.display || '').trim() || word.word;
     const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
     const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+    const [selectedDisplayText, setSelectedDisplayText] = useState('');
     const aiMenuRef = useRef<HTMLDivElement>(null);
     const actionMenuRef = useRef<HTMLDivElement>(null);
+    const activeCollocations = useMemo(
+        () => (word.collocationsArray || []).filter((item) => !item.isIgnored && item.text.trim()),
+        [word.collocationsArray]
+    );
+    const canAutoSetDisplay = activeCollocations.length > 0;
+    const readSelectionText = () => {
+        const selection = window.getSelection?.()?.toString().trim() || '';
+        setSelectedDisplayText(selection.replace(/\s+/g, ' ').trim());
+    };
     const isLibraryWord = (value: string) => {
         const normalized = value.trim().toLowerCase();
         if (!normalized) return false;
@@ -390,6 +404,18 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        readSelectionText();
+        document.addEventListener('selectionchange', readSelectionText);
+        window.addEventListener('mouseup', readSelectionText);
+        window.addEventListener('keyup', readSelectionText);
+        return () => {
+            document.removeEventListener('selectionchange', readSelectionText);
+            window.removeEventListener('mouseup', readSelectionText);
+            window.removeEventListener('keyup', readSelectionText);
+        };
     }, []);
 
     useEffect(() => {
@@ -626,7 +652,12 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const hasTest = Boolean(lessonTestHtml?.trim());
     const exampleSentences = useMemo(() => splitExampleIntoSentences(word.example || ''), [word.example]);
     const hasAiActions = Boolean(onAskAiRequest || onVerifyWordRequest || onAskAiSectionRequest || onAddAIExample);
-    const hasActionMenu = !isViewOnly && Boolean(onChallengeRequest || onEditRequest || onScanParaphrases || onResetMasteryRequest);
+    const trimmedSelectionText = selectedDisplayText.trim();
+    const displayActionLabel = trimmedSelectionText
+        ? `Set Display As "${trimmedSelectionText.length > 24 ? `${trimmedSelectionText.slice(0, 24)}...` : trimmedSelectionText}"`
+        : 'Set Display Auto';
+    const hasSetDisplayAction = Boolean(onSetDisplayRequest) && (Boolean(trimmedSelectionText) || canAutoSetDisplay);
+    const hasActionMenu = !isViewOnly && Boolean(onChallengeRequest || onEditRequest || onScanParaphrases || onResetMasteryRequest || hasSetDisplayAction);
     const wordGroups = (word.groups || []).map((group) => group.trim()).filter(Boolean);
     const handleAiMenuAction = (action: () => void) => {
         setIsAiMenuOpen(false);
@@ -737,20 +768,32 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                                             <div className="flex flex-col gap-1 overflow-hidden rounded-2xl border border-neutral-100 bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleActionMenuAction(onChallengeRequest)}
-                                                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-amber-50"
-                                                >
-                                                    <BookOpenText size={12} />
-                                                    <span>Review</span>
-                                                </button>
-                                                <button
-                                                    type="button"
                                                     onClick={() => handleActionMenuAction(onEditRequest)}
                                                     className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-100"
                                                 >
                                                     <Edit3 size={12} />
                                                     <span>Edit</span>
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleActionMenuAction(onChallengeRequest)}
+                                                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-amber-50"
+                                                >
+                                                    <BookOpenText size={12} />
+                                                    <span>Review</span>
+                                                </button>
+                                                {hasSetDisplayAction ? (
+                                                    <button
+                                                        type="button"
+                                                        disabled={isSettingDisplay}
+                                                        title='Show display text instead of headword in the app. For example, if the word is "run" but you want to be reminded of "running", you can select "running" in the text and choose "Set Display As".'
+                                                        onClick={() => handleActionMenuAction(() => void onSetDisplayRequest?.(trimmedSelectionText || undefined))}
+                                                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-cyan-50 disabled:opacity-50"
+                                                    >
+                                                        {isSettingDisplay ? <Loader2 size={12} className="animate-spin" /> : <BookOpenText size={12} />}
+                                                        <span>{isSettingDisplay ? 'Setting Display...' : displayActionLabel}</span>
+                                                    </button>
+                                                ) : null}
                                                 {onResetMasteryRequest ? (
                                                     <button
                                                         type="button"
@@ -842,7 +885,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
                             {!word.isPassive && (
                                 <>
                                     <button
-                                        onClick={() => handlePronounceWithCoachLookup(word.word)}
+                                        onClick={() => handlePronounceWithCoachLookup(displayHeadword)}
                                         className="shrink-0 p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
                                     >
                                         <Volume2 size={18} />

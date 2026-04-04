@@ -148,6 +148,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [spellResult, setSpellResult] = React.useState<'correct' | 'wrong' | null>(null);
     const touchStartX = React.useRef<number | null>(null);
     const serverUrl = getServerUrl(getConfig());
+    const normalizeComparableText = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
     const hasRetryableFailedTests = React.useMemo(() => {
         if (!currentWord) return false;
         const history = normalizeTestResultKeys(currentWord.lastTestResults || {});
@@ -205,20 +206,25 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const HeaderIcon = isNewWord ? Lightbulb : BookOpen;
     const headerColor = isNewWord ? 'text-blue-500' : 'text-neutral-500';
     const reviewHeadword = (currentWord.display || '').trim() || currentWord.word;
-    const displayText = isNewWord
-    ? reviewHeadword
-    : currentWord.ipaUs || reviewHeadword;
-    const vietnameseMeaning = currentWord.meaningVi?.trim() || 'No Vietnamese meaning available';
     const visiblePrepositions = (currentWord.prepositions || []).filter(p => !p.isIgnored);
     const visibleCollocations = (currentWord.collocationsArray || []).filter(c => !c.isIgnored);
     const visibleParaphrases = (currentWord.paraphrases || []).filter(p => !p.isIgnored);
     const visibleIdioms = (currentWord.idiomsList || []).filter(i => !i.isIgnored);
+    const isDisplayDifferentFromHeadword = normalizeComparableText(reviewHeadword) !== normalizeComparableText(currentWord.word);
+    const matchedDisplayCollocation = visibleCollocations.find((item) => normalizeComparableText(item.text || '') === normalizeComparableText(reviewHeadword));
+    const fallbackMeaning = currentWord.meaningVi?.trim() || 'No Vietnamese meaning available';
+    const cachedDisplayMeaning = String(currentWord.displayMeaning || '').trim();
+    const cachedDisplayIpa = String(currentWord.displayIPA || '').trim();
+    const displayText = isNewWord
+    ? reviewHeadword
+    : cachedDisplayIpa || (isDisplayDifferentFromHeadword ? reviewHeadword : (currentWord.ipaUs || reviewHeadword));
+    const vietnameseMeaning = cachedDisplayMeaning || matchedDisplayCollocation?.d?.trim() || fallbackMeaning;
     const prepositionTooltip = visiblePrepositions.slice(0, 6).map(p => p.usage || p.prep).join('\n');
     const collocationTooltip = visibleCollocations.slice(0, 6).map(c => c.text).join('\n');
     const paraphraseTooltip = visibleParaphrases.slice(0, 6).map(p => p.word).join('\n');
     const idiomTooltip = visibleIdioms.slice(0, 6).map(i => i.text).join('\n');
 
-    const isIpa = !isNewWord && !!currentWord.ipaUs;
+    const isIpa = !isNewWord && !!(cachedDisplayIpa || (!isDisplayDifferentFromHeadword && currentWord.ipaUs));
 
     const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
         touchStartX.current = e.touches[0].clientX;
@@ -344,14 +350,14 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                 </div>
                                 <div className="flex items-center justify-center gap-4">
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); speak(currentWord.word); }}
+                                    onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
                                     className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
                                     title="Pronounce"
                                 >
                                     <Volume2 size={22} />
                                 </button>
                                 <button
-                                    onClick={() => setMimicTarget(currentWord.word)}
+                                    onClick={() => setMimicTarget(reviewHeadword)}
                                     className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
                                     title="Simple Mimic"
                                 >

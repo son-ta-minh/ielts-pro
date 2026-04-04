@@ -220,6 +220,8 @@ export interface VocabularyItem {
   userId: string; 
   word: string; 
   display?: string;
+  displayMeaning?: string;
+  displayIPA?: string;
   keywords?: string[];
   wordFamilyGroupId?: string | null;
   ipaUs?: string;

@@ -249,6 +249,12 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
       .filter((item) => item.text);
 
   const stripIpaDelimiters = (value?: string | null): string => String(value || '').replace(/^\/+|\/+$/g, '').trim();
+  const normalizeComparableText = (value: string): string =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   const formatPhraseIpa = (parts: Array<string | null | undefined>): string | undefined => {
     const cleaned = parts
       .map((part) => stripIpaDelimiters(part))
@@ -282,6 +288,46 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
     return {
       ipaUs: ipaUs ? `/${ipaUs}/` : undefined,
       ipaUk: ipaUk ? `/${ipaUk}/` : undefined
+    };
+  };
+
+  const resolveDisplayMetadata = async (item: VocabularyItem): Promise<Pick<VocabularyItem, 'displayMeaning' | 'displayIPA'>> => {
+    const displayText = String(item.display || '').trim();
+    if (!displayText || normalizeComparableText(displayText) === normalizeComparableText(item.word)) {
+      return { displayMeaning: '', displayIPA: '' };
+    }
+
+    const matchedCollocation = (item.collocationsArray || []).find((entry) =>
+      normalizeComparableText(entry.text || '') === normalizeComparableText(displayText)
+    );
+
+    let displayMeaning = String(matchedCollocation?.d || '').trim();
+    let displayIPA = '';
+    const online = typeof navigator === 'undefined' ? true : navigator.onLine;
+
+    if (online) {
+      const tokens = tokenizeHeadwordForIpa(displayText);
+      if (tokens.length > 0) {
+        try {
+          const tokenResults = await Promise.all(tokens.map((token) => fetchCambridgeTokenIpa(token)));
+          displayIPA = formatPhraseIpa(tokenResults.map((entry) => entry?.ipaUs))
+            || formatPhraseIpa(tokenResults.map((entry) => entry?.ipaUk || entry?.ipaUs))
+            || '';
+        } catch {}
+      }
+
+      if (!displayMeaning) {
+        try {
+          const translationRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(displayText)}&langpair=en|vi`);
+          const translationData = await translationRes.json().catch(() => null);
+          displayMeaning = String(translationData?.responseData?.translatedText || '').trim();
+        } catch {}
+      }
+    }
+
+    return {
+      displayMeaning,
+      displayIPA
     };
   };
 
@@ -514,7 +560,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
     }
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent) => {
     if(e) e.preventDefault();
     const { groupsString, studiedStatus, collocationsArray, idiomsList, prepositionsList, essayEdit, testEdit, ...rest } = formData;
     
@@ -541,6 +587,10 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         groups: groupsString.split(',').map(g => g.trim()).filter(Boolean),
         updatedAt: Date.now() 
     };
+
+    const previousDisplay = String(word.display || '').trim();
+    const nextDisplay = String(updatedWord.display || '').trim();
+    const didDisplayChange = normalizeComparableText(previousDisplay) !== normalizeComparableText(nextDisplay);
     
     const finalResults = { ...(updatedWord.lastTestResults || {}) };
     const validCollocs = new Set((updatedWord.collocationsArray || []).filter(c => !c.isIgnored).map(c => c.text.toLowerCase()));
@@ -580,6 +630,23 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         updatedWord.complexity = calculateComplexity(updatedWord);
         updatedWord.masteryScore = calculateMasteryScore(updatedWord);
         updatedWord.gameEligibility = calculateGameEligibility(updatedWord);
+    }
+
+    if (!nextDisplay || normalizeComparableText(nextDisplay) === normalizeComparableText(updatedWord.word)) {
+      updatedWord.display = nextDisplay || undefined;
+      updatedWord.displayMeaning = '';
+      updatedWord.displayIPA = '';
+    } else if (didDisplayChange) {
+      try {
+        const resolved = await resolveDisplayMetadata(updatedWord);
+        updatedWord = {
+          ...updatedWord,
+          ...resolved,
+          updatedAt: Date.now()
+        };
+      } catch (error) {
+        console.error('Failed to resolve display metadata before save', error);
+      }
     }
     
     onSave(updatedWord);

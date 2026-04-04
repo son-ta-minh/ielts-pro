@@ -6,10 +6,11 @@ import { createNewWord, calculateMasteryScore } from '../../utils/srs';
 import TestModal from '../practice/TestModal';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
 import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
-import { getConfig } from '../../app/settingsManager';
+import { getConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { StudyBuddyTargetSection } from '../../utils/studyBuddyChatUtils';
 import { clearStaleWordFamilyGroupLink } from '../../utils/wordFamilyGroupLinking';
 import * as db from '../../app/db';
+import { useToast } from '../../contexts/ToastContext';
 
 interface ScannedParaphraseItem extends ParaphraseOption {
   sourceWord?: string;
@@ -36,6 +37,13 @@ const normalizeWordParaphrases = (item: VocabularyItem): VocabularyItem => ({
   }))
 });
 
+const normalizeComparableText = (value: string): string =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 interface Props {
   word: VocabularyItem;
   onClose: () => void;
@@ -49,6 +57,7 @@ interface Props {
 }
 
 const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpenWordFamilyGroup, onEditRequest, onUpdate, isViewOnly = false, onStartReviewSession }) => {
+  const { showToast } = useToast();
   const [currentWord, setCurrentWord] = useState<VocabularyItem>({
     ...normalizeWordParaphrases(word),
     lastTestResults: normalizeTestResultKeys(word.lastTestResults)
@@ -58,6 +67,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
   const [isMimicOpen, setIsMimicOpen] = useState(false);
   const [scannedParaphrases, setScannedParaphrases] = useState<ScannedParaphraseItem[]>([]);
   const [isScanningParaphrases, setIsScanningParaphrases] = useState(false);
+  const [isSettingDisplay, setIsSettingDisplay] = useState(false);
   const [scanParaphraseResultCount, setScanParaphraseResultCount] = useState<number | null>(null);
   const scanParaphraseResetTimerRef = useRef<number | null>(null);
 
@@ -376,6 +386,140 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
     setScannedParaphrases((prev) => prev.filter((entry) => entry.word.trim().toLowerCase() !== normalizedWord));
   };
 
+  const cleanDisplayText = (value: string): string => String(value || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s*[-*•]+\s*/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const stripIpaDelimiters = (value?: string | null): string => String(value || '').replace(/^\/+|\/+$/g, '').trim();
+  const formatPhraseIpa = (parts: Array<string | null | undefined>): string | undefined => {
+    const cleaned = parts
+      .map((part) => stripIpaDelimiters(part))
+      .filter(Boolean);
+    if (cleaned.length === 0) return undefined;
+    return `/${cleaned.join(' ')}/`;
+  };
+  const tokenizeDisplayForIpa = (value: string): string[] =>
+    String(value || '')
+      .split(/\s+/)
+      .map((token) => token.trim().replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, ''))
+      .filter(Boolean);
+  const fetchCambridgeTokenIpa = async (token: string): Promise<{ ipaUs?: string; ipaUk?: string } | null> => {
+    const response = await fetch(`${getServerUrl(config)}/api/lookup/cambridge/simple?word=${encodeURIComponent(token)}`, {
+      cache: 'no-store'
+    });
+    if (!response.ok) return null;
+
+    const payload = await response.json().catch(() => null);
+    if (!payload?.exists || !Array.isArray(payload.pronunciations)) return null;
+
+    const pronunciation = payload.pronunciations.find((item: any) => item?.ipaUs || item?.ipaUk);
+    if (!pronunciation) return null;
+
+    const ipaUs = stripIpaDelimiters(pronunciation.ipaUs || '');
+    const ipaUk = stripIpaDelimiters(pronunciation.ipaUk || '');
+
+    return {
+      ipaUs: ipaUs ? `/${ipaUs}/` : undefined,
+      ipaUk: ipaUk ? `/${ipaUk}/` : undefined
+    };
+  };
+
+  const resolveDisplayMetadata = async (baseWord: VocabularyItem, displayText: string): Promise<Pick<VocabularyItem, 'displayMeaning' | 'displayIPA'>> => {
+    if (!displayText || normalizeComparableText(displayText) === normalizeComparableText(baseWord.word)) {
+      return { displayMeaning: '', displayIPA: '' };
+    }
+
+    const matchedCollocation = (baseWord.collocationsArray || []).find((entry) =>
+      normalizeComparableText(entry.text || '') === normalizeComparableText(displayText)
+    );
+
+    let displayMeaning = String(matchedCollocation?.d || '').trim();
+    let displayIPA = '';
+    const online = typeof navigator === 'undefined' ? true : navigator.onLine;
+
+    if (online) {
+      const tokens = tokenizeDisplayForIpa(displayText);
+      if (tokens.length > 0) {
+        try {
+          const tokenResults = await Promise.all(tokens.map((token) => fetchCambridgeTokenIpa(token)));
+          displayIPA = formatPhraseIpa(tokenResults.map((entry) => entry?.ipaUs))
+            || formatPhraseIpa(tokenResults.map((entry) => entry?.ipaUk || entry?.ipaUs))
+            || '';
+        } catch {}
+      }
+
+      if (!displayMeaning) {
+        try {
+          const translationRes = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(displayText)}&langpair=en|vi`);
+          const translationData = await translationRes.json().catch(() => null);
+          displayMeaning = String(translationData?.responseData?.translatedText || '').trim();
+        } catch {}
+      }
+    }
+
+    return {
+      displayMeaning,
+      displayIPA
+    };
+  };
+
+  const requestDisplaySuggestion = async (): Promise<string> => {
+    const config = getConfig();
+    const activeCollocations = (currentWord.collocationsArray || [])
+      .filter((item) => !item.isIgnored && item.text.trim())
+      .map((item) => item.text.trim());
+    const response = await fetch(getStudyBuddyAiUrl(config), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'system',
+            content: 'You are StudyBuddy. Return exactly one display phrase only. No bullet, no explanation, no quotes, no markdown.'
+          },
+          {
+            role: 'user',
+            content: [
+              `Headword: ${currentWord.word}`,
+              activeCollocations.length > 0 ? `Collocations: ${activeCollocations.join('; ')}` : '',
+              '',
+              'Suggest the single best display phrase for this vocabulary item from the provided collocations if applicable.',
+              'Prioritize: naturalness, broad coverage, frequent real usage, strong learning value, and high IELTS band usefulness.',
+              'Prefer a short phrase that best represents how this word should be shown to the learner.',
+              'Do not return the headword itself as the display if there are better alternatives in the collocations or new collocation that you suggest',
+              'Return only the final display phrase.'
+            ].filter(Boolean).join('\n')
+          }
+        ],
+        searchEnabled: false,
+        temperature: 0.2,
+        top_p: 0.85,
+        repetition_penalty: 1.15,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`StudyBuddy request failed (${response.status})`);
+    }
+
+    const payload = await response.json().catch(() => null);
+    const rawText = payload?.choices?.[0]?.message?.content;
+    const cleaned = cleanDisplayText(rawText || '');
+    if (!cleaned) {
+      throw new Error('StudyBuddy returned empty display text.');
+    }
+    return cleaned;
+  };
+
   const handleResetMastery = async () => {
     const updatedWord: VocabularyItem = {
       ...currentWord,
@@ -389,6 +533,46 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
 
     await onUpdate(updatedWord);
     setCurrentWord(updatedWord);
+  };
+
+  const handleSetDisplay = async (selectedText?: string) => {
+    const normalizedSelectedText = cleanDisplayText(selectedText || '');
+    if (!normalizedSelectedText && !(currentWord.collocationsArray || []).some((item) => !item.isIgnored && item.text.trim())) {
+      showToast('No selected text or collocations available for display.', 'info');
+      return;
+    }
+
+    setIsSettingDisplay(true);
+    try {
+      const nextDisplay = normalizedSelectedText || await requestDisplaySuggestion();
+      let updatedWord: VocabularyItem = {
+        ...currentWord,
+        display: nextDisplay,
+        displayMeaning: '',
+        displayIPA: '',
+        updatedAt: Date.now()
+      };
+
+      try {
+        const resolved = await resolveDisplayMetadata(updatedWord, nextDisplay);
+        updatedWord = {
+          ...updatedWord,
+          ...resolved,
+          updatedAt: Date.now()
+        };
+      } catch (error) {
+        console.error('Failed to resolve display metadata before save', error);
+      }
+
+      await onUpdate(updatedWord);
+      setCurrentWord(updatedWord);
+      showToast('Display text updated.', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to set display text.', 'error');
+    } finally {
+      setIsSettingDisplay(false);
+    }
   };
 
   const dispatchAskAiTarget = (section: StudyBuddyTargetSection, source: string) => {
@@ -420,7 +604,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
     <>
     {isChallenging && <TestModal word={currentWord} onComplete={handleChallengeComplete} onClose={() => setIsChallenging(false)} />}
     {isMimicOpen && (
-        <SimpleMimicModal target={currentWord.word} onClose={() => setIsMimicOpen(false)} />
+        <SimpleMimicModal target={(currentWord.display || '').trim() || currentWord.word} onClose={() => setIsMimicOpen(false)} />
     )}
     <ViewWordModalUI
       word={currentWord}
@@ -437,6 +621,8 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       onMimicRequest={() => setIsMimicOpen(true)}
       onEditRequest={() => onEditRequest(currentWord)}
       onResetMasteryRequest={handleResetMastery}
+      onSetDisplayRequest={handleSetDisplay}
+      isSettingDisplay={isSettingDisplay}
       onUpdate={handleLocalUpdate}
       onNavigateToWord={onNavigateToWord}
       libraryWordSet={libraryWordSet}
