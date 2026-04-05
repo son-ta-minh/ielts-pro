@@ -331,7 +331,6 @@ const RefineSetupModal: React.FC<{
     const [includeIdioms, setIncludeIdioms] = useState(DEFAULT_WORD_REFINE_SETUP.includeIdioms);
     const [exampleCount, setExampleCount] = useState(DEFAULT_WORD_REFINE_SETUP.exampleCount);
     const [includePrepositions, setIncludePrepositions] = useState(DEFAULT_WORD_REFINE_SETUP.includePrepositions);
-    const [phraseIpaMode, setPhraseIpaMode] = useState(DEFAULT_WORD_REFINE_SETUP.phraseIpaMode);
     const [includeGroupsIfMissing, setIncludeGroupsIfMissing] = useState(defaultIncludeGroupsIfMissing);
 
     useEffect(() => {
@@ -342,7 +341,6 @@ const RefineSetupModal: React.FC<{
         setIncludeIdioms(DEFAULT_WORD_REFINE_SETUP.includeIdioms);
         setExampleCount(DEFAULT_WORD_REFINE_SETUP.exampleCount);
         setIncludePrepositions(DEFAULT_WORD_REFINE_SETUP.includePrepositions);
-        setPhraseIpaMode(DEFAULT_WORD_REFINE_SETUP.phraseIpaMode);
         setIncludeGroupsIfMissing(defaultIncludeGroupsIfMissing);
     }, [isOpen, defaultIncludeGroupsIfMissing]);
 
@@ -361,56 +359,47 @@ const RefineSetupModal: React.FC<{
                     </button>
                 </div>
                 <div className="grid gap-x-6 gap-y-4 px-6 py-6 md:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] md:items-center">
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Meaning</div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Meaning Language</div>
                     <select value={meaningLanguage} onChange={(e) => setMeaningLanguage(e.target.value as 'vi' | 'en')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value="vi">VI</option>
-                        <option value="en">EN</option>
-                    </select>
-
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Collocations</div>
-                    <select value={collocationCount} onChange={(e) => setCollocationCount(Number(e.target.value))} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        {[0, 1, 2, 3, 4, 5].map((count) => (
-                            <option key={count} value={count}>{count}</option>
-                        ))}
-                    </select>
-
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Paraphrase</div>
-                    <select value={includeParaphrases ? 'yes' : 'no'} onChange={(e) => setIncludeParaphrases(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
-                    </select>
-
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Idiom</div>
-                    <select value={includeIdioms ? 'yes' : 'no'} onChange={(e) => setIncludeIdioms(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
+                        <option value="vi">Vietnamese</option>
+                        <option value="en">English</option>
                     </select>
 
                     <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Example</div>
                     <select value={exampleCount} onChange={(e) => setExampleCount(Number(e.target.value))} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        {[1, 2, 3].map((count) => (
-                            <option key={count} value={count}>{count}</option>
-                        ))}
+                        <option value={1}>One example</option>
+                        <option value={2}>Two examples</option>
+                        <option value={3}>Three examples</option>
                     </select>
 
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Preposition</div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Collocations</div>
+                    <select value={collocationCount} onChange={(e) => setCollocationCount(Number(e.target.value))} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        <option value={0}>Do not add collocations</option>
+                        <option value={3}>Core collocations</option>
+                        <option value={5}>Extended collocations</option>
+                    </select>
+
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Include Prepositions?</div>
                     <select value={includePrepositions ? 'yes' : 'no'} onChange={(e) => setIncludePrepositions(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
                         <option value="yes">Yes</option>
                         <option value="no">No</option>
                     </select>
 
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">IPA</div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-bold text-neutral-500">Single: Cambridge</div>
-                        <select value={phraseIpaMode} onChange={(e) => setPhraseIpaMode(e.target.value as 'cambridge' | 'generated')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                            <option value="generated">Phrase: Generated</option>
-                            <option value="cambridge">Phrase: Cambridge</option>
-                        </select>
-                    </div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Include Paraphrased Items?</div>
+                    <select value={includeParaphrases ? 'yes' : 'no'} onChange={(e) => setIncludeParaphrases(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
 
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Group</div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Include Idiomatic Items?</div>
+                    <select value={includeIdioms ? 'yes' : 'no'} onChange={(e) => setIncludeIdioms(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Automatically Assign Group?</div>
                     <select value={includeGroupsIfMissing ? 'yes' : 'no'} onChange={(e) => setIncludeGroupsIfMissing(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value="yes">Yes if no group</option>
+                        <option value="yes">Yes, if no group assigned</option>
                         <option value="no">No</option>
                     </select>
                 </div>
@@ -424,7 +413,6 @@ const RefineSetupModal: React.FC<{
                             includeIdioms,
                             exampleCount,
                             includePrepositions,
-                            phraseIpaMode,
                             includeGroupsIfMissing
                         })}
                         className="rounded-xl bg-neutral-900 px-4 py-2 text-xs font-black text-white hover:bg-neutral-700"

@@ -20,8 +20,6 @@ const PHRASE_LIKE_TYPES = new Set(['idiom', 'phrasal_verb', 'collocation', 'phra
 const WORD_REFINE_DEBUG_STORAGE_KEY = 'vocab_pro_debug_refine_api';
 
 export type WordRefineMeaningMode = 'vi' | 'en';
-export type WordRefinePhraseIpaMode = 'cambridge' | 'generated';
-
 export interface WordRefineSetup {
     meaningLanguage: WordRefineMeaningMode;
     collocationCount: number;
@@ -29,7 +27,6 @@ export interface WordRefineSetup {
     includeIdioms: boolean;
     exampleCount: number;
     includePrepositions: boolean;
-    phraseIpaMode: WordRefinePhraseIpaMode;
     includeGroupsIfMissing: boolean;
 }
 
@@ -40,7 +37,6 @@ export const DEFAULT_WORD_REFINE_SETUP: WordRefineSetup = {
     includeIdioms: false,
     exampleCount: 1,
     includePrepositions: true,
-    phraseIpaMode: 'generated',
     includeGroupsIfMissing: false
 };
 
@@ -263,7 +259,6 @@ const normalizeWordRefineSetup = (setup?: Partial<WordRefineSetup>): WordRefineS
     includeIdioms: setup?.includeIdioms ?? DEFAULT_WORD_REFINE_SETUP.includeIdioms,
     exampleCount: clamp(Number(setup?.exampleCount ?? DEFAULT_WORD_REFINE_SETUP.exampleCount), 1, 3),
     includePrepositions: setup?.includePrepositions ?? DEFAULT_WORD_REFINE_SETUP.includePrepositions,
-    phraseIpaMode: setup?.phraseIpaMode === 'cambridge' ? 'cambridge' : DEFAULT_WORD_REFINE_SETUP.phraseIpaMode,
     includeGroupsIfMissing: setup?.includeGroupsIfMissing ?? DEFAULT_WORD_REFINE_SETUP.includeGroupsIfMissing
 });
 
@@ -871,7 +866,7 @@ const resolveInitialPronunciation = async (
     totalWords: number
 ): Promise<any | null> => {
     const singleWord = isSingleWordText(word.word);
-    const useCambridge = singleWord || setup.phraseIpaMode === 'cambridge';
+    const useCambridge = singleWord;
 
     if (useCambridge) {
         onProgress?.({
