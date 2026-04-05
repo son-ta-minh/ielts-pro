@@ -13,7 +13,7 @@ import UniversalAiModal from '../common/UniversalAiModal';
 import { createNewWord } from '../../utils/srs';
 import { TagTreeNode } from '../common/TagBrowser';
 import * as db from '../../app/db';
-import { runWordRefineWithRetry, WordRefineProgressSnapshot } from '../../services/wordRefineApi';
+import { runWordRefineWithRetry, WordRefineProgressSnapshot, WordRefineSetup } from '../../services/wordRefineApi';
 
 const MAX_API_REFINE_HISTORY_ITEMS = 120;
 
@@ -377,40 +377,6 @@ const WordTable: React.FC<Props> = ({
     }
   };
 
-  const handleAddToPronunciation = () => {
-      const selectedItems = words.filter(w => selectedIds.has(w.id));
-      if (selectedItems.length === 0) return;
-
-      const currentQueue = getStoredJSON<any[]>('vocab_pro_mimic_practice_queue', []);
-      const existingTexts = new Set(currentQueue.map(i => i.text.toLowerCase().trim()));
-      
-      let addedCount = 0;
-      const newItems = [];
-
-      selectedItems.forEach(item => {
-          const text = item.word;
-          if (!existingTexts.has(text.toLowerCase().trim())) {
-              newItems.push({
-                  id: `pronun-${Date.now()}-${Math.random()}`,
-                  text: text,
-                  sourceWord: item.word,
-                  type: 'Library Word'
-              });
-              existingTexts.add(text.toLowerCase().trim());
-              addedCount++;
-          }
-      });
-
-      if (addedCount > 0) {
-          const updatedQueue = [...currentQueue, ...newItems];
-          setStoredJSON('vocab_pro_mimic_practice_queue', updatedQueue);
-          setNotification({ type: 'success', message: `Added ${addedCount} words to Pronunciation.` });
-          setSelectedIds(new Set());
-      } else {
-          setNotification({ type: 'info', message: 'Selected words are already in Pronunciation queue.' });
-      }
-  };
-
   const handleSetSelectedVocabularyType = async (type: Exclude<WordTypeOption, 'archive' | 'focus' | 'duplicate'>) => {
     if (selectedIds.size === 0) return;
 
@@ -646,7 +612,7 @@ const WordTable: React.FC<Props> = ({
   const handleGenerateParaPrompt = (inputs: { words: string }) => getBulkParaphrasePrompt(selectedWordsToRefine);
   const handleGenerateHintPrompt = (inputs: any) => getHintsPrompt(selectedWordsMissingHints);
 
-  const handleApiRefineSelected = async () => {
+  const handleApiRefineSelected = async (setup?: Partial<WordRefineSetup>) => {
     if (selectedWordsToRefine.length === 0 || isApiRefining) return;
     const totalWordsForRun = selectedWordsToRefine.length;
 
@@ -666,6 +632,7 @@ const WordTable: React.FC<Props> = ({
         selectedWordsToRefine,
         user.nativeLanguage || 'Vietnamese',
         {
+          setup,
           signal: controller.signal,
           onProgress: (snapshot) => {
             setApiRefineProgress(snapshot);
@@ -829,12 +796,6 @@ const WordTable: React.FC<Props> = ({
     setIsHintModalOpen(false);
   };
   
-  const handleOpenAddToBookModal = async () => {
-    const books = await db.getWordBooksByUserId(user.id);
-    setAvailableBooks(books);
-    setIsAddToBookModalOpen(true);
-  };
-
   const handleConfirmAddToBook = async (bookId: string) => {
     const targetBook = availableBooks.find(b => b.id === bookId);
     if (!targetBook) return;
@@ -911,24 +872,15 @@ const WordTable: React.FC<Props> = ({
     selectedIds, setSelectedIds, 
     wordToDelete, setWordToDelete, isDeleting, setIsDeleting,
     wordToHardDelete, setWordToHardDelete, isHardDeleting, setIsHardDeleting, onHardDelete,
-    isAiModalOpen, setIsAiModalOpen, notification, viewMenuRef, visibility,
+    notification, viewMenuRef, visibility,
     setVisibility, handleToggleFilter, handleBatchAddSubmit,
     // FIX: Renamed typo onBoldDelete to onBulkDelete
     onOpenBulkDeleteModal: onBulkDelete ? () => setIsBulkDeleteModalOpen(true) : undefined,
     onOpenBulkHardDeleteModal: onBulkHardDelete && selectedRawWords.length > 0 ? () => setIsBulkHardDeleteModalOpen(true) : undefined,
-    selectedWordsToRefine, handleGenerateRefinePrompt, handleAiRefinementResult,
+    selectedWordsToRefine,
     selectedRawWordsCount: selectedRawWords.length,
-    selectedWordsMissingHintsCount: selectedWordsMissingHints.length,
-    onOpenHintModal: () => setIsHintModalOpen(true),
-    onApiRefineSelected: handleApiRefineSelected,
+    onStartRefineSelected: handleApiRefineSelected,
     isApiRefining,
-    apiRefineProgress,
-    apiRefineHistory,
-    apiRefineFlushedCount,
-    apiRefineTotalWords,
-    isApiRefineLogOpen,
-    onOpenApiRefineLog: () => setIsApiRefineLogOpen(true),
-    onCloseApiRefineLog: () => setIsApiRefineLogOpen(false),
     onStopApiRefine: handleStopApiRefine,
     setStatusFilter, setRefinedFilter, setRegisterFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen, setIsFilterMenuOpen,
     setIsAddExpanded,
@@ -950,14 +902,10 @@ const WordTable: React.FC<Props> = ({
     onSetSelectedLearnedStatus: handleSetSelectedLearnedStatus,
     onAddSelectedGroup: handleAddSelectedGroup,
     onCopySelectedHeadwords: handleCopySelectedHeadwords,
-    onOpenAddToBookModal: handleOpenAddToBookModal,
     isAddToBookModalOpen,
     setIsAddToBookModalOpen,
     wordBooks: availableBooks,
-    onConfirmAddToBook: handleConfirmAddToBook,
-    // New prop for Pronunciation Queue
-    onAddToPronunciation: handleAddToPronunciation,
-    onOpenParaModal: () => setIsParaModalOpen(true)
+    onConfirmAddToBook: handleConfirmAddToBook
   };
 
   return (

@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, RefreshCw, PenLine, BookMarked, Image, Play } from 'lucide-react';
+import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, PenLine, BookMarked, Image, Play } from 'lucide-react';
 import { VocabularyItem, LearnedStatus, WordQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
-import { WordRefineProgressSnapshot } from '../../services/wordRefineApi';
+import { DEFAULT_WORD_REFINE_SETUP, WordRefineSetup } from '../../services/wordRefineApi';
 
 export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'archive' | 'focus' | 'duplicate';
 export type RefinedFilter = 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined';
@@ -318,6 +318,146 @@ const AddToBookModal: React.FC<{
     );
 };
 
+const RefineSetupModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: (setup: WordRefineSetup) => void;
+    defaultIncludeGroupsIfMissing: boolean;
+    selectedCount: number;
+}> = ({ isOpen, onClose, onConfirm, defaultIncludeGroupsIfMissing, selectedCount }) => {
+    const [meaningLanguage, setMeaningLanguage] = useState<'vi' | 'en'>(DEFAULT_WORD_REFINE_SETUP.meaningLanguage);
+    const [collocationCount, setCollocationCount] = useState(DEFAULT_WORD_REFINE_SETUP.collocationCount);
+    const [paraphraseCount, setParaphraseCount] = useState(DEFAULT_WORD_REFINE_SETUP.paraphraseCount);
+    const [idiomCount, setIdiomCount] = useState(DEFAULT_WORD_REFINE_SETUP.idiomCount);
+    const [exampleCount, setExampleCount] = useState(DEFAULT_WORD_REFINE_SETUP.exampleCount);
+    const [includePrepositions, setIncludePrepositions] = useState(DEFAULT_WORD_REFINE_SETUP.includePrepositions);
+    const [phraseIpaMode, setPhraseIpaMode] = useState(DEFAULT_WORD_REFINE_SETUP.phraseIpaMode);
+    const [includeGroupsIfMissing, setIncludeGroupsIfMissing] = useState(defaultIncludeGroupsIfMissing);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setMeaningLanguage(DEFAULT_WORD_REFINE_SETUP.meaningLanguage);
+        setCollocationCount(DEFAULT_WORD_REFINE_SETUP.collocationCount);
+        setParaphraseCount(DEFAULT_WORD_REFINE_SETUP.paraphraseCount);
+        setIdiomCount(DEFAULT_WORD_REFINE_SETUP.idiomCount);
+        setExampleCount(DEFAULT_WORD_REFINE_SETUP.exampleCount);
+        setIncludePrepositions(DEFAULT_WORD_REFINE_SETUP.includePrepositions);
+        setPhraseIpaMode(DEFAULT_WORD_REFINE_SETUP.phraseIpaMode);
+        setIncludeGroupsIfMissing(defaultIncludeGroupsIfMissing);
+    }, [isOpen, defaultIncludeGroupsIfMissing]);
+
+    if (!isOpen) return null;
+
+    const numberButtonClass = (active: boolean) => active
+        ? 'bg-neutral-900 text-white border-neutral-900'
+        : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400';
+
+    return (
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-3xl rounded-[2rem] border border-neutral-200 bg-white shadow-2xl">
+                <div className="flex items-start justify-between border-b border-neutral-100 px-6 py-5">
+                    <div>
+                        <h3 className="text-xl font-black text-neutral-900">Refine Setup</h3>
+                        <p className="mt-1 text-xs font-bold text-neutral-500">Running refine for {selectedCount} selected word(s).</p>
+                    </div>
+                    <button onClick={onClose} className="rounded-full p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900">
+                        <X size={18} />
+                    </button>
+                </div>
+                <div className="grid gap-5 px-6 py-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Meaning</div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setMeaningLanguage('vi')} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(meaningLanguage === 'vi')}`}>VI</button>
+                            <button onClick={() => setMeaningLanguage('en')} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(meaningLanguage === 'en')}`}>EN</button>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Phrase IPA</div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setPhraseIpaMode('generated')} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(phraseIpaMode === 'generated')}`}>Generated IPA</button>
+                            <button onClick={() => setPhraseIpaMode('cambridge')} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(phraseIpaMode === 'cambridge')}`}>Cambridge</button>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Collocations</div>
+                        <div className="flex flex-wrap gap-2">
+                            {[0, 1, 2, 3, 4, 5].map((count) => (
+                                <button key={count} onClick={() => setCollocationCount(count)} className={`rounded-xl border px-3 py-2 text-xs font-black ${numberButtonClass(collocationCount === count)}`}>{count}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Paraphrase</div>
+                        <div className="flex flex-wrap gap-2">
+                            {[0, 1, 2, 3, 4, 5].map((count) => (
+                                <button key={count} onClick={() => setParaphraseCount(count)} className={`rounded-xl border px-3 py-2 text-xs font-black ${numberButtonClass(paraphraseCount === count)}`}>{count}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Idiom</div>
+                        <div className="flex flex-wrap gap-2">
+                            {[0, 1, 2, 3].map((count) => (
+                                <button key={count} onClick={() => setIdiomCount(count)} className={`rounded-xl border px-3 py-2 text-xs font-black ${numberButtonClass(idiomCount === count)}`}>{count}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Example</div>
+                        <div className="flex flex-wrap gap-2">
+                            {[1, 2, 3].map((count) => (
+                                <button key={count} onClick={() => setExampleCount(count)} className={`rounded-xl border px-3 py-2 text-xs font-black ${numberButtonClass(exampleCount === count)}`}>{count}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Preposition</div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setIncludePrepositions(true)} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(includePrepositions)}`}>Yes</button>
+                            <button onClick={() => setIncludePrepositions(false)} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(!includePrepositions)}`}>No</button>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Word Family</div>
+                        <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-black text-neutral-500">Not Applicable</div>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">IPA</div>
+                        <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-black text-neutral-500">Single word: Cambridge only</div>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Group</div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setIncludeGroupsIfMissing(true)} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(includeGroupsIfMissing)}`}>Yes if no group</button>
+                            <button onClick={() => setIncludeGroupsIfMissing(false)} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(!includeGroupsIfMissing)}`}>No</button>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center justify-end gap-3 border-t border-neutral-100 px-6 py-4">
+                    <button onClick={onClose} className="rounded-xl px-4 py-2 text-xs font-black text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">Cancel</button>
+                    <button
+                        onClick={() => onConfirm({
+                            meaningLanguage,
+                            collocationCount,
+                            paraphraseCount,
+                            idiomCount,
+                            exampleCount,
+                            includePrepositions,
+                            includeWordFamily: false,
+                            phraseIpaMode,
+                            includeGroupsIfMissing
+                        })}
+                        className="rounded-xl bg-neutral-900 px-4 py-2 text-xs font-black text-white hover:bg-neutral-700"
+                    >
+                        Start Refine
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export interface WordTableUIProps {
   words: VocabularyItem[];
   total: number;
@@ -359,8 +499,6 @@ export interface WordTableUIProps {
   setWordToHardDelete?: (w: VocabularyItem | null) => void;
   isHardDeleting?: boolean;
   setIsHardDeleting?: (d: boolean) => void;
-  isAiModalOpen: boolean;
-  setIsAiModalOpen: (o: boolean) => void;
   notification: {type: 'success' | 'error' | 'info', message: string} | null;
   viewMenuRef: React.RefObject<HTMLDivElement>;
   visibility: VisibilitySettings;
@@ -371,17 +509,8 @@ export interface WordTableUIProps {
   onOpenBulkHardDeleteModal?: () => void;
   selectedWordsToRefine: VocabularyItem[];
   selectedRawWordsCount: number;
-  handleGenerateRefinePrompt: (inputs: { words: string }) => string;
-  handleAiRefinementResult: (results: any[]) => void;
-  onApiRefineSelected: () => void;
+  onStartRefineSelected: (setup: WordRefineSetup) => void;
   isApiRefining: boolean;
-  apiRefineProgress: WordRefineProgressSnapshot | null;
-  apiRefineHistory: WordRefineProgressSnapshot[];
-  apiRefineFlushedCount: number;
-  apiRefineTotalWords: number;
-  isApiRefineLogOpen: boolean;
-  onOpenApiRefineLog: () => void;
-  onCloseApiRefineLog: () => void;
   onStopApiRefine: () => void;
   setStatusFilter: (sf: StatusFilter) => void;
   setRefinedFilter: (rf: RefinedFilter) => void;
@@ -391,8 +520,6 @@ export interface WordTableUIProps {
   setIsViewMenuOpen: (o: boolean) => void;
   setIsFilterMenuOpen: (o: boolean) => void;
   setIsAddExpanded: (o: boolean) => void;
-  selectedWordsMissingHintsCount: number;
-  onOpenHintModal: () => void;
   showTagBrowserButton?: boolean;
   tagTree?: TagTreeNode[];
   selectedTag?: string | null;
@@ -412,17 +539,10 @@ export interface WordTableUIProps {
   onSetSelectedLearnedStatus: (status: LearnedStatus) => void | Promise<void>;
   onAddSelectedGroup: (group: string) => void | Promise<void>;
   onCopySelectedHeadwords: () => void | Promise<void>;
-  
-  // New props for Add to Book
-  onOpenAddToBookModal: () => void;
   isAddToBookModalOpen: boolean;
   setIsAddToBookModalOpen: (o: boolean) => void;
   wordBooks: WordBook[];
   onConfirmAddToBook: (bookId: string) => void;
-  // New prop for Pronunciation Queue
-  onAddToPronunciation: () => void;
-  // New prop for Bulk Paraphrase
-  onOpenParaModal?: () => void;
 }
 
 export const WordTableUI: React.FC<WordTableUIProps> = ({
@@ -432,23 +552,19 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   setQuickAddInput, isAdding, isViewMenuOpen, selectedIds, setSelectedIds,
   wordToDelete, setWordToDelete, isDeleting, setIsDeleting,
   wordToHardDelete, setWordToHardDelete, isHardDeleting, setIsHardDeleting,
-  isAiModalOpen, setIsAiModalOpen,
   notification, viewMenuRef, visibility, setVisibility, handleToggleFilter,
-  handleBatchAddSubmit, onOpenBulkDeleteModal, onOpenBulkHardDeleteModal, selectedWordsToRefine, selectedRawWordsCount, handleGenerateRefinePrompt,
-  handleAiRefinementResult, onApiRefineSelected, isApiRefining, apiRefineProgress, apiRefineHistory, isApiRefineLogOpen, onOpenApiRefineLog, onCloseApiRefineLog, onStopApiRefine, setStatusFilter, setRefinedFilter, setRegisterFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen,
-  apiRefineFlushedCount, apiRefineTotalWords,
-  setIsFilterMenuOpen, setIsAddExpanded, selectedWordsMissingHintsCount, onOpenHintModal,
+  handleBatchAddSubmit, onOpenBulkDeleteModal, onOpenBulkHardDeleteModal, selectedWordsToRefine, selectedRawWordsCount,
+  onStartRefineSelected, isApiRefining, onStopApiRefine, setStatusFilter, setRefinedFilter, setRegisterFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen,
+  setIsFilterMenuOpen, setIsAddExpanded,
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
   onRenameGroup, onDeleteGroup,
   selectedTypes, toggleType, onOpenWordBook,
   availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onSetSelectedQuality, onSetSelectedLearnedStatus, onAddSelectedGroup, onCopySelectedHeadwords,
-  onOpenAddToBookModal, isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook,
-  onAddToPronunciation,
-  onOpenParaModal
+  isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
-  const [isRefineMenuOpen, setIsRefineMenuOpen] = useState(false);
+  const [isRefineSetupModalOpen, setIsRefineSetupModalOpen] = useState(false);
   const [isSetAttributeMenuOpen, setIsSetAttributeMenuOpen] = useState(false);
   const [selectedBulkGroup, setSelectedBulkGroup] = useState('');
   const [newBulkGroup, setNewBulkGroup] = useState('');
@@ -464,11 +580,13 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
     return values;
   }, [tagTree]);
   const totalPages = Math.ceil(total / pageSize);
-  const totalApiRefineWords = apiRefineTotalWords || selectedWordsToRefine.length;
-  const remainingApiRefineWords = Math.max(totalApiRefineWords - apiRefineFlushedCount, 0);
   const bulkGroupOptions = useMemo(
     () => Array.from(new Set(availableGroups.map(group => group.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
     [availableGroups]
+  );
+  const defaultIncludeGroupsIfMissing = useMemo(
+    () => selectedWordsToRefine.some((word) => !word.groups || word.groups.length === 0),
+    [selectedWordsToRefine]
   );
   const visibleColumnCount = 3
     + (visibility.showMeaning ? 1 : 0)
@@ -819,58 +937,21 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 )}
               </div>
 
-              <div
-                className="relative"
-                onMouseEnter={() => setIsRefineMenuOpen(true)}
-                onMouseLeave={() => setIsRefineMenuOpen(false)}
+              <button
+                type="button"
+                onClick={() => setIsRefineSetupModalOpen(true)}
+                disabled={isApiRefining}
+                className="px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors bg-white/10 hover:bg-white/20 text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <button
-                  type="button"
-                  className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${
-                    isRefineMenuOpen ? 'bg-white text-neutral-900' : 'bg-white/10 hover:bg-white/20 text-white'
-                  }`}
-                >
-                  {isApiRefining ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                  <span>Refine</span>
-                  <ChevronDown size={14} className={`transition-transform ${isRefineMenuOpen ? 'rotate-180' : ''}`} />
+                {isApiRefining ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                <span>Refine</span>
+              </button>
+              {isApiRefining && (
+                <button onClick={onStopApiRefine} className="px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors bg-rose-500/10 hover:bg-rose-500/20 text-rose-300">
+                  <X size={14} />
+                  <span>Stop</span>
                 </button>
-                {isRefineMenuOpen && (
-                  <div className="absolute bottom-full right-0 z-[220] mb-0 w-64 overflow-hidden rounded-[1.5rem] border border-neutral-200 bg-white p-3 text-neutral-900 shadow-2xl">
-                    <div className="space-y-2">
-                      <button
-                        onClick={onApiRefineSelected}
-                        disabled={isApiRefining}
-                        className="flex w-full items-center gap-2 rounded-xl border border-amber-200 px-3 py-2 text-left text-[11px] font-black text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isApiRefining ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                        <span>Refine API</span>
-                      </button>
-                      <button onClick={() => { setIsAiModalOpen(true); }} className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 hover:border-neutral-900 hover:bg-neutral-50">
-                        <Wand2 size={14} />
-                        <span>Refine Manual</span>
-                      </button>
-                      {selectedWordsMissingHintsCount > 0 && (
-                        <button onClick={onOpenHintModal} className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 hover:border-neutral-900 hover:bg-neutral-50" title="Generate hints for collocations and idioms">
-                          <Zap size={14} />
-                          <span>Hints ({selectedWordsMissingHintsCount})</span>
-                        </button>
-                      )}
-                      {(apiRefineProgress || apiRefineHistory.length > 0) && (
-                        <button onClick={onOpenApiRefineLog} className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 hover:border-neutral-900 hover:bg-neutral-50">
-                          <Eye size={14} />
-                          <span>Refine Log</span>
-                        </button>
-                      )}
-                      {isApiRefining && (
-                        <button onClick={onStopApiRefine} className="flex w-full items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-left text-[11px] font-black text-rose-700 hover:bg-rose-50">
-                          <X size={14} />
-                          <span>Stop</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
 
               <div
                 className="relative"
@@ -1036,68 +1117,16 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
           </div>
         </div>
       )}
-      {isApiRefineLogOpen && apiRefineProgress && (
-        <div className="fixed bottom-40 left-1/2 -translate-x-1/2 z-[210] w-full max-w-5xl px-4">
-          <div className="rounded-[2rem] border border-amber-200 bg-amber-50/95 shadow-2xl p-4 sm:p-5 backdrop-blur">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">Refine API Progress</div>
-                  <div className="text-sm font-black text-amber-950">{apiRefineProgress.message}</div>
-                  <div className="mt-1 text-[11px] font-black uppercase tracking-wider text-amber-700">
-                    Flushed {apiRefineFlushedCount}/{totalApiRefineWords}, remaining {remainingApiRefineWords}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-700">
-                    Attempt {Math.max(apiRefineProgress.attempt, 1)}/{apiRefineProgress.maxAttempts}
-                  </div>
-                  <button
-                    onClick={onCloseApiRefineLog}
-                    className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-amber-700 hover:bg-amber-100 transition-colors"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-              {apiRefineProgress.issues && apiRefineProgress.issues.length > 0 && (
-                <div className="rounded-2xl border border-rose-200 bg-white p-3">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-rose-500">Validation / Error</div>
-                  <div className="mt-2 text-xs font-semibold text-rose-700 whitespace-pre-wrap">
-                    {apiRefineProgress.issues.slice(0, 8).join('\n')}
-                  </div>
-                </div>
-              )}
-              {apiRefineProgress.rawText && (
-                <div className="rounded-2xl border border-neutral-200 bg-white p-3">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Server Response Preview</div>
-                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed font-mono text-neutral-700">
-                    {apiRefineProgress.rawText}
-                  </pre>
-                </div>
-              )}
-              {apiRefineHistory.length > 1 && (
-                <div className="rounded-2xl border border-neutral-200 bg-white p-3">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Progress Log</div>
-                  <div className="mt-2 max-h-40 overflow-auto space-y-2">
-                    {apiRefineHistory.map((item, index) => (
-                      <div key={`${item.stage}-${item.attempt}-${index}`} className="rounded-xl bg-neutral-50 px-3 py-2">
-                        <div className="text-[11px] font-black text-neutral-700">
-                          [{item.attempt}/{item.maxAttempts}] {item.stage}
-                        </div>
-                        <div className="mt-1 text-[11px] leading-relaxed text-neutral-600 whitespace-pre-wrap">
-                          {item.message}
-                          {item.issues && item.issues.length > 0 ? `\n${item.issues.slice(0, 3).join('\n')}` : ''}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <RefineSetupModal
+        isOpen={isRefineSetupModalOpen}
+        onClose={() => setIsRefineSetupModalOpen(false)}
+        defaultIncludeGroupsIfMissing={defaultIncludeGroupsIfMissing}
+        selectedCount={selectedIds.size}
+        onConfirm={(setup) => {
+          setIsRefineSetupModalOpen(false);
+          onStartRefineSelected(setup);
+        }}
+      />
       <AddToBookModal isOpen={isAddToBookModalOpen} onClose={() => setIsAddToBookModalOpen(false)} onConfirm={onConfirmAddToBook} books={wordBooks} selectedCount={selectedIds.size} />
     </div>
   );

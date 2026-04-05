@@ -134,6 +134,9 @@ export const normalizeAiResponse = (shortData: any): any => {
         
         prepositionString: typeof shortData.prep === 'string' ? shortData.prep : undefined,
         prepositionsArray: normalizedPrepsArray,
+        groups: Array.isArray(shortData.gr || shortData.groups)
+            ? Array.from(new Set((shortData.gr || shortData.groups).map((item: any) => String(item || '').trim()).filter(Boolean)))
+            : undefined,
 
         // Use new type classification if available, else fallback to individual is_ flags
         isIdiom: type ? typeFlags.isIdiom : (shortData.is_id ?? shortData.isIdiom),
@@ -232,6 +235,10 @@ export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any
         finalPrepositions = merged;
     } 
     updatedItem.prepositions = finalPrepositions.length > 0 ? finalPrepositions : undefined;
+
+    if (Array.isArray(aiResult.groups) && aiResult.groups.length > 0) {
+        updatedItem.groups = Array.from(new Set([...(baseItem.groups || []), ...aiResult.groups]));
+    }
 
     // Word Family
     if (aiResult.wordFamily) {

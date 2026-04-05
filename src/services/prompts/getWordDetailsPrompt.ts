@@ -1,5 +1,13 @@
 interface WordDetailsPromptOptions {
     includePronunciation?: boolean;
+    meaningLanguage?: 'vi' | 'en';
+    collocationCount?: number;
+    paraphraseCount?: number;
+    idiomCount?: number;
+    exampleCount?: number;
+    includePrepositions?: boolean;
+    includeWordFamily?: boolean;
+    includeGroupsIfMissing?: boolean;
 }
 
 export function getWordDetailsPrompt(
@@ -7,8 +15,18 @@ export function getWordDetailsPrompt(
     nativeLanguage: string = 'Vietnamese',
     options: WordDetailsPromptOptions = {}
 ): string {
-    const wordList = words.map(w => `"${w}"`).join(', ');
+    const wordList = words.map((word) => `"${word}"`).join(', ');
     const includePronunciation = options.includePronunciation !== false;
+    const meaningLanguage = options.meaningLanguage || 'vi';
+    const collocationCount = Math.max(0, Math.min(5, options.collocationCount ?? 3));
+    const paraphraseCount = Math.max(0, Math.min(5, options.paraphraseCount ?? 3));
+    const idiomCount = Math.max(0, Math.min(3, options.idiomCount ?? 0));
+    const exampleCount = Math.max(1, Math.min(3, options.exampleCount ?? 1));
+    const includePrepositions = options.includePrepositions !== false;
+    const includeWordFamily = options.includeWordFamily === true;
+    const includeGroupsIfMissing = options.includeGroupsIfMissing === true;
+    const meaningFieldLanguage = meaningLanguage === 'en' ? 'English' : nativeLanguage;
+
     const pronunciationOptimizationRule = includePronunciation
         ? '- Omit "ipa_uk" if "pron_sim" is "same".'
         : '- Do NOT output "ipa_us", "ipa_uk", or "pron_sim".';
@@ -23,28 +41,36 @@ export function getWordDetailsPrompt(
         : '';
 
     return `You are an expert IELTS coach, examiner, and native English speaker.
-    
-    Analyze this list of vocabulary items: [${wordList}].
 
-    HEADWORD (hw) RULES:
+Analyze this list of vocabulary items: [${wordList}].
+
+HEADWORD (hw) RULES:
     - Phrase/idiom → keep the EXACT full phrase (no reduction)
     - Single word → convert to base form (singular)
     - All fields (meaning, IPA, examples) must match the headword
     - If adverb → use its base adjective as headword
 
-    LANGUAGE:
-    - Use English for all fields except "m", which must be in ${nativeLanguage}
+LANGUAGE:
+    - Use English for all fields except "m", which must be in ${meaningFieldLanguage}.
 
-    ${pronunciationOptimizationRule}
+REFINE SETUP:
+    - Requested paraphrase count: ${paraphraseCount}. If 0, return "para": [].
+    - Requested idiom count: ${idiomCount}. If 0, return "idm": [].
+    - Requested example count: ${exampleCount}. Put all examples into "ex" as one string, separated by newline when more than one example is needed.
+    - Prepositions requested: ${includePrepositions ? 'YES' : 'NO'}. If NO, return "prep": [].
+    - Word family requested: ${includeWordFamily ? 'YES' : 'NO'}. If NO, omit "fam".
+    - Group suggestion requested only when the app says the word currently has no group: ${includeGroupsIfMissing ? 'YES' : 'NO'}.
 
-    FIELD DEFINITIONS:
+${pronunciationOptimizationRule}
+
+FIELD DEFINITIONS:
     - og: The EXACT string from the input list. (Include ONLY if different from "hw").
     - hw: The headword (Full phrase for expressions; base form for single words).
-    ${pronunciationFieldDefinitions}
-    - m: Definition of the headword in ${nativeLanguage}.
+${pronunciationFieldDefinitions}
+    - m: Definition of the headword in ${meaningFieldLanguage}.
     - reg: Register. MUST be ONLY one of: "academic", "casual", "neutral" (mix of academic and casual).
     - ex: A high-quality IELTS example sentence using the headword.
-    - col: up to 5 most common, natural collocations if exist; if none → [].
+    - col: up to ${collocationCount} most common, natural collocations if exist; if none → [].
         - Items: {"text": "natural collocation", "d": "minimal descriptive cue for recall (5-10 words)"}.
         - Collocations must include the headword, combined with natural co-occurring words
         - Inflections or word-family forms of headword are allowed (e.g., plural, V-ed, V-ing)
