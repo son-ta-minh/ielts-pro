@@ -483,7 +483,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
         messages: [
           {
             role: 'system',
-            content: 'You are StudyBuddy. Return exactly one display phrase only. No bullet, no explanation, no quotes, no markdown.'
+            content: 'You are an expert IELTS coach, examiner, and native English speaker. Return exactly one display phrase only. No bullet, no explanation, no quotes, no markdown.'
           },
           {
             role: 'user',

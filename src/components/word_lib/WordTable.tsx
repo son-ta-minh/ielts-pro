@@ -79,6 +79,8 @@ const LIBRARY_FILTERS_KEY = 'vocab_pro_library_filters_v2';
 // Groups definition for exclusive logic
 const GROUP_CONTENT: WordTypeOption[] = ['vocab', 'idiom', 'phrasal', 'collocation', 'phrase'];
 const GROUP_ATTRIBUTE: WordTypeOption[] = ['archive'];
+const normalizeGroupLabel = (value: string): string => value.trim();
+const dedupeGroups = (groups: string[]): string[] => Array.from(new Set(groups.map(normalizeGroupLabel).filter(Boolean)));
 
 const WordTable: React.FC<Props> = ({ 
   user,
@@ -314,6 +316,14 @@ const WordTable: React.FC<Props> = ({
   };
   
   const selectedWordsToRefine = useMemo(() => words.filter(w => selectedIds.has(w.id)), [words, selectedIds]);
+  const availableGroups = useMemo(() => {
+    const allWords = dataStore.getAllWords().filter(word => word.userId === user.id);
+    return Array.from(
+      new Set(
+        allWords.flatMap(word => (word.groups || []).map(normalizeGroupLabel).filter(Boolean))
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [user.id, words]);
 
   const selectedRawWords = useMemo(
     () => words.filter(w => selectedIds.has(w.id) && w.quality === WordQuality.RAW),
@@ -412,6 +422,78 @@ const WordTable: React.FC<Props> = ({
       } else {
           setNotification({ type: 'info', message: 'Selected words are already in Pronunciation queue.' });
       }
+  };
+
+  const handleSetSelectedVocabularyType = async (type: Exclude<WordTypeOption, 'archive' | 'focus' | 'duplicate'>) => {
+    if (selectedIds.size === 0) return;
+
+    const itemsToUpdate = dataStore.getAllWords()
+      .filter(word => selectedIds.has(word.id))
+      .map(word => ({
+        ...word,
+        isIdiom: type === 'idiom',
+        isPhrasalVerb: type === 'phrasal',
+        isCollocation: type === 'collocation',
+        isStandardPhrase: type === 'phrase',
+        updatedAt: Date.now()
+      }));
+
+    if (itemsToUpdate.length === 0) return;
+
+    await dataStore.bulkSaveWords(itemsToUpdate);
+    setNotification({ type: 'success', message: `Updated vocabulary type for ${itemsToUpdate.length} word(s).` });
+  };
+
+  const handleSetSelectedArchive = async (value: boolean) => {
+    if (selectedIds.size === 0) return;
+
+    const itemsToUpdate = dataStore.getAllWords()
+      .filter(word => selectedIds.has(word.id))
+      .map(word => ({
+        ...word,
+        isPassive: value,
+        updatedAt: Date.now()
+      }));
+
+    if (itemsToUpdate.length === 0) return;
+
+    await dataStore.bulkSaveWords(itemsToUpdate);
+    setNotification({ type: 'success', message: `${value ? 'Archived' : 'Unarchived'} ${itemsToUpdate.length} word(s).` });
+  };
+
+  const handleSetSelectedFocus = async (value: boolean) => {
+    if (selectedIds.size === 0) return;
+
+    const itemsToUpdate = dataStore.getAllWords()
+      .filter(word => selectedIds.has(word.id))
+      .map(word => ({
+        ...word,
+        isFocus: value,
+        updatedAt: Date.now()
+      }));
+
+    if (itemsToUpdate.length === 0) return;
+
+    await dataStore.bulkSaveWords(itemsToUpdate);
+    setNotification({ type: 'success', message: `${value ? 'Focused' : 'Unfocused'} ${itemsToUpdate.length} word(s).` });
+  };
+
+  const handleAddSelectedGroup = async (group: string) => {
+    const normalizedGroup = normalizeGroupLabel(group);
+    if (!normalizedGroup || selectedIds.size === 0) return;
+
+    const itemsToUpdate = dataStore.getAllWords()
+      .filter(word => selectedIds.has(word.id))
+      .map(word => ({
+        ...word,
+        groups: dedupeGroups([...(word.groups || []), normalizedGroup]),
+        updatedAt: Date.now()
+      }));
+
+    if (itemsToUpdate.length === 0) return;
+
+    await dataStore.bulkSaveWords(itemsToUpdate);
+    setNotification({ type: 'success', message: `Added group "${normalizedGroup}" to ${itemsToUpdate.length} word(s).` });
   };
 
   const applyAiRefinementResults = async (
@@ -831,6 +913,11 @@ const WordTable: React.FC<Props> = ({
     selectedTypes: selectedWordTypes,
     toggleType: handleTypeToggle,
     onOpenWordBook,
+    availableGroups,
+    onSetSelectedVocabularyType: handleSetSelectedVocabularyType,
+    onSetSelectedArchive: handleSetSelectedArchive,
+    onSetSelectedFocus: handleSetSelectedFocus,
+    onAddSelectedGroup: handleAddSelectedGroup,
     onOpenAddToBookModal: handleOpenAddToBookModal,
     isAddToBookModalOpen,
     setIsAddToBookModalOpen,

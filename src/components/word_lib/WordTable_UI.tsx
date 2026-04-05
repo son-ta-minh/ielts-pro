@@ -405,6 +405,11 @@ export interface WordTableUIProps {
   selectedTypes: Set<WordTypeOption>;
   toggleType: (type: WordTypeOption) => void;
   onOpenWordBook?: () => void;
+  availableGroups: string[];
+  onSetSelectedVocabularyType: (type: Exclude<WordTypeOption, 'archive' | 'focus' | 'duplicate'>) => void | Promise<void>;
+  onSetSelectedArchive: (value: boolean) => void | Promise<void>;
+  onSetSelectedFocus: (value: boolean) => void | Promise<void>;
+  onAddSelectedGroup: (group: string) => void | Promise<void>;
   
   // New props for Add to Book
   onOpenAddToBookModal: () => void;
@@ -434,11 +439,15 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
   onRenameGroup, onDeleteGroup,
   selectedTypes, toggleType, onOpenWordBook,
+  availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onAddSelectedGroup,
   onOpenAddToBookModal, isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook,
   onAddToPronunciation,
   onOpenParaModal
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
+  const [isSetAttributeMenuOpen, setIsSetAttributeMenuOpen] = useState(false);
+  const [selectedBulkGroup, setSelectedBulkGroup] = useState('');
+  const [newBulkGroup, setNewBulkGroup] = useState('');
   const groupSuggestions = useMemo(() => {
     const values: string[] = [];
     const visit = (nodes: TagTreeNode[]) => {
@@ -453,6 +462,10 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   const totalPages = Math.ceil(total / pageSize);
   const totalApiRefineWords = apiRefineTotalWords || selectedWordsToRefine.length;
   const remainingApiRefineWords = Math.max(totalApiRefineWords - apiRefineFlushedCount, 0);
+  const bulkGroupOptions = useMemo(
+    () => Array.from(new Set(availableGroups.map(group => group.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [availableGroups]
+  );
   const visibleColumnCount = 3
     + (visibility.showMeaning ? 1 : 0)
     + (visibility.showGroups ? 1 : 0)
@@ -461,6 +474,32 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
     + (visibility.showMastery ? 1 : 0);
   const defaultDeleteMessage = <span>Are you sure you want to permanently delete <span className="font-bold text-neutral-900">&quot;{wordToDelete?.word}&quot;</span>? This action cannot be undone.</span>;
   const unitUnlinkMessage = <span>Remove <span className="font-bold text-neutral-900">&quot;{wordToDelete?.word}&quot;</span> from this unit? It remains in your library.</span>;
+  const handleApplyExistingGroup = async () => {
+    const normalized = selectedBulkGroup.trim();
+    if (!normalized) return;
+    await onAddSelectedGroup(normalized);
+    setSelectedBulkGroup('');
+    setIsSetAttributeMenuOpen(false);
+  };
+  const handleApplyNewGroup = async () => {
+    const normalized = newBulkGroup.trim();
+    if (!normalized) return;
+    await onAddSelectedGroup(normalized);
+    setNewBulkGroup('');
+    setIsSetAttributeMenuOpen(false);
+  };
+  const handleSetVocabularyType = async (type: Exclude<WordTypeOption, 'archive' | 'focus' | 'duplicate'>) => {
+    await onSetSelectedVocabularyType(type);
+    setIsSetAttributeMenuOpen(false);
+  };
+  const handleSetArchive = async (value: boolean) => {
+    await onSetSelectedArchive(value);
+    setIsSetAttributeMenuOpen(false);
+  };
+  const handleSetFocus = async (value: boolean) => {
+    await onSetSelectedFocus(value);
+    setIsSetAttributeMenuOpen(false);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 relative">
@@ -757,6 +796,134 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 </button>
               )}
               <button onClick={() => { setIsAiModalOpen(true); }} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>Refine Manual</span></button>
+              <div
+                className="relative"
+                onMouseEnter={() => setIsSetAttributeMenuOpen(true)}
+                onMouseLeave={() => setIsSetAttributeMenuOpen(false)}
+              >
+                <button
+                  type="button"
+                  className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${
+                    isSetAttributeMenuOpen
+                      ? 'bg-white text-neutral-900'
+                      : 'bg-white/10 hover:bg-white/20 text-white'
+                  }`}
+                >
+                  <Tag size={14} />
+                  <span>Set Attribute</span>
+                  <ChevronDown size={14} className={`transition-transform ${isSetAttributeMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isSetAttributeMenuOpen && (
+                  <div className="absolute bottom-full right-0 z-[220] mb-0 w-[22rem] overflow-hidden rounded-[1.5rem] border border-neutral-200 bg-white p-3 text-neutral-900 shadow-2xl">
+                    <div className="space-y-3">
+                      <div>
+                        <div className="px-1 pb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Vocabulary Type</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {TYPE_OPTIONS.filter(option => ['vocab', 'idiom', 'phrasal', 'collocation', 'phrase'].includes(option.id)).map(option => {
+                            const Icon = option.icon;
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => void handleSetVocabularyType(option.id as Exclude<WordTypeOption, 'archive' | 'focus' | 'duplicate'>)}
+                                className="flex items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 transition-colors hover:border-neutral-900 hover:bg-neutral-50 hover:text-neutral-900"
+                              >
+                                <Icon size={14} />
+                                <span>{option.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="px-1 pb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Archive</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleSetArchive(true)}
+                              className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-black text-amber-700 transition-colors hover:bg-amber-100"
+                            >
+                              On
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleSetArchive(false)}
+                              className="rounded-xl bg-neutral-100 px-3 py-2 text-[11px] font-black text-neutral-700 transition-colors hover:bg-neutral-200"
+                            >
+                              Off
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="px-1 pb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Focus</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleSetFocus(true)}
+                              className="rounded-xl bg-sky-50 px-3 py-2 text-[11px] font-black text-sky-700 transition-colors hover:bg-sky-100"
+                            >
+                              On
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleSetFocus(false)}
+                              className="rounded-xl bg-neutral-100 px-3 py-2 text-[11px] font-black text-neutral-700 transition-colors hover:bg-neutral-200"
+                            >
+                              Off
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3">
+                        <div className="px-1 pb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Group Existing</div>
+                        <div className="flex gap-2">
+                          <select
+                            value={selectedBulkGroup}
+                            onChange={(e) => setSelectedBulkGroup(e.target.value)}
+                            className="flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900"
+                          >
+                            <option value="">Select group...</option>
+                            {bulkGroupOptions.map(group => (
+                              <option key={group} value={group}>{group}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => void handleApplyExistingGroup()}
+                            disabled={!selectedBulkGroup.trim()}
+                            className="rounded-xl bg-neutral-900 px-3 py-2 text-[11px] font-black text-white transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3">
+                        <div className="px-1 pb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Group New</div>
+                        <div className="flex gap-2">
+                          <input
+                            value={newBulkGroup}
+                            onChange={(e) => setNewBulkGroup(e.target.value)}
+                            placeholder="Create new group..."
+                            className="flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-bold text-neutral-900 outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-neutral-900"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleApplyNewGroup()}
+                            disabled={!newBulkGroup.trim()}
+                            className="rounded-xl bg-neutral-900 px-3 py-2 text-[11px] font-black text-white transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Create
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

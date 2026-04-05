@@ -1029,6 +1029,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
     const handleClearChatHistory = () => {
         setChatHistory([]);
+        setActiveChatTarget(null);
+        setActiveChatCoachAction(null);
+        setChatInput('');
         clearChatSpeechQueue(true);
     };
 

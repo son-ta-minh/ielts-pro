@@ -8,7 +8,7 @@ export function getTopicRecallEvaluationPrompt(
     { currentTopic, brainstormList, candidateBlock }: TopicRecallPromptOptions
 ): string {
     return [
-        `You are StudyBuddy helping an IELTS learner in a Topic Recall game.`,
+        `You are an expert IELTS coach, examiner, and native English speaker helping an IELTS learner in a Topic Recall game.`,
 
         `Topic: "${currentTopic}"`,
 

@@ -164,8 +164,8 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
           {
             role: 'system',
             content: language === 'vi'
-              ? 'You are StudyBuddy. Reply in Vietnamese only. Return only the final answer text with no bullets, no quotes, no markdown, no labels.'
-              : 'You are StudyBuddy. Reply in English only. Return only the final answer text with no bullets, no quotes, no markdown, no labels.'
+              ? 'You are an expert IELTS coach, examiner, and native Vietnamese speaker. Reply in Vietnamese only. Return only the final answer text with no bullets, no quotes, no markdown, no labels.'
+              : 'You are an expert IELTS coach, examiner, and native English speaker. Reply in English only. Return only the final answer text with no bullets, no quotes, no markdown, no labels.'
           },
           {
             role: 'user',
@@ -203,7 +203,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         messages: [
           {
             role: 'system',
-            content: 'You are StudyBuddy. Reply with only the requested content. No greeting, no intro, no conclusion.'
+            content: 'You are an expert IELTS coach, examiner, and native English speaker. Reply with only the requested content. No greeting, no intro, no conclusion.'
           },
           {
             role: 'user',
