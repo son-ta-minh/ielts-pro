@@ -15,7 +15,7 @@ const REFINE_ATTEMPT_TIMEOUT_MS = 120000;
 const VIETNAMESE_HINT_PATTERN = /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i;
 const ENGLISH_LEAK_PATTERN = /\b(the|and|with|for|to|from|of|in|on|at|by|an|a|is|are)\b/i;
 const VALID_REGISTERS = new Set(['academic', 'casual', 'neutral']);
-const VALID_PARAPHRASE_TONES = new Set(['academic', 'casual', 'synonym', 'intensified', 'softened']);
+const VALID_PARAPHRASE_TONES = new Set(['academic', 'casual', 'neutral']);
 const PHRASE_LIKE_TYPES = new Set(['idiom', 'phrasal_verb', 'collocation', 'phrase']);
 const WORD_REFINE_DEBUG_STORAGE_KEY = 'vocab_pro_debug_refine_api';
 
