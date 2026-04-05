@@ -504,7 +504,7 @@ const WordTable: React.FC<Props> = ({
     const selectedWords = words.filter(word => selectedIds.has(word.id));
     if (selectedWords.length === 0) return;
 
-    const text = selectedWords.map(word => word.word).join('\n');
+    const text = selectedWords.map(word => word.word).join(', ');
     await navigator.clipboard.writeText(text);
     setNotification({ type: 'success', message: `Copied ${selectedWords.length} headword(s).` });
   };

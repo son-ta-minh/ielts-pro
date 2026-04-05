@@ -93,9 +93,9 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
   const baseUrl = useMemo(() => getServerUrl(getConfig()), []);
 
   const fileNameFromPath = (p: string) => {
-    if (!p) return 'Untitled';
+    if (!p) return '';
     const parts = p.split(/[/\\]/);
-    return parts[parts.length - 1] || 'Untitled';
+    return parts[parts.length - 1] || '';
   };
 
   const loadFromServer = async () => {
@@ -429,7 +429,7 @@ export const WordGalleryPage: React.FC<{ user: User }> = ({ user }) => {
               />
               {(showDetail.title?.trim() || showDetail.collection?.trim()) && (
                 <div className="space-y-1">
-                  {showDetail.title?.trim() && showDetail.title.trim() !== fileNameFromPath(showDetail.imagePath) && (
+                  {showDetail.title?.trim() && showDetail.title.trim() !== 'Untitled' && (
                     <h2 className="text-lg font-black text-neutral-900">{showDetail.title}</h2>
                   )}
                 </div>
