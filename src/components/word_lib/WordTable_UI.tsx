@@ -369,7 +369,6 @@ export interface WordTableUIProps {
   handleBatchAddSubmit: () => void;
   onOpenBulkDeleteModal?: () => void;
   onOpenBulkHardDeleteModal?: () => void;
-  onBulkVerify: (ids: Set<string>) => void;
   selectedWordsToRefine: VocabularyItem[];
   selectedRawWordsCount: number;
   handleGenerateRefinePrompt: (inputs: { words: string }) => string;
@@ -409,7 +408,10 @@ export interface WordTableUIProps {
   onSetSelectedVocabularyType: (type: Exclude<WordTypeOption, 'archive' | 'focus' | 'duplicate'>) => void | Promise<void>;
   onSetSelectedArchive: (value: boolean) => void | Promise<void>;
   onSetSelectedFocus: (value: boolean) => void | Promise<void>;
+  onSetSelectedQuality: (quality: WordQuality) => void | Promise<void>;
+  onSetSelectedLearnedStatus: (status: LearnedStatus) => void | Promise<void>;
   onAddSelectedGroup: (group: string) => void | Promise<void>;
+  onCopySelectedHeadwords: () => void | Promise<void>;
   
   // New props for Add to Book
   onOpenAddToBookModal: () => void;
@@ -432,19 +434,21 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   wordToHardDelete, setWordToHardDelete, isHardDeleting, setIsHardDeleting,
   isAiModalOpen, setIsAiModalOpen,
   notification, viewMenuRef, visibility, setVisibility, handleToggleFilter,
-  handleBatchAddSubmit, onOpenBulkDeleteModal, onOpenBulkHardDeleteModal, onBulkVerify, selectedWordsToRefine, selectedRawWordsCount, handleGenerateRefinePrompt,
+  handleBatchAddSubmit, onOpenBulkDeleteModal, onOpenBulkHardDeleteModal, selectedWordsToRefine, selectedRawWordsCount, handleGenerateRefinePrompt,
   handleAiRefinementResult, onApiRefineSelected, isApiRefining, apiRefineProgress, apiRefineHistory, isApiRefineLogOpen, onOpenApiRefineLog, onCloseApiRefineLog, onStopApiRefine, setStatusFilter, setRefinedFilter, setRegisterFilter, setCompositionFilter, setBookFilter, setIsViewMenuOpen,
   apiRefineFlushedCount, apiRefineTotalWords,
   setIsFilterMenuOpen, setIsAddExpanded, selectedWordsMissingHintsCount, onOpenHintModal,
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
   onRenameGroup, onDeleteGroup,
   selectedTypes, toggleType, onOpenWordBook,
-  availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onAddSelectedGroup,
+  availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onSetSelectedQuality, onSetSelectedLearnedStatus, onAddSelectedGroup, onCopySelectedHeadwords,
   onOpenAddToBookModal, isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook,
   onAddToPronunciation,
   onOpenParaModal
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isRefineMenuOpen, setIsRefineMenuOpen] = useState(false);
   const [isSetAttributeMenuOpen, setIsSetAttributeMenuOpen] = useState(false);
   const [selectedBulkGroup, setSelectedBulkGroup] = useState('');
   const [newBulkGroup, setNewBulkGroup] = useState('');
@@ -500,6 +504,28 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
     await onSetSelectedFocus(value);
     setIsSetAttributeMenuOpen(false);
   };
+  const handleSetQuality = async (quality: WordQuality) => {
+    await onSetSelectedQuality(quality);
+    setIsSetAttributeMenuOpen(false);
+  };
+  const handleSetLearnedStatus = async (status: LearnedStatus) => {
+    await onSetSelectedLearnedStatus(status);
+    setIsSetAttributeMenuOpen(false);
+  };
+  const qualityOptions = [
+    { id: WordQuality.RAW, label: 'Raw' },
+    { id: WordQuality.REFINED, label: 'Refined' },
+    { id: WordQuality.VERIFIED, label: 'Verified' },
+    { id: WordQuality.FAILED, label: 'Failed' },
+  ];
+  const learnedStatusOptions = [
+    { id: LearnedStatus.NEW, label: 'New' },
+    { id: LearnedStatus.IGNORED, label: 'Ignored' },
+    { id: LearnedStatus.LEARNED, label: 'Learned' },
+    { id: LearnedStatus.FORGOT, label: 'Forgot' },
+    { id: LearnedStatus.HARD, label: 'Hard' },
+    { id: LearnedStatus.EASY, label: 'Easy' },
+  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 relative">
@@ -748,54 +774,104 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
           <div className="bg-neutral-900 text-white rounded-[2rem] p-4 shadow-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border border-neutral-800">
             <div className="flex items-center space-x-4 pl-2 shrink-0"><button onClick={() => setSelectedIds(new Set())} className="text-neutral-500 hover:text-white transition-colors"><X size={20} /></button><div><div className="text-sm font-black">{selectedIds.size} selected</div></div></div>
             <div className="flex flex-wrap items-center gap-2 sm:ml-4">
-              {context === 'library' && (
+              <div
+                className="relative"
+                onMouseEnter={() => setIsActionMenuOpen(true)}
+                onMouseLeave={() => setIsActionMenuOpen(false)}
+              >
                 <button
-                  onClick={() => onPractice(selectedIds)}
-                  className="px-4 py-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"
+                  type="button"
+                  className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${
+                    isActionMenuOpen ? 'bg-white text-neutral-900' : 'bg-white/10 hover:bg-white/20 text-white'
+                  }`}
                 >
                   <Play size={14} />
-                  <span>Practice</span>
+                  <span>Action</span>
+                  <ChevronDown size={14} className={`transition-transform ${isActionMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
-              )}
-              {onOpenBulkDeleteModal && (<button onClick={onOpenBulkDeleteModal} className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${context === 'unit' ? 'bg-orange-500/10 hover:bg-orange-500/20 text-orange-500' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'}`}>{context === 'unit' ? <Unlink size={14} /> : <Trash2 size={14} />}<span>{context === 'unit' ? 'Unlink' : 'Delete'}</span></button>)}
-              {context === 'unit' && onOpenBulkHardDeleteModal && selectedRawWordsCount > 0 && (
-                  <button 
-                    onClick={onOpenBulkHardDeleteModal}
-                    className="px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-all bg-red-500/10 hover:bg-red-500/20 text-red-500"
-                  >
-                      <Trash2 size={14}/><span>Delete Raw ({selectedRawWordsCount})</span>
-                  </button>
-              )}
-              <button onClick={() => onBulkVerify(selectedIds)} className="px-4 py-3 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><ShieldCheck size={14} /> <span>Verify</span></button>
-              {selectedWordsMissingHintsCount > 0 && ( <button onClick={onOpenHintModal} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors" title="Generate hints for collocations and idioms"><Zap size={14} /> <span>Hints ({selectedWordsMissingHintsCount})</span></button> )}
-              <button
-                onClick={onApiRefineSelected}
-                disabled={isApiRefining}
-                className="px-4 py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors disabled:opacity-60"
-                title="Call AI API directly with validation and retry"
+                {isActionMenuOpen && (
+                  <div className="absolute bottom-full right-0 z-[220] mb-0 w-64 overflow-hidden rounded-[1.5rem] border border-neutral-200 bg-white p-3 text-neutral-900 shadow-2xl">
+                    <div className="space-y-2">
+                      {context === 'library' && (
+                        <button onClick={() => onPractice(selectedIds)} className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700">
+                          <Play size={14} />
+                          <span>Practice</span>
+                        </button>
+                      )}
+                      <button onClick={() => void onCopySelectedHeadwords()} className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 hover:border-neutral-900 hover:bg-neutral-50 hover:text-neutral-900">
+                        <Save size={14} />
+                        <span>Copy Headword</span>
+                      </button>
+                      {onOpenBulkDeleteModal && (
+                        <button onClick={onOpenBulkDeleteModal} className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-[11px] font-black ${context === 'unit' ? 'border-orange-200 text-orange-700 hover:bg-orange-50' : 'border-rose-200 text-rose-700 hover:bg-rose-50'}`}>
+                          {context === 'unit' ? <Unlink size={14} /> : <Trash2 size={14} />}
+                          <span>{context === 'unit' ? 'Unlink' : 'Delete'}</span>
+                        </button>
+                      )}
+                      {context === 'unit' && onOpenBulkHardDeleteModal && selectedRawWordsCount > 0 && (
+                        <button onClick={onOpenBulkHardDeleteModal} className="flex w-full items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-left text-[11px] font-black text-rose-700 hover:bg-rose-50">
+                          <Trash2 size={14} />
+                          <span>Delete Raw ({selectedRawWordsCount})</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="relative"
+                onMouseEnter={() => setIsRefineMenuOpen(true)}
+                onMouseLeave={() => setIsRefineMenuOpen(false)}
               >
-                {isApiRefining ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                <span>Refine API</span>
-              </button>
-              {isApiRefining && (
                 <button
-                  onClick={onStopApiRefine}
-                  className="px-4 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"
+                  type="button"
+                  className={`px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors ${
+                    isRefineMenuOpen ? 'bg-white text-neutral-900' : 'bg-white/10 hover:bg-white/20 text-white'
+                  }`}
                 >
-                  <X size={14} />
-                  <span>Stop</span>
+                  {isApiRefining ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                  <span>Refine</span>
+                  <ChevronDown size={14} className={`transition-transform ${isRefineMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
-              )}
-              {(apiRefineProgress || apiRefineHistory.length > 0) && (
-                <button
-                  onClick={onOpenApiRefineLog}
-                  className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"
-                >
-                  <Eye size={14} />
-                  <span>Logs</span>
-                </button>
-              )}
-              <button onClick={() => { setIsAiModalOpen(true); }} className="px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-black flex items-center space-x-2 transition-colors"><Wand2 size={14} /> <span>Refine Manual</span></button>
+                {isRefineMenuOpen && (
+                  <div className="absolute bottom-full right-0 z-[220] mb-0 w-64 overflow-hidden rounded-[1.5rem] border border-neutral-200 bg-white p-3 text-neutral-900 shadow-2xl">
+                    <div className="space-y-2">
+                      <button
+                        onClick={onApiRefineSelected}
+                        disabled={isApiRefining}
+                        className="flex w-full items-center gap-2 rounded-xl border border-amber-200 px-3 py-2 text-left text-[11px] font-black text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isApiRefining ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                        <span>Refine API</span>
+                      </button>
+                      <button onClick={() => { setIsAiModalOpen(true); }} className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 hover:border-neutral-900 hover:bg-neutral-50">
+                        <Wand2 size={14} />
+                        <span>Refine Manual</span>
+                      </button>
+                      {selectedWordsMissingHintsCount > 0 && (
+                        <button onClick={onOpenHintModal} className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 hover:border-neutral-900 hover:bg-neutral-50" title="Generate hints for collocations and idioms">
+                          <Zap size={14} />
+                          <span>Hints ({selectedWordsMissingHintsCount})</span>
+                        </button>
+                      )}
+                      {(apiRefineProgress || apiRefineHistory.length > 0) && (
+                        <button onClick={onOpenApiRefineLog} className="flex w-full items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 hover:border-neutral-900 hover:bg-neutral-50">
+                          <Eye size={14} />
+                          <span>Refine Log</span>
+                        </button>
+                      )}
+                      {isApiRefining && (
+                        <button onClick={onStopApiRefine} className="flex w-full items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-left text-[11px] font-black text-rose-700 hover:bg-rose-50">
+                          <X size={14} />
+                          <span>Stop</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div
                 className="relative"
                 onMouseEnter={() => setIsSetAttributeMenuOpen(true)}
@@ -874,6 +950,38 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                               Off
                             </button>
                           </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="px-1 pb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Quality Status</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {qualityOptions.map((option) => (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => void handleSetQuality(option.id)}
+                              className="rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 transition-colors hover:border-neutral-900 hover:bg-neutral-50 hover:text-neutral-900"
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="px-1 pb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Learned Status</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {learnedStatusOptions.map((option) => (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => void handleSetLearnedStatus(option.id)}
+                              className="rounded-xl border border-neutral-200 px-3 py-2 text-left text-[11px] font-black text-neutral-700 transition-colors hover:border-neutral-900 hover:bg-neutral-50 hover:text-neutral-900"
+                            >
+                              {option.label}
+                            </button>
+                          ))}
                         </div>
                       </div>
 

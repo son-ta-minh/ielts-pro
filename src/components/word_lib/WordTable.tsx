@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem, ParaphraseOption } from '../../app/types';
+import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem, ParaphraseOption, LearnedStatus } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { getWordDetailsPrompt, getHintsPrompt, getBulkParaphrasePrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
@@ -377,19 +377,6 @@ const WordTable: React.FC<Props> = ({
     }
   };
 
-  const handleBulkVerify = async (ids: Set<string>) => {
-    const allWordsFromStore = dataStore.getAllWords();
-    const itemsToUpdate = allWordsFromStore
-        .filter(w => ids.has(w.id))
-        .map(w => ({ ...w, quality: WordQuality.VERIFIED, updatedAt: Date.now() }));
-
-    if (itemsToUpdate.length > 0) {
-        await dataStore.bulkSaveWords(itemsToUpdate);
-        setNotification({ type: 'success', message: `Marked ${itemsToUpdate.length} item(s) as Verified.` });
-        setSelectedIds(new Set());
-    }
-  };
-
   const handleAddToPronunciation = () => {
       const selectedItems = words.filter(w => selectedIds.has(w.id));
       if (selectedItems.length === 0) return;
@@ -478,6 +465,40 @@ const WordTable: React.FC<Props> = ({
     setNotification({ type: 'success', message: `${value ? 'Focused' : 'Unfocused'} ${itemsToUpdate.length} word(s).` });
   };
 
+  const handleSetSelectedQuality = async (quality: WordQuality) => {
+    if (selectedIds.size === 0) return;
+
+    const itemsToUpdate = dataStore.getAllWords()
+      .filter(word => selectedIds.has(word.id))
+      .map(word => ({
+        ...word,
+        quality,
+        updatedAt: Date.now()
+      }));
+
+    if (itemsToUpdate.length === 0) return;
+
+    await dataStore.bulkSaveWords(itemsToUpdate);
+    setNotification({ type: 'success', message: `Set quality status to ${quality.toLowerCase()} for ${itemsToUpdate.length} word(s).` });
+  };
+
+  const handleSetSelectedLearnedStatus = async (learnedStatus: LearnedStatus) => {
+    if (selectedIds.size === 0) return;
+
+    const itemsToUpdate = dataStore.getAllWords()
+      .filter(word => selectedIds.has(word.id))
+      .map(word => ({
+        ...word,
+        learnedStatus,
+        updatedAt: Date.now()
+      }));
+
+    if (itemsToUpdate.length === 0) return;
+
+    await dataStore.bulkSaveWords(itemsToUpdate);
+    setNotification({ type: 'success', message: `Set learned status to ${learnedStatus.toLowerCase()} for ${itemsToUpdate.length} word(s).` });
+  };
+
   const handleAddSelectedGroup = async (group: string) => {
     const normalizedGroup = normalizeGroupLabel(group);
     if (!normalizedGroup || selectedIds.size === 0) return;
@@ -494,6 +515,15 @@ const WordTable: React.FC<Props> = ({
 
     await dataStore.bulkSaveWords(itemsToUpdate);
     setNotification({ type: 'success', message: `Added group "${normalizedGroup}" to ${itemsToUpdate.length} word(s).` });
+  };
+
+  const handleCopySelectedHeadwords = async () => {
+    const selectedWords = words.filter(word => selectedIds.has(word.id));
+    if (selectedWords.length === 0) return;
+
+    const text = selectedWords.map(word => word.word).join('\n');
+    await navigator.clipboard.writeText(text);
+    setNotification({ type: 'success', message: `Copied ${selectedWords.length} headword(s).` });
   };
 
   const applyAiRefinementResults = async (
@@ -885,7 +915,6 @@ const WordTable: React.FC<Props> = ({
     setVisibility, handleToggleFilter, handleBatchAddSubmit,
     // FIX: Renamed typo onBoldDelete to onBulkDelete
     onOpenBulkDeleteModal: onBulkDelete ? () => setIsBulkDeleteModalOpen(true) : undefined,
-    onBulkVerify: handleBulkVerify,
     onOpenBulkHardDeleteModal: onBulkHardDelete && selectedRawWords.length > 0 ? () => setIsBulkHardDeleteModalOpen(true) : undefined,
     selectedWordsToRefine, handleGenerateRefinePrompt, handleAiRefinementResult,
     selectedRawWordsCount: selectedRawWords.length,
@@ -917,7 +946,10 @@ const WordTable: React.FC<Props> = ({
     onSetSelectedVocabularyType: handleSetSelectedVocabularyType,
     onSetSelectedArchive: handleSetSelectedArchive,
     onSetSelectedFocus: handleSetSelectedFocus,
+    onSetSelectedQuality: handleSetSelectedQuality,
+    onSetSelectedLearnedStatus: handleSetSelectedLearnedStatus,
     onAddSelectedGroup: handleAddSelectedGroup,
+    onCopySelectedHeadwords: handleCopySelectedHeadwords,
     onOpenAddToBookModal: handleOpenAddToBookModal,
     isAddToBookModalOpen,
     setIsAddToBookModalOpen,
