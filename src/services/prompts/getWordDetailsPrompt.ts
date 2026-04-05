@@ -1,12 +1,13 @@
 interface WordDetailsPromptOptions {
     includePronunciation?: boolean;
+    includeMeaning?: boolean;
     meaningLanguage?: 'vi' | 'en';
+    includeExamples?: boolean;
     collocationCount?: number;
     includeParaphrases?: boolean;
     includeIdioms?: boolean;
     exampleCount?: number;
     includePrepositions?: boolean;
-    includeGroupsIfMissing?: boolean;
 }
 
 export function getWordDetailsPrompt(
@@ -16,13 +17,14 @@ export function getWordDetailsPrompt(
 ): string {
     const wordList = words.map((word) => `"${word}"`).join(', ');
     const includePronunciation = options.includePronunciation !== false;
+    const includeMeaning = options.includeMeaning !== false;
     const meaningLanguage = options.meaningLanguage || 'vi';
+    const includeExamples = options.includeExamples !== false;
     const collocationCount = Math.max(0, Math.min(5, options.collocationCount ?? 3));
     const includeParaphrases = options.includeParaphrases !== false;
     const includeIdioms = options.includeIdioms === true;
     const exampleCount = Math.max(1, Math.min(3, options.exampleCount ?? 1));
     const includePrepositions = options.includePrepositions !== false;
-    const includeGroupsIfMissing = options.includeGroupsIfMissing === true;
     const meaningFieldLanguage = meaningLanguage === 'en' ? 'English' : nativeLanguage;
 
     const pronunciationOptimizationRule = includePronunciation
@@ -41,9 +43,9 @@ export function getWordDetailsPrompt(
         `- og: The EXACT string from the input list. (Include ONLY if different from "hw").`,
         `- hw: The headword (Full phrase for expressions; base form for single words).`,
         pronunciationFieldDefinitions,
-        `- m: Definition of the headword in ${meaningFieldLanguage}.`,
+        includeMeaning ? `- m: Definition of the headword in ${meaningFieldLanguage}.` : '',
         `- reg: Register. MUST be ONLY one of: "academic", "casual", "neutral" (mix of academic and casual).`,
-        `- ex: ${exampleCount} high-quality example sentence${exampleCount > 1 ? 's' : ''} using the headword. If more than one example, return them in one string separated by newline.`,
+        includeExamples ? `- ex: ${exampleCount} high-quality example sentence${exampleCount > 1 ? 's' : ''} using the headword. If more than one example, return them in one string separated by newline.` : '',
         collocationCount > 0
             ? `- col: up to ${collocationCount} most common, natural collocations if exist.
         - Items: {"text": "natural collocation", "d": "minimal descriptive cue for recall (5-10 words)"}.
@@ -68,18 +70,15 @@ export function getWordDetailsPrompt(
         - 'c' (context) = a short (2-5 words) situational recall cue (e.g., "job interview", "arguing with friend").
         - Do NOT generate 'para' (paraphrase) for orthographic variants (e.g., space vs no space, hyphen vs no hyphen).`
             : '',
-        includeGroupsIfMissing
-            ? `- gr: Optional array of suggested group names. Only include this when the word currently has no group and a strong group is genuinely useful.`
-            : '',
         `- type: MUST be one of: "idiom", "phrasal_verb", "collocation", "phrase", "vocabulary", "irregular_verb".`,
         `- is_pas: Boolean. True if the word is "Passive" (vulgar, slang, or should be archived).`
     ].filter(Boolean).join('\n');
     const responseExampleLines = [
         `      "hw": "unhappy",`,
         pronunciationExampleBlock,
-        `      "m": "${meaningLanguage === 'en' ? 'not happy' : 'không vui'}",`,
+        includeMeaning ? `      "m": "${meaningLanguage === 'en' ? 'not happy' : 'không vui'}",` : '',
         `      "reg": "neutral",`,
-        `      "ex": ${exampleCount > 1 ? `"She was unhappy after the meeting.\\nHe felt unhappy about the result.",` : `"She was unhappy after the meeting.",`}`,
+        includeExamples ? `      "ex": ${exampleCount > 1 ? `"She was unhappy after the meeting.\\nHe felt unhappy about the result.",` : `"She was unhappy after the meeting.",`}` : '',
         collocationCount > 0
             ? `      "col": [{"text": "deeply unhappy", "d": "extreme sadness about a life event"}],`
             : '',
@@ -91,9 +90,6 @@ export function getWordDetailsPrompt(
             : '',
         includeParaphrases
             ? `      "para": [{"w": "miserable", "t": "neutral", "c": "feeling very bad"}],`
-            : '',
-        includeGroupsIfMissing
-            ? `      "gr": ["Emotion Words"],`
             : '',
         `      "type": "vocabulary",`,
         `      "is_pas": false`
@@ -110,7 +106,7 @@ HEADWORD (hw) RULES:
     - If adverb → use its base adjective as headword
 
 LANGUAGE:
-    - Use English for all fields except "m", which must be in ${meaningFieldLanguage}.
+    - Use English for all fields${includeMeaning ? ` except "m", which must be in ${meaningFieldLanguage}` : ''}.
 
 ${pronunciationOptimizationRule}
 

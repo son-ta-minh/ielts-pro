@@ -4,6 +4,7 @@ import { VocabularyItem, LearnedStatus, WordQuality, WordTypeOption, WordBook } 
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
 import { DEFAULT_WORD_REFINE_SETUP, WordRefineSetup } from '../../services/wordRefineApi';
+import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 
 export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'archive' | 'focus' | 'duplicate';
 export type RefinedFilter = 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined';
@@ -322,29 +323,98 @@ const RefineSetupModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     onConfirm: (setup: WordRefineSetup) => void;
-    defaultIncludeGroupsIfMissing: boolean;
     selectedCount: number;
-}> = ({ isOpen, onClose, onConfirm, defaultIncludeGroupsIfMissing, selectedCount }) => {
-    const [meaningLanguage, setMeaningLanguage] = useState<'vi' | 'en'>(DEFAULT_WORD_REFINE_SETUP.meaningLanguage);
-    const [collocationCount, setCollocationCount] = useState(DEFAULT_WORD_REFINE_SETUP.collocationCount);
-    const [includeParaphrases, setIncludeParaphrases] = useState(DEFAULT_WORD_REFINE_SETUP.includeParaphrases);
-    const [includeIdioms, setIncludeIdioms] = useState(DEFAULT_WORD_REFINE_SETUP.includeIdioms);
-    const [exampleCount, setExampleCount] = useState(DEFAULT_WORD_REFINE_SETUP.exampleCount);
-    const [includePrepositions, setIncludePrepositions] = useState(DEFAULT_WORD_REFINE_SETUP.includePrepositions);
-    const [includeGroupsIfMissing, setIncludeGroupsIfMissing] = useState(defaultIncludeGroupsIfMissing);
+}> = ({ isOpen, onClose, onConfirm, selectedCount }) => {
+    const REFINE_SETUP_STORAGE_KEY = 'ielts_pro_word_refine_setup_v1';
+    const coreSetup = useMemo((): WordRefineSetup => ({
+        includeMeaning: true,
+        meaningLanguage: 'vi',
+        includeCollocations: true,
+        collocationCount: 3,
+        includeExamples: true,
+        exampleCount: 1,
+        includePrepositions: true,
+        includeParaphrases: false,
+        includeIdioms: false
+    }), []);
+    const detailedSetup = useMemo((): WordRefineSetup => ({
+        includeMeaning: true,
+        meaningLanguage: 'vi',
+        includeCollocations: true,
+        collocationCount: 5,
+        includeExamples: true,
+        exampleCount: 1,
+        includePrepositions: true,
+        includeParaphrases: true,
+        includeIdioms: true
+    }), []);
+    const getInitialSetup = (): WordRefineSetup => {
+        const stored = getStoredJSON<Partial<WordRefineSetup> | null>(REFINE_SETUP_STORAGE_KEY, null);
+        return {
+            ...coreSetup,
+            ...stored
+        };
+    };
+    const [includeMeaning, setIncludeMeaning] = useState(getInitialSetup().includeMeaning);
+    const [meaningLanguage, setMeaningLanguage] = useState<'vi' | 'en'>(getInitialSetup().meaningLanguage);
+    const [includeCollocations, setIncludeCollocations] = useState(getInitialSetup().includeCollocations);
+    const [collocationCount, setCollocationCount] = useState(getInitialSetup().collocationCount);
+    const [includeExamples, setIncludeExamples] = useState(getInitialSetup().includeExamples);
+    const [includeParaphrases, setIncludeParaphrases] = useState(getInitialSetup().includeParaphrases);
+    const [includeIdioms, setIncludeIdioms] = useState(getInitialSetup().includeIdioms);
+    const [exampleCount, setExampleCount] = useState(getInitialSetup().exampleCount);
+    const [includePrepositions, setIncludePrepositions] = useState(getInitialSetup().includePrepositions);
+
+    const applySetup = (setup: WordRefineSetup) => {
+        setIncludeMeaning(setup.includeMeaning);
+        setMeaningLanguage(setup.meaningLanguage);
+        setIncludeCollocations(setup.includeCollocations);
+        setCollocationCount(setup.collocationCount);
+        setIncludeExamples(setup.includeExamples);
+        setIncludeParaphrases(setup.includeParaphrases);
+        setIncludeIdioms(setup.includeIdioms);
+        setExampleCount(setup.exampleCount);
+        setIncludePrepositions(setup.includePrepositions);
+    };
 
     useEffect(() => {
         if (!isOpen) return;
-        setMeaningLanguage(DEFAULT_WORD_REFINE_SETUP.meaningLanguage);
-        setCollocationCount(DEFAULT_WORD_REFINE_SETUP.collocationCount);
-        setIncludeParaphrases(DEFAULT_WORD_REFINE_SETUP.includeParaphrases);
-        setIncludeIdioms(DEFAULT_WORD_REFINE_SETUP.includeIdioms);
-        setExampleCount(DEFAULT_WORD_REFINE_SETUP.exampleCount);
-        setIncludePrepositions(DEFAULT_WORD_REFINE_SETUP.includePrepositions);
-        setIncludeGroupsIfMissing(defaultIncludeGroupsIfMissing);
-    }, [isOpen, defaultIncludeGroupsIfMissing]);
+        const stored = getStoredJSON<Partial<WordRefineSetup> | null>(REFINE_SETUP_STORAGE_KEY, null);
+        applySetup({
+            ...coreSetup,
+            ...stored
+        });
+    }, [isOpen, coreSetup]);
+    const currentSetup: WordRefineSetup = {
+        includeMeaning,
+        meaningLanguage,
+        includeCollocations,
+        collocationCount,
+        includeExamples,
+        exampleCount,
+        includePrepositions,
+        includeParaphrases,
+        includeIdioms
+    };
+
+    useEffect(() => {
+        setStoredJSON(REFINE_SETUP_STORAGE_KEY, currentSetup);
+    }, [currentSetup]);
 
     if (!isOpen) return null;
+
+    const hasSelectedField = [
+        includeMeaning,
+        includeExamples,
+        includeCollocations,
+        includePrepositions,
+        includeParaphrases,
+        includeIdioms
+    ].some(Boolean);
+
+    const rowLabelClass = "flex items-center gap-3 text-[11px] font-black uppercase tracking-widest text-neutral-400";
+    const selectClass = "w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400";
+    const rowCheckboxClass = "h-4 w-4 rounded border-neutral-300 accent-neutral-900";
 
     return (
         <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -358,64 +428,83 @@ const RefineSetupModal: React.FC<{
                         <X size={18} />
                     </button>
                 </div>
+                <div className="flex flex-wrap gap-2 border-b border-neutral-100 px-6 py-4">
+                    <button
+                        type="button"
+                        onClick={() => applySetup(coreSetup)}
+                        className="rounded-xl border border-neutral-200 px-3 py-2 text-xs font-black text-neutral-700 transition-colors hover:border-neutral-900 hover:bg-neutral-50 hover:text-neutral-900"
+                    >
+                        Refine Essential
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => applySetup(detailedSetup)}
+                        className="rounded-xl border border-neutral-200 px-3 py-2 text-xs font-black text-neutral-700 transition-colors hover:border-neutral-900 hover:bg-neutral-50 hover:text-neutral-900"
+                    >
+                        Refine Detail Data
+                    </button>
+                </div>
                 <div className="grid gap-x-6 gap-y-4 px-6 py-6 md:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] md:items-center">
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Meaning Language</div>
-                    <select value={meaningLanguage} onChange={(e) => setMeaningLanguage(e.target.value as 'vi' | 'en')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value="vi">Vietnamese</option>
-                        <option value="en">English</option>
-                    </select>
+                    <label className={rowLabelClass}>
+                        <input type="checkbox" checked={includeMeaning} onChange={() => setIncludeMeaning((prev) => !prev)} className={rowCheckboxClass} />
+                        <span>Meaning Language</span>
+                    </label>
+                    {includeMeaning ? (
+                        <select value={meaningLanguage} onChange={(e) => setMeaningLanguage(e.target.value as 'vi' | 'en')} className={selectClass}>
+                            <option value="vi">Vietnamese</option>
+                            <option value="en">English</option>
+                        </select>
+                    ) : <div />}
 
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Example</div>
-                    <select value={exampleCount} onChange={(e) => setExampleCount(Number(e.target.value))} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value={1}>One example</option>
-                        <option value={2}>Two examples</option>
-                        <option value={3}>Three examples</option>
-                    </select>
+                    <label className={rowLabelClass}>
+                        <input type="checkbox" checked={includeExamples} onChange={() => setIncludeExamples((prev) => !prev)} className={rowCheckboxClass} />
+                        <span>Example</span>
+                    </label>
+                    {includeExamples ? (
+                        <select value={exampleCount} onChange={(e) => setExampleCount(Number(e.target.value))} className={selectClass}>
+                            <option value={1}>One example</option>
+                            <option value={2}>Two examples</option>
+                            <option value={3}>Three examples</option>
+                        </select>
+                    ) : <div />}
 
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Collocations</div>
-                    <select value={collocationCount} onChange={(e) => setCollocationCount(Number(e.target.value))} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value={0}>Do not add collocations</option>
-                        <option value={3}>Core collocations</option>
-                        <option value={5}>Extended collocations</option>
-                    </select>
+                    <label className={rowLabelClass}>
+                        <input type="checkbox" checked={includeCollocations} onChange={() => setIncludeCollocations((prev) => !prev)} className={rowCheckboxClass} />
+                        <span>Collocations</span>
+                    </label>
+                    {includeCollocations ? (
+                        <select value={collocationCount >= 5 ? 5 : 3} onChange={(e) => setCollocationCount(Number(e.target.value))} className={selectClass}>
+                            <option value={3}>Core</option>
+                            <option value={5}>Extended</option>
+                        </select>
+                    ) : <div />}
 
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Include Prepositions?</div>
-                    <select value={includePrepositions ? 'yes' : 'no'} onChange={(e) => setIncludePrepositions(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
-                    </select>
+                    <label className={rowLabelClass}>
+                        <input type="checkbox" checked={includePrepositions} onChange={() => setIncludePrepositions((prev) => !prev)} className={rowCheckboxClass} />
+                        <span>Prepositions</span>
+                    </label>
+                    <div />
 
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Include Paraphrased Items?</div>
-                    <select value={includeParaphrases ? 'yes' : 'no'} onChange={(e) => setIncludeParaphrases(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
-                    </select>
+                    <label className={rowLabelClass}>
+                        <input type="checkbox" checked={includeParaphrases} onChange={() => setIncludeParaphrases((prev) => !prev)} className={rowCheckboxClass} />
+                        <span>Paraphrased Items</span>
+                    </label>
+                    <div />
 
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Include Idiomatic Items?</div>
-                    <select value={includeIdioms ? 'yes' : 'no'} onChange={(e) => setIncludeIdioms(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
-                    </select>
-
-                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Automatically Assign Group?</div>
-                    <select value={includeGroupsIfMissing ? 'yes' : 'no'} onChange={(e) => setIncludeGroupsIfMissing(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
-                        <option value="yes">Yes, if no group assigned</option>
-                        <option value="no">No</option>
-                    </select>
+                    <label className={rowLabelClass}>
+                        <input type="checkbox" checked={includeIdioms} onChange={() => setIncludeIdioms((prev) => !prev)} className={rowCheckboxClass} />
+                        <span>Idiomatic Items</span>
+                    </label>
+                    <div />
                 </div>
                 <div className="flex items-center justify-end gap-3 border-t border-neutral-100 px-6 py-4">
                     <button onClick={onClose} className="rounded-xl px-4 py-2 text-xs font-black text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">Cancel</button>
                     <button
+                        disabled={!hasSelectedField}
                         onClick={() => onConfirm({
-                            meaningLanguage,
-                            collocationCount,
-                            includeParaphrases,
-                            includeIdioms,
-                            exampleCount,
-                            includePrepositions,
-                            includeGroupsIfMissing
+                            ...currentSetup
                         })}
-                        className="rounded-xl bg-neutral-900 px-4 py-2 text-xs font-black text-white hover:bg-neutral-700"
+                        className="rounded-xl bg-neutral-900 px-4 py-2 text-xs font-black text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
                     >
                         Start Refine
                     </button>
@@ -505,6 +594,7 @@ export interface WordTableUIProps {
   onSetSelectedQuality: (quality: WordQuality) => void | Promise<void>;
   onSetSelectedLearnedStatus: (status: LearnedStatus) => void | Promise<void>;
   onAddSelectedGroup: (group: string) => void | Promise<void>;
+  onClearSelectedGroups: () => void | Promise<void>;
   onCopySelectedHeadwords: () => void | Promise<void>;
   isAddToBookModalOpen: boolean;
   setIsAddToBookModalOpen: (o: boolean) => void;
@@ -526,7 +616,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
   onRenameGroup, onDeleteGroup,
   selectedTypes, toggleType, onOpenWordBook,
-  availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onSetSelectedQuality, onSetSelectedLearnedStatus, onAddSelectedGroup, onCopySelectedHeadwords,
+  availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onSetSelectedQuality, onSetSelectedLearnedStatus, onAddSelectedGroup, onClearSelectedGroups, onCopySelectedHeadwords,
   isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
@@ -551,10 +641,6 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
     () => Array.from(new Set(availableGroups.map(group => group.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
     [availableGroups]
   );
-  const defaultIncludeGroupsIfMissing = useMemo(
-    () => selectedWordsToRefine.some((word) => !word.groups || word.groups.length === 0),
-    [selectedWordsToRefine]
-  );
   const visibleColumnCount = 3
     + (visibility.showMeaning ? 1 : 0)
     + (visibility.showGroups ? 1 : 0)
@@ -574,6 +660,12 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
     const normalized = newBulkGroup.trim();
     if (!normalized) return;
     await onAddSelectedGroup(normalized);
+    setNewBulkGroup('');
+    setIsSetAttributeMenuOpen(false);
+  };
+  const handleClearGroups = async () => {
+    await onClearSelectedGroups();
+    setSelectedBulkGroup('');
     setNewBulkGroup('');
     setIsSetAttributeMenuOpen(false);
   };
@@ -1076,6 +1168,14 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                           </button>
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => void handleClearGroups()}
+                        className="flex w-full items-center justify-center rounded-xl border border-rose-200 px-3 py-2 text-[11px] font-black text-rose-700 transition-colors hover:bg-rose-50"
+                      >
+                        Clear Group
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1087,7 +1187,6 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
       <RefineSetupModal
         isOpen={isRefineSetupModalOpen}
         onClose={() => setIsRefineSetupModalOpen(false)}
-        defaultIncludeGroupsIfMissing={defaultIncludeGroupsIfMissing}
         selectedCount={selectedIds.size}
         onConfirm={(setup) => {
           setIsRefineSetupModalOpen(false);

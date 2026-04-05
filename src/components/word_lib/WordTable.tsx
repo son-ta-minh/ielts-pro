@@ -483,6 +483,23 @@ const WordTable: React.FC<Props> = ({
     setNotification({ type: 'success', message: `Added group "${normalizedGroup}" to ${itemsToUpdate.length} word(s).` });
   };
 
+  const handleClearSelectedGroups = async () => {
+    if (selectedIds.size === 0) return;
+
+    const itemsToUpdate = dataStore.getAllWords()
+      .filter(word => selectedIds.has(word.id))
+      .map(word => ({
+        ...word,
+        groups: [],
+        updatedAt: Date.now()
+      }));
+
+    if (itemsToUpdate.length === 0) return;
+
+    await dataStore.bulkSaveWords(itemsToUpdate);
+    setNotification({ type: 'success', message: `Cleared groups for ${itemsToUpdate.length} word(s).` });
+  };
+
   const handleCopySelectedHeadwords = async () => {
     const selectedWords = words.filter(word => selectedIds.has(word.id));
     if (selectedWords.length === 0) return;
@@ -901,6 +918,7 @@ const WordTable: React.FC<Props> = ({
     onSetSelectedQuality: handleSetSelectedQuality,
     onSetSelectedLearnedStatus: handleSetSelectedLearnedStatus,
     onAddSelectedGroup: handleAddSelectedGroup,
+    onClearSelectedGroups: handleClearSelectedGroups,
     onCopySelectedHeadwords: handleCopySelectedHeadwords,
     isAddToBookModalOpen,
     setIsAddToBookModalOpen,
