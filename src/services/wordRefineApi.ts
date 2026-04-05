@@ -25,11 +25,10 @@ export type WordRefinePhraseIpaMode = 'cambridge' | 'generated';
 export interface WordRefineSetup {
     meaningLanguage: WordRefineMeaningMode;
     collocationCount: number;
-    paraphraseCount: number;
-    idiomCount: number;
+    includeParaphrases: boolean;
+    includeIdioms: boolean;
     exampleCount: number;
     includePrepositions: boolean;
-    includeWordFamily: boolean;
     phraseIpaMode: WordRefinePhraseIpaMode;
     includeGroupsIfMissing: boolean;
 }
@@ -37,11 +36,10 @@ export interface WordRefineSetup {
 export const DEFAULT_WORD_REFINE_SETUP: WordRefineSetup = {
     meaningLanguage: 'vi',
     collocationCount: 3,
-    paraphraseCount: 3,
-    idiomCount: 0,
+    includeParaphrases: true,
+    includeIdioms: false,
     exampleCount: 1,
     includePrepositions: true,
-    includeWordFamily: false,
     phraseIpaMode: 'generated',
     includeGroupsIfMissing: false
 };
@@ -261,11 +259,10 @@ const clamp = (value: number, min: number, max: number): number => Math.min(max,
 const normalizeWordRefineSetup = (setup?: Partial<WordRefineSetup>): WordRefineSetup => ({
     meaningLanguage: setup?.meaningLanguage === 'en' ? 'en' : DEFAULT_WORD_REFINE_SETUP.meaningLanguage,
     collocationCount: clamp(Number(setup?.collocationCount ?? DEFAULT_WORD_REFINE_SETUP.collocationCount), 0, 5),
-    paraphraseCount: clamp(Number(setup?.paraphraseCount ?? DEFAULT_WORD_REFINE_SETUP.paraphraseCount), 0, 5),
-    idiomCount: clamp(Number(setup?.idiomCount ?? DEFAULT_WORD_REFINE_SETUP.idiomCount), 0, 3),
+    includeParaphrases: setup?.includeParaphrases ?? DEFAULT_WORD_REFINE_SETUP.includeParaphrases,
+    includeIdioms: setup?.includeIdioms ?? DEFAULT_WORD_REFINE_SETUP.includeIdioms,
     exampleCount: clamp(Number(setup?.exampleCount ?? DEFAULT_WORD_REFINE_SETUP.exampleCount), 1, 3),
     includePrepositions: setup?.includePrepositions ?? DEFAULT_WORD_REFINE_SETUP.includePrepositions,
-    includeWordFamily: setup?.includeWordFamily ?? DEFAULT_WORD_REFINE_SETUP.includeWordFamily,
     phraseIpaMode: setup?.phraseIpaMode === 'cambridge' ? 'cambridge' : DEFAULT_WORD_REFINE_SETUP.phraseIpaMode,
     includeGroupsIfMissing: setup?.includeGroupsIfMissing ?? DEFAULT_WORD_REFINE_SETUP.includeGroupsIfMissing
 });
@@ -483,11 +480,11 @@ const validateWordResult = (result: any, word: VocabularyItem, setup: WordRefine
         issues.push(`Collocations missing for "${word.word}".`);
         retryFields.add('collocationsArray');
     }
-    if (setup.idiomCount > 0 && idioms.length < 1) {
+    if (setup.includeIdioms && idioms.length < 1) {
         issues.push(`Idioms missing for "${word.word}".`);
         retryFields.add('idiomsList');
     }
-    if (setup.paraphraseCount > 0 && paraphrases.length < 1) {
+    if (setup.includeParaphrases && paraphrases.length < 1) {
         issues.push(`Paraphrases missing for "${word.word}".`);
         retryFields.add('paraphrases');
     }
@@ -495,7 +492,7 @@ const validateWordResult = (result: any, word: VocabularyItem, setup: WordRefine
     const invalidParaphraseTones = paraphrases
         .map((item: any) => String(item?.tone || '').trim())
         .filter((tone) => !VALID_PARAPHRASE_TONES.has(tone.toLowerCase()));
-    if (invalidParaphraseTones.length > 0) {
+    if (setup.includeParaphrases && invalidParaphraseTones.length > 0) {
         issues.push(`Invalid paraphrase tone found for "${word.word}": ${invalidParaphraseTones.join(', ')}.`);
         retryFields.add('paraphrases');
     }
@@ -587,11 +584,10 @@ const buildConfiguredWordRefinePrompt = (
         includePronunciation: options?.includePronunciation,
         meaningLanguage: setup.meaningLanguage,
         collocationCount: options?.pronunciationOnly ? 0 : setup.collocationCount,
-        paraphraseCount: options?.pronunciationOnly ? 0 : setup.paraphraseCount,
-        idiomCount: options?.pronunciationOnly ? 0 : setup.idiomCount,
+        includeParaphrases: options?.pronunciationOnly ? false : setup.includeParaphrases,
+        includeIdioms: options?.pronunciationOnly ? false : setup.includeIdioms,
         exampleCount: options?.pronunciationOnly ? 1 : setup.exampleCount,
         includePrepositions: options?.pronunciationOnly ? false : setup.includePrepositions,
-        includeWordFamily: options?.pronunciationOnly ? false : setup.includeWordFamily,
         includeGroupsIfMissing: !options?.pronunciationOnly && setup.includeGroupsIfMissing && currentGroups.length === 0
     });
 

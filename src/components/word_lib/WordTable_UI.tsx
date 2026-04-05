@@ -327,8 +327,8 @@ const RefineSetupModal: React.FC<{
 }> = ({ isOpen, onClose, onConfirm, defaultIncludeGroupsIfMissing, selectedCount }) => {
     const [meaningLanguage, setMeaningLanguage] = useState<'vi' | 'en'>(DEFAULT_WORD_REFINE_SETUP.meaningLanguage);
     const [collocationCount, setCollocationCount] = useState(DEFAULT_WORD_REFINE_SETUP.collocationCount);
-    const [paraphraseCount, setParaphraseCount] = useState(DEFAULT_WORD_REFINE_SETUP.paraphraseCount);
-    const [idiomCount, setIdiomCount] = useState(DEFAULT_WORD_REFINE_SETUP.idiomCount);
+    const [includeParaphrases, setIncludeParaphrases] = useState(DEFAULT_WORD_REFINE_SETUP.includeParaphrases);
+    const [includeIdioms, setIncludeIdioms] = useState(DEFAULT_WORD_REFINE_SETUP.includeIdioms);
     const [exampleCount, setExampleCount] = useState(DEFAULT_WORD_REFINE_SETUP.exampleCount);
     const [includePrepositions, setIncludePrepositions] = useState(DEFAULT_WORD_REFINE_SETUP.includePrepositions);
     const [phraseIpaMode, setPhraseIpaMode] = useState(DEFAULT_WORD_REFINE_SETUP.phraseIpaMode);
@@ -338,8 +338,8 @@ const RefineSetupModal: React.FC<{
         if (!isOpen) return;
         setMeaningLanguage(DEFAULT_WORD_REFINE_SETUP.meaningLanguage);
         setCollocationCount(DEFAULT_WORD_REFINE_SETUP.collocationCount);
-        setParaphraseCount(DEFAULT_WORD_REFINE_SETUP.paraphraseCount);
-        setIdiomCount(DEFAULT_WORD_REFINE_SETUP.idiomCount);
+        setIncludeParaphrases(DEFAULT_WORD_REFINE_SETUP.includeParaphrases);
+        setIncludeIdioms(DEFAULT_WORD_REFINE_SETUP.includeIdioms);
         setExampleCount(DEFAULT_WORD_REFINE_SETUP.exampleCount);
         setIncludePrepositions(DEFAULT_WORD_REFINE_SETUP.includePrepositions);
         setPhraseIpaMode(DEFAULT_WORD_REFINE_SETUP.phraseIpaMode);
@@ -348,13 +348,9 @@ const RefineSetupModal: React.FC<{
 
     if (!isOpen) return null;
 
-    const numberButtonClass = (active: boolean) => active
-        ? 'bg-neutral-900 text-white border-neutral-900'
-        : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-400';
-
     return (
         <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-3xl rounded-[2rem] border border-neutral-200 bg-white shadow-2xl">
+            <div className="w-full max-w-2xl rounded-[2rem] border border-neutral-200 bg-white shadow-2xl">
                 <div className="flex items-start justify-between border-b border-neutral-100 px-6 py-5">
                     <div>
                         <h3 className="text-xl font-black text-neutral-900">Refine Setup</h3>
@@ -364,75 +360,59 @@ const RefineSetupModal: React.FC<{
                         <X size={18} />
                     </button>
                 </div>
-                <div className="grid gap-5 px-6 py-6 md:grid-cols-2">
-                    <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Meaning</div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setMeaningLanguage('vi')} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(meaningLanguage === 'vi')}`}>VI</button>
-                            <button onClick={() => setMeaningLanguage('en')} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(meaningLanguage === 'en')}`}>EN</button>
-                        </div>
+                <div className="grid gap-x-6 gap-y-4 px-6 py-6 md:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] md:items-center">
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Meaning</div>
+                    <select value={meaningLanguage} onChange={(e) => setMeaningLanguage(e.target.value as 'vi' | 'en')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        <option value="vi">VI</option>
+                        <option value="en">EN</option>
+                    </select>
+
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Collocations</div>
+                    <select value={collocationCount} onChange={(e) => setCollocationCount(Number(e.target.value))} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        {[0, 1, 2, 3, 4, 5].map((count) => (
+                            <option key={count} value={count}>{count}</option>
+                        ))}
+                    </select>
+
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Paraphrase</div>
+                    <select value={includeParaphrases ? 'yes' : 'no'} onChange={(e) => setIncludeParaphrases(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Idiom</div>
+                    <select value={includeIdioms ? 'yes' : 'no'} onChange={(e) => setIncludeIdioms(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Example</div>
+                    <select value={exampleCount} onChange={(e) => setExampleCount(Number(e.target.value))} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        {[1, 2, 3].map((count) => (
+                            <option key={count} value={count}>{count}</option>
+                        ))}
+                    </select>
+
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Preposition</div>
+                    <select value={includePrepositions ? 'yes' : 'no'} onChange={(e) => setIncludePrepositions(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">IPA</div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-bold text-neutral-500">Single: Cambridge</div>
+                        <select value={phraseIpaMode} onChange={(e) => setPhraseIpaMode(e.target.value as 'cambridge' | 'generated')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                            <option value="generated">Phrase: Generated</option>
+                            <option value="cambridge">Phrase: Cambridge</option>
+                        </select>
                     </div>
-                    <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Phrase IPA</div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setPhraseIpaMode('generated')} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(phraseIpaMode === 'generated')}`}>Generated IPA</button>
-                            <button onClick={() => setPhraseIpaMode('cambridge')} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(phraseIpaMode === 'cambridge')}`}>Cambridge</button>
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Collocations</div>
-                        <div className="flex flex-wrap gap-2">
-                            {[0, 1, 2, 3, 4, 5].map((count) => (
-                                <button key={count} onClick={() => setCollocationCount(count)} className={`rounded-xl border px-3 py-2 text-xs font-black ${numberButtonClass(collocationCount === count)}`}>{count}</button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Paraphrase</div>
-                        <div className="flex flex-wrap gap-2">
-                            {[0, 1, 2, 3, 4, 5].map((count) => (
-                                <button key={count} onClick={() => setParaphraseCount(count)} className={`rounded-xl border px-3 py-2 text-xs font-black ${numberButtonClass(paraphraseCount === count)}`}>{count}</button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Idiom</div>
-                        <div className="flex flex-wrap gap-2">
-                            {[0, 1, 2, 3].map((count) => (
-                                <button key={count} onClick={() => setIdiomCount(count)} className={`rounded-xl border px-3 py-2 text-xs font-black ${numberButtonClass(idiomCount === count)}`}>{count}</button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Example</div>
-                        <div className="flex flex-wrap gap-2">
-                            {[1, 2, 3].map((count) => (
-                                <button key={count} onClick={() => setExampleCount(count)} className={`rounded-xl border px-3 py-2 text-xs font-black ${numberButtonClass(exampleCount === count)}`}>{count}</button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Preposition</div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setIncludePrepositions(true)} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(includePrepositions)}`}>Yes</button>
-                            <button onClick={() => setIncludePrepositions(false)} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(!includePrepositions)}`}>No</button>
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Word Family</div>
-                        <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-black text-neutral-500">Not Applicable</div>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">IPA</div>
-                        <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-black text-neutral-500">Single word: Cambridge only</div>
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Group</div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setIncludeGroupsIfMissing(true)} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(includeGroupsIfMissing)}`}>Yes if no group</button>
-                            <button onClick={() => setIncludeGroupsIfMissing(false)} className={`rounded-xl border px-4 py-2 text-xs font-black ${numberButtonClass(!includeGroupsIfMissing)}`}>No</button>
-                        </div>
-                    </div>
+
+                    <div className="text-[11px] font-black uppercase tracking-widest text-neutral-400">Group</div>
+                    <select value={includeGroupsIfMissing ? 'yes' : 'no'} onChange={(e) => setIncludeGroupsIfMissing(e.target.value === 'yes')} className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900">
+                        <option value="yes">Yes if no group</option>
+                        <option value="no">No</option>
+                    </select>
                 </div>
                 <div className="flex items-center justify-end gap-3 border-t border-neutral-100 px-6 py-4">
                     <button onClick={onClose} className="rounded-xl px-4 py-2 text-xs font-black text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">Cancel</button>
@@ -440,11 +420,10 @@ const RefineSetupModal: React.FC<{
                         onClick={() => onConfirm({
                             meaningLanguage,
                             collocationCount,
-                            paraphraseCount,
-                            idiomCount,
+                            includeParaphrases,
+                            includeIdioms,
                             exampleCount,
                             includePrepositions,
-                            includeWordFamily: false,
                             phraseIpaMode,
                             includeGroupsIfMissing
                         })}
