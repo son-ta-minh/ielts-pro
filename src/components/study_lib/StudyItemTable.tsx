@@ -10,7 +10,6 @@ import { stringToWordArray } from '../../utils/text';
 import ConfirmationModal from '../common/ConfirmationModal';
 import { Unlink, Trash2 } from 'lucide-react';
 import UniversalAiModal from '../common/UniversalAiModal';
-import { createNewWord } from '../../utils/srs';
 import { TagTreeNode } from '../common/TagBrowser';
 import * as db from '../../app/db';
 import { runWordRefineWithRetry, WordRefineProgressSnapshot, WordRefineSetup } from '../../services/wordRefineApi';
@@ -522,6 +521,21 @@ const StudyItemTable: React.FC<Props> = ({
   ) => {
     if (!Array.isArray(results)) throw new Error('Response must be an array.');
 
+    const applyHeadwordRenameToOriginalItem = (
+      originalItem: StudyItem,
+      rawAiResult: any,
+      suggestedHeadword: string
+    ): StudyItem => {
+      const oldWord = originalItem.word.trim();
+      const nextHeadword = suggestedHeadword.trim();
+      const updatedItem = mergeAiResultIntoWord(originalItem, rawAiResult);
+
+      updatedItem.word = nextHeadword;
+      updatedItem.display = oldWord;
+
+      return updatedItem;
+    };
+
     const aiMap = new Map<string, any[]>();
     results.forEach(rawResult => {
         const key = (rawResult.og || rawResult.original || rawResult.hw || rawResult.headword || '').toLowerCase();
@@ -551,38 +565,12 @@ const StudyItemTable: React.FC<Props> = ({
         ).trim();
 
         if (suggestedHeadword) {
-            const originalWordCount = originalItem.word.trim().split(/\s+/).length;
-            const newWordCount = suggestedHeadword.trim().split(/\s+/).length;
-
-            if (originalWordCount !== newWordCount) {
-                const existingHeadwordItem = await dataStore.findWordByText(originalItem.userId, suggestedHeadword);
-                if (existingHeadwordItem) {
-                    const mergedItem = mergeAiResultIntoWord(existingHeadwordItem, rawAiResult);
-                    itemsToSave.push(mergedItem);
-                } else {
-                    const newItem = await createNewWord(suggestedHeadword, '', '', '', '', [], false, false, false, false, false);
-                    newItem.userId = originalItem.userId;
-                    const finalNewItem = mergeAiResultIntoWord(newItem, rawAiResult);
-                    itemsToSave.push(finalNewItem);
-                }
+            const isRenaming = suggestedHeadword.toLowerCase() !== originalItem.word.toLowerCase();
+            if (isRenaming) {
+                itemsToSave.push(applyHeadwordRenameToOriginalItem(originalItem, rawAiResult, suggestedHeadword));
+                renames.push({ id: originalItem.id, oldWord: originalItem.word, newWord: suggestedHeadword });
             } else {
-                const isRenaming = suggestedHeadword.toLowerCase() !== originalItem.word.toLowerCase();
-                if (isRenaming) {
-                    const existingHeadwordItem = await dataStore.findWordByText(originalItem.userId, suggestedHeadword);
-                    if (existingHeadwordItem && existingHeadwordItem.id !== originalItem.id) {
-                        const mergedItem = mergeAiResultIntoWord(existingHeadwordItem, rawAiResult);
-                        itemsToSave.push(mergedItem);
-                        itemsToDeleteIds.push(originalItem.id);
-                        renames.push({ id: originalItem.id, oldWord: originalItem.word, newWord: suggestedHeadword });
-                    } else {
-                        let updatedItem = mergeAiResultIntoWord(originalItem, rawAiResult);
-                        updatedItem.word = suggestedHeadword;
-                        itemsToSave.push(updatedItem);
-                        renames.push({ id: originalItem.id, oldWord: originalItem.word, newWord: suggestedHeadword });
-                    }
-                } else {
-                    itemsToSave.push(mergeAiResultIntoWord(originalItem, rawAiResult));
-                }
+                itemsToSave.push(mergeAiResultIntoWord(originalItem, rawAiResult));
             }
         } else {
             itemsToSave.push(mergeAiResultIntoWord(originalItem, rawAiResult));
