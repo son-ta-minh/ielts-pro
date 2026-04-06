@@ -147,7 +147,7 @@ const UsageTable: React.FC<{
 
 // --- Main UI Component ---
 
-export interface ViewWordModalUIProps {
+export interface ViewStudyItemModalUIProps {
     word: StudyItem;
     libraryWordSet?: Set<string>;
     libraryWords?: StudyItem[];
@@ -178,7 +178,7 @@ export interface ViewWordModalUIProps {
     onAddScannedParaphrase?: (item: ParaphraseOption & { sourceWord?: string }) => void;
 }
 
-export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({ 
+export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({ 
     word, libraryWordSet, libraryWords = [], scannedParaphrases = [], isScanningParaphrases = false, scanParaphraseResultCount = null, wordFamilyGroup, onOpenWordFamilyGroupRequest, onClose, onChallengeRequest, onMimicRequest, onEditRequest, onUpdate, linkedUnits, relatedWords, relatedByGroup, 
     onResetMasteryRequest,
     onSetDisplayRequest,
@@ -371,7 +371,7 @@ export const ViewWordModalUI: React.FC<ViewWordModalUIProps> = ({
     const [activeExampleHighlight, setActiveExampleHighlight] = useState<string | null>(null);
 
     useEffect(() => {
-    //   console.log('=== ViewWordModalUI LOAD ===');
+    //   console.log('=== ViewStudyItemModalUI LOAD ===');
     //   console.log('word.id:', word?.id);
     //   console.log('lastTestResults:', word?.lastTestResults);
     }, [word]);

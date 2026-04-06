@@ -3,8 +3,8 @@ import React from 'react';
 import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Image } from 'lucide-react';
 import { StudyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
-import EditWordModal from '../study_lib/EditWordModal';
-import ViewWordModal from '../study_lib/ViewWordModal';
+import EditStudyItemModal from '../study_lib/EditStudyItemModal';
+import ViewStudyItemModal from '../study_lib/ViewStudyItemModal';
 import TestModal from './TestModal';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
 import { generateAvailableChallenges } from '../../utils/challengeUtils';
@@ -581,8 +581,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                     )}
                 </div>
             </div>
-            {wordInModal && <ViewWordModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={async () => 0} isViewOnly={false} />}
-            {editingWordInModal && <EditWordModal user={user} word={editingWordInModal} onSave={handleSaveEdit} onClose={() => setEditingWordInModal(null)} onSwitchToView={(word) => { setEditingWordInModal(null); setWordInModal(word); }} />}
+            {wordInModal && <ViewStudyItemModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={async () => 0} isViewOnly={false} />}
+            {editingWordInModal && <EditStudyItemModal user={user} word={editingWordInModal} onSave={handleSaveEdit} onClose={() => setEditingWordInModal(null)} onSwitchToView={(word) => { setEditingWordInModal(null); setWordInModal(word); }} />}
             {isTesting && currentWord && <TestModal word={currentWord} isQuickFire={isQuickFire} sessionPosition={isQuickFire ? { current: currentIndex + 1, total: sessionWords.length } : undefined} onPrevWord={() => setProgress(p => ({ ...p, current: Math.max(0, p.current - 1) }))} onClose={() => {
                 console.log('[InlineReview][ReviewSessionUI] TestModal onClose', { isQuickFire, currentWord: currentWord.word });
                 if (isQuickFire) onComplete(); else setIsTesting(false);

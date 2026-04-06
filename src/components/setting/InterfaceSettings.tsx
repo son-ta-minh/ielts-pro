@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Table, Eye } from 'lucide-react';
-import { DEFAULT_VISIBILITY } from '../study_lib/WordTable_UI';
+import { DEFAULT_VISIBILITY } from '../study_lib/StudyItemTable_UI';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 
 interface InterfaceSettingsProps {

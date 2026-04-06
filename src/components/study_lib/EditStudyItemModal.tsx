@@ -3,7 +3,7 @@ import { StudyItem, WordFamilyMember, LearnedStatus, Unit, PrepositionPattern, U
 import { applyLearnedStatus, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { getWordDetailsPrompt, getLearningSuggestionsPrompt } from '../../services/promptService';
 import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
-import { EditWordModalUI } from './EditWordModal_UI';
+import { EditStudyItemModalUI } from './EditStudyItemModal_UI';
 import { getAllWords } from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
 import UniversalAiModal from '../common/UniversalAiModal';
@@ -98,7 +98,7 @@ interface Props {
   onSwitchToView: (word: StudyItem) => void;
 }
 
-const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchToView }) => {
+const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchToView }) => {
   const config = getConfig();
   const serverUrl = getServerUrl(config);
   const { showToast } = useToast();
@@ -785,7 +785,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
   
   return (
     <>
-      <EditWordModalUI 
+      <EditStudyItemModalUI 
         onClose={onClose}
         onSwitchToView={() => onSwitchToView(word)}
         formData={formData}
@@ -905,4 +905,4 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
   );
 };
 
-export default EditWordModal;
+export default EditStudyItemModal;

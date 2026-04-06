@@ -10,7 +10,7 @@ import { User, StudyItem } from '../../../app/types';
 import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
 import ConfirmationModal from '../../../components/common/ConfirmationModal';
 import { getTopicRecallEvaluationPrompt } from '../../../services/promptService';
-import ViewWordModal from '../../study_lib/ViewWordModal';
+import ViewStudyItemModal from '../../study_lib/ViewStudyItemModal';
 
 interface TopicRecallGameProps {
   words: StudyItem[];
@@ -1637,7 +1637,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
         )}
 
         {selectedWord && (
-          <ViewWordModal
+          <ViewStudyItemModal
             word={selectedWord}
             onClose={() => setSelectedWord(null)}
             onNavigateToWord={(word) => setSelectedWord(word)}

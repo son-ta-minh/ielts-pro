@@ -2,11 +2,11 @@ import React, { Suspense, useState, useCallback, useEffect, useMemo } from 'reac
 import { StudyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
-import WordTable from './WordTable';
-import ViewWordModal from './ViewWordModal';
-import EditWordModal from './EditWordModal';
+import StudyItemTable from './StudyItemTable';
+import ViewStudyItemModal from './ViewStudyItemModal';
+import EditStudyItemModal from './EditStudyItemModal';
 import ReviewSession from '../practice/ReviewSession';
-import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from './WordTable_UI';
+import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from './StudyItemTable_UI';
 import { stringToWordArray } from '../../utils/text';
 import { TagTreeNode } from '../common/TagBrowser';
 import { getStoredJSON } from '../../utils/storage';
@@ -51,7 +51,7 @@ const deleteGroupPathValue = (groupPath: string, targetPath: string): string | n
   return groupPath.slice(targetPath.length + 1) || null;
 };
 
-const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed, onNavigate }) => {
+const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed, onNavigate }) => {
   const [words, setWords] = useState<StudyItem[]>([]);
   
   // Read storage synchronously for initial state
@@ -325,7 +325,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
             serverMap.set(item.word.toLowerCase().trim(), item);
         });
     } catch (e) {
-        console.warn("Server lookup failed in WordList:", e);
+        console.warn("Server lookup failed in StudyItemList:", e);
     }
 
     for (const word of wordsToProcess) {
@@ -395,7 +395,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
       // try {
       //   await autoRefineNewWords(newItems, user.nativeLanguage || 'Vietnamese');
       // } catch (error) {
-      //   console.warn('[WordList] Auto refine after add failed:', error);
+      //   console.warn('[StudyItemList] Auto refine after add failed:', error);
       // }
     }
   };
@@ -405,7 +405,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
       onStartSession(items);
   };
 
-  // FIX: handleBulkDelete updated to accept Set<string> to match WordTable prop expectation
+  // FIX: handleBulkDelete updated to accept Set<string> to match StudyItemTable prop expectation
   const handleBulkDelete = async (ids: Set<string>) => {
     await onBulkDelete(Array.from(ids));
   };
@@ -417,7 +417,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
 
   return (
     <>
-      <WordTable 
+      <StudyItemTable 
           user={user}
           words={words}
           total={total}
@@ -459,7 +459,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
           onOpenWordBook={() => onNavigate && onNavigate('WORDBOOK')}
       />
       {viewingWord && (
-          <ViewWordModal 
+          <ViewStudyItemModal 
             word={viewingWord} 
             onClose={() => setViewingWord(null)} 
             onNavigateToWord={setViewingWord} 
@@ -472,7 +472,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
             onUpdate={onUpdate} 
             onGainXp={async () => 0}
             onStartReviewSession={(word) => {
-              console.log('[InlineReview][WordList] open from ViewWordModal', { word: word.word, id: word.id });
+              console.log('[InlineReview][StudyItemList] open from ViewStudyItemModal', { word: word.word, id: word.id });
               setInlineReviewWords([word]);
             }}
           /> 
@@ -490,7 +490,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
                     await dataStore.bulkSaveWords(updatedWords);
                   }}
                   onComplete={() => {
-                    console.log('[InlineReview][WordList] onComplete -> closing overlay');
+                    console.log('[InlineReview][StudyItemList] onComplete -> closing overlay');
                     const reviewedWordId = inlineReviewWords[0]?.id;
                     if (reviewedWordId) {
                       const latestWord = dataStore.getWordById(reviewedWordId);
@@ -508,7 +508,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
           </div>
       )}
       {editingWord && (
-          <EditWordModal 
+          <EditStudyItemModal 
             user={user} 
             word={editingWord} 
             onSave={(w) => { handleSaveEdit(w); setViewingWord(w); }}
@@ -520,4 +520,4 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
   );
 };
 
-export default WordList;
+export default StudyItemList;

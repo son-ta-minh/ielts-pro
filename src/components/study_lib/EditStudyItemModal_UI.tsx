@@ -44,7 +44,7 @@ const StatusDropdown: React.FC<{
     );
 };
 
-export interface EditWordModalUIProps {
+export interface EditStudyItemModalUIProps {
   onClose: () => void;
   onSwitchToView: () => void;
   formData: any; 
@@ -117,7 +117,7 @@ const ListEditorSection: React.FC<{
 );
 
 
-export const EditWordModalUI: React.FC<EditWordModalUIProps> = (props) => {
+export const EditStudyItemModalUI: React.FC<EditStudyItemModalUIProps> = (props) => {
   const {
     onClose, onSwitchToView, formData, setFormData, setFlag,
     familyHandler, prepList, collocList, idiomList, paraList, handleSubmit,

@@ -10,8 +10,8 @@ import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { speak } from '../../utils/audio';
 import { createNewWord } from '../../utils/srs';
-import ViewWordModal from '../../components/study_lib/ViewWordModal';
-import EditWordModal from '../../components/study_lib/EditWordModal';
+import ViewStudyItemModal from '../../components/study_lib/ViewStudyItemModal';
+import EditStudyItemModal from '../../components/study_lib/EditStudyItemModal';
 import { UniversalCard, CardBadge } from '../../components/common/UniversalCard';
 import { WordBookCard, COLORS, TITLE_COLORS, BookIcon } from '../../components/wordbook/WordBookCard';
 import { AddShelfModal, RenameShelfModal, MoveBookModal } from '../../components/wordbook/ShelfModals';
@@ -786,7 +786,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
 
             {/* Common Modals & Sub-views - ALWAYS RENDERED AT THE END OF THE COMPONENT */}
             {viewingWord && (
-                <ViewWordModal 
+                <ViewStudyItemModal 
                     word={viewingWord} 
                     onClose={() => setViewingWord(null)} 
                     onNavigateToWord={setViewingWord} 
@@ -797,7 +797,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
                 />
             )}
             {editingWord && (
-                <EditWordModal 
+                <EditStudyItemModal 
                     user={user} 
                     word={editingWord} 
                     onSave={async (w) => { await dataStore.saveWord(w); setEditingWord(null); await loadBooks(); }} 

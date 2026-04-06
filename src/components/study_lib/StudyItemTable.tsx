@@ -2,8 +2,8 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { StudyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem, ParaphraseOption, LearnedStatus } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { getWordDetailsPrompt, getHintsPrompt, getBulkParaphrasePrompt } from '../../services/promptService';
-import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
-import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from './WordTable_UI';
+import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './StudyItemTable_UI';
+import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from './StudyItemTable_UI';
 import { normalizeAiResponse, mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { stringToWordArray } from '../../utils/text';
@@ -82,7 +82,7 @@ const GROUP_ATTRIBUTE: WordTypeOption[] = ['archive'];
 const normalizeGroupLabel = (value: string): string => value.trim();
 const dedupeGroups = (groups: string[]): string[] => Array.from(new Set(groups.map(normalizeGroupLabel).filter(Boolean)));
 
-const WordTable: React.FC<Props> = ({ 
+const StudyItemTable: React.FC<Props> = ({ 
   user,
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
   onSearch, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onBulkHardDelete, onPractice,
@@ -241,7 +241,7 @@ const WordTable: React.FC<Props> = ({
       onFilterChange({ types: activeFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, composition: compositionFilter, book: bookFilter, specificBookId });
       
       // If it's the first mount, do NOT reset the page to 0. 
-      // Allow WordList to initialize it from storage.
+      // Allow StudyItemList to initialize it from storage.
       if (isFirstMount.current) {
           isFirstMount.current = false;
       } else {
@@ -1030,4 +1030,4 @@ const WordTable: React.FC<Props> = ({
   );
 };
 
-export default WordTable;
+export default StudyItemTable;

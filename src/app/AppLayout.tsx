@@ -6,8 +6,8 @@ import {
 import { AppView, StudyItem } from './types';
 import { useAppController } from './useAppController';
 import * as dataStore from './dataStore';
-import EditWordModal from '../components/study_lib/EditWordModal';
-import ViewWordModal from '../components/study_lib/ViewWordModal';
+import EditStudyItemModal from '../components/study_lib/EditStudyItemModal';
+import ViewStudyItemModal from '../components/study_lib/ViewStudyItemModal';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import { StudyBuddy } from '../components/common/StudyBuddy';
 import { ServerRestoreModal } from '../components/common/ServerRestoreModal';
@@ -17,7 +17,7 @@ import { AutoRefineProvider } from '../components/common/AutoRefine';
 
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
 const ReviewSession = React.lazy(() => import('../components/practice/ReviewSession'));
-const WordList = React.lazy(() => import('../components/study_lib/WordList'));
+const StudyItemList = React.lazy(() => import('../components/study_lib/StudyItemList'));
 const ReadingUnitPage = React.lazy(() => import('../dynamic/templates/ReadingUnitPage').then(module => ({ default: module.ReadingUnitPage })));
 const SettingsView = React.lazy(() => import('../components/setting/SettingsView').then(module => ({ default: module.SettingsView })));
 const Discover = React.lazy(() => import('../components/discover/Discover'));
@@ -177,7 +177,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'WORDBOOK': return <WordBookPage user={currentUser} />;
     case 'PLANNING': return <PlanningPage user={currentUser} initialAction={planningAction} onActionConsumed={consumePlanningAction} />;
     case 'REVIEW': return sessionWords && sessionType ? <ReviewSession user={currentUser} sessionWords={sessionWords} sessionType={sessionType} sessionFocus={sessionFocus} onUpdate={updateWord} onBulkUpdate={bulkUpdateWords} onComplete={handleSessionComplete} onRetry={handleRetrySession} /> : null;
-    case 'BROWSE': return <WordList user={currentUser} onDelete={async (id) => await deleteWord(id)} onBulkDelete={async (ids) => await bulkDeleteWords(ids)} onUpdate={updateWord} onStartSession={(words) => startSession(words, 'custom')} initialFilter={initialListFilter} onInitialFilterApplied={() => setInitialListFilter(null)} forceExpandAdd={forceExpandAdd} onExpandAddConsumed={() => setForceExpandAdd(false)} onNavigate={setView} />;
+    case 'BROWSE': return <StudyItemList user={currentUser} onDelete={async (id) => await deleteWord(id)} onBulkDelete={async (ids) => await bulkDeleteWords(ids)} onUpdate={updateWord} onStartSession={(words) => startSession(words, 'custom')} initialFilter={initialListFilter} onInitialFilterApplied={() => setInitialListFilter(null)} forceExpandAdd={forceExpandAdd} onExpandAddConsumed={() => setForceExpandAdd(false)} onNavigate={setView} />;
     case 'LESSON': return <KnowledgeLibrary user={currentUser} onStartSession={(words) => startSession(words, 'custom')} onExit={() => setView('DASHBOARD')} onNavigate={setView} onUpdateUser={handleUpdateUser} initialLessonId={controller.targetLessonId} onConsumeLessonId={controller.consumeTargetLessonId} initialTag={controller.targetLessonTag} onConsumeTag={controller.consumeTargetLessonTag} initialType={controller.targetLessonType} onConsumeType={controller.consumeTargetLessonType} />;
     case 'COURSE': return <CourseList initialCourseId={targetCourseId} onConsumeInitialCourseId={consumeTargetCourseId} />;
     case 'SEARCH': return <SearchPage user={currentUser} onViewWord={setGlobalViewWord} />;
@@ -257,8 +257,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
             />
           </Suspense>
         )}
-        {globalViewWord && <ViewWordModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onOpenWordFamilyGroup={(groupId) => { sessionStorage.setItem('vocab_pro_word_family_target_group_id', groupId); setGlobalViewWord(null); setView('WORD_FAMILY'); }} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} onStartReviewSession={(word) => {
-          console.log('[InlineReview][AppLayout] open from ViewWordModal', { word: word.word, id: word.id });
+        {globalViewWord && <ViewStudyItemModal word={globalViewWord} onClose={() => setGlobalViewWord(null)} onNavigateToWord={setGlobalViewWord} onOpenWordFamilyGroup={(groupId) => { sessionStorage.setItem('vocab_pro_word_family_target_group_id', groupId); setGlobalViewWord(null); setView('WORD_FAMILY'); }} onEditRequest={handleEditRequest} onUpdate={updateWord} onGainXp={gainExperienceAndLevelUp} onStartReviewSession={(word) => {
+          console.log('[InlineReview][AppLayout] open from ViewStudyItemModal', { word: word.word, id: word.id });
           setInlineReviewWords([word]);
         }} />}
         {currentUser && inlineReviewWords && (
@@ -289,7 +289,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
             </Suspense>
           </div>
         )}
-        {editingWord && <EditWordModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
+        {editingWord && <EditStudyItemModal user={controller.currentUser!} word={editingWord} onSave={handleSaveEdit} onClose={() => setEditingWord(null)} onSwitchToView={(word) => { setEditingWord(null); setGlobalViewWord(word); }}/>}
         <ConfirmationModal isOpen={endSessionModal.isOpen} title="End Current Session?" message="Navigating away will end your current study session. Are you sure you want to continue?" confirmText="End Session" isProcessing={false} onConfirm={confirmEndSession} onClose={cancelEndSession} icon={<AlertTriangle size={40} className="text-orange-50" />} confirmButtonClass="bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200" />
         <ConfirmationModal
           isOpen={writingConfirmModal.isOpen}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StudyItem, Unit, ReviewGrade, WordFamilyGroup, ParaphraseOption } from '../../app/types';
 import { findWordByText, saveWord, getUnitsContainingWord, getAllWords } from '../../app/dataStore';
-import { ViewWordModalUI } from './ViewWordModal_UI';
+import { ViewStudyItemModalUI } from './ViewStudyItemModal_UI';
 import { createNewWord, calculateMasteryScore } from '../../utils/srs';
 import TestModal from '../practice/TestModal';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
@@ -56,7 +56,7 @@ interface Props {
   onStartReviewSession?: (word: StudyItem) => void;
 }
 
-const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpenWordFamilyGroup, onEditRequest, onUpdate, isViewOnly = false, onStartReviewSession }) => {
+const ViewStudyItemModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpenWordFamilyGroup, onEditRequest, onUpdate, isViewOnly = false, onStartReviewSession }) => {
   const { showToast } = useToast();
   const [currentWord, setCurrentWord] = useState<StudyItem>({
     ...normalizeWordParaphrases(word),
@@ -90,7 +90,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
   useEffect(() => {
     let isActive = true;
     const run = async () => {
-      console.log('[InlineReview][ViewWordModal] clearStaleWordFamilyGroupLink:start', {
+      console.log('[InlineReview][ViewStudyItemModal] clearStaleWordFamilyGroupLink:start', {
         word: word.word,
         id: word.id,
         wordFamilyGroupId: word.wordFamilyGroupId || null
@@ -100,7 +100,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
         lastTestResults: normalizeTestResultKeys(word.lastTestResults)
       });
       if (!isActive) return;
-      console.log('[InlineReview][ViewWordModal] clearStaleWordFamilyGroupLink:done', {
+      console.log('[InlineReview][ViewStudyItemModal] clearStaleWordFamilyGroupLink:done', {
         word: word.word,
         id: word.id,
         before: word.wordFamilyGroupId || null,
@@ -108,7 +108,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       });
       setCurrentWord(cleaned);
       if ((word.wordFamilyGroupId || null) !== (cleaned.wordFamilyGroupId || null)) {
-        console.log('[InlineReview][ViewWordModal] saving cleaned word after stale link removal', {
+        console.log('[InlineReview][ViewStudyItemModal] saving cleaned word after stale link removal', {
           word: cleaned.word,
           id: cleaned.id,
           before: word.wordFamilyGroupId || null,
@@ -606,7 +606,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
     {isMimicOpen && (
         <SimpleMimicModal target={(currentWord.display || '').trim() || currentWord.word} onClose={() => setIsMimicOpen(false)} />
     )}
-    <ViewWordModalUI
+    <ViewStudyItemModalUI
       word={currentWord}
       wordFamilyGroup={currentWordFamilyGroup}
       onOpenWordFamilyGroupRequest={onOpenWordFamilyGroup}
@@ -642,4 +642,4 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
   );
 };
 
-export default ViewWordModal;
+export default ViewStudyItemModal;
