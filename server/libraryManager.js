@@ -198,33 +198,33 @@ function loadGlobalLibrary() {
                 const data = JSON.parse(raw);
                 
                 // --- VOCABULARY MERGE ---
-                let items = [];
-                if (Array.isArray(data)) {
-                    items = data;
-                } else if (data.vocabulary) {
-                    items = data.vocabulary;
-                } else if (data.vocab) {
-                    items = data.vocab;
-                }
+                // let items = [];
+                // if (Array.isArray(data)) {
+                //     items = data;
+                // } else if (data.vocabulary) {
+                //     items = data.vocabulary;
+                // } else if (data.vocab) {
+                //     items = data.vocab;
+                // }
 
-                if (Array.isArray(items)) {
-                    fileCount++;
-                    items.forEach(item => {
-                        const wordText = item.word || item.w;
-                        const quality = item.quality || item.q;
+                // if (Array.isArray(items)) {
+                //     fileCount++;
+                //     items.forEach(item => {
+                //         const wordText = item.word || item.w;
+                //         const quality = item.quality || item.q;
 
-                        // Only merge good quality items
-                        const isGoodQuality = 
-                            quality === 'VERIFIED' || quality === 'REFINED' || 
-                            quality === 'v' || quality === 'r';
+                //         // Only merge good quality items
+                //         const isGoodQuality = 
+                //             quality === 'VERIFIED' || quality === 'REFINED' || 
+                //             quality === 'v' || quality === 'r';
 
-                        if (wordText && isGoodQuality) {
-                            const key = wordText.toLowerCase().trim();
-                            // CLEAN IMMEDIATELY BEFORE STORAGE
-                            globalLibrary.set(key, cleanVocab(item));
-                        }
-                    });
-                }
+                //         if (wordText && isGoodQuality) {
+                //             const key = wordText.toLowerCase().trim();
+                //             // CLEAN IMMEDIATELY BEFORE STORAGE
+                //             globalLibrary.set(key, cleanVocab(item));
+                //         }
+                //     });
+                // }
 
                 // --- READING UNITS MERGE ---
                 let units = [];
