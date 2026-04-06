@@ -10,7 +10,7 @@ import { User, StudyItem } from '../../../app/types';
 import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
 import ConfirmationModal from '../../../components/common/ConfirmationModal';
 import { getTopicRecallEvaluationPrompt } from '../../../services/promptService';
-import ViewWordModal from '../../word_lib/ViewWordModal';
+import ViewWordModal from '../../study_lib/ViewWordModal';
 
 interface TopicRecallGameProps {
   words: StudyItem[];

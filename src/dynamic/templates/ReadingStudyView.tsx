@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Unit, StudyItem, User } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
-import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from '../../components/word_lib/WordTable_UI';
+import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from '../../components/study_lib/WordTable_UI';
 import { ReadingStudyViewUI } from './ReadingStudyView_UI';
 import { useToast } from '../../contexts/ToastContext';
 import { parseVocabMapping, stringToWordArray } from '../../utils/text';

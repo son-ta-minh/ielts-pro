@@ -6,8 +6,8 @@ import {
 import { AppView, StudyItem } from './types';
 import { useAppController } from './useAppController';
 import * as dataStore from './dataStore';
-import EditWordModal from '../components/word_lib/EditWordModal';
-import ViewWordModal from '../components/word_lib/ViewWordModal';
+import EditWordModal from '../components/study_lib/EditWordModal';
+import ViewWordModal from '../components/study_lib/ViewWordModal';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import { StudyBuddy } from '../components/common/StudyBuddy';
 import { ServerRestoreModal } from '../components/common/ServerRestoreModal';
@@ -17,7 +17,7 @@ import { AutoRefineProvider } from '../components/common/AutoRefine';
 
 const Dashboard = React.lazy(() => import('../components/dashboard/Dashboard'));
 const ReviewSession = React.lazy(() => import('../components/practice/ReviewSession'));
-const WordList = React.lazy(() => import('../components/word_lib/WordList'));
+const WordList = React.lazy(() => import('../components/study_lib/WordList'));
 const ReadingUnitPage = React.lazy(() => import('../dynamic/templates/ReadingUnitPage').then(module => ({ default: module.ReadingUnitPage })));
 const SettingsView = React.lazy(() => import('../components/setting/SettingsView').then(module => ({ default: module.SettingsView })));
 const Discover = React.lazy(() => import('../components/discover/Discover'));

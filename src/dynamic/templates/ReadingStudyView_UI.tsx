@@ -2,10 +2,10 @@
 import React, { useState, useMemo, useEffect, useId } from 'react';
 import { Play, Edit3, ArrowLeft, BrainCircuit, BookOpen, Tag, HelpCircle, X, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText, Headphones, SkipBack, SkipForward, FileAudio, Save, Pause } from 'lucide-react';
 import { StudyItem, Unit, User } from '../../app/types';
-import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
-import EditWordModal from '../../components/word_lib/EditWordModal';
-import ViewWordModal from '../../components/word_lib/ViewWordModal';
-import WordTable from '../../components/word_lib/WordTable';
+import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/study_lib/WordTable_UI';
+import EditWordModal from '../../components/study_lib/EditWordModal';
+import ViewWordModal from '../../components/study_lib/ViewWordModal';
+import WordTable from '../../components/study_lib/WordTable';
 import { EssayReader } from './EssayReader';
 import { speak, playSound, pauseSpeaking, resumeSpeaking, getAudioProgress, seekAudio, getIsSpeaking, getIsAudioPaused } from '../../utils/audio';
 import { getDocument, GlobalWorkerOptions, TextLayer } from 'pdfjs-dist';
