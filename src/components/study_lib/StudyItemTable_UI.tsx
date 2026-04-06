@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, PenLine, BookMarked, Image, Play } from 'lucide-react';
-import { StudyItem, LearnedStatus, WordQuality, WordTypeOption, WordBook } from '../../app/types';
+import { StudyItem, LearnedStatus, StudyItemQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
 import { DEFAULT_WORD_REFINE_SETUP, WordRefineSetup } from '../../services/wordRefineApi';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 
-export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'archive' | 'focus' | 'duplicate';
+export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'lesson' | 'archive' | 'focus' | 'duplicate';
 export type RefinedFilter = 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined';
-export type StatusFilter = 'all' | 'new' | 'forgot' | 'hard' | 'easy' | 'learned';
+export type StatusFilter = 'all' | 'new' | 'forgot' | 'hard' | 'easy' | 'learned' | 'reviewing' | 'ignored' | 'not_ignored';
 export type RegisterFilter = 'all' | 'academic' | 'casual' | 'neutral' | 'raw';
 export type CompositionFilter = 'all' | 'composed' | 'not_composed';
 export type BookFilter = 'all' | 'in_book' | 'not_in_book' | 'specific';
@@ -191,11 +191,11 @@ const getStatusBadge = (item: StudyItem) => {
   }
 };
 
-const getQualityIcon = (quality: WordQuality) => {
+const getQualityIcon = (quality: StudyItemQuality) => {
     switch (quality) {
-        case WordQuality.VERIFIED: return <span title="Verified Content"><ShieldCheck size={14} className="text-emerald-500" /></span>;
-        case WordQuality.REFINED: return <span title="AI Refined - Needs Verification"><Wand2 size={14} className="text-indigo-500" /></span>;
-        case WordQuality.FAILED: return <span title="Verification Failed"><ShieldX size={14} className="text-rose-500" /></span>;
+        case StudyItemQuality.VERIFIED: return <span title="Verified Content"><ShieldCheck size={14} className="text-emerald-500" /></span>;
+        case StudyItemQuality.REFINED: return <span title="AI Refined - Needs Verification"><Wand2 size={14} className="text-indigo-500" /></span>;
+        case StudyItemQuality.FAILED: return <span title="Verification Failed"><ShieldX size={14} className="text-rose-500" /></span>;
         default: return <span title="Raw Content"><Ghost size={14} className="text-neutral-300" /></span>;
     }
 };
@@ -591,7 +591,7 @@ export interface WordTableUIProps {
   onSetSelectedVocabularyType: (type: Exclude<WordTypeOption, 'archive' | 'focus' | 'duplicate'>) => void | Promise<void>;
   onSetSelectedArchive: (value: boolean) => void | Promise<void>;
   onSetSelectedFocus: (value: boolean) => void | Promise<void>;
-  onSetSelectedQuality: (quality: WordQuality) => void | Promise<void>;
+  onSetSelectedQuality: (quality: StudyItemQuality) => void | Promise<void>;
   onSetSelectedLearnedStatus: (status: LearnedStatus) => void | Promise<void>;
   onAddSelectedGroup: (group: string) => void | Promise<void>;
   onClearSelectedGroups: () => void | Promise<void>;
@@ -681,7 +681,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
     await onSetSelectedFocus(value);
     setIsSetAttributeMenuOpen(false);
   };
-  const handleSetQuality = async (quality: WordQuality) => {
+  const handleSetQuality = async (quality: StudyItemQuality) => {
     await onSetSelectedQuality(quality);
     setIsSetAttributeMenuOpen(false);
   };
@@ -690,10 +690,10 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
     setIsSetAttributeMenuOpen(false);
   };
   const qualityOptions = [
-    { id: WordQuality.RAW, label: 'Raw' },
-    { id: WordQuality.REFINED, label: 'Refined' },
-    { id: WordQuality.VERIFIED, label: 'Verified' },
-    { id: WordQuality.FAILED, label: 'Failed' },
+    { id: StudyItemQuality.RAW, label: 'Raw' },
+    { id: StudyItemQuality.REFINED, label: 'Refined' },
+    { id: StudyItemQuality.VERIFIED, label: 'Verified' },
+    { id: StudyItemQuality.FAILED, label: 'Failed' },
   ];
   const learnedStatusOptions = [
     { id: LearnedStatus.NEW, label: 'New' },
@@ -801,14 +801,21 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest w-16 shrink-0">Type</span>
                     <div className="flex flex-wrap gap-2">
-                        {[ 'all', 'vocab', 'idiom', 'phrasal', 'colloc', 'phrase', 'archive', 'focus', 'duplicate' ].map(id => {
+                        {[ 'all', 'vocab', 'idiom', 'phrasal', 'colloc', 'phrase', 'lesson', 'archive', 'focus', 'duplicate' ].map(id => {
                             const isActive = activeFilters.has(id as FilterType);
                             const isDuplicate = id === 'duplicate';
                             let buttonClass = 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300';
                             if (isActive) {
                                 buttonClass = isDuplicate ? 'bg-rose-600 text-white border-rose-600' : 'bg-neutral-900 text-white border-neutral-900';
                             }
-                            return (<button key={id} onClick={() => handleToggleFilter(id as FilterType)} className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${buttonClass}`}>{id === 'all' ? 'All' : id.charAt(0).toUpperCase() + id.slice(1)}</button>)
+                            const label = id === 'all'
+                                ? 'All'
+                                : id === 'colloc'
+                                    ? 'Colloc'
+                                    : id === 'lesson'
+                                        ? 'Lesson'
+                                        : id.charAt(0).toUpperCase() + id.slice(1);
+                            return (<button key={id} onClick={() => handleToggleFilter(id as FilterType)} className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${buttonClass}`}>{label}</button>)
                         })}
                     </div>
                 </div>
@@ -816,7 +823,17 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     <div>
                         <label htmlFor="status-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1">Status</label>
                         <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold text-neutral-900 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
-                            {[ { id: 'all', label: 'Any' }, { id: 'new', label: 'New' }, { id: 'learned', label: 'Learned' }, { id: 'easy', label: 'Easy' }, { id: 'hard', label: 'Hard' }, { id: 'forgot', label: 'Forgot' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                            {[
+                                { id: 'all', label: 'Any' },
+                                { id: 'new', label: 'New' },
+                                { id: 'learned', label: 'Learned' },
+                                { id: 'reviewing', label: 'Reviewing' },
+                                { id: 'easy', label: 'Easy' },
+                                { id: 'hard', label: 'Hard' },
+                                { id: 'forgot', label: 'Forgot' },
+                                { id: 'ignored', label: 'Ignored' },
+                                { id: 'not_ignored', label: 'Not Ignored' }
+                            ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                         </select>
                     </div>
                     <div>
@@ -936,7 +953,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                           <Image size={12} className="text-indigo-500"/>
                         </span>
                       )}
-                    </div></div>{visibility.showIPA && (<div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-0.5"><span className="text-[10px] font-mono text-neutral-400">{item.ipaUs || '/?/'}</span></div>)}</td>{visibility.showMeaning && (<td className="px-4 py-2 max-w-[200px] align-middle"><div className={`text-sm text-neutral-600 leading-snug transition-all duration-300 ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100 select-none cursor-help' : ''}`}>{item.meaningVi}</div></td>)}{visibility.showGroups && (<td className="px-4 py-2 align-middle"><div className="flex max-w-[280px] flex-wrap gap-1.5">{item.groups && item.groups.length > 0 ? item.groups.map((group) => (<span key={group} className="inline-flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-bold text-neutral-600">{group}</span>)) : <span className="text-[10px] font-medium italic text-neutral-300">None</span>}</div></td>)}{(visibility.showProgress || visibility.showDue) && (<td className="px-6 py-2 text-center"><div className="flex flex-row items-center justify-center gap-2">{visibility.showProgress && getStatusBadge(item)}{visibility.showDue && <div className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${reviewStatus.urgency === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-neutral-50 text-neutral-400 border border-neutral-100'}`}><span>{reviewStatus.label}</span></div>}</div></td>)}{visibility.showComplexity && <td className="px-4 py-2 text-center align-middle"><span className="text-xs font-black text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-md border border-neutral-200">{item.complexity ?? 0}</span></td>}{visibility.showMastery && (<td className="px-4 py-2 text-center align-middle"><span className={`inline-block px-2 py-0.5 rounded-md text-xs font-black ${getScoreCellClasses(item.masteryScore)}`}>{item.masteryScore ?? 0}</span></td>)}<td className="px-6 py-2 text-right"><div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onEditWord(item); }} className="p-2 text-neutral-300 hover:text-neutral-900 transition-all"><Edit3 size={16} /></button>{context === 'unit' && item.quality === WordQuality.RAW && onHardDelete && setWordToHardDelete && (<button onClick={(e) => { e.stopPropagation(); setWordToHardDelete(item); }} className="p-2 text-neutral-300 hover:text-red-700 transition-all" title="Delete Raw Word from Library"><Trash2 size={16} /></button>)}<button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setWordToDelete(item); }} className="p-2 text-neutral-300 hover:text-rose-500 transition-all" title={context === 'unit' ? 'Unlink from Unit' : 'Delete from Library'}>{context === 'unit' ? <Unlink size={16}/> : <Trash2 size={16} />}</button></div></td></tr>); }))}
+                    </div></div>{visibility.showIPA && (<div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-0.5"><span className="text-[10px] font-mono text-neutral-400">{item.ipaUs || '/?/'}</span></div>)}</td>{visibility.showMeaning && (<td className="px-4 py-2 max-w-[200px] align-middle"><div className={`text-sm text-neutral-600 leading-snug transition-all duration-300 ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100 select-none cursor-help' : ''}`}>{item.meaningVi}</div></td>)}{visibility.showGroups && (<td className="px-4 py-2 align-middle"><div className="flex max-w-[280px] flex-wrap gap-1.5">{item.groups && item.groups.length > 0 ? item.groups.map((group) => (<span key={group} className="inline-flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-bold text-neutral-600">{group}</span>)) : <span className="text-[10px] font-medium italic text-neutral-300">None</span>}</div></td>)}{(visibility.showProgress || visibility.showDue) && (<td className="px-6 py-2 text-center"><div className="flex flex-row items-center justify-center gap-2">{visibility.showProgress && getStatusBadge(item)}{visibility.showDue && <div className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${reviewStatus.urgency === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-neutral-50 text-neutral-400 border border-neutral-100'}`}><span>{reviewStatus.label}</span></div>}</div></td>)}{visibility.showComplexity && <td className="px-4 py-2 text-center align-middle"><span className="text-xs font-black text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-md border border-neutral-200">{item.complexity ?? 0}</span></td>}{visibility.showMastery && (<td className="px-4 py-2 text-center align-middle"><span className={`inline-block px-2 py-0.5 rounded-md text-xs font-black ${getScoreCellClasses(item.masteryScore)}`}>{item.masteryScore ?? 0}</span></td>)}<td className="px-6 py-2 text-right"><div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onEditWord(item); }} className="p-2 text-neutral-300 hover:text-neutral-900 transition-all"><Edit3 size={16} /></button>{context === 'unit' && item.quality === StudyItemQuality.RAW && onHardDelete && setWordToHardDelete && (<button onClick={(e) => { e.stopPropagation(); setWordToHardDelete(item); }} className="p-2 text-neutral-300 hover:text-red-700 transition-all" title="Delete Raw Word from Library"><Trash2 size={16} /></button>)}<button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setWordToDelete(item); }} className="p-2 text-neutral-300 hover:text-rose-500 transition-all" title={context === 'unit' ? 'Unlink from Unit' : 'Delete from Library'}>{context === 'unit' ? <Unlink size={16}/> : <Trash2 size={16} />}</button></div></td></tr>); }))}
               </tbody>
             </table>
             <div className="p-6 bg-neutral-50/30 flex items-center justify-between border-t border-neutral-100">
@@ -996,12 +1013,13 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsRefineSetupModalOpen(true)}
-                disabled={isApiRefining}
-                className="px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors bg-white/10 hover:bg-white/20 text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
+                <button
+                  type="button"
+                  onClick={() => setIsRefineSetupModalOpen(true)}
+                  disabled={isApiRefining || selectedWordsToRefine.length === 0}
+                  className="px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors bg-white/10 hover:bg-white/20 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  title={selectedWordsToRefine.length === 0 ? 'Selected Lesson items cannot be refined.' : undefined}
+                >
                 {isApiRefining ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
                 <span>Refine</span>
               </button>

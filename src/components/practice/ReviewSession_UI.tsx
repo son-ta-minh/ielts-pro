@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Image } from 'lucide-react';
 import { StudyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
@@ -11,7 +11,25 @@ import { generateAvailableChallenges } from '../../utils/challengeUtils';
 import { ChallengeType, Challenge, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge, PrepositionQuizChallenge } from './TestModalTypes';
 import { calculateMasteryScore, getAllValidTestKeys } from '../../utils/srs';
 import { normalizeTestResultKeys } from '../../utils/testResultUtils';
-import { getServerUrl, getConfig } from '../../app/settingsManager';
+import { getServerUrl, getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
+
+const GENERATED_EXAMPLE_BUFFER_SIZE = 4;
+
+const normalizeExampleLine = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+
+const splitExampleLines = (value: string): string[] =>
+    String(value || '')
+        .split(/\r?\n/)
+        .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+        .filter(Boolean);
+
+const getAudienceInstruction = (user: User): string => {
+    const targetAudience = user.lessonPreferences?.targetAudience || 'Adult';
+    if (targetAudience === 'Kid') {
+        return 'Write kid-friendly, simple, natural examples suitable for a child learner. Avoid IELTS exam prompts, adult work contexts, and abstract academic situations.';
+    }
+    return 'Write natural examples suitable for an adult learner. Keep them useful for everyday communication or study.';
+};
 
 export interface ReviewSessionUIProps {
   user: User;
@@ -142,15 +160,25 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
 
     const { current: currentIndex, max: maxIndexVisited } = progress;
     const isQuickFire = sessionType === 'random_test';
-    const [mimicTarget, setMimicTarget] = React.useState<string | null>(null);
-    const [showSpellBox, setShowSpellBox] = React.useState(false);
-    const [spellInput, setSpellInput] = React.useState('');
-    const [spellResult, setSpellResult] = React.useState<'correct' | 'wrong' | null>(null);
-    const touchStartX = React.useRef<number | null>(null);
+    const [mimicTarget, setMimicTarget] = useState<string | null>(null);
+    const [showSpellBox, setShowSpellBox] = useState(false);
+    const [spellInput, setSpellInput] = useState('');
+    const [spellResult, setSpellResult] = useState<'correct' | 'wrong' | null>(null);
+    const [isStudyBuddyExampleVisible, setIsStudyBuddyExampleVisible] = useState(false);
+    const [studyBuddyExample, setStudyBuddyExample] = useState<string | null>(null);
+    const [studyBuddyExampleBuffer, setStudyBuddyExampleBuffer] = useState<string[]>([]);
+    const [isStudyBuddyExampleLoading, setIsStudyBuddyExampleLoading] = useState(false);
+    const [studyBuddyExampleError, setStudyBuddyExampleError] = useState<string | null>(null);
+    const touchStartX = useRef<number | null>(null);
+    const studyBuddyExampleAbortRef = useRef<AbortController | null>(null);
+    const studyBuddyExampleRequestRef = useRef<Promise<string[]> | null>(null);
+    const studyBuddyExampleRequestWordIdRef = useRef<string | null>(null);
+    const studyBuddyExampleSeenRef = useRef<Set<string>>(new Set());
+    const studyBuddyExampleRevealRef = useRef(false);
     const serverUrl = getServerUrl(getConfig());
+    const studyBuddyAiUrl = getStudyBuddyAiUrl(getConfig());
     const normalizeComparableText = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
     const hasRetryableFailedTests = React.useMemo(() => {
-        if (!currentWord) return false;
         const history = normalizeTestResultKeys(currentWord.lastTestResults || {});
         const validKeys = getAllValidTestKeys(currentWord);
         const validBaseTypes = new Set(Array.from(validKeys).map(key => key.split(':')[0]));
@@ -202,7 +230,6 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         return <div className="flex flex-col items-center justify-center py-20 text-center animate-in zoom-in-95 duration-500"><Trophy size={64} className="text-yellow-500 mb-4 animate-bounce" /><h2 className="text-3xl font-black text-neutral-900">Session Complete!</h2><p className="text-neutral-500 mt-2 font-medium">You have finished this review session.</p><button onClick={onComplete} className="mt-8 px-10 py-3.5 bg-neutral-900 text-white rounded-2xl font-bold shadow-xl hover:scale-105 transition-all text-sm">Return to Dashboard</button></div>;
     }
 
-    if (!currentWord) return null;
     const HeaderIcon = isNewWord ? Lightbulb : BookOpen;
     const headerColor = isNewWord ? 'text-blue-500' : 'text-neutral-500';
     const reviewHeadword = (currentWord.display || '').trim() || currentWord.word;
@@ -223,8 +250,273 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const collocationTooltip = visibleCollocations.slice(0, 6).map(c => c.text).join('\n');
     const paraphraseTooltip = visibleParaphrases.slice(0, 6).map(p => p.word).join('\n');
     const idiomTooltip = visibleIdioms.slice(0, 6).map(i => i.text).join('\n');
+    const existingExampleSet = useMemo(() => {
+        const set = new Set<string>();
+        splitExampleLines(currentWord.example || '').forEach((line) => {
+            const normalized = normalizeExampleLine(line);
+            if (normalized) set.add(normalized);
+        });
+        return set;
+    }, [currentWord.example]);
 
     const isIpa = !isNewWord && !!(cachedDisplayIpa || (!isDisplayDifferentFromHeadword && currentWord.ipaUs));
+
+    const extractFreshExamples = useCallback((rawText: string): string[] => {
+        const seen = studyBuddyExampleSeenRef.current;
+        return splitExampleLines(rawText).filter((line) => {
+            const normalized = normalizeExampleLine(line);
+            if (!normalized) return false;
+            if (existingExampleSet.has(normalized)) return false;
+            if (seen.has(normalized)) return false;
+            seen.add(normalized);
+            return true;
+        });
+    }, [existingExampleSet]);
+
+    const mergeBufferedExamples = useCallback((incomingExamples: string[], options?: { replace?: boolean }) => {
+        if (incomingExamples.length === 0) return;
+        setStudyBuddyExampleBuffer((prev) => {
+            const merged = options?.replace ? incomingExamples : [...prev, ...incomingExamples];
+            const unique: string[] = [];
+            const localSeen = new Set<string>();
+            merged.forEach((item) => {
+                const normalized = normalizeExampleLine(item);
+                if (!normalized || localSeen.has(normalized)) return;
+                localSeen.add(normalized);
+                unique.push(item);
+            });
+            return unique;
+        });
+    }, []);
+
+    const requestStudyBuddyExamples = useCallback(async (word: StudyItem, signal?: AbortSignal): Promise<string[]> => {
+        const bannedExamples = splitExampleLines(word.example || '').slice(0, 3);
+        const audienceInstruction = getAudienceInstruction(user);
+        const levelInstruction = user.currentLevel ? `Learner level: ${user.currentLevel}.` : '';
+        const targetInstruction = user.target ? `Learner goal: ${user.target}.` : '';
+        const response = await fetch(studyBuddyAiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an expert IELTS coach and native English teacher. Reply with only English example sentences. No bullets, no numbering, no markdown, no commentary.'
+                    },
+                    {
+                        role: 'user',
+                        content: `Write exactly ${GENERATED_EXAMPLE_BUFFER_SIZE} distinct example sentences for the word "${word.word}".
+
+Rules:
+- ${audienceInstruction}
+- ${levelInstruction}
+- ${targetInstruction}
+- Match the learner profile above.
+- Use the target word naturally in context.
+- One sentence per line.
+- Keep each sentence concise.
+- Do not repeat the same pattern.
+- Do not explain anything.
+${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing examples:\n${bannedExamples.map((item) => `  • ${item}`).join('\n')}` : ''}`
+                    }
+                ],
+                searchEnabled: false,
+                temperature: 0.7,
+                top_p: 0.9,
+                repetition_penalty: 1.08,
+                stream: true
+            }),
+            signal
+        });
+
+        if (!response.ok || !response.body) {
+            throw new Error(`StudyBuddy example request failed (${response.status})`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let assistantText = '';
+        let buffered = '';
+        let deliveredCount = 0;
+        let finalExamples: string[] = [];
+
+        const flushAssistantText = (isFinal: boolean) => {
+            const normalizedText = assistantText.replace(/\r/g, '');
+            const segments = normalizedText.split('\n');
+            const completeSegments = isFinal ? segments : segments.slice(0, -1);
+            const freshExamples = extractFreshExamples(completeSegments.join('\n'));
+            const newExamples = freshExamples.slice(deliveredCount);
+            if (newExamples.length > 0) {
+                mergeBufferedExamples(newExamples, { replace: deliveredCount === 0 });
+                finalExamples = [...finalExamples, ...newExamples];
+                deliveredCount += newExamples.length;
+            }
+            if (studyBuddyExampleRevealRef.current) {
+                const firstSegment = segments[0]?.trim();
+                if (firstSegment) {
+                    setStudyBuddyExample(firstSegment);
+                }
+            }
+        };
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffered += decoder.decode(value, { stream: true });
+            const parts = buffered.split('\n\n');
+            buffered = parts.pop() || '';
+
+            for (const part of parts) {
+                const lines = part.split('\n').map((line) => line.trim()).filter(Boolean);
+                for (const line of lines) {
+                    if (!line.startsWith('data:')) continue;
+                    const raw = line.slice(5).trim();
+                    if (!raw || raw === '[DONE]') continue;
+                    try {
+                        const json = JSON.parse(raw);
+                        const delta = json?.choices?.[0]?.delta?.content ?? json?.choices?.[0]?.message?.content;
+                        if (typeof delta === 'string') {
+                            assistantText += delta;
+                            flushAssistantText(false);
+                        } else if (Array.isArray(delta)) {
+                            for (const partItem of delta) {
+                                if (partItem?.type === 'text' && typeof partItem.text === 'string') {
+                                    assistantText += partItem.text;
+                                }
+                            }
+                            flushAssistantText(false);
+                        }
+                    } catch {
+                        // ignore malformed stream chunk
+                    }
+                }
+            }
+        }
+
+        if (buffered.trim()) {
+            const lines = buffered.split('\n').map((line) => line.trim()).filter(Boolean);
+            for (const line of lines) {
+                if (!line.startsWith('data:')) continue;
+                const raw = line.slice(5).trim();
+                if (!raw || raw === '[DONE]') continue;
+                try {
+                    const json = JSON.parse(raw);
+                    const delta = json?.choices?.[0]?.delta?.content ?? json?.choices?.[0]?.message?.content;
+                    if (typeof delta === 'string') assistantText += delta;
+                } catch {
+                    // ignore
+                }
+            }
+        }
+
+        flushAssistantText(true);
+        return finalExamples;
+    }, [extractFreshExamples, mergeBufferedExamples, studyBuddyAiUrl, user]);
+
+    const prefetchStudyBuddyExamples = useCallback((word: StudyItem, options?: { replace?: boolean }) => {
+        if (studyBuddyExampleRequestRef.current && studyBuddyExampleRequestWordIdRef.current === word.id) {
+            return studyBuddyExampleRequestRef.current;
+        }
+
+        const controller = new AbortController();
+        studyBuddyExampleAbortRef.current?.abort();
+        studyBuddyExampleAbortRef.current = controller;
+        studyBuddyExampleRequestWordIdRef.current = word.id;
+        setIsStudyBuddyExampleLoading(true);
+        setStudyBuddyExampleError(null);
+        if (options?.replace) {
+            setStudyBuddyExampleBuffer([]);
+        }
+
+        const requestPromise = requestStudyBuddyExamples(word, controller.signal)
+            .then((incomingExamples) => {
+                if (controller.signal.aborted) return [];
+                if (incomingExamples.length === 0) {
+                    setStudyBuddyExampleError('No fresh example right now.');
+                }
+                return incomingExamples;
+            })
+            .catch((error) => {
+                if (controller.signal.aborted) return [];
+                console.error(error);
+                setStudyBuddyExampleError('Failed to load example.');
+                return [];
+            })
+            .finally(() => {
+                if (studyBuddyExampleAbortRef.current === controller) {
+                    studyBuddyExampleAbortRef.current = null;
+                }
+                if (studyBuddyExampleRequestRef.current === requestPromise) {
+                    studyBuddyExampleRequestRef.current = null;
+                    studyBuddyExampleRequestWordIdRef.current = null;
+                }
+                setIsStudyBuddyExampleLoading(false);
+            });
+
+        studyBuddyExampleRequestRef.current = requestPromise;
+        return requestPromise;
+    }, [requestStudyBuddyExamples]);
+
+    const showNextStudyBuddyExample = useCallback(async () => {
+        setIsStudyBuddyExampleVisible(true);
+        studyBuddyExampleRevealRef.current = false;
+        let nextExample: string | null = null;
+        let remainingCount = 0;
+
+        setStudyBuddyExampleBuffer((prev) => {
+            if (prev.length === 0) return prev;
+            const [first, ...rest] = prev;
+            nextExample = first;
+            remainingCount = rest.length;
+            return rest;
+        });
+
+        if (nextExample) {
+            setStudyBuddyExample(nextExample);
+            setStudyBuddyExampleError(null);
+            if (remainingCount < 2) {
+                void prefetchStudyBuddyExamples(currentWord);
+            }
+            return;
+        }
+
+        if (!isStudyBuddyExampleLoading) {
+            setStudyBuddyExampleError(null);
+            studyBuddyExampleRevealRef.current = true;
+            const incomingExamples = await prefetchStudyBuddyExamples(currentWord, { replace: true });
+            const fallbackExample = incomingExamples?.[0];
+            if (fallbackExample) {
+                setStudyBuddyExample(fallbackExample);
+                setStudyBuddyExampleBuffer((prev) => {
+                    const normalizedFallback = normalizeExampleLine(fallbackExample);
+                    return prev.filter((item) => normalizeExampleLine(item) !== normalizedFallback);
+                });
+            } else {
+                setStudyBuddyExample(null);
+            }
+            studyBuddyExampleRevealRef.current = false;
+        }
+    }, [currentWord, isStudyBuddyExampleLoading, prefetchStudyBuddyExamples]);
+
+    useEffect(() => {
+        studyBuddyExampleAbortRef.current?.abort();
+        studyBuddyExampleRequestRef.current = null;
+        studyBuddyExampleRequestWordIdRef.current = null;
+        studyBuddyExampleSeenRef.current = new Set();
+        studyBuddyExampleRevealRef.current = false;
+        setIsStudyBuddyExampleVisible(false);
+        setStudyBuddyExample(null);
+        setStudyBuddyExampleBuffer([]);
+        setStudyBuddyExampleError(null);
+        void prefetchStudyBuddyExamples(currentWord, { replace: true });
+
+        return () => {
+            studyBuddyExampleAbortRef.current?.abort();
+        };
+    }, [currentWord.id, prefetchStudyBuddyExamples]);
 
     const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
         touchStartX.current = e.touches[0].clientX;
@@ -489,6 +781,15 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                             </span>
                                         </div>
                                     )}
+                                    <div className="relative group/example">
+                                        <button
+                                            onClick={() => void showNextStudyBuddyExample()}
+                                            className="p-3 rounded-full transition-colors text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-fuchsia-600"
+                                            title="Example"
+                                        >
+                                            <BookCopy size={20} />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
@@ -505,6 +806,45 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                                         <BrainCircuit size={14}/><span>Practice</span>
                                     </button>
                                 </div>
+                                {(isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
+                                    <div className="w-full max-w-lg">
+                                        <button
+                                            type="button"
+                                            onClick={() => void showNextStudyBuddyExample()}
+                                            className="w-full rounded-[1.75rem] border border-fuchsia-200 bg-fuchsia-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-fuchsia-50"
+                                        >
+                                            <div className="mb-2 flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-fuchsia-700">
+                                                    <BookCopy size={12} />
+                                                    <span>Example</span>
+                                                </div>
+                                                <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-colors ${isStudyBuddyExampleLoading ? 'bg-fuchsia-200 text-fuchsia-800' : 'bg-white text-fuchsia-700 border border-fuchsia-200'}`}>
+                                                    {isStudyBuddyExampleLoading ? null : <ArrowRight size={11} />}
+                                                    <span>{isStudyBuddyExampleLoading ? 'Loading' : 'Next'}</span>
+                                                </div>
+                                            </div>
+                                            {studyBuddyExample ? (
+                                                <p className="text-sm font-semibold leading-relaxed text-neutral-800">
+                                                    {studyBuddyExample}
+                                                </p>
+                                            ) : isStudyBuddyExampleLoading ? (
+                                                <div className="space-y-2">
+                                                    <div className="h-3 w-full rounded-full bg-fuchsia-100 animate-pulse" />
+                                                    <div className="h-3 w-5/6 rounded-full bg-fuchsia-100 animate-pulse" />
+                                                    <div className="h-3 w-2/3 rounded-full bg-fuchsia-100 animate-pulse" />
+                                                </div>
+                                            ) : studyBuddyExampleError ? (
+                                                <p className="text-sm font-semibold leading-relaxed text-rose-600">
+                                                    {studyBuddyExampleError}
+                                                </p>
+                                            ) : (
+                                                <p className="text-sm font-semibold leading-relaxed text-neutral-500">
+                                                    Tap to show an example sentence.
+                                                </p>
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             {showSpellBox && (
                                 <div className="absolute bottom-24 left-1/2 -translate-x-1/2 w-[280px] bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in">

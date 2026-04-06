@@ -1,5 +1,5 @@
 import React, { Suspense, useState, useCallback, useEffect, useMemo } from 'react';
-import { StudyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
+import { StudyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, StudyItemQuality, AppView } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import StudyItemTable from './StudyItemTable';
@@ -137,8 +137,14 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
                         tempTree.get(currentPart)!.parents.add(parentOfCurrentPart);
                     }
                 }
-                tempTree.get(parentPath)!.children.add(groupName);
-                node.parents.add(parentPath);
+                // Prevent cycles such as "animal" -> "animal/bird" -> "animal".
+                const wouldCreateCycle =
+                  parentPath === groupName ||
+                  parentPath.startsWith(`${groupName}/`);
+                if (!wouldCreateCycle) {
+                  tempTree.get(parentPath)!.children.add(groupName);
+                  node.parents.add(parentPath);
+                }
             });
         }
     });
@@ -173,14 +179,18 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
     };
     
     // 4. Finalize tree structure
-    const buildNode = (groupName: string): TagTreeNode => {
+    const buildNode = (groupName: string, lineage = new Set<string>()): TagTreeNode => {
         const nodeData = tempTree.get(groupName)!;
-        const children = Array.from(nodeData.children).sort();
+        const nextLineage = new Set(lineage);
+        nextLineage.add(groupName);
+        const children = Array.from(nodeData.children)
+          .filter(child => !nextLineage.has(child))
+          .sort();
         
         return {
             name: groupName.split('/').pop()!,
             path: groupName,
-            children: children.map(buildNode),
+            children: children.map(child => buildNode(child, nextLineage)),
             unitCount: getSubtreeWordCount(groupName),
         };
     };
@@ -354,7 +364,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
                  userId: userId,
                  createdAt: Date.now(),
                  updatedAt: Date.now(),
-                 quality: WordQuality.REFINED,
+                 quality: StudyItemQuality.REFINED,
                  // Reset SRS
                  nextReview: Date.now(),
                  interval: 0,

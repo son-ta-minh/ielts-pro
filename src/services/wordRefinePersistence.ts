@@ -1,4 +1,4 @@
-import { StudyItem, WordQuality } from '../app/types';
+import { StudyItem, StudyItemQuality } from '../app/types';
 import * as dataStore from '../app/dataStore';
 import { createNewWord } from '../utils/srs';
 import { mergeAiResultIntoWord, normalizeAiResponse } from '../utils/vocabUtils';
@@ -119,7 +119,7 @@ export const autoRefineNewWords = async (
     finalIssuesCount: number;
 }> => {
     const wordsToRefine = words.filter((word) =>
-        word.quality === WordQuality.RAW
+        word.quality === StudyItemQuality.RAW
     );
 
     if (wordsToRefine.length === 0) {

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { StudyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem, ParaphraseOption, LearnedStatus } from '../../app/types';
+import { StudyItem, ReviewGrade, WordFamily, PrepositionPattern, User, StudyItemQuality, WordTypeOption, WordBook, WordBookItem, ParaphraseOption, LearnedStatus } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { getWordDetailsPrompt, getHintsPrompt, getBulkParaphrasePrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './StudyItemTable_UI';
@@ -200,7 +200,10 @@ const StudyItemTable: React.FC<Props> = ({
         'forgot',
         'hard',
         'easy',
-        'learned'
+        'learned',
+        'reviewing',
+        'ignored',
+        'not_ignored'
     ];
 
     if (refinedFilterValues.includes(initialFilter as RefinedFilter)) {
@@ -315,7 +318,10 @@ const StudyItemTable: React.FC<Props> = ({
     finally { setIsAdding(false); }
   };
   
-  const selectedWordsToRefine = useMemo(() => words.filter(w => selectedIds.has(w.id)), [words, selectedIds]);
+  const selectedWordsToRefine = useMemo(
+    () => words.filter(w => selectedIds.has(w.id) && !w.isFreeLesson),
+    [words, selectedIds]
+  );
   const availableGroups = useMemo(() => {
     const allWords = dataStore.getAllWords().filter(word => word.userId === user.id);
     return Array.from(
@@ -326,7 +332,7 @@ const StudyItemTable: React.FC<Props> = ({
   }, [user.id, words]);
 
   const selectedRawWords = useMemo(
-    () => words.filter(w => selectedIds.has(w.id) && w.quality === WordQuality.RAW),
+    () => words.filter(w => selectedIds.has(w.id) && w.quality === StudyItemQuality.RAW),
     [words, selectedIds]
   );
   
@@ -431,7 +437,7 @@ const StudyItemTable: React.FC<Props> = ({
     setNotification({ type: 'success', message: `${value ? 'Focused' : 'Unfocused'} ${itemsToUpdate.length} word(s).` });
   };
 
-  const handleSetSelectedQuality = async (quality: WordQuality) => {
+  const handleSetSelectedQuality = async (quality: StudyItemQuality) => {
     if (selectedIds.size === 0) return;
 
     const itemsToUpdate = dataStore.getAllWords()
@@ -630,7 +636,11 @@ const StudyItemTable: React.FC<Props> = ({
   const handleGenerateHintPrompt = (inputs: any) => getHintsPrompt(selectedWordsMissingHints);
 
   const handleApiRefineSelected = async (setup?: Partial<WordRefineSetup>) => {
-    if (selectedWordsToRefine.length === 0 || isApiRefining) return;
+    if (isApiRefining) return;
+    if (selectedWordsToRefine.length === 0) {
+      setNotification({ type: 'info', message: 'Lesson items cannot be refined.' });
+      return;
+    }
     const totalWordsForRun = selectedWordsToRefine.length;
 
     const controller = new AbortController();

@@ -16,7 +16,7 @@ export enum LearnedStatus {
   LEARNED = 'LEARNED',
 }
 
-export enum WordQuality {
+export enum StudyItemQuality {
   RAW = 'RAW',
   REFINED = 'REFINED',
   VERIFIED = 'VERIFIED',
@@ -216,46 +216,22 @@ export interface CollocationDetail {
 }
 
 export interface StudyItem {
+  // -------------------------------------------------
+  // General
+  // -------------------------------------------------
+  // Core fields
   id: string;
   userId: string; 
-  word: string; 
-  display?: string;
-  displayMeaning?: string;
-  displayIPA?: string;
-  keywords?: string[];
-  wordFamilyGroupId?: string | null;
-  ipaUs?: string;
-  ipaUk?: string;
-  pronSim?: 'same' | 'near' | 'different';
-  ipaMistakes?: string[];
+  word: string; // Headword, title or main text representing the item
+  quality: StudyItemQuality;
+  register?: 'raw' | 'academic' | 'casual' | 'neutral';
   meaningVi: string;
   example: string;
-  collocations?: string;
-  collocationsArray?: CollocationDetail[];
-  idioms?: string;
-  idiomsList?: CollocationDetail[];
   note: string;
-  groups?: string[]; 
   createdAt: number;
   updatedAt: number;
-  wordFamily?: WordFamily;
-  prepositions?: PrepositionPattern[];
-  paraphrases?: ParaphraseOption[];
-  register?: 'raw' | 'academic' | 'casual' | 'neutral';
-  isIdiom?: boolean;
-  isPhrasalVerb?: boolean;
-  isCollocation?: boolean;
-  isStandardPhrase?: boolean;
-  isInterrogative?: boolean;
-  isExclamatory?: boolean;
-  isImplicitImperative?: boolean;
-  isPhrasalPhrasalVerb?: boolean;
-  isIrregular?: boolean; 
-  isExampleLocked?: boolean;
-  isPassive?: boolean;
-  isFocus?: boolean;
-  quality: WordQuality;
-  img?: string;
+
+  // SRS fields
   nextReview: number; 
   interval: number; 
   easeFactor: number; 
@@ -264,12 +240,52 @@ export interface StudyItem {
   learnedStatus: LearnedStatus;
   lastReviewSessionType?: SessionType;
   forgotCount: number;
+
+  // Additional fields for enhanced SRS and user insights
   complexity?: number;
   masteryScore?: number;
   lastTestResults?: Record<string, boolean>;
   lastXpEarnedTime?: number;
   gameEligibility?: string[];
-  intensityLessonId?: string;
+
+  // Optional fields
+  isFocus?: boolean;
+  isPassive?: boolean;
+  display?: string;
+  displayMeaning?: string;
+  displayIPA?: string;
+  keywords?: string[];
+  groups?: string[];
+  img?: string;
+
+  // -------------------------------------------------
+  // Vocabulary Specific
+  // -------------------------------------------------
+  // Core fields
+  isIdiom?: boolean;
+  isPhrasalVerb?: boolean;
+  isCollocation?: boolean;
+  isStandardPhrase?: boolean;
+  isIrregular?: boolean;
+  isFreeLesson?: boolean;
+
+  // Phonetic fields
+  ipaUs?: string;
+  ipaUk?: string;
+  pronSim?: 'same' | 'near' | 'different';
+  ipaMistakes?: string[];
+
+  // Vocabulary Usage Fields
+  collocations?: string;
+  collocationsArray?: CollocationDetail[];
+  idioms?: string;
+  idiomsList?: CollocationDetail[];
+  prepositions?: PrepositionPattern[];
+  paraphrases?: ParaphraseOption[];
+  wordFamilyGroupId?: string | null;
+
+  // Deprecated fields (to be removed in future iterations)
+  wordFamily?: WordFamily;
   lesson?: {
     essay?: string;
     test?: string;

@@ -1,4 +1,4 @@
-import { LearnedStatus, StudyItem, WordQuality } from '../app/types';
+import { LearnedStatus, StudyItem, StudyItemQuality } from '../app/types';
 import * as dataStore from '../app/dataStore';
 import { isSrsIgnored } from './srs';
 
@@ -18,7 +18,7 @@ export interface StudyWordContext {
   nextReview: number;
   lastReview?: number;
   isFocus: boolean;
-  quality: WordQuality;
+  quality: StudyItemQuality;
   groups: string[];
 }
 
@@ -165,7 +165,7 @@ const getActiveWordsForCurrentUser = (): StudyItem[] => {
 
   return dataStore
     .getAllWords()
-    .filter((word) => word.userId === userId && !word.isPassive && word.quality !== WordQuality.FAILED && !isSrsIgnored(word));
+    .filter((word) => word.userId === userId && !word.isPassive && word.quality !== StudyItemQuality.FAILED && !isSrsIgnored(word));
 };
 
 const sortByRecentLearned = (words: StudyItem[]) =>

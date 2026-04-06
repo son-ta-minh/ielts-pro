@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, AppView, WordQuality, StudyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily, LearnedStatus } from '../../app/types';
+import { User, AppView, StudyItemQuality, StudyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily, LearnedStatus } from '../../app/types';
 import { MessageSquare, Languages, Binary, Loader2, Search, Pause, Play, Square, Sparkles } from 'lucide-react';
 import { getConfig, saveConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
@@ -665,7 +665,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         return {
             ...baseItem,
             userId: user.id,
-            quality: WordQuality.RAW,
+            quality: StudyItemQuality.RAW,
             isPassive: false
         };
     };
@@ -1989,7 +1989,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                      userId: user.id,
                      createdAt: Date.now(),
                      updatedAt: Date.now(),
-                     quality: WordQuality.REFINED,
+                     quality: StudyItemQuality.REFINED,
                      nextReview: Date.now(),
                      interval: 0,
                      easeFactor: 2.5,
@@ -2022,7 +2022,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 newItem = {
                     ...baseItem,
                     userId: user.id,
-                    quality: WordQuality.RAW
+                    quality: StudyItemQuality.RAW
                 };
                 newItem.isPassive = false;
             }
@@ -2067,7 +2067,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 newItem = {
                     ...baseItem,
                     userId: user.id,
-                    quality: WordQuality.RAW
+                    quality: StudyItemQuality.RAW
                 };
                 newItem.isPassive = false;
                 newItems.push(newItem);

@@ -1,6 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
-import { User, StudyItem, AppView, WordQuality } from '../types';
+import { User, StudyItem, AppView, StudyItemQuality } from '../types';
 import * as dataStore from '../dataStore';
 import { getStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
@@ -34,7 +34,7 @@ export const useDataFetching = ({ currentUser, onUpdateUser }: UseDataFetchingPr
         const activeWords = allUserWords.filter(w => !w.isPassive);
         
         // Create a specific pool for Word of the Day from verified words
-        const wotdPool = activeWords.filter(w => w.quality === WordQuality.VERIFIED);
+        const wotdPool = activeWords.filter(w => w.quality === StudyItemQuality.VERIFIED);
         
         let selectedWotd: StudyItem | null = null;
 
@@ -161,7 +161,7 @@ export const useDataFetching = ({ currentUser, onUpdateUser }: UseDataFetchingPr
     const randomizeWotd = () => {
         if (!currentUser) return;
         const allUserWords = dataStore.getAllWords().filter(w => w.userId === currentUser.id);
-        const wotdPool = allUserWords.filter(w => !w.isPassive && w.quality === WordQuality.VERIFIED);
+        const wotdPool = allUserWords.filter(w => !w.isPassive && w.quality === StudyItemQuality.VERIFIED);
         if (wotdPool.length > 0) {
             const random = wotdPool[Math.floor(Math.random() * wotdPool.length)];
             setRandomWotd(random);

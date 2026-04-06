@@ -1,4 +1,4 @@
-import { StudyItem, User, Unit, WordQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus } from './types';
+import { StudyItem, User, Unit, StudyItemQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity, isSrsIgnored } from '../utils/srs';
@@ -103,9 +103,9 @@ function _recalculateStats(userId: string) {
 
     const total = activeWords.length;
     
-    const due = activeWords.filter(w => w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED).length;
+    const due = activeWords.filter(w => w.lastReview && w.nextReview <= now && w.quality !== StudyItemQuality.FAILED).length;
     
-    const newCount = activeWords.filter(w => !w.lastReview && w.quality === WordQuality.VERIFIED).length;
+    const newCount = activeWords.filter(w => !w.lastReview && w.quality === StudyItemQuality.VERIFIED).length;
     
     const masteredCount = activeWords.filter(w => w.interval > 21).length;
     const learningWords = activeWords.filter(w => !!w.lastReview && w.interval <= 21);
@@ -116,8 +116,8 @@ function _recalculateStats(userId: string) {
     const statusEasy = learningWords.filter(w => w.learnedStatus === LearnedStatus.EASY).length;
     const statusLearned = learningWords.filter(w => w.learnedStatus === LearnedStatus.LEARNED).length;
 
-    const refinedCount = activeWords.filter(w => w.quality === WordQuality.REFINED).length;
-    const rawCount = activeWords.filter(w => w.quality === WordQuality.RAW).length;
+    const refinedCount = activeWords.filter(w => w.quality === StudyItemQuality.REFINED).length;
+    const rawCount = activeWords.filter(w => w.quality === StudyItemQuality.RAW).length;
 
     const categories: Record<string, { total: number; learned: number }> = {
       'vocab': { total: 0, learned: 0 }, 'idiom': { total: 0, learned: 0 }, 'phrasal': { total: 0, learned: 0 }, 'colloc': { total: 0, learned: 0 }, 'phrase': { total: 0, learned: 0 }, 'preposition': { total: 0, learned: 0 }

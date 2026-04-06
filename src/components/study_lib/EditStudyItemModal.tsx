@@ -25,7 +25,7 @@ type FormState = StudyItem & {
 type FormAction =
     | { type: 'REINITIALIZE', payload: StudyItem }
     | { type: 'SET_FIELD', payload: { field: keyof FormState, value: any } }
-    | { type: 'SET_FLAG', payload: { flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' | 'isFocus' } }
+    | { type: 'SET_FLAG', payload: { flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' | 'isFocus' | 'isFreeLesson' } }
     | { type: 'SET_LIST_ITEM', payload: { list: 'wordFamily' | 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases', data: any } }
     | { type: 'ADD_LIST_ITEM', payload: { list: 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases', item: any } }
     | { type: 'APPLY_AI_MERGE', payload: any };

@@ -1,5 +1,5 @@
 
-import { StudyItem, WordQuality } from '../app/types';
+import { StudyItem, StudyItemQuality } from '../app/types';
 
 /**
  * Phonemes used in the IPA Sorter game.
@@ -43,7 +43,7 @@ const checkIpaEligibility = (ipa: string): boolean => {
  */
 export const calculateGameEligibility = (item: StudyItem): string[] => {
     // Words must be verified AND already learned/reviewed (i.e., not new) to be eligible for games.
-    if (item.quality !== WordQuality.VERIFIED || !item.lastReview) {
+    if (item.quality !== StudyItemQuality.VERIFIED || !item.lastReview) {
         return [];
     }
 

@@ -1,4 +1,4 @@
-import { StudyItem, User, Unit, ParaphraseLog, WordQuality, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
+import { StudyItem, User, Unit, ParaphraseLog, StudyItemQuality, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -538,7 +538,7 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
             // userId: targetUser.id, // Stop mapping to specific user to keep data global
             nextReview: item.nextReview || Date.now(),
             lastXpEarnedTime: item.lastXpEarnedTime || undefined, 
-            quality: item.quality || WordQuality.VERIFIED
+            quality: item.quality || StudyItemQuality.VERIFIED
           }));
           await bulkSaveWords(finalVocab);
       }
@@ -593,7 +593,7 @@ export const getRandomMeanings = async (count: number, excludeId: string): Promi
         req.onsuccess = () => {
           const allItems = req.result as StudyItem[];
           const GENERIC_DISTRACTORS = [ "To express an idea or feeling", "A state of great comfort and luxury", "Happening or developing gradually", "To influence or change someone or something", "A formal meeting for discussion", "Necessary for a particular purpose", "The ability to do something well", "A careful and detailed study of something", "To make something new or original", ];
-          const potential = Array.from(new Set(allItems.filter(i => i.id !== excludeId && i.quality === WordQuality.VERIFIED && i.meaningVi && i.meaningVi.trim().length > 0 && i.meaningVi.length < 150).map(i => i.meaningVi.trim())));
+          const potential = Array.from(new Set(allItems.filter(i => i.id !== excludeId && i.quality === StudyItemQuality.VERIFIED && i.meaningVi && i.meaningVi.trim().length > 0 && i.meaningVi.length < 150).map(i => i.meaningVi.trim())));
           const shuffled = [...potential].sort(() => Math.random() - 0.5);
           const finalMeanings = shuffled.slice(0, count);
           if (finalMeanings.length < count) {
@@ -628,11 +628,11 @@ export const filterItem = (
     if (item.isPassive && !filterTypes.includes('archive')) return false;
 
     if (refinedFilter !== 'all') {
-        if (refinedFilter === 'refined' && item.quality !== WordQuality.REFINED) return false;
-        if (refinedFilter === 'verified' && item.quality !== WordQuality.VERIFIED) return false;
-        if (refinedFilter === 'failed' && item.quality !== WordQuality.FAILED) return false;
-        if (refinedFilter === 'raw' && item.quality !== WordQuality.RAW) return false;
-        if (refinedFilter === 'not_refined' && item.quality !== WordQuality.RAW) return false;
+        if (refinedFilter === 'refined' && item.quality !== StudyItemQuality.REFINED) return false;
+        if (refinedFilter === 'verified' && item.quality !== StudyItemQuality.VERIFIED) return false;
+        if (refinedFilter === 'failed' && item.quality !== StudyItemQuality.FAILED) return false;
+        if (refinedFilter === 'raw' && item.quality !== StudyItemQuality.RAW) return false;
+        if (refinedFilter === 'not_refined' && item.quality !== StudyItemQuality.RAW) return false;
     }
 
     if (statusFilter !== 'all') {
@@ -641,7 +641,19 @@ export const filterItem = (
         const isEasy = !!item.lastReview && item.consecutiveCorrect > 1 && item.learnedStatus === LearnedStatus.EASY;
         const isHard = !!item.lastReview && item.consecutiveCorrect > 1 && item.learnedStatus === LearnedStatus.HARD;
         const isForgot = !!item.lastReview && item.learnedStatus === LearnedStatus.FORGOT;
-        if ((statusFilter === 'new' && !isNew) || (statusFilter === 'learned' && !isLearned) || (statusFilter === 'easy' && !isEasy) || (statusFilter === 'hard' && !isHard) || (statusFilter === 'forgot' && !isForgot)) return false;
+        const isReviewing = isEasy || isHard || isForgot;
+        const isIgnored = item.learnedStatus === LearnedStatus.IGNORED;
+        const isNotIgnored = item.learnedStatus !== LearnedStatus.IGNORED;
+        if (
+            (statusFilter === 'new' && !isNew) ||
+            (statusFilter === 'learned' && !isLearned) ||
+            (statusFilter === 'easy' && !isEasy) ||
+            (statusFilter === 'hard' && !isHard) ||
+            (statusFilter === 'forgot' && !isForgot) ||
+            (statusFilter === 'reviewing' && !isReviewing) ||
+            (statusFilter === 'ignored' && !isIgnored) ||
+            (statusFilter === 'not_ignored' && !isNotIgnored)
+        ) return false;
     }
     if (registerFilter !== 'all' && (item.register || 'raw') !== registerFilter) return false;
     if (groupFilter) {
@@ -667,7 +679,16 @@ export const filterItem = (
     const isAll = filterTypes.includes('all') || filterTypes.length === 0;
     if (isAll) return !item.isPassive; 
     for (const type of filterTypes) {
-        if ((type === 'archive' && item.isPassive) || (type === 'focus' && item.isFocus) || (type === 'idiom' && item.isIdiom) || (type === 'phrasal' && item.isPhrasalVerb) || (type === 'colloc' && item.isCollocation) || (type === 'phrase' && item.isStandardPhrase) || (type === 'vocab' && !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase)) return true;
+        if (
+            (type === 'archive' && item.isPassive) ||
+            (type === 'focus' && item.isFocus) ||
+            (type === 'idiom' && item.isIdiom) ||
+            (type === 'phrasal' && item.isPhrasalVerb) ||
+            (type === 'colloc' && item.isCollocation) ||
+            (type === 'phrase' && item.isStandardPhrase) ||
+            (type === 'lesson' && item.isFreeLesson) ||
+            (type === 'vocab' && !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase && !item.isFreeLesson)
+        ) return true;
     }
     return false;
 };
@@ -682,8 +703,8 @@ export const getReviewCounts = async (): Promise<{ total: number, due: number, n
         req.onsuccess = () => {
           const all = (req.result || []) as StudyItem[];
           const active = all.filter(w => !w.isPassive && w.learnedStatus !== LearnedStatus.IGNORED);
-          const isDueWord = (w: StudyItem) => w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED;
-          const isNewWord = (w: StudyItem) => !w.lastReview && w.quality === WordQuality.VERIFIED && w.learnedStatus !== LearnedStatus.IGNORED;
+          const isDueWord = (w: StudyItem) => w.lastReview && w.nextReview <= now && w.quality !== StudyItemQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED;
+          const isNewWord = (w: StudyItem) => !w.lastReview && w.quality === StudyItemQuality.VERIFIED && w.learnedStatus !== LearnedStatus.IGNORED;
           resolve({ 
               total: active.length, 
               due: active.filter(isDueWord).length, 
@@ -707,7 +728,7 @@ export const getDueWords = async (limit: number = 30): Promise<StudyItem[]> => {
         req.onsuccess = () => {
           const allItems = (req.result || []) as StudyItem[];
           const dueWords = allItems
-            .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED)
+            .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality !== StudyItemQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED)
             .sort((a, b) => a.nextReview - b.nextReview)
             .slice(0, limit);
           resolve(dueWords);
@@ -727,7 +748,7 @@ export const getNewWords = async (limit: number = 20): Promise<StudyItem[]> => {
         req.onsuccess = () => {
           const allItems = (req.result || []) as StudyItem[];
           const newWords = allItems
-            .filter(w => !w.isPassive && !w.lastReview && w.quality === WordQuality.VERIFIED)
+            .filter(w => !w.isPassive && !w.lastReview && w.quality === StudyItemQuality.VERIFIED)
             .sort((a, b) => a.createdAt - b.createdAt)
             .slice(0, limit);
           resolve(newWords);

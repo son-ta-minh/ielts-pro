@@ -8,7 +8,7 @@ import React, {
     useState
 } from 'react';
 import { CheckCircle2, Loader2, Wand2, X } from 'lucide-react';
-import { User, StudyItem, WordQuality } from '../../app/types';
+import { User, StudyItem, StudyItemQuality } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
 import { runWordRefineWithRetry, WordRefineProgressSnapshot } from '../../services/wordRefineApi';
@@ -220,7 +220,7 @@ export const AutoRefineProvider: React.FC<{
                     currentWordText: fallbackWordLabel
                 }));
 
-                if (!liveWord || liveWord.quality !== WordQuality.RAW || !!liveWord.isPassive) {
+                if (!liveWord || liveWord.quality !== StudyItemQuality.RAW || !!liveWord.isPassive) {
                     markWordProcessed(wordId, fallbackWordLabel, { success: true });
                     showToast(`Auto Refine skipped "${fallbackWordLabel}" because it is no longer an active RAW word.`, 'info', 2500);
                     continue;
@@ -333,7 +333,7 @@ export const AutoRefineProvider: React.FC<{
         }
 
         const rawWords = dataStore.getAllWords()
-            .filter((word) => word.userId === currentUser.id && word.quality === WordQuality.RAW && !word.isPassive);
+            .filter((word) => word.userId === currentUser.id && word.quality === StudyItemQuality.RAW && !word.isPassive);
 
         if (rawWords.length === 0) {
             showToast('No RAW words found for Auto Refine.', 'info');

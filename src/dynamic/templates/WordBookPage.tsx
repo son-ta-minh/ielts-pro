@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { User, WordBook, WordBookItem, StudyItem, FocusColor, WordQuality, Unit, LearnedStatus } from '../../app/types';
+import { User, WordBook, WordBookItem, StudyItem, FocusColor, StudyItemQuality, Unit, LearnedStatus } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
@@ -40,7 +40,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
 
     const [filterColor, setFilterColor] = useState<FocusColor | 'none' | 'all'>('all');
     const [filterStatus, setFilterStatus] = useState<LearnedStatus | 'all'>('all');
-    const [filterQuality, setFilterQuality] = useState<WordQuality | 'all'>('all');
+    const [filterQuality, setFilterQuality] = useState<StudyItemQuality | 'all'>('all');
 
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
     const [bookToDelete, setBookToDelete] = useState<WordBook | null>(null);
@@ -545,10 +545,10 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
                                     className="bg-white border border-neutral-200 rounded-xl px-2 py-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none cursor-pointer"
                                 >
                                     <option value="all">Any Quality</option>
-                                    <option value={WordQuality.VERIFIED}>Verified</option>
-                                    <option value={WordQuality.REFINED}>Refined</option>
-                                    <option value={WordQuality.RAW}>Raw</option>
-                                    <option value={WordQuality.FAILED}>Failed</option>
+                                    <option value={StudyItemQuality.VERIFIED}>Verified</option>
+                                    <option value={StudyItemQuality.REFINED}>Refined</option>
+                                    <option value={StudyItemQuality.RAW}>Raw</option>
+                                    <option value={StudyItemQuality.FAILED}>Failed</option>
                                 </select>
 
                                 {(filterColor !== 'all' || filterStatus !== 'all' || filterQuality !== 'all') && (

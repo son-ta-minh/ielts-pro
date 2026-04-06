@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench, Plus, Trash2, Tag, Check, Circle, Ear, BookMarked, Calendar, Cloud, Wifi, Link, ListTodo, Globe } from 'lucide-react';
-import { DataScope, StudyItem, WordQuality } from '../../app/types';
+import { DataScope, StudyItem, StudyItemQuality } from '../../app/types';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../common/ConfirmationModal';
 import * as dataStore from '../../app/dataStore';
@@ -106,7 +106,7 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
 
             // 1. Identify RAW words
             const allWords = dataStore.getAllWords();
-            const rawWords = allWords.filter(w => w.quality === WordQuality.RAW);
+            const rawWords = allWords.filter(w => w.quality === StudyItemQuality.RAW);
             
             if (rawWords.length === 0) {
                 showToast("No RAW words found to refine.", "info");
@@ -149,7 +149,7 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
                         isIdiom: foundItem.isIdiom,
                         isCollocation: foundItem.isCollocation,
                         isPhrasalVerb: foundItem.isPhrasalVerb,
-                        quality: WordQuality.REFINED, // Set as Refined so user can verify
+                        quality: StudyItemQuality.REFINED, // Set as Refined so user can verify
                         updatedAt: Date.now()
                     };
                     

@@ -1,4 +1,4 @@
-import { StudyItem, ReviewGrade, WordQuality, WordFamily, LearnedStatus } from '../app/types';
+import { StudyItem, ReviewGrade, StudyItemQuality, WordFamily, LearnedStatus } from '../app/types';
 import { ChallengeType } from '../components/practice/TestModalTypes';
 import { generateAvailableChallenges } from './challengeUtils';
 import { calculateGameEligibility } from './gameEligibility';
@@ -275,7 +275,7 @@ export async function createNewWord(
     keywords: [],
     isIdiom, isPhrasalVerb, isCollocation, isStandardPhrase, isPassive,
     isFocus: false,
-    register: 'raw', quality: WordQuality.RAW, isExampleLocked: false,
+    register: 'raw', quality: StudyItemQuality.RAW,
     createdAt: now, updatedAt: now, nextReview: now, interval: 0, easeFactor: 2.5, consecutiveCorrect: 0, forgotCount: 0,
     learnedStatus: LearnedStatus.NEW,
     lastTestResults: {}

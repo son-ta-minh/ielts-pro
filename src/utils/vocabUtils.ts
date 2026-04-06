@@ -1,4 +1,4 @@
-import { StudyItem, WordFamilyMember, PrepositionPattern, ParaphraseOption, CollocationDetail, WordQuality } from '../app/types';
+import { StudyItem, WordFamilyMember, PrepositionPattern, ParaphraseOption, CollocationDetail, StudyItemQuality } from '../app/types';
 import { calculateGameEligibility } from './gameEligibility';
 import { calculateComplexity, calculateMasteryScore } from './srs';
 
@@ -274,7 +274,7 @@ export const mergeAiResultIntoWord = (baseItem: StudyItem, rawAiResult: any): St
     updatedItem.isPassive = aiResult.isPassive !== undefined ? !!aiResult.isPassive : baseItem.isPassive;
     updatedItem.isFocus = aiResult.isFocus !== undefined ? !!aiResult.isFocus : baseItem.isFocus;
     
-    updatedItem.quality = WordQuality.REFINED;
+    updatedItem.quality = StudyItemQuality.REFINED;
     
     updatedItem.complexity = calculateComplexity(updatedItem);
     updatedItem.masteryScore = calculateMasteryScore(updatedItem);

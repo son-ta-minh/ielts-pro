@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { X, Save, Sparkles, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, BookText, ClipboardList } from 'lucide-react';
-import { StudyItem, WordFamily, WordFamilyMember, LearnedStatus, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
+import { X, Save, Sparkles, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, BookText, ClipboardList, GraduationCap } from 'lucide-react';
+import { StudyItem, WordFamily, WordFamilyMember, LearnedStatus, ParaphraseOption, PrepositionPattern, CollocationDetail, StudyItemQuality, ParaphraseTone } from '../../app/types';
 
 const StatusDropdown: React.FC<{
     label?: string;
@@ -49,7 +49,7 @@ export interface EditStudyItemModalUIProps {
   onSwitchToView: () => void;
   formData: any; 
   setFormData: (field: keyof StudyItem | 'groupsString' | 'studiedStatus' | 'prepositionsList' | 'essayEdit' | 'testEdit', value: any) => void;
-  setFlag: (flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' | 'isFocus') => void;
+  setFlag: (flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' | 'isFocus' | 'isFreeLesson') => void;
   familyHandler: (type: keyof WordFamily) => { update: (index: number, field: 'word', value: string) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: () => void; };
   prepList: { update: (index: number, changes: object) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: (newItem: object) => void; };
   collocList: { update: (index: number, changes: object) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: (newItem: object) => void; };
@@ -233,10 +233,10 @@ export const EditStudyItemModalUI: React.FC<EditStudyItemModalUIProps> = (props)
   ];
 
   const qualityOptions = [
-    { id: WordQuality.RAW, label: 'Raw', icon: <Ghost size={14} className="text-neutral-400" /> },
-    { id: WordQuality.REFINED, label: 'Refined', icon: <Wand2 size={14} className="text-indigo-500" /> },
-    { id: WordQuality.VERIFIED, label: 'Verified', icon: <ShieldCheck size={14} className="text-emerald-500" /> },
-    { id: WordQuality.FAILED, label: 'Incorrect', icon: <ShieldX size={14} className="text-rose-500" /> },
+    { id: StudyItemQuality.RAW, label: 'Raw', icon: <Ghost size={14} className="text-neutral-400" /> },
+    { id: StudyItemQuality.REFINED, label: 'Refined', icon: <Wand2 size={14} className="text-indigo-500" /> },
+    { id: StudyItemQuality.VERIFIED, label: 'Verified', icon: <ShieldCheck size={14} className="text-emerald-500" /> },
+    { id: StudyItemQuality.FAILED, label: 'Incorrect', icon: <ShieldX size={14} className="text-rose-500" /> },
   ];
 
   const learnStatusOptions = [
@@ -634,7 +634,7 @@ export const EditStudyItemModalUI: React.FC<EditStudyItemModalUIProps> = (props)
                     <div className="space-y-6 animate-in fade-in duration-300">
                         <div className="space-y-2">
                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Flags</label>
-                           <div className="flex flex-wrap gap-2 p-3 bg-white border border-neutral-200 rounded-2xl">{[{ id: 'isIdiom', label: 'Idiom', icon: Quote }, { id: 'isCollocation', label: 'Colloc.', icon: Combine }, { id: 'isStandardPhrase', label: 'Phrase', icon: MessageSquare }, { id: 'isPhrasalVerb', label: 'Phrasal', icon: Layers }, { id: 'isIrregular', label: 'Irregular', icon: RotateCw }, { id: 'isPassive', label: 'Archive', icon: formData.isPassive ? Archive : Trash2 }, { id: 'isFocus', label: 'Focus', icon: Zap }].map(btn => (<button key={btn.id} type="button" onClick={() => setFlag(btn.id as any)} className={`flex items-center space-x-1.5 py-1.5 px-3 rounded-lg border transition-all font-bold text-[9px] uppercase tracking-wider ${formData[btn.id] ? 'bg-neutral-900 border-neutral-900 text-white shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-300'}`}><btn.icon size={10} /><span>{btn.label}</span></button>))}</div>
+                           <div className="flex flex-wrap gap-2 p-3 bg-white border border-neutral-200 rounded-2xl">{[{ id: 'isIdiom', label: 'Idiom', icon: Quote }, { id: 'isCollocation', label: 'Colloc.', icon: Combine }, { id: 'isStandardPhrase', label: 'Phrase', icon: MessageSquare }, { id: 'isPhrasalVerb', label: 'Phrasal', icon: Layers }, { id: 'isIrregular', label: 'Irregular', icon: RotateCw }, { id: 'isFreeLesson', label: 'Lesson', icon: GraduationCap }, { id: 'isPassive', label: 'Archive', icon: formData.isPassive ? Archive : Trash2 }, { id: 'isFocus', label: 'Focus', icon: Zap }].map(btn => (<button key={btn.id} type="button" onClick={() => setFlag(btn.id as any)} className={`flex items-center space-x-1.5 py-1.5 px-3 rounded-lg border transition-all font-bold text-[9px] uppercase tracking-wider ${formData[btn.id] ? 'bg-neutral-900 border-neutral-900 text-white shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-300'}`}><btn.icon size={10} /><span>{btn.label}</span></button>))}</div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                            <div className="space-y-2">

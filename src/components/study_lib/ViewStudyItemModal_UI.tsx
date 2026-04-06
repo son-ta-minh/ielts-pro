@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 // Added missing RefreshCw import
 import { Search, LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BookOpenText, Image, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
-import { StudyItem, WordFamilyMember, LearnedStatus, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
+import { StudyItem, WordFamilyMember, LearnedStatus, Unit, StudyItemQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
@@ -195,6 +195,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
     const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
     const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
     const [selectedDisplayText, setSelectedDisplayText] = useState('');
+    const selectedDisplayTextRef = useRef('');
     const aiMenuRef = useRef<HTMLDivElement>(null);
     const actionMenuRef = useRef<HTMLDivElement>(null);
     const activeCollocations = useMemo(
@@ -202,10 +203,16 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
         [word.collocationsArray]
     );
     const canAutoSetDisplay = activeCollocations.length > 0;
-    const readSelectionText = () => {
+    const readSelectionText = useCallback(() => {
         const selection = window.getSelection?.()?.toString().trim() || '';
-        setSelectedDisplayText(selection.replace(/\s+/g, ' ').trim());
-    };
+        const normalized = selection.replace(/\s+/g, ' ').trim();
+        selectedDisplayTextRef.current = normalized;
+        return normalized;
+    }, []);
+    const syncSelectedDisplayText = useCallback(() => {
+        const normalized = readSelectionText();
+        setSelectedDisplayText(prev => (prev === normalized ? prev : normalized));
+    }, [readSelectionText]);
     const isLibraryWord = (value: string) => {
         const normalized = value.trim().toLowerCase();
         if (!normalized) return false;
@@ -409,14 +416,14 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
     useEffect(() => {
         readSelectionText();
         document.addEventListener('selectionchange', readSelectionText);
-        window.addEventListener('mouseup', readSelectionText);
-        window.addEventListener('keyup', readSelectionText);
+        window.addEventListener('mouseup', syncSelectedDisplayText);
+        window.addEventListener('keyup', syncSelectedDisplayText);
         return () => {
             document.removeEventListener('selectionchange', readSelectionText);
-            window.removeEventListener('mouseup', readSelectionText);
-            window.removeEventListener('keyup', readSelectionText);
+            window.removeEventListener('mouseup', syncSelectedDisplayText);
+            window.removeEventListener('keyup', syncSelectedDisplayText);
         };
-    }, []);
+    }, [readSelectionText, syncSelectedDisplayText]);
 
     useEffect(() => {
         (window as any).handleLessonSpeak = (text: string, lang?: 'en' | 'vi') => {
@@ -517,10 +524,10 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
     const currentLearnStatus = word.learnedStatus || LearnedStatus.NEW;
 
     const qualityStatusOptions = [
-        { id: WordQuality.RAW, label: 'Raw', icon: <Ghost size={14} className="text-neutral-400" /> },
-        { id: WordQuality.REFINED, label: 'To Review', icon: <Wand2 size={14} className="text-indigo-500" /> },
-        { id: WordQuality.VERIFIED, label: 'Verified', icon: <ShieldCheck size={14} className="text-emerald-500" /> },
-        { id: WordQuality.FAILED, label: 'Incorrect', icon: <ShieldX size={14} className="text-rose-500" /> },
+        { id: StudyItemQuality.RAW, label: 'Raw', icon: <Ghost size={14} className="text-neutral-400" /> },
+        { id: StudyItemQuality.REFINED, label: 'To Review', icon: <Wand2 size={14} className="text-indigo-500" /> },
+        { id: StudyItemQuality.VERIFIED, label: 'Verified', icon: <ShieldCheck size={14} className="text-emerald-500" /> },
+        { id: StudyItemQuality.FAILED, label: 'Incorrect', icon: <ShieldX size={14} className="text-rose-500" /> },
     ];
     const selectedLearnStatus = learnStatusOptions.find((option) => option.id === currentLearnStatus) || learnStatusOptions[0];
     const selectedQualityStatus = qualityStatusOptions.find((option) => option.id === word.quality) || qualityStatusOptions[0];
@@ -751,7 +758,10 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                 <div
                                     className="relative shrink-0"
                                     ref={actionMenuRef}
-                                    onMouseEnter={() => setIsActionMenuOpen(true)}
+                                    onMouseEnter={() => {
+                                        syncSelectedDisplayText();
+                                        setIsActionMenuOpen(true);
+                                    }}
                                     onMouseLeave={() => setIsActionMenuOpen(false)}
                                 >
                                     <button
@@ -787,7 +797,10 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                                         type="button"
                                                         disabled={isSettingDisplay}
                                                         title='Show display text instead of headword in the app. For example, if the word is "run" but you want to be reminded of "running", you can select "running" in the text and choose "Set Display As".'
-                                                        onClick={() => handleActionMenuAction(() => void onSetDisplayRequest?.(trimmedSelectionText || undefined))}
+                                                        onClick={() => handleActionMenuAction(() => {
+                                                            const latestSelectedText = readSelectionText() || trimmedSelectionText;
+                                                            void onSetDisplayRequest?.(latestSelectedText || undefined);
+                                                        })}
                                                         className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-cyan-50 disabled:opacity-50"
                                                     >
                                                         {isSettingDisplay ? <Loader2 size={12} className="animate-spin" /> : <BookOpenText size={12} />}
@@ -1251,7 +1264,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                             </label>
                                             <div />
                                         </div>
-                                        <div className="w-full text-sm leading-snug text-neutral-700">
+                                        <div className="w-full select-text text-sm leading-snug text-neutral-700">
                                         {exampleSentences.map((sentence, index) => {
                                             const isHighlighted = activeExampleHighlight ? doesExampleContain(activeExampleHighlight, sentence) : false;
                                             return (
