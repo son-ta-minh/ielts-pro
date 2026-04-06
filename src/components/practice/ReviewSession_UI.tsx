@@ -13,7 +13,7 @@ import { calculateMasteryScore, getAllValidTestKeys } from '../../utils/srs';
 import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { getServerUrl, getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
 
-const GENERATED_EXAMPLE_BUFFER_SIZE = 3;
+const GENERATED_EXAMPLE_BUFFER_SIZE = 5;
 
 const normalizeExampleLine = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
 
@@ -165,6 +165,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [spellInput, setSpellInput] = useState('');
     const [spellResult, setSpellResult] = useState<'correct' | 'wrong' | null>(null);
     const [isStudyBuddyExampleVisible, setIsStudyBuddyExampleVisible] = useState(false);
+    const [isExampleTextRevealed, setIsExampleTextRevealed] = useState(false);
     const [studyBuddyExample, setStudyBuddyExample] = useState<string | null>(null);
     const [studyBuddyExampleBuffer, setStudyBuddyExampleBuffer] = useState<string[]>([]);
     const [isStudyBuddyExampleLoading, setIsStudyBuddyExampleLoading] = useState(false);
@@ -201,34 +202,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
       setWordInModal(word);
     };
 
-    if (initialWords.length === 0) {
-        return <div className="flex flex-col items-center justify-center space-y-6 py-20 text-center animate-in fade-in duration-500"><div className="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center shadow-inner"><Check size={32} /></div><h2 className="text-xl font-bold text-neutral-900">All clear!</h2><button onClick={onComplete} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-semibold text-sm hover:bg-neutral-800 transition-colors">Back to Dashboard</button></div>;
-    }
-    
-    if (sessionFinished && autoCloseOnFinish) {
-        console.log('[InlineReview][ReviewSessionUI] return null because sessionFinished && autoCloseOnFinish');
-        return null;
-    }
-
-    if (sessionFinished) {
-        console.log('[InlineReview][ReviewSessionUI] rendering recap screen', {
-            sessionType,
-            autoCloseOnFinish,
-            isQuickFire,
-            outcomes: sessionOutcomes
-        });
-        if (sessionType === 'new' || sessionType === 'due' || sessionType === 'new_study' || sessionType === 'custom' || isQuickFire) {
-          const passCount = Object.values(sessionOutcomes).filter(v => v === 'PASS' || v === ReviewGrade.EASY || v === ReviewGrade.LEARNED).length;
-          return (
-            <div className="max-w-2xl mx-auto py-10 text-center animate-in zoom-in-95 duration-500">
-              <div className="mb-6"><div className={`mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-4 ${isQuickFire ? 'bg-amber-100 text-amber-600' : 'bg-neutral-100 text-neutral-900'}`}>{isQuickFire ? <Zap size={40} fill="currentColor" /> : <BookCopy size={40} />}</div><h2 className="text-3xl font-black text-neutral-900">{isQuickFire ? 'Test Result' : 'Session Recap'}</h2>{isQuickFire && <p className="text-xs font-black text-neutral-400 uppercase tracking-[0.2em] mt-2">Score: {passCount} / {sessionWords.length}</p>}<p className="text-neutral-500 mt-2 font-medium">You've completed this focused session.</p></div>
-              <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm mb-8 overflow-hidden"><div className="max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-2">{sessionWords.map(word => (<div key={word.id} className="flex justify-between items-center bg-neutral-50/70 p-2.5 rounded-xl border border-neutral-100"><span className="font-bold text-neutral-800 text-xs truncate pr-2">{(word.display || '').trim() || word.word}</span>{renderStatusBadge(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)}</div>))}</div></div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><button onClick={onComplete} className="px-6 py-4 bg-white border border-neutral-200 text-neutral-500 rounded-2xl font-bold text-xs hover:bg-neutral-50 hover:border-neutral-900 transition-all active:scale-95 uppercase tracking-widest">Finish Session</button><button onClick={handleRetry} className="px-6 py-4 bg-neutral-900 text-white rounded-2xl font-black text-xs flex items-center justify-center space-x-2 shadow-lg hover:bg-neutral-800 transition-all active:scale-95 uppercase tracking-widest"><RotateCw size={14} /><span>Retry This Session</span></button></div>
-            </div>
-          );
-        }
-        return <div className="flex flex-col items-center justify-center py-20 text-center animate-in zoom-in-95 duration-500"><Trophy size={64} className="text-yellow-500 mb-4 animate-bounce" /><h2 className="text-3xl font-black text-neutral-900">Session Complete!</h2><p className="text-neutral-500 mt-2 font-medium">You have finished this review session.</p><button onClick={onComplete} className="mt-8 px-10 py-3.5 bg-neutral-900 text-white rounded-2xl font-bold shadow-xl hover:scale-105 transition-all text-sm">Return to Dashboard</button></div>;
-    }
+    // (all hooks and helpers above)
 
     const HeaderIcon = isNewWord ? Lightbulb : BookOpen;
     const headerColor = isNewWord ? 'text-blue-500' : 'text-neutral-500';
@@ -263,7 +237,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
 
     const extractFreshExamples = useCallback((rawText: string): string[] => {
         const seen = studyBuddyExampleSeenRef.current;
-        return splitExampleLines(rawText).filter((line) => {
+        const result = splitExampleLines(rawText).filter((line) => {
             const normalized = normalizeExampleLine(line);
             if (!normalized) return false;
             if (existingExampleSet.has(normalized)) return false;
@@ -271,9 +245,14 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
             seen.add(normalized);
             return true;
         });
+        return result;
     }, [existingExampleSet]);
 
     const mergeBufferedExamples = useCallback((incomingExamples: string[], options?: { replace?: boolean }) => {
+        console.log('[StudyBuddy][Buffer] MERGE INCOMING', {
+            incomingExamples,
+            replace: options?.replace
+        });
         if (incomingExamples.length === 0) return;
         setStudyBuddyExampleBuffer((prev) => {
             const merged = options?.replace ? incomingExamples : [...prev, ...incomingExamples];
@@ -285,12 +264,20 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                 localSeen.add(normalized);
                 unique.push(item);
             });
+            console.log('[StudyBuddy][Buffer] AFTER MERGE', {
+                previous: prev,
+                merged,
+                unique
+            });
             return unique;
         });
     }, []);
 
     const requestStudyBuddyExamples = useCallback(async (word: StudyItem, signal?: AbortSignal, replaceBuffer = false): Promise<string[]> => {
-        const bannedExamples = splitExampleLines(word.example || '').slice(0, 3);
+        const bannedExamples = [
+            ...splitExampleLines(word.example || ''),
+            ...Array.from(studyBuddyExampleSeenRef.current)
+        ];
         const audienceInstruction = getAudienceInstruction(user);
         const levelInstruction = user.currentLevel ? `Learner level: ${user.currentLevel}.` : '';
         const targetInstruction = user.target ? `Learner goal: ${user.target}.` : '';
@@ -319,7 +306,7 @@ Rules:
 - Keep each sentence concise.
 - Do not repeat the same pattern.
 - Do not explain anything.
-${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing examples:\n${bannedExamples.map((item) => `  • ${item}`).join('\n')}` : ''}`
+${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these examples (strictly avoid duplicates or similar structures):\n${bannedExamples.map((item) => `  • ${item}`).join('\n')}` : ''}`
                     }
                 ],
                 searchEnabled: false,
@@ -414,7 +401,14 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
     }, [extractFreshExamples, mergeBufferedExamples, studyBuddyAiUrl, user]);
 
     const prefetchStudyBuddyExamples = useCallback((word: StudyItem, options?: { replace?: boolean }) => {
+        console.log('[StudyBuddy][Prefetch] CALLED', {
+            wordId: word.id,
+            replace: options?.replace,
+            existingRequestWordId: studyBuddyExampleRequestWordIdRef.current,
+            hasOngoingRequest: !!studyBuddyExampleRequestRef.current
+        });
         if (studyBuddyExampleRequestRef.current && studyBuddyExampleRequestWordIdRef.current === word.id) {
+            console.log('[StudyBuddy][Prefetch] REUSE EXISTING REQUEST');
             return studyBuddyExampleRequestRef.current;
         }
 
@@ -422,7 +416,13 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
         studyBuddyExampleAbortRef.current?.abort();
         studyBuddyExampleAbortRef.current = controller;
         studyBuddyExampleRequestWordIdRef.current = word.id;
-        setIsStudyBuddyExampleLoading(true);
+        console.log('[StudyBuddy][Prefetch] NEW REQUEST START', {
+            wordId: word.id,
+            replace: options?.replace
+        });
+        if (studyBuddyExampleRevealRef.current) {
+            setIsStudyBuddyExampleLoading(true);
+        }
         setStudyBuddyExampleError(null);
         if (options?.replace) {
             setStudyBuddyExampleBuffer([]);
@@ -434,6 +434,23 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
                 if (incomingExamples.length === 0) {
                     setStudyBuddyExampleError('No fresh example right now.');
                 }
+
+                // ✅ Auto-consume immediately using incomingExamples (NOT relying on async buffer state)
+                if (studyBuddyExampleRevealRef.current) {
+                    const first = incomingExamples?.[0];
+
+                    if (first) {
+                        setStudyBuddyExample(first);
+                        setStudyBuddyExampleError(null);
+                        setIsStudyBuddyExampleLoading(false); // ✅ stop loading immediately
+
+                        // remove it from buffer AFTER merge (avoid double showing)
+                        setStudyBuddyExampleBuffer((prev) =>
+                            prev.filter((item) => normalizeExampleLine(item) !== normalizeExampleLine(first))
+                        );
+                    }
+                }
+
                 return incomingExamples;
             })
             .catch((error) => {
@@ -450,7 +467,10 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
                     studyBuddyExampleRequestRef.current = null;
                     studyBuddyExampleRequestWordIdRef.current = null;
                 }
-                setIsStudyBuddyExampleLoading(false);
+                // only turn off loading if not already turned off by auto-consume
+                if (studyBuddyExampleRevealRef.current) {
+                    setIsStudyBuddyExampleLoading(false);
+                }
             });
 
         studyBuddyExampleRequestRef.current = requestPromise;
@@ -460,56 +480,79 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
     const showNextStudyBuddyExample = useCallback(async () => {
         setIsStudyBuddyExampleVisible(true);
         studyBuddyExampleRevealRef.current = false;
-        let nextExample: string | null = null;
-        let remainingCount = 0;
 
-        setStudyBuddyExampleBuffer((prev) => {
-            if (prev.length === 0) return prev;
-            const [first, ...rest] = prev;
-            nextExample = first;
-            remainingCount = rest.length;
-            return rest;
+        const bufferSnapshot = studyBuddyExampleBuffer;
+
+        console.log('[StudyBuddy][NextExample] BUFFER SNAPSHOT', {
+            buffer: bufferSnapshot,
+            bufferLength: bufferSnapshot.length,
+            currentWordId: currentWord.id,
+            activeRequestWordId: studyBuddyExampleRequestWordIdRef.current
         });
 
-        if (nextExample) {
-            setStudyBuddyExample(nextExample);
-            setStudyBuddyExampleError(null);
-            if (remainingCount < 2) {
+        // ✅ Read from snapshot (sync), not via setState
+        if (bufferSnapshot.length > 0) {
+            const [first, ...rest] = bufferSnapshot;
+
+            console.log('[StudyBuddy][NextExample] BUFFER HIT', {
+                nextExample: first,
+                remainingCount: rest.length
+            });
+
+            // update buffer
+            setStudyBuddyExampleBuffer(rest);
+
+            if (rest.length < 2) {
                 void prefetchStudyBuddyExamples(currentWord);
             }
+
+            setStudyBuddyExample(first);
+            setStudyBuddyExampleError(null);
             return;
         }
 
+        // Prevent duplicate fetch if a request is already ongoing for this word
+        if (studyBuddyExampleRequestRef.current && studyBuddyExampleRequestWordIdRef.current === currentWord.id) {
+            console.log('[StudyBuddy][NextExample] WAITING FOR EXISTING REQUEST');
+            studyBuddyExampleRevealRef.current = true;
+
+            // ✅ Do NOT require extra click; result will auto-consume when ready
+            return;
+        }
+
+        console.log('[StudyBuddy][NextExample] BUFFER MISS - requesting new examples', {
+            shouldReplace: studyBuddyExampleRequestWordIdRef.current !== currentWord.id,
+            currentWordId: currentWord.id,
+            activeRequestWordId: studyBuddyExampleRequestWordIdRef.current
+        });
+
         setStudyBuddyExampleError(null);
         studyBuddyExampleRevealRef.current = true;
+
         try {
             const shouldReplace = studyBuddyExampleRequestWordIdRef.current !== currentWord.id;
-            const incomingExamples = await prefetchStudyBuddyExamples(currentWord, { replace: shouldReplace });
-            const fallbackExample = incomingExamples?.[0];
-            if (fallbackExample) {
-                setStudyBuddyExample(fallbackExample);
-                setStudyBuddyExampleBuffer((prev) => {
-                    const normalizedFallback = normalizeExampleLine(fallbackExample);
-                    return prev.filter((item) => normalizeExampleLine(item) !== normalizedFallback);
-                });
-            } else {
-                setStudyBuddyExample(null);
-            }
+            await prefetchStudyBuddyExamples(currentWord, { replace: shouldReplace });
+
+            // Do nothing here — auto-consume is handled inside prefetch
         } finally {
             studyBuddyExampleRevealRef.current = false;
         }
-    }, [currentWord, prefetchStudyBuddyExamples]);
+    }, [currentWord, prefetchStudyBuddyExamples, studyBuddyExampleBuffer]);
 
     useEffect(() => {
         studyBuddyExampleAbortRef.current?.abort();
         studyBuddyExampleRequestRef.current = null;
         studyBuddyExampleRequestWordIdRef.current = null;
         studyBuddyExampleSeenRef.current = new Set();
-        studyBuddyExampleRevealRef.current = false;
-        setIsStudyBuddyExampleVisible(false);
+        // Clear displayed + buffered examples when switching headword
         setStudyBuddyExample(null);
         setStudyBuddyExampleBuffer([]);
+        studyBuddyExampleRevealRef.current = false;
+        setIsStudyBuddyExampleVisible(false);
         setStudyBuddyExampleError(null);
+        setIsExampleTextRevealed(false);
+        // Prefetch silently (no loading UI)
+        studyBuddyExampleRevealRef.current = false;
         void prefetchStudyBuddyExamples(currentWord, { replace: true });
 
         return () => {
@@ -539,6 +582,36 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
         touchStartX.current = null;
     };
 
+    // Conditional returns moved below hooks
+    if (initialWords.length === 0) {
+        return <div className="flex flex-col items-center justify-center space-y-6 py-20 text-center animate-in fade-in duration-500"><div className="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center shadow-inner"><Check size={32} /></div><h2 className="text-xl font-bold text-neutral-900">All clear!</h2><button onClick={onComplete} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-semibold text-sm hover:bg-neutral-800 transition-colors">Back to Dashboard</button></div>;
+    }
+    
+    if (sessionFinished && autoCloseOnFinish) {
+        console.log('[InlineReview][ReviewSessionUI] return null because sessionFinished && autoCloseOnFinish');
+        return null;
+    }
+
+    if (sessionFinished) {
+        console.log('[InlineReview][ReviewSessionUI] rendering recap screen', {
+            sessionType,
+            autoCloseOnFinish,
+            isQuickFire,
+            outcomes: sessionOutcomes
+        });
+        if (sessionType === 'new' || sessionType === 'due' || sessionType === 'new_study' || sessionType === 'custom' || isQuickFire) {
+          const passCount = Object.values(sessionOutcomes).filter(v => v === 'PASS' || v === ReviewGrade.EASY || v === ReviewGrade.LEARNED).length;
+          return (
+            <div className="max-w-2xl mx-auto py-10 text-center animate-in zoom-in-95 duration-500">
+              <div className="mb-6"><div className={`mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-4 ${isQuickFire ? 'bg-amber-100 text-amber-600' : 'bg-neutral-100 text-neutral-900'}`}>{isQuickFire ? <Zap size={40} fill="currentColor" /> : <BookCopy size={40} />}</div><h2 className="text-3xl font-black text-neutral-900">{isQuickFire ? 'Test Result' : 'Session Recap'}</h2>{isQuickFire && <p className="text-xs font-black text-neutral-400 uppercase tracking-[0.2em] mt-2">Score: {passCount} / {sessionWords.length}</p>}<p className="text-neutral-500 mt-2 font-medium">You've completed this focused session.</p></div>
+              <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm mb-8 overflow-hidden"><div className="max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-2">{sessionWords.map(word => (<div key={word.id} className="flex justify-between items-center bg-neutral-50/70 p-2.5 rounded-xl border border-neutral-100"><span className="font-bold text-neutral-800 text-xs truncate pr-2">{(word.display || '').trim() || word.word}</span>{renderStatusBadge(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)}</div>))}</div></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><button onClick={onComplete} className="px-6 py-4 bg-white border border-neutral-200 text-neutral-500 rounded-2xl font-bold text-xs hover:bg-neutral-50 hover:border-neutral-900 transition-all active:scale-95 uppercase tracking-widest">Finish Session</button><button onClick={handleRetry} className="px-6 py-4 bg-neutral-900 text-white rounded-2xl font-black text-xs flex items-center justify-center space-x-2 shadow-lg hover:bg-neutral-800 transition-all active:scale-95 uppercase tracking-widest"><RotateCw size={14} /><span>Retry This Session</span></button></div>
+            </div>
+          );
+        }
+        return <div className="flex flex-col items-center justify-center py-20 text-center animate-in zoom-in-95 duration-500"><Trophy size={64} className="text-yellow-500 mb-4 animate-bounce" /><h2 className="text-3xl font-black text-neutral-900">Session Complete!</h2><p className="text-neutral-500 mt-2 font-medium">You have finished this review session.</p><button onClick={onComplete} className="mt-8 px-10 py-3.5 bg-neutral-900 text-white rounded-2xl font-bold shadow-xl hover:scale-105 transition-all text-sm">Return to Dashboard</button></div>;
+    }
+
     return (
         <>
             <div className="max-w-3xl mx-auto h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] flex flex-col animate-in fade-in duration-300 px-3 sm:px-0">
@@ -563,7 +636,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
                 <div className="flex-1 flex items-center justify-center relative gap-2 sm:gap-4">
                     <button 
                         onClick={() => setProgress(p => ({ ...p, current: (p.current - 1 + sessionWords.length) % sessionWords.length }))} 
-                        className="hidden sm:block p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all"
+                        className="hidden sm:block p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all relative z-20"
                         aria-label="Previous word"
                     >
                         <ArrowLeft size={28} />
@@ -572,7 +645,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
                     <div
                         onTouchStart={handleTouchStart}
                         onTouchEnd={handleTouchEnd}
-                        className="w-full max-w-xl h-full bg-white rounded-3xl sm:rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col relative group select-none touch-pan-y"
+                        className="w-full max-w-xl h-full bg-white rounded-3xl sm:rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col relative group touch-pan-y"
                     >
                         {isQuickFire ? (
                             <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 w-full text-center space-y-4">
@@ -780,15 +853,17 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
                                             </span>
                                         </div>
                                     )}
-                                    <div className="relative group/example">
-                                        <button
-                                            onClick={() => void showNextStudyBuddyExample()}
-                                            className="p-3 rounded-full transition-colors text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-fuchsia-600"
-                                            title="Example"
-                                        >
-                                            <BookCopy size={20} />
-                                        </button>
-                                    </div>
+                                    {!isNewWord && (
+                                        <div className="relative group/example">
+                                            <button
+                                                onClick={() => void showNextStudyBuddyExample()}
+                                                className="p-3 rounded-full transition-colors text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-fuchsia-600"
+                                                title="Example"
+                                            >
+                                                <BookCopy size={20} />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
@@ -805,32 +880,69 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
                                         <BrainCircuit size={14}/><span>Practice</span>
                                     </button>
                                 </div>
-                                {(isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
-                                    <div className="w-full max-w-lg">
-                                        <button
-                                            type="button"
-                                            onClick={() => void showNextStudyBuddyExample()}
-                                            className="w-full rounded-[1.75rem] border border-fuchsia-200 bg-fuchsia-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-fuchsia-50"
+                                {!isNewWord && (isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
+                                    <div className="w-full max-w-lg relative z-0">
+                                        <div
+                                            className="w-full rounded-[1.75rem] border border-blue-200 bg-blue-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-blue-50 relative z-10"
                                         >
                                             <div className="mb-2 flex items-center justify-between gap-3">
-                                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-fuchsia-700">
-                                                    <BookCopy size={12} />
-                                                    <span>Example</span>
+                                                <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-blue-700">
+                                                    <div className="flex items-center gap-2">
+                                                        <BookCopy size={12} />
+                                                        <span>Example</span>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (studyBuddyExample) speak(studyBuddyExample);
+                                                            }}
+                                                            className="p-1.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                                                            title="Speak example"
+                                                        >
+                                                            <Volume2 size={12} />
+                                                        </button>
+                                                    </div>
+                                                    <label className="flex items-center gap-1 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isExampleTextRevealed}
+                                                            onChange={(e) => {
+                                                                e.stopPropagation();
+                                                                setIsExampleTextRevealed(e.target.checked);
+                                                            }}
+                                                            className="w-3 h-3 accent-blue-600"
+                                                        />
+                                                        <span className="text-[9px] font-bold text-blue-600">Reveal</span>
+                                                    </label>
                                                 </div>
-                                                <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-colors ${isStudyBuddyExampleLoading ? 'bg-fuchsia-200 text-fuchsia-800' : 'bg-white text-fuchsia-700 border border-fuchsia-200'}`}>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        void showNextStudyBuddyExample();
+                                                    }}
+                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-all ${
+                                                        isStudyBuddyExampleLoading
+                                                            ? 'bg-blue-200 text-blue-800 cursor-not-allowed'
+                                                            : 'bg-white text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 active:scale-95'
+                                                    }`}
+                                                    disabled={isStudyBuddyExampleLoading}
+                                                >
                                                     {isStudyBuddyExampleLoading ? null : <ArrowRight size={11} />}
                                                     <span>{isStudyBuddyExampleLoading ? 'Loading' : 'Next'}</span>
-                                                </div>
+                                                </button>
                                             </div>
                                             {studyBuddyExample ? (
-                                                <p className="text-sm font-semibold leading-relaxed text-neutral-800">
+                                                <p
+                                                    className={`text-sm font-semibold leading-relaxed transition-all select-text ${
+                                                        isExampleTextRevealed ? 'text-neutral-800' : 'text-neutral-400 blur-sm'
+                                                    }`}
+                                                >
                                                     {studyBuddyExample}
                                                 </p>
                                             ) : isStudyBuddyExampleLoading ? (
                                                 <div className="space-y-2">
-                                                    <div className="h-3 w-full rounded-full bg-fuchsia-100 animate-pulse" />
-                                                    <div className="h-3 w-5/6 rounded-full bg-fuchsia-100 animate-pulse" />
-                                                    <div className="h-3 w-2/3 rounded-full bg-fuchsia-100 animate-pulse" />
+                                                    <div className="h-3 w-full rounded-full bg-blue-100 animate-pulse" />
+                                                    <div className="h-3 w-5/6 rounded-full bg-blue-100 animate-pulse" />
+                                                    <div className="h-3 w-2/3 rounded-full bg-blue-100 animate-pulse" />
                                                 </div>
                                             ) : studyBuddyExampleError ? (
                                                 <p className="text-sm font-semibold leading-relaxed text-rose-600">
@@ -841,7 +953,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
                                                     Tap to show an example sentence.
                                                 </p>
                                             )}
-                                        </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -893,7 +1005,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
                     
                     <button 
                         onClick={() => setProgress(p => ({ ...p, current: (p.current + 1) % sessionWords.length }))} 
-                        className="hidden sm:block p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all"
+                        className="hidden sm:block p-4 rounded-full text-neutral-300 hover:text-neutral-900 transition-all relative z-20"
                         aria-label="Next word"
                     >
                         <ArrowRight size={28} />
