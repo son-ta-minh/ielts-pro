@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { AppView, User, VocabularyItem, DiscoverGame } from './types';
+import { AppView, User, StudyItem, DiscoverGame } from './types';
 import { useToast } from '../contexts/ToastContext';
 import { useAuthAndUser } from './hooks/useAuthAndUser';
 import { useSession } from './hooks/useSession';
@@ -32,7 +32,7 @@ export const useAppController = () => {
     const { currentUser, isLoaded, handleLogin, handleUpdateUser, setCurrentUser, shouldSkipAuth } = useAuthAndUser();
     const [view, setView] = useState<AppView>('AUTH');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [globalViewWord, setGlobalViewWord] = useState<VocabularyItem | null>(null);
+    const [globalViewWord, setGlobalViewWord] = useState<StudyItem | null>(null);
     const [initialListFilter, setInitialListFilter] = useState<string | null>(null);
     const [forceExpandAdd, setForceExpandAdd] = useState(false);
     const [lastMasteryScoreUpdateTimestamp, setLastMasteryScoreUpdateTimestamp] = useState(Date.now());
@@ -61,7 +61,7 @@ export const useAppController = () => {
     const [hasWritingUnsavedChanges, setHasWritingUnsavedChanges] = useState(false);
     const [nextAutoBackupTime, setNextAutoBackupTime] = useState<number | null>(null);
 
-    const [writingContextWord, setWritingContextWord] = useState<VocabularyItem | null>(null);
+    const [writingContextWord, setWritingContextWord] = useState<StudyItem | null>(null);
     const [targetLessonId, setTargetLessonId] = useState<string | null>(null);
     const consumeTargetLessonId = useCallback(() => setTargetLessonId(null), []);
 
@@ -877,7 +877,7 @@ export const useAppController = () => {
 
     useEffect(() => { if (isLoaded && currentUser) checkEnergyRewards(); }, [stats, isLoaded, currentUser?.id]); 
 
-    const updateWordAndNotify = async (updatedWord: VocabularyItem) => {
+    const updateWordAndNotify = async (updatedWord: StudyItem) => {
         const oldWord = dataStore.getWordById(updatedWord.id);
         if (!oldWord || oldWord.masteryScore !== updatedWord.masteryScore) setLastMasteryScoreUpdateTimestamp(Date.now());
         await dataStore.saveWord(updatedWord);
@@ -910,8 +910,8 @@ export const useAppController = () => {
     };
 
     const handleBackupWrapper = async () => { if (serverStatus === 'connected' && currentUser) await triggerServerBackup(); else await handleBackup(); };
-    const bulkUpdateWordsAndNotify = async (updatedWords: VocabularyItem[]) => { await bulkUpdateWords(updatedWords); };
-    const saveWordAndUserAndUpdateState = async (word: VocabularyItem, user: User) => {
+    const bulkUpdateWordsAndNotify = async (updatedWords: StudyItem[]) => { await bulkUpdateWords(updatedWords); };
+    const saveWordAndUserAndUpdateState = async (word: StudyItem, user: User) => {
         await dataStore.saveWordAndUser(word, user);
         setCurrentUser(user);
         const oldWord = dataStore.getWordById(word.id);
@@ -1015,7 +1015,7 @@ export const useAppController = () => {
 
     const handleNavigateToList = (filter: string) => { setInitialListFilter(filter); setView('BROWSE'); };
     const openAddWordLibrary = () => { setView('BROWSE'); setForceExpandAdd(true); };
-    const handleComposeWithWord = (word: VocabularyItem) => { setWritingContextWord(word); setView('WRITING'); };
+    const handleComposeWithWord = (word: StudyItem) => { setWritingContextWord(word); setView('WRITING'); };
     const consumeWritingContext = () => setWritingContextWord(null);
 
     const handleSpecialAction = (action: string, params?: any) => {

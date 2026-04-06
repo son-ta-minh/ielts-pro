@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Image } from 'lucide-react';
-import { VocabularyItem, ReviewGrade, SessionType, User } from '../../app/types';
+import { StudyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditWordModal from '../word_lib/EditWordModal';
 import ViewWordModal from '../word_lib/ViewWordModal';
@@ -15,24 +15,24 @@ import { getServerUrl, getConfig } from '../../app/settingsManager';
 
 export interface ReviewSessionUIProps {
   user: User;
-  initialWords: VocabularyItem[];
-  sessionWords: VocabularyItem[];
+  initialWords: StudyItem[];
+  sessionWords: StudyItem[];
   sessionType: SessionType;
   newWordIds: Set<string>;
   progress: { current: number; max: number };
   setProgress: React.Dispatch<React.SetStateAction<{ current: number; max: number }>>;
   sessionOutcomes: Record<string, string>;
   sessionFinished: boolean;
-  wordInModal: VocabularyItem | null;
-  setWordInModal: (word: VocabularyItem | null) => void;
-  onOpenWordDetails: (word: VocabularyItem) => void | Promise<void>;
-  editingWordInModal: VocabularyItem | null;
-  setEditingWordInModal: (word: VocabularyItem | null) => void;
+  wordInModal: StudyItem | null;
+  setWordInModal: (word: StudyItem | null) => void;
+  onOpenWordDetails: (word: StudyItem) => void | Promise<void>;
+  editingWordInModal: StudyItem | null;
+  setEditingWordInModal: (word: StudyItem | null) => void;
   isTesting: boolean;
   setIsTesting: (isTesting: boolean) => void;
-  currentWord: VocabularyItem;
+  currentWord: StudyItem;
   isNewWord: boolean;
-  onUpdate: (word: VocabularyItem) => void;
+  onUpdate: (word: StudyItem) => void;
   onComplete: () => void;
   nextItem: () => void;
   handleReview: (grade: ReviewGrade) => void;
@@ -102,7 +102,7 @@ const MasteryScoreGauge: React.FC<{ score: number }> = ({ score }) => {
     );
 };
 
-const MasteryScoreCalculator: React.FC<{ word: VocabularyItem }> = ({ word }) => {
+const MasteryScoreCalculator: React.FC<{ word: StudyItem }> = ({ word }) => {
     const score = word.masteryScore ?? 0;
 
     return (
@@ -162,12 +162,12 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         });
     }, [currentWord]);
 
-    const handleEditRequest = (word: VocabularyItem) => {
+    const handleEditRequest = (word: StudyItem) => {
       setWordInModal(null);
       setEditingWordInModal(word);
     };
   
-    const handleSaveEdit = (word: VocabularyItem) => {
+    const handleSaveEdit = (word: StudyItem) => {
       onUpdate(word);
       setEditingWordInModal(null);
       setWordInModal(word);

@@ -1,11 +1,11 @@
-import { VocabularyItem, ParaphraseTone, ReviewGrade } from '../../app/types';
+import { StudyItem, ParaphraseTone, ReviewGrade } from '../../app/types';
 
 export type ChallengeType = 'SPELLING' | 'IPA_QUIZ' | 'IPA_MATCH' | 'PREPOSITION_QUIZ' | 'WORD_FAMILY' | 'MEANING_QUIZ' | 'PARAPHRASE_QUIZ' | 'SENTENCE_SCRAMBLE' | 'HETERONYM_QUIZ' | 'PRONUNCIATION' | 'COLLOCATION_QUIZ' | 'IDIOM_QUIZ' | 'PARAPHRASE_CONTEXT_QUIZ' | 'COLLOCATION_CONTEXT_QUIZ' | 'COLLOCATION_MULTICHOICE_QUIZ' | 'IDIOM_CONTEXT_QUIZ';
 
 export interface BaseChallenge {
   type: ChallengeType;
   title: string;
-  word: VocabularyItem;
+  word: StudyItem;
 }
 
 export interface SpellingChallenge extends BaseChallenge { type: 'SPELLING'; }

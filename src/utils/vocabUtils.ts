@@ -1,4 +1,4 @@
-import { VocabularyItem, WordFamilyMember, PrepositionPattern, ParaphraseOption, CollocationDetail, WordQuality } from '../app/types';
+import { StudyItem, WordFamilyMember, PrepositionPattern, ParaphraseOption, CollocationDetail, WordQuality } from '../app/types';
 import { calculateGameEligibility } from './gameEligibility';
 import { calculateComplexity, calculateMasteryScore } from './srs';
 
@@ -159,13 +159,13 @@ export const normalizeAiResponse = (shortData: any): any => {
 };
 
 /**
- * Merges AI-generated details into an existing VocabularyItem.
+ * Merges AI-generated details into an existing StudyItem.
  */
-export const mergeAiResultIntoWord = (baseItem: VocabularyItem, rawAiResult: any): VocabularyItem => {
+export const mergeAiResultIntoWord = (baseItem: StudyItem, rawAiResult: any): StudyItem => {
     const aiResult = normalizeAiResponse(rawAiResult);
     if (!aiResult) return baseItem;
 
-    const updatedItem: VocabularyItem = { ...baseItem };
+    const updatedItem: StudyItem = { ...baseItem };
     
     // Merge IPA fields
     updatedItem.ipaUs = aiResult.ipaUs ?? baseItem.ipaUs;

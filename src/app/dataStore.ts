@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, WordQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus } from './types';
+import { StudyItem, User, Unit, WordQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity, isSrsIgnored } from '../utils/srs';
@@ -11,7 +11,7 @@ import { withNormalizedVocabularyKeywords } from '../utils/vocabularyKeywordUtil
 // --- Store State ---
 let _isInitialized = false;
 let _isInitializing = false; 
-let _allWords = new Map<string, VocabularyItem>();
+let _allWords = new Map<string, StudyItem>();
 const _composedWordIds = new Set<string>(); // Fast lookup for 'composed' filter
 const _bookWordIds = new Set<string>(); // Fast lookup for 'in book' filter
 const _bookWordMap = new Map<string, Set<string>>(); // Map bookId -> Set of word texts
@@ -137,8 +137,8 @@ function _recalculateStats(userId: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayTimestamp = today.getTime();
-    const todayLearnedWords: VocabularyItem[] = [];
-    const todayReviewedWords: VocabularyItem[] = [];
+    const todayLearnedWords: StudyItem[] = [];
+    const todayReviewedWords: StudyItem[] = [];
 
     activeWords.forEach(w => {
         if (w.lastReview && w.lastReview >= todayTimestamp && w.lastReviewSessionType !== 'boss_battle') {
@@ -264,7 +264,7 @@ export async function init(userId: string) {
             _bookWordMap.set(book.id, wordSet);
         });
         
-        const wordsToMigrate: VocabularyItem[] = [];
+        const wordsToMigrate: StudyItem[] = [];
         for (const word of words) {
             let changed = false;
             
@@ -395,12 +395,12 @@ export function isWordInBook(wordText: string): boolean { return _bookWordIds.ha
 export function getComposedWordIds(): Set<string> { return _composedWordIds; }
 export function getBookWordIds(): Set<string> { return _bookWordIds; }
 export function getStats() { return _statsCache; }
-export function getAllWords(): VocabularyItem[] { return Array.from(_allWords.values()); }
-export function getWordById(id: string): VocabularyItem | undefined { return _allWords.get(id); }
+export function getAllWords(): StudyItem[] { return Array.from(_allWords.values()); }
+export function getWordById(id: string): StudyItem | undefined { return _allWords.get(id); }
 export function getDailyStreakSnapshots(userId: string): DailyStreakSnapshot[] { return readDailyStreaks(userId); }
 export function getDailyGoalHistory(userId: string): DailyGoalSnapshot[] { return readDailyGoalHistory(userId); }
 
-export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = ''): { words: VocabularyItem[], totalCount: number } {
+export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = ''): { words: StudyItem[], totalCount: number } {
     const allItems = Array.from(_allWords.values()).filter(w => w.userId === userId);
     let baseItems = allItems;
     if (filterTypes.includes('duplicate')) {
@@ -442,7 +442,7 @@ export async function findWordByText(userId: string, word: string) {
     return db.findWordByText(userId, word);
 }
 
-export async function saveWordAndUser(word: VocabularyItem, user: User) {
+export async function saveWordAndUser(word: StudyItem, user: User) {
     if (!canWrite('bulk')) return;
     _updateLocalLastModified();
     Object.assign(word, withNormalizedVocabularyKeywords(word));
@@ -456,7 +456,7 @@ export async function saveWordAndUser(word: VocabularyItem, user: User) {
     _notifyChanges();
 }
 
-export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
+export async function saveWordAndUnit(word: StudyItem | null, unit: Unit) {
     if (!canWrite('bulk')) return;
     _updateLocalLastModified();
     if (word) {
@@ -472,7 +472,7 @@ export async function saveWordAndUnit(word: VocabularyItem | null, unit: Unit) {
     _notifyChanges();
 }
 
-export async function saveWord(item: VocabularyItem) {
+export async function saveWord(item: StudyItem) {
     console.log('[InlineReview][DataStore] saveWord:start', {
         id: item.id,
         word: item.word,
@@ -495,7 +495,7 @@ export async function saveWord(item: VocabularyItem) {
     });
 }
 
-export async function bulkSaveWords(items: VocabularyItem[]) {
+export async function bulkSaveWords(items: StudyItem[]) {
     if (items.length === 0) return;
     console.log('[InlineReview][DataStore] bulkSaveWords:start', {
         count: items.length,

@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Play, Sparkles } from 'lucide-react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 import * as dataStore from '../../../app/dataStore';
 import { useToast } from '../../../contexts/ToastContext';
 
 interface Props {
-    words: VocabularyItem[];
+    words: StudyItem[];
     onComplete: (score: number) => void;
     onExit: () => void;
 }
@@ -27,7 +27,7 @@ const REGISTER_OPTIONS: { id: RegisterLabel; label: string }[] = [
     { id: 'neutral', label: 'Neutral' },
 ];
 
-const normalizeRegister = (value?: VocabularyItem['register']): RegisterLabel | null => {
+const normalizeRegister = (value?: StudyItem['register']): RegisterLabel | null => {
     if (value === 'academic' || value === 'casual' || value === 'neutral') return value;
     return null;
 };
@@ -160,7 +160,7 @@ export const RegisterPickGame: React.FC<Props> = ({ words, onComplete, onExit })
                     <div className="bg-neutral-50 rounded-2xl p-4 text-left space-y-1">
                         <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Eligible Words</p>
                         <p className="text-2xl font-black text-neutral-900">{availableCount}</p>
-                        <p className="text-xs text-neutral-500">Only learned words with `VocabularyItem.register` = `academic`, `casual`, or `neutral`.</p>
+                        <p className="text-xs text-neutral-500">Only learned words with `StudyItem.register` = `academic`, `casual`, or `neutral`.</p>
                     </div>
 
                     <div className="bg-neutral-50 rounded-2xl p-4 text-left space-y-3">

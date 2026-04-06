@@ -1,4 +1,4 @@
-import { VocabularyItem, ReviewGrade, WordQuality, WordFamily, LearnedStatus } from '../app/types';
+import { StudyItem, ReviewGrade, WordQuality, WordFamily, LearnedStatus } from '../app/types';
 import { ChallengeType } from '../components/practice/TestModalTypes';
 import { generateAvailableChallenges } from './challengeUtils';
 import { calculateGameEligibility } from './gameEligibility';
@@ -34,7 +34,7 @@ function isSameLocalDay(timestampA: number, timestampB: number): boolean {
 /**
  * Enhanced SRS algorithm with Overdue Bonus (Elastic Scheduling).
  */
-export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyItem {
+export function updateSRS(item: StudyItem, grade: ReviewGrade): StudyItem {
   const config = getConfig().srs;
   const newItem = { ...item };
   const now = Date.now();
@@ -109,9 +109,9 @@ export function updateSRS(item: VocabularyItem, grade: ReviewGrade): VocabularyI
   return newItem;
 }
 
-export function resetProgress(item: VocabularyItem): VocabularyItem {
+export function resetProgress(item: StudyItem): StudyItem {
     const now = Date.now();
-    const resetItem: VocabularyItem = {
+    const resetItem: StudyItem = {
         ...item,
         nextReview: now,
         interval: 0,
@@ -131,7 +131,7 @@ export function resetProgress(item: VocabularyItem): VocabularyItem {
     return resetItem;
 }
 
-export function isDue(item: VocabularyItem): boolean {
+export function isDue(item: StudyItem): boolean {
   return item.learnedStatus !== LearnedStatus.IGNORED && item.nextReview <= Date.now();
 }
 
@@ -149,23 +149,23 @@ export function mapReviewGradeToLearnedStatus(grade: ReviewGrade): LearnedStatus
   }
 }
 
-export function deriveLearnedStatus(item: Pick<VocabularyItem, 'learnedStatus' | 'lastReview'>): LearnedStatus {
+export function deriveLearnedStatus(item: Pick<StudyItem, 'learnedStatus' | 'lastReview'>): LearnedStatus {
   if (item.learnedStatus) return item.learnedStatus;
   return item.lastReview ? LearnedStatus.LEARNED : LearnedStatus.NEW;
 }
 
-export function isSrsIgnored(item: Pick<VocabularyItem, 'learnedStatus'>): boolean {
+export function isSrsIgnored(item: Pick<StudyItem, 'learnedStatus'>): boolean {
   return item.learnedStatus === LearnedStatus.IGNORED;
 }
 
-export function applyLearnedStatus(item: VocabularyItem, status: LearnedStatus): VocabularyItem {
+export function applyLearnedStatus(item: StudyItem, status: LearnedStatus): StudyItem {
   if (status === LearnedStatus.NEW) {
     return resetProgress(item);
   }
 
   if (status === LearnedStatus.IGNORED) {
     const now = Date.now();
-    const updatedItem: VocabularyItem = {
+    const updatedItem: StudyItem = {
       ...item,
       learnedStatus: LearnedStatus.IGNORED,
       updatedAt: now
@@ -192,7 +192,7 @@ export async function createNewWord(
   word: string, ipaUs: string, meaningVi: string, example: string, note: string, groups: string[],
   isIdiom = false, isPhrasalVerb = false,
   isCollocation = false, isStandardPhrase = false, isPassive = false
-): Promise<VocabularyItem> {
+): Promise<StudyItem> {
   let finalIpaUs = ipaUs.trim();
   let finalMeaningVi = meaningVi.trim();
 
@@ -269,7 +269,7 @@ export async function createNewWord(
   await Promise.all(tasks);
 
   const now = Date.now();
-  const newItem: VocabularyItem = {
+  const newItem: StudyItem = {
     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
     userId: '', word: word.trim(), ipaUs: finalIpaUs, meaningVi: finalMeaningVi, example: example.trim(), note, groups,
     keywords: [],
@@ -296,7 +296,7 @@ export interface KnowledgeUnit {
     testKeys: string[];
 }
 
-export function getLogicalKnowledgeUnits(word: VocabularyItem): KnowledgeUnit[] {
+export function getLogicalKnowledgeUnits(word: StudyItem): KnowledgeUnit[] {
     const units: KnowledgeUnit[] = [];
 
     // 1. Spelling
@@ -413,7 +413,7 @@ export function getLogicalKnowledgeUnits(word: VocabularyItem): KnowledgeUnit[] 
     return units;
 }
 
-export function getAllValidTestKeys(word: VocabularyItem): Set<string> {
+export function getAllValidTestKeys(word: StudyItem): Set<string> {
     const units = getLogicalKnowledgeUnits(word);
     const validKeys = new Set<string>();
     units.forEach(unit => {
@@ -425,7 +425,7 @@ export function getAllValidTestKeys(word: VocabularyItem): Set<string> {
 /**
  * Complexity is the TOTAL COUNT of logical knowledge units.
  */
-export function calculateComplexity(word: VocabularyItem): number {
+export function calculateComplexity(word: StudyItem): number {
     return getLogicalKnowledgeUnits(word).length;
 }
 
@@ -434,7 +434,7 @@ export function calculateComplexity(word: VocabularyItem): number {
  * A unit is passed if AT LEAST ONE of its constituent test keys has a result of `true`.
  * This allows "matching" or "multiple choice" variants to satisfy the requirement.
  */
-export function calculateMasteryScore(word: VocabularyItem): number {
+export function calculateMasteryScore(word: StudyItem): number {
     const units = getLogicalKnowledgeUnits(word);
     if (units.length === 0) {
         return 0;

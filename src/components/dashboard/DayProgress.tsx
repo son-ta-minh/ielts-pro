@@ -1,14 +1,14 @@
 import React from 'react';
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 
 interface Props {
     learnedToday: number;
     reviewedToday: number;
     maxLearn: number;
     maxReview: number;
-    learnedWords: VocabularyItem[];
-    reviewedWords: VocabularyItem[];
-    onViewWord: (word: VocabularyItem) => void;
+    learnedWords: StudyItem[];
+    reviewedWords: StudyItem[];
+    onViewWord: (word: StudyItem) => void;
 }
 
 const ProgressBar: React.FC<{ value: number, max: number, label: string }> = ({ value, max, label }) => {

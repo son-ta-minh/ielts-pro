@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, VocabularyItem, SessionType } from '../../../../app/types';
+import { User, StudyItem, SessionType } from '../../../../app/types';
 import * as dataStore from '../../../../app/dataStore';
 import { AdventureUI } from './Adventure_UI';
 import { BattleMode } from './BossBattle';
@@ -13,12 +13,12 @@ interface Props {
     user: User;
     onExit: () => void;
     onUpdateUser: (user: User) => Promise<void>;
-    onStartSession: (words: VocabularyItem[], type: SessionType) => void;
+    onStartSession: (words: StudyItem[], type: SessionType) => void;
 }
 
 const Adventure: React.FC<Props> = ({ user, onExit, onUpdateUser }) => {
     const { showToast } = useToast();
-    const [activeBoss, setActiveBoss] = useState<{ boss: any, words: VocabularyItem[] } | null>(null);
+    const [activeBoss, setActiveBoss] = useState<{ boss: any, words: StudyItem[] } | null>(null);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
     
     // Changed from boolean to object to pass data to Fireworks

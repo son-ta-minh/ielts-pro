@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { VocabularyItem, ReviewGrade, SessionType, User, LearnedStatus } from '../../app/types';
+import { StudyItem, ReviewGrade, SessionType, User, LearnedStatus } from '../../app/types';
 import { updateSRS, calculateMasteryScore, isSrsIgnored } from '../../utils/srs';
 import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { ReviewSessionUI } from './ReviewSession_UI';
@@ -8,11 +8,11 @@ import { useToast } from '../../contexts/ToastContext';
 
 interface Props {
   user: User;
-  sessionWords: VocabularyItem[];
+  sessionWords: StudyItem[];
   sessionFocus?: ReviewMode | null;
   sessionType: SessionType;
-  onUpdate: (word: VocabularyItem) => void;
-  onBulkUpdate: (words: VocabularyItem[]) => void;
+  onUpdate: (word: StudyItem) => void;
+  onBulkUpdate: (words: StudyItem[]) => void;
   onComplete: () => void;
   onRetry: () => void;
   autoCloseOnFinish?: boolean;
@@ -27,7 +27,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   const LEARN_QUEUE_KEY = `vocab_pro_learn_queue_${user.id}`;
   const LEARN_QUEUE_DATE_KEY = `vocab_pro_learn_queue_date_${user.id}`;
   const todayStr = new Date().toISOString().slice(0, 10);
-  const [learnQueue, setLearnQueue] = useState<VocabularyItem[]>([]);
+  const [learnQueue, setLearnQueue] = useState<StudyItem[]>([]);
 
   useEffect(() => {
     console.log('[InlineReview][ReviewSession] mount', {
@@ -49,12 +49,12 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         storedDate = sessionStorage.getItem(LEARN_QUEUE_DATE_KEY) || '';
       } catch {}
 
-      let queue: VocabularyItem[] = [];
+      let queue: StudyItem[] = [];
       if (storedDate === todayStr && queueIds.length > 0) {
         // Only remove words that are no longer 'New', keep order
         queue = queueIds
           .map(id => initialWords.find(w => w.id === id))
-          .filter(w => w && !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED)) as VocabularyItem[];
+          .filter(w => w && !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED)) as StudyItem[];
       } else {
         // Only create a new queue if none exists for today
         const newWords = initialWords.filter(w => !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED));
@@ -91,17 +91,17 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   });
 
   const [sessionOutcomes, setSessionOutcomes] = useState<Record<string, string>>(() => getStoredJSON<Record<string, string>>('vocab_pro_session_outcomes', {}));
-  const [sessionUpdates, setSessionUpdates] = useState<Map<string, VocabularyItem>>(new Map());
+  const [sessionUpdates, setSessionUpdates] = useState<Map<string, StudyItem>>(new Map());
   // Store the most recent test results for the current word
   const lastTestResultsRef = useRef<Record<string, boolean> | null>(null);
 
   const { current: currentIndex, max: maxIndexVisited } = progress;
   const [sessionFinished, setSessionFinished] = useState(false);
-  const [wordInModal, setWordInModal] = useState<VocabularyItem | null>(null);
-  const [editingWordInModal, setEditingWordInModal] = useState<VocabularyItem | null>(null);
+  const [wordInModal, setWordInModal] = useState<StudyItem | null>(null);
+  const [editingWordInModal, setEditingWordInModal] = useState<StudyItem | null>(null);
   const [isTesting, setIsTesting] = useState(sessionType === 'random_test');
   const [isQuickReviewMode, setIsQuickReviewMode] = useState(false);
-  const latestWordStatesRef = useRef<Map<string, VocabularyItem>>(new Map());
+  const latestWordStatesRef = useRef<Map<string, StudyItem>>(new Map());
   
   const queueWord = sessionWords[currentIndex];
   const currentWord = queueWord
@@ -205,7 +205,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     return saveTask;
   }, [onBulkUpdate, showToast]);
 
-  const handleOpenWordDetails = useCallback(async (word: VocabularyItem) => {
+  const handleOpenWordDetails = useCallback(async (word: StudyItem) => {
     const latestWord = sessionUpdatesRef.current.get(word.id) || latestWordStatesRef.current.get(word.id) || word;
 
     if (autosaveTimerRef.current) {
@@ -260,7 +260,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     }
   };
 
-  const persistInlineReviewAndClose = useCallback(async (updatedWord: VocabularyItem) => {
+  const persistInlineReviewAndClose = useCallback(async (updatedWord: StudyItem) => {
     console.log('[InlineReview][ReviewSession] persistInlineReviewAndClose', {
       word: updatedWord.word,
       masteryScore: updatedWord.masteryScore,
@@ -333,7 +333,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
    * Merge current and incoming test results.
    * Keep only the exact outcomes from the latest test format (no cross-format forced fail).
    */
-  const applyTestResults = (word: VocabularyItem, results: Record<string, boolean>) => {
+  const applyTestResults = (word: StudyItem, results: Record<string, boolean>) => {
       const normalizedIncoming = normalizeTestResultKeys(results);
       const currentResults = mergeTestResultsByGroup(word.lastTestResults, normalizedIncoming);
 
@@ -420,7 +420,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       lastTestResultsRef.current = null;
     } else {
       // Learn session: do NOT auto-next after practice, just update state and wait for user action
-      const updated: VocabularyItem = { ...wordWithUpdatedFlags };
+      const updated: StudyItem = { ...wordWithUpdatedFlags };
       if (testResults) {
         updated.lastTestResults = lastTestResultsRef.current;
       }
@@ -441,7 +441,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     setSessionFinished(true);
   };
 
-  const handleUpdateWordFromModal = useCallback((updatedWord: VocabularyItem) => {
+  const handleUpdateWordFromModal = useCallback((updatedWord: StudyItem) => {
     // Persist to global store first.
     onUpdate(updatedWord);
 

@@ -1,10 +1,10 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { User, VocabularyItem, ReviewGrade } from '../types';
+import { User, StudyItem, ReviewGrade } from '../types';
 import { useToast } from '../../contexts/ToastContext';
 
 // --- Constants (moved from useAppController) ---
 
-export const calculateWordDifficultyXp = (word: VocabularyItem): number => {
+export const calculateWordDifficultyXp = (word: StudyItem): number => {
     if (word.isPassive) return 0;
     let baseXP = 50;
     if (word.ipaMistakes?.length) baseXP += 20;
@@ -63,7 +63,7 @@ const calculateAbsoluteXp = (level: number, experienceInLevel: number): number =
 interface UseGamificationProps {
     currentUser: User | null;
     onUpdateUser: (user: User) => Promise<void>;
-    onSaveWordAndUser: (word: VocabularyItem, user: User) => Promise<void>;
+    onSaveWordAndUser: (word: StudyItem, user: User) => Promise<void>;
 }
 
 export const useGamification = ({ currentUser, onUpdateUser, onSaveWordAndUser }: UseGamificationProps) => {
@@ -76,7 +76,7 @@ export const useGamification = ({ currentUser, onUpdateUser, onSaveWordAndUser }
         currentUserRef.current = currentUser;
     }, [currentUser]);
 
-    const gainExperienceAndLevelUp = useCallback(async (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number; tested: number; }) => {
+    const gainExperienceAndLevelUp = useCallback(async (baseXpAmount: number, wordToUpdate?: StudyItem, grade?: ReviewGrade, testCounts?: { correct: number; tested: number; }) => {
         const user = currentUserRef.current;
         if (!user) return 0;
 

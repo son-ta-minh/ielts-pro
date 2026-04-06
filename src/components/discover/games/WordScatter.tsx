@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Target, Play, ChevronLeft, ChevronRight, CheckSquare, Square, RefreshCw, Check, LayoutGrid, Columns, BookOpen, Languages, CheckCircle2 } from 'lucide-react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 
 // Card interface simplified for grid layout
 interface Card {
@@ -20,7 +20,7 @@ interface Cue {
 }
 
 interface Props {
-    words: VocabularyItem[];
+    words: StudyItem[];
     onComplete: (score: number) => void;
     onExit: () => void;
 }

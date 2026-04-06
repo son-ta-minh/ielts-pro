@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ArrowLeft, Save, Loader2, Link, Bot, X, Sparkles, ChevronDown, Tag, PenLine, Eye } from 'lucide-react';
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 import WordSelectorModal from '../../components/discover/games/adventure/WordSelectorModal';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
 import { parseMarkdown } from '../../utils/markdownParser';
@@ -18,7 +18,7 @@ export interface CompositionEditorUIProps {
     setContent: (v: string) => void;
     note: string;
     setNote: (v: string) => void;
-    linkedWords: VocabularyItem[];
+    linkedWords: StudyItem[];
     wordCount: number;
     aiFeedback: string | undefined;
     isFeedbackOpen: boolean;
@@ -35,7 +35,7 @@ export interface CompositionEditorUIProps {
     // Modal Controls
     isWordSelectorOpen: boolean;
     setIsWordSelectorOpen: (v: boolean) => void;
-    allWords: VocabularyItem[]; // For selector
+    allWords: StudyItem[]; // For selector
     handleManualLink: (selectedWords: string[]) => void;
     
     isAiModalOpen: boolean;

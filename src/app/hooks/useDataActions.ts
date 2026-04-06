@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback } from 'react';
-import { User, VocabularyItem, DataScope } from '../types';
+import { User, StudyItem, DataScope } from '../types';
 import * as dataStore from '../dataStore';
 import { processJsonImport, generateJsonExport, ImportResult } from '../../utils/dataHandler';
 import { useToast } from '../../contexts/ToastContext';
@@ -13,11 +13,11 @@ interface UseDataActionsProps {
     currentUser: User | null;
     setView: (view: any) => void;
     refreshGlobalStats: () => void;
-    sessionWords: VocabularyItem[] | null;
-    setSessionWords: React.Dispatch<React.SetStateAction<VocabularyItem[] | null>>;
+    sessionWords: StudyItem[] | null;
+    setSessionWords: React.Dispatch<React.SetStateAction<StudyItem[] | null>>;
 
-    globalViewWord: VocabularyItem | null;
-    setGlobalViewWord: React.Dispatch<React.SetStateAction<VocabularyItem | null>>;
+    globalViewWord: StudyItem | null;
+    setGlobalViewWord: React.Dispatch<React.SetStateAction<StudyItem | null>>;
     onUpdateUser: (user: User) => Promise<void>;
 
 }
@@ -222,7 +222,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
         }
     };
 
-    const updateWord = async (updatedWord: VocabularyItem) => {
+    const updateWord = async (updatedWord: StudyItem) => {
         await dataStore.saveWord(updatedWord);
         if (sessionWords) {
             setSessionWords(prevWords => (prevWords || []).map(w => w.id === updatedWord.id ? updatedWord : w));
@@ -239,7 +239,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
     };
 
     const bulkDeleteWords = async (ids: string[]) => { await dataStore.bulkDeleteWords(ids); };
-    const bulkUpdateWords = async (updatedWords: VocabularyItem[]) => { await dataStore.bulkSaveWords(updatedWords); };
+    const bulkUpdateWords = async (updatedWords: StudyItem[]) => { await dataStore.bulkSaveWords(updatedWords); };
 
     return {
         lastBackupTime, refreshBackupTime, handleBackup, restoreFromServerAction,

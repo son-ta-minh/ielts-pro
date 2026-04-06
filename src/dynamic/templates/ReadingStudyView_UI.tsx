@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useId } from 'react';
 import { Play, Edit3, ArrowLeft, BrainCircuit, BookOpen, Tag, HelpCircle, X, ThumbsUp, ThumbsDown, Eye, ChevronDown, ChevronRight, LayoutList, BookText, Loader2, ExternalLink, FileText, Headphones, SkipBack, SkipForward, FileAudio, Save, Pause } from 'lucide-react';
-import { VocabularyItem, Unit, User } from '../../app/types';
+import { StudyItem, Unit, User } from '../../app/types';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter } from '../../components/word_lib/WordTable_UI';
 import EditWordModal from '../../components/word_lib/EditWordModal';
 import ViewWordModal from '../../components/word_lib/ViewWordModal';
@@ -14,7 +14,7 @@ import { renderAsync } from 'docx-preview';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
 
-interface TooltipState { word: VocabularyItem; rect: DOMRect; }
+interface TooltipState { word: StudyItem; rect: DOMRect; }
 type LinkedFileContent =
   | { state: 'idle' | 'loading' }
   | { state: 'error'; message: string }
@@ -282,15 +282,15 @@ const ComprehensionCheckModal: React.FC<{
 export interface ReadingStudyViewUIProps {
     user: User;
     unit: Unit;
-    allWords: VocabularyItem[];
-    unitWords: VocabularyItem[];
-    wordsById: Map<string, VocabularyItem>;
-    pagedUnitWords: VocabularyItem[];
-    filteredUnitWords: VocabularyItem[];
-    viewingWord: VocabularyItem | null;
-    setViewingWord: (word: VocabularyItem | null) => void;
-    editingWord: VocabularyItem | null;
-    setEditingWord: (word: VocabularyItem | null) => void;
+    allWords: StudyItem[];
+    unitWords: StudyItem[];
+    wordsById: Map<string, StudyItem>;
+    pagedUnitWords: StudyItem[];
+    filteredUnitWords: StudyItem[];
+    viewingWord: StudyItem | null;
+    setViewingWord: (word: StudyItem | null) => void;
+    editingWord: StudyItem | null;
+    setEditingWord: (word: StudyItem | null) => void;
     isPracticeMode: boolean;
     setIsPracticeMode: (isPractice: boolean) => void;
     unitTablePage: number;
@@ -303,13 +303,13 @@ export interface ReadingStudyViewUIProps {
     setUnitTableFilters: (filters: { types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter }) => void;
     onBack: () => void;
     onDataChange: () => void;
-    onStartSession: (words: VocabularyItem[]) => void;
+    onStartSession: (words: StudyItem[]) => void;
     onSwitchToEdit: () => void;
     handleRemoveWordFromUnit: (wordId: string) => Promise<void>;
     onBulkDelete: (ids: Set<string>) => Promise<void>;
-    onHardDelete: (word: VocabularyItem) => Promise<void>;
+    onHardDelete: (word: StudyItem) => Promise<void>;
     onBulkHardDelete: (ids: Set<string>) => Promise<void>;
-    handleSaveWordUpdate: (word: VocabularyItem) => Promise<void>;
+    handleSaveWordUpdate: (word: StudyItem) => Promise<void>;
     onWordAction: (text: string, action: 'add' | 'remove') => void;
     onUpdateUser: (user: User) => Promise<void>;
     handleExportUnit: () => void;
@@ -360,13 +360,13 @@ export const ReadingStudyViewUI: React.FC<ReadingStudyViewUIProps> = (props) => 
     };
   }, []);
 
-  const handleHoverWord = (word: VocabularyItem | null, rect: DOMRect | null) => { 
+  const handleHoverWord = (word: StudyItem | null, rect: DOMRect | null) => { 
     if (isPracticeMode) return;
     if (!word || !rect) setActiveTooltip(null); 
     else setActiveTooltip({ word, rect }); 
   };
   
-  const handleSaveAndCloseEdit = async (word: VocabularyItem) => {
+  const handleSaveAndCloseEdit = async (word: StudyItem) => {
     await handleSaveWordUpdate(word);
     setEditingWord(null);
   };

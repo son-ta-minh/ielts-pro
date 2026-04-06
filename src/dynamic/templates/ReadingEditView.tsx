@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { VocabularyItem, Unit, User } from '../../app/types';
+import { StudyItem, Unit, User } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import { getRefineUnitPrompt } from '../../services/promptService';
@@ -10,7 +10,7 @@ import { stringToWordArray } from '../../utils/text';
 interface Props {
   user: User;
   unit: Unit;
-  allWords: VocabularyItem[];
+  allWords: StudyItem[];
   allLibraryTags: string[];
   onCancel: () => void;
   onSave: () => void;
@@ -55,7 +55,7 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
     if (unit.customVocabString) {
         setEditWords(unit.customVocabString);
     } else {
-        const wordsById = new Map<string, VocabularyItem>(allWords.map(w => [w.id, w]));
+        const wordsById = new Map<string, StudyItem>(allWords.map(w => [w.id, w]));
         const currentWordsText = unit.wordIds.map(id => wordsById.get(id)?.word).filter(Boolean).join('; ');
         setEditWords(currentWordsText);
     }
@@ -69,7 +69,7 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
         for(const entry of entries) { const [essaySide, baseSide] = entry.split(':'); const base = (baseSide || essaySide).trim(); if (base) uniqueBaseWords.add(base.toLowerCase()); }
         
         const finalWordIds: string[] = []; 
-        const newWordsToCreate: VocabularyItem[] = [];
+        const newWordsToCreate: StudyItem[] = [];
         
         for (const token of uniqueBaseWords) {
             const existingWord = wordsByText.get(token);

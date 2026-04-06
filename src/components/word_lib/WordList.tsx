@@ -1,5 +1,5 @@
 import React, { Suspense, useState, useCallback, useEffect, useMemo } from 'react';
-import { VocabularyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
+import { StudyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, WordQuality, AppView } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import WordTable from './WordTable';
@@ -20,8 +20,8 @@ interface Props {
   user: User;
   onDelete: (id: string) => Promise<void>;
   onBulkDelete: (ids: string[]) => Promise<void>;
-  onUpdate: (updated: VocabularyItem) => void;
-  onStartSession: (words: VocabularyItem[]) => void;
+  onUpdate: (updated: StudyItem) => void;
+  onStartSession: (words: StudyItem[]) => void;
   initialFilter?: string | null;
   onInitialFilterApplied?: () => void;
   forceExpandAdd?: boolean;
@@ -52,7 +52,7 @@ const deleteGroupPathValue = (groupPath: string, targetPath: string): string | n
 };
 
 const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed, onNavigate }) => {
-  const [words, setWords] = useState<VocabularyItem[]>([]);
+  const [words, setWords] = useState<StudyItem[]>([]);
   
   // Read storage synchronously for initial state
   const savedState = useMemo(() => getStoredJSON<any>(LIBRARY_FILTERS_KEY, {}), []);
@@ -66,9 +66,9 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
   const [currentFilters, setCurrentFilters] = useState<{ types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }>({ types: new Set(['all']), refined: 'all', status: 'all', register: 'all', composition: 'all', book: 'all', specificBookId: '' });
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   
-  const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
-  const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
-  const [inlineReviewWords, setInlineReviewWords] = useState<VocabularyItem[] | null>(null);
+  const [viewingWord, setViewingWord] = useState<StudyItem | null>(null);
+  const [editingWord, setEditingWord] = useState<StudyItem | null>(null);
+  const [inlineReviewWords, setInlineReviewWords] = useState<StudyItem[] | null>(null);
   const [tagTree, setTagTree] = useState<TagTreeNode[]>([]);
 
   const { id: userId } = user;
@@ -76,13 +76,13 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
   const buildTagTree = useCallback(() => {
     const UNCATEGORIZED_GROUP = "Uncategorized";
     const allUserWords = dataStore.getAllWords().filter(w => w.userId === user.id);
-    const wordsByLowerCase = new Map<string, VocabularyItem>();
+    const wordsByLowerCase = new Map<string, StudyItem>();
     allUserWords.forEach(w => wordsByLowerCase.set(w.word.toLowerCase(), w));
     
     // 1. Group words and find all unique group paths
-    const groupToDirectWordsMap = new Map<string, Set<VocabularyItem>>();
+    const groupToDirectWordsMap = new Map<string, Set<StudyItem>>();
     const allExplicitGroups = new Set<string>();
-    const uncategorizedWords: VocabularyItem[] = [];
+    const uncategorizedWords: StudyItem[] = [];
 
     allUserWords.forEach(word => {
         if (word.groups && word.groups.length > 0) {
@@ -306,7 +306,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
 
   const handleAddWords = async (input: string, types: Set<WordTypeOption>) => {
     const wordsToProcess = stringToWordArray(input);
-    const newItems: VocabularyItem[] = [];
+    const newItems: StudyItem[] = [];
     
     // Determine flags based on Set membership
     const isIdiom = types.has('idiom');
@@ -318,7 +318,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
     const isFocus = types.has('focus');
 
     // 1. Pre-fetch from Server Library for Quick Add
-    let serverMap = new Map<string, VocabularyItem>();
+    let serverMap = new Map<string, StudyItem>();
     try {
         const serverItems = await lookupWordsInGlobalLibrary(wordsToProcess);
         serverItems.forEach(item => {
@@ -343,7 +343,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
         newItems.push(updatedItem); 
       } else {
         const key = word.toLowerCase().trim();
-        let newItem: VocabularyItem;
+        let newItem: StudyItem;
 
         if (serverMap.has(key)) {
              // Use Server Data for a REFINED start
@@ -410,7 +410,7 @@ const WordList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onS
     await onBulkDelete(Array.from(ids));
   };
   
-  const handleSaveEdit = (word: VocabularyItem) => {
+  const handleSaveEdit = (word: StudyItem) => {
     onUpdate(word);
     setEditingWord(null);
   };

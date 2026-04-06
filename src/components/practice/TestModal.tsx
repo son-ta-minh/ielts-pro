@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { VocabularyItem, ReviewGrade, LearnedStatus } from '../../app/types';
+import { StudyItem, ReviewGrade, LearnedStatus } from '../../app/types';
 import { TestModalUI } from './TestModal_UI';
 import { Challenge, ChallengeType, RecapData } from './TestModalTypes';
 import { generateAvailableChallenges, prepareChallenges } from '../../utils/challengeUtils';
@@ -10,7 +10,7 @@ import { useTestEngine } from './hooks/useTestEngine';
 import { mergeTestResultsByGroup } from '../../utils/testResultUtils';
 
 interface Props {
-  word: VocabularyItem;
+  word: StudyItem;
   onClose: () => void;
   onComplete: (grade: ReviewGrade, results?: Record<string, boolean>, stopSession?: boolean, counts?: { correct: number, tested: number }) => void;
   isQuickFire?: boolean;

@@ -1,9 +1,9 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 
 interface Props {
-    word: VocabularyItem;
+    word: StudyItem;
     original: string;
     shuffled: string[];
     userAnswer: string[];

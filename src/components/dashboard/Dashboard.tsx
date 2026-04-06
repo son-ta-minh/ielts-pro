@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
+import { AppView, User, StudyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { isSrsIgnored } from '../../utils/srs';
 import * as db from '../../app/db';
@@ -13,8 +13,8 @@ interface Props {
   dueCount: number;
   newCount: number;
   xpToNextLevel: number;
-  wotd: VocabularyItem | null;
-  onViewWotd: (word: VocabularyItem) => void;
+  wotd: StudyItem | null;
+  onViewWotd: (word: StudyItem) => void;
   setView: (view: AppView) => void;
   lastBackupTime: number | null;
   onBackup: () => void;
@@ -24,7 +24,7 @@ interface Props {
   onStartNewLearn: () => void;
   onStartStatusReview: (status: 'hard' | 'forgot') => void;
   isWotdComposed?: boolean;
-  onComposeWotd?: (word: VocabularyItem) => void;
+  onComposeWotd?: (word: StudyItem) => void;
   onRandomizeWotd?: () => void;
   // Received from controller via AppLayout
   serverStatus: 'connected' | 'disconnected';
@@ -39,7 +39,7 @@ interface Props {
   onLocalBackup: () => void;
   onServerBackup?: () => Promise<void>;
   onAction?: (action: string) => void;
-  onViewWord: (word: VocabularyItem) => void;
+  onViewWord: (word: StudyItem) => void;
 }
 
 const Dashboard: React.FC<Props> = ({ 

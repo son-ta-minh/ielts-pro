@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, Composition, VocabularyItem, WritingTopic, FocusColor } from '../../app/types';
+import { User, Composition, StudyItem, WritingTopic, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
@@ -20,7 +20,7 @@ import { ResourceActions } from '../page/ResourceActions';
 interface Props {
   controller: any;
   user: User;
-  initialContextWord?: VocabularyItem | null;
+  initialContextWord?: StudyItem | null;
   onConsumeContext?: () => void;
 }
 

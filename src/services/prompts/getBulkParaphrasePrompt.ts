@@ -1,6 +1,6 @@
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 
-export function getBulkParaphrasePrompt(words: VocabularyItem[]): string {
+export function getBulkParaphrasePrompt(words: StudyItem[]): string {
     const wordList = words.map(w => `"${w.word}"`).join(', ');
 
     return `You are an expert IELTS coach, examiner, and native English speaker.

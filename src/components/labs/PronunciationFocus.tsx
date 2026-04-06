@@ -3,7 +3,7 @@ import * as dataStore from '../../app/dataStore';
 import { speak, startRecording, stopRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { MimicPracticeUI } from './MimicPractice_UI';
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { analyzeSpeechLocally, AnalysisResult } from '../../utils/speechAnalysis';
 import { useToast } from '../../contexts/ToastContext';
@@ -19,7 +19,7 @@ export interface TargetPhrase {
 }
 
 interface Props {
-    scopedWord?: VocabularyItem;
+    scopedWord?: StudyItem;
     onClose?: () => void;
 }
 

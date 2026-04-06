@@ -1,5 +1,5 @@
 
-import { VocabularyItem, WordFamily, PrepositionPattern } from '../app/types';
+import { StudyItem, WordFamily, PrepositionPattern } from '../app/types';
 import { Challenge, ChallengeType, IpaQuizChallenge, IpaMatchChallenge, PrepositionQuizChallenge, MeaningQuizChallenge, ParaphraseQuizChallenge, SentenceScrambleChallenge, ChallengeResult, HeteronymQuizChallenge, HeteronymForm, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseContextQuizChallenge, ParaphraseContextQuizItem, CollocationContextQuizChallenge, CollocationContextQuizItem, CollocationMultichoiceQuizChallenge, IdiomContextQuizChallenge, IdiomContextQuizItem } from '../components/practice/TestModalTypes';
 import { getRandomMeanings } from '../app/db';
 import { getConfig, getServerUrl } from '../app/settingsManager';
@@ -63,7 +63,7 @@ const normalizeCambridgePronunciations = (items?: CambridgePronunciation[]): Cam
 /**
  * Generates a list of all possible challenges for a given vocabulary item.
  */
-export function generateAvailableChallenges(word: VocabularyItem): Challenge[] {
+export function generateAvailableChallenges(word: StudyItem): Challenge[] {
     const list: Challenge[] = [];
     const debugIpaMatch = word.word?.trim().toLowerCase() === 'rebel';
 
@@ -364,7 +364,7 @@ if (word.example && word.example.trim().length > 5) {
 /**
  * Prepares a list of challenges by fetching necessary data (e.g., distractor meanings).
  */
-export async function prepareChallenges(challenges: Challenge[], word: VocabularyItem): Promise<Challenge[]> {
+export async function prepareChallenges(challenges: Challenge[], word: StudyItem): Promise<Challenge[]> {
     const finalChallenges: Challenge[] = [];
     const debugIpaMatch = word.word?.trim().toLowerCase() === 'rebel';
     if (debugIpaMatch) {

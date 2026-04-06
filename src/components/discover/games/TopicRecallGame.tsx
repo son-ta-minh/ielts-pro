@@ -6,14 +6,14 @@ import confetti from 'canvas-confetti';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
-import { User, VocabularyItem } from '../../../app/types';
+import { User, StudyItem } from '../../../app/types';
 import { requestStudyBuddyChatResponse } from '../../common/StudyBuddy';
 import ConfirmationModal from '../../../components/common/ConfirmationModal';
 import { getTopicRecallEvaluationPrompt } from '../../../services/promptService';
 import ViewWordModal from '../../word_lib/ViewWordModal';
 
 interface TopicRecallGameProps {
-  words: VocabularyItem[];
+  words: StudyItem[];
   user: User;
   onUpdateUser: (user: User) => Promise<void>;
   onComplete?: (score: number) => void;
@@ -59,8 +59,8 @@ const DEFAULT_IMAGE = '1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=10
 const COMMON_TOPICS = ['Environment', 'Technology', 'Education', 'Health', 'Travel', 'Work', 'Society', 'Culture'];
 const DEFAULT_GROUP_NAME = 'Default Group';
 
-const normalizeLibraryWords = (words: VocabularyItem[]): VocabularyItem[] => {
-  const deduped = new Map<string, VocabularyItem>();
+const normalizeLibraryWords = (words: StudyItem[]): StudyItem[] => {
+  const deduped = new Map<string, StudyItem>();
 
   words.forEach((word) => {
     const headword = word.word?.trim();
@@ -203,7 +203,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   // --- State ---
   // Tab state for mobile/iPad view
   const [activeTab, setActiveTab] = useState<'library' | 'canvas'>('library');
-  const [vocab, setVocab] = useState<VocabularyItem[]>(() => normalizeLibraryWords(words || []));
+  const [vocab, setVocab] = useState<StudyItem[]>(() => normalizeLibraryWords(words || []));
   const [currentTopic, setCurrentTopic] = useState<string>(user.topicRecallData?.lastTopic || 'Environment');
   const [topicImages, setTopicImages] = useState<any[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -219,7 +219,7 @@ export const TopicRecallGame: React.FC<TopicRecallGameProps> = ({ words, user, o
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
-  const [selectedWord, setSelectedWord] = useState<VocabularyItem | null>(null);
+  const [selectedWord, setSelectedWord] = useState<StudyItem | null>(null);
   const [showMeaning, setShowMeaning] = useState(true);
   const [showCollocation, setShowCollocation] = useState(true);
   const [newTopicName, setNewTopicName] = useState(user.topicRecallData?.lastTopic || 'Environment');

@@ -1,7 +1,7 @@
 
-import { VocabularyItem, LessonPreferences } from '../../app/types';
+import { StudyItem, LessonPreferences } from '../../app/types';
 
-export function getGenerateWordLessonEssayPrompt(word: VocabularyItem, prefs: LessonPreferences, coachName?: string): string {
+export function getGenerateWordLessonEssayPrompt(word: StudyItem, prefs: LessonPreferences, coachName?: string): string {
   const language = prefs.language || 'English';
 
   const wordDetails = {
@@ -47,7 +47,7 @@ export function getGenerateWordLessonEssayPrompt(word: VocabularyItem, prefs: Le
   }`;
 }
 
-export function getGenerateWordLessonTestPrompt(word: VocabularyItem, prefs: LessonPreferences, coachName?: string): string {
+export function getGenerateWordLessonTestPrompt(word: StudyItem, prefs: LessonPreferences, coachName?: string): string {
     const language = prefs.language || 'English';
     const wordDetails = {
       word: word.word,
@@ -82,7 +82,7 @@ export function getGenerateWordLessonTestPrompt(word: VocabularyItem, prefs: Les
 }
 
 /* Added unified function expected by templates */
-export function getGenerateWordLessonPrompt(word: VocabularyItem, prefs: any, coachName: string): string {
+export function getGenerateWordLessonPrompt(word: StudyItem, prefs: any, coachName: string): string {
   const format = prefs.format || 'reading';
   if (format === 'test') {
       return getGenerateWordLessonTestPrompt(word, prefs, coachName);

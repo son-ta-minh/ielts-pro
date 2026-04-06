@@ -1,6 +1,6 @@
 
 import { processJsonImport, ImportResult, _mapToShortKeys, _mapUserToShortKeys } from '../utils/dataHandler';
-import { User, DataScope, VocabularyItem, DailyStreakSnapshot } from '../app/types';
+import { User, DataScope, StudyItem, DailyStreakSnapshot } from '../app/types';
 import { getConfig, saveConfig, getServerUrl } from '../app/settingsManager';
 import * as dataStore from '../app/dataStore';
 import * as db from '../app/db';
@@ -280,9 +280,9 @@ export const refreshServerLibrary = async (): Promise<boolean> => {
 /**
  * Queries the Global Server Library for refined definitions.
  * @param words Array of words to look up
- * @returns Array of found VocabularyItem objects (with short keys expanded)
+ * @returns Array of found StudyItem objects (with short keys expanded)
  */
-export const lookupWordsInGlobalLibrary = async (words: string[]): Promise<VocabularyItem[]> => {
+export const lookupWordsInGlobalLibrary = async (words: string[]): Promise<StudyItem[]> => {
     try {
         const config = getConfig();
         const serverUrl = getServerUrl(config);
@@ -296,9 +296,9 @@ export const lookupWordsInGlobalLibrary = async (words: string[]): Promise<Vocab
         if (response.ok) {
             const data = await response.json();
             // Data comes back as short-key objects (stored in server memory). 
-            // We need to expand them back to VocabularyItem using _mapToLongKeys
+            // We need to expand them back to StudyItem using _mapToLongKeys
             if (Array.isArray(data.found)) {
-                return data.found.map((item: any) => _mapToLongKeys(item) as VocabularyItem);
+                return data.found.map((item: any) => _mapToLongKeys(item) as StudyItem);
             }
         }
         return [];

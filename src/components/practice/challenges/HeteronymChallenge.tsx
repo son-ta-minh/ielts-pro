@@ -1,9 +1,9 @@
 import React from 'react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 import { HeteronymForm } from '../TestModalTypes';
 
 interface Props {
-    word: VocabularyItem;
+    word: StudyItem;
     forms: HeteronymForm[];
     ipaOptions: string[];
     userAnswer: Record<string, string>;

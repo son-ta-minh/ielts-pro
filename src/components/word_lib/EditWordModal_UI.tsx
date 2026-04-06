@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Save, Sparkles, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, BookText, ClipboardList } from 'lucide-react';
-import { VocabularyItem, WordFamily, WordFamilyMember, LearnedStatus, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
+import { StudyItem, WordFamily, WordFamilyMember, LearnedStatus, ParaphraseOption, PrepositionPattern, CollocationDetail, WordQuality, ParaphraseTone } from '../../app/types';
 
 const StatusDropdown: React.FC<{
     label?: string;
@@ -48,7 +48,7 @@ export interface EditWordModalUIProps {
   onClose: () => void;
   onSwitchToView: () => void;
   formData: any; 
-  setFormData: (field: keyof VocabularyItem | 'groupsString' | 'studiedStatus' | 'prepositionsList' | 'essayEdit' | 'testEdit', value: any) => void;
+  setFormData: (field: keyof StudyItem | 'groupsString' | 'studiedStatus' | 'prepositionsList' | 'essayEdit' | 'testEdit', value: any) => void;
   setFlag: (flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' | 'isFocus') => void;
   familyHandler: (type: keyof WordFamily) => { update: (index: number, field: 'word', value: string) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: () => void; };
   prepList: { update: (index: number, changes: object) => void; toggleIgnore: (index: number) => void; remove: (index: number) => void; add: (newItem: object) => void; };

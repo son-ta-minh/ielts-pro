@@ -3,7 +3,7 @@
  * Uses short keys to reduce JSON size for storage and transfer.
  */
 
-import { VocabularyItem, Unit, ParaphraseLog, User, WordQuality, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, WordFamilyGroup, LearnedStatus } from '../app/types';
+import { StudyItem, Unit, ParaphraseLog, User, WordQuality, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, WordFamilyGroup, LearnedStatus } from '../app/types';
 import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getPlanningGoalsByUserId, bulkSavePlanningGoals, getConversationItemsByUserId, bulkSaveConversationItems, getFreeTalkItemsByUserId, bulkSaveFreeTalkItems, getWordFamilyGroupsByUserId, bulkSaveWordFamilyGroups } from '../app/db';
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
@@ -13,7 +13,7 @@ import { getStoredJSON, setStoredJSON } from './storage';
 import { normalizeVocabularyKeywords } from './vocabularyKeywordUtils';
 
 const keyMap: { [key: string]: string } = {
-    // VocabularyItem top-level - 'ipa' removed, 'ipaUs' uses 'i_us'
+    // StudyItem top-level - 'ipa' removed, 'ipaUs' uses 'i_us'
     userId: 'uid', word: 'w', display: 'wd', displayMeaning: 'wdm', displayIPA: 'wdi', keywords: 'kw', wordFamilyGroupId: 'wfgid', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'nt', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', isExampleLocked: 'is_exl', isPassive: 'is_pas', isFocus: 'is_foc', quality: 'q', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', learnedStatus: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
     masteryScore: 'ms',
     complexity: 'cx',
@@ -431,7 +431,7 @@ export const processJsonImport = async (
                 const incomingItemsRaw: any[] = Array.isArray(rawJson) ? rawJson : (rawJson.vocabulary || rawJson.vocab || []);
                 const isShortKeyFormat = incomingItemsRaw.length > 0 && (incomingItemsRaw[0].uid || !incomingItemsRaw[0].userId);
                 
-                let incomingItems: Partial<VocabularyItem>[] = isShortKeyFormat 
+                let incomingItems: Partial<StudyItem>[] = isShortKeyFormat 
                     ? incomingItemsRaw.map(_mapToLongKeys) 
                     : incomingItemsRaw;
 
@@ -489,19 +489,19 @@ export const processJsonImport = async (
                 if (scope.vocabulary) {
                     const localItems = await getAllWordsForExport(userId);
                     const localItemsByWord = new Map(localItems.map(item => [item.word.toLowerCase().trim(), item]));
-                    const itemsToSave: VocabularyItem[] = []; 
+                    const itemsToSave: StudyItem[] = []; 
 
                     for (const incoming of incomingItems) {
                         if (!incoming.word) continue;
                         const local = localItemsByWord.get(incoming.word.toLowerCase().trim());
                         if (local) {
                             if ((incoming.updatedAt || 0) > (local.updatedAt || 0)) {
-                                itemsToSave.push({ ...local, ...incoming, id: local.id, userId: importedUserId, updatedAt: Date.now() } as VocabularyItem); 
+                                itemsToSave.push({ ...local, ...incoming, id: local.id, userId: importedUserId, updatedAt: Date.now() } as StudyItem); 
                                 mergedCount++;
                             } else skippedCount++;
                         } else {
                             const now = Date.now();
-                            itemsToSave.push({ ...incoming, id: incoming.id || `w-${now}-${Math.random()}`, userId: importedUserId, createdAt: incoming.createdAt || now, updatedAt: now } as VocabularyItem);
+                            itemsToSave.push({ ...incoming, id: incoming.id || `w-${now}-${Math.random()}`, userId: importedUserId, createdAt: incoming.createdAt || now, updatedAt: now } as StudyItem);
                             newCount++;
                         }
                     }

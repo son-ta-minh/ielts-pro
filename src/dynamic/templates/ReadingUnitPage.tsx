@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, Unit, VocabularyItem, FocusColor } from '../../app/types';
+import { User, Unit, StudyItem, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { Edit3, Trash2, BookOpen, Plus, Sparkles, FolderTree, Tag, Target, Download, ExternalLink, X } from 'lucide-react';
@@ -21,7 +21,7 @@ import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 interface Props {
   user: User;
-  onStartSession: (words: VocabularyItem[]) => void;
+  onStartSession: (words: StudyItem[]) => void;
   onUpdateUser: (user: User) => Promise<void>;
 }
 
@@ -30,7 +30,7 @@ const VIEW_SETTINGS_KEY = 'vocab_pro_reading_view_settings';
 
 export const ReadingUnitPage: React.FC<Props> = ({ user, onStartSession, onUpdateUser }) => {
   const [units, setUnits] = useState<Unit[]>([]);
-  const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
+  const [allWords, setAllWords] = useState<StudyItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // View State

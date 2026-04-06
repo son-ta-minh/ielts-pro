@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useMemo, useState } from 'react';
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 import { Challenge, ChallengeResult, PrepositionQuizChallenge, ChallengeType, ParaphraseQuizChallenge, CollocationQuizChallenge, IdiomQuizChallenge, RecapData } from './TestModalTypes';
 import { TestModalHeader } from './TestModalHeader';
 import { TestModalContent } from './TestModalContent';
@@ -12,7 +12,7 @@ import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 export * from './TestModalTypes';
 
 export interface TestModalUIProps {
-  word: VocabularyItem;
+  word: StudyItem;
   onClose: () => void;
   isModal?: boolean;
   

@@ -1,4 +1,4 @@
-import { LearnedStatus, VocabularyItem, WordQuality } from '../app/types';
+import { LearnedStatus, StudyItem, WordQuality } from '../app/types';
 import * as dataStore from '../app/dataStore';
 import { isSrsIgnored } from './srs';
 
@@ -46,7 +46,7 @@ export interface VocabularySearchHit {
 }
 
 export interface VocabularySearchResult {
-  word: VocabularyItem;
+  word: StudyItem;
   hits: VocabularySearchHit[];
   score: number;
   matchedQueries: string[];
@@ -143,7 +143,7 @@ const normalizeSearchQueries = (queries: string[]): string[] => {
     });
 };
 
-const normalizeWordContext = (word: VocabularyItem): StudyWordContext => ({
+const normalizeWordContext = (word: StudyItem): StudyWordContext => ({
   word: word.word,
   meaningVi: word.meaningVi || '',
   example: word.example || '',
@@ -159,7 +159,7 @@ const normalizeWordContext = (word: VocabularyItem): StudyWordContext => ({
   groups: word.groups || [],
 });
 
-const getActiveWordsForCurrentUser = (): VocabularyItem[] => {
+const getActiveWordsForCurrentUser = (): StudyItem[] => {
   const userId = getCurrentUserId();
   if (!userId) return [];
 
@@ -168,26 +168,26 @@ const getActiveWordsForCurrentUser = (): VocabularyItem[] => {
     .filter((word) => word.userId === userId && !word.isPassive && word.quality !== WordQuality.FAILED && !isSrsIgnored(word));
 };
 
-const sortByRecentLearned = (words: VocabularyItem[]) =>
+const sortByRecentLearned = (words: StudyItem[]) =>
   [...words].sort((a, b) => {
     const aTime = a.lastReview || a.updatedAt || 0;
     const bTime = b.lastReview || b.updatedAt || 0;
     return bTime - aTime;
   });
 
-const sortByForgotSeverity = (words: VocabularyItem[]) =>
+const sortByForgotSeverity = (words: StudyItem[]) =>
   [...words].sort((a, b) => {
     const forgotDiff = (b.forgotCount || 0) - (a.forgotCount || 0);
     if (forgotDiff !== 0) return forgotDiff;
 
-    const gradeWeight = (item: VocabularyItem) => item.learnedStatus === LearnedStatus.FORGOT ? 2 : item.learnedStatus === LearnedStatus.HARD ? 1 : 0;
+    const gradeWeight = (item: StudyItem) => item.learnedStatus === LearnedStatus.FORGOT ? 2 : item.learnedStatus === LearnedStatus.HARD ? 1 : 0;
     const gradeDiff = gradeWeight(b) - gradeWeight(a);
     if (gradeDiff !== 0) return gradeDiff;
 
     return (a.masteryScore ?? 0) - (b.masteryScore ?? 0);
   });
 
-const sortByHardness = (words: VocabularyItem[]) =>
+const sortByHardness = (words: StudyItem[]) =>
   [...words].sort((a, b) => {
     const aScore = [
       a.learnedStatus === LearnedStatus.HARD ? 3 : 0,

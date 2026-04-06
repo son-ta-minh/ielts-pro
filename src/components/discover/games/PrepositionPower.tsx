@@ -1,12 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Play, Check, ChevronRight, Zap, Search } from 'lucide-react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 import * as dataStore from '../../../app/dataStore';
 import { useToast } from '../../../contexts/ToastContext';
 
 interface Props {
-    words: VocabularyItem[];
+    words: StudyItem[];
     onComplete: (score: number) => void;
     onExit: () => void;
 }

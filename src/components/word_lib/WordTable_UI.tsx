@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, PenLine, BookMarked, Image, Play } from 'lucide-react';
-import { VocabularyItem, LearnedStatus, WordQuality, WordTypeOption, WordBook } from '../../app/types';
+import { StudyItem, LearnedStatus, WordQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
 import { DEFAULT_WORD_REFINE_SETUP, WordRefineSetup } from '../../services/wordRefineApi';
@@ -172,7 +172,7 @@ const GroupFilterCombobox: React.FC<{
     );
 };
 
-const getStatusBadge = (item: VocabularyItem) => {
+const getStatusBadge = (item: StudyItem) => {
   if (!item.lastReview || item.learnedStatus === LearnedStatus.NEW) return <span className="inline-flex px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-100 whitespace-nowrap">New</span>;
   
   switch (item.learnedStatus) {
@@ -515,7 +515,7 @@ const RefineSetupModal: React.FC<{
 };
 
 export interface WordTableUIProps {
-  words: VocabularyItem[];
+  words: StudyItem[];
   total: number;
   loading: boolean;
   page: number;
@@ -525,10 +525,10 @@ export interface WordTableUIProps {
   onPractice: (ids: Set<string>) => void;
   settingsKey: string;
   context: 'library' | 'unit';
-  onViewWord: (word: VocabularyItem) => void;
-  onEditWord: (word: VocabularyItem) => void;
-  onDelete: (word: VocabularyItem) => Promise<void>;
-  onHardDelete?: (word: VocabularyItem) => Promise<void>;
+  onViewWord: (word: StudyItem) => void;
+  onEditWord: (word: StudyItem) => void;
+  onDelete: (word: StudyItem) => Promise<void>;
+  onHardDelete?: (word: StudyItem) => Promise<void>;
   query: string;
   setQuery: (q: string) => void;
   activeFilters: Set<FilterType>;
@@ -547,12 +547,12 @@ export interface WordTableUIProps {
   isViewMenuOpen: boolean;
   selectedIds: Set<string>;
   setSelectedIds: (ids: Set<string>) => void;
-  wordToDelete: VocabularyItem | null;
-  setWordToDelete: (w: VocabularyItem | null) => void;
+  wordToDelete: StudyItem | null;
+  setWordToDelete: (w: StudyItem | null) => void;
   isDeleting: boolean;
   setIsDeleting: (d: boolean) => void;
-  wordToHardDelete?: VocabularyItem | null;
-  setWordToHardDelete?: (w: VocabularyItem | null) => void;
+  wordToHardDelete?: StudyItem | null;
+  setWordToHardDelete?: (w: StudyItem | null) => void;
   isHardDeleting?: boolean;
   setIsHardDeleting?: (d: boolean) => void;
   notification: {type: 'success' | 'error' | 'info', message: string} | null;
@@ -563,7 +563,7 @@ export interface WordTableUIProps {
   handleBatchAddSubmit: () => void;
   onOpenBulkDeleteModal?: () => void;
   onOpenBulkHardDeleteModal?: () => void;
-  selectedWordsToRefine: VocabularyItem[];
+  selectedWordsToRefine: StudyItem[];
   selectedRawWordsCount: number;
   onStartRefineSelected: (setup: WordRefineSetup) => void;
   isApiRefining: boolean;

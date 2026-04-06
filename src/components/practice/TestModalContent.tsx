@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 import { 
     Challenge, ChallengeResult, 
     PrepositionQuizChallenge, 
@@ -23,7 +23,7 @@ import { HeteronymChallenge } from './challenges/HeteronymChallenge';
 import { SpellingChallenge } from './challenges/SpellingChallenge';
 
 interface TestModalContentProps {
-    word: VocabularyItem;
+    word: StudyItem;
     currentChallenge: Challenge;
     currentChallengeIndex: number;
     userAnswers: any[];

@@ -1,6 +1,6 @@
-import { User, VocabularyItem } from '../../app/types';
+import { User, StudyItem } from '../../app/types';
 
-export function getLearningSuggestionsPrompt(word: VocabularyItem, user: User): string {
+export function getLearningSuggestionsPrompt(word: StudyItem, user: User): string {
     // Sanitize word data to send to AI
     const wordData = {
         word: word.word,

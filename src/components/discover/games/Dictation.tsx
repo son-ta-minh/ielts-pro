@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ArrowRight, Play, Keyboard, Server, Book, Loader2, Brain, Check, Volume2, Zap } from 'lucide-react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 import { speak, stopSpeaking, fetchServerVoices, VoiceDefinition } from '../../../utils/audio';
 import { getConfig, getServerUrl } from '../../../app/settingsManager';
 import { useToast } from '../../../contexts/ToastContext';
 import { getStoredJSON, setStoredJSON } from '../../../utils/storage';
 
 interface Props {
-    words: VocabularyItem[];
+    words: StudyItem[];
     onComplete: (score: number) => void;
     onExit: () => void;
 }
@@ -207,7 +207,7 @@ export const Dictation: React.FC<Props> = ({ words, onComplete, onExit }) => {
 
     const collectVocabularyPool = (): string[] => {
         const pool = new Set<string>();
-        const isMasteredWord = (word: VocabularyItem) => {
+        const isMasteredWord = (word: StudyItem) => {
             if (typeof word.masteryScore === 'number') return word.masteryScore >= 80;
             return (word.consecutiveCorrect || 0) >= 3;
         };

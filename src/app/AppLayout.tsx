@@ -3,7 +3,7 @@ import React, { Suspense, useState, useEffect } from 'react';
 import { 
   Menu, X, BookCopy, Loader2, AlertTriangle, Users, Search
 } from 'lucide-react';
-import { AppView, VocabularyItem } from './types';
+import { AppView, StudyItem } from './types';
 import { useAppController } from './useAppController';
 import * as dataStore from './dataStore';
 import EditWordModal from '../components/word_lib/EditWordModal';
@@ -196,7 +196,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
   const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, selectedArchiveUser, archiveCandidates, isArchiveLoading, restoreFromServerAction, handleOpenArchivePicker, handleCloseArchivePicker, handleCreateArchiveForUser, handleRestoreFromArchive, handleDeleteArchive, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore, sslIssueUrl, setSslIssueUrl, retrySslConnection } = controller;
-  const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
+  const [editingWord, setEditingWord] = useState<StudyItem | null>(null);
   const [searchModalState, setSearchModalState] = useState<{ isOpen: boolean; initialQuery: string }>({ isOpen: false, initialQuery: '' });
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
   const [writingConfirmModal, setWritingConfirmModal] = useState<{ isOpen: boolean; targetView: AppView | null; action?: () => void }>({
@@ -228,10 +228,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
     setEndSessionModal({isOpen: false, targetView: null, andThen: undefined});
   };
   const cancelEndSession = () => setEndSessionModal({isOpen: false, targetView: null, andThen: undefined});
-  const handleEditRequest = (word: VocabularyItem) => { setGlobalViewWord(null); setEditingWord(word); };
-  const handleSaveEdit = (updated: VocabularyItem) => { updateWord(updated); setEditingWord(null); };
+  const handleEditRequest = (word: StudyItem) => { setGlobalViewWord(null); setEditingWord(word); };
+  const handleSaveEdit = (updated: StudyItem) => { updateWord(updated); setEditingWord(null); };
   const [isRestoring, setIsRestoring] = useState(false);
-  const [inlineReviewWords, setInlineReviewWords] = useState<VocabularyItem[] | null>(null);
+  const [inlineReviewWords, setInlineReviewWords] = useState<StudyItem[] | null>(null);
 
   return (
     <AutoRefineProvider currentUser={currentUser}>

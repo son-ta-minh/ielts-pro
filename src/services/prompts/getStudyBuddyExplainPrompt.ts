@@ -3,7 +3,7 @@ export function getStudyBuddyExplainPrompt(selectedText: string): string {
 
 Explain "${selectedText}" for an English learner.
 
-If a VocabularyItem or saved library record for this target is available in the provided context, reuse that data first and stay consistent with it. Do not invent extra saved data. If saved data is missing, use only safe, common knowledge.
+If a StudyItem or saved library record for this target is available in the provided context, reuse that data first and stay consistent with it. Do not invent extra saved data. If saved data is missing, use only safe, common knowledge.
 
 Always return structured Markdown with these sections in exact order:
 

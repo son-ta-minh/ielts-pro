@@ -1,10 +1,10 @@
 import React from 'react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 import { SpeechInputButton } from './SpeechInputButton';
 import { useInputValidation } from './hooks/useInputValidation';
 
 interface Props {
-    word: VocabularyItem;
+    word: StudyItem;
     userAnswer: Record<string, string>; // { nouns: '...', verbs: '...' }
     onAnswer: (val: Record<string, string>) => void;
     isFinishing: boolean;

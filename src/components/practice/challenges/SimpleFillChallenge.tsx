@@ -1,11 +1,11 @@
 import React, { useRef } from 'react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 import { SpeechInputButton } from './SpeechInputButton';
 import { useInputValidation } from './hooks/useInputValidation';
 import { SpeechRecognitionManager } from '../../../utils/speechRecognition';
 
 interface Props {
-    word: VocabularyItem;
+    word: StudyItem;
     title: string;
     cue?: string;
     contextTag?: string; // Optional small tag (e.g. Paraphrase Tone)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { VocabularyItem, Unit, ReviewGrade, WordFamilyGroup, ParaphraseOption } from '../../app/types';
+import { StudyItem, Unit, ReviewGrade, WordFamilyGroup, ParaphraseOption } from '../../app/types';
 import { findWordByText, saveWord, getUnitsContainingWord, getAllWords } from '../../app/dataStore';
 import { ViewWordModalUI } from './ViewWordModal_UI';
 import { createNewWord, calculateMasteryScore } from '../../utils/srs';
@@ -24,12 +24,12 @@ const normalizeParaphraseTone = (tone?: string): ParaphraseOption['tone'] => {
 };
 
 const getParaphraseToneFromWordRegister = (
-  register?: VocabularyItem['register']
+  register?: StudyItem['register']
 ): ParaphraseOption['tone'] => {
   return normalizeParaphraseTone(register);
 };
 
-const normalizeWordParaphrases = (item: VocabularyItem): VocabularyItem => ({
+const normalizeWordParaphrases = (item: StudyItem): StudyItem => ({
   ...item,
   paraphrases: (item.paraphrases || []).map((paraphrase) => ({
     ...paraphrase,
@@ -45,20 +45,20 @@ const normalizeComparableText = (value: string): string =>
     .trim();
 
 interface Props {
-  word: VocabularyItem;
+  word: StudyItem;
   onClose: () => void;
-  onNavigateToWord: (word: VocabularyItem) => void;
+  onNavigateToWord: (word: StudyItem) => void;
   onOpenWordFamilyGroup?: (groupId: string) => void;
-  onEditRequest: (word: VocabularyItem) => void;
-  onGainXp: (baseXpAmount: number, wordToUpdate?: VocabularyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => Promise<number>;
-  onUpdate: (word: VocabularyItem) => void;
+  onEditRequest: (word: StudyItem) => void;
+  onGainXp: (baseXpAmount: number, wordToUpdate?: StudyItem, grade?: ReviewGrade, testCounts?: { correct: number, tested: number }) => Promise<number>;
+  onUpdate: (word: StudyItem) => void;
   isViewOnly?: boolean;
-  onStartReviewSession?: (word: VocabularyItem) => void;
+  onStartReviewSession?: (word: StudyItem) => void;
 }
 
 const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpenWordFamilyGroup, onEditRequest, onUpdate, isViewOnly = false, onStartReviewSession }) => {
   const { showToast } = useToast();
-  const [currentWord, setCurrentWord] = useState<VocabularyItem>({
+  const [currentWord, setCurrentWord] = useState<StudyItem>({
     ...normalizeWordParaphrases(word),
     lastTestResults: normalizeTestResultKeys(word.lastTestResults)
   });
@@ -177,7 +177,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
     setCurrentWord(updated);
   };
 
-  const handleLocalUpdate = (updatedWord: VocabularyItem) => {
+  const handleLocalUpdate = (updatedWord: StudyItem) => {
       onUpdate(updatedWord);
       setCurrentWord({
         ...normalizeWordParaphrases(updatedWord),
@@ -286,7 +286,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
           ...(currentWord.paraphrases || []).map((item) => item.word.trim().toLowerCase())
         ].filter(Boolean)
       );
-      const libraryMap = new Map<string, VocabularyItem>();
+      const libraryMap = new Map<string, StudyItem>();
       libraryWords.forEach((item) => {
         const normalizedWord = item.word.trim().toLowerCase();
         if (normalizedWord) libraryMap.set(normalizedWord, item);
@@ -303,7 +303,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
         }
       };
 
-      const recursiveScan = (sourceWord: VocabularyItem) => {
+      const recursiveScan = (sourceWord: StudyItem) => {
         const normalizedSource = sourceWord.word.trim().toLowerCase();
         if (!normalizedSource || visited.has(normalizedSource)) return;
         visited.add(normalizedSource);
@@ -368,7 +368,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
       return;
     }
 
-    const updatedWord: VocabularyItem = {
+    const updatedWord: StudyItem = {
       ...currentWord,
       paraphrases: [
         ...currentParaphrases,
@@ -430,7 +430,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
     };
   };
 
-  const resolveDisplayMetadata = async (baseWord: VocabularyItem, displayText: string): Promise<Pick<VocabularyItem, 'displayMeaning' | 'displayIPA'>> => {
+  const resolveDisplayMetadata = async (baseWord: StudyItem, displayText: string): Promise<Pick<StudyItem, 'displayMeaning' | 'displayIPA'>> => {
     if (!displayText || normalizeComparableText(displayText) === normalizeComparableText(baseWord.word)) {
       return { displayMeaning: '', displayIPA: '' };
     }
@@ -521,7 +521,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
   };
 
   const handleResetMastery = async () => {
-    const updatedWord: VocabularyItem = {
+    const updatedWord: StudyItem = {
       ...currentWord,
       lastTestResults: {},
       masteryScore: calculateMasteryScore({
@@ -545,7 +545,7 @@ const ViewWordModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, onOpe
     setIsSettingDisplay(true);
     try {
       const nextDisplay = normalizedSelectedText || await requestDisplaySuggestion();
-      let updatedWord: VocabularyItem = {
+      let updatedWord: StudyItem = {
         ...currentWord,
         display: nextDisplay,
         displayMeaning: '',

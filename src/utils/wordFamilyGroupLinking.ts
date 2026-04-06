@@ -1,4 +1,4 @@
-import { VocabularyItem, WordFamilyGroup } from '../app/types';
+import { StudyItem, WordFamilyGroup } from '../app/types';
 import * as db from '../app/db';
 
 const normalizeItems = (items: string[]): string[] => {
@@ -35,8 +35,8 @@ const getGroupsByUser = async (userId: string) => {
     return db.getWordFamilyGroupsByUserId(userId);
 };
 
-export const linkWordsToExistingWordFamilyGroups = async (words: VocabularyItem[]): Promise<VocabularyItem[]> => {
-    const updates: VocabularyItem[] = [];
+export const linkWordsToExistingWordFamilyGroups = async (words: StudyItem[]): Promise<StudyItem[]> => {
+    const updates: StudyItem[] = [];
     const groupsByUser = new Map<string, WordFamilyGroup[]>();
 
     for (const word of words) {
@@ -58,9 +58,9 @@ export const linkWordsToExistingWordFamilyGroups = async (words: VocabularyItem[
     return updates;
 };
 
-export const syncLibraryWordsForSavedGroup = (group: WordFamilyGroup, libraryWords: VocabularyItem[]): VocabularyItem[] => {
+export const syncLibraryWordsForSavedGroup = (group: WordFamilyGroup, libraryWords: StudyItem[]): StudyItem[] => {
     const terms = new Set(extractGroupTerms(group));
-    const updates: VocabularyItem[] = [];
+    const updates: StudyItem[] = [];
 
     libraryWords.forEach((word) => {
         if (word.userId !== group.userId || !isSingleWordCandidate(word.word)) return;
@@ -75,13 +75,13 @@ export const syncLibraryWordsForSavedGroup = (group: WordFamilyGroup, libraryWor
     return updates;
 };
 
-export const unlinkLibraryWordsFromDeletedGroup = (groupId: string, libraryWords: VocabularyItem[]): VocabularyItem[] => {
+export const unlinkLibraryWordsFromDeletedGroup = (groupId: string, libraryWords: StudyItem[]): StudyItem[] => {
     return libraryWords
         .filter((word) => (word.wordFamilyGroupId || null) === groupId)
         .map((word) => ({ ...word, wordFamilyGroupId: null }));
 };
 
-export const clearStaleWordFamilyGroupLink = async (word: VocabularyItem): Promise<VocabularyItem> => {
+export const clearStaleWordFamilyGroupLink = async (word: StudyItem): Promise<StudyItem> => {
     if (!word.wordFamilyGroupId) return word;
     const groups = await getGroupsByUser(word.userId);
     const exists = groups.some((group) => group.id === word.wordFamilyGroupId);

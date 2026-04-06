@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useReducer } from 'react';
-import { VocabularyItem, WordFamilyMember, LearnedStatus, Unit, PrepositionPattern, User } from '../../app/types';
+import { StudyItem, WordFamilyMember, LearnedStatus, Unit, PrepositionPattern, User } from '../../app/types';
 import { applyLearnedStatus, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { getWordDetailsPrompt, getLearningSuggestionsPrompt } from '../../services/promptService';
 import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
@@ -14,7 +14,7 @@ import { normalizeVocabularyKeywords } from '../../utils/vocabularyKeywordUtils'
 import { normalizeCambridgePronunciations } from '../../utils/studyBuddyUtils';
 import { getStudyBuddyCoachPrompt } from '../../services/prompts/getStudyBuddyCoachPrompt';
 
-type FormState = VocabularyItem & {
+type FormState = StudyItem & {
     groupsString: string;
     studiedStatus: LearnedStatus;
     prepositionsList: PrepositionPattern[];
@@ -23,7 +23,7 @@ type FormState = VocabularyItem & {
 };
 
 type FormAction =
-    | { type: 'REINITIALIZE', payload: VocabularyItem }
+    | { type: 'REINITIALIZE', payload: StudyItem }
     | { type: 'SET_FIELD', payload: { field: keyof FormState, value: any } }
     | { type: 'SET_FLAG', payload: { flag: 'isIdiom' | 'isPhrasalVerb' | 'isCollocation' | 'isStandardPhrase' | 'isIrregular' | 'isPassive' | 'isFocus' } }
     | { type: 'SET_LIST_ITEM', payload: { list: 'wordFamily' | 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases', data: any } }
@@ -91,11 +91,11 @@ interface SuggestionsData {
 }
 
 interface Props {
-  word: VocabularyItem;
+  word: StudyItem;
   user: User;
-  onSave: (updatedWord: VocabularyItem) => void;
+  onSave: (updatedWord: StudyItem) => void;
   onClose: () => void;
-  onSwitchToView: (word: VocabularyItem) => void;
+  onSwitchToView: (word: StudyItem) => void;
 }
 
 const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchToView }) => {
@@ -291,7 +291,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
     };
   };
 
-  const resolveDisplayMetadata = async (item: VocabularyItem): Promise<Pick<VocabularyItem, 'displayMeaning' | 'displayIPA'>> => {
+  const resolveDisplayMetadata = async (item: StudyItem): Promise<Pick<StudyItem, 'displayMeaning' | 'displayIPA'>> => {
     const displayText = String(item.display || '').trim();
     if (!displayText || normalizeComparableText(displayText) === normalizeComparableText(item.word)) {
       return { displayMeaning: '', displayIPA: '' };
@@ -571,7 +571,7 @@ const EditWordModal: React.FC<Props> = ({ word, user, onSave, onClose, onSwitchT
         finalFamily = hasData ? cleanedFamily : undefined;
     }
     
-    let updatedWord: VocabularyItem = { 
+    let updatedWord: StudyItem = { 
         ...rest, 
         keywords: normalizeVocabularyKeywords(rest.keywords, rest.word),
         wordFamily: finalFamily, 

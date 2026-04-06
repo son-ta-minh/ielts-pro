@@ -1,14 +1,14 @@
 
 import React, { useState, useMemo } from 'react';
 import { AdventureSegment } from '../../../../data/adventure_content';
-import { VocabularyItem } from '../../../../app/types';
+import { StudyItem } from '../../../../app/types';
 import { X, Plus, Sparkles, Save, Loader2 } from 'lucide-react';
 import WordSelectorModal from './WordSelectorModal';
 
 interface Props {
     segment: AdventureSegment;
     chapterId: string;
-    allWords: VocabularyItem[];
+    allWords: StudyItem[];
     wordsLoading: boolean;
     onSave: (chapterId: string, updatedSegment: AdventureSegment) => Promise<void>;
     onClose: () => void;
@@ -20,7 +20,7 @@ const WordListEditor: React.FC<{
     words: string[];
     onWordsChange: (newWords: string[]) => void;
     onAddClick: () => void;
-    wordStatusMap: Map<string, VocabularyItem>;
+    wordStatusMap: Map<string, StudyItem>;
 }> = ({ title, words, onWordsChange, onAddClick, wordStatusMap }) => {
     const handleRemove = (wordToRemove: string) => {
         onWordsChange(words.filter(w => w !== wordToRemove));
@@ -70,7 +70,7 @@ const SegmentEditModal: React.FC<Props> = ({ segment, chapterId, allWords, words
     const allSegmentWords = useMemo(() => new Set([...basicWords, ...intermediateWords, ...advancedWords]), [basicWords, intermediateWords, advancedWords]);
     
     const wordStatusMap = useMemo(() => {
-        const map = new Map<string, VocabularyItem>();
+        const map = new Map<string, StudyItem>();
         for (const word of allWords) {
             map.set(word.word.toLowerCase(), word);
         }

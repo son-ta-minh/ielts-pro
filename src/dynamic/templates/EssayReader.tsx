@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { EssayReaderUI, HighlightColor } from './EssayReader_UI';
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 
 interface Props {
     text: string;
     vocabString?: string;
-    wordsByText: Map<string, VocabularyItem>;
-    onHoverWord?: (word: VocabularyItem | null, rect: DOMRect | null) => void;
+    wordsByText: Map<string, StudyItem>;
+    onHoverWord?: (word: StudyItem | null, rect: DOMRect | null) => void;
     onWordAction?: (text: string, action: 'add' | 'remove') => void;
     isPracticeMode?: boolean;
     className?: string;

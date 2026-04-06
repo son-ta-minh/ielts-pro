@@ -1,19 +1,19 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { ArrowLeft, Lock, Zap, Layers, CheckCircle2, Volume2 } from 'lucide-react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 import { speak } from '../../../utils/audio';
 
 interface Props {
-    words: VocabularyItem[];
+    words: StudyItem[];
     onComplete: (score: number) => void;
     onExit: () => void;
-    onBulkUpdate: (words: VocabularyItem[]) => Promise<void>;
+    onBulkUpdate: (words: StudyItem[]) => Promise<void>;
 }
 
 interface IpaItem {
     id: string;
-    wordObj: VocabularyItem;
+    wordObj: StudyItem;
     word: string;
     ipa: string;
     maskedIpa: string;
@@ -69,7 +69,7 @@ export const IpaSorter: React.FC<Props> = ({ words, onComplete, onExit, onBulkUp
     const [score, setScore] = useState(0);
     const [feedback, setFeedback] = useState<{ symbol: string, correct: boolean } | null>(null);
 
-    const modifiedWordsRef = useRef<Map<string, VocabularyItem>>(new Map());
+    const modifiedWordsRef = useRef<Map<string, StudyItem>>(new Map());
 
     // Regex logic to safely detect phonemes
     const hasPhoneme = (ipa: string, phoneme: string): boolean => {

@@ -1,4 +1,4 @@
-import { VocabularyItem } from '../app/types';
+import { StudyItem } from '../app/types';
 import { getConfig, getServerUrl, getStudyBuddyAiUrl } from '../app/settingsManager';
 import { getWordDetailsPrompt } from './promptService';
 import { normalizeAiResponse } from '../utils/vocabUtils';
@@ -77,7 +77,7 @@ interface RunWordRefineWithRetryOptions {
     setup?: Partial<WordRefineSetup>;
     onProgress?: (snapshot: WordRefineProgressSnapshot) => void;
     onWordValidated?: (payload: {
-        word: VocabularyItem;
+        word: StudyItem;
         results: any[];
         wordIndex: number;
         totalWords: number;
@@ -402,7 +402,7 @@ const mergePartialRefineResult = (
     };
 };
 
-const validateWordResult = (result: any, word: VocabularyItem, setup: WordRefineSetup): ValidationState => {
+const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup): ValidationState => {
     const issues: string[] = [];
     const retryFields = new Set<RetryField>();
     const normalized = normalizeAiResponse(result);
@@ -519,7 +519,7 @@ const validateWordResult = (result: any, word: VocabularyItem, setup: WordRefine
     return validationState;
 };
 
-const getValidationIssues = (results: any[], words: VocabularyItem[], setup: WordRefineSetup): string[] => {
+const getValidationIssues = (results: any[], words: StudyItem[], setup: WordRefineSetup): string[] => {
     const issues: string[] = [];
     const resultsByKey = new Map<string, any>();
 
@@ -540,7 +540,7 @@ const getValidationIssues = (results: any[], words: VocabularyItem[], setup: Wor
 };
 
 const buildConfiguredWordRefinePrompt = (
-    word: VocabularyItem,
+    word: StudyItem,
     nativeLanguage: string,
     setup: WordRefineSetup,
     options?: {
@@ -570,7 +570,7 @@ const buildConfiguredWordRefinePrompt = (
 };
 
 const buildRetryPrompt = (
-    word: VocabularyItem,
+    word: StudyItem,
     nativeLanguage: string,
     setup: WordRefineSetup,
     retryFields: RetryField[],
@@ -819,7 +819,7 @@ const requestWordRefineAttempt = async (
 };
 
 const resolveInitialPronunciation = async (
-    word: VocabularyItem,
+    word: StudyItem,
     nativeLanguage: string,
     setup: WordRefineSetup,
     signal: AbortSignal | undefined,
@@ -878,7 +878,7 @@ const resolveInitialPronunciation = async (
 };
 
 export const runWordRefineWithRetry = async (
-    words: VocabularyItem[],
+    words: StudyItem[],
     nativeLanguage: string = 'Vietnamese',
     options: RunWordRefineWithRetryOptions = {}
 ): Promise<WordRefineApiResult> => {

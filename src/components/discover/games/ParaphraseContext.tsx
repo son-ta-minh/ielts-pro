@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ArrowLeft, Check, RefreshCw, Play, Zap, Split, Layers, Brain, BookOpen, ChevronDown, Link2, CheckCircle2, Quote } from 'lucide-react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 
 interface Card {
     id: string;
@@ -24,7 +24,7 @@ type SourceType = 'PARAPHRASE' | 'COLLOCATION' | 'IDIOM' | 'MIX';
 type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
 interface Props {
-    words: VocabularyItem[];
+    words: StudyItem[];
     onComplete: (score: number) => void;
     onExit: () => void;
 }

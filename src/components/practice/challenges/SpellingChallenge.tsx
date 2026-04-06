@@ -1,11 +1,11 @@
 import React from 'react';
 import { Volume2 } from 'lucide-react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 import { speak } from '../../../utils/audio';
 import { useInputValidation } from './hooks/useInputValidation';
 
 interface Props {
-    word: VocabularyItem;
+    word: StudyItem;
     userAnswer: string;
     onAnswer: (val: string) => void;
     isFinishing: boolean;

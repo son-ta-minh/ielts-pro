@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Volume2, Play, Check, Shuffle, Brain, Zap, Layers } from 'lucide-react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 import { speak } from '../../../utils/audio';
 
 type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
@@ -13,7 +13,7 @@ interface SentenceItem {
 }
 
 interface Props {
-    words: VocabularyItem[];
+    words: StudyItem[];
     onComplete: (score: number) => void;
     onExit: () => void;
 }

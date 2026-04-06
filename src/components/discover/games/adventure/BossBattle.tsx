@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { VocabularyItem, ReviewGrade, User } from '../../../../app/types';
+import { StudyItem, ReviewGrade, User } from '../../../../app/types';
 import { Heart, Swords, Clock, Skull, Sword, Briefcase, LogOut } from 'lucide-react';
 import { updateSRS } from '../../../../utils/srs';
 import TestModal from '../../../practice/TestModal';
@@ -22,7 +22,7 @@ interface Boss {
 interface Props {
     user: User;
     boss: Boss;
-    words: VocabularyItem[];
+    words: StudyItem[];
     onVictory: () => void;
     onDefeat: () => void;
     onExit: () => void;

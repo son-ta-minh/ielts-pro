@@ -7,7 +7,7 @@ import {
   Timer, Plus, Play, Pause, StopCircle, Clock4, Trash2, Chrome
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
-import { AppView, User, VocabularyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
+import { AppView, User, StudyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
 import { AutoRefineDashboardControl } from '../common/AutoRefine';
@@ -126,7 +126,7 @@ export interface DashboardUIProps {
     rawCount: number;
     refinedCount: number;
     reviewStats: { learned: number; mastered: number; statusForgot: number; statusHard: number; statusEasy: number; statusLearned: number; statusFocus: number; };
-    wotd: VocabularyItem | null;
+    wotd: StudyItem | null;
     isWotdComposed: boolean;
     onRandomizeWotd: () => void;
     onComposeWotd: () => void;
@@ -142,7 +142,7 @@ export interface DashboardUIProps {
     lastBackupTime: number | null;
     onBackup: (mode: 'server' | 'file') => void;
     onRestore: (mode: 'server' | 'file') => void;
-    dayProgress: { learned: number; reviewed: number; learnedWords: VocabularyItem[]; reviewedWords: VocabularyItem[]; };
+    dayProgress: { learned: number; reviewed: number; learnedWords: StudyItem[]; reviewedWords: StudyItem[]; };
     dailyGoals: { max_learn_per_day: number; max_review_per_day: number; };
     dailyStreaks: DailyStreakSnapshot[];
     dailyGoalHistory: DailyGoalSnapshot[];
@@ -152,7 +152,7 @@ export interface DashboardUIProps {
     isSwitchingServerMode?: boolean;
     onToggleServerMode?: (mode: 'home' | 'public') => Promise<boolean>;
     onAction: (action: string) => void;
-    onViewWord: (word: VocabularyItem) => void;
+    onViewWord: (word: StudyItem) => void;
 }
 
 const TinyProgressRing: React.FC<{ percent: number, size?: number, stroke?: number }> = ({ percent, size = 20, stroke = 2.5 }) => {

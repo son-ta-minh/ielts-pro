@@ -1,8 +1,8 @@
 import React from 'react';
-import { VocabularyItem } from '../../../app/types';
+import { StudyItem } from '../../../app/types';
 
 interface Props {
-    word: VocabularyItem;
+    word: StudyItem;
     title: string;
     cue?: string; // Optional cue (like for collocations)
     options: string[];

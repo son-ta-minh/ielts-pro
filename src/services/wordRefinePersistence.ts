@@ -1,4 +1,4 @@
-import { VocabularyItem, WordQuality } from '../app/types';
+import { StudyItem, WordQuality } from '../app/types';
 import * as dataStore from '../app/dataStore';
 import { createNewWord } from '../utils/srs';
 import { mergeAiResultIntoWord, normalizeAiResponse } from '../utils/vocabUtils';
@@ -6,7 +6,7 @@ import { runWordRefineWithRetry } from './wordRefineApi';
 
 export const applyAiRefinementResultsToWords = async (
     results: any[],
-    targetWords: VocabularyItem[],
+    targetWords: StudyItem[],
     onWordRenamed?: (renames: { id: string; oldWord: string; newWord: string }[]) => void
 ): Promise<{
     itemsSaved: number;
@@ -25,10 +25,10 @@ export const applyAiRefinementResultsToWords = async (
         aiMap.get(key)?.push(rawResult);
     });
 
-    const originalWordsMap = new Map<string, VocabularyItem>(
+    const originalWordsMap = new Map<string, StudyItem>(
         targetWords.map((word) => [word.word.toLowerCase(), word])
     );
-    const itemsToSave: VocabularyItem[] = [];
+    const itemsToSave: StudyItem[] = [];
     const itemsToDeleteIds: string[] = [];
     const renames: { id: string; oldWord: string; newWord: string }[] = [];
 
@@ -111,7 +111,7 @@ export const applyAiRefinementResultsToWords = async (
 };
 
 export const autoRefineNewWords = async (
-    words: VocabularyItem[],
+    words: StudyItem[],
     nativeLanguage: string = 'Vietnamese',
     onWordRenamed?: (renames: { id: string; oldWord: string; newWord: string }[]) => void
 ): Promise<{

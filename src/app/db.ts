@@ -1,4 +1,4 @@
-import { VocabularyItem, User, Unit, ParaphraseLog, WordQuality, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
+import { StudyItem, User, Unit, ParaphraseLog, WordQuality, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -524,7 +524,7 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
         await saveUser(targetUser); 
       }
       if (!hasData) {
-          let vocabToSeed: VocabularyItem[] = [];
+          let vocabToSeed: StudyItem[] = [];
           try {
             const localResponse = await fetch(LOCAL_SHIPPED_DATA_PATH);
             if (localResponse.ok) {
@@ -555,7 +555,7 @@ export const saveUser = async (user: User): Promise<void> => {
     }
     return crudTemplate(USER_STORE, tx => tx.objectStore(USER_STORE).put(user)); 
 };
-export const findWordByText = async (userId: string, wordText: string): Promise<VocabularyItem | null> => {
+export const findWordByText = async (userId: string, wordText: string): Promise<StudyItem | null> => {
   return withRetry(async () => {
     const db = await openDB();
     return new Promise((resolve) => {
@@ -591,7 +591,7 @@ export const getRandomMeanings = async (count: number, excludeId: string): Promi
         // const req = index.getAll(IDBKeyRange.only(userId));
         const req = tx.objectStore(STORE_NAME).getAll();
         req.onsuccess = () => {
-          const allItems = req.result as VocabularyItem[];
+          const allItems = req.result as StudyItem[];
           const GENERIC_DISTRACTORS = [ "To express an idea or feeling", "A state of great comfort and luxury", "Happening or developing gradually", "To influence or change someone or something", "A formal meeting for discussion", "Necessary for a particular purpose", "The ability to do something well", "A careful and detailed study of something", "To make something new or original", ];
           const potential = Array.from(new Set(allItems.filter(i => i.id !== excludeId && i.quality === WordQuality.VERIFIED && i.meaningVi && i.meaningVi.trim().length > 0 && i.meaningVi.length < 150).map(i => i.meaningVi.trim())));
           const shuffled = [...potential].sort(() => Math.random() - 0.5);
@@ -611,7 +611,7 @@ export const getRandomMeanings = async (count: number, excludeId: string): Promi
   });
 };
 export const filterItem = (
-    item: VocabularyItem, 
+    item: StudyItem, 
     query: string, 
     filterTypes: string[], 
     refinedFilter: string, 
@@ -680,10 +680,10 @@ export const getReviewCounts = async (): Promise<{ total: number, due: number, n
         // const req = tx.objectStore(STORE_NAME).index('userId').getAll(IDBKeyRange.only(userId));
         const req = tx.objectStore(STORE_NAME).getAll();
         req.onsuccess = () => {
-          const all = (req.result || []) as VocabularyItem[];
+          const all = (req.result || []) as StudyItem[];
           const active = all.filter(w => !w.isPassive && w.learnedStatus !== LearnedStatus.IGNORED);
-          const isDueWord = (w: VocabularyItem) => w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED;
-          const isNewWord = (w: VocabularyItem) => !w.lastReview && w.quality === WordQuality.VERIFIED && w.learnedStatus !== LearnedStatus.IGNORED;
+          const isDueWord = (w: StudyItem) => w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED;
+          const isNewWord = (w: StudyItem) => !w.lastReview && w.quality === WordQuality.VERIFIED && w.learnedStatus !== LearnedStatus.IGNORED;
           resolve({ 
               total: active.length, 
               due: active.filter(isDueWord).length, 
@@ -695,7 +695,7 @@ export const getReviewCounts = async (): Promise<{ total: number, due: number, n
       });
   });
 };
-export const getDueWords = async (limit: number = 30): Promise<VocabularyItem[]> => {
+export const getDueWords = async (limit: number = 30): Promise<StudyItem[]> => {
   return withRetry(async () => {
       const db = await openDB();
       const now = Date.now();
@@ -705,7 +705,7 @@ export const getDueWords = async (limit: number = 30): Promise<VocabularyItem[]>
         // const req = index.getAll(IDBKeyRange.only(userId));
         const req = tx.objectStore(STORE_NAME).getAll();
         req.onsuccess = () => {
-          const allItems = (req.result || []) as VocabularyItem[];
+          const allItems = (req.result || []) as StudyItem[];
           const dueWords = allItems
             .filter(w => !w.isPassive && w.lastReview && w.nextReview <= now && w.quality !== WordQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED)
             .sort((a, b) => a.nextReview - b.nextReview)
@@ -716,7 +716,7 @@ export const getDueWords = async (limit: number = 30): Promise<VocabularyItem[]>
       });
   });
 };
-export const getNewWords = async (limit: number = 20): Promise<VocabularyItem[]> => {
+export const getNewWords = async (limit: number = 20): Promise<StudyItem[]> => {
   return withRetry(async () => {
       const db = await openDB();
       return new Promise((resolve, reject) => {
@@ -725,7 +725,7 @@ export const getNewWords = async (limit: number = 20): Promise<VocabularyItem[]>
         // const req = index.getAll(IDBKeyRange.only(userId));
         const req = tx.objectStore(STORE_NAME).getAll();
         req.onsuccess = () => {
-          const allItems = (req.result || []) as VocabularyItem[];
+          const allItems = (req.result || []) as StudyItem[];
           const newWords = allItems
             .filter(w => !w.isPassive && !w.lastReview && w.quality === WordQuality.VERIFIED)
             .sort((a, b) => a.createdAt - b.createdAt)
@@ -736,14 +736,14 @@ export const getNewWords = async (limit: number = 20): Promise<VocabularyItem[]>
       });
   });
 };
-export const saveWordAndUser = async (word: VocabularyItem, user: User): Promise<void> => {
+export const saveWordAndUser = async (word: StudyItem, user: User): Promise<void> => {
     if (user && user.id) localStorage.setItem('vocab_pro_db_marker', 'exists');
     await crudTemplate<void>([STORE_NAME, USER_STORE], (tx) => {
         tx.objectStore(STORE_NAME).put(word);
         tx.objectStore(USER_STORE).put(user);
     });
 };
-export const saveWordAndUnit = async (word: VocabularyItem | null, unit: Unit): Promise<void> => {
+export const saveWordAndUnit = async (word: StudyItem | null, unit: Unit): Promise<void> => {
     await crudTemplate<void>([STORE_NAME, UNIT_STORE], (tx) => {
         if (word) {
             tx.objectStore(STORE_NAME).put(word);
@@ -751,7 +751,7 @@ export const saveWordAndUnit = async (word: VocabularyItem | null, unit: Unit): 
         tx.objectStore(UNIT_STORE).put(unit);
     });
 };
-export const saveWord = async (item: VocabularyItem): Promise<void> => { 
+export const saveWord = async (item: StudyItem): Promise<void> => { 
     item.updatedAt = Date.now(); 
     // if (!item.userId) {
     //    console.error(`[DB_CRITICAL] Attempting to save word ${item.word} with NO USER ID!`);
@@ -765,7 +765,7 @@ export const deleteWordFromDB = async (id: string): Promise<void> => {
 export const bulkDeleteWords = async (ids: string[]): Promise<void> => { 
     await crudTemplate(STORE_NAME, tx => { const store = tx.objectStore(STORE_NAME); ids.forEach(id => store.delete(id)); }); 
 };
-export const bulkSaveWords = async (items: VocabularyItem[]): Promise<void> => { 
+export const bulkSaveWords = async (items: StudyItem[]): Promise<void> => { 
     if (items.length === 0) return;
     // if (!items[0].userId) {
     //      console.error(`[DB_CRITICAL] Attempting to bulk save words with NO USER ID on first item!`);
@@ -773,7 +773,7 @@ export const bulkSaveWords = async (items: VocabularyItem[]): Promise<void> => {
     // }
     await crudTemplate(STORE_NAME, tx => { const store = tx.objectStore(STORE_NAME); items.forEach(i => store.put(i)); }); 
 };
-export const getAllWordsForExport = async (): Promise<VocabularyItem[]> => await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).getAll(), 'readonly');
+export const getAllWordsForExport = async (): Promise<StudyItem[]> => await crudTemplate(STORE_NAME, tx => tx.objectStore(STORE_NAME).getAll(), 'readonly');
 export const saveUnit = async (unit: Unit): Promise<void> => { unit.updatedAt = Date.now(); await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).put(unit)); };
 export const deleteUnit = async (id: string): Promise<void> => { await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).delete(id)); };
 export const getUnitsByUserId = async (): Promise<Unit[]> => await crudTemplate(UNIT_STORE, tx => tx.objectStore(UNIT_STORE).getAll(), 'readonly');

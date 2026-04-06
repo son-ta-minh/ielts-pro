@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Loader2, Save, Sparkles, Eye, BookText, PenLine, FileText, ArrowLeft, Tag, HelpCircle, X, Plus, AlertCircle, Link2, FileAudio, Headphones, Trash2 } from 'lucide-react';
-import { VocabularyItem, Unit, User } from '../../app/types';
+import { StudyItem, Unit, User } from '../../app/types';
 import UniversalAiModal from '../../components/common/UniversalAiModal';
 import { EssayReader } from './EssayReader';
 import { stringToWordArray } from '../../utils/text';
@@ -31,7 +31,7 @@ const UnitHeaderEditModal: React.FC<{ isOpen: boolean; onClose: () => void; init
 export interface ReadingEditViewUIProps {
     user: User;
     unit: Unit;
-    allWords: VocabularyItem[];
+    allWords: StudyItem[];
     allLibraryTags: string[];
     onCancel: () => void;
     editName: string;

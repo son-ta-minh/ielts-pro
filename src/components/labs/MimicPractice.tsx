@@ -1,10 +1,10 @@
 
 import React from 'react';
 import { PronunciationFocus } from './PronunciationFocus';
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 
 interface Props {
-    scopedWord?: VocabularyItem;
+    scopedWord?: StudyItem;
     onClose?: () => void;
 }
 

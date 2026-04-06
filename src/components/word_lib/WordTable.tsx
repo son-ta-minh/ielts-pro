@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { VocabularyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem, ParaphraseOption, LearnedStatus } from '../../app/types';
+import { StudyItem, ReviewGrade, WordFamily, PrepositionPattern, User, WordQuality, WordTypeOption, WordBook, WordBookItem, ParaphraseOption, LearnedStatus } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { getWordDetailsPrompt, getHintsPrompt, getBulkParaphrasePrompt } from '../../services/promptService';
 import { WordTableUI, WordTableUIProps, DEFAULT_VISIBILITY } from './WordTable_UI';
@@ -41,7 +41,7 @@ interface PersistedFilters {
 
 interface Props {
   user: User;
-  words: VocabularyItem[];
+  words: StudyItem[];
   total: number;
   loading: boolean;
   page: number;
@@ -51,10 +51,10 @@ interface Props {
   onSearch: (query: string) => void;
   onFilterChange: (filters: { types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }) => void;
   onAddWords: (wordsInput: string, types: Set<WordTypeOption>) => Promise<void>;
-  onViewWord: (word: VocabularyItem) => void; // This is for OPENING the view modal
-  onEditWord: (word: VocabularyItem) => void; // This is for OPENING the edit modal
-  onDelete: (word: VocabularyItem) => Promise<void>;
-  onHardDelete?: (word: VocabularyItem) => Promise<void>;
+  onViewWord: (word: StudyItem) => void; // This is for OPENING the view modal
+  onEditWord: (word: StudyItem) => void; // This is for OPENING the edit modal
+  onDelete: (word: StudyItem) => Promise<void>;
+  onHardDelete?: (word: StudyItem) => Promise<void>;
   // FIX: Corrected typo from onBoldDelete to onBulkDelete
   onBulkDelete?: (ids: Set<string>) => Promise<void>;
   onBulkHardDelete?: (ids: Set<string>) => Promise<void>;
@@ -142,9 +142,9 @@ const WordTable: React.FC<Props> = ({
   const [selectedWordTypes, setSelectedWordTypes] = useState<Set<WordTypeOption>>(new Set(['vocab']));
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [wordToDelete, setWordToDelete] = useState<VocabularyItem | null>(null);
+  const [wordToDelete, setWordToDelete] = useState<StudyItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [wordToHardDelete, setWordToHardDelete] = useState<VocabularyItem | null>(null);
+  const [wordToHardDelete, setWordToHardDelete] = useState<StudyItem | null>(null);
   const [isHardDeleting, setIsHardDeleting] = useState(false);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [isBulkHardDeleteModalOpen, setIsBulkHardDeleteModalOpen] = useState(false);
@@ -511,7 +511,7 @@ const WordTable: React.FC<Props> = ({
 
   const applyAiRefinementResults = async (
     results: any[],
-    targetWords: VocabularyItem[],
+    targetWords: StudyItem[],
     options?: { clearSelection?: boolean; closeModal?: boolean; successMessage?: string }
   ) => {
     if (!Array.isArray(results)) throw new Error('Response must be an array.');
@@ -525,8 +525,8 @@ const WordTable: React.FC<Props> = ({
         }
     });
 
-    const originalWordsMap = new Map<string, VocabularyItem>(targetWords.map(w => [w.word.toLowerCase(), w]));
-    const itemsToSave: VocabularyItem[] = [];
+    const originalWordsMap = new Map<string, StudyItem>(targetWords.map(w => [w.word.toLowerCase(), w]));
+    const itemsToSave: StudyItem[] = [];
     const itemsToDeleteIds: string[] = [];
     const renames: { id: string; oldWord: string; newWord: string }[] = [];
 
@@ -609,8 +609,8 @@ const WordTable: React.FC<Props> = ({
 
   const handleParaAiResult = async (results: any[]) => {
     if (!Array.isArray(results)) throw new Error('Response must be an array.');
-    const originalWordsMap = new Map<string, VocabularyItem>(selectedWordsToRefine.map(w => [w.word.toLowerCase(), w]));
-    const itemsToSave: VocabularyItem[] = [];
+    const originalWordsMap = new Map<string, StudyItem>(selectedWordsToRefine.map(w => [w.word.toLowerCase(), w]));
+    const itemsToSave: StudyItem[] = [];
     for (const result of results) {
         const originalWord = originalWordsMap.get(result.og?.toLowerCase());
         if (!originalWord) continue;
@@ -757,8 +757,8 @@ const WordTable: React.FC<Props> = ({
         return;
     }
 
-    const wordsToUpdate: VocabularyItem[] = [];
-    const originalWordsMap = new Map<string, VocabularyItem>(selectedWordsMissingHints.map(w => [w.word.toLowerCase(), w]));
+    const wordsToUpdate: StudyItem[] = [];
+    const originalWordsMap = new Map<string, StudyItem>(selectedWordsMissingHints.map(w => [w.word.toLowerCase(), w]));
 
     for (const result of results) {
         const originalWord = originalWordsMap.get(result.og?.toLowerCase());

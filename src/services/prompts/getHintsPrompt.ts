@@ -1,6 +1,6 @@
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 
-export function getHintsPrompt(words: VocabularyItem[]): string {
+export function getHintsPrompt(words: StudyItem[]): string {
     const wordDataForPrompt = words.map(word => {
         const data: { word: string; collocations?: string[]; idioms?: string[] } = { word: word.word };
         const collocsToHint = (word.collocationsArray || []).filter(c => !c.d).map(c => c.text);

@@ -8,7 +8,7 @@ import React, {
     useState
 } from 'react';
 import { CheckCircle2, Loader2, Wand2, X } from 'lucide-react';
-import { User, VocabularyItem, WordQuality } from '../../app/types';
+import { User, StudyItem, WordQuality } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
 import { runWordRefineWithRetry, WordRefineProgressSnapshot } from '../../services/wordRefineApi';
@@ -100,7 +100,7 @@ const loadPersistedAutoRefineState = (): AutoRefineState => {
     }
 };
 
-const getWordById = (wordId: string, userId: string): VocabularyItem | null => {
+const getWordById = (wordId: string, userId: string): StudyItem | null => {
     return dataStore.getAllWords().find((word) => word.id === wordId && word.userId === userId) || null;
 };
 

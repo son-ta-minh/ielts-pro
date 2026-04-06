@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 // Added missing RefreshCw import
 import { Search, LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BookOpenText, Image, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
-import { VocabularyItem, WordFamilyMember, LearnedStatus, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
+import { StudyItem, WordFamilyMember, LearnedStatus, Unit, WordQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { speak } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
@@ -48,7 +48,7 @@ const MasteryScoreGauge: React.FC<{ score: number }> = ({ score }) => {
     );
 };
 
-const MasteryScoreCalculator: React.FC<{ word: VocabularyItem }> = ({ word }) => {
+const MasteryScoreCalculator: React.FC<{ word: StudyItem }> = ({ word }) => {
     const score = word.masteryScore ?? 0;
     return (
         <div className="relative group/score">
@@ -148,9 +148,9 @@ const UsageTable: React.FC<{
 // --- Main UI Component ---
 
 export interface ViewWordModalUIProps {
-    word: VocabularyItem;
+    word: StudyItem;
     libraryWordSet?: Set<string>;
-    libraryWords?: VocabularyItem[];
+    libraryWords?: StudyItem[];
     scannedParaphrases?: Array<ParaphraseOption & { sourceWord?: string }>;
     isScanningParaphrases?: boolean;
     scanParaphraseResultCount?: number | null;
@@ -163,11 +163,11 @@ export interface ViewWordModalUIProps {
     onResetMasteryRequest?: () => void;
     onSetDisplayRequest?: (selectedText?: string) => void | Promise<void>;
     isSettingDisplay?: boolean;
-    onUpdate: (word: VocabularyItem) => void;
+    onUpdate: (word: StudyItem) => void;
     linkedUnits: Unit[];
-    relatedWords: Record<string, VocabularyItem[]>;
-    relatedByGroup: Record<string, VocabularyItem[]>;
-    onNavigateToWord: (word: VocabularyItem) => void;
+    relatedWords: Record<string, StudyItem[]>;
+    relatedByGroup: Record<string, StudyItem[]>;
+    onNavigateToWord: (word: StudyItem) => void;
     isViewOnly?: boolean;
     appliedAccent?: 'US' | 'UK';
     onAddAIExample?: () => void;

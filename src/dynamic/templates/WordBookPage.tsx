@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { User, WordBook, WordBookItem, VocabularyItem, FocusColor, WordQuality, Unit, LearnedStatus } from '../../app/types';
+import { User, WordBook, WordBookItem, StudyItem, FocusColor, WordQuality, Unit, LearnedStatus } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
@@ -25,7 +25,7 @@ interface Props {
 
 export const WordBookPage: React.FC<Props> = ({ user }) => {
     const [books, setBooks] = useState<WordBook[]>([]);
-    const [allLibraryWords, setAllLibraryWords] = useState<VocabularyItem[]>([]);
+    const [allLibraryWords, setAllLibraryWords] = useState<StudyItem[]>([]);
     const [allUnits, setAllUnits] = useState<Unit[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeBook, setActiveBook] = useState<WordBook | null>(null);
@@ -64,9 +64,9 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
     const colorPickerRef = useRef<HTMLDivElement>(null);
     const [customColorUrl, setCustomColorUrl] = useState('');
 
-    const [libraryWordsMap, setLibraryWordsMap] = useState<Map<string, VocabularyItem>>(new Map());
-    const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
-    const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
+    const [libraryWordsMap, setLibraryWordsMap] = useState<Map<string, StudyItem>>(new Map());
+    const [viewingWord, setViewingWord] = useState<StudyItem | null>(null);
+    const [editingWord, setEditingWord] = useState<StudyItem | null>(null);
     const [wordFocusColors, setWordFocusColors] = useState<Record<string, FocusColor | null>>({});
     const [addingWord, setAddingWord] = useState<string | null>(null);
     const [wordMovingTarget, setWordMovingTarget] = useState<WordBookItem | null>(null);
@@ -84,7 +84,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
     }, []);
 
     // Logic to derive status badge info
-    const getStatusInfo = (word: VocabularyItem | null): { text: string; classes: string } | null => {
+    const getStatusInfo = (word: StudyItem | null): { text: string; classes: string } | null => {
         if (!word) return null;
         if (!word.lastReview || word.learnedStatus === LearnedStatus.NEW) return { text: 'New', classes: 'bg-blue-50 text-blue-700 border-blue-100' };
         switch (word.learnedStatus) {
@@ -109,7 +109,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
         setAllLibraryWords(allWords);
         setAllUnits(userUnits.sort((a,b) => a.name.localeCompare(b.name)));
         
-        const map = new Map<string, VocabularyItem>();
+        const map = new Map<string, StudyItem>();
         allWords.forEach(w => map.set(w.word.toLowerCase(), w));
         setLibraryWordsMap(map);
         
@@ -339,7 +339,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
         handleUpdateBook({ words: newWords });
     };
 
-    const handleAddFromLibrary = (items: VocabularyItem[]) => {
+    const handleAddFromLibrary = (items: StudyItem[]) => {
         if (!activeBook) return;
         const newItems = items.map(i => ({ word: i.word, definition: i.meaningVi }));
         const currentWords = new Set(activeBook.words.map(w => w.word.toLowerCase()));
@@ -350,7 +350,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
         showToast(`Added ${filtered.length} words from library.`, "success");
     };
 
-    const handleAddFromUnit = (items: VocabularyItem[]) => {
+    const handleAddFromUnit = (items: StudyItem[]) => {
         if (!activeBook) return;
         const newItems = items.map(i => ({ word: i.word, definition: i.meaningVi }));
         const currentWords = new Set(activeBook.words.map(w => w.word.toLowerCase()));
@@ -441,7 +441,7 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
         });
     };
 
-    const handleSaveWordUpdate = async (updatedWord: VocabularyItem) => {
+    const handleSaveWordUpdate = async (updatedWord: StudyItem) => {
         await dataStore.saveWord(updatedWord);
         // Sync local map
         const nextMap = new Map(libraryWordsMap);

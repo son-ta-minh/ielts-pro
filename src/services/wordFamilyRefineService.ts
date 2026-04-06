@@ -1,4 +1,4 @@
-import { VocabularyItem, WordFamilyGroup } from '../app/types';
+import { StudyItem, WordFamilyGroup } from '../app/types';
 import * as db from '../app/db';
 import * as dataStore from '../app/dataStore';
 import { getConfig, getStudyBuddyAiUrl } from '../app/settingsManager';
@@ -60,7 +60,7 @@ const extractWordFamilyJson = (rawText: string): WordFamilyGroupData => {
     throw new Error('AI response is not a valid word family object.');
 };
 
-const buildSeedGroupFromWord = (word: VocabularyItem): WordFamilyGroupData => {
+const buildSeedGroupFromWord = (word: StudyItem): WordFamilyGroupData => {
     const bucket = inferWordFamilyBucket(word.word, `${word.note || ''} ${word.meaningVi || ''}`);
     const headword = String(word.word || '').trim().toLowerCase();
     return normalizeGroupData({
@@ -71,7 +71,7 @@ const buildSeedGroupFromWord = (word: VocabularyItem): WordFamilyGroupData => {
     });
 };
 
-const findExistingGroupForWord = (word: VocabularyItem, groups: WordFamilyGroup[]): WordFamilyGroup | null => {
+const findExistingGroupForWord = (word: StudyItem, groups: WordFamilyGroup[]): WordFamilyGroup | null => {
     if (word.wordFamilyGroupId) {
         const linked = groups.find((group) => group.id === word.wordFamilyGroupId);
         if (linked) return linked;
@@ -131,7 +131,7 @@ export const requestWordFamilyGroupRefine = async (group: WordFamilyGroupData): 
     }
 };
 
-export const upsertWordFamilyGroupForWord = async (word: VocabularyItem): Promise<WordFamilyGroup | null> => {
+export const upsertWordFamilyGroupForWord = async (word: StudyItem): Promise<WordFamilyGroup | null> => {
     if (!isSingleWordCandidate(word.word)) return null;
 
     const userGroups = await db.getWordFamilyGroupsByUserId(word.userId);
@@ -165,11 +165,11 @@ export const upsertWordFamilyGroupForWord = async (word: VocabularyItem): Promis
     return nextGroup;
 };
 
-export const refineAndLinkWordFamilyGroupsForWords = async (words: VocabularyItem[]): Promise<{
+export const refineAndLinkWordFamilyGroupsForWords = async (words: StudyItem[]): Promise<{
     groupsSaved: number;
     linkedWordsUpdated: number;
 }> => {
-    const pendingWordUpdates = new Map<string, VocabularyItem>();
+    const pendingWordUpdates = new Map<string, StudyItem>();
     let groupsSaved = 0;
 
     for (const word of words) {

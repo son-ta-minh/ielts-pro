@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, VocabularyItem, DiscoverGame, SessionType } from '../../app/types';
+import { User, StudyItem, DiscoverGame, SessionType } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { DiscoverUI } from './Discover_UI';
 import Adventure from './games/adventure/Adventure';
@@ -26,17 +26,17 @@ interface Props {
     onExit: () => void;
     onRecalculateXp: (totalXp: number) => Promise<void>;
     xpToNextLevel: number;
-    onStartSession: (words: VocabularyItem[], type: SessionType) => void;
+    onStartSession: (words: StudyItem[], type: SessionType) => void;
     onUpdateUser: (user: User) => Promise<void>;
     lastMasteryScoreUpdateTimestamp: number;
-    onBulkUpdate: (words: VocabularyItem[]) => Promise<void>;
+    onBulkUpdate: (words: StudyItem[]) => Promise<void>;
     initialGameMode?: DiscoverGame | null;
     onConsumeGameMode?: () => void;
 }
 
 const Discover: React.FC<Props> = ({ user, onExit, onRecalculateXp, xpToNextLevel, onStartSession, onUpdateUser, lastMasteryScoreUpdateTimestamp, onBulkUpdate, initialGameMode, onConsumeGameMode }) => {
     const [gameMode, setGameMode] = useState<DiscoverGame>('ADVENTURE');
-    const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
+    const [allWords, setAllWords] = useState<StudyItem[]>([]);
     const [isRecalculatingXp, setIsRecalculatingXp] = useState(true);
     const lastRecalcTimestamp = useRef(0);
     const { showToast } = useToast();

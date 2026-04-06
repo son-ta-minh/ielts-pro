@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Unit, VocabularyItem, User } from '../../app/types';
+import { Unit, StudyItem, User } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFilter, BookFilter } from '../../components/word_lib/WordTable_UI';
@@ -14,10 +14,10 @@ import { getConfig, getServerUrl } from '../../app/settingsManager';
 interface Props {
   user: User;
   unit: Unit;
-  allWords: VocabularyItem[];
+  allWords: StudyItem[];
   onBack: () => void;
   onDataChange: () => void;
-  onStartSession: (words: VocabularyItem[]) => void;
+  onStartSession: (words: StudyItem[]) => void;
   onSwitchToEdit: () => void;
   onUpdateUser: (user: User) => Promise<void>;
 }
@@ -30,8 +30,8 @@ type LinkedFileContent =
 
 export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onDataChange, onStartSession, onUpdateUser, ...props }) => {
   const serverUrl = getServerUrl(getConfig());
-  const [viewingWord, setViewingWord] = useState<VocabularyItem | null>(null);
-  const [editingWord, setEditingWord] = useState<VocabularyItem | null>(null);
+  const [viewingWord, setViewingWord] = useState<StudyItem | null>(null);
+  const [editingWord, setEditingWord] = useState<StudyItem | null>(null);
   const [isPracticeMode, setIsPracticeMode] = useState(false);
   const [note, setNote] = useState(unit.note ?? '');
   const noteSaveRef = useRef(unit.note ?? '');
@@ -80,7 +80,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
   const { showToast } = useToast();
 
   const unitWords = useMemo(() => {
-    const collected = new Map<string, VocabularyItem>();
+    const collected = new Map<string, StudyItem>();
 
     unit.wordIds.forEach((id) => {
       const word = wordsById.get(id);
@@ -264,7 +264,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
     await onDataChange();
   };
 
-  const handleHardDeleteWord = async (wordToDelete: VocabularyItem) => {
+  const handleHardDeleteWord = async (wordToDelete: StudyItem) => {
     await handleRemoveWordFromUnit(wordToDelete.id);
     await new Promise((resolve) => setTimeout(resolve, 1100));
     await dataStore.deleteWord(wordToDelete.id);
@@ -304,7 +304,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
         if (exists) return;
         
         const existingWord = await dataStore.findWordByText(user.id, rawText);
-        let wordToAdd: VocabularyItem | null = null;
+        let wordToAdd: StudyItem | null = null;
         let wordIdToAdd: string;
         
         if (existingWord) {
@@ -338,7 +338,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
     onDataChange();
   };
 
-  const handleSaveWordUpdate = async (updatedWord: VocabularyItem) => {
+  const handleSaveWordUpdate = async (updatedWord: StudyItem) => {
     await dataStore.saveWord(updatedWord);
     if (viewingWord && viewingWord.id === updatedWord.id) {
         setViewingWord(updatedWord);

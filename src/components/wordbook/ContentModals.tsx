@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Save, Plus, Search, ChevronRight } from 'lucide-react';
-import { Unit, VocabularyItem, WordBookItem, WordBook } from '../../app/types';
+import { Unit, StudyItem, WordBookItem, WordBook } from '../../app/types';
 import { BookIcon } from './WordBookCard';
 
 export const AddWordToBookModal: React.FC<{
@@ -34,13 +34,13 @@ export const AddWordToBookModal: React.FC<{
 export const AddFromUnitModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-    onSave: (words: VocabularyItem[]) => void;
+    onSave: (words: StudyItem[]) => void;
     units: Unit[];
-    libraryWords: VocabularyItem[];
+    libraryWords: StudyItem[];
     wordsInBook: WordBookItem[];
 }> = ({ isOpen, onClose, onSave, units, libraryWords, wordsInBook }) => {
     const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
-    const [staged, setStaged] = useState<VocabularyItem[]>([]);
+    const [staged, setStaged] = useState<StudyItem[]>([]);
     
     const wordsInBookSet = useMemo(() => new Set(wordsInBook.map(w => w.word.toLowerCase())), [wordsInBook]);
     const wordsById = useMemo(() => new Map(libraryWords.map(w => [w.id, w])), [libraryWords]);
@@ -58,7 +58,7 @@ export const AddFromUnitModal: React.FC<{
         if (unit) {
             const unitWords = unit.wordIds
                 .map(id => wordsById.get(id))
-                .filter((w): w is VocabularyItem => !!w && !wordsInBookSet.has(w.word.toLowerCase()));
+                .filter((w): w is StudyItem => !!w && !wordsInBookSet.has(w.word.toLowerCase()));
             setStaged(unitWords);
         }
     };
@@ -216,12 +216,12 @@ export const MoveWordToBookModal: React.FC<{
 export const AddFromLibraryModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-    onSave: (words: VocabularyItem[]) => void;
-    libraryWords: VocabularyItem[];
+    onSave: (words: StudyItem[]) => void;
+    libraryWords: StudyItem[];
     wordsInBook: WordBookItem[];
 }> = ({ isOpen, onClose, onSave, libraryWords, wordsInBook }) => {
     const [query, setQuery] = useState('');
-    const [staged, setStaged] = useState<VocabularyItem[]>([]);
+    const [staged, setStaged] = useState<StudyItem[]>([]);
     useEffect(() => { if (isOpen) { setQuery(''); setStaged([]); } }, [isOpen]);
     const wordsInBookSet = useMemo(() => new Set(wordsInBook.map(w => w.word.toLowerCase())), [wordsInBook]);
     const stagedIdsSet = useMemo(() => new Set(staged.map(w => w.id)), [staged]);
@@ -230,7 +230,7 @@ export const AddFromLibraryModal: React.FC<{
         const lowerQuery = query.toLowerCase();
         return libraryWords.filter(w => w.word.toLowerCase().includes(lowerQuery) && !wordsInBookSet.has(w.word.toLowerCase()) && !stagedIdsSet.has(w.id)).slice(0, 10);
     }, [query, libraryWords, wordsInBookSet, stagedIdsSet]);
-    const handleStage = (word: VocabularyItem) => setStaged(prev => [...prev, word]);
+    const handleStage = (word: StudyItem) => setStaged(prev => [...prev, word]);
     const handleUnstage = (wordId: string) => setStaged(prev => prev.filter(w => w.id !== wordId));
     const handleConfirm = () => onSave(staged);
     if (!isOpen) return null;

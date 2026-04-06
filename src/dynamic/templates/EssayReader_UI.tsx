@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Type, Underline, Minus, Plus, BookText, Link, Unlink, HelpCircle, ChevronDown, CheckCircle2, X } from 'lucide-react';
-import { VocabularyItem } from '../../app/types';
+import { StudyItem } from '../../app/types';
 import { parseVocabMapping, getEssayHighlightRegex } from '../../utils/text';
 
 export type HighlightColor = 'none' | 'amber' | 'emerald' | 'sky' | 'rose';
@@ -110,7 +110,7 @@ const HighlightControls: React.FC<ControlProps> = ({
 
 const PracticeInput: React.FC<{ 
     answer: string; 
-    wordObj?: VocabularyItem; 
+    wordObj?: StudyItem; 
     candidates: string[];
     onCorrect: () => void;
 }> = ({ answer, wordObj, candidates, onCorrect }) => {
@@ -215,10 +215,10 @@ const PracticeInput: React.FC<{
 const HighlightedEssay: React.FC<{ 
     text: string; 
     vocabString?: string; 
-    wordsByText: Map<string, VocabularyItem>; 
+    wordsByText: Map<string, StudyItem>; 
     highlightColor: HighlightColor; 
     isUnderlined: boolean; 
-    onHoverWord?: (word: VocabularyItem | null, rect: DOMRect | null) => void;
+    onHoverWord?: (word: StudyItem | null, rect: DOMRect | null) => void;
     isPracticeMode?: boolean;
     practiceSessionKey: number;
 }> = ({ text, vocabString, wordsByText, highlightColor, isUnderlined, onHoverWord, isPracticeMode, practiceSessionKey }) => {
@@ -340,7 +340,7 @@ const HighlightedEssay: React.FC<{
 export interface EssayReaderUIProps {
     text: string;
     vocabString?: string;
-    wordsByText: Map<string, VocabularyItem>;
+    wordsByText: Map<string, StudyItem>;
     highlightColor: HighlightColor;
     setHighlightColor: (c: HighlightColor) => void;
     isUnderlined: boolean;
@@ -349,7 +349,7 @@ export interface EssayReaderUIProps {
     setFontSize: (s: number) => void;
     isSerif: boolean;
     setIsSerif: (b: boolean) => void;
-    onHoverWord?: (word: VocabularyItem | null, rect: DOMRect | null) => void;
+    onHoverWord?: (word: StudyItem | null, rect: DOMRect | null) => void;
     onWordAction?: (text: string, action: 'add' | 'remove') => void;
     isPracticeMode?: boolean;
     className?: string;

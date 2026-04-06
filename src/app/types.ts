@@ -215,7 +215,7 @@ export interface CollocationDetail {
   d?: string;
 }
 
-export interface VocabularyItem {
+export interface StudyItem {
   id: string;
   userId: string; 
   word: string; 

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, Lesson, VocabularyItem, SessionType, AppView, FocusColor } from '../../app/types';
+import { User, Lesson, StudyItem, SessionType, AppView, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
@@ -21,7 +21,7 @@ import { ResourceConfig } from '../types';
 
 interface Props {
   user: User;
-  onStartSession: (words: VocabularyItem[], type: SessionType) => void;
+  onStartSession: (words: StudyItem[], type: SessionType) => void;
   onNavigate: (view: AppView) => void;
   onUpdateUser: (user: User) => Promise<void>;
   onExit?: () => void;
@@ -44,7 +44,7 @@ const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
 
 export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavigate, onUpdateUser, initialLessonId, onConsumeLessonId, initialTag, onConsumeTag, initialType, onConsumeType }) => {
   const [resources, setResources] = useState<ResourceItem[]>([]);
-  const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
+  const [allWords, setAllWords] = useState<StudyItem[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Filter & View State

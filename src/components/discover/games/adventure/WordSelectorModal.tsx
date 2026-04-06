@@ -1,13 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
-import { VocabularyItem } from '../../../../app/types';
+import { StudyItem } from '../../../../app/types';
 import { X, Search, CheckSquare, Square, Loader2, Plus } from 'lucide-react';
 
 interface Props {
     isOpen: boolean;
     onClose: () => void;
     onSelect: (selectedWords: string[]) => void;
-    allWords: VocabularyItem[];
+    allWords: StudyItem[];
     wordsToExclude: Set<string>;
     loading: boolean;
 }

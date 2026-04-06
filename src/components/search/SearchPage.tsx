@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search, FileText, Hash, Archive, Image as ImageIcon } from 'lucide-react';
-import { User, VocabularyItem } from '../../app/types';
+import { User, StudyItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { getFuzzyPhraseScore, isFuzzyPhraseMatch } from '../../utils/fuzzyPhraseMatch';
@@ -9,7 +9,7 @@ import { normalizeKeywordText } from '../../utils/vocabularyKeywordUtils';
 
 interface Props {
   user: User;
-  onViewWord: (word: VocabularyItem) => void;
+  onViewWord: (word: StudyItem) => void;
   isModal?: boolean;
   onClose?: () => void;
   initialQuery?: string;
@@ -187,7 +187,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
     () => getStoredJSON(SEARCH_PREFERENCES_KEY, { includeArchive: false, searchMode: 'fast' as SearchMode, exampleOnly: false }),
     []
   );
-  const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
+  const [allWords, setAllWords] = useState<StudyItem[]>([]);
   const [galleryItems, setGalleryItems] = useState<GallerySearchItem[]>([]);
   const [query, setQuery] = useState(initialQuery);
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery.trim());
@@ -247,7 +247,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
   };
 
   const results = useMemo(() => {
-    if (!normalizedQuery) return [] as Array<{ word: VocabularyItem; hits: SearchHit[]; score: number }>;
+    if (!normalizedQuery) return [] as Array<{ word: StudyItem; hits: SearchHit[]; score: number }>;
 
     const computedResults = allWords
       .filter(word => includeArchive || !word.isPassive)
@@ -306,7 +306,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
         const score = exactWordStarts + exactWordContains + exactKeywordMatch + exactKeywordStarts + exactKeywordContains + deepWordScore + deepKeywordScore + hits.reduce((sum, hit) => sum + hit.matchScore, 0);
         return { word, hits: hits.slice(0, MAX_HITS_PER_WORD), score };
       })
-      .filter((item): item is { word: VocabularyItem; hits: SearchHit[]; score: number } => item !== null)
+      .filter((item): item is { word: StudyItem; hits: SearchHit[]; score: number } => item !== null)
       .sort((a, b) => b.score - a.score || b.word.updatedAt - a.word.updatedAt)
       .slice(0, MAX_RESULTS);
 

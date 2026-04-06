@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FileJson, Upload, Download, RefreshCw, Loader2, Gamepad2, Wrench, Plus, Trash2, Tag, Check, Circle, Ear, BookMarked, Calendar, Cloud, Wifi, Link, ListTodo, Globe } from 'lucide-react';
-import { DataScope, VocabularyItem, WordQuality } from '../../app/types';
+import { DataScope, StudyItem, WordQuality } from '../../app/types';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../common/ConfirmationModal';
 import * as dataStore from '../../app/dataStore';
@@ -126,7 +126,7 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
             }
 
             // 3. Update Local DB
-            const itemsToUpdate: VocabularyItem[] = [];
+            const itemsToUpdate: StudyItem[] = [];
             const foundMap = new Map(foundItems.map(i => [i.word.toLowerCase().trim(), i]));
 
             for (const rawItem of rawWords) {

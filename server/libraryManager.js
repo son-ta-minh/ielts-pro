@@ -4,7 +4,7 @@ const path = require('path');
 const { settings, MASTER_LIBRARY_FILE, MASTER_READING_FILE, MASTER_PLANNING_FILE } = require('./config');
 const logger = require('./logger');
 
-// In-memory store: Map<lowercase_word, VocabularyItem>
+// In-memory store: Map<lowercase_word, StudyItem>
 const globalLibrary = new Map();
 // In-memory store: Map<unit_name, Unit> (Keyed by Name to prevent duplicates)
 const globalReadingLibrary = new Map();

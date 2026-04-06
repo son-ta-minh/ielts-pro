@@ -1,6 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
-import { VocabularyItem, SessionType, ReviewMode, AppView } from '../types';
+import { StudyItem, SessionType, ReviewMode, AppView } from '../types';
 
 interface UseSessionProps {
     setView: (view: AppView) => void;
@@ -8,7 +8,7 @@ interface UseSessionProps {
 }
 
 export const useSession = ({ setView, setIsSidebarOpen }: UseSessionProps) => {
-    const [sessionWords, setSessionWords] = useState<VocabularyItem[] | null>(null);
+    const [sessionWords, setSessionWords] = useState<StudyItem[] | null>(null);
     const [sessionFocus, setSessionFocus] = useState<ReviewMode | null>(null);
     const [sessionType, setSessionType] = useState<SessionType>(null);
 
@@ -28,7 +28,7 @@ export const useSession = ({ setView, setIsSidebarOpen }: UseSessionProps) => {
         }
     }, []);
 
-    const startSession = useCallback((words: VocabularyItem[], type: SessionType, focus: ReviewMode | null = null) => {
+    const startSession = useCallback((words: StudyItem[], type: SessionType, focus: ReviewMode | null = null) => {
         if (words.length > 0) {
             const uniqueWords = Array.from(new Map(words.map(w => [w.id, w])).values());
             const shuffled = [...uniqueWords].sort(() => Math.random() - 0.5);

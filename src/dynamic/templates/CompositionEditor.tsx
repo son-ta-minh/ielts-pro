@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Composition, User, VocabularyItem } from '../../app/types';
+import { Composition, User, StudyItem } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
 import { getCompositionEvaluationPrompt } from '../../services/promptService';
@@ -25,7 +25,7 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
     const [aiFeedback, setAiFeedback] = useState<string | undefined>(undefined);
     const [isDirty, setIsDirty] = useState(false);
     
-    const [allWords, setAllWords] = useState<VocabularyItem[]>([]);
+    const [allWords, setAllWords] = useState<StudyItem[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
     const [isCoachActionLoading, setIsCoachActionLoading] = useState(false);
@@ -117,7 +117,7 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
     }, [isDirty]);
 
     const linkedWords = useMemo(() => {
-        const linkedMap = new Map<string, VocabularyItem>();
+        const linkedMap = new Map<string, StudyItem>();
         allWords.forEach(w => {
             if (linkedWordIds.has(w.id)) linkedMap.set(w.id, w);
         });
@@ -158,7 +158,7 @@ export const CompositionEditor: React.FC<Props> = ({ controller, user, initialCo
     const handleManualLink = (selectedWords: string[]) => {
         const newIds = new Set(linkedWordIds);
         let addedCount = 0;
-        const wordMap = new Map<string, VocabularyItem>();
+        const wordMap = new Map<string, StudyItem>();
         allWords.forEach(w => wordMap.set(w.word, w));
 
         selectedWords.forEach(wText => {

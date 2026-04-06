@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AdventureBoss } from '../../../../data/adventure_content';
-import { VocabularyItem, ReviewGrade } from '../../../../app/types';
+import { StudyItem, ReviewGrade } from '../../../../app/types';
 import { Heart, Swords, ShieldAlert, X, Loader2 } from 'lucide-react';
 import { updateSRS } from '../../../../utils/srs';
 import TestModal from '../../../practice/TestModal';
 
 interface Props {
     boss: AdventureBoss;
-    words: VocabularyItem[];
+    words: StudyItem[];
     onVictory: () => void;
     onDefeat: () => void;
     onExit: () => void;

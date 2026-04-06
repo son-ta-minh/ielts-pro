@@ -1,6 +1,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
-import { User, VocabularyItem, AppView, WordQuality } from '../types';
+import { User, StudyItem, AppView, WordQuality } from '../types';
 import * as dataStore from '../dataStore';
 import { getStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
@@ -14,8 +14,8 @@ interface UseDataFetchingProps {
 
 export const useDataFetching = ({ currentUser, onUpdateUser }: UseDataFetchingProps) => {
     const [stats, setStats] = useState({ total: 0, due: 0, new: 0, learned: 0 });
-    const [wotd, setWotd] = useState<VocabularyItem | null>(null);
-    const [randomWotd, setRandomWotd] = useState<VocabularyItem | null>(null);
+    const [wotd, setWotd] = useState<StudyItem | null>(null);
+    const [randomWotd, setRandomWotd] = useState<StudyItem | null>(null);
     const [isWotdComposed, setIsWotdComposed] = useState(false);
     
     const [apiUsage, setApiUsage] = useState({ count: 0, date: '' });
@@ -36,7 +36,7 @@ export const useDataFetching = ({ currentUser, onUpdateUser }: UseDataFetchingPr
         // Create a specific pool for Word of the Day from verified words
         const wotdPool = activeWords.filter(w => w.quality === WordQuality.VERIFIED);
         
-        let selectedWotd: VocabularyItem | null = null;
+        let selectedWotd: StudyItem | null = null;
 
         if (randomWotd) {
             // If user manually shuffled, use that

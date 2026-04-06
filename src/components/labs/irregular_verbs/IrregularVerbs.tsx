@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, IrregularVerb, VocabularyItem } from '../../../app/types';
+import { User, IrregularVerb, StudyItem } from '../../../app/types';
 import * as db from '../../../app/db';
 import * as dataStore from '../../../app/dataStore';
 import { useToast } from '../../../contexts/ToastContext';
@@ -14,7 +14,7 @@ import { generateIrregularVerbForms } from '../../../services/geminiService';
 
 interface Props {
   user: User;
-  onGlobalViewWord: (word: VocabularyItem) => void;
+  onGlobalViewWord: (word: StudyItem) => void;
 }
 
 const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
@@ -38,7 +38,7 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
   const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
   const [addInput, setAddInput] = useState('');
 
-  const [libraryWords, setLibraryWords] = useState<Map<string, VocabularyItem>>(new Map());
+  const [libraryWords, setLibraryWords] = useState<Map<string, StudyItem>>(new Map());
 
   const { showToast } = useToast();
 
@@ -95,7 +95,7 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
 
     setVerbs(cleanVerbs.sort((a, b) => a.v1.localeCompare(b.v1)));
     
-    const wordMap = new Map<string, VocabularyItem>();
+    const wordMap = new Map<string, StudyItem>();
     allWords.forEach(w => wordMap.set(w.word.toLowerCase(), w));
     setLibraryWords(wordMap);
     
@@ -281,13 +281,13 @@ const IrregularVerbs: React.FC<Props> = ({ user, onGlobalViewWord }) => {
     if (selectedIds.size === 0) return;
     setIsProcessing(true);
     const selectedVerbs = verbs.filter(v => selectedIds.has(v.id));
-    const newWords: VocabularyItem[] = [];
+    const newWords: StudyItem[] = [];
     for (const verb of selectedVerbs) {
       if (!libraryWords.has(verb.v1.toLowerCase())) {
         const newItem = await createNewWord(verb.v1, '', '', '', '', ['irregular-verb']);
         newItem.userId = user.id;
         newItem.isIrregular = true;
-        // Fix: Removed assignments of v2 and v3 as they do not exist on VocabularyItem type
+        // Fix: Removed assignments of v2 and v3 as they do not exist on StudyItem type
         newWords.push(newItem);
       }
     }

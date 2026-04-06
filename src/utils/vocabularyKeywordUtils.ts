@@ -1,4 +1,4 @@
-import { VocabularyItem } from '../app/types';
+import { StudyItem } from '../app/types';
 import { buildIgnoredTokenRemovalVariants } from './headwordHighlightMap';
 
 export function normalizeKeywordText(value: string): string {
@@ -29,27 +29,27 @@ export function normalizeVocabularyKeywords(
     return result;
 }
 
-export function withNormalizedVocabularyKeywords<T extends Pick<VocabularyItem, 'word' | 'keywords'>>(item: T): T {
+export function withNormalizedVocabularyKeywords<T extends Pick<StudyItem, 'word' | 'keywords'>>(item: T): T {
     return {
         ...item,
         keywords: normalizeVocabularyKeywords(item.keywords, item.word)
     };
 }
 
-export function hasExactKeywordMatch(item: Pick<VocabularyItem, 'keywords'>, text: string): boolean {
+export function hasExactKeywordMatch(item: Pick<StudyItem, 'keywords'>, text: string): boolean {
     const target = normalizeKeywordText(text);
     if (!target) return false;
     return (item.keywords || []).some((keyword) => normalizeKeywordText(keyword) === target);
 }
 
-export function matchesVocabularyHeadwordOrKeyword(item: Pick<VocabularyItem, 'word' | 'keywords'>, text: string): boolean {
+export function matchesVocabularyHeadwordOrKeyword(item: Pick<StudyItem, 'word' | 'keywords'>, text: string): boolean {
     const target = normalizeKeywordText(text);
     if (!target) return false;
     if (normalizeKeywordText(item.word) === target) return true;
     return hasExactKeywordMatch(item, text);
 }
 
-export function findWordByHeadwordOrKeyword(words: VocabularyItem[], userId: string, text: string): VocabularyItem | null {
+export function findWordByHeadwordOrKeyword(words: StudyItem[], userId: string, text: string): StudyItem | null {
     const target = normalizeKeywordText(text);
     if (!target) return null;
 
@@ -59,7 +59,7 @@ export function findWordByHeadwordOrKeyword(words: VocabularyItem[], userId: str
     return words.find((item) => item.userId === userId && hasExactKeywordMatch(item, text)) || null;
 }
 
-export function findWordByStudyBuddyLookup(words: VocabularyItem[], userId: string, text: string): VocabularyItem | null {
+export function findWordByStudyBuddyLookup(words: StudyItem[], userId: string, text: string): StudyItem | null {
     const directMatch = findWordByHeadwordOrKeyword(words, userId, text);
     if (directMatch) return directMatch;
 

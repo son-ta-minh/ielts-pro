@@ -1,4 +1,4 @@
-import { StudyBuddyMemoryChunk, User, VocabularyItem, WordFamily } from '../app/types';
+import { StudyBuddyMemoryChunk, User, StudyItem, WordFamily } from '../app/types';
 import { getAllWords } from '../app/dataStore';
 import { detectLanguage } from './audio';
 import { getAiStudyContextText } from './context_util';
@@ -9,7 +9,7 @@ export type ChatCoachActionKey = ChatSaveActionType | 'test' | 'explain' | 'imag
 export type StudyBuddyTargetSection = 'coreUsage' | 'collocation' | 'wordFamily' | 'idiom' | 'paraphrase' | 'example' | 'preposition' | 'verifyData';
 
 export interface StudyBuddyChatTarget {
-    word: VocabularyItem;
+    word: StudyItem;
     section: StudyBuddyTargetSection;
     source?: string;
 }
@@ -158,7 +158,7 @@ function formatWordFamilySection(wordFamily?: WordFamily | null) {
     ].join('\n');
 }
 
-function getAllAppGroupsForWord(word: VocabularyItem) {
+function getAllAppGroupsForWord(word: StudyItem) {
     return Array.from(
         new Set(
             getAllWords()
@@ -170,7 +170,7 @@ function getAllAppGroupsForWord(word: VocabularyItem) {
     ).sort((left, right) => left.localeCompare(right));
 }
 
-export function buildStudyBuddyTargetRecord(word: VocabularyItem) {
+export function buildStudyBuddyTargetRecord(word: StudyItem) {
     return [
         `Word: ${word.word}`,
         word.meaning ? `Meaning (English): ${word.meaning}` : '',
@@ -209,7 +209,7 @@ export function buildStudyBuddyTargetRecord(word: VocabularyItem) {
     ].filter(Boolean).join('\n\n');
 }
 
-export function buildStudyBuddyVerifyRecord(word: VocabularyItem) {
+export function buildStudyBuddyVerifyRecord(word: StudyItem) {
     const currentGroups = (word.groups || []).map((group) => String(group || '').trim()).filter(Boolean);
     const allAppGroups = getAllAppGroupsForWord(word);
     return [

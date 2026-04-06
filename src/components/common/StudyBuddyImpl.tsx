@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, AppView, WordQuality, VocabularyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily, LearnedStatus } from '../../app/types';
+import { User, AppView, WordQuality, StudyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily, LearnedStatus } from '../../app/types';
 import { MessageSquare, Languages, Binary, Loader2, Search, Pause, Play, Square, Sparkles } from 'lucide-react';
 import { getConfig, saveConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
@@ -71,7 +71,7 @@ interface Props {
     currentView: AppView;
     lastBackupTime: number | null;
     onNavigate: (view: string, params?: any) => void;
-    onViewWord?: (word: VocabularyItem, tab?: string) => void;
+    onViewWord?: (word: StudyItem, tab?: string) => void;
     isAnyModalOpen?: boolean;
     onOpenSearchModal?: (initialQuery?: string) => void;
 }
@@ -214,7 +214,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const [menuPos, setMenuPos] = useState<{ x: number, y: number, placement: 'top' | 'bottom' } | null>(null);
     
     const [isAlreadyInLibrary, setIsAlreadyInLibrary] = useState(false);
-    const [currentLibraryWord, setCurrentLibraryWord] = useState<VocabularyItem | null>(null);
+    const [currentLibraryWord, setCurrentLibraryWord] = useState<StudyItem | null>(null);
     const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
     
     // Tools Modal State
@@ -647,7 +647,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         setIsAlreadyInLibrary(false);
     };
 
-    const createWordForChatSave = async (targetWord: string): Promise<VocabularyItem> => {
+    const createWordForChatSave = async (targetWord: string): Promise<StudyItem> => {
         const baseItem = await createNewWord(
             targetWord,
             '',
@@ -823,7 +823,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 word = await createWordForChatSave(targetWord);
             }
 
-            const updatedWord: VocabularyItem = {
+            const updatedWord: StudyItem = {
                 ...word,
                 updatedAt: Date.now()
             };
@@ -1293,7 +1293,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             const custom = event as CustomEvent<{
                 prompt?: string;
                 targetWord?: string;
-                targetData?: VocabularyItem;
+                targetData?: StudyItem;
                 targetSection?: StudyBuddyTargetSection;
                 targetSource?: string;
             }>;
@@ -1973,8 +1973,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         selectedTextRef.current = selectedText;
         setIsAddingToLibrary(true);
         try {
-            let newItem: VocabularyItem;
-            let serverItem: VocabularyItem | null = null;
+            let newItem: StudyItem;
+            let serverItem: StudyItem | null = null;
             try {
                 const results = await lookupWordsInGlobalLibrary([selectedText]);
                 if (results.length > 0) serverItem = results[0];
@@ -2041,7 +2041,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
     const handleAddExplicitSelectionToLibrary = async (text: string) => {
         const wordsToProcess = stringToWordArray(text);
-        const newItems: VocabularyItem[] = [];
+        const newItems: StudyItem[] = [];
         setIsAddingToLibrary(true);
 
         try {
@@ -2049,7 +2049,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 const existing = await dataStore.findWordByText(user.id, word);
                 if (existing) continue;
 
-                let newItem: VocabularyItem
+                let newItem: StudyItem
                 const baseItem = await createNewWord(
                     word,
                     '',
