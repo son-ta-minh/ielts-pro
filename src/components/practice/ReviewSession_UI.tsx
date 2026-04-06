@@ -490,7 +490,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
             activeRequestWordId: studyBuddyExampleRequestWordIdRef.current
         });
 
-        // ✅ Read from snapshot (sync), not via setState
+        // Read from snapshot (sync), not via setState
         if (bufferSnapshot.length > 0) {
             const [first, ...rest] = bufferSnapshot;
 
@@ -516,7 +516,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
             console.log('[StudyBuddy][NextExample] WAITING FOR EXISTING REQUEST');
             studyBuddyExampleRevealRef.current = true;
 
-            // ✅ Do NOT require extra click; result will auto-consume when ready
+            // Do NOT require extra click; result will auto-consume when ready
             return;
         }
 
@@ -853,17 +853,15 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
                                             </span>
                                         </div>
                                     )}
-                                    {!isNewWord && (
-                                        <div className="relative group/example">
-                                            <button
-                                                onClick={() => void showNextStudyBuddyExample()}
-                                                className="p-3 rounded-full transition-colors text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-fuchsia-600"
-                                                title="Example"
-                                            >
-                                                <BookCopy size={20} />
-                                            </button>
-                                        </div>
-                                    )}
+                                    <div className="relative group/example">
+                                        <button
+                                            onClick={() => void showNextStudyBuddyExample()}
+                                            className="p-3 rounded-full transition-colors text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-fuchsia-600"
+                                            title="Example"
+                                        >
+                                            <BookCopy size={20} />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
@@ -880,7 +878,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
                                         <BrainCircuit size={14}/><span>Practice</span>
                                     </button>
                                 </div>
-                                {!isNewWord && (isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
+                                {(isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
                                     <div className="w-full max-w-lg relative z-0">
                                         <div
                                             className="w-full rounded-[1.75rem] border border-blue-200 bg-blue-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-blue-50 relative z-10"
