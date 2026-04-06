@@ -13,7 +13,7 @@ import { calculateMasteryScore, getAllValidTestKeys } from '../../utils/srs';
 import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { getServerUrl, getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
 
-const GENERATED_EXAMPLE_BUFFER_SIZE = 4;
+const GENERATED_EXAMPLE_BUFFER_SIZE = 3;
 
 const normalizeExampleLine = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
 
@@ -289,7 +289,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         });
     }, []);
 
-    const requestStudyBuddyExamples = useCallback(async (word: StudyItem, signal?: AbortSignal): Promise<string[]> => {
+    const requestStudyBuddyExamples = useCallback(async (word: StudyItem, signal?: AbortSignal, replaceBuffer = false): Promise<string[]> => {
         const bannedExamples = splitExampleLines(word.example || '').slice(0, 3);
         const audienceInstruction = getAudienceInstruction(user);
         const levelInstruction = user.currentLevel ? `Learner level: ${user.currentLevel}.` : '';
@@ -339,7 +339,6 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
         const decoder = new TextDecoder();
         let assistantText = '';
         let buffered = '';
-        let deliveredCount = 0;
         let finalExamples: string[] = [];
 
         const flushAssistantText = (isFinal: boolean) => {
@@ -347,11 +346,9 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
             const segments = normalizedText.split('\n');
             const completeSegments = isFinal ? segments : segments.slice(0, -1);
             const freshExamples = extractFreshExamples(completeSegments.join('\n'));
-            const newExamples = freshExamples.slice(deliveredCount);
-            if (newExamples.length > 0) {
-                mergeBufferedExamples(newExamples, { replace: deliveredCount === 0 });
-                finalExamples = [...finalExamples, ...newExamples];
-                deliveredCount += newExamples.length;
+            if (freshExamples.length > 0) {
+                mergeBufferedExamples(freshExamples, { replace: replaceBuffer && finalExamples.length === 0 });
+                finalExamples = [...finalExamples, ...freshExamples];
             }
             if (studyBuddyExampleRevealRef.current) {
                 const firstSegment = segments[0]?.trim();
@@ -431,7 +428,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
             setStudyBuddyExampleBuffer([]);
         }
 
-        const requestPromise = requestStudyBuddyExamples(word, controller.signal)
+        const requestPromise = requestStudyBuddyExamples(word, controller.signal, !!options?.replace)
             .then((incomingExamples) => {
                 if (controller.signal.aborted) return [];
                 if (incomingExamples.length === 0) {
@@ -483,10 +480,11 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
             return;
         }
 
-        if (!isStudyBuddyExampleLoading) {
-            setStudyBuddyExampleError(null);
-            studyBuddyExampleRevealRef.current = true;
-            const incomingExamples = await prefetchStudyBuddyExamples(currentWord, { replace: true });
+        setStudyBuddyExampleError(null);
+        studyBuddyExampleRevealRef.current = true;
+        try {
+            const shouldReplace = studyBuddyExampleRequestWordIdRef.current !== currentWord.id;
+            const incomingExamples = await prefetchStudyBuddyExamples(currentWord, { replace: shouldReplace });
             const fallbackExample = incomingExamples?.[0];
             if (fallbackExample) {
                 setStudyBuddyExample(fallbackExample);
@@ -497,9 +495,10 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy these existing ex
             } else {
                 setStudyBuddyExample(null);
             }
+        } finally {
             studyBuddyExampleRevealRef.current = false;
         }
-    }, [currentWord, isStudyBuddyExampleLoading, prefetchStudyBuddyExamples]);
+    }, [currentWord, prefetchStudyBuddyExamples]);
 
     useEffect(() => {
         studyBuddyExampleAbortRef.current?.abort();
