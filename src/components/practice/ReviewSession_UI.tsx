@@ -167,8 +167,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [spellResult, setSpellResult] = useState<'correct' | 'wrong' | null>(null);
     const [isStudyBuddyExampleVisible, setIsStudyBuddyExampleVisible] = useState(false);
     const [isExampleTextRevealed, setIsExampleTextRevealed] = useState(false);
-    const [isFastReviewOpen, setIsFastReviewOpen] = useState(false);
-    const [isBotReviewOpen, setIsBotReviewOpen] = useState(false);
+    const [hoveredActionMenu, setHoveredActionMenu] = useState<'view' | 'ai' | null>(null);
+    const [activeFastReviewPanel, setActiveFastReviewPanel] = useState<'meaning' | 'collocation' | 'paraphrase' | 'preposition' | 'idiom' | null>(null);
     const [studyBuddyExample, setStudyBuddyExample] = useState<string | null>(null);
     const [studyBuddyExampleBuffer, setStudyBuddyExampleBuffer] = useState<string[]>([]);
     const [isStudyBuddyExampleLoading, setIsStudyBuddyExampleLoading] = useState(false);
@@ -238,10 +238,6 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     ? reviewHeadword
     : cachedDisplayIpa || (isDisplayDifferentFromHeadword ? reviewHeadword : (currentWord.ipaUs || reviewHeadword));
     const vietnameseMeaning = cachedDisplayMeaning || matchedDisplayCollocation?.d?.trim() || fallbackMeaning;
-    const prepositionTooltip = visiblePrepositions.slice(0, 6).map(p => p.usage || p.prep).join('\n');
-    const collocationTooltip = visibleCollocations.slice(0, 6).map(c => c.text).join('\n');
-    const paraphraseTooltip = visibleParaphrases.slice(0, 6).map(p => p.word).join('\n');
-    const idiomTooltip = visibleIdioms.slice(0, 6).map(i => i.text).join('\n');
     const existingExampleSet = useMemo(() => {
         const set = new Set<string>();
         splitExampleLines(currentWord.example || '').forEach((line) => {
@@ -256,6 +252,15 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         () => (currentWord.collocationsArray || []).filter((item) => !item.isIgnored && String(item.text || '').trim()),
         [currentWord.collocationsArray]
     );
+    const actionButtonBaseClass = 'flex items-center gap-2 px-6 py-3 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg transition-all active:scale-95';
+    const viewButtonClass = `${actionButtonBaseClass} bg-sky-600 hover:bg-sky-700 shadow-sky-500/20 ${activeFastReviewPanel || showSpellBox ? 'ring-2 ring-sky-200 ring-offset-2 ring-offset-white' : ''}`;
+    const aiButtonClass = `${actionButtonBaseClass} bg-fuchsia-600 hover:bg-fuchsia-700 shadow-fuchsia-500/20 ${activeBotPanel ? 'ring-2 ring-fuchsia-200 ring-offset-2 ring-offset-white' : ''}`;
+    const practiceButtonClass = `${actionButtonBaseClass} ${
+        hasRetryableFailedTests
+            ? 'bg-red-600 hover:bg-red-700 shadow-red-500/20'
+            : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
+    }`;
+    const floatingMenuClass = 'absolute left-1/2 top-full z-20 w-max -translate-x-1/2 pt-2 transition-all duration-150';
 
     const extractFreshExamples = useCallback((rawText: string): string[] => {
         const seen = studyBuddyExampleSeenRef.current;
@@ -681,7 +686,10 @@ ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz quest
     }, [requestStudyBuddyQuizQuestions]);
 
     const showNextStudyBuddyExample = useCallback(async () => {
+        setActiveFastReviewPanel(null);
         setActiveBotPanel('example');
+        setHoveredActionMenu(null);
+        setShowSpellBox(false);
         setIsStudyBuddyExampleVisible(true);
         studyBuddyExampleRevealRef.current = false;
 
@@ -744,7 +752,10 @@ ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz quest
     }, [currentWord, prefetchStudyBuddyExamples, studyBuddyExampleBuffer]);
 
     const showNextStudyBuddyQuiz = useCallback(async () => {
+        setActiveFastReviewPanel(null);
         setActiveBotPanel('quiz');
+        setHoveredActionMenu(null);
+        setShowSpellBox(false);
         const bufferSnapshot = studyBuddyQuizBuffer;
         setStudyBuddyQuizFeedback(null);
         setStudyBuddyQuizHint(null);
@@ -835,6 +846,43 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
         }
     }, [collocationTargets, currentWord.word, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizQuestion]);
 
+    const handleFastReviewAction = useCallback((panel: 'meaning' | 'collocation' | 'paraphrase' | 'preposition' | 'idiom') => {
+        setActiveBotPanel(null);
+        setActiveFastReviewPanel(panel);
+        setHoveredActionMenu(null);
+        setShowSpellBox(false);
+
+        if (panel === 'meaning') {
+            speak(vietnameseMeaning, false, 'vi');
+            return;
+        }
+
+        if (panel === 'collocation') {
+            const text = visibleCollocations.slice(0, 5).map((item) => item.text).filter(Boolean).join('. ');
+            if (text) speak(text);
+            return;
+        }
+
+        if (panel === 'paraphrase') {
+            const text = visibleParaphrases
+                .slice(0, 5)
+                .map((item) => item.word)
+                .filter(Boolean)
+                .join('. ');
+            if (text) speak(text);
+            return;
+        }
+
+        if (panel === 'preposition') {
+            const text = visiblePrepositions.slice(0, 5).map((item) => item.usage || item.prep).filter(Boolean).join('. ');
+            if (text) speak(text);
+            return;
+        }
+
+        const text = visibleIdioms.slice(0, 5).map((item) => item.text).filter(Boolean).join('. ');
+        if (text) speak(text);
+    }, [vietnameseMeaning, visibleCollocations, visibleIdioms, visibleParaphrases, visiblePrepositions]);
+
     useEffect(() => {
         studyBuddyExampleAbortRef.current?.abort();
         studyBuddyExampleRequestRef.current = null;
@@ -854,9 +902,12 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
         studyBuddyQuizRequestRef.current = null;
         studyBuddyQuizRequestWordIdRef.current = null;
         studyBuddyQuizSeenRef.current = new Set();
-        setIsFastReviewOpen(false);
-        setIsBotReviewOpen(false);
+        setActiveFastReviewPanel(null);
         setActiveBotPanel(null);
+        setHoveredActionMenu(null);
+        setShowSpellBox(false);
+        setSpellInput('');
+        setSpellResult(null);
         setStudyBuddyQuizQuestion(null);
         setStudyBuddyQuizBuffer([]);
         setStudyBuddyQuizError(null);
@@ -979,6 +1030,44 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                         <Volume2 size={22} />
                                     </button>
 
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveFastReviewPanel(null);
+                                            setActiveBotPanel(null);
+                                            setHoveredActionMenu(null);
+                                            setShowSpellBox(false);
+                                            setMimicTarget(reviewHeadword);
+                                        }}
+                                        className="p-2 bg-neutral-50 text-neutral-400 hover:bg-neutral-100 hover:text-violet-700 rounded-full transition-colors"
+                                        title="Mimic"
+                                    >
+                                        <Mic size={18} />
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveFastReviewPanel(null);
+                                            setActiveBotPanel(null);
+                                            setHoveredActionMenu(null);
+                                            setShowSpellBox((prev) => {
+                                                const next = !prev;
+                                                if (next) {
+                                                    setSpellInput('');
+                                                    setSpellResult(null);
+                                                }
+                                                return next;
+                                            });
+                                        }}
+                                        className={`p-2 rounded-full transition-colors ${showSpellBox ? 'bg-neutral-900 text-white' : 'bg-neutral-50 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900'}`}
+                                        title="Typing check"
+                                    >
+                                        <Keyboard size={18} />
+                                    </button>
+
                                     {currentWord.img && currentWord.img.length > 0 && (
                                         <div className="relative group/img">
                                             <button
@@ -1033,154 +1122,174 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                     )}
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
-                                        <Eye size={14}/><span>View</span>
-                                    </button>
+                                    <div
+                                        className="relative"
+                                        onMouseEnter={() => setHoveredActionMenu('view')}
+                                        onMouseLeave={() => setHoveredActionMenu((current) => current === 'view' ? null : current)}
+                                    >
+                                        <button
+                                            type="button"
+                                            onFocus={() => setHoveredActionMenu('view')}
+                                            onClick={() => setHoveredActionMenu((current) => current === 'view' ? null : 'view')}
+                                            className={viewButtonClass}
+                                        >
+                                            <Eye size={14}/><span>View</span>
+                                        </button>
+                                        <div className={`${floatingMenuClass} ${hoveredActionMenu === 'view' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
+                                            <div className="flex min-w-[220px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
+                                                <button type="button" onClick={() => { setShowSpellBox(false); setHoveredActionMenu(null); void onOpenWordDetails(currentWord); }} className="inline-flex items-center gap-1.5 rounded-xl bg-sky-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-700 transition-colors hover:bg-sky-100"><Eye size={11} /><span>Detail</span></button>
+                                                <button type="button" onClick={() => handleFastReviewAction('meaning')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeFastReviewPanel === 'meaning' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}><BookOpen size={11} /><span>Meaning</span></button>
+                                                {visibleCollocations.length > 0 && <button type="button" onClick={() => handleFastReviewAction('collocation')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeFastReviewPanel === 'collocation' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}><Combine size={11} /><span>Collocation</span></button>}
+                                                {visibleParaphrases.length > 0 && <button type="button" onClick={() => handleFastReviewAction('paraphrase')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeFastReviewPanel === 'paraphrase' ? 'bg-cyan-600 text-white' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100'}`}><Zap size={11} /><span>Paraphrase</span></button>}
+                                                {visiblePrepositions.length > 0 && <button type="button" onClick={() => handleFastReviewAction('preposition')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeFastReviewPanel === 'preposition' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-700 hover:bg-orange-100'}`}><AtSign size={11} /><span>Preposition</span></button>}
+                                                {visibleIdioms.length > 0 && <button type="button" onClick={() => handleFastReviewAction('idiom')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeFastReviewPanel === 'idiom' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}><MessageSquare size={11} /><span>Idiom</span></button>}
+                                            </div>
+                                        </div>
+                                    </div>
                                     <button
+                                        type="button"
                                         onClick={handleManualPractice}
-                                        className={`flex items-center gap-2 px-6 py-3 text-white rounded-xl font-black text-[10px] transition-all active:scale-95 uppercase tracking-widest shadow-lg ${
-                                            hasRetryableFailedTests
-                                                ? 'bg-red-600 hover:bg-red-700 shadow-red-500/20'
-                                                : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
-                                        }`}
+                                        className={practiceButtonClass}
                                     >
                                         <BrainCircuit size={14}/><span>Practice</span>
                                     </button>
-                                    <button
-                                        onClick={() => setIsFastReviewOpen((prev) => !prev)}
-                                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-[10px] transition-all active:scale-95 uppercase tracking-widest shadow-sm border ${
-                                            isFastReviewOpen
-                                                ? 'bg-neutral-900 border-neutral-900 text-white'
-                                                : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
-                                        }`}
+                                    <div
+                                        className="relative"
+                                        onMouseEnter={() => setHoveredActionMenu('ai')}
+                                        onMouseLeave={() => setHoveredActionMenu((current) => current === 'ai' ? null : current)}
                                     >
-                                        <Zap size={14}/><span>Review</span>
-                                    </button>
-                                    <button
-                                        onClick={() => setIsBotReviewOpen((prev) => !prev)}
-                                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-[10px] transition-all active:scale-95 uppercase tracking-widest shadow-sm border ${
-                                            isBotReviewOpen
-                                                ? 'bg-neutral-900 border-neutral-900 text-white'
-                                                : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
-                                        }`}
-                                    >
-                                        <Bot size={14}/><span>AI</span>
-                                    </button>
+                                        <button
+                                            type="button"
+                                            className={aiButtonClass}
+                                            onFocus={() => setHoveredActionMenu('ai')}
+                                            onClick={() => setHoveredActionMenu((current) => current === 'ai' ? null : 'ai')}
+                                        >
+                                            <Bot size={14}/><span>AI</span>
+                                        </button>
+                                        <div className={`${floatingMenuClass} ${hoveredActionMenu === 'ai' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
+                                            <div className="flex min-w-[180px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
+                                                <button type="button" onClick={() => { setHoveredActionMenu('ai'); void showNextStudyBuddyExample(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeBotPanel === 'example' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}><BookCopy size={11} /><span>Example</span></button>
+                                                <button type="button" onClick={() => { setHoveredActionMenu('ai'); void showNextStudyBuddyQuiz(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeBotPanel === 'quiz' ? 'bg-fuchsia-600 text-white' : 'bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100'}`}><Sparkles size={11} /><span>Quiz</span></button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                {isFastReviewOpen && (
-                                    <div className="w-full max-w-lg rounded-[1.5rem] border border-neutral-200 bg-white px-4 py-3 shadow-sm">
-                                        <div className="flex flex-wrap items-center justify-center gap-3">
+                                <div className="w-full max-w-lg min-h-[216px]">
+                                {showSpellBox && (
+                                    <div className="w-full rounded-[1.75rem] border border-neutral-200 bg-neutral-50/80 px-5 py-4 text-left shadow-sm">
+                                        <div className="mb-3 flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neutral-700">
+                                                <Keyboard size={12} />
+                                                <span>Typing Check</span>
+                                            </div>
                                             <button
-                                                onClick={() => setMimicTarget(reviewHeadword)}
-                                                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
-                                                title="Simple Mimic"
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowSpellBox(false);
+                                                    setSpellInput('');
+                                                    setSpellResult(null);
+                                                }}
+                                                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100"
                                             >
-                                                <Mic size={11} />
-                                                <span>Mimic</span>
+                                                <X size={11} />
+                                                <span>Close</span>
                                             </button>
-                                            <div className="relative group/book">
-                                                <button
-                                                    onClick={() => speak(vietnameseMeaning, false, 'vi')}
-                                                    className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
-                                                >
-                                                    <BookOpen size={11} />
-                                                    <span>Meaning</span>
-                                                </button>
-                                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[260px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/book:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 border border-neutral-200 shadow-lg">
-                                                    <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
-                                                        Meaning
-                                                    </div>
-                                                    {vietnameseMeaning}
-                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
-                                                </span>
-                                            </div>
-                                            {visibleCollocations.length > 0 && (
-                                                <div className="relative group/col">
-                                                    <button
-                                                        onClick={() => speak(collocationTooltip.replace(/\n/g, ', '))}
-                                                        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
-                                                    >
-                                                        <Combine size={11} />
-                                                        <span>Collocation</span>
-                                                    </button>
-                                                    <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/col:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
-                                                        <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">Collocations</div>
-                                                        {collocationTooltip.includes('\n') ? <ul className="list-disc pl-4 space-y-0.5">{collocationTooltip.split('\n').map((item, idx) => <li key={idx}>{item}</li>)}</ul> : collocationTooltip}
-                                                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {visibleParaphrases.length > 0 && (
-                                                <div className="relative group/para">
-                                                    <button
-                                                        onClick={() => speak(paraphraseTooltip.replace(/\n/g, ', '))}
-                                                        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
-                                                    >
-                                                        <Zap size={11} />
-                                                        <span>Paraphrase</span>
-                                                    </button>
-                                                    <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/para:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
-                                                        <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">Paraphrases</div>
-                                                        {paraphraseTooltip.includes('\n') ? <ul className="list-disc pl-4 space-y-0.5">{paraphraseTooltip.split('\n').map((item, idx) => <li key={idx}>{item}</li>)}</ul> : paraphraseTooltip}
-                                                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {visiblePrepositions.length > 0 && (
-                                                <div className="relative group/prep">
-                                                    <button
-                                                        onClick={() => speak(prepositionTooltip.replace(/\n/g, ', '))}
-                                                        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
-                                                    >
-                                                        <AtSign size={11} />
-                                                        <span>Preposition</span>
-                                                    </button>
-                                                    <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/prep:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
-                                                        <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">Prepositions</div>
-                                                        {prepositionTooltip.includes('\n') ? <ul className="list-disc pl-4 space-y-0.5">{prepositionTooltip.split('\n').map((item, idx) => <li key={idx}>{item}</li>)}</ul> : prepositionTooltip}
-                                                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
-                                                    </span>
-                                                </div>
-                                            )}
                                         </div>
-                                    </div>
-                                )}
-                                {isBotReviewOpen && (
-                                    <div className="w-full max-w-lg rounded-[1.5rem] border border-neutral-200 bg-white px-4 py-3 shadow-sm">
-                                        <div className="flex flex-wrap items-center justify-between gap-3">
-                                            <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">
-                                                <Bot size={12} />
-                                                <span>Bot</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={() => void showNextStudyBuddyExample()}
-                                                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
-                                                        activeBotPanel === 'example'
-                                                            ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                                            : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100'
-                                                    }`}
-                                                >
-                                                    <BookCopy size={11} />
-                                                    <span>Example</span>
-                                                </button>
-                                                <button
-                                                    onClick={() => void showNextStudyBuddyQuiz()}
-                                                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
-                                                        activeBotPanel === 'quiz'
-                                                            ? 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700'
-                                                            : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100'
-                                                    }`}
-                                                >
-                                                    <Sparkles size={11} />
-                                                    <span>Quiz</span>
-                                                </button>
+                                        <div className="space-y-3">
+                                            <input
+                                                value={spellInput}
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    setSpellInput(value);
+
+                                                    const correct = value.trim().toLowerCase() === currentWord.word.toLowerCase();
+                                                    if (correct) {
+                                                        setSpellResult('correct');
+                                                        setTimeout(() => {
+                                                            setShowSpellBox(false);
+                                                            setSpellInput('');
+                                                            setSpellResult(null);
+                                                        }, 1000);
+                                                    } else {
+                                                        setSpellResult(value.length > 0 ? 'wrong' : null);
+                                                    }
+                                                }}
+                                                placeholder="Type spelling..."
+                                                className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition-colors focus:border-neutral-500"
+                                            />
+                                            <div className="flex items-center justify-between gap-3">
+                                                <p className="text-xs font-semibold text-neutral-500">
+                                                    Type the headword exactly as you hear it.
+                                                </p>
+                                                {spellResult === 'correct' && (
+                                                    <p className="text-[10px] font-black uppercase tracking-wide text-green-600">
+                                                        Correct
+                                                    </p>
+                                                )}
+                                                {spellResult === 'wrong' && (
+                                                    <p className="text-[10px] font-black uppercase tracking-wide text-rose-600">
+                                                        Incorrect
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 )}
-                                {isBotReviewOpen && activeBotPanel === 'example' && (isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
-                                    <div className="w-full max-w-lg relative z-0">
+                                {activeFastReviewPanel === 'meaning' && (
+                                    <div className="w-full rounded-[1.75rem] border border-amber-200 bg-amber-50/70 px-5 py-4 text-left shadow-sm">
+                                        <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                                            <BookOpen size={12} />
+                                            <span>Meaning</span>
+                                        </div>
+                                        <p className="text-sm font-semibold leading-relaxed text-neutral-800">{vietnameseMeaning}</p>
+                                    </div>
+                                )}
+                                {activeFastReviewPanel === 'collocation' && visibleCollocations.length > 0 && (
+                                    <div className="w-full rounded-[1.75rem] border border-indigo-200 bg-indigo-50/70 px-5 py-4 text-left shadow-sm">
+                                        <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                                            <Combine size={12} />
+                                            <span>Collocations</span>
+                                        </div>
+                                        <div className="space-y-1 text-sm font-semibold leading-relaxed text-neutral-800">
+                                            {visibleCollocations.slice(0, 5).map((item, idx) => <p key={`${item.text}-${idx}`}>{item.text}</p>)}
+                                        </div>
+                                    </div>
+                                )}
+                                {activeFastReviewPanel === 'paraphrase' && visibleParaphrases.length > 0 && (
+                                    <div className="w-full rounded-[1.75rem] border border-cyan-200 bg-cyan-50/70 px-5 py-4 text-left shadow-sm">
+                                        <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-cyan-700">
+                                            <Zap size={12} />
+                                            <span>Paraphrases</span>
+                                        </div>
+                                        <div className="space-y-1 text-sm font-semibold leading-relaxed text-neutral-800">
+                                            {visibleParaphrases.slice(0, 5).map((item, idx) => <p key={`${item.word}-${idx}`}>{item.word}</p>)}
+                                        </div>
+                                    </div>
+                                )}
+                                {activeFastReviewPanel === 'preposition' && visiblePrepositions.length > 0 && (
+                                    <div className="w-full rounded-[1.75rem] border border-orange-200 bg-orange-50/70 px-5 py-4 text-left shadow-sm">
+                                        <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-orange-700">
+                                            <AtSign size={12} />
+                                            <span>Prepositions</span>
+                                        </div>
+                                        <div className="space-y-1 text-sm font-semibold leading-relaxed text-neutral-800">
+                                            {visiblePrepositions.slice(0, 5).map((item, idx) => <p key={`${item.prep}-${idx}`}>{item.usage || item.prep}</p>)}
+                                        </div>
+                                    </div>
+                                )}
+                                {activeFastReviewPanel === 'idiom' && visibleIdioms.length > 0 && (
+                                    <div className="w-full rounded-[1.75rem] border border-emerald-200 bg-emerald-50/70 px-5 py-4 text-left shadow-sm">
+                                        <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                                            <MessageSquare size={12} />
+                                            <span>Idioms</span>
+                                        </div>
+                                        <div className="space-y-1 text-sm font-semibold leading-relaxed text-neutral-800">
+                                            {visibleIdioms.slice(0, 5).map((item, idx) => <p key={`${item.text}-${idx}`}>{item.text}</p>)}
+                                        </div>
+                                    </div>
+                                )}
+                                {activeBotPanel === 'example' && (isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
+                                    <div className="w-full relative z-0">
                                         <div
                                             className="w-full rounded-[1.75rem] border border-blue-200 bg-blue-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-blue-50 relative z-10"
                                         >
@@ -1255,8 +1364,8 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                         </div>
                                     </div>
                                 )}
-                                {isBotReviewOpen && activeBotPanel === 'quiz' && (
-                                    <div className="w-full max-w-lg relative z-0">
+                                {activeBotPanel === 'quiz' && (
+                                    <div className="w-full relative z-0">
                                         <div className="w-full rounded-[1.75rem] border border-fuchsia-200 bg-fuchsia-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-fuchsia-50 relative z-10">
                                             <div className="mb-3 flex items-center justify-between gap-3">
                                                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-fuchsia-700">
@@ -1349,50 +1458,8 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                         </div>
                                     </div>
                                 )}
-                            </div>
-                            {showSpellBox && (
-                                <div className="absolute bottom-24 left-1/2 -translate-x-1/2 w-[280px] bg-white border border-neutral-200 rounded-2xl shadow-xl p-4 z-20 animate-in fade-in">
-                                    <div className="text-[10px] font-black uppercase tracking-wider text-neutral-500 mb-2">
-                                        Spell the word
-                                    </div>
-
-                                    <input
-                                        value={spellInput}
-                                        onChange={(e) => {
-                                            const value = e.target.value;
-                                            setSpellInput(value);
-
-                                            const correct = value.trim().toLowerCase() === currentWord.word.toLowerCase();
-                                            if (correct) {
-                                                setSpellResult('correct');
-                                                setTimeout(() => {
-                                                    setShowSpellBox(false);
-                                                    setSpellInput('');
-                                                    setSpellResult(null);
-                                                }, 1000);
-                                            } else {
-                                                setSpellResult(value.length > 0 ? 'wrong' : null);
-                                            }
-                                        }}
-                                        placeholder="Type spelling..."
-                                        className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
-                                    />
-
-                                    <div className="mt-2"></div>
-
-                                    {spellResult === 'correct' && (
-                                        <div className="mt-2 text-[10px] font-black text-green-600 uppercase">
-                                            Correct ✓
-                                        </div>
-                                    )}
-
-                                    {spellResult === 'wrong' && (
-                                        <div className="mt-2 text-[10px] font-black text-red-600 uppercase">
-                                            Incorrect
-                                        </div>
-                                    )}
                                 </div>
-                            )}
+                            </div>
                         </>)}
                     </div>
                     
