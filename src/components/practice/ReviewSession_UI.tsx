@@ -130,6 +130,11 @@ type StudyBuddyQuizItem = {
     answer: string;
 };
 
+type StudyBuddyQuizValidationResult = {
+    isValid: boolean;
+    retryMessage?: string;
+};
+
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const maskAnswerInSentence = (sentence: string, answer: string, headword: string): string => {
@@ -252,20 +257,45 @@ const remaskQuizAnswerInput = (plainInput: string, answer: string, hintLevel: nu
     return mergeHintWithUserInput(answer, baseHint, plainInput);
 };
 
-const isValidStudyBuddyQuizItem = (item: StudyBuddyQuizItem | null | undefined, headword: string): item is StudyBuddyQuizItem => {
-    if (!item) return false;
+const validateStudyBuddyQuizItem = (item: StudyBuddyQuizItem | null | undefined, headword: string): StudyBuddyQuizValidationResult => {
+    if (!item) {
+        return {
+            isValid: false,
+            retryMessage: 'I cannot find both question and answer. Retry with the exact "question ||| answer" format or generate a new question.'
+        };
+    }
 
     const question = String(item.question || '').trim();
     const answer = String(item.answer || '').trim();
     const normalizedQuestion = normalizeExampleLine(question);
     const normalizedAnswer = normalizeExampleLine(answer);
 
-    if (!normalizedQuestion || !normalizedAnswer) return false;
-    if (!isShortNaturalCollocation(answer, headword)) return false;
-    if (maskAnswerInSentence(question, answer, headword) === question) return false;
+    if (!normalizedQuestion || !normalizedAnswer) {
+        return {
+            isValid: false,
+            retryMessage: 'I cannot find both question and answer. Retry with the exact "question ||| answer" format or generate a new question.'
+        };
+    }
 
-    return true;
+    if (!isShortNaturalCollocation(answer, headword)) {
+        return {
+            isValid: false,
+            retryMessage: `The answer is not a short natural collocation with "${headword}". Retry with a shorter natural answer or generate a new question.`
+        };
+    }
+
+    if (maskAnswerInSentence(question, answer, headword) === question) {
+        return {
+            isValid: false,
+            retryMessage: 'I cannot find the answer collocation in the question. Retry with a new answer or generate a new question.'
+        };
+    }
+
+    return { isValid: true };
 };
+
+const isValidStudyBuddyQuizItem = (item: StudyBuddyQuizItem | null | undefined, headword: string): item is StudyBuddyQuizItem =>
+    validateStudyBuddyQuizItem(item, headword).isValid;
 
 export interface ReviewSessionUIProps {
   user: User;
@@ -453,6 +483,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const studyBuddyQuizSeenRef = useRef<Set<string>>(new Set());
     const studyBuddyQuizAnswerSeenRef = useRef<Set<string>>(new Set());
     const studyBuddyQuizRevealRef = useRef(false);
+    const studyBuddyQuizRetryMessageRef = useRef<string | null>(null);
     const serverUrl = getServerUrl(getConfig());
     const studyBuddyAiUrl = getStudyBuddyAiUrl(getConfig());
     const normalizeComparableText = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
@@ -530,15 +561,22 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         return result;
     }, [existingExampleSet]);
 
-    const extractFreshQuizQuestions = useCallback((rawText: string): StudyBuddyQuizItem[] => {
+    const extractFreshQuizQuestions = useCallback((rawText: string): { items: StudyBuddyQuizItem[]; retryMessage: string | null } => {
         const seenQuestions = studyBuddyQuizSeenRef.current;
         const seenAnswers = studyBuddyQuizAnswerSeenRef.current;
         const lines = splitExampleLines(rawText);
         const result: StudyBuddyQuizItem[] = [];
+        let retryMessage: string | null = null;
 
         lines.forEach((line) => {
             const [questionPart, answerPart] = line.split('|||').map((item) => item.trim());
-            if (!isValidStudyBuddyQuizItem({ question: questionPart, answer: answerPart }, currentWord.word)) return;
+            const validation = validateStudyBuddyQuizItem({ question: questionPart, answer: answerPart }, currentWord.word);
+            if (!validation.isValid) {
+                if (!retryMessage) {
+                    retryMessage = validation.retryMessage || 'The quiz item is invalid. Retry with a new answer or generate a new question.';
+                }
+                return;
+            }
             const normalizedQuestion = normalizeExampleLine(questionPart || '');
             const normalizedAnswer = normalizeExampleLine(answerPart || '');
             if (seenQuestions.has(normalizedQuestion) || seenAnswers.has(normalizedAnswer)) return;
@@ -550,7 +588,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
             });
         });
 
-        return result;
+        return { items: result, retryMessage };
     }, [currentWord.word]);
 
     const mergeBufferedExamples = useCallback((incomingExamples: string[], options?: { replace?: boolean }) => {
@@ -743,25 +781,15 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         const maxAttempts = 3;
         let didStreamFirstItem = false;
         let didMergeAnything = false;
-
-        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-            if (signal?.aborted) return [];
-
-            const remainingTarget = Math.max(1, GENERATED_QUIZ_BUFFER_SIZE - collectedItems.length);
-            const response = await fetch(studyBuddyAiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'You are an expert IELTS coach. Write only natural English example sentences and answers. No bullets, no numbering, no markdown, no explanations.'
-                        },
-                        {
-                            role: 'user',
-                            content: `Write exactly ${remainingTarget} distinct collocation quiz items for this learner and the current review word "${word.word}".
+        let lastRetryMessage: string | null = null;
+        let messages = [
+            {
+                role: 'system',
+                content: 'You are an expert IELTS coach. Write only natural English example sentences and answers. No bullets, no numbering, no markdown, no explanations.'
+            },
+            {
+                role: 'user',
+                content: `Write exactly ${GENERATED_QUIZ_BUFFER_SIZE} distinct collocation quiz items for this learner and the current review word "${word.word}".
 
 Rules:
 - This test is for practicing collocations with the word "${word.word}". A collocation is a popular and natural combination of words that native speakers commonly use together (e.g., "make a decision", "conduct research", "raise awareness"). Bad collocation is "keep fit regularly" because we don't say "keep fit" with an adverb in between. Good collocation is "keep fit" or "do exercise regularly".
@@ -782,8 +810,20 @@ Rules:
 - Known collocations for "${word.word}": ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}.
 ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz questions:\n${bannedQuestions.map((item) => `  • ${item}`).join('\n')}` : ''}
 ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer collocations:\n${bannedAnswers.map((item) => `  • ${item}`).join('\n')}` : ''}`
-                        }
-                    ],
+            }
+        ];
+
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            if (signal?.aborted) return [];
+
+            const remainingTarget = Math.max(1, GENERATED_QUIZ_BUFFER_SIZE - collectedItems.length);
+            const response = await fetch(studyBuddyAiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages,
                     searchEnabled: false,
                     temperature: 0.75,
                     top_p: 0.9,
@@ -811,7 +851,12 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
                     setStudyBuddyQuizStreamText(previewLine);
                 }
                 const completeSegments = isFinal ? segments : segments.slice(0, -1);
-                const freshQuizItems = extractFreshQuizQuestions(completeSegments.join('\n'));
+                const parsedQuizItems = extractFreshQuizQuestions(completeSegments.join('\n'));
+                if (parsedQuizItems.retryMessage) {
+                    lastRetryMessage = parsedQuizItems.retryMessage;
+                    studyBuddyQuizRetryMessageRef.current = parsedQuizItems.retryMessage;
+                }
+                const freshQuizItems = parsedQuizItems.items;
                 if (freshQuizItems.length === 0) return;
 
                 mergeBufferedQuizQuestions(freshQuizItems, { replace: replaceBuffer && !didMergeAnything });
@@ -882,6 +927,16 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
             if (collectedItems.length >= GENERATED_QUIZ_BUFFER_SIZE) {
                 break;
             }
+
+            const nextRemainingTarget = Math.max(1, GENERATED_QUIZ_BUFFER_SIZE - collectedItems.length);
+            messages = [
+                ...messages,
+                { role: 'assistant', content: assistantText.trim() || '(empty response)' },
+                {
+                    role: 'user',
+                    content: `${lastRetryMessage || 'The previous output was invalid.'} Retry with exactly ${nextRemainingTarget} new lines in the same "question ||| answer" format. Do not repeat previous invalid lines.`
+                }
+            ];
         }
 
         return collectedItems;
@@ -1016,6 +1071,7 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         if (options?.replace) {
             setStudyBuddyQuizBuffer([]);
         }
+        studyBuddyQuizRetryMessageRef.current = null;
 
         const applyQuizItemToUi = (item: StudyBuddyQuizItem) => {
             if (!isValidStudyBuddyQuizItem(item, word.word)) {
@@ -1056,7 +1112,9 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
             .then((incomingQuestions) => {
                 if (controller.signal.aborted) return [];
                 if (incomingQuestions.length === 0) {
-                    setStudyBuddyQuizError('No quiz prompt right now.');
+                    setStudyBuddyQuizError(
+                        studyBuddyQuizRetryMessageRef.current || 'No quiz prompt right now.'
+                    );
                 }
 
                 if (studyBuddyQuizRevealRef.current && !hasAutoConsumedStreamedItem) {
@@ -1359,6 +1417,7 @@ Reply with exactly one very short sentence or phrase in English.`
         studyBuddyQuizRequestRef.current = null;
         studyBuddyQuizRequestWordIdRef.current = null;
         studyBuddyQuizAnswerSeenRef.current = new Set();
+        studyBuddyQuizRetryMessageRef.current = null;
         setActiveFastReviewPanel(null);
         setActiveBotPanel(null);
         setHoveredActionMenu(null);
