@@ -195,7 +195,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
 };
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
-  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, selectedArchiveUser, archiveCandidates, isArchiveLoading, restoreFromServerAction, handleOpenArchivePicker, handleCloseArchivePicker, handleCreateArchiveForUser, handleRestoreFromArchive, handleDeleteArchive, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore, sslIssueUrl, setSslIssueUrl, retrySslConnection } = controller;
+  const { view, isSidebarOpen, setIsSidebarOpen, globalViewWord, setGlobalViewWord, updateWord, bulkUpdateWords, gainExperienceAndLevelUp, sessionType, clearSessionState, setView, setForceExpandAdd, currentUser, stats, lastBackupTime, isAutoRestoreOpen, setIsAutoRestoreOpen, autoRestoreCandidates, selectedArchiveUser, archiveCandidates, isArchiveLoading, restoreFromServerAction, handleOpenArchivePicker, handleCloseArchivePicker, handleCreateArchiveForUser, handleRestoreFromArchive, handleDeleteArchive, handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, syncPrompt, setSyncPrompt, isSyncing, handleSyncPush, handleSyncRestore, sslIssueUrl, setSslIssueUrl, retrySslConnection } = controller;
   const [editingWord, setEditingWord] = useState<StudyItem | null>(null);
   const [searchModalState, setSearchModalState] = useState<{ isOpen: boolean; initialQuery: string }>({ isOpen: false, initialQuery: '' });
   const [endSessionModal, setEndSessionModal] = useState<{isOpen: boolean, targetView: AppView | null, andThen?: () => void}>({isOpen: false, targetView: null, andThen: undefined});
@@ -264,7 +264,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
         {currentUser && inlineReviewWords && (
           <div className="fixed inset-0 z-[130] bg-black/35 backdrop-blur-sm">
             <Suspense fallback={<div className="fixed inset-0 z-[131] flex items-center justify-center"><Loader2 className="animate-spin text-white" size={32} /></div>}>
-              <div className="h-full overflow-y-auto p-4 md:p-8">
+              <div className="h-full overflow-y-auto p-4 md:p-8 bg-white">
                 <ReviewSession
                   user={currentUser}
                   sessionWords={inlineReviewWords}
