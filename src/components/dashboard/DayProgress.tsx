@@ -78,7 +78,7 @@ export const DayProgress: React.FC<Props> = ({ learnedToday, reviewedToday, maxL
                                     className="w-full flex items-center gap-2 text-left p-1.5 rounded-lg hover:bg-neutral-50 group"
                                 >
                                     <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${learnedWords.some(lw => lw.id === word.id) ? 'bg-blue-500' : 'bg-orange-500'}`} />
-                                    <span className="text-xs font-bold text-neutral-700 flex-1 truncate group-hover:text-neutral-900">{word.word}</span>
+                                    <span className="text-xs font-bold text-neutral-700 flex-1 truncate group-hover:text-neutral-900">{word.display || word.word}</span>
                                     <span className={`text-[9px] font-black px-1 py-0.5 rounded ${getScoreBadgeClasses(word.masteryScore)}`}>{word.masteryScore ?? 0}</span>
                                 </button>
                             ))}
