@@ -1,6 +1,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Image } from 'lucide-react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Image, Bot, Sparkles } from 'lucide-react';
 import { StudyItem, ReviewGrade, SessionType, User } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditStudyItemModal from '../study_lib/EditStudyItemModal';
@@ -14,6 +14,7 @@ import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { getServerUrl, getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
 
 const GENERATED_EXAMPLE_BUFFER_SIZE = 5;
+const GENERATED_QUIZ_BUFFER_SIZE = 4;
 
 const normalizeExampleLine = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
 
@@ -170,12 +171,27 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [studyBuddyExampleBuffer, setStudyBuddyExampleBuffer] = useState<string[]>([]);
     const [isStudyBuddyExampleLoading, setIsStudyBuddyExampleLoading] = useState(false);
     const [studyBuddyExampleError, setStudyBuddyExampleError] = useState<string | null>(null);
+    const [activeBotPanel, setActiveBotPanel] = useState<'example' | 'quiz' | null>(null);
+    const [studyBuddyQuizQuestion, setStudyBuddyQuizQuestion] = useState<string | null>(null);
+    const [studyBuddyQuizBuffer, setStudyBuddyQuizBuffer] = useState<string[]>([]);
+    const [isStudyBuddyQuizLoading, setIsStudyBuddyQuizLoading] = useState(false);
+    const [studyBuddyQuizError, setStudyBuddyQuizError] = useState<string | null>(null);
+    const [studyBuddyQuizAnswer, setStudyBuddyQuizAnswer] = useState('');
+    const [studyBuddyQuizFeedback, setStudyBuddyQuizFeedback] = useState<string | null>(null);
+    const [studyBuddyQuizHint, setStudyBuddyQuizHint] = useState<string | null>(null);
+    const [isStudyBuddyQuizChecking, setIsStudyBuddyQuizChecking] = useState(false);
+    const [isStudyBuddyQuizHintLoading, setIsStudyBuddyQuizHintLoading] = useState(false);
     const touchStartX = useRef<number | null>(null);
     const studyBuddyExampleAbortRef = useRef<AbortController | null>(null);
     const studyBuddyExampleRequestRef = useRef<Promise<string[]> | null>(null);
     const studyBuddyExampleRequestWordIdRef = useRef<string | null>(null);
     const studyBuddyExampleSeenRef = useRef<Set<string>>(new Set());
     const studyBuddyExampleRevealRef = useRef(false);
+    const studyBuddyQuizAbortRef = useRef<AbortController | null>(null);
+    const studyBuddyQuizRequestRef = useRef<Promise<string[]> | null>(null);
+    const studyBuddyQuizRequestWordIdRef = useRef<string | null>(null);
+    const studyBuddyQuizSeenRef = useRef<Set<string>>(new Set());
+    const studyBuddyQuizRevealRef = useRef(false);
     const serverUrl = getServerUrl(getConfig());
     const studyBuddyAiUrl = getStudyBuddyAiUrl(getConfig());
     const normalizeComparableText = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
@@ -234,6 +250,10 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     }, [currentWord.example]);
 
     const isIpa = !isNewWord && !!(cachedDisplayIpa || (!isDisplayDifferentFromHeadword && currentWord.ipaUs));
+    const collocationTargets = useMemo(
+        () => (currentWord.collocationsArray || []).filter((item) => !item.isIgnored && String(item.text || '').trim()),
+        [currentWord.collocationsArray]
+    );
 
     const extractFreshExamples = useCallback((rawText: string): string[] => {
         const seen = studyBuddyExampleSeenRef.current;
@@ -247,6 +267,17 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         });
         return result;
     }, [existingExampleSet]);
+
+    const extractFreshQuizQuestions = useCallback((rawText: string): string[] => {
+        const seen = studyBuddyQuizSeenRef.current;
+        return splitExampleLines(rawText).filter((line) => {
+            const normalized = normalizeExampleLine(line);
+            if (!normalized) return false;
+            if (seen.has(normalized)) return false;
+            seen.add(normalized);
+            return true;
+        });
+    }, []);
 
     const mergeBufferedExamples = useCallback((incomingExamples: string[], options?: { replace?: boolean }) => {
         console.log('[StudyBuddy][Buffer] MERGE INCOMING', {
@@ -268,6 +299,22 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                 previous: prev,
                 merged,
                 unique
+            });
+            return unique;
+        });
+    }, []);
+
+    const mergeBufferedQuizQuestions = useCallback((incomingQuestions: string[], options?: { replace?: boolean }) => {
+        if (incomingQuestions.length === 0) return;
+        setStudyBuddyQuizBuffer((prev) => {
+            const merged = options?.replace ? incomingQuestions : [...prev, ...incomingQuestions];
+            const unique: string[] = [];
+            const localSeen = new Set<string>();
+            merged.forEach((item) => {
+                const normalized = normalizeExampleLine(item);
+                if (!normalized || localSeen.has(normalized)) return;
+                localSeen.add(normalized);
+                unique.push(item);
             });
             return unique;
         });
@@ -400,6 +447,99 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         return finalExamples;
     }, [extractFreshExamples, mergeBufferedExamples, studyBuddyAiUrl, user]);
 
+    const requestStudyBuddyQuizQuestions = useCallback(async (word: StudyItem, signal?: AbortSignal, replaceBuffer = false): Promise<string[]> => {
+        const bannedQuestions = Array.from(studyBuddyQuizSeenRef.current);
+        const audienceInstruction = getAudienceInstruction(user);
+        const levelInstruction = user.currentLevel ? `Learner level: ${user.currentLevel}.` : '';
+        const targetInstruction = user.target ? `Learner goal: ${user.target}.` : '';
+        const collocationList = (word.collocationsArray || [])
+            .filter((item) => !item.isIgnored && String(item.text || '').trim())
+            .map((item) => item.text.trim());
+        const response = await fetch(studyBuddyAiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an expert IELTS coach. Write only concise quiz questions in English. No bullets, no numbering, no markdown, no answers, no explanations.'
+                    },
+                    {
+                        role: 'user',
+                        content: `Write exactly ${GENERATED_QUIZ_BUFFER_SIZE} distinct collocation quiz questions for the target word "${word.word}".
+
+Rules:
+- ${audienceInstruction}
+- ${levelInstruction}
+- ${targetInstruction}
+- Each line must be one scenario-based question.
+- Test whether the learner can produce a natural collocation with the target word.
+- NEVER reveal the target word or the answer collocation in the question.
+- Keep each question concise and realistic.
+- The expected answer should fit IELTS, academic, or natural adult usage.
+- Prefer these collocations if they are natural: ${collocationList.length > 0 ? collocationList.join(' | ') : 'infer a common natural collocation for this word'}.
+${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz questions:\n${bannedQuestions.map((item) => `  • ${item}`).join('\n')}` : ''}`
+                    }
+                ],
+                searchEnabled: false,
+                temperature: 0.75,
+                top_p: 0.9,
+                repetition_penalty: 1.08,
+                stream: false
+            }),
+            signal
+        });
+
+        if (!response.ok) {
+            throw new Error(`StudyBuddy quiz request failed (${response.status})`);
+        }
+
+        const payload = await response.json().catch(() => null);
+        const rawText = String(payload?.choices?.[0]?.message?.content || '').trim();
+        const freshQuestions = extractFreshQuizQuestions(rawText);
+        if (freshQuestions.length > 0) {
+            mergeBufferedQuizQuestions(freshQuestions, { replace: replaceBuffer });
+        }
+        return freshQuestions;
+    }, [extractFreshQuizQuestions, mergeBufferedQuizQuestions, studyBuddyAiUrl, user]);
+
+    const requestStudyBuddyQuizMicroReply = useCallback(async (prompt: string): Promise<string> => {
+        const response = await fetch(studyBuddyAiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an expert IELTS collocation coach. Reply with exactly one very short sentence or phrase in English. No bullets, no markdown, no preface.'
+                    },
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                searchEnabled: false,
+                temperature: 0.35,
+                top_p: 0.85,
+                repetition_penalty: 1.05,
+                stream: false
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`StudyBuddy micro reply failed (${response.status})`);
+        }
+
+        const payload = await response.json().catch(() => null);
+        return String(payload?.choices?.[0]?.message?.content || '')
+            .replace(/\r?\n+/g, ' ')
+            .trim();
+    }, [studyBuddyAiUrl]);
+
     const prefetchStudyBuddyExamples = useCallback((word: StudyItem, options?: { replace?: boolean }) => {
         console.log('[StudyBuddy][Prefetch] CALLED', {
             wordId: word.id,
@@ -477,7 +617,69 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         return requestPromise;
     }, [requestStudyBuddyExamples]);
 
+    const prefetchStudyBuddyQuizQuestions = useCallback((word: StudyItem, options?: { replace?: boolean }) => {
+        if (studyBuddyQuizRequestRef.current && studyBuddyQuizRequestWordIdRef.current === word.id) {
+            return studyBuddyQuizRequestRef.current;
+        }
+
+        const controller = new AbortController();
+        studyBuddyQuizAbortRef.current?.abort();
+        studyBuddyQuizAbortRef.current = controller;
+        studyBuddyQuizRequestWordIdRef.current = word.id;
+        if (studyBuddyQuizRevealRef.current) {
+            setIsStudyBuddyQuizLoading(true);
+        }
+        setStudyBuddyQuizError(null);
+        if (options?.replace) {
+            setStudyBuddyQuizBuffer([]);
+        }
+
+        const requestPromise = requestStudyBuddyQuizQuestions(word, controller.signal, !!options?.replace)
+            .then((incomingQuestions) => {
+                if (controller.signal.aborted) return [];
+                if (incomingQuestions.length === 0) {
+                    setStudyBuddyQuizError('No quiz prompt right now.');
+                }
+
+                if (studyBuddyQuizRevealRef.current) {
+                    const first = incomingQuestions?.[0];
+                    if (first) {
+                        setStudyBuddyQuizQuestion(first);
+                        setStudyBuddyQuizError(null);
+                        setIsStudyBuddyQuizLoading(false);
+                        setStudyBuddyQuizBuffer((prev) =>
+                            prev.filter((item) => normalizeExampleLine(item) !== normalizeExampleLine(first))
+                        );
+                    }
+                }
+
+                return incomingQuestions;
+            })
+            .catch((error) => {
+                if (controller.signal.aborted) return [];
+                console.error(error);
+                setStudyBuddyQuizError('Failed to load quiz.');
+                return [];
+            })
+            .finally(() => {
+                if (studyBuddyQuizAbortRef.current === controller) {
+                    studyBuddyQuizAbortRef.current = null;
+                }
+                if (studyBuddyQuizRequestRef.current === requestPromise) {
+                    studyBuddyQuizRequestRef.current = null;
+                    studyBuddyQuizRequestWordIdRef.current = null;
+                }
+                if (studyBuddyQuizRevealRef.current) {
+                    setIsStudyBuddyQuizLoading(false);
+                }
+            });
+
+        studyBuddyQuizRequestRef.current = requestPromise;
+        return requestPromise;
+    }, [requestStudyBuddyQuizQuestions]);
+
     const showNextStudyBuddyExample = useCallback(async () => {
+        setActiveBotPanel('example');
         setIsStudyBuddyExampleVisible(true);
         studyBuddyExampleRevealRef.current = false;
 
@@ -539,6 +741,98 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         }
     }, [currentWord, prefetchStudyBuddyExamples, studyBuddyExampleBuffer]);
 
+    const showNextStudyBuddyQuiz = useCallback(async () => {
+        setActiveBotPanel('quiz');
+        const bufferSnapshot = studyBuddyQuizBuffer;
+        setStudyBuddyQuizFeedback(null);
+        setStudyBuddyQuizHint(null);
+        setStudyBuddyQuizAnswer('');
+
+        if (bufferSnapshot.length > 0) {
+            const [first, ...rest] = bufferSnapshot;
+            setStudyBuddyQuizBuffer(rest);
+            if (rest.length < 2) {
+                void prefetchStudyBuddyQuizQuestions(currentWord);
+            }
+            setStudyBuddyQuizQuestion(first);
+            setStudyBuddyQuizError(null);
+            return;
+        }
+
+        if (studyBuddyQuizRequestRef.current && studyBuddyQuizRequestWordIdRef.current === currentWord.id) {
+            studyBuddyQuizRevealRef.current = true;
+            return;
+        }
+
+        setStudyBuddyQuizError(null);
+        studyBuddyQuizRevealRef.current = true;
+        try {
+            const shouldReplace = studyBuddyQuizRequestWordIdRef.current !== currentWord.id;
+            await prefetchStudyBuddyQuizQuestions(currentWord, { replace: shouldReplace });
+        } finally {
+            studyBuddyQuizRevealRef.current = false;
+        }
+    }, [currentWord, prefetchStudyBuddyQuizQuestions, studyBuddyQuizBuffer]);
+
+    const handleStudyBuddyQuizCheck = useCallback(async () => {
+        const answer = studyBuddyQuizAnswer.trim();
+        const question = studyBuddyQuizQuestion?.trim() || '';
+        if (!answer || !question) return;
+
+        setIsStudyBuddyQuizChecking(true);
+        setStudyBuddyQuizHint(null);
+        try {
+            const collocationList = collocationTargets.map((item) => item.text.trim()).filter(Boolean);
+            const reply = await requestStudyBuddyQuizMicroReply(
+                `Evaluate this learner answer for a collocation quiz.
+
+Target word: "${currentWord.word}"
+Known collocations: ${collocationList.length > 0 ? collocationList.join(' | ') : 'infer natural collocations if needed'}
+Quiz question: "${question}"
+Learner answer: "${answer}"
+
+Judge only:
+- is the collocation natural?
+- is it correct English?
+- is it appropriate in casual/academic style for this context?
+
+Reply with exactly one very short sentence or phrase.`
+            );
+            setStudyBuddyQuizFeedback(reply || 'Try again.');
+        } catch (error) {
+            console.error(error);
+            setStudyBuddyQuizFeedback('Could not check now.');
+        } finally {
+            setIsStudyBuddyQuizChecking(false);
+        }
+    }, [collocationTargets, currentWord.word, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizQuestion]);
+
+    const handleStudyBuddyQuizHint = useCallback(async () => {
+        const question = studyBuddyQuizQuestion?.trim() || '';
+        if (!question) return;
+
+        setIsStudyBuddyQuizHintLoading(true);
+        try {
+            const collocationList = collocationTargets.map((item) => item.text.trim()).filter(Boolean);
+            const reply = await requestStudyBuddyQuizMicroReply(
+                `Give a minimal collocation hint for this learner.
+
+Target word: "${currentWord.word}"
+Known collocations: ${collocationList.length > 0 ? collocationList.join(' | ') : 'infer one common natural collocation'}
+Quiz question: "${question}"
+Current learner answer: "${studyBuddyQuizAnswer.trim() || '(empty)'}"
+
+Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
+            );
+            setStudyBuddyQuizHint(reply || 'No hint right now.');
+        } catch (error) {
+            console.error(error);
+            setStudyBuddyQuizHint('No hint right now.');
+        } finally {
+            setIsStudyBuddyQuizHintLoading(false);
+        }
+    }, [collocationTargets, currentWord.word, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizQuestion]);
+
     useEffect(() => {
         studyBuddyExampleAbortRef.current?.abort();
         studyBuddyExampleRequestRef.current = null;
@@ -554,11 +848,25 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         // Prefetch silently (no loading UI)
         studyBuddyExampleRevealRef.current = false;
         void prefetchStudyBuddyExamples(currentWord, { replace: true });
+        studyBuddyQuizAbortRef.current?.abort();
+        studyBuddyQuizRequestRef.current = null;
+        studyBuddyQuizRequestWordIdRef.current = null;
+        studyBuddyQuizSeenRef.current = new Set();
+        setActiveBotPanel(null);
+        setStudyBuddyQuizQuestion(null);
+        setStudyBuddyQuizBuffer([]);
+        setStudyBuddyQuizError(null);
+        setStudyBuddyQuizAnswer('');
+        setStudyBuddyQuizFeedback(null);
+        setStudyBuddyQuizHint(null);
+        studyBuddyQuizRevealRef.current = false;
+        void prefetchStudyBuddyQuizQuestions(currentWord, { replace: true });
 
         return () => {
             studyBuddyExampleAbortRef.current?.abort();
+            studyBuddyQuizAbortRef.current?.abort();
         };
-    }, [currentWord.id, prefetchStudyBuddyExamples]);
+    }, [currentWord.id, prefetchStudyBuddyExamples, prefetchStudyBuddyQuizQuestions]);
 
     const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
         touchStartX.current = e.touches[0].clientX;
@@ -603,7 +911,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
           const passCount = Object.values(sessionOutcomes).filter(v => v === 'PASS' || v === ReviewGrade.EASY || v === ReviewGrade.LEARNED).length;
           return (
             <div className="max-w-2xl mx-auto py-10 text-center animate-in zoom-in-95 duration-500">
-              <div className="mb-6"><div className={`mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-4 ${isQuickFire ? 'bg-amber-100 text-amber-600' : 'bg-neutral-100 text-neutral-900'}`}>{isQuickFire ? <Zap size={40} fill="currentColor" /> : <BookCopy size={40} />}</div><h2 className="text-3xl font-black text-neutral-900">{isQuickFire ? 'Test Result' : 'Session Recap'}</h2>{isQuickFire && <p className="text-xs font-black text-neutral-400 uppercase tracking-[0.2em] mt-2">Score: {passCount} / {sessionWords.length}</p>}<p className="text-neutral-500 mt-2 font-medium">You've completed this focused session.</p></div>
+              <div className="mb-6"><div className={`mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-4 ${isQuickFire ? 'bg-amber-100 text-amber-600' : 'bg-neutral-100 text-neutral-900'}`}>{isQuickFire ? <Zap size={40} fill="currentColor" /> : <BookCopy size={40} />}</div><h2 className="text-3xl font-black text-neutral-900">{isQuickFire ? 'Test Result' : 'Session Recap'}</h2>{isQuickFire && <p className="text-xs font-black text-neutral-400 uppercase tracking-[0.2em] mt-2">Score: {passCount} / {sessionWords.length}</p>}<p className="text-neutral-500 mt-2 font-medium">You&apos;ve completed this focused session.</p></div>
               <div className="bg-white p-4 rounded-[2rem] border border-neutral-200 shadow-sm mb-8 overflow-hidden"><div className="max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-2">{sessionWords.map(word => (<div key={word.id} className="flex justify-between items-center bg-neutral-50/70 p-2.5 rounded-xl border border-neutral-100"><span className="font-bold text-neutral-800 text-xs truncate pr-2">{(word.display || '').trim() || word.word}</span>{renderStatusBadge(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)}</div>))}</div></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><button onClick={onComplete} className="px-6 py-4 bg-white border border-neutral-200 text-neutral-500 rounded-2xl font-bold text-xs hover:bg-neutral-50 hover:border-neutral-900 transition-all active:scale-95 uppercase tracking-widest">Finish Session</button><button onClick={handleRetry} className="px-6 py-4 bg-neutral-900 text-white rounded-2xl font-black text-xs flex items-center justify-center space-x-2 shadow-lg hover:bg-neutral-800 transition-all active:scale-95 uppercase tracking-widest"><RotateCw size={14} /><span>Retry This Session</span></button></div>
             </div>
@@ -853,15 +1161,6 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
                                             </span>
                                         </div>
                                     )}
-                                    <div className="relative group/example">
-                                        <button
-                                            onClick={() => void showNextStudyBuddyExample()}
-                                            className="p-3 rounded-full transition-colors text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-fuchsia-600"
-                                            title="Example"
-                                        >
-                                            <BookCopy size={20} />
-                                        </button>
-                                    </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
@@ -878,7 +1177,39 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
                                         <BrainCircuit size={14}/><span>Practice</span>
                                     </button>
                                 </div>
-                                {(isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
+                                <div className="w-full max-w-lg rounded-[1.5rem] border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">
+                                            <Bot size={12} />
+                                            <span>Bot</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => void showNextStudyBuddyExample()}
+                                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
+                                                    activeBotPanel === 'example'
+                                                        ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                                        : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100'
+                                                }`}
+                                            >
+                                                <BookCopy size={11} />
+                                                <span>Example</span>
+                                            </button>
+                                            <button
+                                                onClick={() => void showNextStudyBuddyQuiz()}
+                                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
+                                                    activeBotPanel === 'quiz'
+                                                        ? 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700'
+                                                        : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100'
+                                                }`}
+                                            >
+                                                <Sparkles size={11} />
+                                                <span>Quiz</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {activeBotPanel === 'example' && (isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
                                     <div className="w-full max-w-lg relative z-0">
                                         <div
                                             className="w-full rounded-[1.75rem] border border-blue-200 bg-blue-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-blue-50 relative z-10"
@@ -949,6 +1280,100 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
                                             ) : (
                                                 <p className="text-sm font-semibold leading-relaxed text-neutral-500">
                                                     Tap to show an example sentence.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                {activeBotPanel === 'quiz' && (
+                                    <div className="w-full max-w-lg relative z-0">
+                                        <div className="w-full rounded-[1.75rem] border border-fuchsia-200 bg-fuchsia-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-fuchsia-50 relative z-10">
+                                            <div className="mb-3 flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-fuchsia-700">
+                                                    <Sparkles size={12} />
+                                                    <span>Quiz</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => void showNextStudyBuddyQuiz()}
+                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-all ${
+                                                        isStudyBuddyQuizLoading
+                                                            ? 'bg-fuchsia-200 text-fuchsia-800 cursor-not-allowed'
+                                                            : 'bg-white text-fuchsia-700 border border-fuchsia-200 hover:bg-fuchsia-100 hover:border-fuchsia-300 active:scale-95'
+                                                    }`}
+                                                    disabled={isStudyBuddyQuizLoading}
+                                                >
+                                                    {isStudyBuddyQuizLoading ? null : <ArrowRight size={11} />}
+                                                    <span>{isStudyBuddyQuizLoading ? 'Loading' : 'Next'}</span>
+                                                </button>
+                                            </div>
+                                            {studyBuddyQuizQuestion ? (
+                                                <div className="space-y-3">
+                                                    <p className="text-sm font-semibold leading-relaxed text-neutral-800">
+                                                        {studyBuddyQuizQuestion}
+                                                    </p>
+                                                    <div className="space-y-2">
+                                                        <input
+                                                            value={studyBuddyQuizAnswer}
+                                                            onChange={(e) => {
+                                                                setStudyBuddyQuizAnswer(e.target.value);
+                                                                setStudyBuddyQuizFeedback(null);
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.preventDefault();
+                                                                    void handleStudyBuddyQuizCheck();
+                                                                }
+                                                            }}
+                                                            placeholder="Type your answer..."
+                                                            className="w-full rounded-2xl border border-fuchsia-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition-colors focus:border-fuchsia-500"
+                                                        />
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <button
+                                                                onClick={() => void handleStudyBuddyQuizCheck()}
+                                                                disabled={!studyBuddyQuizAnswer.trim() || isStudyBuddyQuizChecking}
+                                                                className="inline-flex items-center gap-1.5 rounded-full border border-fuchsia-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-fuchsia-700 transition-all hover:bg-fuchsia-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                                            >
+                                                                {isStudyBuddyQuizChecking ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                                                                <span>Check</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => void handleStudyBuddyQuizHint()}
+                                                                disabled={isStudyBuddyQuizHintLoading}
+                                                                className="inline-flex items-center gap-1.5 rounded-full border border-fuchsia-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-fuchsia-700 transition-all hover:bg-fuchsia-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                                            >
+                                                                {isStudyBuddyQuizHintLoading ? <Loader2 size={11} className="animate-spin" /> : <HelpCircle size={11} />}
+                                                                <span>Hint</span>
+                                                            </button>
+                                                        </div>
+                                                        {(studyBuddyQuizFeedback || studyBuddyQuizHint) && (
+                                                            <div className="space-y-1">
+                                                                {studyBuddyQuizFeedback && (
+                                                                    <p className="text-xs font-bold text-fuchsia-800">
+                                                                        {studyBuddyQuizFeedback}
+                                                                    </p>
+                                                                )}
+                                                                {studyBuddyQuizHint && (
+                                                                    <p className="text-xs font-bold text-neutral-600">
+                                                                        Hint: {studyBuddyQuizHint}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : isStudyBuddyQuizLoading ? (
+                                                <div className="space-y-2">
+                                                    <div className="h-3 w-full rounded-full bg-fuchsia-100 animate-pulse" />
+                                                    <div className="h-3 w-5/6 rounded-full bg-fuchsia-100 animate-pulse" />
+                                                    <div className="h-3 w-2/3 rounded-full bg-fuchsia-100 animate-pulse" />
+                                                </div>
+                                            ) : studyBuddyQuizError ? (
+                                                <p className="text-sm font-semibold leading-relaxed text-rose-600">
+                                                    {studyBuddyQuizError}
+                                                </p>
+                                            ) : (
+                                                <p className="text-sm font-semibold leading-relaxed text-neutral-500">
+                                                    Tap Quiz to get a collocation question.
                                                 </p>
                                             )}
                                         </div>
