@@ -1,7 +1,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Image, Bot, Sparkles } from 'lucide-react';
-import { StudyItem, ReviewGrade, SessionType, User } from '../../app/types';
+import { StudyItem, ReviewGrade, SessionType, User, StudyItemQuality, LearnedStatus } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditStudyItemModal from '../study_lib/EditStudyItemModal';
 import ViewStudyItemModal from '../study_lib/ViewStudyItemModal';
@@ -284,7 +284,7 @@ export interface ReviewSessionUIProps {
   setEditingWordInModal: (word: StudyItem | null) => void;
   isTesting: boolean;
   setIsTesting: (isTesting: boolean) => void;
-  currentWord: StudyItem;
+  currentWord?: StudyItem;
   isNewWord: boolean;
   onUpdate: (word: StudyItem) => void;
   onComplete: () => void;
@@ -298,6 +298,24 @@ export interface ReviewSessionUIProps {
   isQuickReviewMode?: boolean;
   autoCloseOnFinish?: boolean;
 }
+
+const EMPTY_STUDY_ITEM: StudyItem = {
+    id: '',
+    userId: '',
+    word: '',
+    quality: StudyItemQuality.RAW,
+    meaningVi: '',
+    example: '',
+    note: '',
+    createdAt: 0,
+    updatedAt: 0,
+    nextReview: 0,
+    interval: 0,
+    easeFactor: 2.5,
+    consecutiveCorrect: 0,
+    learnedStatus: LearnedStatus.NEW,
+    forgotCount: 0
+};
 
 const renderStatusBadge = (outcome: string | undefined, wasNew: boolean, isQuickFire: boolean) => {
     if (isQuickFire) {
@@ -389,10 +407,11 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const {
         user, initialWords, sessionWords, sessionType, newWordIds, progress, setProgress,
         sessionOutcomes, sessionFinished, wordInModal, setWordInModal, onOpenWordDetails, editingWordInModal, setEditingWordInModal,
-        isTesting, setIsTesting, currentWord, isNewWord, onUpdate, onComplete,
+        isTesting, setIsTesting, currentWord: currentWordProp, isNewWord, onUpdate, onComplete,
         nextItem, handleReview, handleTestComplete, handleRetry, handleEndSession,
         handleQuickReview, handleManualPractice, isQuickReviewMode, autoCloseOnFinish = false
     } = props;
+    const currentWord = currentWordProp ?? EMPTY_STUDY_ITEM;
 
     const { current: currentIndex, max: maxIndexVisited } = progress;
     const isQuickFire = sessionType === 'random_test';
@@ -745,23 +764,22 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
                             content: `Write exactly ${remainingTarget} distinct collocation quiz items for this learner and the current review word "${word.word}".
 
 Rules:
+- This test is for practicing collocations with the word "${word.word}". A collocation is a popular and natural combination of words that native speakers commonly use together (e.g., "make a decision", "conduct research", "raise awareness"). Bad collocation is "keep fit regularly" because we don't say "keep fit" with an adverb in between. Good collocation is "keep fit" or "do exercise regularly".
 - ${audienceInstruction}
 - ${profileInstruction}
 - Each line must use this exact format: question ||| answer
-- "question" = one full natural example sentence that already contains the answer collocation in the sentence. Do not use blanks.
+- "question" = one natural example sentence that already contains the answer collocation in the sentence. Do not use blanks.
 - answer = the exact collocation phrase taken from that sentence.
 - The answer must include a form of "${word.word}" (e.g., singular/plural, past/future, or other grammatically correct variations).
 - Use the existing known collocations for "${word.word}" first. Only invent new ones after you have already used all suitable known collocations.
-- If there are ${GENERATED_QUIZ_BUFFER_SIZE} or more suitable known collocations, do not invent any new collocations.
-- For any invented collocation, besides the headword itself, add no more than 2 extra words.
-- The headword has ${headwordWordCount} word(s), so the full answer can have at most ${headwordWordCount + 2} words.
+- For any invented collocation, the full answer can have at most ${headwordWordCount + 2} words.
 - Do not include extra modifiers, determiners, pronouns, or long descriptive noun phrases in the answer.
 - Bad answer examples: "perform these advanced statistical analyses", "make a very careful decision today".
 - Good answer examples: "conduct research", "raise awareness", "make a decision", "meet deadlines".
 - Prefer everyday, school, or work situations that fit the learner profile.
 - The answer phrase must appear exactly and contiguously inside the sentence.
 - Make all 4 questions target different collocation patterns. Avoid overlap in answers, even with different wording.
-- Can reuse these known collocations or use more natural popular collocation for "${word.word}": ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}.
+- Known collocations for "${word.word}": ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}.
 ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz questions:\n${bannedQuestions.map((item) => `  • ${item}`).join('\n')}` : ''}
 ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer collocations:\n${bannedAnswers.map((item) => `  • ${item}`).join('\n')}` : ''}`
                         }
@@ -1402,6 +1420,10 @@ Reply with exactly one very short sentence or phrase in English.`
     if (initialWords.length === 0) {
         return <div className="flex flex-col items-center justify-center space-y-6 py-20 text-center animate-in fade-in duration-500"><div className="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center shadow-inner"><Check size={32} /></div><h2 className="text-xl font-bold text-neutral-900">All clear!</h2><button onClick={onComplete} className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl font-semibold text-sm hover:bg-neutral-800 transition-colors">Back to Dashboard</button></div>;
     }
+
+    if (!currentWordProp) {
+        return <div className="flex flex-col items-center justify-center space-y-3 py-20 text-center animate-in fade-in duration-300"><div className="h-10 w-10 rounded-full border-4 border-neutral-200 border-t-neutral-900 animate-spin" /><p className="text-sm font-semibold text-neutral-500">Preparing your review session...</p></div>;
+    }
     
     if (sessionFinished && autoCloseOnFinish) {
         console.log('[InlineReview][ReviewSessionUI] return null because sessionFinished && autoCloseOnFinish');
@@ -1409,12 +1431,6 @@ Reply with exactly one very short sentence or phrase in English.`
     }
 
     if (sessionFinished) {
-        console.log('[InlineReview][ReviewSessionUI] rendering recap screen', {
-            sessionType,
-            autoCloseOnFinish,
-            isQuickFire,
-            outcomes: sessionOutcomes
-        });
         if (sessionType === 'new' || sessionType === 'due' || sessionType === 'new_study' || sessionType === 'custom' || isQuickFire) {
           const passCount = Object.values(sessionOutcomes).filter(v => v === 'PASS' || v === ReviewGrade.EASY || v === ReviewGrade.LEARNED).length;
           return (

@@ -185,22 +185,17 @@ export const useAppController = () => {
 
             try {
                 const firebaseData = await getCurrentHost();
-                console.log('[AutoConnect] Firebase data:', firebaseData);
 
                 // STRICT priority: try LOCAL first
                 if (firebaseData?.local) {
-                    console.log('[AutoConnect] Firebase LOCAL raw:', firebaseData.local);
-
                     const urlObj = new URL(firebaseData.local);
                     const detectedPort = urlObj.port || '443';
 
-                    // 🔥 First try https://localhost:<port>
+                    // First try https://localhost:<port>
                     const localhostUrl = `https://localhost:${detectedPort}`;
-                    console.log('[AutoConnect] Trying LOCALHOST first:', localhostUrl);
                     setScanningUrl(localhostUrl);
 
                     let result = await probeServerUrl(localhostUrl, signal);
-                    console.log('[AutoConnect] LOCALHOST result:', result);
 
                     if (result === true) {
                         setServerUrl(localhostUrl);

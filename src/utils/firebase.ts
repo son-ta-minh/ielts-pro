@@ -12,10 +12,8 @@ export const db = getFirestore(app);
 
 export async function getCurrentHost() {
   try {
-    console.log("Attempting to get current host from Firebase...");
     const docRef = doc(db, "vocabpro", "server");
 
-    console.log("Fetching document from Firestore...");
     const snap = await getDoc(docRef);
 
     console.log("Received response from Firestore:", snap.exists() ? snap.data() : "No document");

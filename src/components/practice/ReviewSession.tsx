@@ -27,52 +27,50 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   const LEARN_QUEUE_KEY = `vocab_pro_learn_queue_${user.id}`;
   const LEARN_QUEUE_DATE_KEY = `vocab_pro_learn_queue_date_${user.id}`;
   const todayStr = new Date().toISOString().slice(0, 10);
-  const [learnQueue, setLearnQueue] = useState<StudyItem[]>([]);
+  const deriveLearnQueue = (words: StudyItem[]): StudyItem[] => {
+    let queueIds: string[] = [];
+    let storedDate = '';
 
-  useEffect(() => {
-    console.log('[InlineReview][ReviewSession] mount', {
-      sessionType,
-      autoCloseOnFinish,
-      words: initialWords.map((word) => ({ id: word.id, word: word.word }))
-    });
-    return () => {
-      console.log('[InlineReview][ReviewSession] unmount');
-    };
-  }, []);
+    try {
+      queueIds = JSON.parse(sessionStorage.getItem(LEARN_QUEUE_KEY) || '[]');
+      storedDate = sessionStorage.getItem(LEARN_QUEUE_DATE_KEY) || '';
+    } catch {}
+
+    let queue: StudyItem[] = [];
+    if (storedDate === todayStr && queueIds.length > 0) {
+      // Only remove words that are no longer 'New', keep order
+      queue = queueIds
+        .map(id => words.find(w => w.id === id))
+        .filter(w => w && !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED)) as StudyItem[];
+    } else {
+      // Only create a new queue if none exists for today
+      const newWords = words.filter(w => !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED));
+      queue = newWords.slice(0, 20);
+    }
+
+    // If queue is less than 20, append new 'New' words not already in queue
+    const alreadyInQueue = new Set(queue.map(w => w.id));
+    const newWords = words.filter(w => !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED));
+    for (const w of newWords) {
+      if (queue.length >= 20) break;
+      if (!alreadyInQueue.has(w.id)) queue.push(w);
+    }
+
+    sessionStorage.setItem(LEARN_QUEUE_KEY, JSON.stringify(queue.map(w => w.id)));
+    sessionStorage.setItem(LEARN_QUEUE_DATE_KEY, todayStr);
+    return queue;
+  };
+
+  const [learnQueue, setLearnQueue] = useState<StudyItem[]>(() => {
+    if (sessionType === 'new' || sessionType === 'new_study') {
+      return deriveLearnQueue(initialWords);
+    }
+    return initialWords;
+  });
 
   useEffect(() => {
     if (sessionType === 'new' || sessionType === 'new_study') {
-      let queueIds: string[] = [];
-      let storedDate = '';
-      try {
-        queueIds = JSON.parse(sessionStorage.getItem(LEARN_QUEUE_KEY) || '[]');
-        storedDate = sessionStorage.getItem(LEARN_QUEUE_DATE_KEY) || '';
-      } catch {}
-
-      let queue: StudyItem[] = [];
-      if (storedDate === todayStr && queueIds.length > 0) {
-        // Only remove words that are no longer 'New', keep order
-        queue = queueIds
-          .map(id => initialWords.find(w => w.id === id))
-          .filter(w => w && !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED)) as StudyItem[];
-      } else {
-        // Only create a new queue if none exists for today
-        const newWords = initialWords.filter(w => !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED));
-        queue = newWords.slice(0, 20);
-      }
-
-      // If queue is less than 20, append new 'New' words not already in queue
-      const alreadyInQueue = new Set(queue.map(w => w.id));
-      const newWords = initialWords.filter(w => !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED));
-      for (const w of newWords) {
-        if (queue.length >= 20) break;
-        if (!alreadyInQueue.has(w.id)) queue.push(w);
-      }
-
-      // Save updated queue to sessionStorage
-      sessionStorage.setItem(LEARN_QUEUE_KEY, JSON.stringify(queue.map(w => w.id)));
-      sessionStorage.setItem(LEARN_QUEUE_DATE_KEY, todayStr);
-      setLearnQueue(queue);
+      setLearnQueue(deriveLearnQueue(initialWords));
     } else {
       setLearnQueue(initialWords);
     }
@@ -110,14 +108,15 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   const isNewWord = useMemo(() => !currentWord?.lastReview, [currentWord]);
 
   useEffect(() => {
-    console.log('[InlineReview][ReviewSession] state', {
-      currentIndex,
-      sessionFinished,
-      isTesting,
-      isQuickReviewMode,
-      currentWord: currentWord?.word
-    });
-  }, [currentIndex, sessionFinished, isTesting, isQuickReviewMode, currentWord?.word]);
+    if (sessionFinished || sessionWords.length === 0) return;
+    if (currentIndex < sessionWords.length) return;
+
+    const lastIndex = Math.max(0, sessionWords.length - 1);
+    setProgress(prev => ({
+      current: lastIndex,
+      max: Math.min(prev.max, lastIndex)
+    }));
+  }, [currentIndex, sessionFinished, sessionWords.length]);
 
   // --- Refs for cleanup effects ---
   const sessionUpdatesRef = useRef(sessionUpdates);
