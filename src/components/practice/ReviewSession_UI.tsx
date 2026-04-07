@@ -25,7 +25,7 @@ const splitExampleLines = (value: string): string[] =>
         .filter(Boolean);
 
 const ALWAYS_VISIBLE_HINT_WORDS = new Set([
-    'I', 'a', 'an', 'the',
+    'i', 'a', 'an', 'the',
     'my', 'mine', 'your', 'yours', 'his', 'her', 'hers', 'its', 'our', 'ours', 'their', 'theirs',
     'this', 'that', 'these', 'those',
     'to', 'of', 'for', 'in', 'on', 'at', 'by', 'with', 'from', 'as', 'about', 'into', 'over', 'after',
