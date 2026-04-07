@@ -1300,15 +1300,14 @@ Reply with exactly one very short sentence or phrase in English.`
         }
 
         if (panel === 'collocation') {
-            const text = visibleCollocations.slice(0, 5).map((item) => item.text).filter(Boolean).join('. ');
+            const text = visibleCollocations.map(item => `- ${item.text}`).filter(Boolean).join('. ');
             if (text) speak(text);
             return;
         }
 
         if (panel === 'paraphrase') {
             const text = visibleParaphrases
-                .slice(0, 5)
-                .map((item) => item.word)
+                .map((item) => `- ${item.word}`)
                 .filter(Boolean)
                 .join('. ');
             if (text) speak(text);
@@ -1316,12 +1315,12 @@ Reply with exactly one very short sentence or phrase in English.`
         }
 
         if (panel === 'preposition') {
-            const text = visiblePrepositions.slice(0, 5).map((item) => item.usage || item.prep).filter(Boolean).join('. ');
+            const text = visiblePrepositions.map((item) => `- ${item.usage}`).filter(Boolean).join('. ');
             if (text) speak(text);
             return;
         }
 
-        const text = visibleIdioms.slice(0, 5).map((item) => item.text).filter(Boolean).join('. ');
+        const text = visibleIdioms.map((item) => `- ${item.text}`).filter(Boolean).join('. ');
         if (text) speak(text);
     }, [vietnameseMeaning, visibleCollocations, visibleIdioms, visibleParaphrases, visiblePrepositions]);
 
@@ -1706,7 +1705,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                             <span>Collocations</span>
                                         </div>
                                         <div className="space-y-1 text-sm font-semibold leading-relaxed text-neutral-800">
-                                            {visibleCollocations.slice(0, 5).map((item, idx) => <p key={`${item.text}-${idx}`}>{item.text}</p>)}
+                                            {visibleCollocations.map((item, idx) => <p key={`${item.text}-${idx}`}>{item.text}</p>)}
                                         </div>
                                     </div>
                                 )}
@@ -1717,7 +1716,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                             <span>Paraphrases</span>
                                         </div>
                                         <div className="space-y-1 text-sm font-semibold leading-relaxed text-neutral-800">
-                                            {visibleParaphrases.slice(0, 5).map((item, idx) => <p key={`${item.word}-${idx}`}>{item.word}</p>)}
+                                            {visibleParaphrases.map((item, idx) => <p key={`${item.word}-${idx}`}>{item.word}</p>)}
                                         </div>
                                     </div>
                                 )}
@@ -1728,7 +1727,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                             <span>Prepositions</span>
                                         </div>
                                         <div className="space-y-1 text-sm font-semibold leading-relaxed text-neutral-800">
-                                            {visiblePrepositions.slice(0, 5).map((item, idx) => <p key={`${item.prep}-${idx}`}>{item.usage || item.prep}</p>)}
+                                            {visiblePrepositions.map((item, idx) => <p key={`${item.prep}-${idx}`}>{item.usage || item.prep}</p>)}
                                         </div>
                                     </div>
                                 )}
@@ -1739,7 +1738,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                             <span>Idioms</span>
                                         </div>
                                         <div className="space-y-1 text-sm font-semibold leading-relaxed text-neutral-800">
-                                            {visibleIdioms.slice(0, 5).map((item, idx) => <p key={`${item.text}-${idx}`}>{item.text}</p>)}
+                                            {visibleIdioms.map((item, idx) => <p key={`${item.text}-${idx}`}>{item.text}</p>)}
                                         </div>
                                     </div>
                                 )}
