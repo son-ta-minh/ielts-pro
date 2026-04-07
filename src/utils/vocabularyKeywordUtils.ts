@@ -76,9 +76,6 @@ export function findWordByStudyBuddyLookup(words: StudyItem[], userId: string, t
     const directMatch = findWordByHeadwordOrKeyword(words, userId, text);
     if (directMatch) return directMatch;
 
-    const directCollocationMatch = words.find((item) => item.userId === userId && hasExactCollocationMatch(item, text));
-    if (directCollocationMatch) return directCollocationMatch;
-
     const fallbackCandidates = buildIgnoredTokenRemovalVariants(text);
     for (const candidate of fallbackCandidates) {
         const fallbackMatch = findWordByHeadwordOrKeyword(words, userId, candidate);
