@@ -24,6 +24,79 @@ const splitExampleLines = (value: string): string[] =>
         .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
         .filter(Boolean);
 
+const ALWAYS_VISIBLE_HINT_WORDS = new Set([
+    'I', 'a', 'an', 'the',
+    'my', 'mine', 'your', 'yours', 'his', 'her', 'hers', 'its', 'our', 'ours', 'their', 'theirs',
+    'this', 'that', 'these', 'those',
+    'to', 'of', 'for', 'in', 'on', 'at', 'by', 'with', 'from', 'as', 'about', 'into', 'over', 'after',
+    'and', 'or', 'but'
+]);
+
+const getWordRevealPrefix = (word: string, visibleChars: number): string => {
+    const chars = Array.from(word);
+    const visiblePrefix: string[] = [];
+
+    for (const char of chars) {
+        if (/[\p{L}\p{N}]/u.test(char)) {
+            visiblePrefix.push(char);
+        }
+        if (visiblePrefix.length >= visibleChars) {
+            break;
+        }
+    }
+
+    return visiblePrefix.join('');
+};
+
+const normalizeHintToken = (value: string): string => value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '').trim();
+const HINT_MASK_SUFFIX = '__';
+const formatHintWord = (word: string, visibleChars: number): string => {
+    const prefix = getWordRevealPrefix(word, visibleChars);
+    if (!prefix) return word;
+    return normalizeHintToken(prefix).length >= normalizeHintToken(word).length
+        ? word
+        : `${prefix}${HINT_MASK_SUFFIX}`;
+};
+
+const createMaskedAnswerHint = (answer: string, hintLevel: number, headword: string): string => {
+    const shouldKeepHeadwordVisible = countWords(headword) === 1;
+    const normalizedHeadword = normalizeHintToken(headword);
+    const masked = String(answer || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((word, index) => {
+            const normalizedWord = word.toLowerCase();
+            const normalizedToken = normalizeHintToken(word);
+
+            if (
+                ALWAYS_VISIBLE_HINT_WORDS.has(normalizedWord) ||
+                normalizedToken.length <= 1 ||
+                (shouldKeepHeadwordVisible && normalizeHintToken(word) === normalizedHeadword)
+            ) {
+                return word;
+            }
+
+            if (hintLevel <= 1) {
+                return formatHintWord(word, 1);
+            }
+
+            if (hintLevel === 2) {
+                return formatHintWord(word, 3);
+            }
+
+            const fullyRevealedWordCount = hintLevel - 2;
+            if (index < fullyRevealedWordCount) {
+                return word;
+            }
+
+            return formatHintWord(word, 3);
+        })
+        .join(' ');
+
+    return masked || 'No hint right now.';
+};
+
 const getAudienceInstruction = (user: User): string => {
     const targetAudience = user.lessonPreferences?.targetAudience || 'Adult';
     if (targetAudience === 'Kid') {
@@ -55,6 +128,143 @@ const getLearnerProfileInstruction = (user: User): string => {
 type StudyBuddyQuizItem = {
     question: string;
     answer: string;
+};
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const maskAnswerInSentence = (sentence: string, answer: string, headword: string): string => {
+    const cleanSentence = String(sentence || '').trim();
+    const cleanAnswer = String(answer || '').trim();
+
+    if (!cleanSentence) return '';
+    if (!cleanAnswer) return cleanSentence;
+
+    const pattern = new RegExp(`\\b${escapeRegExp(cleanAnswer)}\\b`, 'iu');
+    if (pattern.test(cleanSentence)) {
+        if (countWords(headword) === 1) {
+            const normalizedHeadword = normalizeHintToken(headword);
+            const partialMask = cleanAnswer
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((word) => normalizeHintToken(word) === normalizedHeadword ? word : '___')
+                .join(' ');
+
+            return cleanSentence.replace(pattern, partialMask || '___');
+        }
+
+        return cleanSentence.replace(pattern, '___');
+    }
+
+    return cleanSentence;
+};
+
+const countWords = (value: string): number => String(value || '').trim().split(/\s+/).filter(Boolean).length;
+
+const isShortNaturalCollocation = (answer: string, headword: string): boolean => {
+    const cleanAnswer = String(answer || '').trim();
+    if (!cleanAnswer) return false;
+
+    const headwordWordCount = Math.max(1, countWords(headword));
+    const answerWordCount = countWords(cleanAnswer);
+
+    return answerWordCount >= headwordWordCount && answerWordCount <= headwordWordCount + 2;
+};
+
+const getHintVisibleCharCount = (value: string): number => normalizeHintToken(String(value || '').replace(/_/g, '')).length;
+const stripHintMaskMarkers = (value: string): string => String(value || '').replace(/_/g, '');
+
+const mergeHintWithUserInput = (answer: string, nextHint: string, currentInput: string): string => {
+    const answerWords = String(answer || '').trim().split(/\s+/).filter(Boolean);
+    const nextHintWords = String(nextHint || '').trim().split(/\s+/).filter(Boolean);
+    const currentInputWords = String(currentInput || '').trim().split(/\s+/).filter(Boolean);
+    const mergedWords: string[] = [];
+    const maxLength = Math.max(answerWords.length, nextHintWords.length, currentInputWords.length);
+
+    for (let index = 0; index < maxLength; index += 1) {
+        const answerWord = answerWords[index] || '';
+        const nextHintWord = nextHintWords[index] || '';
+        const currentInputWord = currentInputWords[index] || '';
+
+        if (!nextHintWord) {
+            if (currentInputWord) mergedWords.push(currentInputWord);
+            continue;
+        }
+
+        if (!currentInputWord) {
+            mergedWords.push(nextHintWord);
+            continue;
+        }
+
+        if (!answerWord) {
+            mergedWords.push(nextHintWord);
+            continue;
+        }
+
+        const normalizedAnswerWord = normalizeHintToken(answerWord);
+        const normalizedCurrentWord = normalizeHintToken(currentInputWord);
+        const currentVisibleChars = getHintVisibleCharCount(currentInputWord);
+        const nextVisibleChars = getHintVisibleCharCount(nextHintWord);
+
+        const isCurrentCompatible =
+            !!normalizedCurrentWord &&
+            normalizedAnswerWord.startsWith(normalizedCurrentWord);
+
+        const isCurrentExactMatch = normalizedCurrentWord === normalizedAnswerWord;
+
+        if (isCurrentExactMatch) {
+            mergedWords.push(answerWord);
+            continue;
+        }
+
+        if (isCurrentCompatible && currentVisibleChars > nextVisibleChars) {
+            mergedWords.push(currentInputWord);
+            continue;
+        }
+
+        mergedWords.push(nextHintWord);
+    }
+
+    return mergedWords.join(' ').trim();
+};
+
+const getNextDistinctHintState = (answer: string, currentLevel: number, currentInput: string, headword: string) => {
+    const maxHintLevel = countWords(answer) + 3;
+
+    for (let level = currentLevel + 1; level <= maxHintLevel; level += 1) {
+        const hint = createMaskedAnswerHint(answer, level, headword);
+        const mergedHint = mergeHintWithUserInput(answer, hint, currentInput);
+        if (mergedHint !== currentInput) {
+            return { level, hint: mergedHint };
+        }
+    }
+
+    const fallbackLevel = Math.max(currentLevel + 1, maxHintLevel);
+    const fallbackHint = createMaskedAnswerHint(answer, fallbackLevel, headword);
+    return {
+        level: fallbackLevel,
+        hint: mergeHintWithUserInput(answer, fallbackHint, currentInput)
+    };
+};
+
+const remaskQuizAnswerInput = (plainInput: string, answer: string, hintLevel: number, headword: string): string => {
+    if (!answer) return plainInput;
+    const baseHint = createMaskedAnswerHint(answer, hintLevel, headword);
+    return mergeHintWithUserInput(answer, baseHint, plainInput);
+};
+
+const isValidStudyBuddyQuizItem = (item: StudyBuddyQuizItem | null | undefined, headword: string): item is StudyBuddyQuizItem => {
+    if (!item) return false;
+
+    const question = String(item.question || '').trim();
+    const answer = String(item.answer || '').trim();
+    const normalizedQuestion = normalizeExampleLine(question);
+    const normalizedAnswer = normalizeExampleLine(answer);
+
+    if (!normalizedQuestion || !normalizedAnswer) return false;
+    if (!isShortNaturalCollocation(answer, headword)) return false;
+    if (maskAnswerInSentence(question, answer, headword) === question) return false;
+
+    return true;
 };
 
 export interface ReviewSessionUIProps {
@@ -203,11 +413,15 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [studyBuddyQuizBuffer, setStudyBuddyQuizBuffer] = useState<StudyBuddyQuizItem[]>([]);
     const [isStudyBuddyQuizLoading, setIsStudyBuddyQuizLoading] = useState(false);
     const [studyBuddyQuizError, setStudyBuddyQuizError] = useState<string | null>(null);
+    const [studyBuddyQuizStreamText, setStudyBuddyQuizStreamText] = useState<string>('');
     const [studyBuddyQuizAnswer, setStudyBuddyQuizAnswer] = useState('');
     const [studyBuddyQuizFeedback, setStudyBuddyQuizFeedback] = useState<string | null>(null);
     const [studyBuddyQuizHint, setStudyBuddyQuizHint] = useState<string | null>(null);
+    const [studyBuddyQuizHintLevel, setStudyBuddyQuizHintLevel] = useState(0);
     const [isStudyBuddyQuizChecking, setIsStudyBuddyQuizChecking] = useState(false);
     const [isStudyBuddyQuizHintLoading, setIsStudyBuddyQuizHintLoading] = useState(false);
+    const [isStudyBuddyQuizInputFocused, setIsStudyBuddyQuizInputFocused] = useState(false);
+    const studyBuddyQuizInputRef = useRef<HTMLInputElement | null>(null);
     const touchStartX = useRef<number | null>(null);
     const studyBuddyExampleAbortRef = useRef<AbortController | null>(null);
     const studyBuddyExampleRequestRef = useRef<Promise<string[]> | null>(null);
@@ -305,9 +519,9 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
 
         lines.forEach((line) => {
             const [questionPart, answerPart] = line.split('|||').map((item) => item.trim());
+            if (!isValidStudyBuddyQuizItem({ question: questionPart, answer: answerPart }, currentWord.word)) return;
             const normalizedQuestion = normalizeExampleLine(questionPart || '');
             const normalizedAnswer = normalizeExampleLine(answerPart || '');
-            if (!normalizedQuestion || !normalizedAnswer) return;
             if (seenQuestions.has(normalizedQuestion) || seenAnswers.has(normalizedAnswer)) return;
             seenQuestions.add(normalizedQuestion);
             seenAnswers.add(normalizedAnswer);
@@ -318,7 +532,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         });
 
         return result;
-    }, []);
+    }, [currentWord.word]);
 
     const mergeBufferedExamples = useCallback((incomingExamples: string[], options?: { replace?: boolean }) => {
         console.log('[StudyBuddy][Buffer] MERGE INCOMING', {
@@ -492,68 +706,167 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         return finalExamples;
     }, [extractFreshExamples, mergeBufferedExamples, studyBuddyAiUrl, user]);
 
-    const requestStudyBuddyQuizQuestions = useCallback(async (word: StudyItem, signal?: AbortSignal, replaceBuffer = false): Promise<StudyBuddyQuizItem[]> => {
+    const requestStudyBuddyQuizQuestions = useCallback(async (
+        word: StudyItem,
+        signal?: AbortSignal,
+        replaceBuffer = false,
+        onFirstItem?: (item: StudyBuddyQuizItem) => void
+    ): Promise<StudyBuddyQuizItem[]> => {
         const bannedQuestions = Array.from(studyBuddyQuizSeenRef.current);
         const bannedAnswers = Array.from(studyBuddyQuizAnswerSeenRef.current);
         const audienceInstruction = getAudienceInstruction(user);
         const profileInstruction = getLearnerProfileInstruction(user);
+        const headwordWordCount = Math.max(1, countWords(word.word));
         const collocationList = (word.collocationsArray || [])
             .filter((item) => !item.isIgnored && String(item.text || '').trim())
             .map((item) => item.text.trim());
-        const response = await fetch(studyBuddyAiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are an expert IELTS coach. Write only concise quiz questions in English. No bullets, no numbering, no markdown, no answers, no explanations.'
-                    },
-                    {
-                        role: 'user',
-                        content: `Write exactly ${GENERATED_QUIZ_BUFFER_SIZE} distinct collocation quiz items for this learner and the current review word "${word.word}".
+        const collectedItems: StudyBuddyQuizItem[] = [];
+        const maxAttempts = 3;
+        let didStreamFirstItem = false;
+        let didMergeAnything = false;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            if (signal?.aborted) return [];
+
+            const remainingTarget = Math.max(1, GENERATED_QUIZ_BUFFER_SIZE - collectedItems.length);
+            const response = await fetch(studyBuddyAiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'You are an expert IELTS coach. Write only natural English example sentences and answers. No bullets, no numbering, no markdown, no explanations.'
+                        },
+                        {
+                            role: 'user',
+                            content: `Write exactly ${remainingTarget} distinct collocation quiz items for this learner and the current review word "${word.word}".
 
 Rules:
 - ${audienceInstruction}
 - ${profileInstruction}
 - Each line must use this exact format: question ||| answer
-- "question" = one concise scenario-based question.
-- "answer" = one natural collocation that must include "${word.word}".
-- The expected answer must use the current review word "${word.word}" in a natural collocation.
-- Do NOT reveal the current review word in the question.
-- You may invent new natural collocations even if they are not in the saved collocation list.
+- "question" = one full natural example sentence that already contains the answer collocation in the sentence. Do not use blanks.
+- answer = the exact collocation phrase taken from that sentence.
+- The answer must include a form of "${word.word}" (e.g., singular/plural, past/future, or other grammatically correct variations).
+- Use the existing known collocations for "${word.word}" first. Only invent new ones after you have already used all suitable known collocations.
+- If there are ${GENERATED_QUIZ_BUFFER_SIZE} or more suitable known collocations, do not invent any new collocations.
+- For any invented collocation, besides the headword itself, add no more than 2 extra words.
+- The headword has ${headwordWordCount} word(s), so the full answer can have at most ${headwordWordCount + 2} words.
+- Do not include extra modifiers, determiners, pronouns, or long descriptive noun phrases in the answer.
+- Bad answer examples: "perform these advanced statistical analyses", "make a very careful decision today".
+- Good answer examples: "conduct research", "raise awareness", "make a decision", "meet deadlines".
 - Prefer everyday, school, or work situations that fit the learner profile.
-- NEVER reveal the answer collocation in the question.
-- Keep each question concise, realistic, and clearly answerable.
-- Make all 4 questions target different collocation patterns. Avoid semantic overlap.
-- All 4 answers must be different collocations. Do not reuse the same answer pattern with different wording.
-- Avoid simply reusing these known collocations unless needed, but stay semantically natural for "${word.word}": ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}.
+- The answer phrase must appear exactly and contiguously inside the sentence.
+- Make all 4 questions target different collocation patterns. Avoid overlap in answers, even with different wording.
+- Can reuse these known collocations or use more natural popular collocation for "${word.word}": ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}.
 ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz questions:\n${bannedQuestions.map((item) => `  • ${item}`).join('\n')}` : ''}
 ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer collocations:\n${bannedAnswers.map((item) => `  • ${item}`).join('\n')}` : ''}`
+                        }
+                    ],
+                    searchEnabled: false,
+                    temperature: 0.75,
+                    top_p: 0.9,
+                    repetition_penalty: 1.08,
+                    stream: true
+                }),
+                signal
+            });
+
+            if (!response.ok || !response.body) {
+                throw new Error(`StudyBuddy quiz request failed (${response.status})`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let assistantText = '';
+            let buffered = '';
+            let attemptItems: StudyBuddyQuizItem[] = [];
+
+            const flushAssistantText = (isFinal: boolean) => {
+                const normalizedText = assistantText.replace(/\r/g, '');
+                const segments = normalizedText.split('\n');
+                const previewLine = (segments[0]?.split('|||')[0] || '').trim();
+                if (studyBuddyQuizRevealRef.current && !didStreamFirstItem) {
+                    setStudyBuddyQuizStreamText(previewLine);
+                }
+                const completeSegments = isFinal ? segments : segments.slice(0, -1);
+                const freshQuizItems = extractFreshQuizQuestions(completeSegments.join('\n'));
+                if (freshQuizItems.length === 0) return;
+
+                mergeBufferedQuizQuestions(freshQuizItems, { replace: replaceBuffer && !didMergeAnything });
+                didMergeAnything = true;
+                attemptItems = [...attemptItems, ...freshQuizItems];
+                collectedItems.push(...freshQuizItems);
+
+                if (!didStreamFirstItem) {
+                    didStreamFirstItem = true;
+                    setStudyBuddyQuizStreamText('');
+                    onFirstItem?.(freshQuizItems[0]);
+                }
+            };
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffered += decoder.decode(value, { stream: true });
+                const parts = buffered.split('\n\n');
+                buffered = parts.pop() || '';
+
+                for (const part of parts) {
+                    const lines = part.split('\n').map((line) => line.trim()).filter(Boolean);
+                    for (const line of lines) {
+                        if (!line.startsWith('data:')) continue;
+                        const raw = line.slice(5).trim();
+                        if (!raw || raw === '[DONE]') continue;
+                        try {
+                            const json = JSON.parse(raw);
+                            const delta = json?.choices?.[0]?.delta?.content ?? json?.choices?.[0]?.message?.content;
+                            if (typeof delta === 'string') {
+                                assistantText += delta;
+                                flushAssistantText(false);
+                            } else if (Array.isArray(delta)) {
+                                for (const partItem of delta) {
+                                    if (partItem?.type === 'text' && typeof partItem.text === 'string') {
+                                        assistantText += partItem.text;
+                                    }
+                                }
+                                flushAssistantText(false);
+                            }
+                        } catch {
+                            // ignore malformed stream chunk
+                        }
                     }
-                ],
-                searchEnabled: false,
-                temperature: 0.75,
-                top_p: 0.9,
-                repetition_penalty: 1.08,
-                stream: false
-            }),
-            signal
-        });
+                }
+            }
 
-        if (!response.ok) {
-            throw new Error(`StudyBuddy quiz request failed (${response.status})`);
+            if (buffered.trim()) {
+                const lines = buffered.split('\n').map((line) => line.trim()).filter(Boolean);
+                for (const line of lines) {
+                    if (!line.startsWith('data:')) continue;
+                    const raw = line.slice(5).trim();
+                    if (!raw || raw === '[DONE]') continue;
+                    try {
+                        const json = JSON.parse(raw);
+                        const delta = json?.choices?.[0]?.delta?.content ?? json?.choices?.[0]?.message?.content;
+                        if (typeof delta === 'string') assistantText += delta;
+                    } catch {
+                        // ignore
+                    }
+                }
+            }
+
+            flushAssistantText(true);
+
+            if (collectedItems.length >= GENERATED_QUIZ_BUFFER_SIZE) {
+                break;
+            }
         }
 
-        const payload = await response.json().catch(() => null);
-        const rawText = String(payload?.choices?.[0]?.message?.content || '').trim();
-        const freshQuizItems = extractFreshQuizQuestions(rawText);
-        if (freshQuizItems.length > 0) {
-            mergeBufferedQuizQuestions(freshQuizItems, { replace: replaceBuffer });
-        }
-        return freshQuizItems;
+        return collectedItems;
     }, [extractFreshQuizQuestions, mergeBufferedQuizQuestions, studyBuddyAiUrl, user]);
 
     const requestStudyBuddyQuizMicroReply = useCallback(async (prompt: string): Promise<string> => {
@@ -680,27 +993,58 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         if (studyBuddyQuizRevealRef.current) {
             setIsStudyBuddyQuizLoading(true);
         }
+        setStudyBuddyQuizStreamText('');
         setStudyBuddyQuizError(null);
         if (options?.replace) {
             setStudyBuddyQuizBuffer([]);
         }
 
-        const requestPromise = requestStudyBuddyQuizQuestions(word, controller.signal, !!options?.replace)
+        const applyQuizItemToUi = (item: StudyBuddyQuizItem) => {
+            if (!isValidStudyBuddyQuizItem(item, word.word)) {
+                setStudyBuddyQuizItem(null);
+                return false;
+            }
+
+            const firstHint = createMaskedAnswerHint(item.answer, 1, word.word);
+            setStudyBuddyQuizItem(item);
+            setStudyBuddyQuizStreamText('');
+            setStudyBuddyQuizHint(firstHint);
+            setStudyBuddyQuizHintLevel(1);
+            setStudyBuddyQuizAnswer(firstHint);
+            setIsStudyBuddyQuizInputFocused(false);
+            setStudyBuddyQuizFeedback(null);
+            setStudyBuddyQuizError(null);
+            setIsStudyBuddyQuizLoading(false);
+            setStudyBuddyQuizBuffer((prev) =>
+                prev.filter((bufferedItem) => normalizeExampleLine(bufferedItem.question) !== normalizeExampleLine(item.question))
+            );
+            return true;
+        };
+
+        let hasAutoConsumedStreamedItem = false;
+
+        const requestPromise = requestStudyBuddyQuizQuestions(
+            word,
+            controller.signal,
+            !!options?.replace,
+            (item) => {
+                if (!studyBuddyQuizRevealRef.current || hasAutoConsumedStreamedItem) return;
+                const didApply = applyQuizItemToUi(item);
+                if (didApply) {
+                    hasAutoConsumedStreamedItem = true;
+                }
+            }
+        )
             .then((incomingQuestions) => {
                 if (controller.signal.aborted) return [];
                 if (incomingQuestions.length === 0) {
                     setStudyBuddyQuizError('No quiz prompt right now.');
                 }
 
-                if (studyBuddyQuizRevealRef.current) {
+                if (studyBuddyQuizRevealRef.current && !hasAutoConsumedStreamedItem) {
                     const first = incomingQuestions?.[0];
                     if (first) {
-                        setStudyBuddyQuizItem(first);
-                        setStudyBuddyQuizError(null);
-                        setIsStudyBuddyQuizLoading(false);
-                        setStudyBuddyQuizBuffer((prev) =>
-                            prev.filter((item) => normalizeExampleLine(item.question) !== normalizeExampleLine(first.question))
-                        );
+                        hasAutoConsumedStreamedItem = applyQuizItemToUi(first);
                     }
                 }
 
@@ -797,16 +1141,36 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         setHoveredActionMenu(null);
         setShowSpellBox(false);
         const bufferSnapshot = studyBuddyQuizBuffer;
+        setStudyBuddyQuizStreamText('');
         setStudyBuddyQuizFeedback(null);
         setStudyBuddyQuizHint(null);
+        setStudyBuddyQuizHintLevel(0);
         setStudyBuddyQuizAnswer('');
 
         if (bufferSnapshot.length > 0) {
-            const [first, ...rest] = bufferSnapshot;
-            setStudyBuddyQuizBuffer(rest);
-            setStudyBuddyQuizItem(first);
-            setStudyBuddyQuizError(null);
-            return;
+            const firstValidIndex = bufferSnapshot.findIndex((item) => isValidStudyBuddyQuizItem(item, currentWord.word));
+            const nextValidItem = firstValidIndex >= 0 ? bufferSnapshot[firstValidIndex] : null;
+            const remainingItems = firstValidIndex >= 0 ? bufferSnapshot.slice(firstValidIndex + 1) : [];
+
+            setStudyBuddyQuizBuffer(
+                firstValidIndex >= 0
+                    ? remainingItems
+                    : []
+            );
+
+            if (nextValidItem) {
+                const firstHint = createMaskedAnswerHint(nextValidItem.answer, 1, currentWord.word);
+                setStudyBuddyQuizItem(nextValidItem);
+                setStudyBuddyQuizHint(firstHint);
+                setStudyBuddyQuizHintLevel(1);
+                setStudyBuddyQuizAnswer(firstHint);
+                setIsStudyBuddyQuizInputFocused(false);
+                setStudyBuddyQuizError(null);
+                if (remainingItems.length < 2 && !studyBuddyQuizRequestRef.current) {
+                    void prefetchStudyBuddyQuizQuestions(currentWord);
+                }
+                return;
+            }
         }
 
         if (studyBuddyQuizRequestRef.current && studyBuddyQuizRequestWordIdRef.current === currentWord.id) {
@@ -828,32 +1192,41 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         const answer = studyBuddyQuizAnswer.trim();
         const question = studyBuddyQuizItem?.question.trim() || '';
         const expectedAnswer = studyBuddyQuizItem?.answer.trim() || '';
+        const maskedQuestion = maskAnswerInSentence(question, expectedAnswer, currentWord.word);
         if (!answer || !question) return;
 
         setIsStudyBuddyQuizChecking(true);
         setStudyBuddyQuizHint(null);
+        setStudyBuddyQuizHintLevel(0);
         try {
+            const normalizedAnswer = normalizeComparableText(answer);
+            const normalizedExpectedAnswer = normalizeComparableText(expectedAnswer);
+
+            if (normalizedAnswer && normalizedAnswer === normalizedExpectedAnswer) {
+                setStudyBuddyQuizAnswer(expectedAnswer);
+                setStudyBuddyQuizFeedback('Match');
+                return;
+            }
+
             const collocationList = collocationTargets.map((item) => item.text.trim()).filter(Boolean);
             const reply = await requestStudyBuddyQuizMicroReply(
-                `Evaluate this learner answer for a collocation quiz about the current review word.
+                `Explain briefly why this learner answer does not match the expected collocation quiz answer.
 
 Learner profile: ${getLearnerProfileInstruction(user)}
 Current review word: "${currentWord.word}" (the answer must use this word)
 Known collocations of current review word: ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}
-Quiz question: "${question}"
+Quiz sentence with blank: "${maskedQuestion}"
+Full example sentence: "${question}"
 Expected target collocation: "${expectedAnswer || 'not provided'}"
 Learner answer: "${answer}"
 
-Judge only:
-- is the collocation natural?
-- is it correct English?
-- does the answer actually use the current review word?
-- does it fit the scenario and learner profile?
-- treat the expected target collocation as the main intended answer
-- accept a close natural variant only if it answers the same collocation idea correctly
-- it may be a new collocation not listed above if it is natural
+Rules:
+- The learner answer is already considered not an exact match to the expected answer
+- Briefly say what is wrong or missing
+- If helpful, mention the expected collocation at the end
+- Keep it very short and easy to understand
 
-Reply with exactly one very short sentence or phrase.`
+Reply with exactly one very short sentence or phrase in English.`
             );
             setStudyBuddyQuizFeedback(reply || 'Try again.');
         } catch (error) {
@@ -862,36 +1235,58 @@ Reply with exactly one very short sentence or phrase.`
         } finally {
             setIsStudyBuddyQuizChecking(false);
         }
-    }, [collocationTargets, currentWord.word, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizItem, user]);
+    }, [collocationTargets, currentWord.word, normalizeComparableText, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizItem, user]);
 
     const handleStudyBuddyQuizHint = useCallback(async () => {
-        const question = studyBuddyQuizItem?.question.trim() || '';
         const expectedAnswer = studyBuddyQuizItem?.answer.trim() || '';
-        if (!question) return;
+        if (!expectedAnswer) return;
 
         setIsStudyBuddyQuizHintLoading(true);
         try {
-            const collocationList = collocationTargets.map((item) => item.text.trim()).filter(Boolean);
-            const reply = await requestStudyBuddyQuizMicroReply(
-                `Give a minimal hint for a collocation quiz about the current review word.
-
-Learner profile: ${getLearnerProfileInstruction(user)}
-Current review word: "${currentWord.word}" (the answer must use this word)
-Known collocations of current review word: ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}
-Quiz question: "${question}"
-Expected target collocation: "${expectedAnswer || 'not provided'}"
-Current learner answer: "${studyBuddyQuizAnswer.trim() || '(empty)'}"
-
-Reply with only one minimal hint or one ideal answer phrase using the current review word. Keep it very short.`
-            );
-            setStudyBuddyQuizHint(reply || 'No hint right now.');
+            setStudyBuddyQuizHintLevel((previousLevel) => {
+                const nextState = getNextDistinctHintState(
+                    expectedAnswer,
+                    previousLevel,
+                    studyBuddyQuizAnswer,
+                    currentWord.word
+                );
+                setStudyBuddyQuizHint(nextState.hint);
+                setStudyBuddyQuizAnswer(
+                    isStudyBuddyQuizInputFocused
+                        ? stripHintMaskMarkers(nextState.hint)
+                        : nextState.hint
+                );
+                return nextState.level;
+            });
         } catch (error) {
             console.error(error);
             setStudyBuddyQuizHint('No hint right now.');
         } finally {
             setIsStudyBuddyQuizHintLoading(false);
         }
-    }, [collocationTargets, currentWord.word, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizItem, user]);
+    }, [currentWord.word, isStudyBuddyQuizInputFocused, studyBuddyQuizAnswer, studyBuddyQuizItem]);
+
+    const handleStudyBuddyQuizInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            void handleStudyBuddyQuizCheck();
+        }
+    }, [handleStudyBuddyQuizCheck]);
+
+    const handleStudyBuddyQuizInputFocus = useCallback(() => {
+        setIsStudyBuddyQuizInputFocused(true);
+        setStudyBuddyQuizAnswer((previous) => stripHintMaskMarkers(previous));
+    }, []);
+
+    const handleStudyBuddyQuizInputBlur = useCallback(() => {
+        setIsStudyBuddyQuizInputFocused(false);
+        const expectedAnswer = studyBuddyQuizItem?.answer.trim() || '';
+        if (!expectedAnswer) return;
+
+        setStudyBuddyQuizAnswer((previous) =>
+            remaskQuizAnswerInput(previous, expectedAnswer, studyBuddyQuizHintLevel, currentWord.word)
+        );
+    }, [currentWord.word, studyBuddyQuizHintLevel, studyBuddyQuizItem]);
 
     const handleFastReviewAction = useCallback((panel: 'meaning' | 'collocation' | 'paraphrase' | 'preposition' | 'idiom') => {
         setActiveBotPanel(null);
@@ -959,6 +1354,7 @@ Reply with only one minimal hint or one ideal answer phrase using the current re
         setStudyBuddyQuizAnswer('');
         setStudyBuddyQuizFeedback(null);
         setStudyBuddyQuizHint(null);
+        setStudyBuddyQuizHintLevel(0);
         studyBuddyQuizRevealRef.current = false;
 
         return () => {
@@ -988,6 +1384,20 @@ Reply with only one minimal hint or one ideal answer phrase using the current re
 
         touchStartX.current = null;
     };
+
+    useEffect(() => {
+        if (activeBotPanel !== 'quiz' || !studyBuddyQuizItem) return;
+        if (isValidStudyBuddyQuizItem(studyBuddyQuizItem, currentWord.word)) return;
+
+        setStudyBuddyQuizItem(null);
+        setStudyBuddyQuizHint(null);
+        setStudyBuddyQuizHintLevel(0);
+        setStudyBuddyQuizAnswer('');
+        setStudyBuddyQuizFeedback(null);
+        setStudyBuddyQuizError(null);
+        studyBuddyQuizRevealRef.current = true;
+        void prefetchStudyBuddyQuizQuestions(currentWord);
+    }, [activeBotPanel, currentWord, prefetchStudyBuddyQuizQuestions, studyBuddyQuizItem]);
 
     // Conditional returns moved below hooks
     if (initialWords.length === 0) {
@@ -1432,24 +1842,36 @@ Reply with only one minimal hint or one ideal answer phrase using the current re
                                             </div>
                                             {studyBuddyQuizItem ? (
                                                 <div className="space-y-3">
-                                                    <p className="text-sm font-semibold leading-relaxed text-neutral-800">
-                                                        {studyBuddyQuizItem.question}
-                                                    </p>
+                                                    {studyBuddyQuizFeedback === 'Match' ? (
+                                                        <div className="rounded-2xl border border-green-200 bg-green-50 px-3 py-2">
+                                                            <p className="flex items-center gap-1.5 text-xs font-black text-green-700">
+                                                                <CheckCircle2 size={14} />
+                                                                <span>Match</span>
+                                                            </p>
+                                                            <p className="mt-1 text-xs font-semibold leading-relaxed text-green-800">
+                                                                {studyBuddyQuizItem.question}
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-sm font-semibold leading-relaxed text-neutral-800">
+                                                            {maskAnswerInSentence(studyBuddyQuizItem.question, studyBuddyQuizItem.answer, currentWord.word)}
+                                                        </p>
+                                                    )}
                                                     <div className="space-y-2">
                                                         <input
+                                                            ref={studyBuddyQuizInputRef}
                                                             value={studyBuddyQuizAnswer}
                                                             onChange={(e) => {
                                                                 setStudyBuddyQuizAnswer(e.target.value);
                                                                 setStudyBuddyQuizFeedback(null);
                                                             }}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') {
-                                                                    e.preventDefault();
-                                                                    void handleStudyBuddyQuizCheck();
-                                                                }
-                                                            }}
+                                                            onFocus={handleStudyBuddyQuizInputFocus}
+                                                            onBlur={handleStudyBuddyQuizInputBlur}
+                                                            onKeyDown={handleStudyBuddyQuizInputKeyDown}
                                                             placeholder="Type your answer..."
-                                                            className="w-full rounded-2xl border border-fuchsia-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition-colors focus:border-fuchsia-500"
+                                                            className={`w-full rounded-2xl border border-fuchsia-200 bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-fuchsia-500 ${
+                                                                !isStudyBuddyQuizInputFocused && studyBuddyQuizAnswer === studyBuddyQuizHint ? 'text-neutral-500' : 'text-neutral-900'
+                                                            }`}
                                                         />
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <button
@@ -1469,28 +1891,27 @@ Reply with only one minimal hint or one ideal answer phrase using the current re
                                                                 <span>Hint</span>
                                                             </button>
                                                         </div>
-                                                        {(studyBuddyQuizFeedback || studyBuddyQuizHint) && (
+                                                        {studyBuddyQuizFeedback && studyBuddyQuizFeedback !== 'Match' && (
                                                             <div className="space-y-1">
-                                                                {studyBuddyQuizFeedback && (
-                                                                    <p className="text-xs font-bold text-fuchsia-800">
-                                                                        {studyBuddyQuizFeedback}
-                                                                    </p>
-                                                                )}
-                                                                {studyBuddyQuizHint && (
-                                                                    <p className="text-xs font-bold text-neutral-600">
-                                                                        Hint: {studyBuddyQuizHint}
-                                                                    </p>
-                                                                )}
+                                                                <p className="text-xs font-bold text-fuchsia-800">
+                                                                    {studyBuddyQuizFeedback}
+                                                                </p>
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
                                             ) : isStudyBuddyQuizLoading ? (
+                                                studyBuddyQuizStreamText ? (
+                                                    <p className="text-sm font-semibold leading-relaxed text-neutral-500 animate-pulse">
+                                                        {studyBuddyQuizStreamText}
+                                                    </p>
+                                                ) : (
                                                 <div className="space-y-2">
                                                     <div className="h-3 w-full rounded-full bg-fuchsia-100 animate-pulse" />
                                                     <div className="h-3 w-5/6 rounded-full bg-fuchsia-100 animate-pulse" />
                                                     <div className="h-3 w-2/3 rounded-full bg-fuchsia-100 animate-pulse" />
                                                 </div>
+                                                )
                                             ) : studyBuddyQuizError ? (
                                                 <p className="text-sm font-semibold leading-relaxed text-rose-600">
                                                     {studyBuddyQuizError}
