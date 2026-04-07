@@ -1016,7 +1016,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                 <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading Next Test...</p>
                             </div>
                         ) : (<>
-                            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-30 w-full text-center space-y-3 sm:space-y-3">
+                            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-16 w-full text-center space-y-3 sm:space-y-3">
                                 <div className="flex items-center gap-4 flex-wrap justify-center">
                                     <h2 className={`font-black text-neutral-900 tracking-tight text-3xl sm:text-4xl break-words ${isIpa ? 'font-serif' : ''}`}>
                                         {displayText}
