@@ -1016,12 +1016,19 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                 <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading Next Test...</p>
                             </div>
                         ) : (<>
-                            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 w-full text-center space-y-6 sm:space-y-8">
+                            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-30 w-full text-center space-y-3 sm:space-y-3">
                                 <div className="flex items-center gap-4 flex-wrap justify-center">
                                     <h2 className={`font-black text-neutral-900 tracking-tight text-3xl sm:text-4xl break-words ${isIpa ? 'font-serif' : ''}`}>
                                         {displayText}
                                     </h2>
 
+                                    {isNewWord ? (
+                                        <ComplexityIndicator complexity={currentWord.complexity ?? 0} />
+                                    ) : (
+                                        <MasteryScoreCalculator word={currentWord} />
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-3">
                                     <button
                                         onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
                                         className="text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
@@ -1114,12 +1121,6 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                             </div>
                                         </div>
                                     )}
-
-                                    {isNewWord ? (
-                                        <ComplexityIndicator complexity={currentWord.complexity ?? 0} />
-                                    ) : (
-                                        <MasteryScoreCalculator word={currentWord} />
-                                    )}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div
@@ -1146,13 +1147,6 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                             </div>
                                         </div>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleManualPractice}
-                                        className={practiceButtonClass}
-                                    >
-                                        <BrainCircuit size={14}/><span>Practice</span>
-                                    </button>
                                     <div
                                         className="relative"
                                         onMouseEnter={() => setHoveredActionMenu('ai')}
@@ -1173,6 +1167,13 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                             </div>
                                         </div>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleManualPractice}
+                                        className={practiceButtonClass}
+                                    >
+                                        <BrainCircuit size={14}/><span>Practice</span>
+                                    </button>
                                 </div>
                                 <div className="w-full max-w-lg min-h-[216px]">
                                 {showSpellBox && (
