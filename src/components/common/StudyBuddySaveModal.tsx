@@ -6,6 +6,7 @@ import { ParsedPairItem, ParsedWordFamilyItem } from '../../utils/studyBuddyUtil
 interface ChatSaveDraft {
     targetWord: string;
     detectedTargetWords: string[];
+    libraryTargetWords: string[];
     sourceText: string;
     selectedSection: ChatSaveSection;
     availableSections: ChatSaveSection[];
@@ -41,6 +42,12 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
 }) => {
     if (!chatSaveDraft) return null;
 
+    const normalizedTargetWord = chatSaveDraft.targetWord.trim().toLowerCase();
+    const hasLibraryTargetOptions = chatSaveDraft.libraryTargetWords.length > 0;
+    const isTargetWordInLibrary = chatSaveDraft.libraryTargetWords.some(
+        (word) => word.trim().toLowerCase() === normalizedTargetWord
+    );
+
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/75 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-[1.75rem] border border-neutral-200 bg-white p-5 shadow-2xl">
@@ -59,9 +66,16 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
 
                 <div className="mt-4 space-y-4">
                     <div>
-                        <label className="mb-2 block text-[11px] font-black uppercase tracking-wide text-neutral-500">
-                            Target Word
-                        </label>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                            <label className="block text-[11px] font-black uppercase tracking-wide text-neutral-500">
+                                Target Word
+                            </label>
+                            {!hasLibraryTargetOptions && (
+                                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700">
+                                    New
+                                </span>
+                            )}
+                        </div>
                         <input
                             type="text"
                             value={chatSaveDraft.targetWord}
@@ -69,6 +83,27 @@ export const StudyBuddySaveModal: React.FC<StudyBuddySaveModalProps> = ({
                             placeholder="Enter the word to save into"
                             className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-900 outline-none transition-colors focus:border-neutral-900 focus:bg-white"
                         />
+                        {hasLibraryTargetOptions && (
+                            <select
+                                value={isTargetWordInLibrary ? chatSaveDraft.targetWord : ''}
+                                onChange={(e) => onChangeTargetWord(e.target.value)}
+                                className="mt-2 w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold text-neutral-900 outline-none transition-colors focus:border-neutral-900 focus:bg-white"
+                            >
+                                <option value="">
+                                    Choose existing word from library
+                                </option>
+                                {chatSaveDraft.libraryTargetWords.map((word) => (
+                                    <option key={word} value={word}>
+                                        {word}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                        {hasLibraryTargetOptions && isTargetWordInLibrary && (
+                            <p className="mt-2 text-[11px] font-semibold text-neutral-500">
+                                Saving into an existing library word.
+                            </p>
+                        )}
                         {chatSaveDraft.detectedTargetWords.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-2">
                                 {chatSaveDraft.detectedTargetWords.map((word) => (

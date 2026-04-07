@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { X, Save, Sparkles, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, BookText, ClipboardList, GraduationCap } from 'lucide-react';
+import { X, Save, Sparkles, Quote, Layers, Combine, MessageSquare, RotateCw, Trash2, Plus, EyeOff, Eye, AtSign, ArrowLeft, StickyNote, Zap, Archive, Book, Info, Link as LinkIcon, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, Users2, Lightbulb, BookText, ClipboardList, GraduationCap, Loader2 } from 'lucide-react';
 import { StudyItem, WordFamily, WordFamilyMember, LearnedStatus, ParaphraseOption, PrepositionPattern, CollocationDetail, StudyItemQuality, ParaphraseTone } from '../../app/types';
 
 const StatusDropdown: React.FC<{
@@ -78,6 +78,7 @@ export interface EditStudyItemModalUIProps {
   onGenerateExamples: () => void;
   onGenerateCollocations: () => void;
   isStudyBuddyGenerating: 'examples' | 'collocations' | null;
+  isSaving?: boolean;
 }
 
 type Tab = 'MAIN' | 'SOUND' | 'DETAILS' | 'CONNECTIONS' | 'USAGE';
@@ -135,7 +136,8 @@ export const EditStudyItemModalUI: React.FC<EditStudyItemModalUIProps> = (props)
     isIpaLoading,
     onGenerateExamples,
     onGenerateCollocations,
-    isStudyBuddyGenerating
+    isStudyBuddyGenerating,
+    isSaving = false
   } = props;
   
   const [activeTab, setActiveTab] = useState<Tab>('MAIN');
@@ -317,7 +319,15 @@ export const EditStudyItemModalUI: React.FC<EditStudyItemModalUIProps> = (props)
                         <Lightbulb size={12} className={hasSuggestions ? "text-amber-500" : "text-neutral-400"} /><span>{hasSuggestions ? 'View Suggestion' : 'Suggest'}</span>
                     </button>
                     <button type="button" onClick={onOpenAiRefine} className="px-3 py-2 bg-white border border-neutral-200 text-neutral-600 rounded-lg font-black text-[10px] flex items-center justify-center space-x-1.5 hover:bg-neutral-50 active:scale-95 transition-all shadow-sm"><Sparkles size={12} className="text-amber-500" /><span>Manual AI</span></button>
-                    <button type="button" onClick={() => handleSubmit()} className="px-5 py-2 bg-neutral-900 text-white rounded-lg font-black text-[10px] flex items-center justify-center space-x-1.5 hover:bg-neutral-800 active:scale-95 transition-all shadow-md shadow-neutral-900/10"><Save size={12} /><span>Save</span></button>
+                    <button
+                        type="button"
+                        onClick={() => handleSubmit()}
+                        disabled={isSaving}
+                        className="px-5 py-2 bg-neutral-900 text-white rounded-lg font-black text-[10px] flex items-center justify-center space-x-1.5 hover:bg-neutral-800 active:scale-95 transition-all shadow-md shadow-neutral-900/10 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-neutral-900 disabled:active:scale-100"
+                    >
+                        {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                        <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                    </button>
                     <button onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors ml-2"><X size={18} /></button>
                 </div>
             </div>

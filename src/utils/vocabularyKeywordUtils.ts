@@ -42,6 +42,19 @@ export function hasExactKeywordMatch(item: Pick<StudyItem, 'keywords'>, text: st
     return (item.keywords || []).some((keyword) => normalizeKeywordText(keyword) === target);
 }
 
+export function hasExactCollocationMatch(item: Pick<StudyItem, 'collocationsArray' | 'collocations'>, text: string): boolean {
+    const target = normalizeKeywordText(text);
+    if (!target) return false;
+
+    if ((item.collocationsArray || []).some((entry) => normalizeKeywordText(entry?.text || '') === target)) {
+        return true;
+    }
+
+    return String(item.collocations || '')
+        .split('\n')
+        .some((entry) => normalizeKeywordText(entry) === target);
+}
+
 export function matchesVocabularyHeadwordOrKeyword(item: Pick<StudyItem, 'word' | 'keywords'>, text: string): boolean {
     const target = normalizeKeywordText(text);
     if (!target) return false;
@@ -63,10 +76,16 @@ export function findWordByStudyBuddyLookup(words: StudyItem[], userId: string, t
     const directMatch = findWordByHeadwordOrKeyword(words, userId, text);
     if (directMatch) return directMatch;
 
+    const directCollocationMatch = words.find((item) => item.userId === userId && hasExactCollocationMatch(item, text));
+    if (directCollocationMatch) return directCollocationMatch;
+
     const fallbackCandidates = buildIgnoredTokenRemovalVariants(text);
     for (const candidate of fallbackCandidates) {
         const fallbackMatch = findWordByHeadwordOrKeyword(words, userId, candidate);
         if (fallbackMatch) return fallbackMatch;
+
+        const fallbackCollocationMatch = words.find((item) => item.userId === userId && hasExactCollocationMatch(item, candidate));
+        if (fallbackCollocationMatch) return fallbackCollocationMatch;
     }
 
     const target = normalizeKeywordText(text);
@@ -79,6 +98,12 @@ export function findWordByStudyBuddyLookup(words: StudyItem[], userId: string, t
 
         const keywordVariants = (item.keywords || []).flatMap((keyword) => buildIgnoredTokenRemovalVariants(keyword));
         if (keywordVariants.some((variant) => normalizeKeywordText(variant) === target)) {
+            return item;
+        }
+
+        const collocationVariants = (item.collocationsArray || [])
+            .flatMap((entry) => buildIgnoredTokenRemovalVariants(entry?.text || ''));
+        if (collocationVariants.some((variant) => normalizeKeywordText(variant) === target)) {
             return item;
         }
     }

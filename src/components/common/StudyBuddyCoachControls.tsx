@@ -202,6 +202,7 @@ interface CommandBoxProps {
     onOpenTools: () => void;
     onExamples: (selectedText?: string) => void;
     onExplain: (selectedText?: string) => void;
+    onBriefExplain: (selectedText?: string) => void;
     onCollocations: (selectedText?: string) => void;
     onParaphrase: (selectedText?: string) => void;
 }
@@ -226,6 +227,7 @@ export const StudyBuddyCommandBox: React.FC<CommandBoxProps> = ({
     onOpenTools,
     onExamples,
     onExplain,
+    onBriefExplain,
     onCollocations,
     onParaphrase,
 }) => {
@@ -280,6 +282,14 @@ export const StudyBuddyCommandBox: React.FC<CommandBoxProps> = ({
                                 onClick={() => handleAiAction(onExplain)}
                                 disabled={!hasSelection}
                                 className="rounded-xl bg-cyan-50 px-3 py-2 text-left text-[11px] font-bold text-cyan-700 transition-colors hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                IELTS Usage
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleAiAction(onBriefExplain)}
+                                disabled={!hasSelection}
+                                className="rounded-xl bg-teal-50 px-3 py-2 text-left text-[11px] font-bold text-teal-700 transition-colors hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 Explain
                             </button>

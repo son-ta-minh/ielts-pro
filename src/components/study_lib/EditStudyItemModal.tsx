@@ -93,7 +93,7 @@ interface SuggestionsData {
 interface Props {
   word: StudyItem;
   user: User;
-  onSave: (updatedWord: StudyItem) => void;
+  onSave: (updatedWord: StudyItem) => Promise<void> | void;
   onClose: () => void;
   onSwitchToView: (word: StudyItem) => void;
 }
@@ -116,6 +116,7 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
   const [isMeaningLoading, setIsMeaningLoading] = useState<'vi' | 'en' | null>(null);
   const [isIpaLoading, setIsIpaLoading] = useState<'cambridge' | 'generated' | null>(null);
   const [isStudyBuddyGenerating, setIsStudyBuddyGenerating] = useState<'examples' | 'collocations' | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const availableGroups = Array.from(
     new Set(
       getAllWords()
@@ -562,6 +563,10 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if(e) e.preventDefault();
+    if (isSaving) return;
+
+    setIsSaving(true);
+    try {
     const { groupsString, studiedStatus, collocationsArray, idiomsList, prepositionsList, essayEdit, testEdit, ...rest } = formData;
     
     let finalFamily = rest.wordFamily;
@@ -649,8 +654,14 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
       }
     }
     
-    onSave(updatedWord);
+    await Promise.resolve(onSave(updatedWord));
     showToast('Word saved successfully!', 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to save word.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const createListHandler = (list: 'wordFamily' | 'prepositionsList' | 'collocationsArray' | 'idiomsList' | 'paraphrases') => {
@@ -814,6 +825,7 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
       onGenerateExamples={() => void handleGenerateExamples()}
       onGenerateCollocations={() => void handleGenerateCollocations()}
       isStudyBuddyGenerating={isStudyBuddyGenerating}
+      isSaving={isSaving}
     />
       <LearningSuggestionModal
         isOpen={isSuggestionModalOpen}

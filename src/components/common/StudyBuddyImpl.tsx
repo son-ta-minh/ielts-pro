@@ -99,6 +99,7 @@ interface CambridgeSimpleResult {
 interface ChatSaveDraft {
     turnId: string;
     detectedTargetWords: string[];
+    libraryTargetWords: string[];
     sourceText: string;
     targetWord: string;
     selectedSection: ChatSaveSection;
@@ -718,14 +719,24 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             .map((line) => normalizeSaveLine(line))
             .filter(Boolean)
             .map((word) => ({ word, note: '', bucket: inferWordFamilyBucket(word, '') as keyof WordFamily }));
+        const preferredTargetWord = actionType === 'compare'
+            ? (detectedTargetWords.length === 1 ? detectedTargetWords[0] : '')
+            : (turn.saveContext?.targetWord || '');
+        const allWords = dataStore.getAllWords();
+        const libraryTargetWords = Array.from(
+            new Set(
+                [preferredTargetWord, ...detectedTargetWords]
+                    .map((value) => findWordByStudyBuddyLookup(allWords, user.id, value)?.word.trim() || '')
+                    .filter(Boolean)
+            )
+        );
 
         setChatSaveDraft({
             turnId: turn.id,
             detectedTargetWords,
+            libraryTargetWords,
             sourceText,
-            targetWord: actionType === 'compare'
-                ? (detectedTargetWords.length === 1 ? detectedTargetWords[0] : '')
-                : (turn.saveContext?.targetWord || ''),
+            targetWord: preferredTargetWord,
             selectedSection: lockedSection,
             availableSections,
             exampleLines,
@@ -2451,6 +2462,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                         onOpenTools={handleOpenTools}
                         onExamples={(selectedText) => handleChatCoachPromptToChat('examples', 'Examples', (text) => getStudyBuddyCoachPrompt(text, 'examples'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                         onExplain={(selectedText) => handleChatCoachExplain(selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
+                        onBriefExplain={(selectedText) => handleBackgroundChatRequest(`Briefly explain for ${selectedText || ''}`)}
                         onCollocations={(selectedText) => handleChatCoachPromptToChat('collocations', 'Collocations', (text) => getStudyBuddyCoachPrompt(text, 'collocations'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                         onParaphrase={(selectedText) => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (text) => getStudyBuddyCoachPrompt(text, 'paraphrase'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                     />
@@ -2627,6 +2639,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                         onOpenTools={handleOpenTools}
                                         onExamples={(selectedText) => handleChatCoachPromptToChat('examples', 'Examples', (text) => getStudyBuddyCoachPrompt(text, 'examples'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                                         onExplain={(selectedText) => handleChatCoachExplain(selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
+                                        onBriefExplain={(selectedText) => handleBackgroundChatRequest(`Briefly explain for ${selectedText || ''}`)}
                                         onCollocations={(selectedText) => handleChatCoachPromptToChat('collocations', 'Collocations', (text) => getStudyBuddyCoachPrompt(text, 'collocations'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                                         onParaphrase={(selectedText) => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (text) => getStudyBuddyCoachPrompt(text, 'paraphrase'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                                     />
