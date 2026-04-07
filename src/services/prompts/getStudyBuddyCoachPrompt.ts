@@ -18,7 +18,7 @@ ${baseRules}
     }
 
     if (type === 'collocations') {
-        return `Generate max 5 natural collocations for "${selectedText}" following common usage patterns.
+        return `Generate max 5 most common, natural collocations, cover IELTS topics for "${selectedText}" following common usage patterns.
 Replace placeholders like 'something' with realistic words/phrases, and include variations for reflexive pronouns or tenses where applicable.
 Do not paraphrase.
 

@@ -47,7 +47,7 @@ export function getWordDetailsPrompt(
         `- reg: Register. MUST be ONLY one of: "academic", "casual", "neutral" (mix of academic and casual).`,
         includeExamples ? `- ex: ${exampleCount} high-quality example sentence${exampleCount > 1 ? 's' : ''} using the headword. If more than one example, return them in one string separated by newline.` : '',
         collocationCount > 0
-            ? `- col: up to ${collocationCount} most common, natural collocations if exist.
+            ? `- col: up to ${collocationCount} most common, natural collocations, cover IELTS topics, if exist.
         - Items: {"text": "natural collocation", "d": "minimal descriptive cue for recall (5-10 words)"}.
         - Collocations must include the headword, combined with natural co-occurring words
         - Inflections or word-family forms of headword are allowed (e.g., plural, V-ed, V-ing)

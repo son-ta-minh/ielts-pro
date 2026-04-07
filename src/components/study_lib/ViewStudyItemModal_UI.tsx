@@ -1097,7 +1097,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                                 return (
                                                     <div key={i} className={`relative flex items-start gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${containerClass}`}>
                                                         <div className="flex-1 overflow-hidden">
-                                                            <span className={`truncate ${c.isIgnored ? 'line-through' : isInLibrary ? 'text-green-900' : ''}`} title={c.text}>{c.text}</span>
+                                                            <span className={`${c.isIgnored ? 'line-through' : isInLibrary ? 'text-green-900' : ''}`} title={c.text}>{c.text}</span>
                                                             {c.d && !c.isIgnored && (
                                                                 <div className="text-[10px] italic text-neutral-400 mt-0.5 normal-case font-medium">{c.d}</div>
                                                             )}
