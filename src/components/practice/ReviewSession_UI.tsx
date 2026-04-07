@@ -32,6 +32,31 @@ const getAudienceInstruction = (user: User): string => {
     return 'Write natural examples suitable for an adult learner. Keep them useful for everyday communication or study.';
 };
 
+const getLearnerProfileInstruction = (user: User): string => {
+    const targetAudience = user.lessonPreferences?.targetAudience || 'Adult';
+    const role = String(user.role || '').trim();
+    const level = String(user.currentLevel || '').trim();
+    const target = String(user.target || '').trim();
+
+    const profileParts = [
+        targetAudience === 'Kid' ? 'child learner' : 'adult learner',
+        role,
+        level,
+        target
+    ].filter(Boolean);
+
+    if (profileParts.length === 0) {
+        return 'Match a general English learner profile.';
+    }
+
+    return `Match this learner profile: ${profileParts.join(' | ')}.`;
+};
+
+type StudyBuddyQuizItem = {
+    question: string;
+    answer: string;
+};
+
 export interface ReviewSessionUIProps {
   user: User;
   initialWords: StudyItem[];
@@ -174,8 +199,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [isStudyBuddyExampleLoading, setIsStudyBuddyExampleLoading] = useState(false);
     const [studyBuddyExampleError, setStudyBuddyExampleError] = useState<string | null>(null);
     const [activeBotPanel, setActiveBotPanel] = useState<'example' | 'quiz' | null>(null);
-    const [studyBuddyQuizQuestion, setStudyBuddyQuizQuestion] = useState<string | null>(null);
-    const [studyBuddyQuizBuffer, setStudyBuddyQuizBuffer] = useState<string[]>([]);
+    const [studyBuddyQuizItem, setStudyBuddyQuizItem] = useState<StudyBuddyQuizItem | null>(null);
+    const [studyBuddyQuizBuffer, setStudyBuddyQuizBuffer] = useState<StudyBuddyQuizItem[]>([]);
     const [isStudyBuddyQuizLoading, setIsStudyBuddyQuizLoading] = useState(false);
     const [studyBuddyQuizError, setStudyBuddyQuizError] = useState<string | null>(null);
     const [studyBuddyQuizAnswer, setStudyBuddyQuizAnswer] = useState('');
@@ -190,9 +215,10 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const studyBuddyExampleSeenRef = useRef<Set<string>>(new Set());
     const studyBuddyExampleRevealRef = useRef(false);
     const studyBuddyQuizAbortRef = useRef<AbortController | null>(null);
-    const studyBuddyQuizRequestRef = useRef<Promise<string[]> | null>(null);
+    const studyBuddyQuizRequestRef = useRef<Promise<StudyBuddyQuizItem[]> | null>(null);
     const studyBuddyQuizRequestWordIdRef = useRef<string | null>(null);
     const studyBuddyQuizSeenRef = useRef<Set<string>>(new Set());
+    const studyBuddyQuizAnswerSeenRef = useRef<Set<string>>(new Set());
     const studyBuddyQuizRevealRef = useRef(false);
     const serverUrl = getServerUrl(getConfig());
     const studyBuddyAiUrl = getStudyBuddyAiUrl(getConfig());
@@ -253,13 +279,9 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         [currentWord.collocationsArray]
     );
     const actionButtonBaseClass = 'flex items-center gap-2 px-6 py-3 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg transition-all active:scale-95';
-    const viewButtonClass = `${actionButtonBaseClass} bg-sky-600 hover:bg-sky-700 shadow-sky-500/20 ${activeFastReviewPanel || showSpellBox ? 'ring-2 ring-sky-200 ring-offset-2 ring-offset-white' : ''}`;
-    const aiButtonClass = `${actionButtonBaseClass} bg-fuchsia-600 hover:bg-fuchsia-700 shadow-fuchsia-500/20 ${activeBotPanel ? 'ring-2 ring-fuchsia-200 ring-offset-2 ring-offset-white' : ''}`;
-    const practiceButtonClass = `${actionButtonBaseClass} ${
-        hasRetryableFailedTests
-            ? 'bg-red-600 hover:bg-red-700 shadow-red-500/20'
-            : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20'
-    }`;
+    const viewButtonClass = `${actionButtonBaseClass} bg-white text-sky-600 border border-sky-600 hover:bg-sky-50 hover:text-sky-700 shadow-none ${activeFastReviewPanel || showSpellBox ? 'ring-2 ring-sky-200 ring-offset-2 ring-offset-white' : ''}`;
+    const aiButtonClass = `${actionButtonBaseClass} bg-white text-fuchsia-600 border border-fuchsia-600 hover:bg-fuchsia-50 hover:text-fuchsia-700 shadow-none ${activeBotPanel ? 'ring-2 ring-fuchsia-200 ring-offset-2 ring-offset-white' : ''}`;
+    const practiceButtonClass = `${actionButtonBaseClass} bg-white text-${hasRetryableFailedTests ? 'red-600 border border-red-600 hover:bg-red-50 hover:text-red-700 shadow-none' : 'amber-600 border border-amber-600 hover:bg-amber-50 hover:text-amber-700 shadow-none'}`;
     const floatingMenuClass = 'absolute left-1/2 top-full z-20 w-max -translate-x-1/2 pt-2 transition-all duration-150';
 
     const extractFreshExamples = useCallback((rawText: string): string[] => {
@@ -275,15 +297,27 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         return result;
     }, [existingExampleSet]);
 
-    const extractFreshQuizQuestions = useCallback((rawText: string): string[] => {
-        const seen = studyBuddyQuizSeenRef.current;
-        return splitExampleLines(rawText).filter((line) => {
-            const normalized = normalizeExampleLine(line);
-            if (!normalized) return false;
-            if (seen.has(normalized)) return false;
-            seen.add(normalized);
-            return true;
+    const extractFreshQuizQuestions = useCallback((rawText: string): StudyBuddyQuizItem[] => {
+        const seenQuestions = studyBuddyQuizSeenRef.current;
+        const seenAnswers = studyBuddyQuizAnswerSeenRef.current;
+        const lines = splitExampleLines(rawText);
+        const result: StudyBuddyQuizItem[] = [];
+
+        lines.forEach((line) => {
+            const [questionPart, answerPart] = line.split('|||').map((item) => item.trim());
+            const normalizedQuestion = normalizeExampleLine(questionPart || '');
+            const normalizedAnswer = normalizeExampleLine(answerPart || '');
+            if (!normalizedQuestion || !normalizedAnswer) return;
+            if (seenQuestions.has(normalizedQuestion) || seenAnswers.has(normalizedAnswer)) return;
+            seenQuestions.add(normalizedQuestion);
+            seenAnswers.add(normalizedAnswer);
+            result.push({
+                question: questionPart,
+                answer: answerPart
+            });
         });
+
+        return result;
     }, []);
 
     const mergeBufferedExamples = useCallback((incomingExamples: string[], options?: { replace?: boolean }) => {
@@ -311,16 +345,20 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         });
     }, []);
 
-    const mergeBufferedQuizQuestions = useCallback((incomingQuestions: string[], options?: { replace?: boolean }) => {
+    const mergeBufferedQuizQuestions = useCallback((incomingQuestions: StudyBuddyQuizItem[], options?: { replace?: boolean }) => {
         if (incomingQuestions.length === 0) return;
         setStudyBuddyQuizBuffer((prev) => {
             const merged = options?.replace ? incomingQuestions : [...prev, ...incomingQuestions];
-            const unique: string[] = [];
-            const localSeen = new Set<string>();
+            const unique: StudyBuddyQuizItem[] = [];
+            const localQuestionSeen = new Set<string>();
+            const localAnswerSeen = new Set<string>();
             merged.forEach((item) => {
-                const normalized = normalizeExampleLine(item);
-                if (!normalized || localSeen.has(normalized)) return;
-                localSeen.add(normalized);
+                const normalizedQuestion = normalizeExampleLine(item.question);
+                const normalizedAnswer = normalizeExampleLine(item.answer);
+                if (!normalizedQuestion || !normalizedAnswer) return;
+                if (localQuestionSeen.has(normalizedQuestion) || localAnswerSeen.has(normalizedAnswer)) return;
+                localQuestionSeen.add(normalizedQuestion);
+                localAnswerSeen.add(normalizedAnswer);
                 unique.push(item);
             });
             return unique;
@@ -454,11 +492,11 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         return finalExamples;
     }, [extractFreshExamples, mergeBufferedExamples, studyBuddyAiUrl, user]);
 
-    const requestStudyBuddyQuizQuestions = useCallback(async (word: StudyItem, signal?: AbortSignal, replaceBuffer = false): Promise<string[]> => {
+    const requestStudyBuddyQuizQuestions = useCallback(async (word: StudyItem, signal?: AbortSignal, replaceBuffer = false): Promise<StudyBuddyQuizItem[]> => {
         const bannedQuestions = Array.from(studyBuddyQuizSeenRef.current);
+        const bannedAnswers = Array.from(studyBuddyQuizAnswerSeenRef.current);
         const audienceInstruction = getAudienceInstruction(user);
-        const levelInstruction = user.currentLevel ? `Learner level: ${user.currentLevel}.` : '';
-        const targetInstruction = user.target ? `Learner goal: ${user.target}.` : '';
+        const profileInstruction = getLearnerProfileInstruction(user);
         const collocationList = (word.collocationsArray || [])
             .filter((item) => !item.isIgnored && String(item.text || '').trim())
             .map((item) => item.text.trim());
@@ -475,19 +513,25 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
                     },
                     {
                         role: 'user',
-                        content: `Write exactly ${GENERATED_QUIZ_BUFFER_SIZE} distinct collocation quiz questions for the target word "${word.word}".
+                        content: `Write exactly ${GENERATED_QUIZ_BUFFER_SIZE} distinct collocation quiz items for this learner and the current review word "${word.word}".
 
 Rules:
 - ${audienceInstruction}
-- ${levelInstruction}
-- ${targetInstruction}
-- Each line must be one scenario-based question.
-- Test whether the learner can produce a natural collocation with the target word.
-- NEVER reveal the target word or the answer collocation in the question.
-- Keep each question concise and realistic.
-- The expected answer should fit IELTS, academic, or natural adult usage.
-- Prefer these collocations if they are natural: ${collocationList.length > 0 ? collocationList.join(' | ') : 'infer a common natural collocation for this word'}.
-${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz questions:\n${bannedQuestions.map((item) => `  • ${item}`).join('\n')}` : ''}`
+- ${profileInstruction}
+- Each line must use this exact format: question ||| answer
+- "question" = one concise scenario-based question.
+- "answer" = one natural collocation that must include "${word.word}".
+- The expected answer must use the current review word "${word.word}" in a natural collocation.
+- Do NOT reveal the current review word in the question.
+- You may invent new natural collocations even if they are not in the saved collocation list.
+- Prefer everyday, school, or work situations that fit the learner profile.
+- NEVER reveal the answer collocation in the question.
+- Keep each question concise, realistic, and clearly answerable.
+- Make all 4 questions target different collocation patterns. Avoid semantic overlap.
+- All 4 answers must be different collocations. Do not reuse the same answer pattern with different wording.
+- Avoid simply reusing these known collocations unless needed, but stay semantically natural for "${word.word}": ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}.
+${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz questions:\n${bannedQuestions.map((item) => `  • ${item}`).join('\n')}` : ''}
+${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer collocations:\n${bannedAnswers.map((item) => `  • ${item}`).join('\n')}` : ''}`
                     }
                 ],
                 searchEnabled: false,
@@ -505,11 +549,11 @@ ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz quest
 
         const payload = await response.json().catch(() => null);
         const rawText = String(payload?.choices?.[0]?.message?.content || '').trim();
-        const freshQuestions = extractFreshQuizQuestions(rawText);
-        if (freshQuestions.length > 0) {
-            mergeBufferedQuizQuestions(freshQuestions, { replace: replaceBuffer });
+        const freshQuizItems = extractFreshQuizQuestions(rawText);
+        if (freshQuizItems.length > 0) {
+            mergeBufferedQuizQuestions(freshQuizItems, { replace: replaceBuffer });
         }
-        return freshQuestions;
+        return freshQuizItems;
     }, [extractFreshQuizQuestions, mergeBufferedQuizQuestions, studyBuddyAiUrl, user]);
 
     const requestStudyBuddyQuizMicroReply = useCallback(async (prompt: string): Promise<string> => {
@@ -651,11 +695,11 @@ ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz quest
                 if (studyBuddyQuizRevealRef.current) {
                     const first = incomingQuestions?.[0];
                     if (first) {
-                        setStudyBuddyQuizQuestion(first);
+                        setStudyBuddyQuizItem(first);
                         setStudyBuddyQuizError(null);
                         setIsStudyBuddyQuizLoading(false);
                         setStudyBuddyQuizBuffer((prev) =>
-                            prev.filter((item) => normalizeExampleLine(item) !== normalizeExampleLine(first))
+                            prev.filter((item) => normalizeExampleLine(item.question) !== normalizeExampleLine(first.question))
                         );
                     }
                 }
@@ -714,10 +758,6 @@ ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz quest
             // update buffer
             setStudyBuddyExampleBuffer(rest);
 
-            if (rest.length < 2) {
-                void prefetchStudyBuddyExamples(currentWord);
-            }
-
             setStudyBuddyExample(first);
             setStudyBuddyExampleError(null);
             return;
@@ -764,10 +804,7 @@ ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz quest
         if (bufferSnapshot.length > 0) {
             const [first, ...rest] = bufferSnapshot;
             setStudyBuddyQuizBuffer(rest);
-            if (rest.length < 2) {
-                void prefetchStudyBuddyQuizQuestions(currentWord);
-            }
-            setStudyBuddyQuizQuestion(first);
+            setStudyBuddyQuizItem(first);
             setStudyBuddyQuizError(null);
             return;
         }
@@ -789,7 +826,8 @@ ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz quest
 
     const handleStudyBuddyQuizCheck = useCallback(async () => {
         const answer = studyBuddyQuizAnswer.trim();
-        const question = studyBuddyQuizQuestion?.trim() || '';
+        const question = studyBuddyQuizItem?.question.trim() || '';
+        const expectedAnswer = studyBuddyQuizItem?.answer.trim() || '';
         if (!answer || !question) return;
 
         setIsStudyBuddyQuizChecking(true);
@@ -797,17 +835,23 @@ ${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz quest
         try {
             const collocationList = collocationTargets.map((item) => item.text.trim()).filter(Boolean);
             const reply = await requestStudyBuddyQuizMicroReply(
-                `Evaluate this learner answer for a collocation quiz.
+                `Evaluate this learner answer for a collocation quiz about the current review word.
 
-Target word: "${currentWord.word}"
-Known collocations: ${collocationList.length > 0 ? collocationList.join(' | ') : 'infer natural collocations if needed'}
+Learner profile: ${getLearnerProfileInstruction(user)}
+Current review word: "${currentWord.word}" (the answer must use this word)
+Known collocations of current review word: ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}
 Quiz question: "${question}"
+Expected target collocation: "${expectedAnswer || 'not provided'}"
 Learner answer: "${answer}"
 
 Judge only:
 - is the collocation natural?
 - is it correct English?
-- is it appropriate in casual/academic style for this context?
+- does the answer actually use the current review word?
+- does it fit the scenario and learner profile?
+- treat the expected target collocation as the main intended answer
+- accept a close natural variant only if it answers the same collocation idea correctly
+- it may be a new collocation not listed above if it is natural
 
 Reply with exactly one very short sentence or phrase.`
             );
@@ -818,24 +862,27 @@ Reply with exactly one very short sentence or phrase.`
         } finally {
             setIsStudyBuddyQuizChecking(false);
         }
-    }, [collocationTargets, currentWord.word, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizQuestion]);
+    }, [collocationTargets, currentWord.word, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizItem, user]);
 
     const handleStudyBuddyQuizHint = useCallback(async () => {
-        const question = studyBuddyQuizQuestion?.trim() || '';
+        const question = studyBuddyQuizItem?.question.trim() || '';
+        const expectedAnswer = studyBuddyQuizItem?.answer.trim() || '';
         if (!question) return;
 
         setIsStudyBuddyQuizHintLoading(true);
         try {
             const collocationList = collocationTargets.map((item) => item.text.trim()).filter(Boolean);
             const reply = await requestStudyBuddyQuizMicroReply(
-                `Give a minimal collocation hint for this learner.
+                `Give a minimal hint for a collocation quiz about the current review word.
 
-Target word: "${currentWord.word}"
-Known collocations: ${collocationList.length > 0 ? collocationList.join(' | ') : 'infer one common natural collocation'}
+Learner profile: ${getLearnerProfileInstruction(user)}
+Current review word: "${currentWord.word}" (the answer must use this word)
+Known collocations of current review word: ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}
 Quiz question: "${question}"
+Expected target collocation: "${expectedAnswer || 'not provided'}"
 Current learner answer: "${studyBuddyQuizAnswer.trim() || '(empty)'}"
 
-Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
+Reply with only one minimal hint or one ideal answer phrase using the current review word. Keep it very short.`
             );
             setStudyBuddyQuizHint(reply || 'No hint right now.');
         } catch (error) {
@@ -844,7 +891,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
         } finally {
             setIsStudyBuddyQuizHintLoading(false);
         }
-    }, [collocationTargets, currentWord.word, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizQuestion]);
+    }, [collocationTargets, currentWord.word, requestStudyBuddyQuizMicroReply, studyBuddyQuizAnswer, studyBuddyQuizItem, user]);
 
     const handleFastReviewAction = useCallback((panel: 'meaning' | 'collocation' | 'paraphrase' | 'preposition' | 'idiom') => {
         setActiveBotPanel(null);
@@ -895,33 +942,30 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
         setIsStudyBuddyExampleVisible(false);
         setStudyBuddyExampleError(null);
         setIsExampleTextRevealed(false);
-        // Prefetch silently (no loading UI)
         studyBuddyExampleRevealRef.current = false;
-        void prefetchStudyBuddyExamples(currentWord, { replace: true });
         studyBuddyQuizAbortRef.current?.abort();
         studyBuddyQuizRequestRef.current = null;
         studyBuddyQuizRequestWordIdRef.current = null;
-        studyBuddyQuizSeenRef.current = new Set();
+        studyBuddyQuizAnswerSeenRef.current = new Set();
         setActiveFastReviewPanel(null);
         setActiveBotPanel(null);
         setHoveredActionMenu(null);
         setShowSpellBox(false);
         setSpellInput('');
         setSpellResult(null);
-        setStudyBuddyQuizQuestion(null);
+        setStudyBuddyQuizItem(null);
         setStudyBuddyQuizBuffer([]);
         setStudyBuddyQuizError(null);
         setStudyBuddyQuizAnswer('');
         setStudyBuddyQuizFeedback(null);
         setStudyBuddyQuizHint(null);
         studyBuddyQuizRevealRef.current = false;
-        void prefetchStudyBuddyQuizQuestions(currentWord, { replace: true });
 
         return () => {
             studyBuddyExampleAbortRef.current?.abort();
             studyBuddyQuizAbortRef.current?.abort();
         };
-    }, [currentWord.id, prefetchStudyBuddyExamples, prefetchStudyBuddyQuizQuestions]);
+    }, [currentWord.id]);
 
     const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
         touchStartX.current = e.touches[0].clientX;
@@ -1016,7 +1060,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                 <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading Next Test...</p>
                             </div>
                         ) : (<>
-                            <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-16 w-full text-center space-y-3 sm:space-y-3">
+                            <div className="flex-1 flex flex-col items-center justify-start pt-40 w-full text-center space-y-3 sm:space-y-3">
                                 <div className="flex items-center gap-4 flex-wrap justify-center">
                                     <h2 className={`font-black text-neutral-900 tracking-tight text-3xl sm:text-4xl break-words ${isIpa ? 'font-serif' : ''}`}>
                                         {displayText}
@@ -1134,7 +1178,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                             onClick={() => setHoveredActionMenu((current) => current === 'view' ? null : 'view')}
                                             className={viewButtonClass}
                                         >
-                                            <Eye size={14}/><span>View</span>
+                                            <Eye size={14}/>
                                         </button>
                                         <div className={`${floatingMenuClass} ${hoveredActionMenu === 'view' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
                                             <div className="flex min-w-[220px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
@@ -1158,7 +1202,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                             onFocus={() => setHoveredActionMenu('ai')}
                                             onClick={() => setHoveredActionMenu((current) => current === 'ai' ? null : 'ai')}
                                         >
-                                            <Bot size={14}/><span>AI</span>
+                                            <Bot size={14}/>
                                         </button>
                                         <div className={`${floatingMenuClass} ${hoveredActionMenu === 'ai' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
                                             <div className="flex min-w-[180px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
@@ -1172,7 +1216,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                         onClick={handleManualPractice}
                                         className={practiceButtonClass}
                                     >
-                                        <BrainCircuit size={14}/><span>Practice</span>
+                                        <BrainCircuit size={14}/>
                                     </button>
                                 </div>
                                 <div className="w-full max-w-lg min-h-[216px]">
@@ -1386,10 +1430,10 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                                     <span>{isStudyBuddyQuizLoading ? 'Loading' : 'Next'}</span>
                                                 </button>
                                             </div>
-                                            {studyBuddyQuizQuestion ? (
+                                            {studyBuddyQuizItem ? (
                                                 <div className="space-y-3">
                                                     <p className="text-sm font-semibold leading-relaxed text-neutral-800">
-                                                        {studyBuddyQuizQuestion}
+                                                        {studyBuddyQuizItem.question}
                                                     </p>
                                                     <div className="space-y-2">
                                                         <input
