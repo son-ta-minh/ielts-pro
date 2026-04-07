@@ -370,6 +370,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
 
     const serverUrl = getServerUrl(getConfig());
     const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+    const [isWordFamilyExpanded, setIsWordFamilyExpanded] = useState(false);
     const activeTab: 'OVERVIEW' = 'OVERVIEW';
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const viewMenuRef = useRef<HTMLDivElement>(null);
@@ -385,6 +386,10 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
 
     useEffect(() => {
         setActiveExampleHighlight(null);
+    }, [word.id]);
+
+    useEffect(() => {
+        setIsWordFamilyExpanded(false);
     }, [word.id]);
 
     const handlePronounceWithCoachLookup = (targetWord: string) => {
@@ -617,6 +622,12 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
     }, [word.wordFamily, wordFamilyGroup]);
 
     const hasAnyFamilyData = !!(effectiveWordFamily && (effectiveWordFamily.nouns?.length || effectiveWordFamily.verbs?.length || effectiveWordFamily.adjs?.length || effectiveWordFamily.advs?.length));
+    const wordFamilyCount = (
+        (effectiveWordFamily?.nouns?.length || 0) +
+        (effectiveWordFamily?.verbs?.length || 0) +
+        (effectiveWordFamily?.adjs?.length || 0) +
+        (effectiveWordFamily?.advs?.length || 0)
+    );
     const displayedPreps = (word.prepositions || []).filter(p => viewSettings.showHidden || !p.isIgnored);
     const displayedCollocs = (word.collocationsArray || []).filter(c => viewSettings.showHidden || !c.isIgnored);
     const displayedIdioms = (word.idiomsList || []).filter(c => viewSettings.showHidden || !c.isIgnored);
@@ -1051,28 +1062,45 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                 {hasAnyFamilyData && (
                                     <div className="space-y-1 md:col-span-4">
                                         <div className="mb-1 flex items-center justify-between">
-                                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                                                <Network size={10}/> Word Family
-                                            </label>
-                                            {wordFamilyGroup?.id && onOpenWordFamilyGroupRequest ? (
+                                            <div className="flex items-center gap-2">
+                                                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest flex items-center gap-1">
+                                                    <Network size={10}/> Word Family
+                                                </label>
+                                                <span className="rounded-full border border-neutral-200 bg-white px-1.5 py-0.5 text-[9px] font-black text-neutral-500">
+                                                    {wordFamilyCount}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {wordFamilyGroup?.id && onOpenWordFamilyGroupRequest ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onOpenWordFamilyGroupRequest(wordFamilyGroup.id)}
+                                                        className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                                                    >
+                                                        <LibraryBig size={10} />
+                                                        <span>Edit</span>
+                                                    </button>
+                                                ) : null}
                                                 <button
                                                     type="button"
-                                                    onClick={() => onOpenWordFamilyGroupRequest(wordFamilyGroup.id)}
+                                                    onClick={() => setIsWordFamilyExpanded((prev) => !prev)}
                                                     className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
                                                 >
-                                                    <LibraryBig size={10} />
-                                                    <span>Edit</span>
+                                                    {isWordFamilyExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                                                    <span>{isWordFamilyExpanded ? 'Hide' : 'Show'}</span>
                                                 </button>
-                                            ) : null}
-                                        </div>
-                                        <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100">
-                                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                                                {renderFamilyCardGroup("Nouns", effectiveWordFamily?.nouns, "blue", "nouns")}
-                                                {renderFamilyCardGroup("Verbs", effectiveWordFamily?.verbs, "green", "verbs")}
-                                                {renderFamilyCardGroup("Adjectives", effectiveWordFamily?.adjs, "orange", "adjs")}
-                                                {renderFamilyCardGroup("Adverbs", effectiveWordFamily?.advs, "purple", "advs")}
                                             </div>
                                         </div>
+                                        {isWordFamilyExpanded && (
+                                            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-100 animate-in fade-in zoom-in-95">
+                                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                                    {renderFamilyCardGroup("Nouns", effectiveWordFamily?.nouns, "blue", "nouns")}
+                                                    {renderFamilyCardGroup("Verbs", effectiveWordFamily?.verbs, "green", "verbs")}
+                                                    {renderFamilyCardGroup("Adjectives", effectiveWordFamily?.adjs, "orange", "adjs")}
+                                                    {renderFamilyCardGroup("Adverbs", effectiveWordFamily?.advs, "purple", "advs")}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 {displayedCollocs.length > 0 && (
