@@ -167,6 +167,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [spellResult, setSpellResult] = useState<'correct' | 'wrong' | null>(null);
     const [isStudyBuddyExampleVisible, setIsStudyBuddyExampleVisible] = useState(false);
     const [isExampleTextRevealed, setIsExampleTextRevealed] = useState(false);
+    const [isFastReviewOpen, setIsFastReviewOpen] = useState(false);
+    const [isBotReviewOpen, setIsBotReviewOpen] = useState(false);
     const [studyBuddyExample, setStudyBuddyExample] = useState<string | null>(null);
     const [studyBuddyExampleBuffer, setStudyBuddyExampleBuffer] = useState<string[]>([]);
     const [isStudyBuddyExampleLoading, setIsStudyBuddyExampleLoading] = useState(false);
@@ -852,6 +854,8 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
         studyBuddyQuizRequestRef.current = null;
         studyBuddyQuizRequestWordIdRef.current = null;
         studyBuddyQuizSeenRef.current = new Set();
+        setIsFastReviewOpen(false);
+        setIsBotReviewOpen(false);
         setActiveBotPanel(null);
         setStudyBuddyQuizQuestion(null);
         setStudyBuddyQuizBuffer([]);
@@ -967,6 +971,14 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                         {displayText}
                                     </h2>
 
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
+                                        className="text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
+                                        title="Pronounce"
+                                    >
+                                        <Volume2 size={22} />
+                                    </button>
+
                                     {currentWord.img && currentWord.img.length > 0 && (
                                         <div className="relative group/img">
                                             <button
@@ -1020,148 +1032,6 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                         <MasteryScoreCalculator word={currentWord} />
                                     )}
                                 </div>
-                                <div className="flex items-center justify-center gap-4">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
-                                    className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                    title="Pronounce"
-                                >
-                                    <Volume2 size={22} />
-                                </button>
-                                <button
-                                    onClick={() => setMimicTarget(reviewHeadword)}
-                                    className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
-                                    title="Simple Mimic"
-                                >
-                                    <Mic size={20} />
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setSpellInput('');
-                                        setSpellResult(null);
-                                        setShowSpellBox(v => !v);
-                                    }}
-                                    className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-purple-600 rounded-full transition-colors"
-                                    title="Check Spelling"
-                                >
-                                    <Keyboard size={20} />
-                                </button>
-                                    <div className="relative group/book">
-                                        <button
-                                            onClick={() => speak(vietnameseMeaning, false, 'vi')}
-                                            className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-amber-600 rounded-full transition-colors"
-                                        >
-                                            <BookOpen size={20} />
-                                        </button>
-                                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[260px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/book:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 border border-neutral-200 shadow-lg">
-                                            <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
-                                                Meaning
-                                            </div>
-                                            {vietnameseMeaning}
-                                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
-                                        </span>
-                                    </div>
-                                    {visiblePrepositions.length > 0 && (
-                                        <div className="relative group/prep">
-                                            <button
-                                                onClick={() => speak(prepositionTooltip.replace(/\n/g, ', '))}
-                                                className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-orange-600 rounded-full transition-colors"
-                                            >
-                                                <AtSign size={20} />
-                                            </button>
-                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/prep:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
-                                                <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
-                                                    Prepositions
-                                                </div>
-                                                {prepositionTooltip.includes('\n') ? (
-                                                    <ul className="list-disc pl-4 space-y-0.5">
-                                                        {prepositionTooltip.split('\n').map((item, idx) => (
-                                                            <li key={idx}>{item}</li>
-                                                        ))}
-                                                    </ul>
-                                                ) : (
-                                                    prepositionTooltip
-                                                )}
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
-                                            </span>
-                                        </div>
-                                    )}
-                                    {visibleCollocations.length > 0 && (
-                                        <div className="relative group/col">
-                                            <button
-                                                onClick={() => speak(collocationTooltip.replace(/\n/g, ', '))}
-                                                className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
-                                            >
-                                                <Combine size={20} />
-                                            </button>
-                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/col:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
-                                                <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
-                                                    Collocations
-                                                </div>
-                                                {collocationTooltip.includes('\n') ? (
-                                                    <ul className="list-disc pl-4 space-y-0.5">
-                                                        {collocationTooltip.split('\n').map((item, idx) => (
-                                                            <li key={idx}>{item}</li>
-                                                        ))}
-                                                    </ul>
-                                                ) : (
-                                                    collocationTooltip
-                                                )}
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
-                                            </span>
-                                        </div>
-                                    )}
-                                    {visibleParaphrases.length > 0 && (
-                                        <div className="relative group/para">
-                                            <button
-                                                onClick={() => speak(paraphraseTooltip.replace(/\n/g, ', '))}
-                                                className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-cyan-600 rounded-full transition-colors"
-                                            >
-                                                <Zap size={20} />
-                                            </button>
-                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/para:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
-                                                <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
-                                                    Paraphrases
-                                                </div>
-                                                {paraphraseTooltip.includes('\n') ? (
-                                                    <ul className="list-disc pl-4 space-y-0.5">
-                                                        {paraphraseTooltip.split('\n').map((item, idx) => (
-                                                            <li key={idx}>{item}</li>
-                                                        ))}
-                                                    </ul>
-                                                ) : (
-                                                    paraphraseTooltip
-                                                )}
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
-                                            </span>
-                                        </div>
-                                    )}
-                                    {visibleIdioms.length > 0 && (
-                                        <div className="relative group/idiom">
-                                            <button
-                                                onClick={() => speak(idiomTooltip.replace(/\n/g, ', '))}
-                                                className="p-3 text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-emerald-600 rounded-full transition-colors"
-                                            >
-                                                <MessageSquare size={20} />
-                                            </button>
-                                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/idiom:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
-                                                <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
-                                                    Idioms
-                                                </div>
-                                                {idiomTooltip.includes('\n') ? (
-                                                    <ul className="list-disc pl-4 space-y-0.5">
-                                                        {idiomTooltip.split('\n').map((item, idx) => (
-                                                            <li key={idx}>{item}</li>
-                                                        ))}
-                                                    </ul>
-                                                ) : (
-                                                    idiomTooltip
-                                                )}
-                                                <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
                                 <div className="flex items-center gap-3">
                                     <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
                                         <Eye size={14}/><span>View Details</span>
@@ -1176,40 +1046,140 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                     >
                                         <BrainCircuit size={14}/><span>Practice</span>
                                     </button>
+                                    <button
+                                        onClick={() => setIsFastReviewOpen((prev) => !prev)}
+                                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-[10px] transition-all active:scale-95 uppercase tracking-widest shadow-sm border ${
+                                            isFastReviewOpen
+                                                ? 'bg-neutral-900 border-neutral-900 text-white'
+                                                : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                                        }`}
+                                    >
+                                        <Zap size={14}/><span>Fast Review</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setIsBotReviewOpen((prev) => !prev)}
+                                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-[10px] transition-all active:scale-95 uppercase tracking-widest shadow-sm border ${
+                                            isBotReviewOpen
+                                                ? 'bg-neutral-900 border-neutral-900 text-white'
+                                                : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                                        }`}
+                                    >
+                                        <Bot size={14}/><span>AI Review</span>
+                                    </button>
                                 </div>
-                                <div className="w-full max-w-lg rounded-[1.5rem] border border-neutral-200 bg-white px-4 py-3 shadow-sm">
-                                    <div className="flex flex-wrap items-center justify-between gap-3">
-                                        <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">
-                                            <Bot size={12} />
-                                            <span>Bot</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
+                                {isFastReviewOpen && (
+                                    <div className="w-full max-w-lg rounded-[1.5rem] border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+                                        <div className="flex flex-wrap items-center justify-center gap-3">
                                             <button
-                                                onClick={() => void showNextStudyBuddyExample()}
-                                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
-                                                    activeBotPanel === 'example'
-                                                        ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                                        : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100'
-                                                }`}
+                                                onClick={() => setMimicTarget(reviewHeadword)}
+                                                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
+                                                title="Simple Mimic"
                                             >
-                                                <BookCopy size={11} />
-                                                <span>Example</span>
+                                                <Mic size={11} />
+                                                <span>Mimic</span>
                                             </button>
-                                            <button
-                                                onClick={() => void showNextStudyBuddyQuiz()}
-                                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
-                                                    activeBotPanel === 'quiz'
-                                                        ? 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700'
-                                                        : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100'
-                                                }`}
-                                            >
-                                                <Sparkles size={11} />
-                                                <span>Quiz</span>
-                                            </button>
+                                            <div className="relative group/book">
+                                                <button
+                                                    onClick={() => speak(vietnameseMeaning, false, 'vi')}
+                                                    className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
+                                                >
+                                                    <BookOpen size={11} />
+                                                    <span>Meaning</span>
+                                                </button>
+                                                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[260px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/book:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 border border-neutral-200 shadow-lg">
+                                                    <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">
+                                                        Meaning
+                                                    </div>
+                                                    {vietnameseMeaning}
+                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
+                                                </span>
+                                            </div>
+                                            {visibleCollocations.length > 0 && (
+                                                <div className="relative group/col">
+                                                    <button
+                                                        onClick={() => speak(collocationTooltip.replace(/\n/g, ', '))}
+                                                        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
+                                                    >
+                                                        <Combine size={11} />
+                                                        <span>Collocation</span>
+                                                    </button>
+                                                    <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/col:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
+                                                        <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">Collocations</div>
+                                                        {collocationTooltip.includes('\n') ? <ul className="list-disc pl-4 space-y-0.5">{collocationTooltip.split('\n').map((item, idx) => <li key={idx}>{item}</li>)}</ul> : collocationTooltip}
+                                                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {visibleParaphrases.length > 0 && (
+                                                <div className="relative group/para">
+                                                    <button
+                                                        onClick={() => speak(paraphraseTooltip.replace(/\n/g, ', '))}
+                                                        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
+                                                    >
+                                                        <Zap size={11} />
+                                                        <span>Paraphrase</span>
+                                                    </button>
+                                                    <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/para:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
+                                                        <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">Paraphrases</div>
+                                                        {paraphraseTooltip.includes('\n') ? <ul className="list-disc pl-4 space-y-0.5">{paraphraseTooltip.split('\n').map((item, idx) => <li key={idx}>{item}</li>)}</ul> : paraphraseTooltip}
+                                                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {visiblePrepositions.length > 0 && (
+                                                <div className="relative group/prep">
+                                                    <button
+                                                        onClick={() => speak(prepositionTooltip.replace(/\n/g, ', '))}
+                                                        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-neutral-600 hover:bg-neutral-100"
+                                                    >
+                                                        <AtSign size={11} />
+                                                        <span>Preposition</span>
+                                                    </button>
+                                                    <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-[300px] px-3 py-2 bg-white text-neutral-900 text-[10px] font-semibold rounded-lg opacity-0 group-hover/prep:opacity-100 transition-opacity pointer-events-none text-left leading-snug z-20 whitespace-pre-line border border-neutral-200 shadow-lg">
+                                                        <div className="text-[9px] font-black uppercase tracking-wider mb-1 text-neutral-500">Prepositions</div>
+                                                        {prepositionTooltip.includes('\n') ? <ul className="list-disc pl-4 space-y-0.5">{prepositionTooltip.split('\n').map((item, idx) => <li key={idx}>{item}</li>)}</ul> : prepositionTooltip}
+                                                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-white border-l border-t border-neutral-200 rotate-45"></span>
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
-                                {activeBotPanel === 'example' && (isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
+                                )}
+                                {isBotReviewOpen && (
+                                    <div className="w-full max-w-lg rounded-[1.5rem] border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">
+                                                <Bot size={12} />
+                                                <span>Bot</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => void showNextStudyBuddyExample()}
+                                                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
+                                                        activeBotPanel === 'example'
+                                                            ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                                            : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100'
+                                                    }`}
+                                                >
+                                                    <BookCopy size={11} />
+                                                    <span>Example</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => void showNextStudyBuddyQuiz()}
+                                                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
+                                                        activeBotPanel === 'quiz'
+                                                            ? 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-700'
+                                                            : 'border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100'
+                                                    }`}
+                                                >
+                                                    <Sparkles size={11} />
+                                                    <span>Quiz</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                {isBotReviewOpen && activeBotPanel === 'example' && (isStudyBuddyExampleVisible || isStudyBuddyExampleLoading || studyBuddyExampleError) && (
                                     <div className="w-full max-w-lg relative z-0">
                                         <div
                                             className="w-full rounded-[1.75rem] border border-blue-200 bg-blue-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-blue-50 relative z-10"
@@ -1285,7 +1255,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                         </div>
                                     </div>
                                 )}
-                                {activeBotPanel === 'quiz' && (
+                                {isBotReviewOpen && activeBotPanel === 'quiz' && (
                                     <div className="w-full max-w-lg relative z-0">
                                         <div className="w-full rounded-[1.75rem] border border-fuchsia-200 bg-fuchsia-50/70 px-5 py-4 text-left shadow-sm transition-colors hover:bg-fuchsia-50 relative z-10">
                                             <div className="mb-3 flex items-center justify-between gap-3">
