@@ -1034,7 +1034,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button onClick={() => onOpenWordDetails(currentWord)} className="flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl font-black text-[10px] hover:bg-neutral-50 transition-all active:scale-95 uppercase tracking-widest shadow-sm">
-                                        <Eye size={14}/><span>View Details</span>
+                                        <Eye size={14}/><span>View</span>
                                     </button>
                                     <button
                                         onClick={handleManualPractice}
@@ -1054,7 +1054,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                                 : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
                                         }`}
                                     >
-                                        <Zap size={14}/><span>Fast Review</span>
+                                        <Zap size={14}/><span>Review</span>
                                     </button>
                                     <button
                                         onClick={() => setIsBotReviewOpen((prev) => !prev)}
@@ -1064,7 +1064,7 @@ Reply with only one minimal hint or ideal answer phrase. Keep it very short.`
                                                 : 'bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50'
                                         }`}
                                     >
-                                        <Bot size={14}/><span>AI Review</span>
+                                        <Bot size={14}/><span>AI</span>
                                     </button>
                                 </div>
                                 {isFastReviewOpen && (
