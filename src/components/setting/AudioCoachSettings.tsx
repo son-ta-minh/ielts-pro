@@ -600,6 +600,20 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
                         Add Memory
                     </button>
                 </div>
+                <label
+                    onClick={() => handleUpdateCoach({ autoWriteMemory: !(coachConfig.autoWriteMemory ?? false) }, true)}
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-neutral-200 bg-white px-4 py-4 shadow-sm transition-all hover:bg-neutral-50 cursor-pointer"
+                >
+                    <div className="flex flex-col">
+                        <span className="text-sm font-black text-neutral-900">Write Memory</span>
+                        <span className="text-xs font-medium text-neutral-500 mt-0.5">
+                            Let AI auto-save long-term memory chunks from chat. Recommended off for local AI.
+                        </span>
+                    </div>
+                    <div className={`w-11 h-6 rounded-full transition-all flex items-center p-1 ${(coachConfig.autoWriteMemory ?? false) ? 'bg-indigo-600' : 'bg-neutral-200'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-300 ${(coachConfig.autoWriteMemory ?? false) ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </div>
+                </label>
                 <div className="space-y-3">
                     {memoryDrafts.length ? memoryDrafts.map((chunk) => (
                         <div key={chunk.id} className="flex items-start gap-3 rounded-2xl border border-neutral-200 bg-neutral-50/70 p-3">

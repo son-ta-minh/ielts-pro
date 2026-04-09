@@ -42,6 +42,7 @@ export interface CoachConfig {
   enAccent: string; 
   viVoice: string;
   viAccent: string; 
+  autoWriteMemory?: boolean;
 }
 
 export interface AudioCoachConfig {
@@ -166,7 +167,8 @@ export const DEFAULT_CONFIG: SystemConfig = {
         enVoice: '',
         enAccent: 'en_US',
         viVoice: '',
-        viAccent: 'vi_VN'
+        viAccent: 'vi_VN',
+        autoWriteMemory: false
       },
       female: {
         name: 'Sofia',
@@ -175,7 +177,8 @@ export const DEFAULT_CONFIG: SystemConfig = {
         enVoice: '',
         enAccent: 'en_US',
         viVoice: '',
-        viAccent: 'vi_VN'
+        viAccent: 'vi_VN',
+        autoWriteMemory: false
       }
     }
   },

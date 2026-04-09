@@ -242,6 +242,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const conversationPendingSubmitRef = useRef(false);
     const memoryChunksRef = useRef<StudyBuddyMemoryChunk[]>(user.studyBuddyMemory || []);
     const imageSettingsRef = useRef<StudyBuddyImageSettings>(normalizeStudyBuddyImageSettings(user.studyBuddyImageSettings));
+    const isMemoryWriteEnabledRef = useRef(!!config.audioCoach.coaches[config.audioCoach.activeCoach]?.autoWriteMemory);
     const conversationSilenceTimeoutRef = useRef<number | null>(null);
     const conversationRestartTimeoutRef = useRef<number | null>(null);
     const chatAbortReasonRef = useRef<'manual' | 'conversation-interrupt' | 'superseded' | null>(null);
@@ -1165,6 +1166,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     }, [isChatAudioEnabled]);
 
     useEffect(() => {
+        isMemoryWriteEnabledRef.current = !!coach.autoWriteMemory;
+    }, [coach.autoWriteMemory]);
+
+    useEffect(() => {
         isChatListeningRef.current = isChatListening;
     }, [isChatListening]);
 
@@ -1359,7 +1364,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         };
         const handleExternalStudyBuddyChatResponse = (event: Event) => {
             const custom = event as CustomEvent<{ content?: string }>;
-            const parsed = parseStudyBuddyMemoryDirectives(custom.detail?.content || '');
+            const parsed = isMemoryWriteEnabledRef.current
+                ? parseStudyBuddyMemoryDirectives(custom.detail?.content || '')
+                : { visibleText: String(custom.detail?.content || ''), memories: [] as string[] };
             const content = parsed.visibleText.trim();
             if (parsed.memories.length) {
                 void saveMemoryTexts(parsed.memories);
@@ -1405,7 +1412,9 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             setChatHistory((current) =>
                 current.map((turn) => {
                     if (turn.id !== streamState.assistantId) return turn;
-                    const parsed = parseStudyBuddyMemoryDirectives(`${turn.content}${delta}`);
+                    const parsed = isMemoryWriteEnabledRef.current
+                        ? parseStudyBuddyMemoryDirectives(`${turn.content}${delta}`)
+                        : { visibleText: `${turn.content}${delta}`, memories: [] as string[] };
                     nextContent = parsed.visibleText;
                     if (parsed.memories.length) {
                         void saveMemoryTexts(parsed.memories);
@@ -1884,6 +1893,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         chatConversationSilenceMs: CHAT_CONVERSATION_SILENCE_MS,
         chatConversationMaxChars: CHAT_CONVERSATION_MAX_CHARS,
         chatConversationMaxWords: CHAT_CONVERSATION_MAX_WORDS,
+        isMemoryWriteEnabled: !!coach.autoWriteMemory,
         getStudyBuddyMemoryChunks: () => memoryChunksRef.current,
         getStudyBuddyImageSettings: () => imageSettingsRef.current,
         getActiveChatTarget: () => activeChatTargetRef.current,

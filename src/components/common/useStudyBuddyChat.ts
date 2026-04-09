@@ -276,6 +276,7 @@ interface UseStudyBuddyChatOptions {
     chatConversationSilenceMs: number;
     chatConversationMaxChars: number;
     chatConversationMaxWords: number;
+    isMemoryWriteEnabled: boolean;
     getStudyBuddyMemoryChunks: () => StudyBuddyMemoryChunk[];
     getStudyBuddyImageSettings: () => StudyBuddyImageSettings;
     getActiveChatTarget: () => StudyBuddyChatTarget | null;
@@ -336,6 +337,7 @@ export function useStudyBuddyChat({
     chatConversationSilenceMs,
     chatConversationMaxChars,
     chatConversationMaxWords,
+    isMemoryWriteEnabled,
     getStudyBuddyMemoryChunks,
     getStudyBuddyImageSettings,
     getActiveChatTarget,
@@ -360,6 +362,16 @@ export function useStudyBuddyChat({
             'Stay tightly focused on the target word and the requested section.',
             'Prefer short structured explanation over chatty prose.'
         ].join(' ');
+    }
+
+    function parseAssistantMemory(content: string) {
+        if (!isMemoryWriteEnabled) {
+            return {
+                visibleText: String(content || ''),
+                memories: [] as string[]
+            };
+        }
+        return parseStudyBuddyMemoryDirectives(content);
     }
 
     async function resolveTargetWord(selectedText: string, section: StudyBuddyChatTarget['section'], source: string) {
@@ -633,7 +645,7 @@ Return a fresh corrected JSON array only. Do not explain.`;
                 ? ['Conversation mode is active. Do not use emojis in your response.']
                 : []),
             buildChatLanguageSystemMessage(chatResponseLanguage),
-            STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE
+            ...(isMemoryWriteEnabled ? [STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE] : [])
         ];
 
         setChatHistory(nextHistory);
@@ -705,7 +717,7 @@ Return a fresh corrected JSON array only. Do not explain.`;
                         if (typeof part?.text === 'string') assistantText += part.text;
                     }
                 }
-                const parsed = parseStudyBuddyMemoryDirectives(assistantText);
+                const parsed = parseAssistantMemory(assistantText);
                 if (parsed.memories.length) {
                     const freshMemories = parsed.memories.filter((text) => !persistedMemories.has(text));
                     if (freshMemories.length) {
@@ -784,7 +796,7 @@ Return a fresh corrected JSON array only. Do not explain.`;
                 }
             }
 
-            const parsedFinal = parseStudyBuddyMemoryDirectives(assistantText);
+            const parsedFinal = parseAssistantMemory(assistantText);
             if (!parsedFinal.visibleText.trim()) {
                 removeChatStatusTurn(statusTurnId);
                 updateAssistantTurn(formatStudyBuddyTargetAssistantFinal(parsedFinal.memories.length ? 'OK' : 'Connected to AI but not receive response', activeTarget));
@@ -997,7 +1009,7 @@ Return a fresh corrected JSON array only. Do not explain.`;
             ...(activeTarget ? [buildStudyBuddyTargetSystemMessage(activeTarget)] : []),
             ...(activeTarget ? [buildTargetAcademicStyleSystemMessage(activeTarget)] : []),
             buildChatLanguageSystemMessage(chatResponseLanguage),
-            STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE
+            ...(isMemoryWriteEnabled ? [STUDY_BUDDY_MEMORY_DIRECTIVE_MESSAGE] : [])
         ];
 
         setIsChatOpen(true);
@@ -1069,7 +1081,7 @@ Return a fresh corrected JSON array only. Do not explain.`;
                         if (typeof part?.text === 'string') assistantText += part.text;
                     }
                 }
-                const parsed = parseStudyBuddyMemoryDirectives(assistantText);
+                const parsed = parseAssistantMemory(assistantText);
                 if (parsed.memories.length) {
                     const freshMemories = parsed.memories.filter((text) => !persistedMemories.has(text));
                     if (freshMemories.length) {
@@ -1139,7 +1151,7 @@ Return a fresh corrected JSON array only. Do not explain.`;
                 }
             }
 
-            const parsedFinal = parseStudyBuddyMemoryDirectives(assistantText);
+            const parsedFinal = parseAssistantMemory(assistantText);
             if (!parsedFinal.visibleText.trim()) {
                 removeChatStatusTurn(statusTurnId);
                 updateAssistantTurn(formatStudyBuddyTargetAssistantFinal(parsedFinal.memories.length ? 'OK' : 'AI server da ket noi, nhung chua tra ve noi dung.', activeTarget));
