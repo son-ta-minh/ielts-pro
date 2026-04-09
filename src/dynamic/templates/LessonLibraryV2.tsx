@@ -18,6 +18,10 @@ import { getLessonPrompt } from '../../services/promptService';
 import { ResourceActions, AddAction } from '../page/ResourceActions';
 import { ViewMenu } from '../../components/common/ViewMenu';
 import { ResourceConfig } from '../types';
+import { parseMarkdown } from '../../utils/markdownParser';
+import { IntensityTable } from '../../components/common/IntensityTable';
+import { ComparisonTable } from '../../components/common/ComparisonTable';
+import { MistakeTable } from '../../components/common/MistakeTable';
 
 interface Props {
   user: User;
@@ -43,6 +47,8 @@ type BuiltInFilter = 'ALL' | ResourceItem['type'];
 type TypeFilter = BuiltInFilter | `KNOWLEDGE:${string}`;
 
 const getKnowledgeTypeFilterValue = (value: string): TypeFilter => `KNOWLEDGE:${value}`;
+const PROSE_CLASS =
+  'prose prose-sm max-w-none prose-headings:font-black prose-headings:text-neutral-900 prose-p:text-neutral-600 prose-p:leading-relaxed prose-img:rounded-xl prose-img:shadow-md prose-strong:text-neutral-900 prose-a:text-indigo-600';
 
 const lessonConfig: ResourceConfig = { filterSchema: [], viewSchema: [] };
 const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
@@ -173,7 +179,9 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
   const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
-  const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, { showDesc: true, compact: false }));
+  const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, { showDesc: true, compact: false, sideBySide: false }));
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [sideBySideLessonId, setSideBySideLessonId] = useState<string | null>(null);
   
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(12);
@@ -193,6 +201,14 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   );
 
   useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const updateDesktop = () => setIsDesktop(media.matches);
+    updateDesktop();
+    media.addEventListener('change', updateDesktop);
+    return () => media.removeEventListener('change', updateDesktop);
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -306,6 +322,33 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       const start = page * pageSize;
       return filteredResources.slice(start, start + pageSize);
   }, [filteredResources, page, pageSize]);
+
+  const canUseSideBySide = isDesktop && typeFilter === 'ESSAY';
+  const isSideBySideMode = canUseSideBySide && !!viewSettings.sideBySide;
+
+  useEffect(() => {
+    if (!canUseSideBySide && viewSettings.sideBySide) {
+      setViewSettings((prev: any) => ({ ...prev, sideBySide: false }));
+    }
+  }, [canUseSideBySide, viewSettings.sideBySide]);
+
+  useEffect(() => {
+    if (!isSideBySideMode) return;
+    if (pagedResources.length === 0) {
+      setSideBySideLessonId(null);
+      return;
+    }
+
+    const stillExists = pagedResources.some((item) => item.data.id === sideBySideLessonId);
+    if (!stillExists) {
+      setSideBySideLessonId(pagedResources[0].data.id);
+    }
+  }, [isSideBySideMode, pagedResources, sideBySideLessonId]);
+
+  const sideBySideLesson = useMemo(
+    () => pagedResources.find((item) => item.data.id === sideBySideLessonId) || pagedResources[0] || null,
+    [pagedResources, sideBySideLessonId]
+  );
 
   const handleDeleteLesson = async () => { if (!lessonToDelete) return; await dataStore.deleteLesson(lessonToDelete.id); showToast('Lesson deleted.', 'success'); setLessonToDelete(null); loadData(); };
   
@@ -515,6 +558,28 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       </div>
   );
 
+  const renderSideBySidePreview = (item: ResourceItem) => {
+    const lesson = item.data as Lesson;
+
+    if (item.type === 'INTENSITY') {
+      return <IntensityTable rows={lesson.intensityRows || []} />;
+    }
+    if (item.type === 'COMPARISON') {
+      return <ComparisonTable rows={lesson.comparisonRows || []} />;
+    }
+    if (item.type === 'MISTAKE') {
+      return <MistakeTable rows={lesson.mistakeRows || []} />;
+    }
+
+    const html = parseMarkdown(lesson.content || '');
+    return (
+      <div
+        className={PROSE_CLASS}
+        dangerouslySetInnerHTML={{ __html: html || '<p class="text-neutral-400">No content yet.</p>' }}
+      />
+    );
+  };
+
   return (
     <>
     <ResourcePage
@@ -556,7 +621,8 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                     }
                     viewOptions={[
                         { label: 'Show Description', checked: viewSettings.showDesc, onChange: () => setViewSettings(v => ({...v, showDesc: !v.showDesc})) },
-                        { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }
+                        { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) },
+                        ...(canUseSideBySide ? [{ label: 'Side by Side', checked: !!viewSettings.sideBySide, onChange: () => setViewSettings((v: any) => ({ ...v, sideBySide: !v.sideBySide })) }] : [])
                     ]}
                 />
             }
@@ -571,58 +637,115 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       }
     >
       {() => (
-        <>
-          {pagedResources.map((item) => {
-            const onRead = () => { setActiveLesson(item.data as Lesson); setViewMode('read_lesson'); };
-            const onEdit = () => { setActiveLesson(item.data as Lesson); setViewMode('edit_lesson'); };
-            const onDelete = () => setLessonToDelete(item.data as Lesson);
+        isSideBySideMode ? (
+          <div className="hidden lg:grid lg:grid-cols-[280px_minmax(0,1fr)] gap-6 items-start">
+            <div className="sticky top-6 self-start bg-white border border-neutral-200 rounded-[2rem] shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Lesson Titles</h3>
+              </div>
+              <div className="max-h-[70vh] overflow-y-auto p-2 space-y-1">
+                {pagedResources.map((item) => {
+                  const lesson = item.data as Lesson;
+                  const isActive = sideBySideLesson?.data.id === item.data.id;
+                  return (
+                    <button
+                      key={`side-${item.data.id}`}
+                      onClick={() => setSideBySideLessonId(item.data.id)}
+                      className={`group relative w-full text-left px-4 py-3 rounded-2xl transition-all ${isActive ? 'bg-neutral-900 text-white shadow-lg' : 'bg-white text-neutral-700 hover:bg-neutral-50 border border-transparent hover:border-neutral-200'}`}
+                    >
+                      <div className="truncate text-sm font-black leading-tight">{lesson.title || 'Untitled lesson'}</div>
+                      <div className={`absolute left-full top-1/2 z-[140] ml-3 hidden w-72 -translate-y-1/2 rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-2xl group-hover:block ${isActive ? 'lg:block' : ''}`}>
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 border border-emerald-100">
+                            Lesson
+                          </span>
+                        </div>
+                        <p className="text-sm font-black text-neutral-900 leading-snug">{lesson.title || 'Untitled lesson'}</p>
+                        {lesson.description ? (
+                          <p className="mt-2 text-xs font-medium leading-relaxed text-neutral-600">{lesson.description}</p>
+                        ) : (
+                          <p className="mt-2 text-xs italic text-neutral-400">No description</p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-            const isIntensity = item.type === 'INTENSITY';
-            const isComparison = item.type === 'COMPARISON';
-            const isMistake = item.type === 'MISTAKE';
-            const knowledgeType = (item.data.knowledgeType || '').trim();
-
-            let badge;
-            if (isIntensity) {
-                badge = { label: 'Scale', colorClass: 'bg-orange-50 text-orange-700 border-orange-100', icon: Scale };
-            } else if (isComparison) {
-                badge = { label: 'Diff', colorClass: 'bg-indigo-50 text-indigo-700 border-indigo-100', icon: FileDiff };
-            } else if (isMistake) {
-                badge = { label: 'Mistake', colorClass: 'bg-rose-50 text-rose-700 border-rose-100', icon: AlertTriangle };
-            } else if (knowledgeType) {
-                badge = { label: knowledgeType, colorClass: 'bg-sky-50 text-sky-700 border-sky-100', icon: BookText };
-            } else {
-                badge = { label: 'Lesson', colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: BookText };
-            }
-
-            return (
-                <UniversalCard
-                    key={`${item.type}-${item.data.id}`}
-                    title={<div className="font-black text-lg text-neutral-900 tracking-tight leading-tight truncate">{(item.data as Lesson).title}</div>} 
-                    tags={item.data.tags} 
-                    badge={badge}
-                    compact={viewSettings.compact}
-                    onClick={onRead}
-                    focusColor={item.data.focusColor}
-                    onFocusChange={(c) => handleFocusChange(item, c)}
-                    isFocused={item.data.isFocused}
-                    onToggleFocus={() => handleToggleFocus(item)}
-                    isCompleted={item.data.focusColor === 'green'}
-                    actions={
-                        <>
-                            <button onClick={(e) => { e.stopPropagation(); onRead(); }} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Read"><BookOpen size={14}/></button>
-                            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit"><Edit3 size={14}/></button>
-                            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete"><Trash2 size={14}/></button>
-                        </>
-                    }
-                >
-                    {viewSettings.showDesc && (item.data as Lesson).description && (
-                        <p className="line-clamp-3 mt-1">{(item.data as Lesson).description}</p>
+            <div className="min-w-0 bg-white border border-neutral-200 rounded-[2.5rem] shadow-sm p-8 min-h-[70vh]">
+              {sideBySideLesson ? (
+                <div className="space-y-6">
+                  <div className="space-y-2 border-b border-neutral-100 pb-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Preview</p>
+                    <h3 className="text-3xl font-black tracking-tight text-neutral-900">{sideBySideLesson.data.title}</h3>
+                    {sideBySideLesson.data.description && (
+                      <p className="max-w-3xl text-sm font-medium leading-relaxed text-neutral-500">{sideBySideLesson.data.description}</p>
                     )}
-                </UniversalCard>
-            );
-          })}
-        </>
+                  </div>
+                  {renderSideBySidePreview(sideBySideLesson)}
+                </div>
+              ) : (
+                <div className="flex min-h-[50vh] items-center justify-center text-sm font-medium text-neutral-400">
+                  Select a lesson to preview.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {pagedResources.map((item) => {
+              const onRead = () => { setActiveLesson(item.data as Lesson); setViewMode('read_lesson'); };
+              const onEdit = () => { setActiveLesson(item.data as Lesson); setViewMode('edit_lesson'); };
+              const onDelete = () => setLessonToDelete(item.data as Lesson);
+
+              const isIntensity = item.type === 'INTENSITY';
+              const isComparison = item.type === 'COMPARISON';
+              const isMistake = item.type === 'MISTAKE';
+              const knowledgeType = (item.data.knowledgeType || '').trim();
+
+              let badge;
+              if (isIntensity) {
+                  badge = { label: 'Scale', colorClass: 'bg-orange-50 text-orange-700 border-orange-100', icon: Scale };
+              } else if (isComparison) {
+                  badge = { label: 'Diff', colorClass: 'bg-indigo-50 text-indigo-700 border-indigo-100', icon: FileDiff };
+              } else if (isMistake) {
+                  badge = { label: 'Mistake', colorClass: 'bg-rose-50 text-rose-700 border-rose-100', icon: AlertTriangle };
+              } else if (knowledgeType) {
+                  badge = { label: knowledgeType, colorClass: 'bg-sky-50 text-sky-700 border-sky-100', icon: BookText };
+              } else {
+                  badge = { label: 'Lesson', colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: BookText };
+              }
+
+              return (
+                  <UniversalCard
+                      key={`${item.type}-${item.data.id}`}
+                      title={<div className="font-black text-lg text-neutral-900 tracking-tight leading-tight truncate">{(item.data as Lesson).title}</div>} 
+                      tags={item.data.tags} 
+                      badge={badge}
+                      compact={viewSettings.compact}
+                      onClick={onRead}
+                      focusColor={item.data.focusColor}
+                      onFocusChange={(c) => handleFocusChange(item, c)}
+                      isFocused={item.data.isFocused}
+                      onToggleFocus={() => handleToggleFocus(item)}
+                      isCompleted={item.data.focusColor === 'green'}
+                      actions={
+                          <>
+                              <button onClick={(e) => { e.stopPropagation(); onRead(); }} className="p-1.5 text-neutral-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Read"><BookOpen size={14}/></button>
+                              <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors" title="Edit"><Edit3 size={14}/></button>
+                              <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete"><Trash2 size={14}/></button>
+                          </>
+                      }
+                  >
+                      {viewSettings.showDesc && (item.data as Lesson).description && (
+                          <p className="line-clamp-3 mt-1">{(item.data as Lesson).description}</p>
+                      )}
+                  </UniversalCard>
+              );
+            })}
+          </>
+        )
       )}
     </ResourcePage>
     <ConfirmationModal isOpen={!!lessonToDelete} title="Delete Lesson?" message="Confirm delete?" confirmText="Yes, Delete" isProcessing={false} onConfirm={handleDeleteLesson} onClose={() => setLessonToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
