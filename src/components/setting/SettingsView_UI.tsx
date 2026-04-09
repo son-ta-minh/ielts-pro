@@ -7,6 +7,7 @@ import { SrsSettings } from './SrsSettings';
 import { GoalSettings } from './GoalSettings';
 import { DangerZone } from './DangerZone';
 import { ServerSettings } from './ServerSettings';
+import { LearningSettings } from './LearningSettings';
 import { SystemConfig, DailyGoalConfig } from '../../app/settingsManager';
 import { User as UserType } from '../../app/types';
 
@@ -80,6 +81,7 @@ export const SettingsViewUI: React.FC<SettingsViewUIProps> = (props) => {
             case 'AUDIO_COACH': return <AudioCoachSettings config={props.config} user={props.user} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} onUpdateUser={props.onUpdateUser} />;
             case 'LEARNING': return (
                 <div className="space-y-6 animate-in fade-in duration-300">
+                    <LearningSettings lessonConfig={props.config.lesson} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />
                     <GoalSettings goalConfig={props.goalConfig} onGoalConfigChange={props.onGoalConfigChange} onSaveSettings={props.onSaveSettings} />
                     <SrsSettings srsConfig={props.config.srs} onSrsConfigChange={props.onSrsConfigChange} onResetSrsConfig={props.onResetSrsConfig} onSaveSettings={props.onSaveSettings} />
                 </div>

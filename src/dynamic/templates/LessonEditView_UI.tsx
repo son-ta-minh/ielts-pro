@@ -10,6 +10,8 @@ interface Props {
   setTitle: (t: string) => void;
   description: string;
   setDescription: (d: string) => void;
+  knowledgeType: string;
+  setKnowledgeType: (value: string) => void;
   path: string;
   setPath: (p: string) => void;
   tagsInput: string;
@@ -36,6 +38,7 @@ interface Props {
 export const LessonEditViewUI: React.FC<Props> = (props) => {
     const { 
         type, title, setTitle, description, setDescription, tagsInput, setTagsInput, 
+        knowledgeType, setKnowledgeType,
         content, setContent, listeningContent, setListeningContent, testContent, setTestContent,
         intensityRows, setIntensityRows,
         comparisonRows, setComparisonRows,
@@ -151,6 +154,18 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
                 />
             </div>
         </div>
+        {type === 'essay' && (
+            <div className="space-y-1">
+                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Knowledge Type</label>
+                <input
+                    type="text"
+                    value={knowledgeType}
+                    onChange={(e) => setKnowledgeType(e.target.value)}
+                    placeholder="e.g. Tech, Management"
+                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
+                />
+            </div>
+        )}
         <div className="space-y-1 mt-2">
             <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Description</label>
             <textarea

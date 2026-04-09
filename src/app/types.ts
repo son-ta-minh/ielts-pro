@@ -484,6 +484,7 @@ export interface Lesson {
   id: string;
   userId: string;
   type?: LessonType; 
+  knowledgeType?: string;
   topic1: string; 
   topic2: string; 
   title: string;

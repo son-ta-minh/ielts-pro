@@ -18,6 +18,7 @@ interface Props {
 const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onCancel }) => {
   const [title, setTitle] = useState(lesson.title);
   const [description, setDescription] = useState(lesson.description || '');
+  const [knowledgeType, setKnowledgeType] = useState(lesson.knowledgeType || '');
   const [path, setPath] = useState(lesson.path || '/');
   const [tagsInput, setTagsInput] = useState((lesson.tags || []).join(', '));
   const [content, setContent] = useState(lesson.content);
@@ -41,6 +42,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   }, []);
 
   useEffect(() => {
+    setKnowledgeType(lesson.knowledgeType || '');
     if (lesson.path === undefined && lesson.tags) {
       const legacyTags = lesson.tags || [];
       const pathFromTags = legacyTags.find(t => t.startsWith('/'));
@@ -68,6 +70,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
       title,
       description,
       type,
+      knowledgeType: type === 'essay' ? knowledgeType.trim() || undefined : undefined,
       path: path.trim(),
       tags: finalTags,
       content,
@@ -192,6 +195,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         type={lesson.type || 'essay'}
         title={title} setTitle={setTitle}
         description={description} setDescription={setDescription}
+        knowledgeType={knowledgeType} setKnowledgeType={setKnowledgeType}
         path={path} setPath={setPath}
         tagsInput={tagsInput} setTagsInput={setTagsInput}
         content={content} setContent={setContent}

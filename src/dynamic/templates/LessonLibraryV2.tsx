@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { User, Lesson, StudyItem, SessionType, AppView, FocusColor } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, FileClock, Target, Sparkles, Zap, Split, FileDiff, Scale, BookText, Search, LayoutGrid, AlertTriangle } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, FileClock, Target, Sparkles, Zap, Split, FileDiff, Scale, BookText, Search, LayoutGrid, AlertTriangle, ChevronDown, Layers3 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { TagBrowser } from '../../components/common/TagBrowser';
@@ -39,8 +39,123 @@ type ResourceItem =
   | { type: 'COMPARISON'; data: Lesson; path?: string; tags?: string[]; date: number }
   | { type: 'MISTAKE'; data: Lesson; path?: string; tags?: string[]; date: number };
 
+type BuiltInFilter = 'ALL' | ResourceItem['type'];
+type TypeFilter = BuiltInFilter | `KNOWLEDGE:${string}`;
+
+const getKnowledgeTypeFilterValue = (value: string): TypeFilter => `KNOWLEDGE:${value}`;
+
 const lessonConfig: ResourceConfig = { filterSchema: [], viewSchema: [] };
 const VIEW_SETTINGS_KEY = 'vocab_pro_lesson_view_settings';
+
+interface FilterMenuGroupProps {
+  id: 'system' | 'dynamic';
+  title: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  activeLabel: string;
+  options: Array<{
+    key: TypeFilter;
+    label: string;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+    activeClass: string;
+    inactiveClass: string;
+  }>;
+  typeFilter: TypeFilter;
+  setTypeFilter: (next: TypeFilter) => void;
+  openMenuId: 'system' | 'dynamic' | null;
+  setOpenMenuId: React.Dispatch<React.SetStateAction<'system' | 'dynamic' | null>>;
+}
+
+const FilterMenuGroup: React.FC<FilterMenuGroupProps> = ({ id, title, icon: Icon, activeLabel, options, typeFilter, setTypeFilter, openMenuId, setOpenMenuId }) => {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const closeTimeoutRef = useRef<number | null>(null);
+  const isOpen = openMenuId === id;
+
+  const clearCloseTimeout = useCallback(() => {
+    if (closeTimeoutRef.current !== null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    clearCloseTimeout();
+    closeTimeoutRef.current = window.setTimeout(() => {
+      setOpenMenuId((current) => (current === id ? null : current));
+      closeTimeoutRef.current = null;
+    }, 120);
+  }, [clearCloseTimeout, id, setOpenMenuId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        clearCloseTimeout();
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      clearCloseTimeout();
+    };
+  }, [clearCloseTimeout, setOpenMenuId]);
+
+  return (
+    <div
+      ref={wrapperRef}
+      className="relative"
+      onMouseLeave={scheduleClose}
+    >
+      <button
+        onClick={() => setOpenMenuId((prev) => (prev === id ? null : id))}
+        onMouseEnter={clearCloseTimeout}
+        className="flex items-center gap-2 px-3 py-2 bg-white border border-neutral-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-all shadow-sm"
+      >
+        <Icon size={12} />
+        <span>{title}</span>
+        <span className="px-1.5 py-0.5 rounded-md bg-neutral-100 text-neutral-500 normal-case tracking-normal text-[10px] font-bold">
+          {activeLabel}
+        </span>
+        <ChevronDown size={12} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div
+          className="absolute left-0 top-full pt-2 min-w-[14rem] z-[120] animate-in fade-in zoom-in-95"
+          onMouseEnter={() => {
+            clearCloseTimeout();
+            setOpenMenuId(id);
+          }}
+        >
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-neutral-100 p-2 pointer-events-auto">
+            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50">
+              {title} Filters
+            </div>
+            <div className="pt-2 flex flex-col gap-1">
+              {options.map((option) => {
+                const OptionIcon = option.icon;
+                const isActive = typeFilter === option.key;
+                return (
+                <button
+                  key={option.key}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setTypeFilter(option.key);
+                    setOpenMenuId(null);
+                  }}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-[11px] font-bold transition-all ${isActive ? option.activeClass : option.inactiveClass}`}
+                >
+                    <OptionIcon size={13} />
+                    <span>{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavigate, onUpdateUser, initialLessonId, onConsumeLessonId, initialTag, onConsumeTag, initialType, onConsumeType }) => {
   const [resources, setResources] = useState<ResourceItem[]>([]);
@@ -51,9 +166,10 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+  const [openFilterMenuId, setOpenFilterMenuId] = useState<'system' | 'dynamic' | null>(null);
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'ESSAY' | 'INTENSITY' | 'COMPARISON' | 'MISTAKE'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
   const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
@@ -70,6 +186,11 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   
   const { showToast } = useToast();
+  const config = getConfig();
+  const dynamicKnowledgeTypes = useMemo(
+    () => (config.lesson.knowledgeTypes || []).map((item) => item.trim()).filter(Boolean),
+    [config.lesson.knowledgeTypes]
+  );
 
   useEffect(() => { setStoredJSON(VIEW_SETTINGS_KEY, viewSettings); }, [viewSettings]);
 
@@ -117,7 +238,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
 
   useEffect(() => {
       if (initialType) {
-          setTypeFilter(initialType as any);
+          setTypeFilter(initialType as TypeFilter);
           onConsumeType?.();
       }
   }, [initialType, onConsumeType]);
@@ -153,11 +274,18 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         const tagMatch = (res.data.tags || []).some(t => (t || '').toLowerCase().includes(q));
         
         if (!titleMatch && !descMatch && !keywordMatch && !tagMatch) return false;
-        return true;
       }
 
-      // 2. Standard Filters (only if no search query)
-      if (typeFilter !== 'ALL' && res.type !== typeFilter) return false;
+      // 2. Standard Filters
+      if (typeFilter !== 'ALL') {
+        if (typeFilter.startsWith('KNOWLEDGE:')) {
+          const selectedKnowledgeType = typeFilter.slice('KNOWLEDGE:'.length).toLowerCase();
+          if ((res.data.knowledgeType || '').trim().toLowerCase() !== selectedKnowledgeType) return false;
+        } else {
+          if (res.type !== typeFilter) return false;
+          if (typeFilter === 'ESSAY' && (res.data.knowledgeType || '').trim()) return false;
+        }
+      }
       if (focusFilter === 'focused' && !res.data.isFocused) return false;
       if (colorFilter !== 'all' && res.data.focusColor !== colorFilter) return false;
       
@@ -189,13 +317,14 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       loadData(); 
   };
   
-  const handleNewLesson = (type: Lesson['type'] = 'essay') => {
+  const handleNewLesson = (type: Lesson['type'] = 'essay', knowledgeType?: string) => {
     const newLesson: Lesson = { 
         id: `lesson-${Date.now()}`, 
         userId: user.id, 
         topic1: 'General', 
         topic2: 'General', 
         type,
+        knowledgeType: type === 'essay' ? knowledgeType : undefined,
         title: type === 'intensity' ? 'New Intensity Scale' : type === 'comparison' ? 'New Comparison Lab' : type === 'mistake' ? 'New Mistake Card' : `New Lesson`, 
         description: '', 
         content: '', 
@@ -259,6 +388,45 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       }));
   };
 
+  const quickFilterOptions = useMemo(() => {
+    const dynamicOptions = dynamicKnowledgeTypes.map((item) => ({
+      key: getKnowledgeTypeFilterValue(item),
+      label: item,
+      icon: BookText,
+      activeClass: 'bg-sky-600 text-white shadow-md',
+      inactiveClass: 'bg-white border border-neutral-200 text-neutral-500 hover:text-sky-600'
+    }));
+
+    return [
+      { key: 'ALL' as TypeFilter, label: 'All', icon: LayoutGrid, activeClass: 'bg-neutral-900 text-white shadow-md', inactiveClass: 'bg-white border border-neutral-200 text-neutral-500 hover:text-neutral-900' },
+      { key: 'ESSAY' as TypeFilter, label: 'Lesson', icon: BookText, activeClass: 'bg-emerald-600 text-white shadow-md', inactiveClass: 'bg-white border border-neutral-200 text-neutral-500 hover:text-emerald-600' },
+      { key: 'INTENSITY' as TypeFilter, label: 'Scale', icon: Scale, activeClass: 'bg-orange-500 text-white shadow-md', inactiveClass: 'bg-white border border-neutral-200 text-neutral-500 hover:text-orange-500' },
+      { key: 'COMPARISON' as TypeFilter, label: 'Diff', icon: FileDiff, activeClass: 'bg-indigo-600 text-white shadow-md', inactiveClass: 'bg-white border border-neutral-200 text-neutral-500 hover:text-indigo-600' },
+      { key: 'MISTAKE' as TypeFilter, label: 'Mistake', icon: AlertTriangle, activeClass: 'bg-rose-600 text-white shadow-md', inactiveClass: 'bg-white border border-neutral-200 text-neutral-500 hover:text-rose-600' },
+      ...dynamicOptions
+    ];
+  }, [dynamicKnowledgeTypes]);
+
+  const systemFilterOptions = useMemo(
+    () => quickFilterOptions.filter((option) => !option.key.startsWith('KNOWLEDGE:')),
+    [quickFilterOptions]
+  );
+
+  const dynamicFilterOptions = useMemo(
+    () => quickFilterOptions.filter((option) => option.key.startsWith('KNOWLEDGE:')),
+    [quickFilterOptions]
+  );
+
+  const activeSystemOption = useMemo(
+    () => systemFilterOptions.find((option) => option.key === typeFilter) || systemFilterOptions[0],
+    [systemFilterOptions, typeFilter]
+  );
+
+  const activeDynamicOption = useMemo(
+    () => dynamicFilterOptions.find((option) => option.key === typeFilter) || null,
+    [dynamicFilterOptions, typeFilter]
+  );
+
   const handleRandomize = () => {
     setResources(prev => [...prev].sort(() => Math.random() - 0.5));
     showToast("Deck shuffled!", "success");
@@ -270,10 +438,14 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       { label: 'Comparison Lab', icon: Split, onClick: () => handleNewLesson('comparison') },
       { label: 'Mistake Card', icon: AlertTriangle, onClick: () => handleNewLesson('mistake') },
       { label: 'New Lesson (Manual)', icon: Plus, onClick: () => handleNewLesson('essay') },
+      ...dynamicKnowledgeTypes.map((item) => ({
+        label: `New ${item} Card`,
+        icon: BookText,
+        onClick: () => handleNewLesson('essay', item)
+      }))
   ];
 
   const handleGeneratePromptWithCoach = (inputs: any) => {
-      const config = getConfig();
       const activeType = config.audioCoach.activeCoach;
       const coachName = config.audioCoach.coaches[activeType].name;
       return getLessonPrompt({
@@ -313,37 +485,31 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
              </div>
              
              {/* Quick Filters */}
-             <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0 no-scrollbar">
-                 <button 
-                    onClick={() => setTypeFilter('ALL')} 
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'ALL' ? 'bg-neutral-900 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-neutral-900'}`}
-                 >
-                    <LayoutGrid size={12} /> All
-                 </button>
-                 <button 
-                    onClick={() => setTypeFilter('ESSAY')} 
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'ESSAY' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-emerald-600'}`}
-                 >
-                    <BookText size={12} /> Lesson
-                 </button>
-                 <button 
-                    onClick={() => setTypeFilter('INTENSITY')} 
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'INTENSITY' ? 'bg-orange-500 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-orange-500'}`}
-                 >
-                    <Scale size={12} /> Scale
-                 </button>
-                 <button 
-                    onClick={() => setTypeFilter('COMPARISON')} 
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'COMPARISON' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-indigo-600'}`}
-                 >
-                    <FileDiff size={12} /> Diff
-                 </button>
-                 <button 
-                    onClick={() => setTypeFilter('MISTAKE')} 
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${typeFilter === 'MISTAKE' ? 'bg-rose-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-rose-600'}`}
-                 >
-                    <AlertTriangle size={12} /> Mistake
-                 </button>
+             <div className="flex flex-wrap items-center gap-2 overflow-visible w-full sm:w-auto pb-2 sm:pb-0">
+                 <FilterMenuGroup
+                    id="system"
+                    title="System"
+                    icon={Layers3}
+                    activeLabel={activeSystemOption?.label || 'All'}
+                    options={systemFilterOptions}
+                    typeFilter={typeFilter}
+                    setTypeFilter={setTypeFilter}
+                    openMenuId={openFilterMenuId}
+                    setOpenMenuId={setOpenFilterMenuId}
+                 />
+                 {dynamicFilterOptions.length > 0 && (
+                    <FilterMenuGroup
+                      id="dynamic"
+                      title="Dynamic"
+                      icon={BookText}
+                      activeLabel={activeDynamicOption?.label || 'Select'}
+                      options={dynamicFilterOptions}
+                      typeFilter={typeFilter}
+                      setTypeFilter={setTypeFilter}
+                      openMenuId={openFilterMenuId}
+                      setOpenMenuId={setOpenFilterMenuId}
+                    />
+                 )}
              </div>
         </div>
       </div>
@@ -414,6 +580,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
             const isIntensity = item.type === 'INTENSITY';
             const isComparison = item.type === 'COMPARISON';
             const isMistake = item.type === 'MISTAKE';
+            const knowledgeType = (item.data.knowledgeType || '').trim();
 
             let badge;
             if (isIntensity) {
@@ -422,6 +589,8 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                 badge = { label: 'Diff', colorClass: 'bg-indigo-50 text-indigo-700 border-indigo-100', icon: FileDiff };
             } else if (isMistake) {
                 badge = { label: 'Mistake', colorClass: 'bg-rose-50 text-rose-700 border-rose-100', icon: AlertTriangle };
+            } else if (knowledgeType) {
+                badge = { label: knowledgeType, colorClass: 'bg-sky-50 text-sky-700 border-sky-100', icon: BookText };
             } else {
                 badge = { label: 'Lesson', colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: BookText };
             }

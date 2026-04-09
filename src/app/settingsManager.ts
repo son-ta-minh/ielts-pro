@@ -74,6 +74,7 @@ export interface TestConfig {
 export interface LessonConfig {
   topic1Options: string[];
   topic2Options: Record<string, string[]>;
+  knowledgeTypes: string[];
 }
 
 export interface SyncConfig {
@@ -136,7 +137,8 @@ export const DEFAULT_LESSON_CONFIG: LessonConfig = {
       'Grammar': ['Tenses', 'Conditionals', 'Passive Voice', 'Reported Speech'],
       'Vocabulary': ['Topic: Work', 'Topic: Environment', 'Collocations', 'Idioms'],
       'Pronunciation': ['Vowel Sounds', 'Consonant Sounds', 'Intonation']
-  }
+  },
+  knowledgeTypes: []
 };
 
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
