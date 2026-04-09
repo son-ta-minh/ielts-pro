@@ -90,30 +90,15 @@ const ViewStudyItemModal: React.FC<Props> = ({ word, onClose, onNavigateToWord, 
   useEffect(() => {
     let isActive = true;
     const run = async () => {
-      console.log('[InlineReview][ViewStudyItemModal] clearStaleWordFamilyGroupLink:start', {
-        word: word.word,
-        id: word.id,
-        wordFamilyGroupId: word.wordFamilyGroupId || null
-      });
+
       const cleaned = await clearStaleWordFamilyGroupLink({
         ...normalizeWordParaphrases(word),
         lastTestResults: normalizeTestResultKeys(word.lastTestResults)
       });
       if (!isActive) return;
-      console.log('[InlineReview][ViewStudyItemModal] clearStaleWordFamilyGroupLink:done', {
-        word: word.word,
-        id: word.id,
-        before: word.wordFamilyGroupId || null,
-        after: cleaned.wordFamilyGroupId || null
-      });
+
       setCurrentWord(cleaned);
       if ((word.wordFamilyGroupId || null) !== (cleaned.wordFamilyGroupId || null)) {
-        console.log('[InlineReview][ViewStudyItemModal] saving cleaned word after stale link removal', {
-          word: cleaned.word,
-          id: cleaned.id,
-          before: word.wordFamilyGroupId || null,
-          after: cleaned.wordFamilyGroupId || null
-        });
         await saveWord(cleaned);
       }
     };

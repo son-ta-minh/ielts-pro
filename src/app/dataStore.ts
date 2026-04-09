@@ -473,11 +473,6 @@ export async function saveWordAndUnit(word: StudyItem | null, unit: Unit) {
 }
 
 export async function saveWord(item: StudyItem) {
-    console.log('[InlineReview][DataStore] saveWord:start', {
-        id: item.id,
-        word: item.word,
-        scope: 'word'
-    });
     if (!canWrite('word')) return;
     _updateLocalLastModified();
     Object.assign(item, withNormalizedVocabularyKeywords(item));
@@ -489,10 +484,6 @@ export async function saveWord(item: StudyItem) {
     _recalculateStats(item.userId);
     _triggerBackup();
     _notifyChanges();
-    console.log('[InlineReview][DataStore] saveWord:done', {
-        id: item.id,
-        word: item.word
-    });
 }
 
 export async function bulkSaveWords(items: StudyItem[]) {

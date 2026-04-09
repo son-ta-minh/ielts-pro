@@ -13,6 +13,7 @@ const MAX_REFINE_ATTEMPTS = 5;
 const REFINE_ATTEMPT_TIMEOUT_MS = 120000;
 const VIETNAMESE_HINT_PATTERN = /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i;
 const ENGLISH_LEAK_PATTERN = /\b(the|and|with|for|to|from|of|in|on|at|by|an|a|is|are)\b/i;
+const PLACEHOLDER_MEANING_PATTERN = /^(to resist openly|thach thuc,\s*bat tuan)$/i;
 const VALID_REGISTERS = new Set(['academic', 'casual', 'neutral']);
 const VALID_PARAPHRASE_TONES = new Set(['academic', 'casual', 'neutral']);
 const PHRASE_LIKE_TYPES = new Set(['idiom', 'phrasal_verb', 'collocation', 'phrase']);
@@ -302,6 +303,7 @@ const extractJsonBlock = (rawText: string): unknown => {
 const looksVietnameseMeaning = (value: string): boolean => {
     const text = value.trim();
     if (!text) return false;
+    if (PLACEHOLDER_MEANING_PATTERN.test(text)) return false;
     if (VIETNAMESE_HINT_PATTERN.test(text)) return true;
     if (ENGLISH_LEAK_PATTERN.test(text)) return false;
     return text.split(/\s+/).length <= 5;
@@ -460,6 +462,9 @@ const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup
     }
     if (setup.includeMeaning && !meaningVi) {
         issues.push(`Missing meaning for "${word.word}".`);
+        retryFields.add('meaningVi');
+    } else if (setup.includeMeaning && PLACEHOLDER_MEANING_PATTERN.test(meaningVi)) {
+        issues.push(`Meaning for "${word.word}" reused a leaked placeholder example instead of the real meaning.`);
         retryFields.add('meaningVi');
     } else if (setup.includeMeaning && setup.meaningLanguage === 'vi' && !looksVietnameseMeaning(meaningVi)) {
         issues.push(`Meaning for "${word.word}" is not clearly Vietnamese-only.`);
@@ -620,9 +625,9 @@ const buildRetryPrompt = (
 
     const expectedFieldExamples: Record<RetryField, string> = {
         pronunciation: `- ipa_us expected: "/dɪˈfaɪ/"`,
-        headword: `- hw expected: "defy"`,
-        meaningVi: `- m expected: "${setup.meaningLanguage === 'en' ? 'to resist openly' : 'thach thuc, bat tuan'}"`,
-        example: `- ex expected: "Their actions showed open defiance of the rules."`,
+        headword: '- hw expected: the corrected base word or full phrase for this specific item.',
+        meaningVi: `- m expected: a concise ${setup.meaningLanguage === 'en' ? 'English' : nativeLanguage} meaning for this specific word. Do not copy placeholder examples from prior prompts.`,
+        example: '- ex expected: one natural example sentence that uses the exact headword for this specific item.',
         register: `- reg expected: "academic" OR "casual" OR "neutral"`,
         collocationsArray: '',
         idiomsList: '',
