@@ -25,7 +25,7 @@ export function getWordDetailsPrompt(
     const includeIdioms = options.includeIdioms === true;
     const exampleCount = Math.max(1, Math.min(3, options.exampleCount ?? 1));
     const includePrepositions = options.includePrepositions !== false;
-    const meaningFieldLanguage = meaningLanguage === 'en' ? 'English' : nativeLanguage;
+    const meaningFieldLanguage = meaningLanguage === 'en' ? 'English' : 'Vietnamese';
 
     const pronunciationOptimizationRule = includePronunciation
         ? '- Omit "ipa_uk" if "pron_sim" is "same".'

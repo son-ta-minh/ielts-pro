@@ -195,6 +195,36 @@ const fetchCambridgePronunciation = async (word: string): Promise<CambridgePronu
     }
 };
 
+const fetchServerIpaPronunciation = async (text: string): Promise<CambridgePronunciationPayload | null> => {
+    const normalizedText = String(text || '').trim();
+    if (!normalizedText) return null;
+
+    try {
+        const config = getConfig();
+        const serverUrl = getServerUrl(config);
+        const response = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(normalizedText)}&mode=2`, {
+            cache: 'no-store'
+        });
+        if (!response.ok) return null;
+
+        const payload = await response.json().catch(() => null);
+        const ipaUs = formatIpaValue(payload?.ipa);
+        if (!ipaUs) return null;
+
+        return {
+            ipaUs,
+            ipaUk: undefined,
+            pronSim: 'same'
+        };
+    } catch (error) {
+        debugWordRefine('fetchServerIpaPronunciation:error', {
+            text: normalizedText,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return null;
+    }
+};
+
 const normalizeRawParaphrases = (value: any): any[] => {
     if (!Array.isArray(value)) return [];
     return value
@@ -226,6 +256,64 @@ const isWordRefineDebugEnabled = (): boolean => {
 const debugWordRefine = (label: string, payload: Record<string, unknown>) => {
     if (!isWordRefineDebugEnabled()) return;
     console.log(`[WordRefineAPI] ${label}`, payload);
+};
+
+const logWordRefineValidationFailure = (payload: {
+    word: string;
+    attempt: number;
+    issues: string[];
+    retryFields: RetryField[];
+    rawText?: string;
+    rawResult?: any;
+    partialResult?: any;
+    retryPrompt?: string;
+}) => {
+    console.groupCollapsed(`[WordRefineAPI] Validation failed for "${payload.word}" at attempt ${payload.attempt}`);
+    console.warn('Issues:', payload.issues);
+    console.info('Retry fields:', payload.retryFields);
+    if (payload.rawText) {
+        console.info('Raw AI response:', payload.rawText);
+    }
+    if (payload.rawResult !== undefined) {
+        console.info('Matched raw result:', payload.rawResult);
+    }
+    if (payload.partialResult !== undefined) {
+        console.info('Merged partial result:', payload.partialResult);
+    }
+    if (payload.retryPrompt) {
+        console.info('Retry prompt sent to AI:', payload.retryPrompt);
+    }
+    console.groupEnd();
+};
+
+const logWordRefineAttemptError = (payload: {
+    word: string;
+    attempt: number;
+    error: string;
+    retryFields: RetryField[];
+    retryPrompt?: string;
+}) => {
+    console.groupCollapsed(`[WordRefineAPI] Attempt error for "${payload.word}" at attempt ${payload.attempt}`);
+    console.error(payload.error);
+    if (payload.retryFields.length > 0) {
+        console.info('Current retry fields:', payload.retryFields);
+    }
+    if (payload.retryPrompt) {
+        console.info('Prompt sent to AI:', payload.retryPrompt);
+    }
+    console.groupEnd();
+};
+
+const logWordRefineRetryPrompt = (payload: {
+    word: string;
+    attempt: number;
+    retryFields: RetryField[];
+    prompt: string;
+}) => {
+    console.groupCollapsed(`[WordRefineAPI] Retry prompt for "${payload.word}" at attempt ${payload.attempt}`);
+    console.info('Retry fields:', payload.retryFields);
+    console.info('Prompt:', payload.prompt);
+    console.groupEnd();
 };
 
 const summarizeHttpErrorBody = (rawBody: string): string => {
@@ -266,6 +354,16 @@ const normalizeWordRefineSetup = (setup?: Partial<WordRefineSetup>): WordRefineS
     includeParaphrases: setup?.includeParaphrases ?? DEFAULT_WORD_REFINE_SETUP.includeParaphrases,
     includeIdioms: setup?.includeIdioms ?? DEFAULT_WORD_REFINE_SETUP.includeIdioms
 });
+
+const getRequestedContentFields = (setup: WordRefineSetup): RetryField[] => ([
+    'register',
+    ...(setup.includeMeaning ? ['meaningVi' as const] : []),
+    ...(setup.includeExamples ? ['example' as const] : []),
+    ...(setup.includeCollocations ? ['collocationsArray' as const] : []),
+    ...(setup.includePrepositions ? ['prepositionsArray' as const] : []),
+    ...(setup.includeParaphrases ? ['paraphrases' as const] : []),
+    ...(setup.includeIdioms ? ['idiomsList' as const] : [])
+]);
 
 const normalizeGroupList = (value: any): string[] => {
     if (!Array.isArray(value)) return [];
@@ -344,63 +442,110 @@ const mergeUniqueByText = (base: any[] = [], incoming: any[] = [], key: string) 
 const mergePartialRefineResult = (
     baseResult: any | null,
     incomingResult: any | null,
+    setup: WordRefineSetup,
     replaceFields: RetryField[] = []
 ): any | null => {
     const normalizedIncoming = normalizeAiResponse(incomingResult);
     const fallbackParaphrases = getParaphrasesFromAnyShape(incomingResult);
+    const requestedFields = new Set(getRequestedContentFields(setup));
     debugWordRefine('mergePartialRefineResult', {
         incomingOriginalKey: getOriginalKey(incomingResult),
         hasBaseResult: !!baseResult,
         incomingResult,
         normalizedIncoming,
+        requestedFields: Array.from(requestedFields),
         replaceFields
     });
     if (!normalizedIncoming) return baseResult;
-    if (!baseResult) return normalizedIncoming;
+    if (!baseResult) {
+        return {
+            original: normalizedIncoming.original,
+            headword: normalizedIncoming.headword,
+            ipaUs: normalizedIncoming.ipaUs,
+            ipaUk: normalizedIncoming.ipaUk,
+            pronSim: normalizedIncoming.pronSim,
+            register: normalizedIncoming.register,
+            isIdiom: normalizedIncoming.isIdiom,
+            isPhrasalVerb: normalizedIncoming.isPhrasalVerb,
+            isCollocation: normalizedIncoming.isCollocation,
+            isStandardPhrase: normalizedIncoming.isStandardPhrase,
+            isIrregular: normalizedIncoming.isIrregular,
+            isPassive: normalizedIncoming.isPassive,
+            meaningVi: requestedFields.has('meaningVi') ? normalizedIncoming.meaningVi : undefined,
+            example: requestedFields.has('example') ? normalizedIncoming.example : undefined,
+            collocations: requestedFields.has('collocationsArray') ? normalizedIncoming.collocations : undefined,
+            collocationsArray: requestedFields.has('collocationsArray') ? normalizedIncoming.collocationsArray : undefined,
+            idioms: requestedFields.has('idiomsList') ? normalizedIncoming.idioms : undefined,
+            idiomsList: requestedFields.has('idiomsList') ? normalizedIncoming.idiomsList : undefined,
+            prepositionsArray: requestedFields.has('prepositionsArray') ? normalizedIncoming.prepositionsArray : undefined,
+            paraphrases: requestedFields.has('paraphrases')
+                ? ((normalizedIncoming.paraphrases && normalizedIncoming.paraphrases.length > 0
+                    ? normalizedIncoming.paraphrases
+                    : fallbackParaphrases))
+                : undefined
+        };
+    }
 
     const shouldReplace = (field: RetryField) => replaceFields.includes(field);
 
     return {
         ...baseResult,
-        ...normalizedIncoming,
         original: normalizedIncoming.original || baseResult.original,
-        headword: normalizedIncoming.headword || baseResult.headword,
+        headword: baseResult.headword || normalizedIncoming.headword,
         ipaUs: normalizedIncoming.ipaUs || baseResult.ipaUs,
         ipaUk: normalizedIncoming.ipaUk || baseResult.ipaUk,
         pronSim: normalizedIncoming.pronSim || baseResult.pronSim,
-        meaningVi: normalizedIncoming.meaningVi || baseResult.meaningVi,
         register: normalizedIncoming.register || baseResult.register,
-        example: normalizedIncoming.example || baseResult.example,
-        collocations: shouldReplace('collocationsArray')
-            ? (normalizedIncoming.collocations || baseResult.collocations)
-            : (normalizedIncoming.collocations || baseResult.collocations),
-        collocationsArray: shouldReplace('collocationsArray')
-            ? (normalizedIncoming.collocationsArray || baseResult.collocationsArray)
-            : mergeUniqueByText(baseResult.collocationsArray, normalizedIncoming.collocationsArray, 'text'),
-        idioms: normalizedIncoming.idioms || baseResult.idioms,
-        idiomsList: mergeUniqueByText(baseResult.idiomsList, normalizedIncoming.idiomsList, 'text'),
-        prepositionsArray: shouldReplace('prepositionsArray')
-            ? (normalizedIncoming.prepositionsArray || baseResult.prepositionsArray)
-            : mergeUniqueByText(baseResult.prepositionsArray, normalizedIncoming.prepositionsArray, 'prep'),
-        paraphrases: shouldReplace('paraphrases')
-            ? ((normalizedIncoming.paraphrases && normalizedIncoming.paraphrases.length > 0
-                ? normalizedIncoming.paraphrases
-                : fallbackParaphrases) || baseResult.paraphrases)
-            : mergeUniqueByText(
-                baseResult.paraphrases,
-                (normalizedIncoming.paraphrases && normalizedIncoming.paraphrases.length > 0
-                    ? normalizedIncoming.paraphrases
-                    : fallbackParaphrases),
-                'word'
-            ),
-        wordFamily: normalizedIncoming.wordFamily || baseResult.wordFamily,
-        groups: baseResult.groups,
         isIdiom: normalizedIncoming.isIdiom ?? baseResult.isIdiom,
         isPhrasalVerb: normalizedIncoming.isPhrasalVerb ?? baseResult.isPhrasalVerb,
         isCollocation: normalizedIncoming.isCollocation ?? baseResult.isCollocation,
         isStandardPhrase: normalizedIncoming.isStandardPhrase ?? baseResult.isStandardPhrase,
         isIrregular: normalizedIncoming.isIrregular ?? baseResult.isIrregular,
-        isPassive: normalizedIncoming.isPassive ?? baseResult.isPassive
+        isPassive: normalizedIncoming.isPassive ?? baseResult.isPassive,
+        meaningVi: requestedFields.has('meaningVi')
+            ? (normalizedIncoming.meaningVi || baseResult.meaningVi)
+            : baseResult.meaningVi,
+        example: requestedFields.has('example')
+            ? (normalizedIncoming.example || baseResult.example)
+            : baseResult.example,
+        collocations: requestedFields.has('collocationsArray')
+            ? (normalizedIncoming.collocations || baseResult.collocations)
+            : baseResult.collocations,
+        collocationsArray: requestedFields.has('collocationsArray')
+            ? (
+                shouldReplace('collocationsArray')
+                    ? (normalizedIncoming.collocationsArray || baseResult.collocationsArray)
+                    : mergeUniqueByText(baseResult.collocationsArray, normalizedIncoming.collocationsArray, 'text')
+            )
+            : baseResult.collocationsArray,
+        idioms: requestedFields.has('idiomsList')
+            ? (normalizedIncoming.idioms || baseResult.idioms)
+            : baseResult.idioms,
+        idiomsList: requestedFields.has('idiomsList')
+            ? mergeUniqueByText(baseResult.idiomsList, normalizedIncoming.idiomsList, 'text')
+            : baseResult.idiomsList,
+        prepositionsArray: requestedFields.has('prepositionsArray')
+            ? (
+                shouldReplace('prepositionsArray')
+                    ? (normalizedIncoming.prepositionsArray || baseResult.prepositionsArray)
+                    : mergeUniqueByText(baseResult.prepositionsArray, normalizedIncoming.prepositionsArray, 'prep')
+            )
+            : baseResult.prepositionsArray,
+        paraphrases: requestedFields.has('paraphrases')
+            ? (
+                shouldReplace('paraphrases')
+                    ? ((normalizedIncoming.paraphrases && normalizedIncoming.paraphrases.length > 0
+                        ? normalizedIncoming.paraphrases
+                        : fallbackParaphrases) || baseResult.paraphrases)
+                    : mergeUniqueByText(
+                        baseResult.paraphrases,
+                        (normalizedIncoming.paraphrases && normalizedIncoming.paraphrases.length > 0
+                            ? normalizedIncoming.paraphrases
+                            : fallbackParaphrases),
+                        'word'
+                    )
+            )
+            : baseResult.paraphrases
     };
 };
 
@@ -408,12 +553,7 @@ const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup
     const issues: string[] = [];
     const retryFields = new Set<RetryField>();
     const normalized = normalizeAiResponse(result);
-    const baseRetryFields: RetryField[] = [
-        'headword',
-        ...(setup.includeMeaning ? ['meaningVi' as const] : []),
-        ...(setup.includeExamples ? ['example' as const] : []),
-        'register'
-    ];
+    const baseRetryFields: RetryField[] = getRequestedContentFields(setup);
 
     if (!result) {
         return {
@@ -456,10 +596,6 @@ const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup
         }
     });
 
-    if (!headword) {
-        issues.push(`Missing headword for "${word.word}".`);
-        retryFields.add('headword');
-    }
     if (setup.includeMeaning && !meaningVi) {
         issues.push(`Missing meaning for "${word.word}".`);
         retryFields.add('meaningVi');
@@ -554,7 +690,7 @@ const buildConfiguredWordRefinePrompt = (
     }
 ): string => {
     const basePrompt = getWordDetailsPrompt([word.word], nativeLanguage, {
-        includePronunciation: options?.includePronunciation,
+        includePronunciation: !!options?.includePronunciation,
         meaningLanguage: setup.meaningLanguage,
         includeMeaning: options?.pronunciationOnly ? false : setup.includeMeaning,
         collocationCount: options?.pronunciationOnly || !setup.includeCollocations ? 0 : setup.collocationCount,
@@ -567,8 +703,8 @@ const buildConfiguredWordRefinePrompt = (
 
     const extraLines = [
         options?.pronunciationOnly
-            ? 'For this pass, generate ONLY pronunciation fields and the minimal identity fields needed to map the result. Return og, hw, ipa_us, optional ipa_uk, optional pron_sim. Omit all other content fields.'
-            : 'For this pass, follow the refine setup exactly. If a requested list has no natural item, return an empty array in the correct JSON field instead of inventing weak content.'
+            ? 'For this pass, generate ONLY pronunciation fields plus the always-required core metadata fields. Omit all content fields like meaning, example, collocations, idioms, paraphrases, and prepositions.'
+            : 'For this pass, keep the always-required core metadata fields "reg", "type", and "is_pas", and include ONLY the optional content fields enabled by the current refine setup. Do not add disabled optional fields.'
     ].filter(Boolean);
 
     return `${basePrompt}\n\n${extraLines.join('\n\n')}\n\nReturn ONLY one strict JSON array in a \`\`\`json code block. Do not add explanation text outside the code block.`;
@@ -589,7 +725,7 @@ const buildRetryPrompt = (
     const fieldInstructions: Record<RetryField, string> = {
         pronunciation: '- ipa_us / optional ipa_uk / optional pron_sim: regenerate pronunciation fields only.',
         headword: '- hw: correct headword/base form. Keep the full phrase if the original input is a phrase.',
-        meaningVi: `- m: meaning in ${setup.meaningLanguage === 'en' ? 'English' : nativeLanguage}.`,
+        meaningVi: `- m: meaning in ${setup.meaningLanguage === 'en' ? 'English' : 'Vietnamese'}.`,
         example: '- ex: one natural example sentence using the exact headword.',
         register: '- reg: A-MUST / IMPORTANT. MUST be ONLY one of "academic", "casual", or "neutral". NEVER output any other register label.',
         collocationsArray: '- col: return collocations in correct schema. Each item must include both "text" and "d".',
@@ -609,11 +745,13 @@ const buildRetryPrompt = (
         paraphrases: 'para',
         prepositionsArray: 'prep'
     };
+    const requestedKeys = retryFields.map((field) => fieldKeyMap[field]).join(', ');
+    const knownHeadword = String(partialResult?.headword || word.word || '').trim() || word.word;
 
     const knownData = partialResult
         ? JSON.stringify({
             og: partialResult.original,
-            hw: partialResult.headword,
+            hw: knownHeadword,
             ipa_us: partialResult.ipaUs,
             ipa_uk: partialResult.ipaUk,
             pron_sim: partialResult.pronSim,
@@ -626,7 +764,7 @@ const buildRetryPrompt = (
     const expectedFieldExamples: Record<RetryField, string> = {
         pronunciation: `- ipa_us expected: "/dɪˈfaɪ/"`,
         headword: '- hw expected: the corrected base word or full phrase for this specific item.',
-        meaningVi: `- m expected: a concise ${setup.meaningLanguage === 'en' ? 'English' : nativeLanguage} meaning for this specific word. Do not copy placeholder examples from prior prompts.`,
+        meaningVi: `- m expected: a concise ${setup.meaningLanguage === 'en' ? 'English' : 'Vietnamese'} meaning for this specific word. Do not copy placeholder examples from prior prompts.`,
         example: '- ex expected: one natural example sentence that uses the exact headword for this specific item.',
         register: `- reg expected: "academic" OR "casual" OR "neutral"`,
         collocationsArray: '',
@@ -667,17 +805,43 @@ SPECIAL NOTE FOR PREPOSITIONS:
 - Example of INVALID output: {"p":"in","c":"the face of"}
 - Example of VALID shape: {"p":"in","c":"in the face of criticism"}
 
+STRICT RETRY RULES:
+- This is NOT a pronunciation pass unless "ipa_us" appears in the requested keys below.
+- Do NOT return ipa_us, ipa_uk, or pron_sim unless those keys are explicitly requested.
+- Your JSON MUST contain every requested key with a non-empty value when applicable.
+- If requested keys are "m, reg", your object must include BOTH "m" and "reg".
+- Never answer with only og/hw or only pronunciation fields when the requested keys are different.
+
 Required JSON shape:
 - Return a strict JSON array with exactly one object.
 - Include "og" as "${word.word}".
-- Include "hw" if known or if you are regenerating it.
+- Include "hw" as "${knownHeadword}".
 - Include ONLY the requested fields above (plus "og"/"hw" when needed).
 - Do not rewrite fields that were not requested.
+
+REQUESTED SHORT JSON KEYS FOR THIS RETRY:
+- ${requestedKeys}
+
+MINIMUM VALID RESPONSE SHAPE EXAMPLE:
+\`\`\`json
+[
+  {
+    "og": "${word.word}",
+    "hw": "${knownHeadword}"${retryFields.includes('meaningVi') ? `,
+    "m": "<fill real meaning>"` : ''}${retryFields.includes('register') ? `,
+    "reg": "<academic|casual|neutral>"` : ''}${retryFields.includes('example') ? `,
+    "ex": "<fill real example>"` : ''}${retryFields.includes('pronunciation') ? `,
+    "ipa_us": "<fill ipa>"` : ''}${retryFields.includes('pronunciation') ? `,
+    "ipa_uk": "<optional ipa>"` : ''}${retryFields.includes('pronunciation') ? `,
+    "pron_sim": "<same|near|different>"` : ''}
+  }
+]
+\`\`\`
 
 Previous validation issues:
 - ${lastIssues.join('\n- ')}
 
-Use these JSON keys when you answer: ${retryFields.map((field) => fieldKeyMap[field]).join(', ')}.
+Use these JSON keys when you answer: ${requestedKeys}.
 Return ONLY one strict JSON array in a \`\`\`json code block. Do not add explanation text outside the code block.`;
 };
 
@@ -825,17 +989,13 @@ const requestWordRefineAttempt = async (
 
 const resolveInitialPronunciation = async (
     word: StudyItem,
-    nativeLanguage: string,
-    setup: WordRefineSetup,
     signal: AbortSignal | undefined,
     onProgress: RunWordRefineWithRetryOptions['onProgress'],
     wordIndex: number,
     totalWords: number
 ): Promise<any | null> => {
     const singleWord = isSingleWordText(word.word);
-    const useCambridge = singleWord;
-
-    if (useCambridge) {
+    if (singleWord) {
         onProgress?.({
             stage: 'starting',
             attempt: 0,
@@ -857,29 +1017,20 @@ const resolveInitialPronunciation = async (
         stage: 'starting',
         attempt: 0,
         maxAttempts: MAX_REFINE_ATTEMPTS,
-        message: `Word ${wordIndex + 1}/${totalWords} "${word.word}": generating phrase IPA first...`
+        message: `Word ${wordIndex + 1}/${totalWords} "${word.word}": resolving IPA from server route...`
     });
-    const { results } = await requestWordRefineAttempt(
-        buildConfiguredWordRefinePrompt(word, nativeLanguage, setup, {
-            includePronunciation: true,
-            pronunciationOnly: true
-        }),
-        1,
-        signal,
-        (snapshot) => onProgress?.({
-            ...snapshot,
-            message: `Word ${wordIndex + 1}/${totalWords} "${word.word}": ${snapshot.message}`
-        })
-    );
-    const matchedRawResult = results.find((item) => getOriginalKey(item) === word.word.trim().toLowerCase()) || results[0] || null;
-    const normalized = normalizeAiResponse(ensureResultHasOriginalWord(matchedRawResult, word.word));
-    if (!normalized?.ipaUs && !normalized?.ipaUk) return null;
-    return {
-        original: word.word,
-        ipaUs: normalized.ipaUs,
-        ipaUk: normalized.ipaUk,
-        pronSim: normalized.pronSim
-    };
+    if (signal?.aborted) {
+        throw new DOMException('The user aborted a request.', 'AbortError');
+    }
+    const serverPronunciation = await fetchServerIpaPronunciation(word.word);
+    return serverPronunciation
+        ? {
+            original: word.word,
+            ipaUs: serverPronunciation.ipaUs,
+            ipaUk: serverPronunciation.ipaUk,
+            pronSim: serverPronunciation.pronSim
+        }
+        : null;
 };
 
 export const runWordRefineWithRetry = async (
@@ -908,6 +1059,7 @@ export const runWordRefineWithRetry = async (
         let lastError: unknown = null;
         let retryFields: RetryField[] = [];
         let partialResult: any | null = null;
+        let hasAttemptedFullRefine = false;
 
         options.onProgress?.({
             stage: 'starting',
@@ -919,8 +1071,6 @@ export const runWordRefineWithRetry = async (
         try {
             partialResult = await resolveInitialPronunciation(
                 currentWord,
-                nativeLanguage,
-                setup,
                 options.signal,
                 options.onProgress,
                 wordIndex,
@@ -952,10 +1102,22 @@ export const runWordRefineWithRetry = async (
             }
 
             try {
+                const shouldUseRetryPrompt = hasAttemptedFullRefine && lastIssues.length > 0;
+                const promptForAttempt = shouldUseRetryPrompt
+                    ? buildRetryPrompt(currentWord, nativeLanguage, setup, retryFields, lastIssues, partialResult)
+                    : buildConfiguredWordRefinePrompt(currentWord, nativeLanguage, setup, {
+                        includePronunciation: !partialResult?.ipaUs && !partialResult?.ipaUk
+                    });
+                if (shouldUseRetryPrompt) {
+                    logWordRefineRetryPrompt({
+                        word: currentWord.word,
+                        attempt,
+                        retryFields,
+                        prompt: promptForAttempt
+                    });
+                }
                 const { results, rawText } = await requestWordRefineAttempt(
-                    lastIssues.length > 0
-                        ? buildRetryPrompt(currentWord, nativeLanguage, setup, retryFields, lastIssues, partialResult)
-                        : buildConfiguredWordRefinePrompt(currentWord, nativeLanguage, setup, { includePronunciation: false }),
+                    promptForAttempt,
                     attempt,
                     options.signal,
                     (snapshot) => options.onProgress?.({
@@ -963,6 +1125,7 @@ export const runWordRefineWithRetry = async (
                         message: `Word ${wordIndex + 1}/${words.length} "${currentWord.word}": ${snapshot.message}`
                     })
                 );
+                hasAttemptedFullRefine = true;
                 options.onProgress?.({
                     stage: 'validating',
                     attempt,
@@ -978,7 +1141,7 @@ export const runWordRefineWithRetry = async (
                     resultKeys: results.map((item) => getOriginalKey(item)),
                     rawResult
                 });
-                partialResult = mergePartialRefineResult(partialResult, rawResult, retryFields);
+                partialResult = mergePartialRefineResult(partialResult, rawResult, setup, retryFields);
                 debugWordRefine('attempt:partialResult', {
                     word: currentWord.word,
                     attempt,
@@ -1021,6 +1184,19 @@ export const runWordRefineWithRetry = async (
                     retryFields: validation.retryFields,
                     partialResult
                 });
+                const retryPrompt = attempt < MAX_REFINE_ATTEMPTS
+                    ? buildRetryPrompt(currentWord, nativeLanguage, setup, validation.retryFields, validation.issues, partialResult)
+                    : undefined;
+                logWordRefineValidationFailure({
+                    word: currentWord.word,
+                    attempt,
+                    issues: validation.issues,
+                    retryFields: validation.retryFields,
+                    rawText,
+                    rawResult,
+                    partialResult,
+                    retryPrompt
+                });
             } catch (error) {
                 if (error instanceof DOMException && error.name === 'AbortError') {
                     options.onProgress?.({
@@ -1039,6 +1215,15 @@ export const runWordRefineWithRetry = async (
                     maxAttempts: MAX_REFINE_ATTEMPTS,
                     message: `Word ${wordIndex + 1}/${words.length} "${currentWord.word}": ${lastIssues[0]}`,
                     issues: lastIssues
+                });
+                logWordRefineAttemptError({
+                    word: currentWord.word,
+                    attempt,
+                    error: lastIssues[0],
+                    retryFields,
+                    retryPrompt: attempt < MAX_REFINE_ATTEMPTS
+                        ? buildRetryPrompt(currentWord, nativeLanguage, setup, retryFields, lastIssues, partialResult)
+                        : undefined
                 });
             }
         }
