@@ -33,6 +33,7 @@ const throwIfAbortRequested = (signal?: AbortSignal) => {
 // Define interface for persisted filter settings to fix TypeScript inference errors
 interface PersistedFilters {
     query?: string;
+    searchMeaning?: boolean;
     activeFilters?: FilterType[];
     refinedFilter?: RefinedFilter;
     statusFilter?: StatusFilter;
@@ -55,6 +56,8 @@ interface Props {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onSearch: (query: string) => void;
+  onSearchMeaningChange?: (enabled: boolean) => void;
+  searchMeaning?: boolean;
   onFilterChange: (filters: { types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }) => void;
   onAddWords: (wordsInput: string, types: Set<WordTypeOption>) => Promise<void>;
   onViewWord: (word: StudyItem) => void; // This is for OPENING the view modal
@@ -91,7 +94,7 @@ const dedupeGroups = (groups: string[]): string[] => Array.from(new Set(groups.m
 const StudyItemTable: React.FC<Props> = ({ 
   user,
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
-  onSearch, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onBulkHardDelete, onPractice,
+  onSearch, onSearchMeaningChange, searchMeaning: externalSearchMeaning, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onBulkHardDelete, onPractice,
   settingsKey, context, initialFilter, forceExpandAdd, onExpandAddConsumed, onWordRenamed,
   showTagBrowserButton, tagTree, selectedTag, onSelectTag, onRenameGroup, onDeleteGroup, onOpenWordBook
 }) => {
@@ -104,6 +107,7 @@ const StudyItemTable: React.FC<Props> = ({
   const persistedFilters = useMemo(() => getStoredJSON<PersistedFilters>(filterStorageKey, {}), [filterStorageKey]);
 
   const [query, setQuery] = useState(persistedFilters.query || '');
+  const [searchMeaning, setSearchMeaning] = useState(Boolean(externalSearchMeaning ?? persistedFilters.searchMeaning));
   const [activeFilters, setActiveFilters] = useState<Set<FilterType>>(() => {
     if (Array.isArray(persistedFilters.activeFilters)) {
       return new Set(persistedFilters.activeFilters);
@@ -128,8 +132,9 @@ const StudyItemTable: React.FC<Props> = ({
 
   // Persistence effect
   useEffect(() => {
-    setStoredJSON(filterStorageKey, {
+      setStoredJSON(filterStorageKey, {
         query,
+        searchMeaning,
         activeFilters: Array.from(activeFilters),
         refinedFilter,
         statusFilter,
@@ -141,7 +146,12 @@ const StudyItemTable: React.FC<Props> = ({
         page,      // Save current page
         pageSize   // Save current pageSize
     });
-  }, [filterStorageKey, query, activeFilters, refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, isFilterMenuOpen, page, pageSize]);
+  }, [filterStorageKey, query, searchMeaning, activeFilters, refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, isFilterMenuOpen, page, pageSize]);
+
+  useEffect(() => {
+    if (externalSearchMeaning === undefined) return;
+    setSearchMeaning(externalSearchMeaning);
+  }, [externalSearchMeaning]);
 
   // New state for Word Type selection in Quick Add
   // Default to 'vocab' selected
@@ -244,7 +254,11 @@ const StudyItemTable: React.FC<Props> = ({
   useEffect(() => {
     const timer = setTimeout(() => onSearch(query), 300);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, onSearch]);
+
+  useEffect(() => {
+    onSearchMeaningChange?.(searchMeaning);
+  }, [searchMeaning, onSearchMeaningChange]);
 
   useEffect(() => {
       onFilterChange({ types: activeFilters, refined: refinedFilter, status: statusFilter, register: registerFilter, composition: compositionFilter, book: bookFilter, specificBookId });
@@ -934,7 +948,7 @@ const StudyItemTable: React.FC<Props> = ({
     words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
     onPractice, context, onDelete,
     onViewWord, onEditWord,
-    query, setQuery, activeFilters, refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, onSpecificBookChange: setSpecificBookId, isAddExpanded,
+    query, setQuery, searchMeaning, setSearchMeaning, activeFilters, refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, onSpecificBookChange: setSpecificBookId, isAddExpanded,
     isFilterMenuOpen, quickAddInput, setQuickAddInput, isAdding, isViewMenuOpen,
     selectedIds, setSelectedIds, 
     wordToDelete, setWordToDelete, isDeleting, setIsDeleting,

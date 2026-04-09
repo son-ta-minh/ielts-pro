@@ -621,10 +621,15 @@ export const filterItem = (
     compositionFilter: string = 'all',
     composedWordIds: Set<string> | null = null,
     bookFilter: string = 'all',
-    bookWordIds: Set<string> | null = null
+    bookWordIds: Set<string> | null = null,
+    searchMeaning: boolean = false
 ) => {
     const lowerQuery = query.toLowerCase().trim();
-    if (lowerQuery && !(item.word.toLowerCase().includes(lowerQuery) || item.meaningVi.toLowerCase().includes(lowerQuery))) return false;
+    if (lowerQuery) {
+        const matchesWord = item.word.toLowerCase().includes(lowerQuery);
+        const matchesMeaning = searchMeaning && item.meaningVi.toLowerCase().includes(lowerQuery);
+        if (!(matchesWord || matchesMeaning)) return false;
+    }
     if (item.isPassive && !filterTypes.includes('archive')) return false;
 
     if (refinedFilter !== 'all') {

@@ -531,6 +531,8 @@ export interface WordTableUIProps {
   onHardDelete?: (word: StudyItem) => Promise<void>;
   query: string;
   setQuery: (q: string) => void;
+  searchMeaning: boolean;
+  setSearchMeaning: (enabled: boolean) => void;
   activeFilters: Set<FilterType>;
   refinedFilter: RefinedFilter;
   statusFilter: StatusFilter;
@@ -605,7 +607,7 @@ export interface WordTableUIProps {
 
 export const WordTableUI: React.FC<WordTableUIProps> = ({
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
-  onPractice, context, onViewWord, onEditWord, onDelete, onHardDelete, query, setQuery, activeFilters,
+  onPractice, context, onViewWord, onEditWord, onDelete, onHardDelete, query, setQuery, searchMeaning, setSearchMeaning, activeFilters,
   refinedFilter, statusFilter, registerFilter, compositionFilter, bookFilter, specificBookId, onSpecificBookChange, isAddExpanded, isFilterMenuOpen, quickAddInput,
   setQuickAddInput, isAdding, isViewMenuOpen, selectedIds, setSelectedIds,
   wordToDelete, setWordToDelete, isDeleting, setIsDeleting,
@@ -749,6 +751,17 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     )}
                 </div>            
             </div>
+            {context === 'library' && (
+                <button
+                    type="button"
+                    onClick={() => setSearchMeaning(!searchMeaning)}
+                    className={`px-4 py-3 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${searchMeaning ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`}
+                    title="Include meaning in library search"
+                >
+                    <CheckCircle2 size={16} />
+                    <span>Search Meaning</span>
+                </button>
+            )}
             <div className="flex gap-2">
                 <div className="relative" ref={viewMenuRef}>
                     <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className={`px-4 py-3 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isViewMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="View Options">

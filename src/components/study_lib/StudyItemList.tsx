@@ -30,6 +30,7 @@ interface Props {
 }
 
 const LIBRARY_FILTERS_KEY = 'vocab_pro_library_filters_v2';
+const LIBRARY_TABLE_FILTERS_KEY = `${LIBRARY_FILTERS_KEY}_library_vocab_pro_word_table_settings`;
 
 const dedupeGroups = (groups: string[]): string[] => Array.from(new Set(groups.filter(Boolean)));
 
@@ -55,7 +56,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
   const [words, setWords] = useState<StudyItem[]>([]);
   
   // Read storage synchronously for initial state
-  const savedState = useMemo(() => getStoredJSON<any>(LIBRARY_FILTERS_KEY, {}), []);
+  const savedState = useMemo(() => getStoredJSON<any>(LIBRARY_TABLE_FILTERS_KEY, {}), []);
 
   const [page, setPage] = useState(savedState.page || 0);
   const [pageSize, setPageSize] = useState(savedState.pageSize || 25);
@@ -63,6 +64,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
   const [loading, setLoading] = useState(true);
   
   const [currentQuery, setCurrentQuery] = useState(savedState.query || '');
+  const [searchMeaning, setSearchMeaning] = useState(Boolean(savedState.searchMeaning));
   const [currentFilters, setCurrentFilters] = useState<{ types: Set<FilterType>, refined: RefinedFilter, status: StatusFilter, register: RegisterFilter, composition: CompositionFilter, book: BookFilter, specificBookId: string }>({ types: new Set(['all']), refined: 'all', status: 'all', register: 'all', composition: 'all', book: 'all', specificBookId: '' });
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   
@@ -227,7 +229,8 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
         selectedTag, 
         currentFilters.composition, 
         currentFilters.book,
-        currentFilters.specificBookId
+        currentFilters.specificBookId,
+        searchMeaning
       );
       setTotal(totalCount);
       setWords(data);
@@ -236,7 +239,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
     } finally {
       setLoading(false);
     }
-  }, [userId, page, pageSize, currentQuery, currentFilters, selectedTag]);
+  }, [userId, page, pageSize, currentQuery, currentFilters, selectedTag, searchMeaning]);
 
   useEffect(() => {
     fetchData();
@@ -437,6 +440,8 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
           onPageChange={setPage}
           onPageSizeChange={setPageSize}
           onSearch={setCurrentQuery}
+          onSearchMeaningChange={setSearchMeaning}
+          searchMeaning={searchMeaning}
           onFilterChange={(f) => {
              setCurrentFilters({ 
                  types: f.types, 
