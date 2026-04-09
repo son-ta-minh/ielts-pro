@@ -111,19 +111,6 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         setIsMinimized(false);
     }, [target]);
 
-    // Real-time analysis during recording
-    useEffect(() => {
-        if (isFreeTalkMode) return;
-        if (isRecording && editedTarget && transcript) {
-            const result = analyzeSpeechLocally(editedTarget, transcript);
-            setAnalysis(result);
-            if (result.score >= 100 && !autoStopTriggeredRef.current) {
-                autoStopTriggeredRef.current = true;
-                stopSession(transcript);
-            }
-        }
-    }, [transcript, isRecording, editedTarget, isFreeTalkMode]);
-
     const fetchIpa = useCallback(async () => {
         if (isFreeTalkMode) return;
         if (!editedTarget) return;
@@ -167,36 +154,6 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         lastActivityRef.current = Date.now();
         setTimeLeft(SILENCE_TIMEOUT);
     }, []);
-
-    const startSilenceCountdown = useCallback((currentText: string) => {
-        if (isFreeTalkMode) return;
-        if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
-
-        const hasRecognizedText = currentText
-            .toLowerCase()
-            .replace(/[^\p{L}\p{N}]+/gu, ' ')
-            .trim()
-            .length > 0;
-        if (!hasRecognizedText) {
-            setTimeLeft(SILENCE_TIMEOUT);
-            return;
-        }
-        
-        lastActivityRef.current = Date.now();
-        setTimeLeft(SILENCE_TIMEOUT);
-
-        silenceTimerRef.current = setInterval(() => {
-            const now = Date.now();
-            const elapsed = now - lastActivityRef.current;
-            const remaining = Math.max(0, SILENCE_TIMEOUT - elapsed);
-            
-            setTimeLeft(remaining);
-
-            if (remaining <= 0 && isRecordingRef.current) {
-                stopSession(currentText);
-            }
-        }, 50); 
-    }, [stopSession, isFreeTalkMode]);
 
     useEffect(() => {
         return () => {
@@ -284,7 +241,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         });
     }, [editedTarget]);
 
-    async function stopSession(currentTranscript: string) {
+    const stopSession = useCallback(async (currentTranscript: string) => {
         if (stopInFlightRef.current) return;
         stopInFlightRef.current = true;
         if (silenceTimerRef.current) {
@@ -315,7 +272,90 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         } finally {
             stopInFlightRef.current = false;
         }
-    }
+    }, [editedTarget, isFreeTalkMode, onSaveScore, saveAudioToHistory]);
+
+    const startSilenceCountdown = useCallback((currentText: string) => {
+        if (isFreeTalkMode) return;
+        if (silenceTimerRef.current) clearInterval(silenceTimerRef.current);
+
+        const hasRecognizedText = currentText
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}]+/gu, ' ')
+            .trim()
+            .length > 0;
+        if (!hasRecognizedText) {
+            setTimeLeft(SILENCE_TIMEOUT);
+            return;
+        }
+        
+        lastActivityRef.current = Date.now();
+        setTimeLeft(SILENCE_TIMEOUT);
+
+        silenceTimerRef.current = setInterval(() => {
+            const now = Date.now();
+            const elapsed = now - lastActivityRef.current;
+            const remaining = Math.max(0, SILENCE_TIMEOUT - elapsed);
+            
+            setTimeLeft(remaining);
+
+            if (remaining <= 0 && isRecordingRef.current) {
+                stopSession(currentText);
+            }
+        }, 50); 
+    }, [isFreeTalkMode, stopSession]);
+
+    // Real-time analysis during recording
+    useEffect(() => {
+        if (isFreeTalkMode) return;
+        if (isRecording && editedTarget && transcript) {
+            const result = analyzeSpeechLocally(editedTarget, transcript);
+            setAnalysis(result);
+            if (result.score >= 100 && !autoStopTriggeredRef.current) {
+                autoStopTriggeredRef.current = true;
+                stopSession(transcript);
+            }
+        }
+    }, [editedTarget, isFreeTalkMode, isRecording, stopSession, transcript]);
+
+    const startRecognitionSession = useCallback(() => {
+        recognitionManager.current.start(
+            (final, interim) => {
+                const fullText = [final, interim].filter(Boolean).join(' ').trim();
+                setTranscript(fullText);
+                const hasRecognizedText = fullText
+                    .toLowerCase()
+                    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+                    .trim()
+                    .length > 0;
+                if (!isFreeTalkMode && hasRecognizedText) {
+                    resetActivity();
+                    startSilenceCountdown(fullText);
+                }
+                if (!isFreeTalkMode && isSingleWordTarget && !singleWordStopTimerRef.current) {
+                    if (hasRecognizedText) {
+                        singleWordStopTimerRef.current = setTimeout(() => {
+                            singleWordStopTimerRef.current = null;
+                            if (isRecordingRef.current) {
+                                stopSession(fullText);
+                            }
+                        }, SINGLE_WORD_AUTOSTOP_DELAY);
+                    }
+                }
+            },
+            (final) => {
+                if (!isRecordingRef.current) return;
+                const trimmedFinal = final.trim();
+                setTranscript(trimmedFinal);
+
+                if (isFreeTalkMode) {
+                    startRecognitionSession();
+                    return;
+                }
+
+                stopSession(trimmedFinal);
+            }
+        );
+    }, [isFreeTalkMode, isSingleWordTarget, resetActivity, startSilenceCountdown, stopSession]);
 
     const handleToggleRecord = async () => {
         if (!isFreeTalkMode && !editedTarget) return;
@@ -345,38 +385,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 }, 500);
                 
                 resetActivity();
-
-                recognitionManager.current.start(
-                    (final, interim) => {
-                        const fullText = [final, interim].filter(Boolean).join(' ').trim();
-                        setTranscript(fullText);
-                        const hasRecognizedText = fullText
-                            .toLowerCase()
-                            .replace(/[^\p{L}\p{N}]+/gu, ' ')
-                            .trim()
-                            .length > 0;
-                        if (!isFreeTalkMode && hasRecognizedText) {
-                            resetActivity();
-                            startSilenceCountdown(fullText);
-                        }
-                        if (!isFreeTalkMode && isSingleWordTarget && !singleWordStopTimerRef.current) {
-                            if (hasRecognizedText) {
-                                singleWordStopTimerRef.current = setTimeout(() => {
-                                    singleWordStopTimerRef.current = null;
-                                    if (isRecordingRef.current) {
-                                        stopSession(fullText);
-                                    }
-                                }, SINGLE_WORD_AUTOSTOP_DELAY);
-                            }
-                        }
-                    },
-                    (final) => {
-                        if (isRecordingRef.current) {
-                            setTranscript(final.trim());
-                            stopSession(final);
-                        }
-                    }
-                );
+                startRecognitionSession();
             } catch (_e) {
                 console.error(_e);
                 setIsRecording(false);
