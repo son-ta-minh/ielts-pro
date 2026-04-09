@@ -1,10 +1,10 @@
 
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Volume2, Mic, Waves, ListPlus, Play, AudioLines, Loader2, Minimize2, Maximize2, Download, History, Pencil, Trash2, Check, ChevronUp, ChevronDown } from 'lucide-react';
+import { Volume2, Mic, Waves, ListPlus, Play, Pause, AudioLines, Loader2, Minimize2, Maximize2, Download, Pencil, Trash2, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import { speak, stopRecording, startRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
-import { analyzeSpeechLocally, AnalysisResult, CharDiff } from '../../utils/speechAnalysis';
+import { analyzeSpeechLocally, AnalysisResult } from '../../utils/speechAnalysis';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
@@ -63,13 +63,16 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
     const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+    const [playingAudioKey, setPlayingAudioKey] = useState<string | null>(null);
     const [playSpeed, setPlaySpeed] = useState<number>(() => {
         const saved = localStorage.getItem('mimic_play_speed');
         return saved ? Number(saved) : 1.5;
     });
     const autoPlayRef = useRef<any>(null);
     const audioPlaybackRef = useRef<AudioContext | null>(null);
+    const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
     const audioElementRef = useRef<HTMLAudioElement | null>(null);
+    const audioBlobUrlRef = useRef<string | null>(null);
 
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const silenceTimerRef = useRef<any>(null);
@@ -164,6 +167,15 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     }, []);
 
     const stopPlayback = useCallback(() => {
+        setPlayingAudioKey(null);
+        if (audioSourceRef.current) {
+            audioSourceRef.current.onended = null;
+            try {
+                audioSourceRef.current.stop();
+            } catch {}
+            audioSourceRef.current.disconnect();
+            audioSourceRef.current = null;
+        }
         if (audioPlaybackRef.current) {
             audioPlaybackRef.current.close().catch(() => {});
             audioPlaybackRef.current = null;
@@ -171,10 +183,11 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         if (audioElementRef.current) {
             audioElementRef.current.pause();
             audioElementRef.current.currentTime = 0;
-            if (audioElementRef.current.src.startsWith('blob:')) {
-                URL.revokeObjectURL(audioElementRef.current.src);
-            }
             audioElementRef.current = null;
+        }
+        if (audioBlobUrlRef.current) {
+            URL.revokeObjectURL(audioBlobUrlRef.current);
+            audioBlobUrlRef.current = null;
         }
     }, []);
 
@@ -369,6 +382,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 clearTimeout(singleWordStopTimerRef.current);
                 singleWordStopTimerRef.current = null;
             }
+            stopPlayback();
             setTranscript('');
             setAnalysis(null);
             setUserAudio(null);
@@ -395,8 +409,14 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         }
     };
 
-    const playAudioData = useCallback(async (audio: { base64: string; mimeType: string }) => {
+    const playAudioData = useCallback(async (audio: { base64: string; mimeType: string }, audioKey: string) => {
+        if (playingAudioKey === audioKey) {
+            stopPlayback();
+            return;
+        }
+
         stopPlayback();
+        setPlayingAudioKey(audioKey);
 
         try {
             const view = decodeAudioBytes(audio.base64);
@@ -406,6 +426,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             audioPlaybackRef.current = audioCtx;
             const buffer = await audioCtx.decodeAudioData(arrayBuffer);
             const source = audioCtx.createBufferSource();
+            audioSourceRef.current = source;
             source.buffer = buffer;
             const gainNode = audioCtx.createGain();
             gainNode.gain.value = 1.8;
@@ -413,9 +434,11 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             await audioCtx.resume();
             source.start();
             source.onended = () => {
-                source.disconnect();
-                gainNode.disconnect();
-                stopPlayback();
+                if (audioSourceRef.current === source) {
+                    source.disconnect();
+                    gainNode.disconnect();
+                    stopPlayback();
+                }
             };
         } catch (_e) {
             console.error('Failed to play recorded audio via AudioContext, trying fallback', _e);
@@ -423,22 +446,25 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 const view = decodeAudioBytes(audio.base64);
                 const blob = new Blob([view.buffer], { type: audio.mimeType });
                 const url = URL.createObjectURL(blob);
+                audioBlobUrlRef.current = url;
                 const audioEl = new Audio(url);
                 audioElementRef.current = audioEl;
                 audioEl.onended = () => {
-                    URL.revokeObjectURL(url);
-                    audioElementRef.current = null;
+                    if (audioElementRef.current === audioEl) {
+                        stopPlayback();
+                    }
                 };
                 await audioEl.play();
             } catch (fallbackError) {
                 console.error('Fallback playback also failed', fallbackError);
+                stopPlayback();
             }
         }
-    }, [decodeAudioBytes, stopPlayback]);
+    }, [decodeAudioBytes, playingAudioKey, stopPlayback]);
 
     const handlePlayUserAudio = useCallback(async () => {
         if (!userAudio) return;
-        await playAudioData(userAudio);
+        await playAudioData(userAudio, 'session-recording');
     }, [playAudioData, userAudio]);
 
     const handleSaveUserAudio = useCallback(() => {
@@ -637,11 +663,17 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                         onClick={handlePlayUserAudio}
                         disabled={isRecording}
                         className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
-                            !isRecording ? 'bg-indigo-100 text-indigo-600 hover:text-indigo-900' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'
+                            !isRecording && playingAudioKey === 'session-recording'
+                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                                : !isRecording
+                                    ? 'bg-indigo-100 text-indigo-600 hover:text-indigo-900'
+                                    : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'
                         }`}
-                        title="Play recording"
+                        title={playingAudioKey === 'session-recording' ? 'Stop playback' : 'Play recording'}
                     >
-                        <Play size={15} fill={!isRecording ? "currentColor" : "none"} />
+                        {playingAudioKey === 'session-recording'
+                            ? <Pause size={15} fill={!isRecording ? "currentColor" : "none"} />
+                            : <Play size={15} fill={!isRecording ? "currentColor" : "none"} />}
                     </button>
                 )}
                 <div className="overflow-hidden rounded-full border border-neutral-200 shadow-sm">
@@ -884,10 +916,18 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                         <button 
                             onClick={handlePlayUserAudio}
                             disabled={isRecording}
-                            className={`p-4 rounded-2xl transition-all ${!isRecording ? 'bg-indigo-100 text-indigo-600 hover:text-indigo-900' : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'}`}
-                            title="Play recording"
+                            className={`p-4 rounded-2xl transition-all ${
+                                !isRecording && playingAudioKey === 'session-recording'
+                                    ? 'bg-indigo-600 text-white shadow-md'
+                                    : !isRecording
+                                        ? 'bg-indigo-100 text-indigo-600 hover:text-indigo-900'
+                                        : 'bg-neutral-50 text-neutral-300 cursor-not-allowed'
+                            }`}
+                            title={playingAudioKey === 'session-recording' ? 'Stop playback' : 'Play recording'}
                         >
-                            <Play size={24} fill={!isRecording ? "currentColor" : "none"} />
+                            {playingAudioKey === 'session-recording'
+                                ? <Pause size={24} fill={!isRecording ? "currentColor" : "none"} />
+                                : <Play size={24} fill={!isRecording ? "currentColor" : "none"} />}
                         </button>
                     )}
                     {userAudio && (
@@ -968,12 +1008,18 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                                             <button
                                                 onClick={() => {
                                                     setUserAudio({ base64: item.base64, mimeType: item.mimeType });
-                                                    void playAudioData({ base64: item.base64, mimeType: item.mimeType });
+                                                    void playAudioData({ base64: item.base64, mimeType: item.mimeType }, item.id);
                                                 }}
-                                                className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 transition-all hover:bg-indigo-200"
-                                                title="Play"
+                                                className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all ${
+                                                    playingAudioKey === item.id
+                                                        ? 'bg-indigo-600 text-white shadow-md'
+                                                        : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                                                }`}
+                                                title={playingAudioKey === item.id ? 'Stop' : 'Play'}
                                             >
-                                                <Play size={16} fill="currentColor" />
+                                                {playingAudioKey === item.id
+                                                    ? <Pause size={16} fill="currentColor" />
+                                                    : <Play size={16} fill="currentColor" />}
                                             </button>
                                             <button
                                                 onClick={() => saveAudioToDevice({ base64: item.base64, mimeType: item.mimeType }, item.name, item.createdAt)}

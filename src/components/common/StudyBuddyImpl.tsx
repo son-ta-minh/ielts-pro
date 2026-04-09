@@ -54,6 +54,8 @@ import { findWordByStudyBuddyLookup } from '../../utils/vocabularyKeywordUtils';
 
 const MAX_READ_LENGTH = 1000;
 const MAX_MIMIC_LENGTH = 1600;
+const MAX_SELECTION_LIBRARY_LOOKUP_LENGTH = 120;
+const MAX_SELECTION_LIBRARY_LOOKUP_WORDS = 12;
 const CHAT_AUDIO_PREFETCH_AHEAD = 2;
 const CHAT_CONVERSATION_SILENCE_MS = 1200;
 const CHAT_CONVERSATION_RESTART_DELAY_MS = 220;
@@ -595,6 +597,20 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
     const checkLibraryExistence = async (word: string) => {
         if (!word || !user.id) return;
+        const normalized = word.trim();
+        const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+
+        // Skip expensive library matching for long free-form selections such as full paragraphs in Course Viewer.
+        if (
+            normalized.length > MAX_SELECTION_LIBRARY_LOOKUP_LENGTH
+            || wordCount > MAX_SELECTION_LIBRARY_LOOKUP_WORDS
+            || normalized.includes('\n')
+        ) {
+            setIsAlreadyInLibrary(false);
+            setCurrentLibraryWord(null);
+            return;
+        }
+
         const exists = findWordByStudyBuddyLookup(dataStore.getAllWords(), user.id, word);
         setIsAlreadyInLibrary(!!exists);
         setCurrentLibraryWord(exists || null);
@@ -1554,6 +1570,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
         const openCoachMenuWithRange = (selectedText: string, range: Range, options?: { fromChat?: boolean }) => {
             if (!selectedText.trim()) return;
+            if (!options?.fromChat && selectedText.length > MAX_READ_LENGTH) {
+                disableSelectionPreservation();
+                selectedRangeRef.current = null;
+                return;
+            }
             const rect = range.getBoundingClientRect();
             const placement = rect.top > 250 ? 'top' : 'bottom';
 
