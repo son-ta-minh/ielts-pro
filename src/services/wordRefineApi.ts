@@ -1053,6 +1053,12 @@ export const runWordRefineWithRetry = async (
         message: `Preparing refine for ${words.length} selected word(s) with configured setup...`
     });
 
+    const throwIfAborted = () => {
+        if (options.signal?.aborted) {
+            throw new DOMException('The user aborted a request.', 'AbortError');
+        }
+    };
+
     const processSingleWord = async (wordIndex: number) => {
         const currentWord = words[wordIndex];
         let lastIssues: string[] = [];
@@ -1069,6 +1075,7 @@ export const runWordRefineWithRetry = async (
         });
 
         try {
+            throwIfAborted();
             partialResult = await resolveInitialPronunciation(
                 currentWord,
                 options.signal,
@@ -1150,6 +1157,7 @@ export const runWordRefineWithRetry = async (
                 const validation = validateWordResult(partialResult, currentWord, setup);
                 if (validation.issues.length === 0 && partialResult) {
                     aggregatedResultsByIndex.set(wordIndex, partialResult);
+                    throwIfAborted();
                     await options.onWordValidated?.({
                         word: currentWord,
                         results: [partialResult],
@@ -1157,6 +1165,7 @@ export const runWordRefineWithRetry = async (
                         totalWords: words.length,
                         attempts: attempt
                     });
+                    throwIfAborted();
                     options.onProgress?.({
                         stage: 'success',
                         attempt,
@@ -1235,6 +1244,7 @@ export const runWordRefineWithRetry = async (
 
             if (savedPartially) {
                 aggregatedResultsByIndex.set(wordIndex, sanitizedPartialResult);
+                throwIfAborted();
                 await options.onWordValidated?.({
                     word: currentWord,
                     results: [sanitizedPartialResult],
@@ -1244,6 +1254,7 @@ export const runWordRefineWithRetry = async (
                     partial: true,
                     issues: lastIssues
                 });
+                throwIfAborted();
             }
 
             finalIssues.push({
@@ -1268,6 +1279,7 @@ export const runWordRefineWithRetry = async (
     };
 
     for (let index = 0; index < words.length; index += 1) {
+        throwIfAborted();
         await processSingleWord(index);
     }
 

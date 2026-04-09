@@ -13,6 +13,7 @@ import UniversalAiModal from '../common/UniversalAiModal';
 import { TagTreeNode } from '../common/TagBrowser';
 import * as db from '../../app/db';
 import { runWordRefineWithRetry, WordRefineProgressSnapshot, WordRefineSetup } from '../../services/wordRefineApi';
+import { createNewWord } from '../../utils/srs';
 
 const MAX_API_REFINE_HISTORY_ITEMS = 120;
 
@@ -22,6 +23,12 @@ const compactRefineSnapshotForHistory = (snapshot: WordRefineProgressSnapshot): 
     ? `${snapshot.rawText.slice(0, 800)}${snapshot.rawText.length > 800 ? '\n...[truncated]' : ''}`
     : undefined
 });
+
+const throwIfAbortRequested = (signal?: AbortSignal) => {
+  if (signal?.aborted) {
+    throw new DOMException('The user aborted a request.', 'AbortError');
+  }
+};
 
 // Define interface for persisted filter settings to fix TypeScript inference errors
 interface PersistedFilters {
@@ -514,6 +521,49 @@ const StudyItemTable: React.FC<Props> = ({
     setNotification({ type: 'success', message: `Copied ${selectedWords.length} headword(s).` });
   };
 
+  const handleResetSelectedWords = async () => {
+    const targetWords = words.filter(word => selectedIds.has(word.id) && !word.isFreeLesson);
+    if (targetWords.length === 0) {
+      setNotification({ type: 'info', message: 'No valid words selected to reset.' });
+      return;
+    }
+
+    try {
+      const resetItems = await Promise.all(
+        targetWords.map(async (word) => {
+          const freshItem = await createNewWord(
+            word.word,
+            '',
+            '',
+            '',
+            '',
+            word.groups || [],
+            !!word.isIdiom,
+            !!word.isPhrasalVerb,
+            !!word.isCollocation,
+            !!word.isStandardPhrase,
+            !!word.isPassive
+          );
+
+          return {
+            ...freshItem,
+            id: word.id,
+            userId: word.userId,
+            createdAt: word.createdAt || freshItem.createdAt,
+            updatedAt: Date.now()
+          };
+        })
+      );
+
+      await dataStore.bulkSaveWords(resetItems);
+      setSelectedIds(new Set());
+      setNotification({ type: 'success', message: `Reset ${resetItems.length} word(s) to default raw state.` });
+    } catch (error) {
+      console.error(error);
+      setNotification({ type: 'error', message: 'Failed to reset selected words.' });
+    }
+  };
+
   const applyAiRefinementResults = async (
     results: any[],
     targetWords: StudyItem[],
@@ -659,6 +709,7 @@ const StudyItemTable: React.FC<Props> = ({
             });
           },
           onWordValidated: async ({ word, results: wordResults, partial, issues }) => {
+            throwIfAbortRequested(controller.signal);
             await applyAiRefinementResults(wordResults, [word], {
               clearSelection: false,
               closeModal: false,
@@ -672,6 +723,7 @@ const StudyItemTable: React.FC<Props> = ({
                   : `Flushed ${flushed}/${totalWordsForRun}, remaining ${remaining}: "${word.word}".`;
               })()
             });
+            throwIfAbortRequested(controller.signal);
             if (partial && issues && issues.length > 0) {
               setApiRefineHistory((current) => {
                 const next = [...current, compactRefineSnapshotForHistory({
@@ -918,6 +970,7 @@ const StudyItemTable: React.FC<Props> = ({
     onAddSelectedGroup: handleAddSelectedGroup,
     onClearSelectedGroups: handleClearSelectedGroups,
     onCopySelectedHeadwords: handleCopySelectedHeadwords,
+    onResetSelectedWords: handleResetSelectedWords,
     isAddToBookModalOpen,
     setIsAddToBookModalOpen,
     wordBooks: availableBooks,

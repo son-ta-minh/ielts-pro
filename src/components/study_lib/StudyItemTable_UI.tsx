@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, PenLine, BookMarked, Image, Play } from 'lucide-react';
+import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, PenLine, BookMarked, Image, Play, RotateCcw } from 'lucide-react';
 import { StudyItem, LearnedStatus, StudyItemQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
@@ -596,6 +596,7 @@ export interface WordTableUIProps {
   onAddSelectedGroup: (group: string) => void | Promise<void>;
   onClearSelectedGroups: () => void | Promise<void>;
   onCopySelectedHeadwords: () => void | Promise<void>;
+  onResetSelectedWords: () => void | Promise<void>;
   isAddToBookModalOpen: boolean;
   setIsAddToBookModalOpen: (o: boolean) => void;
   wordBooks: WordBook[];
@@ -616,7 +617,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
   onRenameGroup, onDeleteGroup,
   selectedTypes, toggleType, onOpenWordBook,
-  availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onSetSelectedQuality, onSetSelectedLearnedStatus, onAddSelectedGroup, onClearSelectedGroups, onCopySelectedHeadwords,
+  availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onSetSelectedQuality, onSetSelectedLearnedStatus, onAddSelectedGroup, onClearSelectedGroups, onCopySelectedHeadwords, onResetSelectedWords,
   isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
@@ -996,6 +997,14 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                         <Save size={14} />
                         <span>Copy Headword</span>
                       </button>
+                      <button
+                        onClick={() => void onResetSelectedWords()}
+                        disabled={isApiRefining || selectedWordsToRefine.length === 0}
+                        className="flex w-full items-center gap-2 rounded-xl border border-amber-200 px-3 py-2 text-left text-[11px] font-black text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <RotateCcw size={14} />
+                        <span>Reset Word</span>
+                      </button>
                       {onOpenBulkDeleteModal && (
                         <button onClick={onOpenBulkDeleteModal} className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-[11px] font-black ${context === 'unit' ? 'border-orange-200 text-orange-700 hover:bg-orange-50' : 'border-rose-200 text-rose-700 hover:bg-rose-50'}`}>
                           {context === 'unit' ? <Unlink size={14} /> : <Trash2 size={14} />}
@@ -1013,13 +1022,13 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 )}
               </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsRefineSetupModalOpen(true)}
-                  disabled={isApiRefining || selectedWordsToRefine.length === 0}
-                  className="px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors bg-white/10 hover:bg-white/20 text-white disabled:cursor-not-allowed disabled:opacity-50"
+              <button
+                type="button"
+                onClick={() => setIsRefineSetupModalOpen(true)}
+                disabled={isApiRefining || selectedWordsToRefine.length === 0}
+                className="px-4 py-3 rounded-xl text-xs font-black flex items-center space-x-2 transition-colors bg-white/10 hover:bg-white/20 text-white disabled:cursor-not-allowed disabled:opacity-50"
                   title={selectedWordsToRefine.length === 0 ? 'Selected Lesson items cannot be refined.' : undefined}
-                >
+              >
                 {isApiRefining ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
                 <span>Refine</span>
               </button>
