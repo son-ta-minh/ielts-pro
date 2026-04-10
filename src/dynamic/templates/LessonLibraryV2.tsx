@@ -191,6 +191,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [isEditingSideContent, setIsEditingSideContent] = useState(false);
   const [sideContentDraft, setSideContentDraft] = useState('');
   const [isSavingSideContent, setIsSavingSideContent] = useState(false);
+  const [sideBySideEditingLesson, setSideBySideEditingLesson] = useState<Lesson | null>(null);
   const [lastAutoSideBySideFilter, setLastAutoSideBySideFilter] = useState<TypeFilter | null>(null);
   
   const [page, setPage] = useState(0);
@@ -392,6 +393,19 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       setViewMode('list'); 
       setActiveLesson(null); 
       loadData(); 
+  };
+
+  const handleSaveSideBySideLesson = async (lesson: Lesson) => {
+    await dataStore.saveLesson(lesson);
+    setResources((prev) => prev.map((item) => (
+      item.data.id === lesson.id
+        ? { ...item, data: lesson }
+        : item
+    )));
+    setSideBySideLessonId(lesson.id);
+    setSideBySideEditingLesson(null);
+    showToast('Lesson saved!', 'success');
+    loadData();
   };
 
   const handleSaveSideContent = async () => {
@@ -710,9 +724,8 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                   const lesson = item.data as Lesson;
                   const isActive = sideBySideLesson?.data.id === item.data.id;
                   return (
-                    <button
+                    <div
                       key={`side-${item.data.id}`}
-                      onClick={() => setSideBySideLessonId(item.data.id)}
                       onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         setHoveredSidePreview({
@@ -722,10 +735,29 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                         });
                       }}
                       onMouseLeave={() => setHoveredSidePreview((current) => (current?.lesson.id === lesson.id ? null : current))}
-                      className={`group relative w-full text-left px-4 py-3 rounded-2xl transition-all ${isActive ? 'bg-neutral-900 text-white shadow-lg' : 'bg-white text-neutral-700 hover:bg-neutral-50 border border-transparent hover:border-neutral-200'}`}
+                      className={`group relative rounded-2xl transition-all ${isActive ? 'bg-neutral-900 text-white shadow-lg' : 'bg-white text-neutral-700 hover:bg-neutral-50 border border-transparent hover:border-neutral-200'}`}
                     >
-                      <div className="truncate text-sm font-black leading-tight">{lesson.title || 'Untitled lesson'}</div>
-                    </button>
+                      <button
+                        onClick={() => setSideBySideLessonId(item.data.id)}
+                        className="w-full text-left px-4 py-3 pr-20"
+                      >
+                        <div className="truncate text-sm font-black leading-tight">{lesson.title || 'Untitled lesson'}</div>
+                      </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSideBySideEditingLesson(lesson);
+                          }}
+                          className={`absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-widest transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 ${
+                            isActive
+                              ? 'bg-white/15 text-white hover:bg-white/25'
+                              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900'
+                          }`}
+                          title="Edit lesson"
+                        >
+                          Edit
+                        </button>
+                    </div>
                   );
                 })}
               </div>
@@ -875,6 +907,30 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         ) : (
           <p className="mt-2 text-xs italic text-neutral-400">No description</p>
         )}
+      </div>
+    )}
+    {sideBySideEditingLesson && (
+      <div className="fixed inset-0 z-[220] flex items-start justify-center bg-neutral-950/45 px-4 py-6 backdrop-blur-sm">
+        <div className="relative max-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-neutral-200 bg-neutral-50 p-6 shadow-2xl">
+          <button
+            onClick={() => setSideBySideEditingLesson(null)}
+            className="sticky top-0 z-10 ml-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-neutral-200 bg-white text-neutral-500 shadow-sm transition-all hover:bg-neutral-50 hover:text-neutral-900"
+            title="Close edit modal"
+          >
+            <X size={18} />
+          </button>
+          <LessonEditView
+            lesson={sideBySideEditingLesson}
+            user={user}
+            onSave={handleSaveSideBySideLesson}
+            onPractice={(lesson) => {
+              setSideBySideEditingLesson(null);
+              setActiveLesson(lesson);
+              setViewMode('read_lesson');
+            }}
+            onCancel={() => setSideBySideEditingLesson(null)}
+          />
+        </div>
       </div>
     )}
     <ConfirmationModal isOpen={!!lessonToDelete} title="Delete Lesson?" message="Confirm delete?" confirmText="Yes, Delete" isProcessing={false} onConfirm={handleDeleteLesson} onClose={() => setLessonToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
