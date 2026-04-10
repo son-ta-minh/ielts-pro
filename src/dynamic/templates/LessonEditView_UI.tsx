@@ -12,6 +12,7 @@ interface Props {
   setDescription: (d: string) => void;
   knowledgeType: string;
   setKnowledgeType: (value: string) => void;
+  knowledgeTypeOptions: string[];
   path: string;
   setPath: (p: string) => void;
   tagsInput: string;
@@ -38,7 +39,7 @@ interface Props {
 export const LessonEditViewUI: React.FC<Props> = (props) => {
     const { 
         type, title, setTitle, description, setDescription, tagsInput, setTagsInput, 
-        knowledgeType, setKnowledgeType,
+        knowledgeType, setKnowledgeType, knowledgeTypeOptions,
         content, setContent, listeningContent, setListeningContent, testContent, setTestContent,
         intensityRows, setIntensityRows,
         comparisonRows, setComparisonRows,
@@ -157,13 +158,16 @@ export const LessonEditViewUI: React.FC<Props> = (props) => {
         {type === 'essay' && (
             <div className="space-y-1">
                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1">Knowledge Type</label>
-                <input
-                    type="text"
+                <select
                     value={knowledgeType}
                     onChange={(e) => setKnowledgeType(e.target.value)}
-                    placeholder="e.g. Tech, Management"
-                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
-                />
+                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none appearance-none"
+                >
+                    <option value="">General Lesson</option>
+                    {knowledgeTypeOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                    ))}
+                </select>
             </div>
         )}
         <div className="space-y-1 mt-2">

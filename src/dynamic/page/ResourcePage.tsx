@@ -29,6 +29,7 @@ interface ResourcePageProps {
   isLoading: boolean;
   isEmpty: boolean;
   emptyMessage?: string;
+  disableGrid?: boolean;
   
   // Slots
   aboveGrid?: ReactNode;
@@ -52,7 +53,7 @@ export const ResourcePage: React.FC<ResourcePageProps> = (props) => {
     title, subtitle, icon, minorSkills, centerContent, actions,
     config,
     query, onQueryChange, searchPlaceholder, activeFilters, onFilterChange,
-    isLoading, isEmpty, emptyMessage,
+    isLoading, isEmpty, emptyMessage, disableGrid,
     aboveGrid,
     pagination,
     children
@@ -108,7 +109,7 @@ export const ResourcePage: React.FC<ResourcePageProps> = (props) => {
       )}
 
       {/* 4. Content Grid */}
-      <ResourceGrid isLoading={isLoading} isEmpty={isEmpty} emptyMessage={emptyMessage}>
+      <ResourceGrid isLoading={isLoading} isEmpty={isEmpty} emptyMessage={emptyMessage} disableGrid={disableGrid}>
         {children(viewSettings)}
       </ResourceGrid>
 

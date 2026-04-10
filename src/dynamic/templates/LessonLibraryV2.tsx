@@ -4,7 +4,7 @@ import { User, Lesson, StudyItem, SessionType, AppView, FocusColor } from '../..
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, FileClock, Target, Sparkles, Zap, Split, FileDiff, Scale, BookText, Search, LayoutGrid, AlertTriangle, ChevronDown, Layers3 } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Plus, Tag, Shuffle, FileClock, Target, Sparkles, Zap, Split, FileDiff, Scale, BookText, Search, LayoutGrid, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Layers3, Save, X } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { TagBrowser } from '../../components/common/TagBrowser';
@@ -67,13 +67,18 @@ interface FilterMenuGroupProps {
   }>;
   typeFilter: TypeFilter;
   setTypeFilter: (next: TypeFilter) => void;
-  openMenuId: 'system' | 'dynamic' | null;
-  setOpenMenuId: React.Dispatch<React.SetStateAction<'system' | 'dynamic' | null>>;
+  openMenuId?: 'system' | 'dynamic' | null;
+  setOpenMenuId?: React.Dispatch<React.SetStateAction<'system' | 'dynamic' | null>>;
 }
 
 const FilterMenuGroup: React.FC<FilterMenuGroupProps> = ({ id, title, icon: Icon, activeLabel, options, typeFilter, setTypeFilter, openMenuId, setOpenMenuId }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const closeTimeoutRef = useRef<number | null>(null);
+  const safeSetOpenMenuId = useCallback((value: React.SetStateAction<'system' | 'dynamic' | null>) => {
+    if (typeof setOpenMenuId === 'function') {
+      setOpenMenuId(value);
+    }
+  }, [setOpenMenuId]);
   const isOpen = openMenuId === id;
 
   const clearCloseTimeout = useCallback(() => {
@@ -86,16 +91,16 @@ const FilterMenuGroup: React.FC<FilterMenuGroupProps> = ({ id, title, icon: Icon
   const scheduleClose = useCallback(() => {
     clearCloseTimeout();
     closeTimeoutRef.current = window.setTimeout(() => {
-      setOpenMenuId((current) => (current === id ? null : current));
+      safeSetOpenMenuId((current) => (current === id ? null : current));
       closeTimeoutRef.current = null;
     }, 120);
-  }, [clearCloseTimeout, id, setOpenMenuId]);
+  }, [clearCloseTimeout, id, safeSetOpenMenuId]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         clearCloseTimeout();
-        setOpenMenuId(null);
+        safeSetOpenMenuId(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -103,7 +108,7 @@ const FilterMenuGroup: React.FC<FilterMenuGroupProps> = ({ id, title, icon: Icon
       document.removeEventListener('mousedown', handleClickOutside);
       clearCloseTimeout();
     };
-  }, [clearCloseTimeout, setOpenMenuId]);
+  }, [clearCloseTimeout, safeSetOpenMenuId]);
 
   return (
     <div
@@ -112,7 +117,7 @@ const FilterMenuGroup: React.FC<FilterMenuGroupProps> = ({ id, title, icon: Icon
       onMouseLeave={scheduleClose}
     >
       <button
-        onClick={() => setOpenMenuId((prev) => (prev === id ? null : id))}
+        onClick={() => safeSetOpenMenuId((prev) => (prev === id ? null : id))}
         onMouseEnter={clearCloseTimeout}
         className="flex items-center gap-2 px-3 py-2 bg-white border border-neutral-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-all shadow-sm"
       >
@@ -129,7 +134,7 @@ const FilterMenuGroup: React.FC<FilterMenuGroupProps> = ({ id, title, icon: Icon
           className="absolute left-0 top-full pt-2 min-w-[14rem] z-[120] animate-in fade-in zoom-in-95"
           onMouseEnter={() => {
             clearCloseTimeout();
-            setOpenMenuId(id);
+            safeSetOpenMenuId(id);
           }}
         >
           <div className="relative bg-white rounded-2xl shadow-2xl border border-neutral-100 p-2 pointer-events-auto">
@@ -146,7 +151,7 @@ const FilterMenuGroup: React.FC<FilterMenuGroupProps> = ({ id, title, icon: Icon
                   onMouseDown={(e) => {
                     e.preventDefault();
                     setTypeFilter(option.key);
-                    setOpenMenuId(null);
+                    safeSetOpenMenuId(null);
                   }}
                   className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-[11px] font-bold transition-all ${isActive ? option.activeClass : option.inactiveClass}`}
                 >
@@ -179,9 +184,14 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
   const [focusFilter, setFocusFilter] = useState<'all' | 'focused'>('all');
   const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
-  const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, { showDesc: true, compact: false, sideBySide: false }));
+  const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, { showDesc: true, compact: false, sideBySide: true, sideBySideCollapsed: false }));
   const [isDesktop, setIsDesktop] = useState(false);
   const [sideBySideLessonId, setSideBySideLessonId] = useState<string | null>(null);
+  const [hoveredSidePreview, setHoveredSidePreview] = useState<{ lesson: Lesson; top: number; left: number } | null>(null);
+  const [isEditingSideContent, setIsEditingSideContent] = useState(false);
+  const [sideContentDraft, setSideContentDraft] = useState('');
+  const [isSavingSideContent, setIsSavingSideContent] = useState(false);
+  const [lastAutoSideBySideFilter, setLastAutoSideBySideFilter] = useState<TypeFilter | null>(null);
   
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(12);
@@ -323,12 +333,30 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       return filteredResources.slice(start, start + pageSize);
   }, [filteredResources, page, pageSize]);
 
-  const canUseSideBySide = isDesktop && typeFilter === 'ESSAY';
+  const canUseSideBySide = isDesktop && (typeFilter === 'ESSAY' || typeFilter.startsWith('KNOWLEDGE:'));
   const isSideBySideMode = canUseSideBySide && !!viewSettings.sideBySide;
+  const isSideBySideCollapsed = isSideBySideMode && !!viewSettings.sideBySideCollapsed;
+
+  useEffect(() => {
+    if (!isSideBySideMode) {
+      setHoveredSidePreview(null);
+    }
+  }, [isSideBySideMode]);
+
+  useEffect(() => {
+    if (!canUseSideBySide) {
+      setLastAutoSideBySideFilter(null);
+      return;
+    }
+    if (lastAutoSideBySideFilter === typeFilter) return;
+
+    setViewSettings((prev: any) => ({ ...prev, sideBySide: true }));
+    setLastAutoSideBySideFilter(typeFilter);
+  }, [canUseSideBySide, lastAutoSideBySideFilter, typeFilter]);
 
   useEffect(() => {
     if (!canUseSideBySide && viewSettings.sideBySide) {
-      setViewSettings((prev: any) => ({ ...prev, sideBySide: false }));
+      setViewSettings((prev: any) => ({ ...prev, sideBySide: false, sideBySideCollapsed: false }));
     }
   }, [canUseSideBySide, viewSettings.sideBySide]);
 
@@ -350,6 +378,12 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     [pagedResources, sideBySideLessonId]
   );
 
+  useEffect(() => {
+    setIsEditingSideContent(false);
+    setIsSavingSideContent(false);
+    setSideContentDraft(sideBySideLesson?.data.content || '');
+  }, [sideBySideLesson?.data.id]);
+
   const handleDeleteLesson = async () => { if (!lessonToDelete) return; await dataStore.deleteLesson(lessonToDelete.id); showToast('Lesson deleted.', 'success'); setLessonToDelete(null); loadData(); };
   
   const handleSaveLesson = async (lesson: Lesson) => { 
@@ -358,6 +392,32 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       setViewMode('list'); 
       setActiveLesson(null); 
       loadData(); 
+  };
+
+  const handleSaveSideContent = async () => {
+    if (!sideBySideLesson) return;
+    const lesson = sideBySideLesson.data as Lesson;
+    setIsSavingSideContent(true);
+    try {
+      const updatedLesson: Lesson = {
+        ...lesson,
+        content: sideContentDraft,
+        updatedAt: Date.now()
+      };
+      await dataStore.saveLesson(updatedLesson);
+      setResources((prev) => prev.map((item) => (
+        item.data.id === updatedLesson.id
+          ? { ...item, data: updatedLesson }
+          : item
+      )));
+      if (activeLesson?.id === updatedLesson.id) {
+        setActiveLesson(updatedLesson);
+      }
+      setIsEditingSideContent(false);
+      showToast('Content updated.', 'success');
+    } finally {
+      setIsSavingSideContent(false);
+    }
   };
   
   const handleNewLesson = (type: Lesson['type'] = 'essay', knowledgeType?: string) => {
@@ -595,6 +655,7 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
       isLoading={loading}
       isEmpty={filteredResources.length === 0}
       emptyMessage="No items found matching your criteria."
+      disableGrid={isSideBySideMode}
       actions={
         <ResourceActions
             viewMenu={
@@ -638,12 +699,13 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
     >
       {() => (
         isSideBySideMode ? (
-          <div className="hidden lg:grid lg:grid-cols-[280px_minmax(0,1fr)] gap-6 items-start">
-            <div className="sticky top-6 self-start bg-white border border-neutral-200 rounded-[2rem] shadow-sm overflow-hidden">
+          <div className={`hidden lg:grid gap-6 items-start transition-all ${isSideBySideCollapsed ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[280px_minmax(0,1fr)]'}`}>
+            {!isSideBySideCollapsed && (
+            <div className="sticky top-6 self-start bg-white border border-neutral-200 rounded-[2rem] shadow-sm overflow-visible">
               <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50">
                 <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Lesson Titles</h3>
               </div>
-              <div className="max-h-[70vh] overflow-y-auto p-2 space-y-1">
+              <div className="max-h-[70vh] overflow-y-auto overflow-x-hidden p-2 space-y-1">
                 {pagedResources.map((item) => {
                   const lesson = item.data as Lesson;
                   const isActive = sideBySideLesson?.data.id === item.data.id;
@@ -651,39 +713,88 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
                     <button
                       key={`side-${item.data.id}`}
                       onClick={() => setSideBySideLessonId(item.data.id)}
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setHoveredSidePreview({
+                          lesson,
+                          top: rect.top + rect.height / 2,
+                          left: rect.right + 12
+                        });
+                      }}
+                      onMouseLeave={() => setHoveredSidePreview((current) => (current?.lesson.id === lesson.id ? null : current))}
                       className={`group relative w-full text-left px-4 py-3 rounded-2xl transition-all ${isActive ? 'bg-neutral-900 text-white shadow-lg' : 'bg-white text-neutral-700 hover:bg-neutral-50 border border-transparent hover:border-neutral-200'}`}
                     >
                       <div className="truncate text-sm font-black leading-tight">{lesson.title || 'Untitled lesson'}</div>
-                      <div className={`absolute left-full top-1/2 z-[140] ml-3 hidden w-72 -translate-y-1/2 rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-2xl group-hover:block ${isActive ? 'lg:block' : ''}`}>
-                        <div className="mb-2 flex items-center gap-2">
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 border border-emerald-100">
-                            Lesson
-                          </span>
-                        </div>
-                        <p className="text-sm font-black text-neutral-900 leading-snug">{lesson.title || 'Untitled lesson'}</p>
-                        {lesson.description ? (
-                          <p className="mt-2 text-xs font-medium leading-relaxed text-neutral-600">{lesson.description}</p>
-                        ) : (
-                          <p className="mt-2 text-xs italic text-neutral-400">No description</p>
-                        )}
-                      </div>
                     </button>
                   );
                 })}
               </div>
             </div>
+            )}
 
             <div className="min-w-0 bg-white border border-neutral-200 rounded-[2.5rem] shadow-sm p-8 min-h-[70vh]">
               {sideBySideLesson ? (
                 <div className="space-y-6">
-                  <div className="space-y-2 border-b border-neutral-100 pb-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Preview</p>
-                    <h3 className="text-3xl font-black tracking-tight text-neutral-900">{sideBySideLesson.data.title}</h3>
-                    {sideBySideLesson.data.description && (
-                      <p className="max-w-3xl text-sm font-medium leading-relaxed text-neutral-500">{sideBySideLesson.data.description}</p>
-                    )}
+                  <div className="flex items-start justify-between gap-4 border-b border-neutral-100 pb-5">
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Preview</p>
+                      <h3 className="text-3xl font-black tracking-tight text-neutral-900">{sideBySideLesson.data.title}</h3>
+                      {sideBySideLesson.data.description && (
+                        <p className="max-w-3xl text-sm font-medium leading-relaxed text-neutral-500">{sideBySideLesson.data.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => setViewSettings((prev: any) => ({ ...prev, sideBySideCollapsed: !prev.sideBySideCollapsed }))}
+                        className="px-4 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-neutral-50 hover:text-neutral-900 transition-all shadow-sm flex items-center gap-2"
+                      >
+                        {isSideBySideCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                        <span>{isSideBySideCollapsed ? 'Show Titles' : 'Collapse'}</span>
+                      </button>
+                      {isEditingSideContent ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setSideContentDraft(sideBySideLesson.data.content || '');
+                              setIsEditingSideContent(false);
+                            }}
+                            disabled={isSavingSideContent}
+                            className="p-3 bg-white border border-neutral-200 text-neutral-500 rounded-2xl hover:bg-neutral-50 hover:text-neutral-900 transition-all shadow-sm"
+                            title="Cancel"
+                          >
+                            <X size={18} />
+                          </button>
+                          <button
+                            onClick={handleSaveSideContent}
+                            disabled={isSavingSideContent}
+                            className="px-4 py-3 bg-neutral-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-neutral-800 transition-all shadow-sm disabled:opacity-60 flex items-center gap-2"
+                          >
+                            <Save size={14} />
+                            <span>{isSavingSideContent ? 'Saving' : 'Save'}</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setIsEditingSideContent(true)}
+                          className="px-4 py-3 bg-white border border-neutral-200 text-neutral-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-neutral-50 hover:text-neutral-900 transition-all shadow-sm flex items-center gap-2"
+                        >
+                          <Edit3 size={14} />
+                          <span>Edit Content</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {renderSideBySidePreview(sideBySideLesson)}
+                  {isEditingSideContent ? (
+                    <textarea
+                      value={sideContentDraft}
+                      onChange={(e) => setSideContentDraft(e.target.value)}
+                      className="min-h-[52vh] w-full resize-none rounded-[2rem] border border-neutral-200 bg-neutral-50 p-6 font-mono text-sm leading-relaxed text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900"
+                      placeholder="Write lesson content here..."
+                      spellCheck={false}
+                    />
+                  ) : (
+                    renderSideBySidePreview(sideBySideLesson)
+                  )}
                 </div>
               ) : (
                 <div className="flex min-h-[50vh] items-center justify-center text-sm font-medium text-neutral-400">
@@ -748,6 +859,24 @@ export const LessonLibraryV2: React.FC<Props> = ({ user, onStartSession, onNavig
         )
       )}
     </ResourcePage>
+    {isSideBySideMode && hoveredSidePreview && (
+      <div
+        className="pointer-events-none fixed z-[160] w-72 -translate-y-1/2 rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-2xl"
+        style={{ top: hoveredSidePreview.top, left: hoveredSidePreview.left }}
+      >
+        <div className="mb-2 flex items-center gap-2">
+          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 border border-emerald-100">
+            Lesson
+          </span>
+        </div>
+        <p className="text-sm font-black text-neutral-900 leading-snug">{hoveredSidePreview.lesson.title || 'Untitled lesson'}</p>
+        {hoveredSidePreview.lesson.description ? (
+          <p className="mt-2 text-xs font-medium leading-relaxed text-neutral-600">{hoveredSidePreview.lesson.description}</p>
+        ) : (
+          <p className="mt-2 text-xs italic text-neutral-400">No description</p>
+        )}
+      </div>
+    )}
     <ConfirmationModal isOpen={!!lessonToDelete} title="Delete Lesson?" message="Confirm delete?" confirmText="Yes, Delete" isProcessing={false} onConfirm={handleDeleteLesson} onClose={() => setLessonToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
     
     <UniversalAiModal 

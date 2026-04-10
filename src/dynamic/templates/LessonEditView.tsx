@@ -34,6 +34,8 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   const [mistakeContentMode, setMistakeContentMode] = useState<'append' | 'replace'>('replace');
   
   const { showToast } = useToast();
+  const config = getConfig();
+  const knowledgeTypeOptions = (config.lesson.knowledgeTypes || []).map((item) => item.trim()).filter(Boolean);
   
   useEffect(() => {
       if (lesson.type === 'comparison' && (!lesson.comparisonRows || lesson.comparisonRows.length === 0) && lesson.id.startsWith('lesson-')) {
@@ -97,7 +99,6 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
   };
 
   const handleGenerateRefinePrompt = (inputs: any) => {
-    const config = getConfig();
     const activeType = config.audioCoach.activeCoach;
     const coachName = config.audioCoach.coaches[activeType].name;
     const format = aiModalMode?.format || inputs.format;
@@ -196,6 +197,7 @@ const LessonEditView: React.FC<Props> = ({ lesson, user, onSave, onPractice, onC
         title={title} setTitle={setTitle}
         description={description} setDescription={setDescription}
         knowledgeType={knowledgeType} setKnowledgeType={setKnowledgeType}
+        knowledgeTypeOptions={knowledgeTypeOptions}
         path={path} setPath={setPath}
         tagsInput={tagsInput} setTagsInput={setTagsInput}
         content={content} setContent={setContent}

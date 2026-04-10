@@ -8,6 +8,7 @@ interface ResourceGridProps {
   emptyAction?: ReactNode;
   children: ReactNode;
   className?: string;
+  disableGrid?: boolean;
 }
 
 export const ResourceGrid: React.FC<ResourceGridProps> = ({
@@ -16,7 +17,8 @@ export const ResourceGrid: React.FC<ResourceGridProps> = ({
   emptyMessage = "No items found.",
   emptyAction,
   children,
-  className = ""
+  className = "",
+  disableGrid = false
 }) => {
   if (isLoading) {
     return (
@@ -35,6 +37,14 @@ export const ResourceGrid: React.FC<ResourceGridProps> = ({
         </div>
         <p className="text-sm font-bold text-neutral-500 mb-4">{emptyMessage}</p>
         {emptyAction}
+      </div>
+    );
+  }
+
+  if (disableGrid) {
+    return (
+      <div className={`pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500 ${className}`}>
+        {children}
       </div>
     );
   }
