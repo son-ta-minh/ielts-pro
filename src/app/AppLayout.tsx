@@ -180,7 +180,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'BROWSE': return <StudyItemList user={currentUser} onDelete={async (id) => await deleteWord(id)} onBulkDelete={async (ids) => await bulkDeleteWords(ids)} onUpdate={updateWord} onStartSession={(words) => startSession(words, 'custom')} initialFilter={initialListFilter} onInitialFilterApplied={() => setInitialListFilter(null)} forceExpandAdd={forceExpandAdd} onExpandAddConsumed={() => setForceExpandAdd(false)} onNavigate={setView} />;
     case 'LESSON': return <KnowledgeLibrary user={currentUser} onStartSession={(words) => startSession(words, 'custom')} onExit={() => setView('DASHBOARD')} onNavigate={setView} onUpdateUser={handleUpdateUser} initialLessonId={controller.targetLessonId} onConsumeLessonId={controller.consumeTargetLessonId} initialTag={controller.targetLessonTag} onConsumeTag={controller.consumeTargetLessonTag} initialType={controller.targetLessonType} onConsumeType={controller.consumeTargetLessonType} />;
     case 'COURSE': return <CourseList initialCourseId={targetCourseId} onConsumeInitialCourseId={consumeTargetCourseId} />;
-    case 'SEARCH': return <SearchPage user={currentUser} onViewWord={setGlobalViewWord} />;
+    case 'SEARCH': return <SearchPage user={currentUser} onViewWord={setGlobalViewWord} onOpenLesson={(lessonId) => controller.handleSpecialAction('LESSON', { lessonId })} />;
     case 'UNIT_LIBRARY': return <ReadingUnitPage user={currentUser} onStartSession={(words) => startSession(words, 'new_study')} onUpdateUser={handleUpdateUser} />;
     case 'SETTINGS': return <SettingsView user={currentUser} onUpdateUser={handleUpdateUser} onRefresh={refreshGlobalStats} onNuke={handleLibraryReset} apiUsage={apiUsage} />;
     case 'DISCOVER': return <Discover user={currentUser} xpToNextLevel={xpToNextLevel} totalWords={stats.total} onExit={() => setView('DASHBOARD')} onGainXp={gainExperienceAndLevelUp} onRecalculateXp={recalculateXpAndLevelUp} xpGained={xpGained} onStartSession={startSession} onUpdateUser={handleUpdateUser} lastMasteryScoreUpdateTimestamp={lastMasteryScoreUpdateTimestamp} onBulkUpdate={bulkUpdateWords} initialGameMode={targetGameMode} onConsumeGameMode={consumeTargetGameMode} />;
@@ -253,6 +253,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ controller }) => {
               onViewWord={(word) => {
                 setSearchModalState({ isOpen: false, initialQuery: '' });
                 setGlobalViewWord(word);
+              }}
+              onOpenLesson={(lessonId) => {
+                setSearchModalState({ isOpen: false, initialQuery: '' });
+                controller.handleSpecialAction('LESSON', { lessonId });
               }}
             />
           </Suspense>

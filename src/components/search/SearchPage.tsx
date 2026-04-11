@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, FileText, Hash, Archive, Image as ImageIcon } from 'lucide-react';
-import { User, StudyItem } from '../../app/types';
+import { Search, FileText, Hash, Archive, Image as ImageIcon, BookText } from 'lucide-react';
+import { User, StudyItem, Lesson } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
+import * as db from '../../app/db';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { getFuzzyPhraseScore, isFuzzyPhraseMatch } from '../../utils/fuzzyPhraseMatch';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
@@ -10,6 +11,7 @@ import { normalizeKeywordText } from '../../utils/vocabularyKeywordUtils';
 interface Props {
   user: User;
   onViewWord: (word: StudyItem) => void;
+  onOpenLesson?: (lessonId: string) => void;
   isModal?: boolean;
   onClose?: () => void;
   initialQuery?: string;
@@ -32,9 +34,11 @@ interface GallerySearchItem {
 
 type SearchMode = 'fast' | 'deep';
 type SearchResultTab = 'text' | 'gallery';
+type TextSearchResult<T> = { item: T; hits: SearchHit[]; score: number };
 
 const MAX_RESULTS = 200;
 const MAX_HITS_PER_WORD = 6;
+const MAX_HITS_PER_LESSON = 6;
 const DEEP_MATCH_THRESHOLD = 0.7;
 const SEARCH_PREFERENCES_KEY = 'ielts_pro_search_preferences_v1';
 
@@ -179,27 +183,76 @@ const getFriendlyPathLabel = (path: string) => {
     return 'Lesson Content';
   }
 
+  if (lower === 'title') {
+    return 'Title';
+  }
+
+  if (lower === 'description') {
+    return 'Description';
+  }
+
+  if (lower === 'content') {
+    return 'Content';
+  }
+
+  if (lower === 'listeningcontent') {
+    return 'Listening';
+  }
+
+  if (lower === 'testcontent') {
+    return 'Test';
+  }
+
+  if (lower === 'searchkeywords' || lower.startsWith('searchkeywords[')) {
+    return 'Search Keyword';
+  }
+
+  if (lower === 'tags' || lower.startsWith('tags[')) {
+    return 'Tag';
+  }
+
+  if (lower === 'knowledgetype') {
+    return 'Knowledge Type';
+  }
+
+  if (lower.startsWith('intensityrows')) {
+    return 'Intensity';
+  }
+
+  if (lower.startsWith('comparisonrows')) {
+    return 'Comparison';
+  }
+
+  if (lower.startsWith('mistakerows')) {
+    return 'Mistake';
+  }
+
   return 'Text';
 };
 
 export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false, onClose, initialQuery = '' }) => {
   const persistedPreferences = useMemo(
-    () => getStoredJSON(SEARCH_PREFERENCES_KEY, { includeArchive: false, searchMode: 'fast' as SearchMode, exampleOnly: false }),
+    () => getStoredJSON(SEARCH_PREFERENCES_KEY, { includeArchive: false, includeKnowledge: false, searchMode: 'fast' as SearchMode, exampleOnly: false }),
     []
   );
   const [allWords, setAllWords] = useState<StudyItem[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [galleryItems, setGalleryItems] = useState<GallerySearchItem[]>([]);
   const [query, setQuery] = useState(initialQuery);
   const [submittedQuery, setSubmittedQuery] = useState(initialQuery.trim());
   const [includeArchive, setIncludeArchive] = useState(Boolean(persistedPreferences.includeArchive));
+  const [includeKnowledge, setIncludeKnowledge] = useState(Boolean(persistedPreferences.includeKnowledge));
   const [searchMode, setSearchMode] = useState<SearchMode>(persistedPreferences.searchMode === 'deep' ? 'deep' : 'fast');
   const [exampleOnly, setExampleOnly] = useState(Boolean(persistedPreferences.exampleOnly));
   const [activeTab, setActiveTab] = useState<SearchResultTab>('text');
 
   useEffect(() => {
-    const refresh = () => {
+    const refresh = async () => {
       const words = dataStore.getAllWords().filter(w => w.userId === user.id);
       setAllWords(words);
+
+      const allLessons = await db.getLessonsByUserId();
+      setLessons(allLessons.filter((lesson) => lesson.userId === user.id));
     };
 
     refresh();
@@ -237,8 +290,8 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
   }, [initialQuery]);
 
   useEffect(() => {
-    setStoredJSON(SEARCH_PREFERENCES_KEY, { includeArchive, searchMode, exampleOnly });
-  }, [includeArchive, searchMode, exampleOnly]);
+    setStoredJSON(SEARCH_PREFERENCES_KEY, { includeArchive, includeKnowledge, searchMode, exampleOnly });
+  }, [includeArchive, includeKnowledge, searchMode, exampleOnly]);
 
   const normalizedQuery = submittedQuery.trim().toLowerCase();
 
@@ -330,6 +383,71 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
     return computedResults;
   }, [allWords, includeArchive, normalizedQuery, searchMode, exampleOnly]);
 
+  const lessonResults = useMemo(() => {
+    if (!normalizedQuery || !includeKnowledge) return [] as TextSearchResult<Lesson>[];
+
+    return lessons
+      .map((lesson) => {
+        const entries: SearchHit[] = [];
+        collectTextNodes({
+          title: lesson.title,
+          description: lesson.description,
+          content: lesson.content,
+          listeningContent: lesson.listeningContent,
+          testContent: lesson.testContent,
+          knowledgeType: lesson.knowledgeType,
+          tags: lesson.tags || [],
+          searchKeywords: lesson.searchKeywords || [],
+          intensityRows: lesson.intensityRows || [],
+          comparisonRows: lesson.comparisonRows || [],
+          mistakeRows: lesson.mistakeRows || []
+        }, '', entries);
+
+        const hits = entries
+          .map((entry) => {
+            const pathLower = entry.path.toLowerCase();
+
+            if (searchMode === 'fast') {
+              return entry.value.toLowerCase().includes(normalizedQuery)
+                ? { ...entry, matchScore: 1 }
+                : null;
+            }
+
+            const matchScore = getFuzzyPhraseScore(normalizedQuery, entry.value);
+            return isFuzzyPhraseMatch(normalizedQuery, entry.value, DEEP_MATCH_THRESHOLD)
+              ? { ...entry, matchScore }
+              : null;
+          })
+          .filter((entry): entry is SearchHit & { matchScore: number } => entry !== null)
+          .sort((a, b) => b.matchScore - a.matchScore);
+
+        if (hits.length === 0) return null;
+
+        const normalizedLessonKeywords = (lesson.searchKeywords || []).map((keyword) => normalizeKeywordText(keyword));
+        const normalizedLessonTags = (lesson.tags || []).map((tag) => normalizeKeywordText(tag));
+        const titleValue = normalizeKeywordText(lesson.title || '');
+        const descriptionValue = normalizeKeywordText(lesson.description || '');
+        const knowledgeTypeValue = normalizeKeywordText(lesson.knowledgeType || '');
+
+        const titleStarts = titleValue.startsWith(normalizedQuery) ? 12 : 0;
+        const titleContains = titleValue.includes(normalizedQuery) ? 7 : 0;
+        const descriptionContains = descriptionValue.includes(normalizedQuery) ? 2 : 0;
+        const knowledgeTypeMatch = knowledgeTypeValue === normalizedQuery ? 6 : 0;
+        const tagMatch = normalizedLessonTags.some((tag) => tag === normalizedQuery) ? 7 : 0;
+        const tagStarts = normalizedLessonTags.some((tag) => tag.startsWith(normalizedQuery)) ? 4 : 0;
+        const keywordMatch = normalizedLessonKeywords.some((keyword) => keyword === normalizedQuery) ? 8 : 0;
+        const keywordStarts = normalizedLessonKeywords.some((keyword) => keyword.startsWith(normalizedQuery)) ? 5 : 0;
+        const deepTitleScore = searchMode === 'deep' ? getFuzzyPhraseScore(normalizedQuery, lesson.title || '') * 10 : 0;
+        const deepDescriptionScore = searchMode === 'deep' ? getFuzzyPhraseScore(normalizedQuery, lesson.description || '') * 4 : 0;
+        const score = titleStarts + titleContains + descriptionContains + knowledgeTypeMatch + tagMatch + tagStarts + keywordMatch + keywordStarts + deepTitleScore + deepDescriptionScore + hits.reduce((sum, hit) => sum + hit.matchScore, 0);
+
+        return { item: lesson, hits: hits.slice(0, MAX_HITS_PER_LESSON), score };
+      })
+      .filter((item): item is TextSearchResult<Lesson> => item !== null)
+      .sort((a, b) => b.score - a.score || b.item.updatedAt - a.item.updatedAt)
+      .slice(0, MAX_RESULTS);
+  }, [includeKnowledge, lessons, normalizedQuery, searchMode]);
+
   const galleryResults = useMemo(() => {
     if (!normalizedQuery) return [] as GallerySearchItem[];
 
@@ -350,6 +468,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
   }, [normalizedQuery, galleryResults.length]);
 
   const shouldShowGalleryTab = isModal && normalizedQuery && galleryResults.length > 0;
+  const hasAnyTextResult = results.length > 0 || lessonResults.length > 0;
 
   const content = (
     <div className="max-w-6xl mx-auto">
@@ -424,6 +543,16 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
           <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
             <input
               type="checkbox"
+              checked={includeKnowledge}
+              onChange={(e) => setIncludeKnowledge(e.target.checked)}
+              className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-700"
+            />
+            Knowledge Library
+          </label>
+
+          <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600">
+            <input
+              type="checkbox"
               checked={exampleOnly}
               onChange={(e) => setExampleOnly(e.target.checked)}
               className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-700"
@@ -465,7 +594,7 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
             <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider">
               {activeTab === 'gallery' && shouldShowGalleryTab
                 ? `${galleryResults.length} image result${galleryResults.length === 1 ? '' : 's'} for "${normalizedQuery}" · Gallery`
-                : `${results.length} result${results.length === 1 ? '' : 's'} for "${normalizedQuery}" · ${searchMode === 'fast' ? 'Fast Search' : 'Deep Search'}${exampleOnly ? ' · Example Only' : ''}`}
+                : `${results.length} vocab result${results.length === 1 ? '' : 's'}${includeKnowledge ? ` · ${lessonResults.length} knowledge result${lessonResults.length === 1 ? '' : 's'}` : ''} for "${normalizedQuery}" · ${searchMode === 'fast' ? 'Fast Search' : 'Deep Search'}${exampleOnly ? ' · Example Only' : ''}`}
             </p>
 
             {activeTab === 'gallery' && shouldShowGalleryTab ? (
@@ -514,56 +643,122 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
               </>
             ) : (
               <>
-                {results.length === 0 && (
+                {!hasAnyTextResult && (
                   <div className="text-center py-10 text-sm font-semibold text-neutral-400">No match found.</div>
                 )}
 
-                {results.map(result => (
-                  <button
-                    key={result.word.id}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onViewWord(result.word);
-                    }}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                    }}
-                    className="w-full text-left p-4 rounded-2xl border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-all"
-                  >
-                    {!exampleOnly && (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.word.word, normalizedQuery)}</h3>
-                        {result.word.isPassive && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-neutral-100 text-neutral-500">
-                            <Archive size={12} />
-                            ARCHIVE
-                          </span>
-                        )}
+                {results.length > 0 && (
+                  <div className="space-y-3">
+                    {includeKnowledge && (
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
+                        <FileText size={12} />
+                        Vocabulary
                       </div>
                     )}
-
-                    <div className={`${exampleOnly ? 'mt-1 space-y-1' : 'mt-3 space-y-2'}`}>
-                      {result.hits.map((hit, index) => {
-                        const snippet = exampleOnly ? hit.value : getSnippet(hit.value, normalizedQuery);
-                        return (
-                          <div
-                            key={`${result.word.id}-${hit.path}-${index}`}
-                            className={`text-sm text-neutral-600 leading-relaxed ${exampleOnly ? 'py-1' : ''}`}
-                          >
-                            {!exampleOnly && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wide mr-2">
-                                <Hash size={11} />
-                                {getFriendlyPathLabel(hit.path)}
+                    {results.map(result => (
+                      <button
+                        key={result.word.id}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onViewWord(result.word);
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="w-full text-left p-4 rounded-2xl border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-all"
+                      >
+                        {!exampleOnly && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.word.word, normalizedQuery)}</h3>
+                            {result.word.isPassive && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-neutral-100 text-neutral-500">
+                                <Archive size={12} />
+                                ARCHIVE
                               </span>
                             )}
-                            <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
                           </div>
-                        );
-                      })}
+                        )}
+
+                        <div className={`${exampleOnly ? 'mt-1 space-y-1' : 'mt-3 space-y-2'}`}>
+                          {result.hits.map((hit, index) => {
+                            const snippet = exampleOnly ? hit.value : getSnippet(hit.value, normalizedQuery);
+                            return (
+                              <div
+                                key={`${result.word.id}-${hit.path}-${index}`}
+                                className={`text-sm text-neutral-600 leading-relaxed ${exampleOnly ? 'py-1' : ''}`}
+                              >
+                                {!exampleOnly && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wide mr-2">
+                                    <Hash size={11} />
+                                    {getFriendlyPathLabel(hit.path)}
+                                  </span>
+                                )}
+                                <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {includeKnowledge && lessonResults.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
+                      <BookText size={12} />
+                      Knowledge Library
                     </div>
-                  </button>
-                ))}
+                    {lessonResults.map((result) => (
+                      <button
+                        key={result.item.id}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onOpenLesson?.(result.item.id);
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="w-full text-left rounded-2xl border border-neutral-200 p-4 transition-all hover:border-neutral-300 hover:bg-neutral-50"
+                      >
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.item.title || 'Untitled lesson', normalizedQuery)}</h3>
+                          {result.item.knowledgeType ? (
+                            <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-sky-700">
+                              {result.item.knowledgeType}
+                            </span>
+                          ) : null}
+                          {result.item.type && result.item.type !== 'essay' ? (
+                            <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-neutral-500">
+                              {result.item.type}
+                            </span>
+                          ) : null}
+                        </div>
+                        {result.item.description ? (
+                          <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
+                            {renderWithHighlight(getSnippet(result.item.description, normalizedQuery, 140), normalizedQuery)}
+                          </p>
+                        ) : null}
+                        <div className="mt-3 space-y-2">
+                          {result.hits.map((hit, index) => {
+                            const snippet = getSnippet(hit.value, normalizedQuery);
+                            return (
+                              <div key={`${result.item.id}-${hit.path}-${index}`} className="text-sm leading-relaxed text-neutral-600">
+                                <span className="mr-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400">
+                                  <Hash size={11} />
+                                  {getFriendlyPathLabel(hit.path)}
+                                </span>
+                                <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>
