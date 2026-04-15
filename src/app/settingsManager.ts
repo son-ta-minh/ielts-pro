@@ -42,6 +42,8 @@ export interface CoachConfig {
   enAccent: string; 
   viVoice: string;
   viAccent: string; 
+  jaVoice: string;
+  jaAccent: string;
   autoWriteMemory?: boolean;
 }
 
@@ -61,6 +63,7 @@ export interface DailyGoalConfig {
 
 export interface InterfaceConfig {
   studyBuddyLanguage: 'vi' | 'en'; 
+  speakLanguage: 'en' | 'ja';
   buddyVoiceEnabled: boolean; 
   studyBuddyAvatar: string;
   junkTags: string[];
@@ -170,6 +173,8 @@ export const DEFAULT_CONFIG: SystemConfig = {
         enAccent: 'en_US',
         viVoice: '',
         viAccent: 'vi_VN',
+        jaVoice: '',
+        jaAccent: 'ja_JP',
         autoWriteMemory: false
       },
       female: {
@@ -180,6 +185,8 @@ export const DEFAULT_CONFIG: SystemConfig = {
         enAccent: 'en_US',
         viVoice: '',
         viAccent: 'vi_VN',
+        jaVoice: '',
+        jaAccent: 'ja_JP',
         autoWriteMemory: false
       }
     }
@@ -187,6 +194,7 @@ export const DEFAULT_CONFIG: SystemConfig = {
   dailyGoals: DEFAULT_DAILY_GOAL_CONFIG,
   interface: {
     studyBuddyLanguage: 'vi',
+    speakLanguage: 'en',
     buddyVoiceEnabled: false, // Changed default to false
     studyBuddyAvatar: 'woman_teacher',
     junkTags: ['ielts', 'general', 'common'],

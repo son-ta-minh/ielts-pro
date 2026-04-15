@@ -685,7 +685,13 @@ const StudyItemTable: React.FC<Props> = ({
     setIsParaModalOpen(false);
   };
 
-  const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(stringToWordArray(inputs.words), user.nativeLanguage || 'Vietnamese');
+  const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(
+    stringToWordArray(inputs.words),
+    user.nativeLanguage || 'Vietnamese',
+    {
+      locale: selectedWordsToRefine.some((item) => item.libraryType === 'kotoba') ? 'japanese' : 'default'
+    }
+  );
   const handleGenerateParaPrompt = (inputs: { words: string }) => getBulkParaphrasePrompt(selectedWordsToRefine);
   const handleGenerateHintPrompt = (inputs: any) => getHintsPrompt(selectedWordsMissingHints);
 

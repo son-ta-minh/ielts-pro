@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Search, LibraryBig, Ear, X, Mic, Combine, MessageSquare, Plus, Edit3, AtSign, Clock, BookOpen, Volume2, Network, Zap, AlertCircle, ShieldCheck, ShieldX, Ghost, Wand2, ChevronDown, ChevronRight, BookOpenText, Image, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
 import { StudyItem, WordFamilyMember, LearnedStatus, Unit, StudyItemQuality, ParaphraseTone, WordFamily, WordFamilyGroup } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
-import { speak } from '../../utils/audio';
+import { speak, getPreferredSpeakLanguage, resolveCoachVoiceForLanguage } from '../../utils/audio';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { getConfig, getServerUrl } from '../../app/settingsManager';
@@ -392,8 +392,16 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
         setIsWordFamilyExpanded(false);
     }, [word.id]);
 
+    const speakWithPreferredLanguage = (text: string) => {
+        const config = getConfig();
+        const preferredLang = getPreferredSpeakLanguage();
+        const coach = config.audioCoach.coaches[config.audioCoach.activeCoach];
+        const preferredVoice = resolveCoachVoiceForLanguage(preferredLang, coach);
+        speak(text, false, preferredLang, preferredVoice.voiceName, preferredVoice.accentCode);
+    };
+
     const handlePronounceWithCoachLookup = (targetWord: string) => {
-        speak(targetWord);
+        speakWithPreferredLanguage(targetWord);
     };
 
     useEffect(() => { setStoredJSON('ielts_pro_word_view_settings', viewSettings); }, [viewSettings]);
@@ -432,7 +440,11 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
 
     useEffect(() => {
         (window as any).handleLessonSpeak = (text: string, lang?: 'en' | 'vi') => {
-            speak(text, false, lang);
+            if (lang === 'vi') {
+                speak(text, false, 'vi');
+                return;
+            }
+            speakWithPreferredLanguage(text);
         };
         return () => { delete (window as any).handleLessonSpeak; };
     }, []);
@@ -586,7 +598,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                 </div>
                                 <div className="absolute top-1 right-1 flex items-center gap-1">
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); speak(member.word); }}
+                                        onClick={(e) => { e.stopPropagation(); speakWithPreferredLanguage(member.word); }}
                                         className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
                                     >
                                         <Volume2 size={10}/>
@@ -1046,7 +1058,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                                                     </button>
                                                                 )}
                                                                 <button
-                                                                    onClick={() => speak(p.usage)}
+                                                                    onClick={() => speakWithPreferredLanguage(p.usage)}
                                                                     className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"
                                                                 >
                                                                     <Volume2 size={10}/>
@@ -1140,7 +1152,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                                                     <AtSign size={10}/>
                                                                 </button>
                                                             )}
-                                                            <button onClick={() => speak(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5">
+                                                            <button onClick={() => speakWithPreferredLanguage(c.text)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5">
                                                                 <Volume2 size={10}/>
                                                             </button>
                                                         </div>
@@ -1191,7 +1203,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                                                     <AtSign size={10}/>
                                                                 </button>
                                                             )}
-                                                            <button onClick={() => speak(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
+                                                            <button onClick={() => speakWithPreferredLanguage(para.word)} className="text-neutral-300 hover:text-indigo-500 transition-colors p-0.5"><Volume2 size={10}/></button>
                                                         </div>
                                                     </div>
                                                 );
@@ -1274,7 +1286,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                                             )}
                                                         </div>
                                                         <div className="absolute top-1 right-1 flex items-center gap-1">
-                                                            <button onClick={() => speak(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
+                                                            <button onClick={() => speakWithPreferredLanguage(idiom.text)} className="text-neutral-300 hover:text-amber-500 transition-colors p-0.5">
                                                                 <Volume2 size={10}/>
                                                             </button>
                                                         </div>

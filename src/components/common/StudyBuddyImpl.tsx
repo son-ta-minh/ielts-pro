@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, StudyItemQuality, StudyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily, LearnedStatus } from '../../app/types';
 import { MessageSquare, Languages, Binary, Loader2, Search, Pause, Play, Square, Sparkles } from 'lucide-react';
 import { getConfig, saveConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
-import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech } from '../../utils/audio';
+import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech, getPreferredSpeakLanguage, resolveCoachVoiceForLanguage } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
@@ -1935,10 +1935,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         const selectedText = getCoachActionText();
         if (!selectedText) return;
         selectedTextRef.current = selectedText;
+        const preferredSpeakLanguage = getPreferredSpeakLanguage();
+        const preferredSpeakVoice = resolveCoachVoiceForLanguage(preferredSpeakLanguage, coach);
         if (selectedText.length > MAX_READ_LENGTH) {
             showToast("Text is too long to read!", "error");
         } else {
-            speak(selectedText, false, 'en', coach.enVoice, coach.enAccent);
+            speak(selectedText, false, preferredSpeakLanguage, preferredSpeakVoice.voiceName, preferredSpeakVoice.accentCode);
         }
         setIsThinking(true);
         setIsOpen(false);
@@ -2002,11 +2004,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         if (!normalized) return;
         syncChatSelectionText(normalized);
         setIsChatOpen(true);
+        const preferredSpeakLanguage = getPreferredSpeakLanguage();
+        const preferredSpeakVoice = resolveCoachVoiceForLanguage(preferredSpeakLanguage, coach);
         if (normalized.length > MAX_READ_LENGTH) {
             showToast("Text is too long to read!", "error");
             return;
         }
-        speak(normalized, false, 'en', coach.enVoice, coach.enAccent);
+        speak(normalized, false, preferredSpeakLanguage, preferredSpeakVoice.voiceName, preferredSpeakVoice.accentCode);
     };
 
     const handleAddToLibrary = async () => {

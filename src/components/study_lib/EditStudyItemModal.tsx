@@ -426,7 +426,13 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
     }
   };
 
-  const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(inputs.words.split(/[,\n]+/).map(w => w.trim()).filter(Boolean), user.nativeLanguage || 'Vietnamese');
+  const handleGenerateRefinePrompt = (inputs: { words: string }) => getWordDetailsPrompt(
+    inputs.words.split(/[,\n]+/).map(w => w.trim()).filter(Boolean),
+    user.nativeLanguage || 'Vietnamese',
+    {
+      locale: formData.libraryType === 'kotoba' ? 'japanese' : 'default'
+    }
+  );
   
   const handleAiResult = (data: any) => {
       const details = Array.isArray(data) ? data[0] : data;

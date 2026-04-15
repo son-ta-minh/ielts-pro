@@ -8,6 +8,7 @@
 import { getConfig, getServerUrl } from '../app/settingsManager';
 
 const MAX_SPEECH_LENGTH = 1500; 
+const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/;
 
 let voices: SpeechSynthesisVoice[] = [];
 let currentServerAudio: HTMLAudioElement | null = null;
@@ -140,11 +141,12 @@ export const getAvailableVoices = (): Promise<SpeechSynthesisVoice[]> => {
 
 export interface VoiceDefinition {
     name: string;
-    language: 'en' | 'vi';
+    language: 'en' | 'vi' | 'ja';
     accent: string;
 }
 
 export type ServerVoice = VoiceDefinition;
+export type SpokenLanguage = 'en' | 'vi' | 'ja';
 
 export interface ServerVoicesResponse {
     currentVoice: string;
@@ -333,22 +335,40 @@ export const resumeSpeaking = async () => {
  * Fetches audio blob from the server without playing it.
  * Used for pre-buffering.
  */
-export const prefetchSpeech = async (text: string, forcedLang?: 'en' | 'vi'): Promise<Blob | null> => {
+export const resolveCoachVoiceForLanguage = (
+    lang: SpokenLanguage,
+    coach: ReturnType<typeof getConfig>['audioCoach']['coaches'][keyof ReturnType<typeof getConfig>['audioCoach']['coaches']]
+) => {
+    if (lang === 'vi') {
+        return { voiceName: coach.viVoice, accentCode: coach.viAccent };
+    }
+    if (lang === 'ja') {
+        return { voiceName: coach.jaVoice, accentCode: coach.jaAccent };
+    }
+    return { voiceName: coach.enVoice, accentCode: coach.enAccent };
+};
+
+export const getPreferredSpeakLanguage = (): Exclude<SpokenLanguage, 'vi'> => {
+    const config = getConfig();
+    return config.interface.speakLanguage === 'ja' ? 'ja' : 'en';
+};
+
+export const prefetchSpeech = async (text: string, forcedLang?: SpokenLanguage): Promise<Blob | null> => {
     const config = getConfig();
     const serverUrl = getServerUrl(config);
     const normalizedForcedLang =
         forcedLang === 'vi' ? 'vi' :
         (forcedLang as any) === 'vn' ? 'vi' :
+        forcedLang === 'ja' ? 'ja' :
         forcedLang === 'en' ? 'en' :
         undefined;
 
-    const lang: 'en' | 'vi' = normalizedForcedLang
+    const lang: SpokenLanguage = normalizedForcedLang
         ? normalizedForcedLang
         : detectLanguage(text);
     const coachType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[coachType];
-    const voiceName = lang === 'vi' ? coach.viVoice : coach.enVoice;
-    const accentCode = lang === 'vi' ? coach.viAccent : coach.enAccent;
+    const { voiceName, accentCode } = resolveCoachVoiceForLanguage(lang, coach);
 
     try {
         const url = `${serverUrl}/speak`;
@@ -423,7 +443,7 @@ const playBlob = (blob: Blob, meta?: { source?: string; word?: string; isSingleW
 
 const speakViaServer = async (
     text: string,
-    language: 'en' | 'vi',
+    language: SpokenLanguage,
     accent: string,
     voice: string,
     urlOverride?: string,
@@ -528,7 +548,7 @@ const speakViaServer = async (
     }
 };
 
-const speakViaBrowser = (text: string, voiceName?: string, langCode: 'en' | 'vi' = 'en'): Promise<boolean> => {
+const speakViaBrowser = (text: string, voiceName?: string, langCode: SpokenLanguage = 'en'): Promise<boolean> => {
     return new Promise((resolve) => {
         if (typeof window === 'undefined' || !window.speechSynthesis) return resolve(false);
         
@@ -538,7 +558,7 @@ const speakViaBrowser = (text: string, voiceName?: string, langCode: 'en' | 'vi'
         notifyStatus(true);
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = langCode === 'vi' ? 'vi-VN' : 'en-US';
+        utterance.lang = langCode === 'vi' ? 'vi-VN' : (langCode === 'ja' ? 'ja-JP' : 'en-US');
         
         const availableVoices = window.speechSynthesis.getVoices();
         const selectedVoice = (voiceName && availableVoices.find(v => v.name === voiceName)) || 
@@ -563,8 +583,9 @@ const speakViaBrowser = (text: string, voiceName?: string, langCode: 'en' | 'vi'
     });
 };
 
-export const detectLanguage = (text: string): 'vi' | 'en' => {
+export const detectLanguage = (text: string): SpokenLanguage => {
   const viRegex = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỗùúụủũưừứựửữỳýỵỷỹđ]/i;
+  if (JAPANESE_CHAR_REGEX.test(text)) return 'ja';
   return viRegex.test(text) ? 'vi' : 'en';
 };
 
@@ -575,14 +596,14 @@ const cleanTextForTts = (text: string): string => {
         .normalize("NFD")
         .replace(/\*+/g, '') 
         .replace(/—/g, ', ') 
-        .replace(/[^a-zA-Z0-9.,!?%'\-\s\u00C0-\u1EF9]/g, '')
+        .replace(/[^a-zA-Z0-9.,!?%'\-\s\u00C0-\u1EF9\u3040-\u30FF\u4E00-\u9FFF]/g, '')
         .trim();
 };
 
 export const speak = async (
     text: string,
     isDialogue = false,
-    forcedLang?: 'en' | 'vi',
+    forcedLang?: SpokenLanguage,
     voiceOverride?: string,
     accentOverride?: string,
     preloadedBlob?: Blob,
@@ -609,14 +630,16 @@ export const speak = async (
   const normalizedForcedLang =
       forcedLang === 'vi' ? 'vi' :
       (forcedLang as any) === 'vn' ? 'vi' :
+      forcedLang === 'ja' ? 'ja' :
       forcedLang === 'en' ? 'en' :
       undefined;
 
-  const lang: 'en' | 'vi' = normalizedForcedLang
+  const lang: SpokenLanguage = normalizedForcedLang
       ? normalizedForcedLang
       : detectLanguage(text);
-  const voiceName = voiceOverride !== undefined ? voiceOverride : (lang === 'vi' ? coach.viVoice : coach.enVoice);
-  const accentCode = accentOverride !== undefined ? accentOverride : (lang === 'vi' ? coach.viAccent : coach.enAccent);
+  const preferredVoice = resolveCoachVoiceForLanguage(lang, coach);
+  const voiceName = voiceOverride !== undefined ? voiceOverride : preferredVoice.voiceName;
+  const accentCode = accentOverride !== undefined ? accentOverride : preferredVoice.accentCode;
 
   try {
       await speakViaServer(cleanedText, lang, accentCode, voiceName, serverUrl, suppressCoachLookup);

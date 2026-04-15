@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Save, ChevronDown, CheckCircle2, AlertCircle, RefreshCw, Info, GraduationCap, School, User as UserIcon, Bot, Play, Volume2, Mic, Link, Edit3, Star, Brain, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
 import { SystemConfig, CoachConfig, getServerUrl, saveConfig } from '../../app/settingsManager';
-import { fetchServerVoices, ServerVoicesResponse, speak, VoiceDefinition, resetAudioProtocolCache } from '../../utils/audio';
+import { fetchServerVoices, ServerVoicesResponse, speak, VoiceDefinition, resetAudioProtocolCache, SpokenLanguage } from '../../utils/audio';
 import { AvatarSelectionModal } from '../common/AvatarSelectionModal';
 import { StudyBuddyImageSettings, StudyBuddyMemoryChunk, User } from '../../app/types';
 import { useToast } from '../../contexts/ToastContext';
@@ -23,7 +23,7 @@ interface AudioCoachSettingsProps {
 
 const VoiceSelector: React.FC<{
     label: string;
-    langCode: 'en' | 'vi';
+    langCode: SpokenLanguage;
     currentVoice: string;
     serverData: ServerVoicesResponse | null;
     onChange: (voiceName: string, accentCode: string) => void;
@@ -61,14 +61,14 @@ const VoiceSelector: React.FC<{
     const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const voiceName = e.target.value;
         if (!voiceName) {
-            const defaultAccent = langCode === 'en' ? 'en_US' : 'vi_VN';
+            const defaultAccent = langCode === 'en' ? 'en_US' : (langCode === 'ja' ? 'ja_JP' : 'vi_VN');
             onChange('', defaultAccent);
             onPreview('', defaultAccent); 
             return;
         }
 
         if (voiceName === 'Random') {
-            const defaultAccent = langCode === 'en' ? 'en_US' : 'vi_VN';
+            const defaultAccent = langCode === 'en' ? 'en_US' : (langCode === 'ja' ? 'ja_JP' : 'vi_VN');
             // Keep the same value as the <option> so the combobox remains selected
             onChange('Random', defaultAccent);
             return;
@@ -88,7 +88,7 @@ const VoiceSelector: React.FC<{
                 <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{label}</label>
                 <button 
                     type="button"
-                    onClick={() => onPreview(currentVoice, langCode === 'en' ? 'en_US' : 'vi_VN')} 
+                    onClick={() => onPreview(currentVoice, langCode === 'en' ? 'en_US' : (langCode === 'ja' ? 'ja_JP' : 'vi_VN'))} 
                     className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:underline"
                 >
                     <Play size={10} fill="currentColor"/> Test
@@ -197,10 +197,12 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
         saveConfig(newConfig);
     };
 
-    const handleVoicePreview = (lang: 'en' | 'vi', voice?: string, accent?: string) => {
-        const text = lang === 'en' 
-            ? "Hello! I am your study companion. Ready to learn?" 
-            : "Xin chào! Mình là bạn đồng hành của bạn. Sẵn sàng chưa?";
+    const handleVoicePreview = (lang: SpokenLanguage, voice?: string, accent?: string) => {
+        const text = lang === 'en'
+            ? "Hello! I am your study companion. Ready to learn?"
+            : (lang === 'ja'
+                ? "こんにちは。学習パートナーです。いっしょに勉強しましょう。"
+                : "Xin chào! Mình là bạn đồng hành của bạn. Sẵn sàng chưa?");
         speak(text, true, lang, voice, accent);
     };
 
@@ -396,7 +398,7 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
                     </label>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <VoiceSelector 
                         label="English Voice" 
                         langCode="en" 
@@ -414,6 +416,16 @@ export const AudioCoachSettings: React.FC<AudioCoachSettingsProps> = ({ config, 
                         serverData={serverData} 
                         onChange={(v, a) => handleUpdateCoach({ viVoice: v, viAccent: a }, true)} 
                         onPreview={(v, a) => handleVoicePreview('vi', v, a)}
+                        filterHighQuality={onlyHighQuality}
+                    />
+
+                    <VoiceSelector 
+                        label="Japanese Voice" 
+                        langCode="ja" 
+                        currentVoice={coachConfig.jaVoice} 
+                        serverData={serverData} 
+                        onChange={(v, a) => handleUpdateCoach({ jaVoice: v, jaAccent: a }, true)} 
+                        onPreview={(v, a) => handleVoicePreview('ja', v, a)}
                         filterHighQuality={onlyHighQuality}
                     />
                 </div>

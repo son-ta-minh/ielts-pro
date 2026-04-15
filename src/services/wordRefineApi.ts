@@ -18,6 +18,10 @@ const VALID_REGISTERS = new Set(['academic', 'casual', 'neutral']);
 const VALID_PARAPHRASE_TONES = new Set(['academic', 'casual', 'neutral']);
 const PHRASE_LIKE_TYPES = new Set(['idiom', 'phrasal_verb', 'collocation', 'phrase']);
 const WORD_REFINE_DEBUG_STORAGE_KEY = 'vocab_pro_debug_refine_api';
+const HIRAGANA_ONLY_PATTERN = /^[\u3040-\u309F\u30FC\s・･]+$/;
+const JAPANESE_SCRIPT_PATTERN = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/;
+const KATAKANA_PATTERN = /[\u30A0-\u30FF]/;
+const ROMAJI_PATTERN = /\b[a-z][a-z'\-]*\b/i;
 
 export type WordRefineMeaningMode = 'vi' | 'en';
 export interface WordRefineSetup {
@@ -110,6 +114,8 @@ interface CambridgePronunciationPayload {
     pronSim?: 'same' | 'near' | 'different';
 }
 
+type RefineLocale = 'default' | 'japanese';
+
 const normalizeParaphraseTone = (value: string): string => {
     const normalized = value.trim().toLowerCase();
     if (!normalized) return normalized;
@@ -117,6 +123,28 @@ const normalizeParaphraseTone = (value: string): string => {
         return 'synonym';
     }
     return normalized;
+};
+
+const getRefineLocale = (word: StudyItem): RefineLocale => word.libraryType === 'kotoba' ? 'japanese' : 'default';
+
+const isJapaneseLocale = (word: StudyItem): boolean => getRefineLocale(word) === 'japanese';
+
+const isHiraganaPronunciation = (value: string): boolean => {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    return HIRAGANA_ONLY_PATTERN.test(text);
+};
+
+const looksJapaneseText = (value: string): boolean => {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    return JAPANESE_SCRIPT_PATTERN.test(text);
+};
+
+const hasRomajiLeak = (value: string): boolean => {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    return ROMAJI_PATTERN.test(text) && !looksJapaneseText(text);
 };
 
 const stripIpaDelimiters = (value: string): string => String(value || '').replace(/^\/+|\/+$/g, '').trim();
@@ -554,6 +582,7 @@ const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup
     const retryFields = new Set<RetryField>();
     const normalized = normalizeAiResponse(result);
     const baseRetryFields: RetryField[] = getRequestedContentFields(setup);
+    const japaneseMode = isJapaneseLocale(word);
 
     if (!result) {
         return {
@@ -574,6 +603,8 @@ const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup
     const example = String(normalized.example || '').trim();
     const register = String(normalized.register || '').trim().toLowerCase();
     const type = String(result.type || '').trim().toLowerCase();
+    const ipaUs = String(normalized.ipaUs || '').trim();
+    const ipaUk = String(normalized.ipaUk || '').trim();
     const normalizedParaphrases = getParaphrasesFromAnyShape(normalized);
     const rawParaphrases = getParaphrasesFromAnyShape(result);
     const paraphrases = normalizedParaphrases.length > 0 ? normalizedParaphrases : rawParaphrases;
@@ -602,12 +633,25 @@ const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup
     } else if (setup.includeMeaning && PLACEHOLDER_MEANING_PATTERN.test(meaningVi)) {
         issues.push(`Meaning for "${word.word}" reused a leaked placeholder example instead of the real meaning.`);
         retryFields.add('meaningVi');
-    } else if (setup.includeMeaning && setup.meaningLanguage === 'vi' && !looksVietnameseMeaning(meaningVi)) {
+    } else if (setup.includeMeaning && !japaneseMode && setup.meaningLanguage === 'vi' && !looksVietnameseMeaning(meaningVi)) {
         issues.push(`Meaning for "${word.word}" is not clearly Vietnamese-only.`);
         retryFields.add('meaningVi');
     }
+    if (japaneseMode) {
+        if (!ipaUs || !isHiraganaPronunciation(ipaUs) || KATAKANA_PATTERN.test(ipaUs)) {
+            issues.push(`Pronunciation for "${word.word}" must be Hiragana-only in "ipa_us".`);
+            retryFields.add('pronunciation');
+        }
+        if (ipaUk && (!isHiraganaPronunciation(ipaUk) || KATAKANA_PATTERN.test(ipaUk))) {
+            issues.push(`Pronunciation for "${word.word}" must be Hiragana-only in "ipa_uk" when provided.`);
+            retryFields.add('pronunciation');
+        }
+    }
     if (setup.includeExamples && !example) {
         issues.push(`Missing example for "${word.word}".`);
+        retryFields.add('example');
+    } else if (japaneseMode && example && !looksJapaneseText(example)) {
+        issues.push(`Example for "${word.word}" must be written in Japanese.`);
         retryFields.add('example');
     }
     if (!VALID_REGISTERS.has(register)) {
@@ -625,11 +669,35 @@ const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup
         issues.push(`Invalid paraphrase tone found for "${word.word}": ${invalidParaphraseTones.join(', ')}.`);
         retryFields.add('paraphrases');
     }
+    if (japaneseMode) {
+        const invalidJapaneseParaphrase = paraphrases.find((item: any) => {
+            const paraWord = String(item?.word || '').trim();
+            const paraContext = String(item?.context || '').trim();
+            if (!paraWord) return false;
+            return !looksJapaneseText(paraWord) || (!!paraContext && !looksJapaneseText(paraContext)) || hasRomajiLeak(paraWord) || hasRomajiLeak(paraContext);
+        });
+        if (setup.includeParaphrases && invalidJapaneseParaphrase) {
+            issues.push(`Paraphrases for "${word.word}" must use Japanese text for both paraphrase and context.`);
+            retryFields.add('paraphrases');
+        }
+    }
 
     const missingCollocationHint = collocations.some((item: any) => !String(item?.text || '').trim() || !String(item?.d || '').trim());
     if (setup.includeCollocations && setup.collocationCount > 0 && needsDenseDetails && collocations.length > 0 && missingCollocationHint) {
         issues.push(`Collocations for "${word.word}" must include both text and hint.`);
         retryFields.add('collocationsArray');
+    }
+    if (japaneseMode) {
+        const invalidJapaneseCollocation = collocations.find((item: any) => {
+            const text = String(item?.text || '').trim();
+            const hint = String(item?.d || '').trim();
+            if (!text && !hint) return false;
+            return !looksJapaneseText(text) || !looksJapaneseText(hint) || hasRomajiLeak(text) || hasRomajiLeak(hint);
+        });
+        if (setup.includeCollocations && invalidJapaneseCollocation) {
+            issues.push(`Collocations for "${word.word}" must contain Japanese text and Japanese hints.`);
+            retryFields.add('collocationsArray');
+        }
     }
     const invalidPrepositionUsage = prepositions.find((item: any) => {
         const prep = String(item?.prep || '').trim().toLowerCase();
@@ -649,6 +717,18 @@ const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup
     if (setup.includePrepositions && prepositions.length > 0 && invalidPrepositionUsage) {
         issues.push(`Preposition usage for "${word.word}" must contain the preposition "${invalidPrepositionUsage.prep}" inside its context/example.`);
         retryFields.add('prepositionsArray');
+    }
+    if (japaneseMode) {
+        const invalidJapanesePreposition = prepositions.find((item: any) => {
+            const prep = String(item?.prep || '').trim();
+            const usage = String(item?.usage || '').trim();
+            if (!prep && !usage) return false;
+            return !looksJapaneseText(prep) || !looksJapaneseText(usage) || hasRomajiLeak(prep) || hasRomajiLeak(usage);
+        });
+        if (setup.includePrepositions && invalidJapanesePreposition) {
+            issues.push(`Preposition usage for "${word.word}" must be written in Japanese.`);
+            retryFields.add('prepositionsArray');
+        }
     }
     const validationState = { issues, retryFields: Array.from(retryFields) };
     debugWordRefine('validateWordResult:end', {
@@ -689,7 +769,9 @@ const buildConfiguredWordRefinePrompt = (
         pronunciationOnly?: boolean;
     }
 ): string => {
+    const locale = getRefineLocale(word);
     const basePrompt = getWordDetailsPrompt([word.word], nativeLanguage, {
+        locale,
         includePronunciation: !!options?.includePronunciation,
         meaningLanguage: setup.meaningLanguage,
         includeMeaning: options?.pronunciationOnly ? false : setup.includeMeaning,
@@ -705,6 +787,10 @@ const buildConfiguredWordRefinePrompt = (
         options?.pronunciationOnly
             ? 'For this pass, generate ONLY pronunciation fields plus the always-required core metadata fields. Omit all content fields like meaning, example, collocations, idioms, paraphrases, and prepositions.'
             : 'For this pass, keep the always-required core metadata fields "reg", "type", and "is_pas", and include ONLY the optional content fields enabled by the current refine setup. Do not add disabled optional fields.'
+        ,
+        locale === 'japanese'
+            ? 'Japanese refine mode: "ipa_us" MUST be the reading in Hiragana only. Example/collocation hint/paraphrase/preposition usage MUST be written in natural Japanese. Do not output IPA symbols, romaji, or katakana in pronunciation fields.'
+            : ''
     ].filter(Boolean);
 
     return `${basePrompt}\n\n${extraLines.join('\n\n')}\n\nReturn ONLY one strict JSON array in a \`\`\`json code block. Do not add explanation text outside the code block.`;
@@ -718,20 +804,31 @@ const buildRetryPrompt = (
     lastIssues: string[],
     partialResult: any | null
 ): string => {
+    const locale = getRefineLocale(word);
     if (retryFields.length === 0) {
         return buildConfiguredWordRefinePrompt(word, nativeLanguage, setup, { includePronunciation: false });
     }
 
     const fieldInstructions: Record<RetryField, string> = {
-        pronunciation: '- ipa_us / optional ipa_uk / optional pron_sim: regenerate pronunciation fields only.',
+        pronunciation: locale === 'japanese'
+            ? '- ipa_us / optional ipa_uk / optional pron_sim: regenerate pronunciation fields only. For Japanese refine, use Hiragana-only reading in ipa_us and set pron_sim to "same".'
+            : '- ipa_us / optional ipa_uk / optional pron_sim: regenerate pronunciation fields only.',
         headword: '- hw: correct headword/base form. Keep the full phrase if the original input is a phrase.',
         meaningVi: `- m: meaning in ${setup.meaningLanguage === 'en' ? 'English' : 'Vietnamese'}.`,
-        example: '- ex: one natural example sentence using the exact headword.',
+        example: locale === 'japanese'
+            ? '- ex: one natural Japanese example sentence using the exact headword.'
+            : '- ex: one natural example sentence using the exact headword.',
         register: '- reg: A-MUST / IMPORTANT. MUST be ONLY one of "academic", "casual", or "neutral". NEVER output any other register label.',
-        collocationsArray: '- col: return collocations in correct schema. Each item must include both "text" and "d".',
+        collocationsArray: locale === 'japanese'
+            ? '- col: return collocations in correct schema. Each item must include both "text" and "d", and both values must be in Japanese.'
+            : '- col: return collocations in correct schema. Each item must include both "text" and "d".',
         idiomsList: '- idm: return idioms in correct schema. Each item must include both "text" and "d".',
-        paraphrases: '- para: every item must include "w", valid tone "t", and short context "c". Tone "t" MUST be ONLY one of "academic", "casual", "neutral".',
-        prepositionsArray: '- prep: dependent prepositions only. Every item MUST include BOTH "p" and "c". Each usage example/context must explicitly contain the exact same preposition. If no natural dependent preposition exists, return [].'
+        paraphrases: locale === 'japanese'
+            ? '- para: every item must include "w", valid tone "t", and short context "c". Tone "t" MUST be ONLY one of "academic", "casual", "neutral". Both "w" and "c" must be in Japanese.'
+            : '- para: every item must include "w", valid tone "t", and short context "c". Tone "t" MUST be ONLY one of "academic", "casual", "neutral".',
+        prepositionsArray: locale === 'japanese'
+            ? '- prep: Japanese particles/postpositions only. Every item MUST include BOTH "p" and "c". Both must be in Japanese, and "c" must explicitly contain the exact same particle "p". If no natural particle pattern exists, return [].'
+            : '- prep: dependent prepositions only. Every item MUST include BOTH "p" and "c". Each usage example/context must explicitly contain the exact same preposition. If no natural dependent preposition exists, return [].'
     };
 
     const fieldKeyMap: Record<RetryField, string> = {
@@ -762,10 +859,14 @@ const buildRetryPrompt = (
         : 'null';
 
     const expectedFieldExamples: Record<RetryField, string> = {
-        pronunciation: `- ipa_us expected: "/dɪˈfaɪ/"`,
+        pronunciation: locale === 'japanese'
+            ? `- ipa_us expected: "たべる"`
+            : `- ipa_us expected: "/dɪˈfaɪ/"`,
         headword: '- hw expected: the corrected base word or full phrase for this specific item.',
         meaningVi: `- m expected: a concise ${setup.meaningLanguage === 'en' ? 'English' : 'Vietnamese'} meaning for this specific word. Do not copy placeholder examples from prior prompts.`,
-        example: '- ex expected: one natural example sentence that uses the exact headword for this specific item.',
+        example: locale === 'japanese'
+            ? '- ex expected: one natural Japanese sentence that uses the exact headword for this specific item.'
+            : '- ex expected: one natural example sentence that uses the exact headword for this specific item.',
         register: `- reg expected: "academic" OR "casual" OR "neutral"`,
         collocationsArray: '',
         idiomsList: '',
@@ -811,6 +912,7 @@ STRICT RETRY RULES:
 - Your JSON MUST contain every requested key with a non-empty value when applicable.
 - If requested keys are "m, reg", your object must include BOTH "m" and "reg".
 - Never answer with only og/hw or only pronunciation fields when the requested keys are different.
+${locale === 'japanese' ? '- Japanese refine mode: ipa_us must be Hiragana-only reading. Example/collocation hint/paraphrase/preposition usage must be in Japanese.' : ''}
 
 Required JSON shape:
 - Return a strict JSON array with exactly one object.
@@ -831,7 +933,7 @@ MINIMUM VALID RESPONSE SHAPE EXAMPLE:
     "m": "<fill real meaning>"` : ''}${retryFields.includes('register') ? `,
     "reg": "<academic|casual|neutral>"` : ''}${retryFields.includes('example') ? `,
     "ex": "<fill real example>"` : ''}${retryFields.includes('pronunciation') ? `,
-    "ipa_us": "<fill ipa>"` : ''}${retryFields.includes('pronunciation') ? `,
+    "ipa_us": "<fill ${locale === 'japanese' ? 'hiragana reading' : 'ipa'}>"` : ''}${retryFields.includes('pronunciation') ? `,
     "ipa_uk": "<optional ipa>"` : ''}${retryFields.includes('pronunciation') ? `,
     "pron_sim": "<same|near|different>"` : ''}
   }
@@ -994,6 +1096,16 @@ const resolveInitialPronunciation = async (
     wordIndex: number,
     totalWords: number
 ): Promise<any | null> => {
+    if (isJapaneseLocale(word)) {
+        onProgress?.({
+            stage: 'starting',
+            attempt: 0,
+            maxAttempts: MAX_REFINE_ATTEMPTS,
+            message: `Word ${wordIndex + 1}/${totalWords} "${word.word}": Japanese refine mode will generate Hiragana pronunciation from AI...`
+        });
+        return null;
+    }
+
     const singleWord = isSingleWordText(word.word);
     if (singleWord) {
         onProgress?.({

@@ -31,6 +31,7 @@ function mapLanguage(accent) {
     const lower = accent.toLowerCase();
     if (lower.startsWith("vi")) return "vi";
     if (lower.startsWith("en")) return "en";
+    if (lower.startsWith("ja")) return "ja";
     return null;
 }
 
@@ -623,10 +624,16 @@ router.post('/speak', async (req, res) => {
     const { text, voice, language } = req.body;
     if (!text) return res.status(400).json({ error: "text_required" });
 
+    const effectiveLanguage = language || selectedLanguage || 'en';
+
     let voiceToUse = selectedVoice;
     if (typeof voice === "string" && voice !== "") {
         if (voiceIndex[voice]) voiceToUse = voice;
         else return res.status(404).json({ error: "voice_not_found" });
+    }
+    if (!voiceToUse || (voiceIndex[voiceToUse] && voiceIndex[voiceToUse].language !== effectiveLanguage)) {
+        const matchingVoiceEntry = Object.entries(voiceIndex).find(([, info]) => info.language === effectiveLanguage);
+        voiceToUse = matchingVoiceEntry?.[0] || "";
     }
 
     // Ensure text is NFC normalized
@@ -634,11 +641,9 @@ router.post('/speak', async (req, res) => {
     logger.info(`[TTS] /speak request`);
     logger.debug(`text="${cleanText}" voice="${voiceToUse || '(default)'}" lang="${language || '(auto)'}"`);
 
-    const effectiveLanguage = language || selectedLanguage || 'en';
-
     // If Vietnamese, skip Quality_Sound and Cambridge completely
-    if (effectiveLanguage === 'vi') {
-        logger.debug(`[TTS] Vietnamese detected → skip quality & Cambridge for "${cleanText}"`);
+    if (effectiveLanguage === 'vi' || effectiveLanguage === 'ja') {
+        logger.debug(`[TTS] Non-English detected (${effectiveLanguage}) → skip quality & Cambridge for "${cleanText}"`);
     } else {
         // Fast path first: for single-word requests, serve pre-recorded quality audio if available.
         const qualityAudioFile = findQualitySoundFile(cleanText);

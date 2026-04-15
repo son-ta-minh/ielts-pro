@@ -25,6 +25,7 @@ import {
 } from '../../utils/studyBuddyChatUtils';
 import { parseStudyBuddyMemoryDirectives } from '../../utils/studyBuddyMemoryUtils';
 import { normalizeStudyBuddyImageSettings } from '../../utils/studyBuddyImageUtils';
+import type { SpokenLanguage } from '../../utils/audio';
 
 type MenuPos = { x: number; y: number; placement: 'top' | 'bottom' } | null;
 type CoachVoiceConfig = {
@@ -32,6 +33,8 @@ type CoachVoiceConfig = {
     persona?: string;
     viVoice?: string;
     viAccent?: string;
+    jaVoice?: string;
+    jaAccent?: string;
 };
 
 type StudyBuddyTestFocusArea = 'collocation' | 'preposition' | 'paraphrase' | 'wordFamily';
@@ -266,7 +269,7 @@ interface UseStudyBuddyChatOptions {
     stopChatStream: (reason?: 'manual' | 'conversation-interrupt') => void;
     queueChatSpeech: (text: string) => void;
     onFallbackTranslateSelection: () => Promise<void>;
-    speakText: (text: string, queue: boolean, lang: 'vi' | 'en', voice?: string, accent?: string) => Promise<void> | void;
+    speakText: (text: string, queue: boolean, lang: SpokenLanguage, voice?: string, accent?: string) => Promise<void> | void;
     studyBuddyAiRequestConfig: {
         temperature: number;
         top_p: number;
