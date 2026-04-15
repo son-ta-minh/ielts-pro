@@ -1771,8 +1771,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         setIsOpen(false);
         setMenuPos(null);
 
+        const langPair = `${detectedLang}|vi`;
+
         try {
-            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(selectedText)}&langpair=en|vi`);
+            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(selectedText)}&langpair=${langPair}`);
             const data = await res.json();
             if (data?.responseData?.translatedText) {
                 const translation = data.responseData.translatedText;
@@ -1806,9 +1808,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             return;
         }
 
+        const langPair = `${detectedLang}|vi`;
+
         setIsThinking(true);
         try {
-            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(normalized)}&langpair=en|vi`);
+            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(normalized)}&langpair=${langPair}`);
             const data = await res.json();
             if (data?.responseData?.translatedText) {
                 const translation = data.responseData.translatedText;

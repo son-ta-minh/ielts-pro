@@ -631,7 +631,7 @@ router.post('/speak', async (req, res) => {
         if (voiceIndex[voice]) voiceToUse = voice;
         else return res.status(404).json({ error: "voice_not_found" });
     }
-    if (!voiceToUse || (voiceIndex[voiceToUse] && voiceIndex[voiceToUse].language !== effectiveLanguage)) {
+    if ((voiceIndex[voiceToUse] && voiceIndex[voiceToUse].language !== effectiveLanguage)) {
         const matchingVoiceEntry = Object.entries(voiceIndex).find(([, info]) => info.language === effectiveLanguage);
         voiceToUse = matchingVoiceEntry?.[0] || "";
     }
