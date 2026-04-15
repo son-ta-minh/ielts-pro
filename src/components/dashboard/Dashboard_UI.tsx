@@ -1497,7 +1497,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
   const [isChromeBrowser, setIsChromeBrowser] = useState(false);
-  const [activeTab, setActiveTab] = useState<'STUDY' | 'KOTOBA' | 'PRACTICE' | 'INSIGHT'>(() => {
+  const [activeTab, setActiveTab] = useState<'STUDY' | 'PRACTICE' | 'INSIGHT' | 'KOTOBA'>(() => {
     const saved = sessionStorage.getItem('dashboard_active_tab');
     if (saved === 'STUDY' || saved === 'KOTOBA' || saved === 'PRACTICE' || saved === 'INSIGHT') return saved;
     return 'STUDY';
@@ -1776,7 +1776,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
       <header className="flex flex-col sm:flex-row justify-between sm:items-start gap-3">
         <div>
             <div className="pt-4 flex items-baseline gap-2">
-                <h2 className="text-3xl font-black text-neutral-900 tracking-tight">IELTS Vocab Pro</h2>
+                <h2 className="text-3xl font-black text-neutral-900 tracking-tight">Vocab Pro</h2>
                 <span className="text-[10px] font-bold text-neutral-400 font-mono tracking-tighter bg-neutral-100 px-1.5 py-0.5 rounded-md border border-neutral-200">{version}</span>
             </div>
             
@@ -1874,9 +1874,22 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
       <div className="flex items-center justify-between">
         <div className="inline-flex p-1 bg-white border-2 border-neutral-100 rounded-2xl w-fit shadow-sm self-start">
              <button onClick={() => setActiveTab('STUDY')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'STUDY' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><LayoutDashboard size={16} /> Study</button>
-             <button onClick={() => setActiveTab('KOTOBA')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'KOTOBA' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BookOpen size={16} /> Kotoba</button>
              <button onClick={() => setActiveTab('PRACTICE')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'PRACTICE' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><Dumbbell size={16} /> Practice</button>
              <button onClick={() => setActiveTab('INSIGHT')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'INSIGHT' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BarChart3 size={16} /> Insight</button>
+             <button
+                onClick={() => setActiveTab('KOTOBA')}
+                className={`w-40 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${
+                    activeTab === 'KOTOBA'
+                    ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]'
+                    : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+                >
+                <BookOpen size={16} />
+                <span>Kotoba</span>
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-green-500 text-white">
+                    New
+                </span>
+             </button>
         </div>
       </div>
 
