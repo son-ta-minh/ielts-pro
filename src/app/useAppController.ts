@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { AppView, User, StudyItem, DiscoverGame } from './types';
+import { AppView, User, StudyItem, DiscoverGame, StudyLibraryType } from './types';
 import { useToast } from '../contexts/ToastContext';
 import { useAuthAndUser } from './hooks/useAuthAndUser';
 import { useSession } from './hooks/useSession';
@@ -25,6 +25,7 @@ import { generateMap } from '../data/adventure_map';
 import { getCurrentHost } from '../utils/firebase';
 
 export const calculateWordDifficultyXp = movedCalc;
+const normalizeLibraryType = (value?: StudyLibraryType | string | null): StudyLibraryType => value === 'kotoba' ? 'kotoba' : 'vocab';
 
 export const useAppController = () => {
     const { showToast } = useToast();
@@ -938,10 +939,13 @@ export const useAppController = () => {
         else handleSessionComplete();
     }, [sessionWords, sessionType, sessionFocus, startSession, handleSessionComplete]);
 
-    const startDueReviewSession = useCallback(async () => { 
+    const getLibraryWords = useCallback((libraryType: StudyLibraryType) => {
+        return dataStore.getAllWords().filter(w => normalizeLibraryType(w.libraryType) === libraryType);
+    }, []);
+
+    const startDueReviewSessionFor = useCallback(async (libraryType: StudyLibraryType) => {
         if (!currentUser) return; 
-        // Use dataStore for consistency with stats
-        const allWords = dataStore.getAllWords();
+        const allWords = getLibraryWords(libraryType);
         const now = Date.now();
         const dueWords = allWords
             .filter(w => !w.isPassive && w.learnedStatus !== 'IGNORED' && w.lastReview && w.nextReview <= now && w.quality !== 'FAILED')
@@ -949,18 +953,17 @@ export const useAppController = () => {
             .slice(0, 30);
         
         if (dueWords.length === 0) {
-            showToast("No words due for review!", "success");
+            showToast(libraryType === 'kotoba' ? "No kotoba due for review!" : "No words due for review!", "success");
             return;
         }
         startSession(dueWords, 'due'); 
-    }, [currentUser, startSession, showToast]);
+    }, [currentUser, getLibraryWords, startSession, showToast]);
 
-    const startStatusReviewSession = useCallback(async (status: 'hard' | 'forgot') => {
+    const startStatusReviewSessionFor = useCallback(async (status: 'hard' | 'forgot', libraryType: StudyLibraryType) => {
         console.log(`[Session] Starting ${status} review session...`);
         if (!currentUser) return;
 
-        // Use dataStore for consistency with stats
-        const allWords = dataStore.getAllWords();
+        const allWords = getLibraryWords(libraryType);
 
         const filteredWords = allWords
             .filter(w => {
@@ -982,33 +985,39 @@ export const useAppController = () => {
         if (filteredWords.length === 0) {
             showToast(
                 status === 'hard'
-                    ? "No hard words to review!"
-                    : "No forgotten words to review!",
+                    ? (libraryType === 'kotoba' ? "No hard kotoba to review!" : "No hard words to review!")
+                    : (libraryType === 'kotoba' ? "No forgotten kotoba to review!" : "No forgotten words to review!"),
                 "success"
             );
             return;
         }
 
         startSession(filteredWords, status);
-    }, [currentUser, startSession, showToast]);
+    }, [currentUser, getLibraryWords, startSession, showToast]);
 
-    const startNewLearnSession = useCallback(async () => { 
+    const startNewLearnSessionFor = useCallback(async (libraryType: StudyLibraryType) => { 
         if (!currentUser) return; 
-        // Use dataStore for consistency with stats
-        const allWords = dataStore.getAllWords();
+        const allWords = getLibraryWords(libraryType);
         const newWords = allWords
             .filter(w => !w.isPassive && !w.lastReview && w.quality === 'VERIFIED')
             .sort((a, b) => a.createdAt - b.createdAt)
             .slice(0, 20);
             
         if (newWords.length === 0) {
-            showToast("No new words to learn!", "success");
+            showToast(libraryType === 'kotoba' ? "No new kotoba to learn!" : "No new words to learn!", "success");
             return;
         }
         startSession(newWords, 'new'); 
-    }, [currentUser, startSession, showToast]);
+    }, [currentUser, getLibraryWords, startSession, showToast]);
 
-    const handleNavigateToList = (filter: string) => { setInitialListFilter(filter); setView('BROWSE'); };
+    const startDueReviewSession = useCallback(async () => { await startDueReviewSessionFor('vocab'); }, [startDueReviewSessionFor]);
+    const startKotobaDueReviewSession = useCallback(async () => { await startDueReviewSessionFor('kotoba'); }, [startDueReviewSessionFor]);
+    const startStatusReviewSession = useCallback(async (status: 'hard' | 'forgot') => { await startStatusReviewSessionFor(status, 'vocab'); }, [startStatusReviewSessionFor]);
+    const startKotobaStatusReviewSession = useCallback(async (status: 'hard' | 'forgot') => { await startStatusReviewSessionFor(status, 'kotoba'); }, [startStatusReviewSessionFor]);
+    const startNewLearnSession = useCallback(async () => { await startNewLearnSessionFor('vocab'); }, [startNewLearnSessionFor]);
+    const startKotobaNewLearnSession = useCallback(async () => { await startNewLearnSessionFor('kotoba'); }, [startNewLearnSessionFor]);
+
+    const handleNavigateToList = (filter: string, libraryType: StudyLibraryType = 'vocab') => { setInitialListFilter(filter); setView(libraryType === 'kotoba' ? 'KOTOBA' : 'BROWSE'); };
     const openAddWordLibrary = () => { setView('BROWSE'); setForceExpandAdd(true); };
     const handleComposeWithWord = (word: StudyItem) => { setWritingContextWord(word); setView('WRITING'); };
     const consumeWritingContext = () => setWritingContextWord(null);
@@ -1089,7 +1098,7 @@ export const useAppController = () => {
         updateWord: updateWordAndNotify, deleteWord, bulkDeleteWords, bulkUpdateWords: bulkUpdateWordsAndNotify,
         handleNavigateToList, openAddWordLibrary, clearSessionState, handleRetrySession,
         gainExperienceAndLevelUp, recalculateXpAndLevelUp, xpGained, xpToNextLevel,
-        startDueReviewSession, startNewLearnSession, startStatusReviewSession, lastMasteryScoreUpdateTimestamp,
+        startDueReviewSession, startNewLearnSession, startStatusReviewSession, startKotobaDueReviewSession, startKotobaNewLearnSession, startKotobaStatusReviewSession, lastMasteryScoreUpdateTimestamp,
         writingContextWord, handleComposeWithWord, consumeWritingContext,
         targetLessonId, setTargetLessonId, consumeTargetLessonId, 
         targetLessonTag, consumeTargetLessonTag, 

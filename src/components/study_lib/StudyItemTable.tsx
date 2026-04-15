@@ -81,6 +81,8 @@ interface Props {
   onRenameGroup?: (path: string, nextName: string) => Promise<void>;
   onDeleteGroup?: (path: string) => Promise<void>;
   onOpenWordBook?: () => void;
+  libraryLabel?: string;
+  showWordBook?: boolean;
 }
 
 const LIBRARY_FILTERS_KEY = 'vocab_pro_library_filters_v2';
@@ -96,7 +98,7 @@ const StudyItemTable: React.FC<Props> = ({
   words, total, loading, page, pageSize, onPageChange, onPageSizeChange,
   onSearch, onSearchMeaningChange, searchMeaning: externalSearchMeaning, onFilterChange, onAddWords, onViewWord, onEditWord, onDelete, onHardDelete, onBulkDelete, onBulkHardDelete, onPractice,
   settingsKey, context, initialFilter, forceExpandAdd, onExpandAddConsumed, onWordRenamed,
-  showTagBrowserButton, tagTree, selectedTag, onSelectTag, onRenameGroup, onDeleteGroup, onOpenWordBook
+  showTagBrowserButton, tagTree, selectedTag, onSelectTag, onRenameGroup, onDeleteGroup, onOpenWordBook, libraryLabel = 'Word Library', showWordBook = true
 }) => {
   const filterStorageKey = useMemo(
     () => `${LIBRARY_FILTERS_KEY}_${context}_${settingsKey}`,
@@ -975,6 +977,8 @@ const StudyItemTable: React.FC<Props> = ({
     selectedTypes: selectedWordTypes,
     toggleType: handleTypeToggle,
     onOpenWordBook,
+    libraryLabel,
+    showWordBook,
     availableGroups,
     onSetSelectedVocabularyType: handleSetSelectedVocabularyType,
     onSetSelectedArchive: handleSetSelectedArchive,

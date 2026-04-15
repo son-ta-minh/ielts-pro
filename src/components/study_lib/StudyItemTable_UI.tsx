@@ -603,6 +603,8 @@ export interface WordTableUIProps {
   setIsAddToBookModalOpen: (o: boolean) => void;
   wordBooks: WordBook[];
   onConfirmAddToBook: (bookId: string) => void;
+  libraryLabel?: string;
+  showWordBook?: boolean;
 }
 
 export const WordTableUI: React.FC<WordTableUIProps> = ({
@@ -620,7 +622,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   onRenameGroup, onDeleteGroup,
   selectedTypes, toggleType, onOpenWordBook,
   availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onSetSelectedQuality, onSetSelectedLearnedStatus, onAddSelectedGroup, onClearSelectedGroups, onCopySelectedHeadwords, onResetSelectedWords,
-  isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook
+  isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook, libraryLabel = 'Word Library', showWordBook = true
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
@@ -713,10 +715,10 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
       <div className="flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
             <div>
-                <h2 className={`${context === 'library' ? 'text-3xl' : 'text-lg'} font-black text-neutral-900 tracking-tight`}>{context === 'library' ? 'Word Library' : 'Unit Vocabulary'}</h2>
+                <h2 className={`${context === 'library' ? 'text-3xl' : 'text-lg'} font-black text-neutral-900 tracking-tight`}>{context === 'library' ? libraryLabel : 'Unit Vocabulary'}</h2>
                 <p className={`${context === 'library' ? 'text-neutral-500 mt-2 font-medium' : 'text-neutral-500 text-xs font-bold mt-0.5'}`}>{total} items{context === 'library' ? ' collected.' : '.'}</p>
             </div>
-            {context === 'library' && onOpenWordBook && (
+            {context === 'library' && showWordBook && onOpenWordBook && (
                 <button 
                     onClick={onOpenWordBook}
                     className="flex items-center gap-2.5 p-2 bg-white border border-neutral-200 rounded-2xl hover:border-indigo-400 hover:shadow-sm transition-all group shrink-0"

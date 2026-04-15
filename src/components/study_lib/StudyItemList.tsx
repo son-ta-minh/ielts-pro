@@ -1,5 +1,5 @@
 import React, { Suspense, useState, useCallback, useEffect, useMemo } from 'react';
-import { StudyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, StudyItemQuality, AppView } from '../../app/types';
+import { StudyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, StudyItemQuality, AppView, StudyLibraryType } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import StudyItemTable from './StudyItemTable';
@@ -18,6 +18,8 @@ import { Loader2 } from 'lucide-react';
 
 interface Props {
   user: User;
+  libraryType?: StudyLibraryType;
+  libraryLabel?: string;
   onDelete: (id: string) => Promise<void>;
   onBulkDelete: (ids: string[]) => Promise<void>;
   onUpdate: (updated: StudyItem) => void;
@@ -30,7 +32,6 @@ interface Props {
 }
 
 const LIBRARY_FILTERS_KEY = 'vocab_pro_library_filters_v2';
-const LIBRARY_TABLE_FILTERS_KEY = `${LIBRARY_FILTERS_KEY}_library_vocab_pro_word_table_settings`;
 
 const dedupeGroups = (groups: string[]): string[] => Array.from(new Set(groups.filter(Boolean)));
 
@@ -52,11 +53,15 @@ const deleteGroupPathValue = (groupPath: string, targetPath: string): string | n
   return groupPath.slice(targetPath.length + 1) || null;
 };
 
-const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed, onNavigate }) => {
+const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLabel = 'Word Library', onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed, onNavigate }) => {
   const [words, setWords] = useState<StudyItem[]>([]);
   
   // Read storage synchronously for initial state
-  const savedState = useMemo(() => getStoredJSON<any>(LIBRARY_TABLE_FILTERS_KEY, {}), []);
+  const tableFiltersKey = useMemo(
+    () => `${LIBRARY_FILTERS_KEY}_library_${libraryType === 'kotoba' ? 'kotoba_pro_word_table_settings' : 'vocab_pro_word_table_settings'}`,
+    [libraryType]
+  );
+  const savedState = useMemo(() => getStoredJSON<any>(tableFiltersKey, {}), [tableFiltersKey]);
 
   const [page, setPage] = useState(savedState.page || 0);
   const [pageSize, setPageSize] = useState(savedState.pageSize || 25);
@@ -77,7 +82,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
 
   const buildTagTree = useCallback(() => {
     const UNCATEGORIZED_GROUP = "Uncategorized";
-    const allUserWords = dataStore.getAllWords().filter(w => w.userId === user.id);
+    const allUserWords = dataStore.getAllWords().filter(w => w.userId === user.id && (w.libraryType || 'vocab') === libraryType);
     const wordsByLowerCase = new Map<string, StudyItem>();
     allUserWords.forEach(w => wordsByLowerCase.set(w.word.toLowerCase(), w));
     
@@ -230,7 +235,8 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
         currentFilters.composition, 
         currentFilters.book,
         currentFilters.specificBookId,
-        searchMeaning
+        searchMeaning,
+        libraryType
       );
       setTotal(totalCount);
       setWords(data);
@@ -269,7 +275,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
     if (renamedPath === path) return;
 
     const affectedWords = dataStore.getAllWords()
-      .filter(word => word.userId === user.id)
+      .filter(word => word.userId === user.id && (word.libraryType || 'vocab') === libraryType)
       .filter(word => word.groups?.some(group => group === path || group.startsWith(`${path}/`)));
 
     if (affectedWords.length === 0) {
@@ -292,7 +298,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
 
   const handleDeleteGroup = async (path: string) => {
     const affectedWords = dataStore.getAllWords()
-      .filter(word => word.userId === user.id)
+      .filter(word => word.userId === user.id && (word.libraryType || 'vocab') === libraryType)
       .filter(word => word.groups?.some(group => group === path || group.startsWith(`${path}/`)));
 
     if (affectedWords.length === 0) {
@@ -342,7 +348,11 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
     }
 
     for (const word of wordsToProcess) {
-      const existing = await dataStore.findWordByText(userId, word);
+      const existing = dataStore.getAllWords().find(item =>
+        item.userId === userId &&
+        (item.libraryType || 'vocab') === libraryType &&
+        item.word.toLowerCase().trim() === word.toLowerCase().trim()
+      );
       
       if (existing) {
         const updatedItem = { ...existing };
@@ -377,6 +387,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
                  lastReview: undefined,
                  learnedStatus: LearnedStatus.NEW,
                  lastTestResults: {},
+                 libraryType,
                  // Apply local flags on top
                  isIdiom: isIdiom || serverItem.isIdiom,
                  isPhrasalVerb: isPhrasalVerb || serverItem.isPhrasalVerb,
@@ -395,7 +406,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
             newItem = await createNewWord(
                 word, '', '', '', '', [], 
                 isIdiom, isPhrasalVerb, 
-                isCollocation, isStandardPhrase, isPassive
+                isCollocation, isStandardPhrase, isPassive, libraryType
             );
             newItem.userId = userId;
             newItem.isFocus = isFocus;
@@ -414,7 +425,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
   };
 
   const handlePractice = (ids: Set<string>) => {
-      const items = dataStore.getAllWords().filter(w => ids.has(w.id));
+      const items = dataStore.getAllWords().filter(w => ids.has(w.id) && (w.libraryType || 'vocab') === libraryType);
       onStartSession(items);
   };
 
@@ -460,7 +471,7 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
           onDelete={async (w) => { await onDelete(w.id); }}
           onBulkDelete={onBulkDelete ? handleBulkDelete : undefined}
           onPractice={handlePractice}
-          settingsKey="vocab_pro_word_table_settings"
+          settingsKey={libraryType === 'kotoba' ? 'kotoba_pro_word_table_settings' : 'vocab_pro_word_table_settings'}
           context="library"
           initialFilter={initialFilter}
           forceExpandAdd={forceExpandAdd}
@@ -472,6 +483,8 @@ const StudyItemList: React.FC<Props> = ({ user, onDelete, onBulkDelete, onUpdate
           onRenameGroup={handleRenameGroup}
           onDeleteGroup={handleDeleteGroup}
           onOpenWordBook={() => onNavigate && onNavigate('WORDBOOK')}
+          libraryLabel={libraryLabel}
+          showWordBook={libraryType === 'vocab'}
       />
       {viewingWord && (
           <ViewStudyItemModal 

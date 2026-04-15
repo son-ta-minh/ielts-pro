@@ -10,6 +10,11 @@ import { getStoredJSON } from '../utils/storage';
 
 const FOCUS_PERIOD_TIMERS_KEY = 'focus_period_timers';
 const FOCUS_PERIOD_HISTORY_KEY = 'focus_period_history';
+const countLibraryItems = (payload: any): number => {
+    const vocabCount = Array.isArray(payload?.vocab) ? payload.vocab.length : (Array.isArray(payload?.vocabulary) ? payload.vocabulary.length : 0);
+    const kotobaCount = Array.isArray(payload?.kotoba) ? payload.kotoba.length : 0;
+    return vocabCount + kotobaCount;
+};
 
 // Scope for auto backup - usually everything
 const FULL_SCOPE: DataScope = {
@@ -37,10 +42,7 @@ const fetchExistingBackupWordCount = async (serverUrl: string, identifier: strin
         if (!res.ok) return null;
         const data = await res.json().catch(() => null);
         if (!data || typeof data !== 'object') return null;
-        const vocab = Array.isArray((data as any).vocab)
-            ? (data as any).vocab
-            : (Array.isArray((data as any).vocabulary) ? (data as any).vocabulary : null);
-        return Array.isArray(vocab) ? vocab.length : null;
+        return countLibraryItems(data);
     } catch {
         return null;
     }
@@ -65,7 +67,7 @@ export const performAutoBackup = async (
 
     try {
         const payloadObj = await getFullExportData(userId, user);
-        const localWordCount = Array.isArray((payloadObj as any).vocab) ? (payloadObj as any).vocab.length : 0;
+        const localWordCount = countLibraryItems(payloadObj);
         const identifier = user.name || userId;
 
         // Safety warning: large drop in vocab count vs existing server backup.
@@ -346,7 +348,8 @@ async function getFullExportData(userId: string, user: User) {
         v: 8,
         ca: new Date().toISOString(),
         user: _mapUserToShortKeys(user), // Consistent shortening using the specific user mapper
-        vocab: wordsData.map(w => _mapToShortKeys(w)),
+        vocab: wordsData.filter(w => (w.libraryType || 'vocab') === 'vocab').map(w => _mapToShortKeys(w)),
+        kotoba: wordsData.filter(w => w.libraryType === 'kotoba').map(w => _mapToShortKeys(w)),
         u: unitsData,
         pl: logsData,
         st: speakingTopicsData,

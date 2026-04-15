@@ -1,4 +1,4 @@
-import { StudyItem, User, Unit, StudyItemQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus } from './types';
+import { StudyItem, User, Unit, StudyItemQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus, StudyLibraryType } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity, isSrsIgnored } from '../utils/srs';
@@ -99,7 +99,7 @@ function _triggerBackup() {
 function _recalculateStats(userId: string) {
     const now = Date.now();
     const wordsArray = Array.from(_allWords.values());
-    const activeWords = wordsArray.filter(w => !w.isPassive && w.userId === userId && !isSrsIgnored(w));
+    const activeWords = wordsArray.filter(w => !w.isPassive && w.userId === userId && matchesLibraryType(w, 'vocab') && !isSrsIgnored(w));
 
     const total = activeWords.length;
     
@@ -188,6 +188,9 @@ function _notifyChanges() {
 }
 
 type WriteScope = 'word' | 'user' | 'unit' | 'composition' | 'bulk';
+
+const normalizeLibraryType = (value?: StudyLibraryType | string | null): StudyLibraryType => value === 'kotoba' ? 'kotoba' : 'vocab';
+const matchesLibraryType = (item: StudyItem, libraryType: StudyLibraryType = 'vocab') => normalizeLibraryType(item.libraryType) === libraryType;
 
 const _lastWriteTimes: Record<WriteScope, number> = {
     word: 0,
@@ -296,6 +299,10 @@ export async function init(userId: string) {
                 word.learnedStatus = legacyLastGrade || (word.lastReview ? LearnedStatus.LEARNED : LearnedStatus.NEW);
                 changed = true;
             }
+            if (!word.libraryType) {
+                word.libraryType = 'vocab';
+                changed = true;
+            }
             if (legacyLastGrade !== undefined) {
                 delete (word as any).lastGrade;
                 changed = true;
@@ -400,8 +407,8 @@ export function getWordById(id: string): StudyItem | undefined { return _allWord
 export function getDailyStreakSnapshots(userId: string): DailyStreakSnapshot[] { return readDailyStreaks(userId); }
 export function getDailyGoalHistory(userId: string): DailyGoalSnapshot[] { return readDailyGoalHistory(userId); }
 
-export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = '', searchMeaning: boolean = false): { words: StudyItem[], totalCount: number } {
-    const allItems = Array.from(_allWords.values()).filter(w => w.userId === userId);
+export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = '', searchMeaning: boolean = false, libraryType: StudyLibraryType = 'vocab'): { words: StudyItem[], totalCount: number } {
+    const allItems = Array.from(_allWords.values()).filter(w => w.userId === userId && matchesLibraryType(w, libraryType));
     let baseItems = allItems;
     if (filterTypes.includes('duplicate')) {
         const wordCounts = new Map<string, number>();

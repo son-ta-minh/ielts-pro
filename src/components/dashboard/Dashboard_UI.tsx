@@ -11,6 +11,7 @@ import { AppView, User, StudyItem, DailyStreakSnapshot, DailyGoalSnapshot } from
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
 import { AutoRefineDashboardControl } from '../common/AutoRefine';
+import type { LibraryDashboardStats } from './Dashboard';
 
 const getFormattedBuildDate = () => {
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
@@ -139,6 +140,12 @@ export interface DashboardUIProps {
     onStartDueReview: () => void;
     onStartStatusReview: (status: 'hard' | 'forgot') => void;
     onStartNewLearn: () => void;
+    onNavigateToKotobaList: (filter: string) => void;
+    onStartKotobaDueReview: () => void;
+    onStartKotobaStatusReview: (status: 'hard' | 'forgot') => void;
+    onStartKotobaNewLearn: () => void;
+    vocabLibraryStats: LibraryDashboardStats;
+    kotobaLibraryStats: LibraryDashboardStats;
     lastBackupTime: number | null;
     onBackup: (mode: 'server' | 'file') => void;
     onRestore: (mode: 'server' | 'file') => void;
@@ -146,6 +153,7 @@ export interface DashboardUIProps {
     dailyGoals: { max_learn_per_day: number; max_review_per_day: number; };
     dailyStreaks: DailyStreakSnapshot[];
     dailyGoalHistory: DailyGoalSnapshot[];
+    kotobaDayProgress: { learned: number; reviewed: number; learnedWords: StudyItem[]; reviewedWords: StudyItem[]; };
     serverStatus: 'connected' | 'disconnected';
     serverUrl?: string;
     activeServerMode?: 'home' | 'public' | null;
@@ -301,17 +309,9 @@ const MasteryOverviewPanel: React.FC<{ stats: StudyStats | null }> = ({ stats })
 };
 
 const VocabularyCenterPanel: React.FC<{
-    stats: StudyStats | null;
-    totalCount: number;
-    newCount: number;
-    studyingCount: number;
-    masteredCount: number;
-    rawCount: number;
-    refinedCount: number;
-    forgottenCount: number;
-    hardCount: number;
-    easyCount: number;
-    focusedCount: number;
+    title?: string;
+    subtitle?: string;
+    stats: LibraryDashboardStats;
     onStartNew: () => void;
     onStartDue: () => void;
     onStartStatusReview: (status: 'hard' | 'forgot') => void;
@@ -319,9 +319,12 @@ const VocabularyCenterPanel: React.FC<{
     onVerifyRefined: () => void;
     onFilterStatus: (filter: string) => void;
 }> = ({
-    stats, totalCount, newCount, studyingCount, masteredCount, rawCount, refinedCount, forgottenCount, hardCount, easyCount, focusedCount,
+    title = 'Vocabulary Center',
+    subtitle = 'Manage and expand your lexical resource.',
+    stats,
     onStartNew, onStartDue, onStartStatusReview, onRefineRaw, onVerifyRefined, onFilterStatus
 }) => {
+    const { totalCount, newCount, dueCount, studyingCount, masteredCount, rawCount, refinedCount, forgottenCount, hardCount, easyCount, focusedCount } = stats;
     const newPercent = totalCount > 0 ? (newCount / totalCount) * 100 : 0;
     const studyingPercent = totalCount > 0 ? (studyingCount / totalCount) * 100 : 0;
     const masteredPercent = totalCount > 0 ? (masteredCount / totalCount) * 100 : 0;
@@ -334,8 +337,8 @@ const VocabularyCenterPanel: React.FC<{
                          <BookCopy size={18} />
                      </div>
                      <div>
-                         <h3 className="text-base font-black text-neutral-900 tracking-tight">Vocabulary Center</h3>
-                         <p className="text-[10px] font-medium text-neutral-400">Manage and expand your lexical resource.</p>
+                         <h3 className="text-base font-black text-neutral-900 tracking-tight">{title}</h3>
+                         <p className="text-[10px] font-medium text-neutral-400">{subtitle}</p>
                      </div>
                  </div>
                  <AutoRefineDashboardControl />
@@ -403,22 +406,22 @@ const VocabularyCenterPanel: React.FC<{
                     {/* Row 1 */}
                     <NavButton 
                         label="Learn New" 
-                        subLabel={`${stats ? stats.vocab.new : '-'} words ready`} 
+                        subLabel={`${newCount} words ready`} 
                         icon={Sparkles} 
                         color="text-indigo-600" 
                         bg="bg-indigo-50" 
                         onClick={onStartNew} 
-                        disabled={!stats || stats.vocab.new === 0} 
+                        disabled={newCount === 0} 
                     />
 
                     <NavButton 
                         label="Review Due" 
-                        subLabel={`${stats ? stats.vocab.due : '-'} words due`} 
+                        subLabel={`${dueCount} words due`} 
                         icon={RotateCw} 
                         color="text-amber-600" 
                         bg="bg-amber-50" 
                         onClick={onStartDue} 
-                        disabled={!stats || stats.vocab.due === 0} 
+                        disabled={dueCount === 0} 
                     />
 
                     {/* Row 2 */}
@@ -1483,8 +1486,9 @@ const BackupStatus: React.FC<{
 export const DashboardUI: React.FC<DashboardUIProps> = ({
   onNavigate, totalCount, newCount, rawCount, refinedCount, reviewStats,
   lastBackupTime, onBackup, onRestore,
-  serverStatus, onAction, onStartNewLearn, onStartDueReview, onStartStatusReview, dayProgress, dailyGoals, dailyStreaks, dailyGoalHistory, onNavigateToWordList, goalStats,
+  serverStatus, onAction, onStartNewLearn, onStartDueReview, onStartStatusReview, onStartKotobaNewLearn, onStartKotobaDueReview, onStartKotobaStatusReview, dayProgress, kotobaDayProgress, dailyGoals, dailyStreaks, dailyGoalHistory, onNavigateToWordList, onNavigateToKotobaList, goalStats,
   studyStats, isStatsLoading,
+  vocabLibraryStats, kotobaLibraryStats,
   onViewWord,
   serverUrl,
   activeServerMode,
@@ -1493,9 +1497,9 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
 }) => {
   const version = useMemo(() => getFormattedBuildDate(), []);
   const [isChromeBrowser, setIsChromeBrowser] = useState(false);
-  const [activeTab, setActiveTab] = useState<'STUDY' | 'PRACTICE' | 'INSIGHT'>(() => {
+  const [activeTab, setActiveTab] = useState<'STUDY' | 'KOTOBA' | 'PRACTICE' | 'INSIGHT'>(() => {
     const saved = sessionStorage.getItem('dashboard_active_tab');
-    if (saved === 'STUDY' || saved === 'PRACTICE' || saved === 'INSIGHT') return saved;
+    if (saved === 'STUDY' || saved === 'KOTOBA' || saved === 'PRACTICE' || saved === 'INSIGHT') return saved;
     return 'STUDY';
   });
 
@@ -1870,6 +1874,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
       <div className="flex items-center justify-between">
         <div className="inline-flex p-1 bg-white border-2 border-neutral-100 rounded-2xl w-fit shadow-sm self-start">
              <button onClick={() => setActiveTab('STUDY')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'STUDY' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><LayoutDashboard size={16} /> Study</button>
+             <button onClick={() => setActiveTab('KOTOBA')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'KOTOBA' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BookOpen size={16} /> Kotoba</button>
              <button onClick={() => setActiveTab('PRACTICE')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'PRACTICE' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><Dumbbell size={16} /> Practice</button>
              <button onClick={() => setActiveTab('INSIGHT')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'INSIGHT' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BarChart3 size={16} /> Insight</button>
         </div>
@@ -1878,17 +1883,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
       {activeTab === 'STUDY' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <VocabularyCenterPanel 
-                stats={studyStats} 
-                totalCount={totalCount} 
-                newCount={newCount} 
-                studyingCount={reviewStats.learned} 
-                masteredCount={reviewStats.mastered} 
-                rawCount={rawCount}
-                refinedCount={refinedCount}
-                forgottenCount={reviewStats.statusForgot}
-                hardCount={reviewStats.statusHard}
-                easyCount={reviewStats.statusEasy}
-                focusedCount={reviewStats.statusFocus}
+                stats={vocabLibraryStats}
                 onStartNew={onStartNewLearn} 
                 onStartDue={onStartDueReview} 
                 onStartStatusReview={onStartStatusReview}
@@ -1922,6 +1917,42 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                   onDeleteHistory={deleteHistoryEntry}
                   clockTick={clockTick}
               />
+          </div>
+      )}
+
+      {activeTab === 'KOTOBA' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <VocabularyCenterPanel
+                title="Vocabulary Center"
+                subtitle="Review and grow your Japanese kotoba library."
+                stats={kotobaLibraryStats}
+                onStartNew={onStartKotobaNewLearn}
+                onStartDue={onStartKotobaDueReview}
+                onStartStatusReview={onStartKotobaStatusReview}
+                onRefineRaw={() => onNavigateToKotobaList('raw')}
+                onVerifyRefined={() => onNavigateToKotobaList('refined')}
+                onFilterStatus={(filter) => onNavigateToKotobaList(filter)}
+              />
+              {(() => {
+                const availableNew = kotobaLibraryStats.newCount;
+                const availableDue = kotobaLibraryStats.dueCount;
+                const baseMaxLearn = Math.min(dailyGoals.max_learn_per_day, availableNew);
+                const baseMaxReview = Math.min(dailyGoals.max_review_per_day, availableDue);
+                const effectiveMaxLearn = Math.max(baseMaxLearn, kotobaDayProgress.learned);
+                const effectiveMaxReview = Math.max(baseMaxReview, kotobaDayProgress.reviewed);
+
+                return (
+                  <DayProgress
+                    learnedToday={kotobaDayProgress.learned}
+                    reviewedToday={kotobaDayProgress.reviewed}
+                    maxLearn={effectiveMaxLearn}
+                    maxReview={effectiveMaxReview}
+                    learnedWords={kotobaDayProgress.learnedWords}
+                    reviewedWords={kotobaDayProgress.reviewedWords}
+                    onViewWord={onViewWord}
+                  />
+                );
+              })()}
           </div>
       )}
 

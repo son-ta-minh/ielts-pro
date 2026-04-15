@@ -1,4 +1,5 @@
-export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'WORD_FAMILY' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT' | 'COURSE' | 'SEARCH' | 'WORD_GALLERY';
+export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'KOTOBA' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'WORD_FAMILY' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT' | 'COURSE' | 'SEARCH' | 'WORD_GALLERY';
+export type StudyLibraryType = 'vocab' | 'kotoba';
 
 export enum ReviewGrade {
   FORGOT = 'FORGOT',
@@ -222,6 +223,7 @@ export interface StudyItem {
   // Core fields
   id: string;
   userId: string; 
+  libraryType?: StudyLibraryType;
   word: string; // Headword, title or main text representing the item
   quality: StudyItemQuality;
   register?: 'raw' | 'academic' | 'casual' | 'neutral';

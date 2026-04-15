@@ -1,4 +1,4 @@
-import { StudyItem, ReviewGrade, StudyItemQuality, WordFamily, LearnedStatus } from '../app/types';
+import { StudyItem, ReviewGrade, StudyItemQuality, WordFamily, LearnedStatus, StudyLibraryType } from '../app/types';
 import { ChallengeType } from '../components/practice/TestModalTypes';
 import { generateAvailableChallenges } from './challengeUtils';
 import { calculateGameEligibility } from './gameEligibility';
@@ -191,7 +191,7 @@ export function getRemainingTime(nextReview: number): { label: string; urgency: 
 export async function createNewWord(
   word: string, ipaUs: string, meaningVi: string, example: string, note: string, groups: string[],
   isIdiom = false, isPhrasalVerb = false,
-  isCollocation = false, isStandardPhrase = false, isPassive = false
+  isCollocation = false, isStandardPhrase = false, isPassive = false, libraryType: StudyLibraryType = 'vocab'
 ): Promise<StudyItem> {
   let finalIpaUs = ipaUs.trim();
   let finalMeaningVi = meaningVi.trim();
@@ -271,7 +271,7 @@ export async function createNewWord(
   const now = Date.now();
   const newItem: StudyItem = {
     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-    userId: '', word: word.trim(), ipaUs: finalIpaUs, meaningVi: finalMeaningVi, example: example.trim(), note, groups,
+    userId: '', libraryType, word: word.trim(), ipaUs: finalIpaUs, meaningVi: finalMeaningVi, example: example.trim(), note, groups,
     keywords: [],
     isIdiom, isPhrasalVerb, isCollocation, isStandardPhrase, isPassive,
     isFocus: false,

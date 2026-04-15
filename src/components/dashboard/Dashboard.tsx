@@ -1,10 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AppView, User, StudyItem, DailyStreakSnapshot, DailyGoalSnapshot } from '../../app/types';
+import { AppView, User, StudyItem, DailyStreakSnapshot, DailyGoalSnapshot, StudyLibraryType } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { isSrsIgnored } from '../../utils/srs';
 import * as db from '../../app/db';
 import { DashboardUI, DashboardUIProps, StudyStats } from './Dashboard_UI';
 import { getConfig } from '../../app/settingsManager';
+
+export interface LibraryDashboardStats {
+  totalCount: number;
+  dueCount: number;
+  newCount: number;
+  studyingCount: number;
+  masteredCount: number;
+  rawCount: number;
+  refinedCount: number;
+  forgottenCount: number;
+  hardCount: number;
+  easyCount: number;
+  focusedCount: number;
+}
 
 interface Props {
   userId: string;
@@ -23,6 +37,10 @@ interface Props {
   onStartDueReview: () => void;
   onStartNewLearn: () => void;
   onStartStatusReview: (status: 'hard' | 'forgot') => void;
+  onNavigateToKotobaList: (filter: string) => void;
+  onStartKotobaDueReview: () => void;
+  onStartKotobaNewLearn: () => void;
+  onStartKotobaStatusReview: (status: 'hard' | 'forgot') => void;
   isWotdComposed?: boolean;
   onComposeWotd?: (word: StudyItem) => void;
   onRandomizeWotd?: () => void;
@@ -52,15 +70,55 @@ const Dashboard: React.FC<Props> = ({
   const [rawCount, setRawCount] = useState(0);
   const [refinedCount, setRefinedCount] = useState(0);
   const [dayProgress, setDayProgress] = useState({ learned: 0, reviewed: 0, learnedWords: [], reviewedWords: [] });
+  const [kotobaDayProgress, setKotobaDayProgress] = useState({ learned: 0, reviewed: 0, learnedWords: [], reviewedWords: [] });
   const [dailyStreaks, setDailyStreaks] = useState<DailyStreakSnapshot[]>([]);
   const [dailyGoalHistory, setDailyGoalHistory] = useState<DailyGoalSnapshot[]>([]);
   const [reviewStats, setReviewStats] = useState({ learned: 0, mastered: 0, statusForgot: 0, statusHard: 0, statusEasy: 0, statusLearned: 0, statusFocus: 0 });
   const [goalStats, setGoalStats] = useState({ totalTasks: 0, completedTasks: 0 });
   
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
+  const [libraryStats, setLibraryStats] = useState<{ vocab: LibraryDashboardStats; kotoba: LibraryDashboardStats }>({
+    vocab: { totalCount: 0, dueCount: 0, newCount: 0, studyingCount: 0, masteredCount: 0, rawCount: 0, refinedCount: 0, forgottenCount: 0, hardCount: 0, easyCount: 0, focusedCount: 0 },
+    kotoba: { totalCount: 0, dueCount: 0, newCount: 0, studyingCount: 0, masteredCount: 0, rawCount: 0, refinedCount: 0, forgottenCount: 0, hardCount: 0, easyCount: 0, focusedCount: 0 }
+  });
   const [isStatsLoading, setIsStatsLoading] = useState(false);
 
   const dailyGoals = getConfig().dailyGoals;
+
+  const calculateLibraryDashboardStats = useCallback((words: StudyItem[], libraryType: StudyLibraryType): LibraryDashboardStats => {
+    const now = Date.now();
+    const activeWords = words.filter(w => w.userId === userId && (w.libraryType || 'vocab') === libraryType && !w.isPassive && !isSrsIgnored(w));
+    const learningWords = activeWords.filter(w => !!w.lastReview && w.interval <= 21);
+
+    return {
+      totalCount: activeWords.length,
+      dueCount: activeWords.filter(w => !!w.lastReview && w.nextReview <= now && w.quality !== 'FAILED').length,
+      newCount: activeWords.filter(w => !w.lastReview && w.quality === 'VERIFIED').length,
+      studyingCount: learningWords.length,
+      masteredCount: activeWords.filter(w => w.interval > 21).length,
+      rawCount: activeWords.filter(w => w.quality === 'RAW').length,
+      refinedCount: activeWords.filter(w => w.quality === 'REFINED').length,
+      forgottenCount: learningWords.filter(w => w.learnedStatus === 'FORGOT').length,
+      hardCount: learningWords.filter(w => w.learnedStatus === 'HARD').length,
+      easyCount: learningWords.filter(w => w.learnedStatus === 'EASY').length,
+      focusedCount: activeWords.filter(w => !!w.isFocus).length
+    };
+  }, [userId]);
+
+  const calculateLibraryDayProgress = useCallback((words: StudyItem[], libraryType: StudyLibraryType) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTimestamp = today.getTime();
+    const activeWords = words.filter(w => w.userId === userId && (w.libraryType || 'vocab') === libraryType && !w.isPassive && !isSrsIgnored(w));
+    const learnedWords = activeWords.filter(w => w.lastReview && w.lastReview >= todayTimestamp && w.lastReviewSessionType !== 'boss_battle' && w.learnedStatus === 'LEARNED');
+    const reviewedWords = activeWords.filter(w => w.lastReview && w.lastReview >= todayTimestamp && w.lastReviewSessionType !== 'boss_battle' && w.learnedStatus !== 'LEARNED');
+    return {
+      learned: learnedWords.length,
+      reviewed: reviewedWords.length,
+      learnedWords,
+      reviewedWords
+    };
+  }, [userId]);
   
   const fetchGoalStats = async () => {
     try {
@@ -102,7 +160,7 @@ const Dashboard: React.FC<Props> = ({
           const words = dataStore.getAllWords().filter(w => w.userId === userId);
 
           // Vocab
-          const activeWords = words.filter(w => !w.isPassive && !isSrsIgnored(w));
+          const activeWords = words.filter(w => (w.libraryType || 'vocab') === 'vocab' && !w.isPassive && !isSrsIgnored(w));
           const newVocab = activeWords.filter(w => !w.lastReview && w.quality === 'VERIFIED').length;
           const dueVocab = activeWords.filter(w => w.lastReview && w.nextReview <= Date.now() && w.quality !== 'FAILED').length;
 
@@ -158,6 +216,12 @@ const Dashboard: React.FC<Props> = ({
       if (stats.dayProgress) {
         setDayProgress(stats.dayProgress);
       }
+      const allWords = dataStore.getAllWords();
+      setLibraryStats({
+        vocab: calculateLibraryDashboardStats(allWords, 'vocab'),
+        kotoba: calculateLibraryDashboardStats(allWords, 'kotoba')
+      });
+      setKotobaDayProgress(calculateLibraryDayProgress(allWords, 'kotoba'));
       setDailyStreaks(dataStore.getDailyStreakSnapshots(userId));
       setDailyGoalHistory(dataStore.getDailyGoalHistory(userId));
 
@@ -165,8 +229,8 @@ const Dashboard: React.FC<Props> = ({
       setRefinedCount(stats.dashboardStats.refinedCount || 0);
       
       if (stats.reviewCounts) {
-        const focusCount = dataStore.getAllWords().filter(
-          w => w.userId === userId && !w.isPassive && !!w.isFocus
+        const focusCount = allWords.filter(
+          w => w.userId === userId && (w.libraryType || 'vocab') === 'vocab' && !w.isPassive && !!w.isFocus
         ).length;
         setReviewStats({
             learned: stats.reviewCounts.learned || 0,
@@ -199,7 +263,7 @@ const Dashboard: React.FC<Props> = ({
     return () => {
       window.removeEventListener('datastore-updated', handleUpdate);
     };
-  }, [userId, totalCount, fetchStudyStats]);
+  }, [userId, totalCount, fetchStudyStats, calculateLibraryDashboardStats, calculateLibraryDayProgress]);
   
   const handleRestoreClick = (mode: 'server' | 'file') => {
       if (mode === 'server' && restoreFromServerAction) {
@@ -246,10 +310,17 @@ const Dashboard: React.FC<Props> = ({
     onStartDueReview: restProps.onStartDueReview,
     onStartNewLearn: restProps.onStartNewLearn,
     onStartStatusReview: restProps.onStartStatusReview,
+    onNavigateToKotobaList: restProps.onNavigateToKotobaList,
+    onStartKotobaDueReview: restProps.onStartKotobaDueReview,
+    onStartKotobaNewLearn: restProps.onStartKotobaNewLearn,
+    onStartKotobaStatusReview: restProps.onStartKotobaStatusReview,
+    vocabLibraryStats: libraryStats.vocab,
+    kotobaLibraryStats: libraryStats.kotoba,
     lastBackupTime: restProps.lastBackupTime,
     onBackup: handleBackupClick,
     onRestore: handleRestoreClick,
     dayProgress,
+    kotobaDayProgress,
     dailyStreaks,
     dailyGoalHistory,
     dailyGoals,
