@@ -223,14 +223,14 @@ const fetchCambridgePronunciation = async (word: string): Promise<CambridgePronu
     }
 };
 
-const fetchServerIpaPronunciation = async (text: string): Promise<CambridgePronunciationPayload | null> => {
+const fetchServerIpaPronunciation = async (text: string, lang: 'en' | 'ja' = 'en'): Promise<CambridgePronunciationPayload | null> => {
     const normalizedText = String(text || '').trim();
     if (!normalizedText) return null;
 
     try {
         const config = getConfig();
         const serverUrl = getServerUrl(config);
-        const response = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(normalizedText)}&mode=2`, {
+        const response = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(normalizedText)}&mode=2&lang=${encodeURIComponent(lang)}`, {
             cache: 'no-store'
         });
         if (!response.ok) return null;
@@ -1134,7 +1134,7 @@ const resolveInitialPronunciation = async (
     if (signal?.aborted) {
         throw new DOMException('The user aborted a request.', 'AbortError');
     }
-    const serverPronunciation = await fetchServerIpaPronunciation(word.word);
+    const serverPronunciation = await fetchServerIpaPronunciation(word.word, isJapaneseLocale(word) ? 'ja' : 'en');
     return serverPronunciation
         ? {
             original: word.word,

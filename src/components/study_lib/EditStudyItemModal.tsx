@@ -404,7 +404,8 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
 
     setIsIpaLoading('generated');
     try {
-      const response = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(headword)}`);
+      const pronunciationLang = formData.libraryType === 'kotoba' ? 'ja' : 'en';
+      const response = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(headword)}&lang=${encodeURIComponent(pronunciationLang)}`);
       if (!response.ok) {
         throw new Error(`IPA server error ${response.status}`);
       }

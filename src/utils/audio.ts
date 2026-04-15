@@ -252,7 +252,8 @@ const triggerCoachLookup = async (word: string): Promise<boolean> => {
         if (!simpleData?.exists) {
             // Final fallback: still show IPA even when Cambridge lookup is unavailable.
             try {
-                const ipaRes = await fetch(`${baseUrl}/api/convert/pron?text=${encodeURIComponent(cleanWord)}&mode=2`, {
+                const spokenLanguage = getPreferredSpeakLanguage();
+                const ipaRes = await fetch(`${baseUrl}/api/convert/pron?text=${encodeURIComponent(cleanWord)}&mode=2&lang=${encodeURIComponent(spokenLanguage)}`, {
                     signal: AbortSignal.timeout(6000),
                     cache: 'no-store'
                 });

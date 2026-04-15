@@ -1986,7 +1986,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
             // Priority 3: Server IPA conversion fallback
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(selectedText)}&mode=2`);
+            const spokenLanguage = getPreferredSpeakLanguage();
+            const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(selectedText)}&mode=2&lang=${encodeURIComponent(spokenLanguage)}`);
             if (res.ok) {
                 const data = await res.json();
                 setMessage({ text: `**Pronunciation:** ${data.ipa}`, icon: <Binary size={18} className="text-purple-500" /> });

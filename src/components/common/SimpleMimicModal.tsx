@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Volume2, Mic, Waves, ListPlus, Play, Pause, AudioLines, Loader2, Minimize2, Maximize2, Download, Pencil, Trash2, Check, ChevronUp, ChevronDown } from 'lucide-react';
-import { speak, stopRecording, startRecording } from '../../utils/audio';
+import { detectLanguage, speak, stopRecording, startRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { analyzeSpeechLocally, AnalysisResult } from '../../utils/speechAnalysis';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
@@ -137,7 +137,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             // 2. Fallback to Server API
             const config = getConfig();
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(editedTarget)}`);
+            const pronunciationLang = detectLanguage(editedTarget) === 'ja' ? 'ja' : 'en';
+            const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(editedTarget)}&lang=${encodeURIComponent(pronunciationLang)}`);
             if (res.ok) {
                 const data = await res.json();
                 setIpa(data.ipa);

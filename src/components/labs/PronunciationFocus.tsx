@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as dataStore from '../../app/dataStore';
-import { speak, startRecording, stopRecording } from '../../utils/audio';
+import { detectLanguage, speak, startRecording, stopRecording } from '../../utils/audio';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { MimicPracticeUI } from './MimicPractice_UI';
 import { StudyItem } from '../../app/types';
@@ -280,7 +280,8 @@ export const PronunciationFocus: React.FC<Props> = ({ scopedWord, onClose }) => 
                 // 2. Fallback to Server API
                 const config = getConfig();
                 const serverUrl = getServerUrl(config);
-                const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(target.text)}`);
+                const pronunciationLang = detectLanguage(target.text) === 'ja' ? 'ja' : 'en';
+                const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(target.text)}&lang=${encodeURIComponent(pronunciationLang)}`);
                 if (res.ok) {
                     const data = await res.json();
                     setIpa(data.ipa);

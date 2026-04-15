@@ -242,10 +242,12 @@ export async function createNewWord(
           }
         }
 
+        const fallbackLang = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(cleaned) ? 'ja' : 'en';
+
         // Fallback if still empty
         if (!finalIpaUs) {
           const fallbackRes = await fetch(
-            `${serverUrl}/api/convert/pron?text=${encodeURIComponent(cleaned)}&mode=2`
+            `${serverUrl}/api/convert/pron?text=${encodeURIComponent(cleaned)}&mode=2&lang=${encodeURIComponent(fallbackLang)}`
           );
           if (fallbackRes.ok) {
             const fallbackData = await fallbackRes.json();
@@ -256,7 +258,7 @@ export async function createNewWord(
         }
 
         // Normalize IPA format
-        if (finalIpaUs && !finalIpaUs.startsWith('/')) {
+        if (finalIpaUs && fallbackLang !== 'ja' && !finalIpaUs.startsWith('/')) {
           finalIpaUs = `/${finalIpaUs.replace(/^\/+|\/+$/g, '')}/`;
         }
       } catch (err) {

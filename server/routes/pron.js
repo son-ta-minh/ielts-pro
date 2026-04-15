@@ -172,6 +172,254 @@ function textToIPA(text) {
     return converted.join(" ");
 }
 
+const JAPANESE_CHAR_PATTERN = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/;
+const KANJI_CHAR_PATTERN = /[\u4E00-\u9FFF]/;
+const SMALL_TSU_PATTERN = /^[っッ]$/;
+const LONG_VOWEL_MARK_PATTERN = /^[ー]$/;
+const KANA_DIGRAPHS = {
+    きゃ: "kya", きゅ: "kyu", きょ: "kyo",
+    ぎゃ: "gya", ぎゅ: "gyu", ぎょ: "gyo",
+    しゃ: "sha", しゅ: "shu", しょ: "sho",
+    じゃ: "ja", じゅ: "ju", じょ: "jo",
+    ちゃ: "cha", ちゅ: "chu", ちょ: "cho",
+    にゃ: "nya", にゅ: "nyu", にょ: "nyo",
+    ひゃ: "hya", ひゅ: "hyu", ひょ: "hyo",
+    びゃ: "bya", びゅ: "byu", びょ: "byo",
+    ぴゃ: "pya", ぴゅ: "pyu", ぴょ: "pyo",
+    みゃ: "mya", みゅ: "myu", みょ: "myo",
+    りゃ: "rya", りゅ: "ryu", りょ: "ryo",
+    ふぁ: "fa", ふぃ: "fi", ふぇ: "fe", ふぉ: "fo",
+    てぃ: "ti", でぃ: "di", とぅ: "tu", どぅ: "du",
+    つぁ: "tsa", つぃ: "tsi", つぇ: "tse", つぉ: "tso",
+    うぃ: "wi", うぇ: "we", うぉ: "wo",
+    ヴァ: "va", ヴィ: "vi", ヴェ: "ve", ヴォ: "vo", ヴュ: "vyu",
+    キャ: "kya", キュ: "kyu", キョ: "kyo",
+    ギャ: "gya", ギュ: "gyu", ギョ: "gyo",
+    シャ: "sha", シュ: "shu", ショ: "sho",
+    ジャ: "ja", ジュ: "ju", ジョ: "jo",
+    チャ: "cha", チュ: "chu", チョ: "cho",
+    ニャ: "nya", ニュ: "nyu", ニョ: "nyo",
+    ヒャ: "hya", ヒュ: "hyu", ヒョ: "hyo",
+    ビャ: "bya", ビュ: "byu", ビョ: "byo",
+    ピャ: "pya", ピュ: "pyu", ピョ: "pyo",
+    ミャ: "mya", ミュ: "myu", ミョ: "myo",
+    リャ: "rya", リュ: "ryu", リョ: "ryo",
+    ファ: "fa", フィ: "fi", フェ: "fe", フォ: "fo",
+    ティ: "ti", ディ: "di", トゥ: "tu", ドゥ: "du",
+    ツァ: "tsa", ツィ: "tsi", ツェ: "tse", ツォ: "tso",
+    ウィ: "wi", ウェ: "we", ウォ: "wo",
+    シェ: "she", ジェ: "je", チェ: "che"
+};
+const KANA_MONOGRAPHS = {
+    あ: "a", い: "i", う: "u", え: "e", お: "o",
+    か: "ka", き: "ki", く: "ku", け: "ke", こ: "ko",
+    さ: "sa", し: "shi", す: "su", せ: "se", そ: "so",
+    た: "ta", ち: "chi", つ: "tsu", て: "te", と: "to",
+    な: "na", に: "ni", ぬ: "nu", ね: "ne", の: "no",
+    は: "ha", ひ: "hi", ふ: "fu", へ: "he", ほ: "ho",
+    ま: "ma", み: "mi", む: "mu", め: "me", も: "mo",
+    や: "ya", ゆ: "yu", よ: "yo",
+    ら: "ra", り: "ri", る: "ru", れ: "re", ろ: "ro",
+    わ: "wa", を: "o", ん: "n",
+    が: "ga", ぎ: "gi", ぐ: "gu", げ: "ge", ご: "go",
+    ざ: "za", じ: "ji", ず: "zu", ぜ: "ze", ぞ: "zo",
+    だ: "da", ぢ: "ji", づ: "zu", で: "de", ど: "do",
+    ば: "ba", び: "bi", ぶ: "bu", べ: "be", ぼ: "bo",
+    ぱ: "pa", ぴ: "pi", ぷ: "pu", ぺ: "pe", ぽ: "po",
+    ぁ: "a", ぃ: "i", ぅ: "u", ぇ: "e", ぉ: "o",
+    ゃ: "ya", ゅ: "yu", ょ: "yo", ゎ: "wa",
+    ゔ: "vu",
+    ア: "a", イ: "i", ウ: "u", エ: "e", オ: "o",
+    カ: "ka", キ: "ki", ク: "ku", ケ: "ke", コ: "ko",
+    サ: "sa", シ: "shi", ス: "su", セ: "se", ソ: "so",
+    タ: "ta", チ: "chi", ツ: "tsu", テ: "te", ト: "to",
+    ナ: "na", ニ: "ni", ヌ: "nu", ネ: "ne", ノ: "no",
+    ハ: "ha", ヒ: "hi", フ: "fu", ヘ: "he", ホ: "ho",
+    マ: "ma", ミ: "mi", ム: "mu", メ: "me", モ: "mo",
+    ヤ: "ya", ユ: "yu", ヨ: "yo",
+    ラ: "ra", リ: "ri", ル: "ru", レ: "re", ロ: "ro",
+    ワ: "wa", ヲ: "o", ン: "n",
+    ガ: "ga", ギ: "gi", グ: "gu", ゲ: "ge", ゴ: "go",
+    ザ: "za", ジ: "ji", ズ: "zu", ゼ: "ze", ゾ: "zo",
+    ダ: "da", ヂ: "ji", ヅ: "zu", デ: "de", ド: "do",
+    バ: "ba", ビ: "bi", ブ: "bu", ベ: "be", ボ: "bo",
+    パ: "pa", ピ: "pi", プ: "pu", ペ: "pe", ポ: "po",
+    ァ: "a", ィ: "i", ゥ: "u", ェ: "e", ォ: "o",
+    ャ: "ya", ュ: "yu", ョ: "yo", ヮ: "wa",
+    ヴ: "vu"
+};
+
+function normalizePronunciationLang(lang) {
+    const value = String(lang || '').trim().toLowerCase();
+    if (!value) return 'en';
+    if (['ja', 'jp', 'jpn', 'japanese'].includes(value)) return 'ja';
+    return 'en';
+}
+
+function getLeadingConsonant(romaji) {
+    const match = String(romaji || '').match(/^(ch|sh|ts|[bcdfghjklmnpqrstvwxyz])/i);
+    return match ? match[1].toLowerCase() : '';
+}
+
+function getTrailingVowel(romaji) {
+    const match = String(romaji || '').match(/([aeiou])$/i);
+    return match ? match[1].toLowerCase() : '';
+}
+
+function kanaToRomaji(text) {
+    if (!text) return "";
+
+    let result = "";
+    let shouldDoubleNext = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const pair = text.slice(i, i + 2);
+        let romaji = KANA_DIGRAPHS[pair];
+
+        if (romaji) {
+            i += 1;
+        } else {
+            const char = text[i];
+
+            if (SMALL_TSU_PATTERN.test(char)) {
+                shouldDoubleNext = true;
+                continue;
+            }
+
+            if (LONG_VOWEL_MARK_PATTERN.test(char)) {
+                const prevVowel = getTrailingVowel(result);
+                if (prevVowel) result += prevVowel;
+                continue;
+            }
+
+            romaji = KANA_MONOGRAPHS[char];
+            if (!romaji) {
+                result += char;
+                shouldDoubleNext = false;
+                continue;
+            }
+        }
+
+        if (shouldDoubleNext) {
+            const consonant = getLeadingConsonant(romaji);
+            if (consonant) result += consonant;
+            shouldDoubleNext = false;
+        }
+
+        result += romaji;
+    }
+
+    return result;
+}
+
+function textToRomaji(text) {
+    if (!text) return "";
+    const normalizedText = String(text).trim();
+    if (!JAPANESE_CHAR_PATTERN.test(normalizedText)) return normalizedText;
+    return kanaToRomaji(normalizedText);
+}
+
+function extractJsonObjectFromText(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return null;
+
+    try {
+        return JSON.parse(text);
+    } catch (_) {
+        const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fenceMatch?.[1]) {
+            try {
+                return JSON.parse(fenceMatch[1].trim());
+            } catch (_) {}
+        }
+
+        const objectMatch = text.match(/\{[\s\S]*\}/);
+        if (objectMatch?.[0]) {
+            try {
+                return JSON.parse(objectMatch[0]);
+            } catch (_) {}
+        }
+    }
+
+    return null;
+}
+
+function getStudyBuddyAiCandidates() {
+    return String(settings.STUDY_BUDDY_AI_URL || '')
+        .split(';')
+        .map((url) => url.trim())
+        .filter(Boolean);
+}
+
+async function requestJapaneseReadingFromLocalAi(text) {
+    const candidates = getStudyBuddyAiCandidates();
+    if (candidates.length === 0) return null;
+
+    const systemPrompt = [
+        'You convert Japanese text into reading and romaji.',
+        'Return JSON only.',
+        'Use this schema exactly: {"reading":"<hiragana or katakana reading>","romaji":"<lowercase romaji>"}',
+        'Rules:',
+        '- Resolve kanji into the correct reading for the full phrase.',
+        '- "reading" must be Japanese kana only.',
+        '- "romaji" must be Hepburn-style lowercase Latin letters and spaces only.',
+        '- No markdown, no explanation, no extra keys.'
+    ].join(' ');
+
+    const userPrompt = `Japanese text: ${text}`;
+
+    for (const candidate of candidates) {
+        let timeoutId = null;
+        try {
+            const controller = new AbortController();
+            timeoutId = setTimeout(() => controller.abort(), 12000);
+
+            const response = await fetch(candidate, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    temperature: 0.1,
+                    top_p: 0.85,
+                    repetition_penalty: 1.02,
+                    stream: false,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt }
+                    ]
+                }),
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                logger.warn(`[PRON JA] AI status ${response.status} from ${candidate}`);
+                continue;
+            }
+
+            const payload = await response.json().catch(() => null);
+            const rawContent = payload?.choices?.[0]?.message?.content;
+            const parsed = extractJsonObjectFromText(rawContent);
+            const reading = String(parsed?.reading || '').trim();
+            const romaji = String(parsed?.romaji || '').trim().toLowerCase();
+
+            if (!reading || !romaji) {
+                logger.warn(`[PRON JA] AI returned incomplete payload for "${text}"`);
+                continue;
+            }
+
+            return { reading, romaji };
+        } catch (error) {
+            logger.warn(`[PRON JA] AI request failed for "${text}": ${error.message}`);
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
+        }
+    }
+
+    return null;
+}
+
 // --- Cambridge Logic ---
 
 async function getCambridgeIPA(word) {
@@ -729,10 +977,30 @@ async function getCambridgeSimplified(word) {
 }
 
 router.get('/convert/pron', async (req, res) => {
-    const { text, mode } = req.query;
+    const { text, mode, lang } = req.query;
     if (!text) return res.status(400).json({ error: 'Text required' });
 
     const rawText = String(text).trim();
+    const normalizedLang = normalizePronunciationLang(lang);
+
+    if (normalizedLang === 'ja') {
+        const aiResult = KANJI_CHAR_PATTERN.test(rawText)
+            ? await requestJapaneseReadingFromLocalAi(rawText)
+            : null;
+        const reading = aiResult?.reading || rawText;
+        const romaji = aiResult?.romaji || textToRomaji(reading);
+        const romajiWords = romaji ? romaji.split(/\s+/) : [];
+
+        return res.json({
+            text: rawText,
+            lang: normalizedLang,
+            pronunciationType: 'romaji',
+            reading,
+            romaji,
+            ipa: romaji,
+            ipaWords: romajiWords
+        });
+    }
 
     // Determine if input is a single word (no whitespace after trimming)
     const isSingleWord = rawText.split(/\s+/).length === 1;
@@ -753,6 +1021,8 @@ router.get('/convert/pron', async (req, res) => {
 
     res.json({
         text: rawText,
+        lang: normalizedLang,
+        pronunciationType: 'ipa',
         ipa: result,          // original string format (backward compatible)
         ipaWords: ipaWords    // new structured array for hover/highlight mapping
     });
