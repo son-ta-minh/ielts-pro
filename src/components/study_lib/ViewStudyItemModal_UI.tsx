@@ -901,7 +901,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                             {word.register && <RegisterBadge register={word.register} />}
                             {word.isIdiom && <IdiomBadge />}
 
-                            {word.pronSim && (
+                            {word.libraryType === 'vocab' && word.pronSim && (
                                 <div
                                     className={`flex items-center gap-1 px-2 py-0.5 border rounded-md ${
                                         isIpaFailed ? 'bg-red-50 border-red-200' : 'bg-indigo-50 border-indigo-100'

@@ -332,6 +332,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     }, [editedTarget, isFreeTalkMode, isRecording, stopSession, transcript]);
 
     const startRecognitionSession = useCallback(() => {
+        recognitionManager.current.setLanguage(detectLanguage(editedTarget || 'en'));
         recognitionManager.current.start(
             (final, interim) => {
                 const fullText = [final, interim].filter(Boolean).join(' ').trim();
