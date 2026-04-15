@@ -2818,7 +2818,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     </div>
                 </div>
             </div>
-            <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />
+            <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} allowMinimized={true} />
             <ToolsModal
                 user={user}
                 isOpen={isToolsModalOpen}

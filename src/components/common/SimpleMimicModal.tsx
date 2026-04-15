@@ -31,9 +31,10 @@ interface Props {
     target: string | null; // Allow null for manual input
     onClose: () => void;
     onSaveScore?: (score: number) => void;
+    allowMinimized?: boolean; // default: false
 }
 
-export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore }) => {
+export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore, allowMinimized = false }) => {
     const [isRecording, setIsRecording] = useState(false);
     const isRecordingRef = useRef(false);
     const [isMinimized, setIsMinimized] = useState(() => {
@@ -513,6 +514,15 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         }
     }, [renamingId]);
 
+    // Clear all history handler
+    const handleClearAllHistory = useCallback(() => {
+        setHistory([]);
+        setStoredJSON(MIMIC_HISTORY_KEY, []);
+        setUserAudio(null);
+        setRenamingId(null);
+        setRenameDraft('');
+    }, []);
+
     const handleAddToQueue = () => {
         if (!editedTarget) return;
         const queue = getStoredJSON<any[]>('vocab_pro_mimic_practice_queue', []);
@@ -632,7 +642,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         setIsMinimized(false);
     }, []);
 
-    if (isMinimized) {
+    if (isMinimized && allowMinimized) {
         return (
             <div className={`fixed right-5 z-[10000] flex items-center gap-2 rounded-full border border-neutral-200 bg-white/95 px-3 py-2 shadow-2xl backdrop-blur-md ${minimizedPosition === 'top' ? 'top-5' : 'bottom-5'}`}>
                 <button
@@ -701,16 +711,26 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     return (
         <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm ${skipRestoreAnimation ? '' : 'animate-in fade-in duration-200'}`}>
             <div className="bg-white w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-5xl rounded-[2.5rem] shadow-2xl border border-neutral-200 p-8 flex flex-col items-center gap-6 relative">
-                <button
-                    onClick={() => {
-                        setSkipRestoreAnimation(false);
-                        setIsMinimized(true);
-                    }}
-                    className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-all"
-                    title="Minimize"
-                >
-                    <Minimize2 size={18} />
-                </button>
+                {allowMinimized ? (
+                    <button
+                        onClick={() => {
+                            setSkipRestoreAnimation(false);
+                            setIsMinimized(true);
+                        }}
+                        className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-all"
+                        title="Minimize"
+                    >
+                        <Minimize2 size={18} />
+                    </button>
+                ) : (
+                    <button
+                        onClick={onClose}
+                        className="absolute top-6 right-6 p-2 text-neutral-300 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition-all"
+                        title="Close"
+                    >
+                        <span className="text-lg font-bold">×</span>
+                    </button>
+                )}
 
                 <div className="flex w-fit max-w-full items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-2">
                     <div className="flex items-center gap-2">
@@ -953,6 +973,18 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
 
                 {activeTab === 'history' && (
                     <div className="w-full space-y-3">
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm font-bold text-neutral-600">History ({history.length})</p>
+                            {history.length > 0 && (
+                                <button
+                                    onClick={handleClearAllHistory}
+                                    className="text-xs font-bold text-rose-600 hover:text-rose-800 transition-all"
+                                    title="Clear all recordings"
+                                >
+                                    Clear All
+                                </button>
+                            )}
+                        </div>
                         {history.length === 0 ? (
                             <div className="rounded-[2rem] border border-dashed border-neutral-200 bg-neutral-50 px-6 py-10 text-center text-sm text-neutral-500">
                                 Your last 10 recordings will appear here.
