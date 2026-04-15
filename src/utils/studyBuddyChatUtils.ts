@@ -378,10 +378,6 @@ ${record}`;
     }
 }
 
-export function buildStudyBuddyTargetFollowUpMarkdown() {
-    return `[FOLLOWUP:coreUsage|Core] [FOLLOWUP:collocation|Collo] [FOLLOWUP:wordFamily|Family] [FOLLOWUP:preposition|Prep] [FOLLOWUP:idiom|Idiom] [FOLLOWUP:paraphrase|Para] [FOLLOWUP:example|Example] [FOLLOWUP:verifyData|Verify]`;
-}
-
 export function formatStudyBuddyTargetAssistantPreview(content: string, target: StudyBuddyChatTarget | null) {
     void target;
     return content.trim();
@@ -389,8 +385,7 @@ export function formatStudyBuddyTargetAssistantPreview(content: string, target: 
 
 export function formatStudyBuddyTargetAssistantFinal(content: string, target: StudyBuddyChatTarget | null) {
     const preview = formatStudyBuddyTargetAssistantPreview(content, target);
-    if (!target) return preview;
-    return `${preview}\n${buildStudyBuddyTargetFollowUpMarkdown()}`;
+    return preview;
 }
 
 export function createChatTurn(role: ChatTurn['role'], content: string): ChatTurn {

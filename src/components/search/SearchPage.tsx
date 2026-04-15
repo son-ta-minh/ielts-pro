@@ -33,7 +33,7 @@ interface GallerySearchItem {
 }
 
 type SearchMode = 'fast' | 'deep';
-type SearchResultTab = 'text' | 'gallery';
+type SearchResultTab = 'text' | 'knowledge' | 'gallery';
 type TextSearchResult<T> = { item: T; hits: SearchHit[]; score: number };
 
 const MAX_RESULTS = 200;
@@ -230,7 +230,7 @@ const getFriendlyPathLabel = (path: string) => {
   return 'Text';
 };
 
-export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false, onClose, initialQuery = '' }) => {
+export const SearchPage: React.FC<Props> = ({ user, onViewWord, onOpenLesson, isModal = false, onClose, initialQuery = '' }) => {
   const persistedPreferences = useMemo(
     () => getStoredJSON(SEARCH_PREFERENCES_KEY, { includeArchive: false, includeKnowledge: false, searchMode: 'fast' as SearchMode, exampleOnly: false }),
     []
@@ -461,14 +461,24 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
       });
   }, [galleryItems, normalizedQuery]);
 
+  const shouldShowGalleryTab = isModal && normalizedQuery && galleryResults.length > 0;
+  const shouldShowKnowledgeTab = !!normalizedQuery && includeKnowledge;
+
   useEffect(() => {
-    if (!normalizedQuery || galleryResults.length === 0) {
+    if (!normalizedQuery) {
+      setActiveTab('text');
+      return;
+    }
+
+    if (activeTab === 'gallery' && !shouldShowGalleryTab) {
+      setActiveTab(shouldShowKnowledgeTab ? 'knowledge' : 'text');
+      return;
+    }
+
+    if (activeTab === 'knowledge' && !shouldShowKnowledgeTab) {
       setActiveTab('text');
     }
-  }, [normalizedQuery, galleryResults.length]);
-
-  const shouldShowGalleryTab = isModal && normalizedQuery && galleryResults.length > 0;
-  const hasAnyTextResult = results.length > 0 || lessonResults.length > 0;
+  }, [activeTab, normalizedQuery, shouldShowGalleryTab, shouldShowKnowledgeTab]);
 
   const content = (
     <div className="max-w-6xl mx-auto">
@@ -572,15 +582,24 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
 
         {normalizedQuery && (
           <div className="space-y-4">
-            {shouldShowGalleryTab && (
+            {(shouldShowKnowledgeTab || shouldShowGalleryTab) && (
               <div className="inline-flex rounded-2xl border border-neutral-200 bg-neutral-50 p-1">
                 <button
                   type="button"
                   onClick={() => setActiveTab('text')}
                   className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${activeTab === 'text' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
                 >
-                  Text
+                  Vocabulary
                 </button>
+                {shouldShowKnowledgeTab && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('knowledge')}
+                    className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${activeTab === 'knowledge' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-900'}`}
+                  >
+                    Knowledge
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setActiveTab('gallery')}
@@ -594,7 +613,9 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
             <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider">
               {activeTab === 'gallery' && shouldShowGalleryTab
                 ? `${galleryResults.length} image result${galleryResults.length === 1 ? '' : 's'} for "${normalizedQuery}" · Gallery`
-                : `${results.length} vocab result${results.length === 1 ? '' : 's'}${includeKnowledge ? ` · ${lessonResults.length} knowledge result${lessonResults.length === 1 ? '' : 's'}` : ''} for "${normalizedQuery}" · ${searchMode === 'fast' ? 'Fast Search' : 'Deep Search'}${exampleOnly ? ' · Example Only' : ''}`}
+                : activeTab === 'knowledge' && shouldShowKnowledgeTab
+                  ? `${lessonResults.length} knowledge result${lessonResults.length === 1 ? '' : 's'} for "${normalizedQuery}" · ${searchMode === 'fast' ? 'Fast Search' : 'Deep Search'}`
+                  : `${results.length} vocab result${results.length === 1 ? '' : 's'} for "${normalizedQuery}" · ${searchMode === 'fast' ? 'Fast Search' : 'Deep Search'}${exampleOnly ? ' · Example Only' : ''}`}
             </p>
 
             {activeTab === 'gallery' && shouldShowGalleryTab ? (
@@ -641,124 +662,112 @@ export const SearchPage: React.FC<Props> = ({ user, onViewWord, isModal = false,
                   ))}
                 </div>
               </>
+            ) : activeTab === 'knowledge' && shouldShowKnowledgeTab ? (
+              <>
+                {lessonResults.length === 0 && (
+                  <div className="text-center py-10 text-sm font-semibold text-neutral-400">No knowledge match found.</div>
+                )}
+
+                {lessonResults.map((result) => (
+                  <button
+                    key={result.item.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onOpenLesson?.(result.item.id);
+                    }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                    className="w-full text-left rounded-2xl border border-neutral-200 p-4 transition-all hover:border-neutral-300 hover:bg-neutral-50"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.item.title || 'Untitled lesson', normalizedQuery)}</h3>
+                      {result.item.knowledgeType ? (
+                        <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-sky-700">
+                          {result.item.knowledgeType}
+                        </span>
+                      ) : null}
+                      {result.item.type && result.item.type !== 'essay' ? (
+                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-neutral-500">
+                          {result.item.type}
+                        </span>
+                      ) : null}
+                    </div>
+                    {result.item.description ? (
+                      <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
+                        {renderWithHighlight(getSnippet(result.item.description, normalizedQuery, 140), normalizedQuery)}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 space-y-2">
+                      {result.hits.map((hit, index) => {
+                        const snippet = getSnippet(hit.value, normalizedQuery);
+                        return (
+                          <div key={`${result.item.id}-${hit.path}-${index}`} className="text-sm leading-relaxed text-neutral-600">
+                            <span className="mr-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400">
+                              <Hash size={11} />
+                              {getFriendlyPathLabel(hit.path)}
+                            </span>
+                            <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </button>
+                ))}
+              </>
             ) : (
               <>
-                {!hasAnyTextResult && (
+                {results.length === 0 && (
                   <div className="text-center py-10 text-sm font-semibold text-neutral-400">No match found.</div>
                 )}
 
-                {results.length > 0 && (
-                  <div className="space-y-3">
-                    {includeKnowledge && (
-                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
-                        <FileText size={12} />
-                        Vocabulary
+                {results.map(result => (
+                  <button
+                    key={result.word.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onViewWord(result.word);
+                    }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                    className="w-full text-left p-4 rounded-2xl border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-all"
+                  >
+                    {!exampleOnly && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.word.word, normalizedQuery)}</h3>
+                        {result.word.isPassive && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-neutral-100 text-neutral-500">
+                            <Archive size={12} />
+                            ARCHIVE
+                          </span>
+                        )}
                       </div>
                     )}
-                    {results.map(result => (
-                      <button
-                        key={result.word.id}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onViewWord(result.word);
-                        }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                        }}
-                        className="w-full text-left p-4 rounded-2xl border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-all"
-                      >
-                        {!exampleOnly && (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.word.word, normalizedQuery)}</h3>
-                            {result.word.isPassive && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-neutral-100 text-neutral-500">
-                                <Archive size={12} />
-                                ARCHIVE
+
+                    <div className={`${exampleOnly ? 'mt-1 space-y-1' : 'mt-3 space-y-2'}`}>
+                      {result.hits.map((hit, index) => {
+                        const snippet = exampleOnly ? hit.value : getSnippet(hit.value, normalizedQuery);
+                        return (
+                          <div
+                            key={`${result.word.id}-${hit.path}-${index}`}
+                            className={`text-sm text-neutral-600 leading-relaxed ${exampleOnly ? 'py-1' : ''}`}
+                          >
+                            {!exampleOnly && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wide mr-2">
+                                <Hash size={11} />
+                                {getFriendlyPathLabel(hit.path)}
                               </span>
                             )}
+                            <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
                           </div>
-                        )}
-
-                        <div className={`${exampleOnly ? 'mt-1 space-y-1' : 'mt-3 space-y-2'}`}>
-                          {result.hits.map((hit, index) => {
-                            const snippet = exampleOnly ? hit.value : getSnippet(hit.value, normalizedQuery);
-                            return (
-                              <div
-                                key={`${result.word.id}-${hit.path}-${index}`}
-                                className={`text-sm text-neutral-600 leading-relaxed ${exampleOnly ? 'py-1' : ''}`}
-                              >
-                                {!exampleOnly && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wide mr-2">
-                                    <Hash size={11} />
-                                    {getFriendlyPathLabel(hit.path)}
-                                  </span>
-                                )}
-                                <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {includeKnowledge && lessonResults.length > 0 && (
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
-                      <BookText size={12} />
-                      Knowledge Library
+                        );
+                      })}
                     </div>
-                    {lessonResults.map((result) => (
-                      <button
-                        key={result.item.id}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onOpenLesson?.(result.item.id);
-                        }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                        }}
-                        className="w-full text-left rounded-2xl border border-neutral-200 p-4 transition-all hover:border-neutral-300 hover:bg-neutral-50"
-                      >
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-base font-black text-neutral-900">{renderWithHighlight(result.item.title || 'Untitled lesson', normalizedQuery)}</h3>
-                          {result.item.knowledgeType ? (
-                            <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-sky-700">
-                              {result.item.knowledgeType}
-                            </span>
-                          ) : null}
-                          {result.item.type && result.item.type !== 'essay' ? (
-                            <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-neutral-500">
-                              {result.item.type}
-                            </span>
-                          ) : null}
-                        </div>
-                        {result.item.description ? (
-                          <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">
-                            {renderWithHighlight(getSnippet(result.item.description, normalizedQuery, 140), normalizedQuery)}
-                          </p>
-                        ) : null}
-                        <div className="mt-3 space-y-2">
-                          {result.hits.map((hit, index) => {
-                            const snippet = getSnippet(hit.value, normalizedQuery);
-                            return (
-                              <div key={`${result.item.id}-${hit.path}-${index}`} className="text-sm leading-relaxed text-neutral-600">
-                                <span className="mr-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400">
-                                  <Hash size={11} />
-                                  {getFriendlyPathLabel(hit.path)}
-                                </span>
-                                <span>{renderWithHighlight(snippet, normalizedQuery)}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  </button>
+                ))}
               </>
             )}
           </div>
