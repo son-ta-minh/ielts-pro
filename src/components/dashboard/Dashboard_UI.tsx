@@ -312,6 +312,7 @@ const MasteryOverviewPanel: React.FC<{ stats: StudyStats | null }> = ({ stats })
 const VocabularyCenterPanel: React.FC<{
     title?: string;
     subtitle?: string;
+    libraryType?: 'vocab' | 'kotoba';
     stats: LibraryDashboardStats;
     onStartNew: () => void;
     onStartDue: () => void;
@@ -322,6 +323,7 @@ const VocabularyCenterPanel: React.FC<{
 }> = ({
     title = 'Vocabulary Center',
     subtitle = 'Manage and expand your lexical resource.',
+    libraryType = 'vocab',
     stats,
     onStartNew, onStartDue, onStartStatusReview, onRefineRaw, onVerifyRefined, onFilterStatus
 }) => {
@@ -342,7 +344,7 @@ const VocabularyCenterPanel: React.FC<{
                          <p className="text-[10px] font-medium text-neutral-400">{subtitle}</p>
                      </div>
                  </div>
-                 <AutoRefineDashboardControl />
+                 <AutoRefineDashboardControl libraryType={libraryType} />
              </div>
 
              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -1929,7 +1931,8 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
 
       {activeTab === 'STUDY' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <VocabularyCenterPanel 
+              <VocabularyCenterPanel
+                libraryType="vocab"
                 stats={vocabLibraryStats}
                 onStartNew={onStartNewLearn} 
                 onStartDue={onStartDueReview} 
@@ -1970,6 +1973,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
       {activeTab === 'KOTOBA' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <VocabularyCenterPanel
+                libraryType="kotoba"
                 title="Vocabulary Center"
                 subtitle="Review and grow your Japanese kotoba library."
                 stats={kotobaLibraryStats}

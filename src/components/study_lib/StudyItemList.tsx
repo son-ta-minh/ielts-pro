@@ -216,7 +216,7 @@ const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLa
     }
 
     setTagTree(finalTree);
-  }, [user.id]);
+  }, [libraryType, user.id]);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -245,7 +245,7 @@ const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLa
     } finally {
       setLoading(false);
     }
-  }, [userId, page, pageSize, currentQuery, currentFilters, selectedTag, searchMeaning]);
+  }, [userId, page, pageSize, currentQuery, currentFilters, selectedTag, searchMeaning, libraryType]);
 
   useEffect(() => {
     fetchData();

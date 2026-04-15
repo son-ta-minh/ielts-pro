@@ -116,6 +116,9 @@ HEADWORD (hw) RULES:
     - Single word → convert to base form (singular)
     - All fields (meaning, IPA, examples) must match the headword
     - If adverb → use its base adjective as headword
+    - ${isJapaneseLocale
+        ? 'For Japanese entries, "hw" MUST stay in Japanese script. Never translate the headword into English. Never replace it with romaji.'
+        : 'Do not translate the headword into another language.'}
 
 LANGUAGE:
     - ${isJapaneseLocale

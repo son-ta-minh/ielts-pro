@@ -3,6 +3,14 @@ import * as dataStore from '../app/dataStore';
 import { mergeAiResultIntoWord, normalizeAiResponse } from '../utils/vocabUtils';
 import { runWordRefineWithRetry } from './wordRefineApi';
 
+const JAPANESE_SCRIPT_PATTERN = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/;
+
+const looksJapaneseText = (value: string): boolean => {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    return JAPANESE_SCRIPT_PATTERN.test(text);
+};
+
 export const applyAiRefinementResultsToWords = async (
     results: any[],
     targetWords: StudyItem[],
@@ -61,7 +69,8 @@ export const applyAiRefinementResultsToWords = async (
         ).trim();
 
         if (suggestedHeadword) {
-            const isRenaming = suggestedHeadword.toLowerCase() !== originalItem.word.toLowerCase();
+            const canRename = originalItem.libraryType !== 'kotoba' || looksJapaneseText(suggestedHeadword);
+            const isRenaming = canRename && suggestedHeadword.toLowerCase() !== originalItem.word.toLowerCase();
             if (isRenaming) {
                 itemsToSave.push(applyHeadwordRenameToOriginalItem(originalItem, rawAiResult, suggestedHeadword));
                 renames.push({ id: originalItem.id, oldWord: originalItem.word, newWord: suggestedHeadword });

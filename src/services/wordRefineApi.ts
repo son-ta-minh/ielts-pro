@@ -638,6 +638,13 @@ const validateWordResult = (result: any, word: StudyItem, setup: WordRefineSetup
         retryFields.add('meaningVi');
     }
     if (japaneseMode) {
+        if (!headword) {
+            issues.push(`Headword for "${word.word}" is missing.`);
+            retryFields.add('headword');
+        } else if (!looksJapaneseText(headword) || hasRomajiLeak(headword)) {
+            issues.push(`Headword for "${word.word}" must remain in Japanese script and must not be translated to English or romaji.`);
+            retryFields.add('headword');
+        }
         if (!ipaUs || !isHiraganaPronunciation(ipaUs) || KATAKANA_PATTERN.test(ipaUs)) {
             issues.push(`Pronunciation for "${word.word}" must be Hiragana-only in "ipa_us".`);
             retryFields.add('pronunciation');
@@ -789,7 +796,7 @@ const buildConfiguredWordRefinePrompt = (
             : 'For this pass, keep the always-required core metadata fields "reg", "type", and "is_pas", and include ONLY the optional content fields enabled by the current refine setup. Do not add disabled optional fields.'
         ,
         locale === 'japanese'
-            ? 'Japanese refine mode: "ipa_us" MUST be the reading in Hiragana only. Example/collocation hint/paraphrase/preposition usage MUST be written in natural Japanese. Do not output IPA symbols, romaji, or katakana in pronunciation fields.'
+            ? 'Japanese refine mode: "hw" MUST remain in Japanese script, never English, and never romaji. "ipa_us" MUST be the reading in Hiragana only. Example/collocation hint/paraphrase/preposition usage MUST be written in natural Japanese. Do not output IPA symbols, romaji, or katakana in pronunciation fields.'
             : ''
     ].filter(Boolean);
 
@@ -912,7 +919,7 @@ STRICT RETRY RULES:
 - Your JSON MUST contain every requested key with a non-empty value when applicable.
 - If requested keys are "m, reg", your object must include BOTH "m" and "reg".
 - Never answer with only og/hw or only pronunciation fields when the requested keys are different.
-${locale === 'japanese' ? '- Japanese refine mode: ipa_us must be Hiragana-only reading. Example/collocation hint/paraphrase/preposition usage must be in Japanese.' : ''}
+${locale === 'japanese' ? '- Japanese refine mode: hw must remain in Japanese script only, never English or romaji. ipa_us must be Hiragana-only reading. Example/collocation hint/paraphrase/preposition usage must be in Japanese.' : ''}
 
 Required JSON shape:
 - Return a strict JSON array with exactly one object.

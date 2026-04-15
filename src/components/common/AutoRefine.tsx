@@ -8,7 +8,7 @@ import React, {
     useState
 } from 'react';
 import { CheckCircle2, Loader2, Wand2, X } from 'lucide-react';
-import { User, StudyItem, StudyItemQuality } from '../../app/types';
+import { User, StudyItem, StudyItemQuality, StudyLibraryType } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { useToast } from '../../contexts/ToastContext';
 import { runWordRefineWithRetry, WordRefineProgressSnapshot } from '../../services/wordRefineApi';
@@ -21,6 +21,7 @@ type AutoRefineStatus = 'idle' | 'running' | 'completed';
 interface AutoRefineState {
     status: AutoRefineStatus;
     userId: string | null;
+    libraryType: StudyLibraryType;
     startedAt: number | null;
     totalWords: number;
     completedCount: number;
@@ -34,13 +35,14 @@ interface AutoRefineState {
 
 interface AutoRefineContextValue {
     state: AutoRefineState;
-    startAutoRefine: () => Promise<void>;
+    startAutoRefine: (libraryType?: StudyLibraryType) => Promise<void>;
     stopAutoRefine: () => void;
 }
 
 const DEFAULT_AUTO_REFINE_STATE: AutoRefineState = {
     status: 'idle',
     userId: null,
+    libraryType: 'vocab',
     startedAt: null,
     totalWords: 0,
     completedCount: 0,
@@ -81,6 +83,7 @@ const loadPersistedAutoRefineState = (): AutoRefineState => {
                 ...DEFAULT_AUTO_REFINE_STATE,
                 status: 'completed',
                 userId: nextState.userId,
+                libraryType: nextState.libraryType || 'vocab',
                 startedAt: nextState.startedAt,
                 totalWords: nextState.totalWords,
                 completedCount: nextState.completedCount,
@@ -225,6 +228,11 @@ export const AutoRefineProvider: React.FC<{
                     showToast(`Auto Refine skipped "${fallbackWordLabel}" because it is no longer an active RAW word.`, 'info', 2500);
                     continue;
                 }
+                if ((liveWord.libraryType || 'vocab') !== stateRef.current.libraryType) {
+                    markWordProcessed(wordId, fallbackWordLabel, { success: true });
+                    showToast(`Auto Refine skipped "${fallbackWordLabel}" because it belongs to another library.`, 'info', 2500);
+                    continue;
+                }
 
                 let wordSaved = false;
                 let partialSave = false;
@@ -326,17 +334,22 @@ export const AutoRefineProvider: React.FC<{
         return () => window.removeEventListener('datastore-updated', handleDataUpdate);
     }, [currentUser, processQueue, state.status, state.userId]);
 
-    const startAutoRefine = useCallback(async () => {
+    const startAutoRefine = useCallback(async (libraryType: StudyLibraryType = 'vocab') => {
         if (!currentUser) return;
         if (stateRef.current.status === 'running' && stateRef.current.userId === currentUser.id) {
             return;
         }
 
         const rawWords = dataStore.getAllWords()
-            .filter((word) => word.userId === currentUser.id && word.quality === StudyItemQuality.RAW && !word.isPassive);
+            .filter((word) =>
+                word.userId === currentUser.id &&
+                (word.libraryType || 'vocab') === libraryType &&
+                word.quality === StudyItemQuality.RAW &&
+                !word.isPassive
+            );
 
         if (rawWords.length === 0) {
-            showToast('No RAW words found for Auto Refine.', 'info');
+            showToast(`No RAW words found for ${libraryType === 'kotoba' ? 'Kotoba' : 'Word Library'} Auto Refine.`, 'info');
             return;
         }
 
@@ -350,6 +363,7 @@ export const AutoRefineProvider: React.FC<{
         updateState({
             status: 'running',
             userId: currentUser.id,
+            libraryType,
             startedAt: Date.now(),
             totalWords: rawWords.length,
             completedCount: 0,
@@ -360,7 +374,7 @@ export const AutoRefineProvider: React.FC<{
             currentWordText: null,
             progress: startingSnapshot
         });
-        showToast(`Auto Refine started for ${rawWords.length} RAW word(s).`, 'info', 2600);
+        showToast(`Auto Refine started for ${rawWords.length} RAW word(s) in ${libraryType === 'kotoba' ? 'Kotoba' : 'Word Library'}.`, 'info', 2600);
     }, [currentUser, showToast, updateState]);
 
     const stopAutoRefine = useCallback(() => {
@@ -396,12 +410,14 @@ export const AutoRefineProvider: React.FC<{
 
 const useAutoRefine = () => useContext(AutoRefineContext);
 
-export const AutoRefineDashboardControl: React.FC = () => {
+export const AutoRefineDashboardControl: React.FC<{
+    libraryType?: StudyLibraryType;
+}> = ({ libraryType = 'vocab' }) => {
     const { state, startAutoRefine, stopAutoRefine } = useAutoRefine();
     const [isPanelOpen, setIsPanelOpen] = useState(false);
 
-    const isRunning = state.status === 'running';
-    const hasProgress = state.totalWords > 0;
+    const isRunning = state.status === 'running' && state.libraryType === libraryType;
+    const hasProgress = state.totalWords > 0 && state.libraryType === libraryType;
     const progressPercent = state.totalWords > 0
         ? Math.min(100, Math.round((state.completedCount / state.totalWords) * 100))
         : 0;
@@ -411,7 +427,7 @@ export const AutoRefineDashboardControl: React.FC = () => {
             setIsPanelOpen((current) => !current);
             return;
         }
-        await startAutoRefine();
+        await startAutoRefine(libraryType);
         setIsPanelOpen(true);
     };
 
