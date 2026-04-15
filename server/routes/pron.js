@@ -728,7 +728,7 @@ async function getCambridgeSimplified(word) {
     return result;
 }
 
-router.get('/convert/ipa', async (req, res) => {
+router.get('/convert/pron', async (req, res) => {
     const { text, mode } = req.query;
     if (!text) return res.status(400).json({ error: 'Text required' });
 
@@ -831,7 +831,7 @@ try {
     logger.error("[IPA] Migration failed:", e.message);
 }
 
-router.get('/ipa/modules', (req, res) => {
+router.get('/pron/modules', (req, res) => {
     try {
         if (!fs.existsSync(MODULES_DIR)) {
             return res.json([]);
@@ -851,7 +851,7 @@ router.get('/ipa/modules', (req, res) => {
     }
 });
 
-router.get('/ipa/modules/:filename', (req, res) => {
+router.get('/pron/modules/:filename', (req, res) => {
     const { filename } = req.params;
     // Basic security check to prevent directory traversal
     if (filename.includes('..') || filename.includes('/')) {
@@ -871,7 +871,7 @@ router.get('/ipa/modules/:filename', (req, res) => {
     }
 });
 
-router.post('/ipa/modules/:filename', (req, res) => {
+router.post('/pron/modules/:filename', (req, res) => {
     const { filename } = req.params;
     const { content } = req.body;
 

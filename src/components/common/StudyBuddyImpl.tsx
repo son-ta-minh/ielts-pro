@@ -1292,7 +1292,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             setIsThinking(false);
             setMenuPos(null);
             setMessage({
-                text: `**IPA:** ${ipa}`,
+                text: `**Pronunciation:** ${ipa}`,
                 icon: <Binary size={18} className="text-purple-500" />
             });
             lastCoachLookupRef.current = { word: normalizedWord, at: Date.now() };
@@ -1978,7 +1978,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             // Priority 2: Word Library IPA
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
             if (existing && existing.ipaUs) {
-                setMessage({ text: `**IPA:** ${existing.ipaUs}`, icon: <Binary size={18} className="text-emerald-500" /> });
+                setMessage({ text: `**Pronunciation:** ${existing.ipaUs}`, icon: <Binary size={18} className="text-emerald-500" /> });
                 setIsOpen(true);
                 setIsThinking(false);
                 return;
@@ -1986,10 +1986,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
             // Priority 3: Server IPA conversion fallback
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(selectedText)}&mode=2`);
+            const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(selectedText)}&mode=2`);
             if (res.ok) {
                 const data = await res.json();
-                setMessage({ text: `**IPA:** ${data.ipa}`, icon: <Binary size={18} className="text-purple-500" /> });
+                setMessage({ text: `**Pronunciation:** ${data.ipa}`, icon: <Binary size={18} className="text-purple-500" /> });
                 setIsOpen(true);
             }
         } catch {

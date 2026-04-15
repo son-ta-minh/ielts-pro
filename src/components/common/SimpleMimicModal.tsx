@@ -137,7 +137,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             // 2. Fallback to Server API
             const config = getConfig();
             const serverUrl = getServerUrl(config);
-            const res = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(editedTarget)}`);
+            const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(editedTarget)}`);
             if (res.ok) {
                 const data = await res.json();
                 setIpa(data.ipa);

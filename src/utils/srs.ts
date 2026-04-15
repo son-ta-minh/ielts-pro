@@ -245,7 +245,7 @@ export async function createNewWord(
         // Fallback if still empty
         if (!finalIpaUs) {
           const fallbackRes = await fetch(
-            `${serverUrl}/api/convert/ipa?text=${encodeURIComponent(cleaned)}&mode=2`
+            `${serverUrl}/api/convert/pron?text=${encodeURIComponent(cleaned)}&mode=2`
           );
           if (fallbackRes.ok) {
             const fallbackData = await fallbackRes.json();

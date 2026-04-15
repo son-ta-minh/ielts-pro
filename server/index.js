@@ -91,7 +91,7 @@ app.use((req, res, next) => {
 app.use('/api', require('./routes/system'));
 app.use('/api', require('./routes/backup'));
 app.use('/', require('./routes/tts')); // TTS often uses root paths like /speak
-app.use('/api', require('./routes/ipa'));
+app.use('/api', require('./routes/pron'));
 const coursesModule = require('./routes/courses');
 app.use('/api', coursesModule.router);
 app.use('/api', require('./routes/audio'));

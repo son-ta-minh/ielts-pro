@@ -107,12 +107,12 @@ export const StudyBuddyMessageCard: React.FC<StudyBuddyMessageCardProps> = ({
                             ? message.texts[messageIndex] || ''
                             : (message.text || '');
                         const isIPA = rawText.startsWith('IPA:');
-                        const ipaContent = isIPA ? rawText.replace(/^IPA:\s*/, '') : rawText;
+                        const ipaContent = isIPA ? rawText.replace(/^Pronunciation:\s*/, '') : rawText;
                         return (
                             <>
                                 {isIPA && (
                                     <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                                        IPA:
+                                        Pronunciation:
                                     </div>
                                 )}
                                 <div

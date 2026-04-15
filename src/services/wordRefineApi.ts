@@ -230,7 +230,7 @@ const fetchServerIpaPronunciation = async (text: string): Promise<CambridgePronu
     try {
         const config = getConfig();
         const serverUrl = getServerUrl(config);
-        const response = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(normalizedText)}&mode=2`, {
+        const response = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(normalizedText)}&mode=2`, {
             cache: 'no-store'
         });
         if (!response.ok) return null;

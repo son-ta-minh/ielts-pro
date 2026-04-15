@@ -404,7 +404,7 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
 
     setIsIpaLoading('generated');
     try {
-      const response = await fetch(`${serverUrl}/api/convert/ipa?text=${encodeURIComponent(headword)}`);
+      const response = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(headword)}`);
       if (!response.ok) {
         throw new Error(`IPA server error ${response.status}`);
       }
