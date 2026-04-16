@@ -472,7 +472,9 @@ export const processJsonImport = async (
                 const incomingReadingShelves = Array.isArray(rawJson) ? undefined : (rawJson.readingShelves || rawJson.rs);
                 const incomingReadingBooks: ReadingBook[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.readingBooks || rawJson.rb);
                 const incomingPlanningGoals: PlanningGoal[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.planningGoals || rawJson.pg);
-                const incomingQuestionBankItems: QuestionBankItem[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.questionBankItems || rawJson.qb);
+                const incomingQuestionBankItems: QuestionBankItem[] | undefined = Array.isArray(rawJson)
+                    ? undefined
+                    : (rawJson.qb || rawJson.questionBankItems || rawJson.questionBank || rawJson.qbItems);
 
                 const incomingUserRaw: User | undefined = Array.isArray(rawJson) ? undefined : rawJson.user;
                 let incomingUser: User | undefined;
@@ -565,7 +567,11 @@ export const processJsonImport = async (
                 if (scope.mimic && incomingMimicQueue) localStorage.setItem('vocab_pro_mimic_practice_queue', JSON.stringify(incomingMimicQueue));
                 if (scope.wordBook && incomingWordBooks) await bulkSaveWordBooks(incomingWordBooks.map(b => ({ ...b, userId: importedUserId })));
                 if (scope.planning && incomingPlanningGoals) await bulkSavePlanningGoals(incomingPlanningGoals.map(g => ({...g, userId: importedUserId})));
-                if (scope.questionBank && incomingQuestionBankItems) await bulkSaveQuestionBankItems(incomingQuestionBankItems.map(item => ({ ...item, userId: importedUserId })));
+                if (scope.questionBank && Array.isArray(incomingQuestionBankItems) && incomingQuestionBankItems.length > 0) {
+                    await bulkSaveQuestionBankItems(
+                        incomingQuestionBankItems.map(item => ({ ...item, userId: importedUserId }))
+                    );
+                }
 
                 let updatedUser: User | undefined = undefined;
                 if (scope.user && incomingUser) {

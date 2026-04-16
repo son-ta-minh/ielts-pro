@@ -246,7 +246,7 @@ export const restoreFromServer = async (identifier: string): Promise<ImportResul
 
         // We temporarily pass 'identifier' as userId placeholder, but processJsonImport extracts real user ID from JSON
         const result = await processJsonImport(file, identifier, FULL_SCOPE);
-        
+
         if (result.type === 'success' && result.updatedUser) {
             await dataStore.forceReload(result.updatedUser.id);
             return result;
@@ -313,7 +313,7 @@ export const lookupWordsInGlobalLibrary = async (words: string[]): Promise<Study
 
 
 async function getFullExportData(userId: string, user: User) {
-     const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
+     const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData, questionBankData] = await Promise.all([
         db.getAllWordsForExport(userId),
         db.getUnitsByUserId(userId),
         db.getReadingBooksByUserId(userId),
@@ -333,7 +333,8 @@ async function getFullExportData(userId: string, user: User) {
         db.getListeningItemsByUserId(userId),
         db.getWordBooksByUserId(userId),
         // getCalendarEventsByUserId removed
-        db.getPlanningGoalsByUserId(userId)
+        db.getPlanningGoalsByUserId(userId),
+        db.getQuestionBankItemsByUserId(userId)
      ]);
 
     const mimicQueueData = localStorage.getItem('vocab_pro_mimic_practice_queue');
@@ -370,6 +371,7 @@ async function getFullExportData(userId: string, user: User) {
         // ce (calendar events) removed
         readingBooks: readingBooksData,
         pg: planningGoalsData,
+        questionBank: questionBankData,
         adv: {
             ch: customChapters ? JSON.parse(customChapters) : null,
             b: customBadges ? JSON.parse(customBadges) : null
