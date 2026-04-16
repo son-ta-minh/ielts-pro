@@ -524,9 +524,12 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const fallbackMeaning = currentWord.meaningVi?.trim() || 'No Vietnamese meaning available';
     const cachedDisplayMeaning = String(currentWord.displayMeaning || '').trim();
     const cachedDisplayIpa = String(currentWord.displayIPA || '').trim();
-    const displayText = isNewWord
-    ? reviewHeadword
-    : cachedDisplayIpa || (isDisplayDifferentFromHeadword ? reviewHeadword : (currentWord.ipaUs || reviewHeadword));
+    let displayText = reviewHeadword;
+    if (currentWord.libraryType === 'vocab') {
+        displayText = isNewWord
+        ? reviewHeadword
+        : cachedDisplayIpa || (isDisplayDifferentFromHeadword ? reviewHeadword : (currentWord.ipaUs || reviewHeadword));
+    }
     const vietnameseMeaning = cachedDisplayMeaning || matchedDisplayCollocation?.d?.trim() || fallbackMeaning;
     const existingExampleSet = useMemo(() => {
         const set = new Set<string>();
