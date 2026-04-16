@@ -554,7 +554,6 @@ export interface QuestionBankItem {
   answer: string;
   tags: string[];
   note: string;
-  sourceFile?: string;
   createdAt: number;
   updatedAt: number;
 }

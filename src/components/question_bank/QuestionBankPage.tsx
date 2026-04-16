@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Download, Eye, EyeOff, FileJson, Loader2, Pencil, Plus, Search, Tag, Trash2, Upload } from 'lucide-react';
+import { Eye, Loader2, Pencil, Plus, Search, Tag, Trash2, X } from 'lucide-react';
 import { QuestionBankItem, User } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
@@ -15,13 +15,7 @@ interface EditorState {
   answer: string;
   tags: string;
   note: string;
-  sourceFile: string;
 }
-
-type JsonPayload = {
-  questionBankItems?: QuestionBankItem[];
-  qb?: QuestionBankItem[];
-};
 
 const PAGE_SIZES = [10, 25, 50];
 
@@ -29,8 +23,7 @@ const createEmptyEditor = (): EditorState => ({
   question: '',
   answer: '',
   tags: '',
-  note: '',
-  sourceFile: ''
+  note: ''
 });
 
 const normalizeTags = (raw: string): string[] =>
@@ -59,6 +52,96 @@ const formatTimestamp = (value: number): string => {
   }
 };
 
+const TagPills: React.FC<{ tags: string[] }> = ({ tags }) => {
+  if (tags.length === 0) {
+    return <span className="text-xs font-bold text-neutral-300">No tags</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {tags.map(tag => (
+        <span key={tag} className="px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-black uppercase tracking-widest">
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+};
+
+const ViewModal: React.FC<{
+  item: QuestionBankItem | null;
+  onClose: () => void;
+  onEdit: (item: QuestionBankItem) => void;
+}> = ({ item, onClose, onEdit }) => {
+  const answerHtml = useMemo(
+    () => parseMarkdown(item?.answer || ''),
+    [item?.answer]
+  );
+
+  if (!item) return null;
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[2rem] bg-white border border-neutral-200 shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-100">
+          <div>
+            <h2 className="text-xl font-black text-neutral-900">Question Detail</h2>
+            <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Question / Answer / Tag / Note</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="max-h-[calc(90vh-88px)] overflow-y-auto p-6 space-y-6">
+          <section className="space-y-2">
+            <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Question</div>
+            <div className="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5 text-sm font-bold text-neutral-900 whitespace-pre-wrap">
+              {item.question}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Answer</div>
+            <div className="rounded-[1.5rem] border border-neutral-200 bg-white p-5">
+              <div className="prose prose-sm max-w-none prose-headings:font-black prose-p:text-neutral-700 prose-strong:text-neutral-900 [&_ul]:pl-5 [&_li]:mb-1" dangerouslySetInnerHTML={{ __html: answerHtml }} />
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Tags</div>
+            <div className="rounded-[1.5rem] border border-neutral-200 bg-white p-5">
+              <TagPills tags={item.tags} />
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Note</div>
+            <div className="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5 text-sm font-medium text-neutral-700 whitespace-pre-wrap min-h-[96px]">
+              {item.note || 'No note.'}
+            </div>
+          </section>
+
+          <div className="flex items-center justify-between gap-4 text-xs font-bold text-neutral-400">
+            <span>Created: {formatTimestamp(item.createdAt)}</span>
+            <span>Updated: {formatTimestamp(item.updatedAt)}</span>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={() => onEdit(item)}
+              className="px-5 py-3 rounded-2xl bg-neutral-900 text-white text-sm font-black hover:bg-neutral-800 transition-colors inline-flex items-center gap-2"
+            >
+              <Pencil size={16} />
+              <span>Edit record</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const EditorModal: React.FC<{
   isOpen: boolean;
   item: QuestionBankItem | null;
@@ -81,7 +164,7 @@ const EditorModal: React.FC<{
         <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-100">
           <div>
             <h2 className="text-xl font-black text-neutral-900">{item ? 'Edit Question' : 'Add Question'}</h2>
-            <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Markdown answer + tags + notes</p>
+            <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Question bank editor</p>
           </div>
           <button onClick={onClose} className="px-4 py-2 rounded-xl bg-neutral-100 text-xs font-black text-neutral-600 hover:bg-neutral-200 transition-colors">
             Close
@@ -112,27 +195,15 @@ const EditorModal: React.FC<{
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Tags</label>
-                <textarea
-                  value={form.tags}
-                  onChange={(e) => onChange({ tags: e.target.value })}
-                  rows={4}
-                  className="w-full px-4 py-3 rounded-2xl border border-neutral-200 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900"
-                  placeholder="ielts, task 2, speaking"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Source file</label>
-                <input
-                  value={form.sourceFile}
-                  onChange={(e) => onChange({ sourceFile: e.target.value })}
-                  className="w-full px-4 py-3 rounded-2xl border border-neutral-200 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900"
-                  placeholder="questions.json"
-                />
-              </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Tags</label>
+              <textarea
+                value={form.tags}
+                onChange={(e) => onChange({ tags: e.target.value })}
+                rows={4}
+                className="w-full px-4 py-3 rounded-2xl border border-neutral-200 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-900"
+                placeholder="ielts, task 2, speaking"
+              />
             </div>
 
             <div className="space-y-2">
@@ -184,11 +255,11 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
   const [selectedTag, setSelectedTag] = useState('ALL');
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  const [viewingItem, setViewingItem] = useState<QuestionBankItem | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<QuestionBankItem | null>(null);
   const [editorForm, setEditorForm] = useState<EditorState>(createEmptyEditor());
   const [isSaving, setIsSaving] = useState(false);
-  const [previewId, setPreviewId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadData = async (silent = false) => {
@@ -230,7 +301,6 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
         item.question,
         item.answer,
         item.note,
-        item.sourceFile || '',
         item.tags.join(' ')
       ].join(' ').toLowerCase();
 
@@ -261,9 +331,9 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
       question: item.question,
       answer: item.answer,
       tags: item.tags.join(', '),
-      note: item.note,
-      sourceFile: item.sourceFile || ''
+      note: item.note
     });
+    setViewingItem(null);
     setIsEditorOpen(true);
   };
 
@@ -293,7 +363,6 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
             answer: editorForm.answer.trim(),
             tags: normalizeTags(editorForm.tags),
             note: editorForm.note.trim(),
-            sourceFile: editorForm.sourceFile.trim() || undefined,
             updatedAt: now
           }
         : {
@@ -303,7 +372,6 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
             answer: editorForm.answer.trim(),
             tags: normalizeTags(editorForm.tags),
             note: editorForm.note.trim(),
-            sourceFile: editorForm.sourceFile.trim() || undefined,
             createdAt: now,
             updatedAt: now
           };
@@ -323,6 +391,9 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
+      if (viewingItem?.id === id) {
+        setViewingItem(null);
+      }
       await dataStore.deleteQuestionBankItem(id);
       await loadData(true);
       showToast('Question deleted.', 'success');
@@ -334,91 +405,21 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
     }
   };
 
-  const handleExport = () => {
-    const payload = {
-      v: 1,
-      ca: new Date().toISOString(),
-      questionBankItems: items
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `question-bank-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      const parsed = JSON.parse(text) as JsonPayload | QuestionBankItem[];
-      const incoming = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed.questionBankItems)
-          ? parsed.questionBankItems
-          : Array.isArray(parsed.qb)
-            ? parsed.qb
-            : [];
-
-      if (incoming.length === 0) {
-        showToast('No question bank records found in JSON.', 'error');
-        return;
-      }
-
-      const now = Date.now();
-      const normalized: QuestionBankItem[] = incoming
-        .filter(item => item && item.question && item.answer)
-        .map((item, index) => ({
-          id: item.id || `qb-import-${now}-${index}`,
-          userId: user.id,
-          question: String(item.question).trim(),
-          answer: String(item.answer).trim(),
-          tags: Array.isArray(item.tags) ? item.tags.map(tag => String(tag).trim()).filter(Boolean) : [],
-          note: String(item.note || '').trim(),
-          sourceFile: String(item.sourceFile || file.name || '').trim() || undefined,
-          createdAt: item.createdAt || now,
-          updatedAt: now
-        }));
-
-      await db.bulkSaveQuestionBankItems(normalized);
-      await loadData(true);
-      window.dispatchEvent(new CustomEvent('vocab-pro-trigger-backup'));
-      showToast(`Imported ${normalized.length} questions.`, 'success');
-    } catch (error) {
-      console.error(error);
-      showToast('Could not import JSON file.', 'error');
-    }
-  };
-
   return (
     <div className="max-w-[1600px] mx-auto space-y-8">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-xs font-black uppercase tracking-widest">
-            <FileJson size={14} />
+            <Tag size={14} />
             <span>Question Bank</span>
           </div>
           <div>
             <h1 className="text-3xl md:text-4xl font-black tracking-tight text-neutral-900">Question bank</h1>
-            <p className="text-sm font-medium text-neutral-500">Questions and markdown answers in a searchable table with dynamic tags, pagination, and JSON sync.</p>
+            <p className="text-sm font-medium text-neutral-500">Search, filter by tag, and manage question records already synced through the app backup flow.</p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <label className="px-4 py-3 rounded-2xl bg-white border border-neutral-200 text-sm font-black text-neutral-700 hover:bg-neutral-50 inline-flex items-center gap-2 cursor-pointer shadow-sm">
-            <Upload size={16} />
-            <span>Import JSON</span>
-            <input type="file" accept=".json,application/json" className="hidden" onChange={handleImport} />
-          </label>
-          <button onClick={handleExport} className="px-4 py-3 rounded-2xl bg-white border border-neutral-200 text-sm font-black text-neutral-700 hover:bg-neutral-50 inline-flex items-center gap-2 shadow-sm">
-            <Download size={16} />
-            <span>Export JSON</span>
-          </button>
           <button onClick={openCreate} className="px-4 py-3 rounded-2xl bg-neutral-900 text-white text-sm font-black hover:bg-neutral-800 inline-flex items-center gap-2 shadow-sm">
             <Plus size={16} />
             <span>Add record</span>
@@ -484,7 +485,7 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
         </div>
 
         <div className="overflow-x-auto rounded-[1.5rem] border border-neutral-200">
-          <table className="w-full min-w-[1100px]">
+          <table className="w-full min-w-[980px]">
             <thead className="bg-neutral-50">
               <tr className="text-left">
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-400">Question</th>
@@ -513,72 +514,59 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
                 </tr>
               ) : (
                 pagedItems.map(item => {
-                  const isPreviewOpen = previewId === item.id;
                   const answerText = stripMarkdown(item.answer);
                   return (
-                    <React.Fragment key={item.id}>
-                      <tr className="align-top hover:bg-neutral-50/60 transition-colors">
-                        <td className="px-4 py-4">
-                          <div className="max-w-[320px]">
-                            <div className="text-sm font-bold text-neutral-900 whitespace-pre-wrap">{item.question}</div>
-                            {item.sourceFile && (
-                              <div className="mt-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">{item.sourceFile}</div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="max-w-[360px] text-sm font-medium text-neutral-600 leading-relaxed">
-                            {answerText ? `${answerText.slice(0, 180)}${answerText.length > 180 ? '...' : ''}` : '-'}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="max-w-[180px] flex flex-wrap gap-2">
-                            {item.tags.length > 0 ? item.tags.map(tag => (
-                              <span key={`${item.id}-${tag}`} className="px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-black uppercase tracking-widest">
-                                {tag}
-                              </span>
-                            )) : (
-                              <span className="text-xs font-bold text-neutral-300">No tags</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="max-w-[220px] text-sm font-medium text-neutral-600 whitespace-pre-wrap">{item.note || '-'}</div>
-                        </td>
-                        <td className="px-4 py-4 text-xs font-bold text-neutral-400 whitespace-nowrap">{formatTimestamp(item.updatedAt)}</td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => setPreviewId(isPreviewOpen ? null : item.id)}
-                              className="p-2 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"
-                              title={isPreviewOpen ? 'Hide preview' : 'Show preview'}
-                            >
-                              {isPreviewOpen ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                            <button onClick={() => openEdit(item)} className="p-2 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors" title="Edit">
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(item.id)}
-                              disabled={deletingId === item.id}
-                              className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-60 transition-colors"
-                              title="Delete"
-                            >
-                              {deletingId === item.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {isPreviewOpen && (
-                        <tr className="bg-neutral-50/70">
-                          <td colSpan={6} className="px-4 py-5">
-                            <div className="rounded-[1.5rem] border border-neutral-200 bg-white p-5">
-                              <div className="prose prose-sm max-w-none prose-headings:font-black prose-p:text-neutral-700 prose-strong:text-neutral-900 [&_ul]:pl-5 [&_li]:mb-1" dangerouslySetInnerHTML={{ __html: parseMarkdown(item.answer) }} />
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                    <tr
+                      key={item.id}
+                      className="align-top hover:bg-neutral-50/60 transition-colors cursor-pointer"
+                      onClick={() => setViewingItem(item)}
+                    >
+                      <td className="px-4 py-4">
+                        <div className="max-w-[340px] text-sm font-bold text-neutral-900 whitespace-pre-wrap">{item.question}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="max-w-[360px] text-sm font-medium text-neutral-600 leading-relaxed">
+                          {answerText ? `${answerText.slice(0, 180)}${answerText.length > 180 ? '...' : ''}` : '-'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="max-w-[180px]">
+                          <TagPills tags={item.tags} />
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="max-w-[220px] text-sm font-medium text-neutral-600 whitespace-pre-wrap">
+                          {item.note || '-'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-xs font-bold text-neutral-400 whitespace-nowrap">{formatTimestamp(item.updatedAt)}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setViewingItem(item)}
+                            className="p-2 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"
+                            title="View"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => openEdit(item)}
+                            className="p-2 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"
+                            title="Edit"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            disabled={deletingId === item.id}
+                            className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-60 transition-colors"
+                            title="Delete"
+                          >
+                            {deletingId === item.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })
               )}
@@ -610,6 +598,7 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
         </div>
       </div>
 
+      <ViewModal item={viewingItem} onClose={() => setViewingItem(null)} onEdit={openEdit} />
       <EditorModal
         isOpen={isEditorOpen}
         item={editingItem}
