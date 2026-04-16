@@ -409,13 +409,11 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
     <div className="max-w-[1600px] mx-auto space-y-8">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-xs font-black uppercase tracking-widest">
-            <Tag size={14} />
-            <span>Question Bank</span>
-          </div>
           <div>
             <h1 className="text-3xl md:text-4xl font-black tracking-tight text-neutral-900">Question bank</h1>
-            <p className="text-sm font-medium text-neutral-500">Search, filter by tag, and manage question records already synced through the app backup flow.</p>
+            <p className="text-neutral-500 mt-2 font-medium">
+              {filteredItems.length} items collected
+            </p>
           </div>
         </div>
 
@@ -455,34 +453,9 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
                 </option>
               ))}
             </select>
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="px-3 py-3 rounded-2xl border border-neutral-200 bg-white text-sm font-bold text-neutral-700 outline-none focus:ring-2 focus:ring-neutral-900"
-            >
-              {PAGE_SIZES.map(size => (
-                <option key={size} value={size}>
-                  {size} / page
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {tagOptions.slice(0, 16).map(tag => {
-            const isActive = selectedTag === tag;
-            return (
-              <button
-                key={tag}
-                onClick={() => setSelectedTag(tag)}
-                className={`px-3 py-2 rounded-full border text-xs font-black transition-colors ${isActive ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'}`}
-              >
-                {tag === 'ALL' ? 'All tags' : tag}
-              </button>
-            );
-          })}
-        </div>
 
         <div className="overflow-x-auto rounded-[1.5rem] border border-neutral-200">
           <table className="w-full min-w-[980px]">
@@ -575,7 +548,22 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="text-xs font-black uppercase tracking-widest text-neutral-400">Total {filteredItems.length} records</div>
+          <div className="flex items-center gap-3">
+            <div className="text-xs font-black uppercase tracking-widest text-neutral-400">
+              Page size
+            </div>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="px-3 py-2 rounded-xl border border-neutral-200 bg-white text-xs font-bold text-neutral-700 outline-none focus:ring-2 focus:ring-neutral-900"
+            >
+              {PAGE_SIZES.map(size => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(prev => Math.max(0, prev - 1))}
