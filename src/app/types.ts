@@ -1,4 +1,4 @@
-export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'KOTOBA' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'WORD_FAMILY' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT' | 'COURSE' | 'SEARCH' | 'WORD_GALLERY';
+export type AppView = 'AUTH' | 'DASHBOARD' | 'BROWSE' | 'KOTOBA' | 'REVIEW' | 'SETTINGS' | 'DISCOVER' | 'UNIT_LIBRARY' | 'WRITING' | 'SPEAKING' | 'LESSON' | 'MIMIC' | 'IRREGULAR_VERBS' | 'WORD_FAMILY' | 'NATIVE_SPEAK' | 'WORDBOOK' | 'PLANNING' | 'EXPERIMENT' | 'COURSE' | 'SEARCH' | 'WORD_GALLERY' | 'QUESTION_BANK';
 export type StudyLibraryType = 'vocab' | 'kotoba';
 
 export enum ReviewGrade {
@@ -52,9 +52,11 @@ export interface DataScope {
   reading: boolean;
   writing: boolean;
   speaking: boolean;
+  listening: boolean;
   mimic: boolean;
   wordBook: boolean;
   planning: boolean;
+  questionBank: boolean;
 }
 
 export interface WordFamilyMember {
@@ -543,6 +545,18 @@ export interface QAItem {
   focusColor?: FocusColor;
   isFocused?: boolean;
   bestScore?: number;
+}
+
+export interface QuestionBankItem {
+  id: string;
+  userId: string;
+  question: string;
+  answer: string;
+  tags: string[];
+  note: string;
+  sourceFile?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ConversationSpeaker {

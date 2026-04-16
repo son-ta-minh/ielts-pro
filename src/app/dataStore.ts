@@ -1,4 +1,4 @@
-import { StudyItem, User, Unit, StudyItemQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus, StudyLibraryType } from './types';
+import { StudyItem, User, Unit, StudyItemQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus, StudyLibraryType, QuestionBankItem } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity, isSrsIgnored } from '../utils/srs';
@@ -639,6 +639,22 @@ export async function deleteQAItem(id: string) {
     if (!canWrite()) return;
     _updateLocalLastModified();
     await db.deleteQAItem(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveQuestionBankItem(item: QuestionBankItem) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveQuestionBankItem(item);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteQuestionBankItem(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteQuestionBankItem(id);
     _triggerBackup();
     _notifyChanges();
 }

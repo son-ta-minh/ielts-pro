@@ -1,4 +1,4 @@
-import { StudyItem, User, Unit, ParaphraseLog, StudyItemQuality, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup } from './types';
+import { StudyItem, User, Unit, ParaphraseLog, StudyItemQuality, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup, QuestionBankItem } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -27,8 +27,9 @@ const LISTENING_BOOK_STORE = 'listening_books';
 const SPEAKING_BOOK_STORE = 'speaking_books';
 const WRITING_BOOK_STORE = 'writing_books';
 const PLANNING_STORE = 'planning_goals';
+const QUESTION_BANK_STORE = 'question_bank_items';
 
-const DB_VERSION = 30; // Bumped version for Word Family store
+const DB_VERSION = 31; // Bumped version for Question Bank store
 
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -298,6 +299,13 @@ const openDB = (): Promise<IDBDatabase> => {
              }
         }
 
+        if (event.oldVersion < 31) {
+             if (!db.objectStoreNames.contains(QUESTION_BANK_STORE)) {
+                 const questionBankStore = db.createObjectStore(QUESTION_BANK_STORE, { keyPath: 'id' });
+                 questionBankStore.createIndex('userId', 'userId', { unique: false });
+             }
+        }
+
         // Cleanup deprecated stores if they exist
         if (db.objectStoreNames.contains('comparison_groups')) {
             db.deleteObjectStore('comparison_groups');
@@ -343,7 +351,7 @@ export const clearVocabularyOnly = async (): Promise<void> => {
   return withRetry(async () => {
       const db = await openDB();
       return new Promise((resolve, reject) => {
-        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, WORD_FAMILY_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, FREE_TALK_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE];
+        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, WORD_FAMILY_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, FREE_TALK_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE, QUESTION_BANK_STORE];
         const tx = db.transaction(stores, 'readwrite');
         stores.forEach(s => {
              if (db.objectStoreNames.contains(s)) {
@@ -849,6 +857,14 @@ export const getQAItemsByUserId = async (): Promise<QAItem[]> => await crudTempl
 export const deleteQAItem = async (id: string): Promise<void> => { await crudTemplate(QA_CARD_STORE, tx => tx.objectStore(QA_CARD_STORE).delete(id)); };
 export const bulkSaveQAItems = async (items: QAItem[]): Promise<void> => { await crudTemplate(QA_CARD_STORE, tx => { const store = tx.objectStore(QA_CARD_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteQAItems = async (ids: string[]): Promise<void> => { await crudTemplate(QA_CARD_STORE, tx => { const store = tx.objectStore(QA_CARD_STORE); ids.forEach(id => store.delete(id)); }); };
+
+// --- Question Bank Feature ---
+export const saveQuestionBankItem = async (item: QuestionBankItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(QUESTION_BANK_STORE, tx => tx.objectStore(QUESTION_BANK_STORE).put(item)); };
+export const getQuestionBankItemsByUserId = async (userId: string): Promise<QuestionBankItem[]> => await crudTemplate(QUESTION_BANK_STORE, tx => tx.objectStore(QUESTION_BANK_STORE).index('userId').getAll(userId), 'readonly');
+export const deleteQuestionBankItem = async (id: string): Promise<void> => { await crudTemplate(QUESTION_BANK_STORE, tx => tx.objectStore(QUESTION_BANK_STORE).delete(id)); };
+export const bulkSaveQuestionBankItems = async (items: QuestionBankItem[]): Promise<void> => { await crudTemplate(QUESTION_BANK_STORE, tx => { const store = tx.objectStore(QUESTION_BANK_STORE); items.forEach(i => store.put(i)); }); };
+export const bulkDeleteQuestionBankItems = async (ids: string[]): Promise<void> => { await crudTemplate(QUESTION_BANK_STORE, tx => { const store = tx.objectStore(QUESTION_BANK_STORE); ids.forEach(id => store.delete(id)); }); };
+export const getAllQuestionBankItemsForExport = async (userId: string): Promise<QuestionBankItem[]> => await crudTemplate(QUESTION_BANK_STORE, tx => tx.objectStore(QUESTION_BANK_STORE).index('userId').getAll(userId), 'readonly');
 
 // --- Writing Feature ---
 export const saveWritingLog = async (log: WritingLog): Promise<void> => { await crudTemplate(WRITING_LOG_STORE, tx => tx.objectStore(WRITING_LOG_STORE).put(log)); };

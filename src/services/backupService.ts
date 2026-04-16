@@ -27,7 +27,8 @@ const FULL_SCOPE: DataScope = {
     listening: true,
     mimic: true,
     wordBook: true,
-    planning: true
+    planning: true,
+    questionBank: true
 };
 
 let _isSyncing = false;

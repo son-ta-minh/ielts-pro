@@ -46,7 +46,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
         const fullScope: DataScope = customScope || {
             user: true, vocabulary: true, lesson: true, reading: true, writing: true, 
             speaking: true, listening: true, mimic: true, wordBook: true, 
-            planning: true
+            planning: true, questionBank: true
         };
         
         const exportData = await generateJsonExport(currentUser.id, currentUser, fullScope);
@@ -183,7 +183,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
                 const fullScope: DataScope = {
                     user: true, vocabulary: true, lesson: true, reading: true, writing: true, 
                     speaking: true, listening: true, mimic: true, wordBook: true, 
-                    planning: true
+                    planning: true, questionBank: true
                 };
 
                 (window as any).isRestoring = true;

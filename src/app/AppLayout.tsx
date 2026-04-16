@@ -33,6 +33,7 @@ const ExpressionPage = React.lazy(() => import('../dynamic/templates/SpeakingCar
 const WordBookPage = React.lazy(() => import('../dynamic/templates/WordBookPage').then(module => ({ default: module.WordBookPage })));
 const CourseList = React.lazy(() => import('../components/courses/CourseList').then(module => ({ default: module.CourseList })));
 const SearchPage = React.lazy(() => import('../components/search/SearchPage').then(module => ({ default: module.SearchPage })));
+const QuestionBankPage = React.lazy(() => import('../components/question_bank/QuestionBankPage').then(module => ({ default: module.QuestionBankPage })));
 
 type AppController = ReturnType<typeof useAppController>;
 
@@ -45,6 +46,7 @@ const navItems = [
   { id: 'BROWSE', view: 'BROWSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png", label: 'Word Library' },
   { id: 'KOTOBA', view: 'KOTOBA', icon: "https://flagcdn.com/w40/jp.png", label: 'Kotoba' },
   { id: 'WORD_GALLERY', view: 'WORD_GALLERY', icon: "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Framed%20picture/3D/framed_picture_3d.png", label: 'Gallery' },
+  { id: 'QUESTION_BANK', view: 'QUESTION_BANK', icon: "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Card%20index%20dividers/3D/card_index_dividers_3d.png", label: 'Question Bank' },
   { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Knowledge Library' },
   { id: 'COURSE', view: 'COURSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Graduation%20Cap.png", label: 'Course' },
   { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },
@@ -192,6 +194,7 @@ const MainContent: React.FC<AppLayoutProps> = ({ controller }) => {
     case 'WORD_FAMILY': return <WordFamily user={currentUser} />;
     case 'MIMIC': return <MimicPractice />;
     case 'WORD_GALLERY': return <WordGalleryPage user={currentUser} />;
+    case 'QUESTION_BANK': return <QuestionBankPage user={currentUser} />;
     default: return <div>Unknown view: {view}</div>;
   }
 };

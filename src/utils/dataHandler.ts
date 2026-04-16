@@ -3,8 +3,8 @@
  * Uses short keys to reduce JSON size for storage and transfer.
  */
 
-import { StudyItem, Unit, ParaphraseLog, User, StudyItemQuality, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, WordFamilyGroup, LearnedStatus, StudyLibraryType } from '../app/types';
-import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getPlanningGoalsByUserId, bulkSavePlanningGoals, getConversationItemsByUserId, bulkSaveConversationItems, getFreeTalkItemsByUserId, bulkSaveFreeTalkItems, getWordFamilyGroupsByUserId, bulkSaveWordFamilyGroups } from '../app/db';
+import { StudyItem, Unit, ParaphraseLog, User, StudyItemQuality, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, WordFamilyGroup, LearnedStatus, StudyLibraryType, QuestionBankItem } from '../app/types';
+import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getPlanningGoalsByUserId, bulkSavePlanningGoals, getConversationItemsByUserId, bulkSaveConversationItems, getFreeTalkItemsByUserId, bulkSaveFreeTalkItems, getWordFamilyGroupsByUserId, bulkSaveWordFamilyGroups, getAllQuestionBankItemsForExport, bulkSaveQuestionBankItems } from '../app/db';
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
@@ -109,7 +109,7 @@ const reverseParaphraseToneMap: { [key: string]: string } = Object.fromEntries(O
 const FULL_SCOPE: DataScope = {
     user: true, vocabulary: true, lesson: true, reading: true, writing: true, 
     speaking: true, listening: true, mimic: true, wordBook: true, 
-    planning: true
+    planning: true, questionBank: true
 };
 
 const FOCUS_PERIOD_TIMERS_KEY = 'focus_period_timers';
@@ -472,6 +472,7 @@ export const processJsonImport = async (
                 const incomingReadingShelves = Array.isArray(rawJson) ? undefined : (rawJson.readingShelves || rawJson.rs);
                 const incomingReadingBooks: ReadingBook[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.readingBooks || rawJson.rb);
                 const incomingPlanningGoals: PlanningGoal[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.planningGoals || rawJson.pg);
+                const incomingQuestionBankItems: QuestionBankItem[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.questionBankItems || rawJson.qb);
 
                 const incomingUserRaw: User | undefined = Array.isArray(rawJson) ? undefined : rawJson.user;
                 let incomingUser: User | undefined;
@@ -564,6 +565,7 @@ export const processJsonImport = async (
                 if (scope.mimic && incomingMimicQueue) localStorage.setItem('vocab_pro_mimic_practice_queue', JSON.stringify(incomingMimicQueue));
                 if (scope.wordBook && incomingWordBooks) await bulkSaveWordBooks(incomingWordBooks.map(b => ({ ...b, userId: importedUserId })));
                 if (scope.planning && incomingPlanningGoals) await bulkSavePlanningGoals(incomingPlanningGoals.map(g => ({...g, userId: importedUserId})));
+                if (scope.questionBank && incomingQuestionBankItems) await bulkSaveQuestionBankItems(incomingQuestionBankItems.map(item => ({ ...item, userId: importedUserId })));
 
                 let updatedUser: User | undefined = undefined;
                 if (scope.user && incomingUser) {
@@ -615,7 +617,7 @@ export const processJsonImport = async (
 export const generateJsonExport = async (userId: string, currentUser: User, scopeInput: any = FULL_SCOPE) => {
     const scope = (scopeInput && typeof scopeInput === 'object' && typeof scopeInput.vocabulary === 'boolean') ? scopeInput : FULL_SCOPE;
 
-    const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData] = await Promise.all([
+    const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData, questionBankData] = await Promise.all([
         scope.vocabulary ? getAllWordsForExport(userId) : [],
         scope.reading ? getUnitsByUserId(userId) : [],
         scope.reading ? getReadingBooksByUserId(userId) : [],
@@ -633,7 +635,8 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         scope.lesson ? getLessonsByUserId(userId) : [],
         scope.listening ? getListeningItemsByUserId(userId) : [],
         scope.wordBook ? getWordBooksByUserId(userId) : [],
-        scope.planning ? getPlanningGoalsByUserId(userId) : []
+        scope.planning ? getPlanningGoalsByUserId(userId) : [],
+        scope.questionBank ? getAllQuestionBankItemsForExport(userId) : []
     ]);
 
     const mimicQueueData = localStorage.getItem('vocab_pro_mimic_practice_queue');
@@ -644,7 +647,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
     const dailyStreaks = readDailyStreaks(userId);
 
      return {
-        v: 8,
+        v: 9,
         ca: new Date().toISOString(),
         user: _mapUserToShortKeys(currentUser), 
         vocab: wordsData.filter(w => normalizeLibraryType(w.libraryType) === 'vocab').map(w => _mapToShortKeys(w)),
@@ -667,6 +670,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         wordBooks: wordBooksDataRaw.map(b => _mapToShortKeys(b)),
         readingBooks: readingBooksData,
         pg: planningGoalsData,
+        qb: questionBankData,
         adv: {
             ch: customChapters ? JSON.parse(customChapters) : null,
             b: customBadges ? JSON.parse(customBadges) : null
