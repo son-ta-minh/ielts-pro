@@ -3,27 +3,39 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
+
+# Prevent concurrent deploys from racing on gh-pages branch
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: 'npm'
 
+      # Skip server workspace — frontend build doesn't need backend deps
+      # (saves ~60s install + avoids ffmpeg-static native binary download)
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --workspaces=false --include-workspace-root
 
       - name: Build
         run: npm run build
+        # Uncomment + add repo secret API_KEY to enable Auto AI Mode.
+        # WARNING: the key ends up bundled into the JS — only use a
+        # restricted/quota-limited key if you enable this.
         # env:
         #   API_KEY: ${{ secrets.API_KEY }}
 
@@ -32,3 +44,4 @@ jobs:
         with:
           folder: dist
           branch: gh-pages
+          clean: true
