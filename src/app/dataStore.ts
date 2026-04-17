@@ -651,6 +651,14 @@ export async function saveQuestionBankItem(item: QuestionBankItem) {
     _notifyChanges();
 }
 
+export async function bulkSaveQuestionBankItems(items: QuestionBankItem[]) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.bulkSaveQuestionBankItems(items);
+    _triggerBackup();
+    _notifyChanges();
+}
+
 export async function deleteQuestionBankItem(id: string) {
     if (!canWrite()) return;
     _updateLocalLastModified();

@@ -482,25 +482,39 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
 
                   if (!normalizedAdd.length && !normalizedRemove.length) return;
 
-                  const updated = items.map(item => {
-                    if (!selectedIds.has(item.id)) return item;
+                  try {
+                    const now = Date.now();
 
-                    let nextTags = item.tags;
+                    const updates = items
+                      .filter(item => selectedIds.has(item.id))
+                      .map(item => {
+                        let nextTags = item.tags;
 
-                    if (normalizedAdd.length) {
-                      nextTags = Array.from(new Set([...nextTags, ...normalizedAdd]));
-                    }
+                        if (normalizedAdd.length) {
+                          nextTags = Array.from(new Set([...nextTags, ...normalizedAdd]));
+                        }
 
-                    if (normalizedRemove.length) {
-                      nextTags = nextTags.filter(t => !normalizedRemove.includes(t));
-                    }
+                        if (normalizedRemove.length) {
+                          nextTags = nextTags.filter(t => !normalizedRemove.includes(t));
+                        }
 
-                    return { ...item, tags: nextTags };
-                  });
+                        return {
+                          ...item,
+                          tags: nextTags,
+                          updatedAt: now
+                        };
+                      });
 
-                  setItems(updated);
-                  clearSelection();
-                  setBulkTagInput('');
+                    await dataStore.bulkSaveQuestionBankItems(updates);
+                    await loadData(true);
+
+                    clearSelection();
+                    setBulkTagInput('');
+                    showToast('Tags updated.', 'success');
+                  } catch (error) {
+                    console.error(error);
+                    showToast('Failed to update tags.', 'error');
+                  }
                 }}
                 className="px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-black hover:bg-orange-500"
               >
@@ -508,11 +522,26 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
               </button>
               <button
                 onClick={async () => {
-                  const updated = items.map(item =>
-                    selectedIds.has(item.id) ? { ...item, tags: [] } : item
-                  );
-                  setItems(updated);
-                  clearSelection();
+                  try {
+                    const now = Date.now();
+
+                    const updates = items
+                      .filter(item => selectedIds.has(item.id))
+                      .map(item => ({
+                        ...item,
+                        tags: [],
+                        updatedAt: now
+                      }));
+
+                    await dataStore.bulkSaveQuestionBankItems(updates);
+                    await loadData(true);
+
+                    clearSelection();
+                    showToast('Tags cleared.', 'success');
+                  } catch (error) {
+                    console.error(error);
+                    showToast('Failed to clear tags.', 'error');
+                  }
                 }}
                 className="px-3 py-2 rounded-xl bg-white border border-orange-200 text-xs font-black text-orange-600"
               >
