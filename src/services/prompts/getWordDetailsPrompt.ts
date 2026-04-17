@@ -32,13 +32,13 @@ export function getWordDetailsPrompt(
 
     const pronunciationOptimizationRule = includePronunciation
         ? (isJapaneseLocale
-            ? '- For Japanese entries, use "ipa_us" as the reading written ONLY in Hiragana. Do not use IPA symbols, katakana, romaji, or slashes. Copy the same Hiragana reading into "ipa_uk" only when needed; otherwise omit "ipa_uk" and set "pron_sim" to "same".'
+            ? '- For Japanese entries, use "ipa_us" as the reading written ONLY in Romanji. Do not use IPA symbols, katakana, romaji, or slashes. Copy the same Romanji reading into "ipa_uk" only when needed; otherwise omit "ipa_uk" and set "pron_sim" to "same".'
             : '- Omit "ipa_uk" if "pron_sim" is "same".')
         : '- Do NOT output "ipa_us", "ipa_uk", or "pron_sim".';
     const pronunciationFieldDefinitions = includePronunciation
         ? (isJapaneseLocale
-            ? `- ipa_us: Japanese reading written ONLY in Hiragana.
-    - ipa_uk: Optional duplicate Hiragana reading when needed. Usually omit it when the reading is identical.
+            ? `- ipa_us: Japanese reading written ONLY in Romanji.
+    - ipa_uk: Optional duplicate Romanji reading when needed. Usually omit it when the reading is identical.
     - pron_sim: For Japanese entries, set to "same".`
             : `- ipa_us: Primary IPA transcription (General American).
     - ipa_uk: Received Pronunciation (UK) IPA. (Omit if "pron_sim" is "same").

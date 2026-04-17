@@ -400,8 +400,18 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
         speak(text, false, preferredLang, preferredVoice.voiceName, preferredVoice.accentCode);
     };
 
-    const handlePronounceWithCoachLookup = (targetWord: string) => {
-        speakWithPreferredLanguage(targetWord);
+    const handlePronounceWithCoachLookup = (word: StudyItem) => {
+        speakWithPreferredLanguage(word.display || word.word);
+        if (word.libraryType === 'kotoba') {
+            const pronunciation = word.displayIPA || word.ipaUs || '';
+            if (pronunciation.trim()) {
+                window.dispatchEvent(
+                    new CustomEvent('studybuddy-show-message', {
+                        detail: { text: pronunciation, iconType: 'pronunciation' }
+                    })
+                );
+            }
+        }
     };
 
     useEffect(() => { setStoredJSON('ielts_pro_word_view_settings', viewSettings); }, [viewSettings]);
@@ -921,7 +931,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                             {!word.isPassive && (
                                 <>
                                     <button
-                                        onClick={() => handlePronounceWithCoachLookup(displayHeadword)}
+                                        onClick={() => handlePronounceWithCoachLookup(word)}
                                         className="shrink-0 p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
                                     >
                                         <Volume2 size={18} />
