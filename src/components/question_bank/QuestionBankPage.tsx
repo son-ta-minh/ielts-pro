@@ -83,17 +83,22 @@ const ViewModal: React.FC<{
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-[2rem] bg-white border border-neutral-200 shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-100">
+        <div className="flex items-center justify-between px-6 pt-2 border-b border-neutral-100">
           <div>
             <h2 className="text-xl font-black text-neutral-900">Question Detail</h2>
-            <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Question / Answer / Tag / Note</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+              <TagPills tags={item.tags} />
+              <button
+                onClick={onClose}
+                className="p-2 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
         </div>
 
-        <div className="max-h-[calc(90vh-88px)] overflow-y-auto p-6 space-y-6">
+        <div className="max-h-[calc(90vh-88px)] overflow-y-auto px-6 py-3 space-y-6">
           <section className="space-y-2">
             <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Question</div>
             <div className="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5 text-sm font-bold text-neutral-900 whitespace-pre-wrap">
@@ -109,23 +114,16 @@ const ViewModal: React.FC<{
           </section>
 
           <section className="space-y-2">
-            <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Tags</div>
-            <div className="rounded-[1.5rem] border border-neutral-200 bg-white p-5">
-              <TagPills tags={item.tags} />
-            </div>
-          </section>
-
-          <section className="space-y-2">
             <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Note</div>
             <div className="rounded-[1.5rem] border border-neutral-200 bg-neutral-50 p-5 text-sm font-medium text-neutral-700 whitespace-pre-wrap min-h-[96px]">
               {item.note || 'No note.'}
             </div>
           </section>
 
-          <div className="flex items-center justify-between gap-4 text-xs font-bold text-neutral-400">
+          {/* <div className="flex items-center justify-between gap-4 text-xs font-bold text-neutral-400">
             <span>Created: {formatTimestamp(item.createdAt)}</span>
             <span>Updated: {formatTimestamp(item.updatedAt)}</span>
-          </div>
+          </div> */}
 
           <div className="flex justify-end">
             <button
@@ -253,6 +251,7 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState('ALL');
+  const [sortMode, setSortMode] = useState<'NEWEST' | 'OLDEST' | 'AZ' | 'RANDOM'>('NEWEST');
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [viewingItem, setViewingItem] = useState<QuestionBankItem | null>(null);
@@ -261,6 +260,19 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
   const [editorForm, setEditorForm] = useState<EditorState>(createEmptyEditor());
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkTagInput, setBulkTagInput] = useState('');
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
 
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -293,7 +305,8 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return items.filter(item => {
+
+    let result = items.filter(item => {
       if (selectedTag !== 'ALL' && !item.tags.includes(selectedTag)) return false;
       if (!normalizedQuery) return true;
 
@@ -306,7 +319,25 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
 
       return haystack.includes(normalizedQuery);
     });
-  }, [items, query, selectedTag]);
+
+    // sorting
+    switch (sortMode) {
+      case 'OLDEST':
+        result = result.sort((a, b) => a.updatedAt - b.updatedAt);
+        break;
+      case 'AZ':
+        result = result.sort((a, b) => a.question.localeCompare(b.question));
+        break;
+      case 'RANDOM':
+        result = [...result].sort(() => Math.random() - 0.5);
+        break;
+      case 'NEWEST':
+      default:
+        result = result.sort((a, b) => b.updatedAt - a.updatedAt);
+    }
+
+    return result;
+  }, [items, query, selectedTag, sortMode]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const currentPage = Math.min(page, totalPages - 1);
@@ -317,7 +348,7 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
 
   useEffect(() => {
     setPage(0);
-  }, [query, selectedTag, pageSize]);
+  }, [query, selectedTag, pageSize, sortMode]);
 
   const openCreate = () => {
     setEditingItem(null);
@@ -406,12 +437,12 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-8">
+    <div className="max-w-[1600px] mx-auto space-y-4">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="space-y-2">
           <div>
             <h1 className="text-3xl md:text-4xl font-black tracking-tight text-neutral-900">Question bank</h1>
-            <p className="text-neutral-500 mt-2 font-medium">
+            <p className="text-neutral-500 font-medium">
               {filteredItems.length} items collected
             </p>
           </div>
@@ -426,6 +457,77 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
       </div>
 
       <div className="bg-white rounded-[2rem] border border-neutral-200 shadow-sm p-5 md:p-6 space-y-5">
+        {selectedIds.size > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-orange-50 border border-orange-200">
+            <div className="text-sm font-bold text-orange-700">
+              {selectedIds.size} selected
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="+tag1, +tag2, -tag3"
+                className="px-3 py-2 rounded-xl border border-orange-200 text-sm min-w-[260px]"
+                value={bulkTagInput}
+                onChange={(e) => setBulkTagInput(e.target.value)}
+              />
+              <button
+                onClick={async () => {
+                  const tokens = bulkTagInput.split(/[,\n]/).map(t => t.trim()).filter(Boolean);
+
+                  const addTags = tokens.filter(t => t.startsWith('+')).map(t => t.slice(1));
+                  const removeTags = tokens.filter(t => t.startsWith('-')).map(t => t.slice(1));
+
+                  const normalizedAdd = normalizeTags(addTags.join(','));
+                  const normalizedRemove = normalizeTags(removeTags.join(','));
+
+                  if (!normalizedAdd.length && !normalizedRemove.length) return;
+
+                  const updated = items.map(item => {
+                    if (!selectedIds.has(item.id)) return item;
+
+                    let nextTags = item.tags;
+
+                    if (normalizedAdd.length) {
+                      nextTags = Array.from(new Set([...nextTags, ...normalizedAdd]));
+                    }
+
+                    if (normalizedRemove.length) {
+                      nextTags = nextTags.filter(t => !normalizedRemove.includes(t));
+                    }
+
+                    return { ...item, tags: nextTags };
+                  });
+
+                  setItems(updated);
+                  clearSelection();
+                  setBulkTagInput('');
+                }}
+                className="px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-black hover:bg-orange-500"
+              >
+                Apply
+              </button>
+              <button
+                onClick={async () => {
+                  const updated = items.map(item =>
+                    selectedIds.has(item.id) ? { ...item, tags: [] } : item
+                  );
+                  setItems(updated);
+                  clearSelection();
+                }}
+                className="px-3 py-2 rounded-xl bg-white border border-orange-200 text-xs font-black text-orange-600"
+              >
+                Clear Tags
+              </button>
+              <button
+                onClick={clearSelection}
+                className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                title="Clear selection"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex flex-col xl:flex-row gap-4">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
@@ -453,6 +555,19 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
                 </option>
               ))}
             </select>
+            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-neutral-100 text-neutral-500 text-xs font-black uppercase tracking-widest">
+              <span>Sort</span>
+            </div>
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as any)}
+              className="px-3 py-3 rounded-2xl border border-neutral-200 bg-white text-sm font-bold text-neutral-700 outline-none focus:ring-2 focus:ring-neutral-900"
+            >
+              <option value="NEWEST">Newest</option>
+              <option value="OLDEST">Oldest</option>
+              <option value="AZ">A → Z</option>
+              <option value="RANDOM">Random</option>
+            </select>
           </div>
         </div>
 
@@ -461,18 +576,19 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
           <table className="w-full min-w-[980px]">
             <thead className="bg-neutral-50">
               <tr className="text-left">
+                <th className="px-4 py-4 w-[40px]"></th>
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-400">Question</th>
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-400">Answer</th>
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-400">Tags</th>
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-400">Note</th>
-                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-400">Updated</th>
+                {/* <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-400">Updated</th> */}
                 <th className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-neutral-400 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-16 text-center">
+                  <td colSpan={7} className="px-4 py-16 text-center">
                     <div className="inline-flex items-center gap-3 text-neutral-400 font-bold">
                       <Loader2 size={18} className="animate-spin" />
                       <span>Loading question bank...</span>
@@ -481,7 +597,7 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
                 </tr>
               ) : pagedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-16 text-center text-sm font-medium text-neutral-400">
+                  <td colSpan={7} className="px-4 py-16 text-center text-sm font-medium text-neutral-400">
                     No records match the current filters.
                   </td>
                 </tr>
@@ -491,19 +607,29 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
                   return (
                     <tr
                       key={item.id}
-                      className="align-top hover:bg-neutral-50/60 transition-colors cursor-pointer"
+                      className={`group align-top cursor-pointer transition-colors ${selectedIds.has(item.id) ? 'bg-orange-50' : 'hover:bg-neutral-50/60'}`}
                       onClick={() => setViewingItem(item)}
                     >
-                      <td className="px-4 py-4">
-                        <div className="max-w-[340px] text-sm font-bold text-neutral-900 whitespace-pre-wrap">{item.question}</div>
+                      <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(item.id)}
+                          onChange={() => toggleSelect(item.id)}
+                          className="w-4 h-4"
+                        />
                       </td>
                       <td className="px-4 py-4">
-                        <div className="max-w-[360px] text-sm font-medium text-neutral-600 leading-relaxed">
-                          {answerText ? `${answerText.slice(0, 180)}${answerText.length > 180 ? '...' : ''}` : '-'}
+                        <div className="max-w-[340px] text-sm font-bold text-neutral-900 truncate">
+                          {item.question}
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="max-w-[180px]">
+                        <div className="max-w-[400px] text-sm font-medium text-neutral-600 truncate">
+                          {answerText || '-'}
+                        </div>
+                    </td>
+                      <td className="px-4 py-4">
+                        <div className="max-w-[100px]">
                           <TagPills tags={item.tags} />
                         </div>
                       </td>
@@ -512,9 +638,9 @@ export const QuestionBankPage: React.FC<Props> = ({ user }) => {
                           {item.note || '-'}
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-xs font-bold text-neutral-400 whitespace-nowrap">{formatTimestamp(item.updatedAt)}</td>
+                      {/* <td className="px-4 py-4 text-xs font-bold text-neutral-400 whitespace-nowrap">{formatTimestamp(item.updatedAt)}</td> */}
                       <td className="px-4 py-4">
-                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => setViewingItem(item)}
                             className="p-2 rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors"
