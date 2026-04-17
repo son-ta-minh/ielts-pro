@@ -9,13 +9,27 @@ const { settings, FOLDER_MAPPINGS_FILE } = require('../config');
 const { runCommand } = require('../utils');
 const logger = require('../logger');
 
-let selectedVoice = ""; 
+let selectedVoice = "";
 let selectedLanguage = "en";
 let selectedAccent = "";
 let voiceIndex = {};
 const QUALITY_SOUND_MAP_NAME = 'Quality_Sound';
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac', '.webm', '.aiff'];
 let FFMPEG_COMMAND = process.env.FFMPEG_PATH || 'ffmpeg';
+
+// Platform detection for cross-platform TTS.
+// macOS uses native `say` command. Windows uses PowerShell with
+// System.Speech.Synthesis (SAPI). Other platforms have no local TTS —
+// the client should fall back to Gemini TTS.
+const IS_MAC = process.platform === 'darwin';
+const IS_WINDOWS = process.platform === 'win32';
+
+// Encode a PowerShell script as base64 (UTF-16LE) so it can be passed
+// via -EncodedCommand, avoiding all quote/escape issues with paths
+// and user text.
+function psEncoded(script) {
+    return Buffer.from(script, 'utf16le').toString('base64');
+}
 
 try {
     const ffmpegStatic = require('ffmpeg-static');
@@ -543,33 +557,99 @@ async function downloadCambridgeAudioToQuality(wordText) {
     return null;
 }
 
-// Initialize TTS
+// Initialize TTS — platform-aware voice discovery.
 async function loadVoicesFromOS() {
     try {
-        const raw = await runCommand("say -v ?");
-        const lines = raw.split("\n").filter(Boolean);
-        voiceIndex = {};
-
-        for (const line of lines) {
-            const match = line.match(/^(.+?)\s{2,}([a-zA-Z_\-]+)\s+#/i);
-            if (!match) continue;
-
-            const name = match[1].trim();
-            const accent = match[2];
-            const language = mapLanguage(accent);
-
-            if (!language) continue;
-
-            voiceIndex[name] = { 
-                language, 
-                accent: accent.replace('-', '_') 
-            };
+        if (IS_MAC) {
+            await loadVoicesFromMac();
+        } else if (IS_WINDOWS) {
+            await loadVoicesFromWindows();
+        } else {
+            logger.warn('[TTS] Local TTS not supported on this platform. Client should use Gemini TTS.');
         }
-        logger.debug(`[TTS] Successfully loaded ${Object.keys(voiceIndex).length} voices from OS.`);
     } catch (e) {
-        logger.error("[TTS] Failed to load voices (Are you on macOS?):", e.message);
+        logger.error("[TTS] Failed to load voices:", e.message);
     }
 }
+
+async function loadVoicesFromMac() {
+    const raw = await runCommand("say -v ?");
+    const lines = raw.split("\n").filter(Boolean);
+    voiceIndex = {};
+
+    for (const line of lines) {
+        const match = line.match(/^(.+?)\s{2,}([a-zA-Z_\-]+)\s+#/i);
+        if (!match) continue;
+
+        const name = match[1].trim();
+        const accent = match[2];
+        const language = mapLanguage(accent);
+        if (!language) continue;
+
+        voiceIndex[name] = { language, accent: accent.replace('-', '_') };
+    }
+    logger.debug(`[TTS] Loaded ${Object.keys(voiceIndex).length} voices from macOS 'say'.`);
+}
+
+async function loadVoicesFromWindows() {
+    // Queries SAPI voices via System.Speech and emits "Name|Culture" per line.
+    const script = `
+        Add-Type -AssemblyName System.Speech;
+        $s = New-Object System.Speech.Synthesis.SpeechSynthesizer;
+        $s.GetInstalledVoices() | ForEach-Object {
+            $info = $_.VoiceInfo;
+            "$($info.Name)|$($info.Culture.Name)"
+        };
+        $s.Dispose();
+    `;
+    const raw = await runCommand(`powershell -NoProfile -EncodedCommand ${psEncoded(script)}`);
+    voiceIndex = {};
+
+    for (const line of raw.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.includes('|')) continue;
+
+        const [name, culture] = trimmed.split('|');
+        if (!name || !culture) continue;
+
+        const language = mapLanguage(culture);
+        if (!language) continue;
+
+        voiceIndex[name] = { language, accent: culture.replace('-', '_') };
+    }
+    logger.debug(`[TTS] Loaded ${Object.keys(voiceIndex).length} voices from Windows SAPI.`);
+}
+
+// Synthesize `text` to `outFile` using the platform's native TTS.
+// `outFile` should have the platform's native extension (.aiff on macOS,
+// .wav on Windows). Caller converts to MP3 via ffmpeg afterwards.
+async function synthNativeTTS(text, voice, txtFile, outFile) {
+    if (IS_MAC) {
+        const cmd = voice
+            ? `say -v "${voice}" -f "${txtFile}" -o "${outFile}"`
+            : `say -f "${txtFile}" -o "${outFile}"`;
+        await runCommand(cmd);
+        return;
+    }
+    if (IS_WINDOWS) {
+        // SelectVoice throws if the voice doesn't exist — wrap in try.
+        // Path escaping is handled by -EncodedCommand (no shell parsing).
+        const voiceLine = voice ? `try { $s.SelectVoice('${voice.replace(/'/g, "''")}') } catch {}` : '';
+        const script = `
+            Add-Type -AssemblyName System.Speech;
+            $s = New-Object System.Speech.Synthesis.SpeechSynthesizer;
+            ${voiceLine};
+            $s.SetOutputToWaveFile('${outFile.replace(/'/g, "''")}');
+            $text = [System.IO.File]::ReadAllText('${txtFile.replace(/'/g, "''")}');
+            $s.Speak($text);
+            $s.Dispose();
+        `;
+        await runCommand(`powershell -NoProfile -EncodedCommand ${psEncoded(script)}`);
+        return;
+    }
+    throw new Error('Local TTS not supported on this platform.');
+}
+
 loadVoicesFromOS();
 
 router.get('/voices', (req, res) => {
@@ -695,9 +775,12 @@ router.post('/speak', async (req, res) => {
     }
 
     logger.debug(`[TTS] /speak source=tts word="${cleanText}"`);
-    
+
     const timestamp = Date.now();
-    const outFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.aiff`);
+    // macOS `say` outputs AIFF, Windows SAPI outputs WAV. Either is
+    // fine for ffmpeg to convert to MP3 in the next step.
+    const nativeExt = IS_WINDOWS ? 'wav' : 'aiff';
+    const outFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.${nativeExt}`);
     const mp3File = path.join(settings.AUDIO_DIR, `tts_${timestamp}.mp3`);
     const txtFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.txt`);
 
@@ -708,14 +791,9 @@ router.post('/speak', async (req, res) => {
         logger.error("[TTS] Failed to write temp text file:", e.message);
         return res.status(500).json({ error: "tts_prep_failed" });
     }
-    
-    // Use -f to read from file
-    const cmd = (voiceToUse)
-        ? `say -v "${voiceToUse}" -f "${txtFile}" -o "${outFile}"`
-        : `say -f "${txtFile}" -o "${outFile}"`;
 
     try {
-        await runCommand(cmd);
+        await synthNativeTTS(cleanText, voiceToUse, txtFile, outFile);
 
         if (!fs.existsSync(outFile)) {
             throw new Error("Output file was not generated.");
