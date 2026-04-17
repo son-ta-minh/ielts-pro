@@ -1,5 +1,6 @@
 import React, { Suspense, useState, useCallback, useEffect, useMemo } from 'react';
-import { StudyItem, LearnedStatus, WordFamily, PrepositionPattern, User, WordTypeOption, StudyItemQuality, AppView, StudyLibraryType } from '../../app/types';
+import { setPreferredSpeakLanguage } from '../../utils/audio';
+import { StudyItem, User, WordTypeOption, AppView, StudyLibraryType } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { createNewWord } from '../../utils/srs';
 import StudyItemTable from './StudyItemTable';
@@ -10,9 +11,6 @@ import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFil
 import { stringToWordArray } from '../../utils/text';
 import { TagTreeNode } from '../common/TagBrowser';
 import { getStoredJSON } from '../../utils/storage';
-import { calculateComplexity, calculateMasteryScore } from '../../utils/srs';
-import { calculateGameEligibility } from '../../utils/gameEligibility';
-import { autoRefineNewWords } from '../../services/wordRefinePersistence';
 import { Loader2 } from 'lucide-react';
 
 interface Props {
@@ -78,6 +76,11 @@ const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLa
   const [tagTree, setTagTree] = useState<TagTreeNode[]>([]);
 
   const { id: userId } = user;
+
+  useEffect(() => {
+    const lang = libraryType === 'vocab' ? 'en' : 'ja';
+    setPreferredSpeakLanguage(lang);
+  }, [libraryType]);
 
   const buildTagTree = useCallback(() => {
     const UNCATEGORIZED_GROUP = "Uncategorized";
@@ -371,11 +374,6 @@ const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLa
     }
     if (newItems.length > 0) {
       await dataStore.bulkSaveWords(newItems);
-      // try {
-      //   await autoRefineNewWords(newItems, user.nativeLanguage || 'Vietnamese');
-      // } catch (error) {
-      //   console.warn('[StudyItemList] Auto refine after add failed:', error);
-      // }
     }
   };
 
