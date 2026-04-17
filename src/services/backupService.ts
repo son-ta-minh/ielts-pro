@@ -280,38 +280,6 @@ export const refreshServerLibrary = async (): Promise<boolean> => {
     }
 };
 
-/**
- * Queries the Global Server Library for refined definitions.
- * @param words Array of words to look up
- * @returns Array of found StudyItem objects (with short keys expanded)
- */
-export const lookupWordsInGlobalLibrary = async (words: string[]): Promise<StudyItem[]> => {
-    try {
-        const config = getConfig();
-        const serverUrl = getServerUrl(config);
-        
-        const response = await fetch(`${serverUrl}/api/library/lookup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ words })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            // Data comes back as short-key objects (stored in server memory). 
-            // We need to expand them back to StudyItem using _mapToLongKeys
-            if (Array.isArray(data.found)) {
-                return data.found.map((item: any) => _mapToLongKeys(item) as StudyItem);
-            }
-        }
-        return [];
-    } catch (e) {
-        console.warn("[Backup] Library lookup failed:", e);
-        return [];
-    }
-};
-
-
 async function getFullExportData(userId: string, user: User) {
      const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData, questionBankData] = await Promise.all([
         db.getAllWordsForExport(userId),

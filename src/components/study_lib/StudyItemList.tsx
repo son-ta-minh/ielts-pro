@@ -10,7 +10,6 @@ import { FilterType, RefinedFilter, StatusFilter, RegisterFilter, CompositionFil
 import { stringToWordArray } from '../../utils/text';
 import { TagTreeNode } from '../common/TagBrowser';
 import { getStoredJSON } from '../../utils/storage';
-import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { autoRefineNewWords } from '../../services/wordRefinePersistence';
@@ -336,17 +335,6 @@ const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLa
     const isPassive = types.has('archive');
     const isFocus = types.has('focus');
 
-    // 1. Pre-fetch from Server Library for Quick Add
-    let serverMap = new Map<string, StudyItem>();
-    try {
-        const serverItems = await lookupWordsInGlobalLibrary(wordsToProcess);
-        serverItems.forEach(item => {
-            serverMap.set(item.word.toLowerCase().trim(), item);
-        });
-    } catch (e) {
-        console.warn("Server lookup failed in StudyItemList:", e);
-    }
-
     for (const word of wordsToProcess) {
       const existing = dataStore.getAllWords().find(item =>
         item.userId === userId &&
@@ -368,49 +356,16 @@ const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLa
         const key = word.toLowerCase().trim();
         let newItem: StudyItem;
 
-        if (serverMap.has(key)) {
-             // Use Server Data for a REFINED start
-             const serverItem = serverMap.get(key)!;
-             newItem = {
-                 ...serverItem,
-                 id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-                 userId: userId,
-                 createdAt: Date.now(),
-                 updatedAt: Date.now(),
-                 quality: StudyItemQuality.REFINED,
-                 // Reset SRS
-                 nextReview: Date.now(),
-                 interval: 0,
-                 easeFactor: 2.5,
-                 consecutiveCorrect: 0,
-                 forgotCount: 0,
-                 lastReview: undefined,
-                 learnedStatus: LearnedStatus.NEW,
-                 lastTestResults: {},
-                 libraryType,
-                 // Apply local flags on top
-                 isIdiom: isIdiom || serverItem.isIdiom,
-                 isPhrasalVerb: isPhrasalVerb || serverItem.isPhrasalVerb,
-                 isCollocation: isCollocation || serverItem.isCollocation,
-                 isStandardPhrase: isStandardPhrase || serverItem.isStandardPhrase,
-                 isPassive: isPassive,
-                 isFocus: isFocus || !!serverItem.isFocus
-             };
-             // Recalc stats
-             newItem.complexity = calculateComplexity(newItem);
-             newItem.masteryScore = calculateMasteryScore(newItem);
-             newItem.gameEligibility = calculateGameEligibility(newItem);
-        } else {
-            // Manual Creation (RAW)
-            // Updated signature: groups is passed instead of tags
-            newItem = await createNewWord(
-                word, '', '', '', '', [], 
-                isIdiom, isPhrasalVerb, 
-                isCollocation, isStandardPhrase, isPassive, libraryType
-            );
-            newItem.userId = userId;
-            newItem.isFocus = isFocus;
-        }
+        // Manual Creation (RAW)
+        // Updated signature: groups is passed instead of tags
+        newItem = await createNewWord(
+            word, '', '', '', '', [], 
+            isIdiom, isPhrasalVerb, 
+            isCollocation, isStandardPhrase, isPassive, libraryType
+        );
+        newItem.userId = userId;
+        newItem.isFocus = isFocus;
+        
         newItems.push(newItem);
       }
     }

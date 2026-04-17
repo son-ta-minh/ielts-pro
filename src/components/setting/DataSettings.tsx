@@ -5,7 +5,7 @@ import { DataScope, StudyItem, StudyItemQuality } from '../../app/types';
 import { useToast } from '../../contexts/ToastContext';
 import ConfirmationModal from '../common/ConfirmationModal';
 import * as dataStore from '../../app/dataStore';
-import { lookupWordsInGlobalLibrary, refreshServerLibrary } from '../../services/backupService';
+import { refreshServerLibrary } from '../../services/backupService';
 import { mergeAiResultIntoWord } from '../../utils/vocabUtils';
 import { calculateComplexity, calculateMasteryScore } from '../../utils/srs';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
@@ -98,83 +98,6 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
         onDataScopeChange({ ...dataScope, [key]: !dataScope[key] });
     };
 
-    const handleRefineFromServer = async () => {
-        setIsRefiningFromServer(true);
-        try {
-            // 0. Force server to re-index first (in case another user just uploaded data)
-            await refreshServerLibrary();
-
-            // 1. Identify RAW words
-            const allWords = dataStore.getAllWords();
-            const rawWords = allWords.filter(w => w.quality === StudyItemQuality.RAW);
-            
-            if (rawWords.length === 0) {
-                showToast("No RAW words found to refine.", "info");
-                setIsRefiningFromServer(false);
-                return;
-            }
-
-            const rawWordTexts = rawWords.map(w => w.word);
-            
-            // 2. Query Server
-            const foundItems = await lookupWordsInGlobalLibrary(rawWordTexts);
-
-            if (foundItems.length === 0) {
-                showToast("No refined data found on server.", "info");
-                setIsRefiningFromServer(false);
-                return;
-            }
-
-            // 3. Update Local DB
-            const itemsToUpdate: StudyItem[] = [];
-            const foundMap = new Map(foundItems.map(i => [i.word.toLowerCase().trim(), i]));
-
-            for (const rawItem of rawWords) {
-                const foundItem = foundMap.get(rawItem.word.toLowerCase().trim());
-                if (foundItem) {
-                    // Merge found data into raw item
-                    // We use mergeAiResultIntoWord logic structure but since foundItem IS a full item,
-                    // we can just take its properties, preserving user ID and ID.
-                    const updated = {
-                        ...rawItem,
-                        ipaUs: foundItem.ipaUs,
-                        ipaUk: foundItem.ipaUk,
-                        meaningVi: foundItem.meaningVi,
-                        example: foundItem.example,
-                        collocationsArray: foundItem.collocationsArray,
-                        idiomsList: foundItem.idiomsList,
-                        paraphrases: foundItem.paraphrases,
-                        wordFamily: foundItem.wordFamily,
-                        prepositions: foundItem.prepositions,
-                        isIdiom: foundItem.isIdiom,
-                        isCollocation: foundItem.isCollocation,
-                        isPhrasalVerb: foundItem.isPhrasalVerb,
-                        quality: StudyItemQuality.REFINED, // Set as Refined so user can verify
-                        updatedAt: Date.now()
-                    };
-                    
-                    // Recalculate stats
-                    updated.complexity = calculateComplexity(updated);
-                    updated.masteryScore = calculateMasteryScore(updated);
-                    updated.gameEligibility = calculateGameEligibility(updated);
-
-                    itemsToUpdate.push(updated);
-                }
-            }
-
-            if (itemsToUpdate.length > 0) {
-                await dataStore.bulkSaveWords(itemsToUpdate);
-                showToast(`Successfully refined ${itemsToUpdate.length} words from server!`, "success");
-            }
-
-        } catch (e) {
-            console.error(e);
-            showToast("Failed to refine from server.", "error");
-        } finally {
-            setIsRefiningFromServer(false);
-        }
-    };
-
     return (
         <section className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm flex flex-col space-y-8">
             <div className="flex items-center space-x-4 mb-2">
@@ -230,20 +153,6 @@ export const DataSettings: React.FC<DataSettingsProps> = (props) => {
                     <div className="text-left">
                         <div className="text-xs font-black uppercase tracking-widest leading-none">Normalize Data</div>
                         <div className="text-[9px] font-bold text-neutral-400 mt-1">Clean junk tags & legacy data</div>
-                    </div>
-                </button>
-
-                <button 
-                    onClick={handleRefineFromServer}
-                    disabled={isRefiningFromServer}
-                    className="w-full py-4 bg-white border border-neutral-200 rounded-2xl text-neutral-600 hover:bg-neutral-50 transition-all flex items-center justify-center space-x-3 group"
-                >
-                    <div className="p-2 bg-neutral-100 group-hover:bg-blue-50 rounded-lg transition-colors">
-                        {isRefiningFromServer ? <Loader2 size={16} className="animate-spin text-blue-600" /> : <Globe size={16} className="text-blue-600" />}
-                    </div>
-                    <div className="text-left">
-                        <div className="text-xs font-black uppercase tracking-widest leading-none">Refine from Server</div>
-                        <div className="text-[9px] font-bold text-neutral-400 mt-1">Update RAW words from Cloud</div>
                     </div>
                 </button>
             </div>

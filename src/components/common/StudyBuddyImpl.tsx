@@ -9,7 +9,6 @@ import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
 import { getAllUsers, saveUser } from '../../app/db';
 import { createNewWord, calculateComplexity, calculateMasteryScore } from '../../utils/srs';
-import { lookupWordsInGlobalLibrary } from '../../services/backupService';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { ToolsModal } from '../tools/ToolsModal';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
@@ -2026,65 +2025,33 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     };
 
     const handleAddToLibrary = async () => {
+        let lang = getPreferredSpeakLanguage();
         const selectedText = getCoachActionText();
         if (!selectedText || isAlreadyInLibrary) return;
         selectedTextRef.current = selectedText;
         setIsAddingToLibrary(true);
         try {
             let newItem: StudyItem;
-            let serverItem: StudyItem | null = null;
-            try {
-                const results = await lookupWordsInGlobalLibrary([selectedText]);
-                if (results.length > 0) serverItem = results[0];
-            } catch {
-                // Silent fail is acceptable here
-            }
+            const baseItem = await createNewWord(
+                selectedText,
+                '',
+                '',
+                '',
+                '',
+                [],
+                false,
+                false,
+                false,
+                selectedText.includes(' '),
+                false,
+                lang === 'en' ? 'vocab' : 'kotoba'
+            );
 
-            if (serverItem) {
-                newItem = {
-                     ...serverItem,
-                     id: crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-                     userId: user.id,
-                     createdAt: Date.now(),
-                     updatedAt: Date.now(),
-                     quality: StudyItemQuality.REFINED,
-                     nextReview: Date.now(),
-                     interval: 0,
-                     easeFactor: 2.5,
-                     consecutiveCorrect: 0,
-                     forgotCount: 0,
-                     lastReview: undefined,
-                     learnedStatus: LearnedStatus.NEW,
-                     lastTestResults: {},
-                     groups: [...(serverItem.groups || [])]
-                };
-                newItem.isPassive = false;
-                newItem.complexity = calculateComplexity(newItem);
-                newItem.masteryScore = calculateMasteryScore(newItem);
-                newItem.gameEligibility = calculateGameEligibility(newItem);
-            } else {
-                const baseItem = await createNewWord(
-                    selectedText,
-                    '',
-                    '',
-                    '',
-                    '',
-                    [],
-                    false,
-                    false,
-                    false,
-                    selectedText.includes(' '),
-                    false
-                );
-
-                newItem = {
-                    ...baseItem,
-                    userId: user.id,
-                    quality: StudyItemQuality.RAW
-                };
-                newItem.isPassive = false;
-            }
-            console.log("Adding to library:", newItem);
+            newItem = {
+                ...baseItem,
+                userId: user.id,
+                quality: StudyItemQuality.RAW,
+            };
             await dataStore.saveWord(newItem);
             showToast(`"${selectedText}" added!`);
             setIsAlreadyInLibrary(true);
