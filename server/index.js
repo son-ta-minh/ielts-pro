@@ -33,28 +33,38 @@ try {
     logger.warn(`[Server] Failed to set CWD to ${__dirname}: ${err.message}`);
 }
 
-// --- Firebase Admin Init (No REST API / No Billing Required) ---
+// --- Firebase Admin Init (Optional — server runs fine without it) ---
+// When serviceAccountKey.json is missing or invalid, Firebase-dependent
+// features (image upload via imgAdmin, public URL registration via
+// Firestore) are disabled but the rest of the server continues.
+let firebaseReady = false;
 if (!admin.apps.length) {
     const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
 
     if (!fs.existsSync(serviceAccountPath)) {
-        logger.error('[Firebase] serviceAccountKey.json not found at:', serviceAccountPath);
-        process.exit(1);
+        logger.warn('[Firebase] serviceAccountKey.json not found — Firebase features disabled.');
+        logger.warn('[Firebase]   Expected at:', serviceAccountPath);
+        logger.warn('[Firebase]   Backup/TTS/library features remain available.');
+    } else {
+        try {
+            const serviceAccount = require(serviceAccountPath);
+
+            // Expose image key globally (singleton like Firebase Admin)
+            global.imgAdmin = {
+                imageKey: serviceAccount.imageKey
+            };
+
+            admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount),
+                projectId: serviceAccount.project_id
+            });
+
+            firebaseReady = true;
+            logger.debug('[Firebase] Admin initialized with project:', serviceAccount.project_id);
+        } catch (err) {
+            logger.warn('[Firebase] Init failed — Firebase features disabled:', err.message);
+        }
     }
-
-    const serviceAccount = require(serviceAccountPath);
-
-    // Expose image key globally (singleton like Firebase Admin)
-    global.imgAdmin = {
-        imageKey: serviceAccount.imageKey
-    };
-
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        projectId: serviceAccount.project_id
-    });
-
-    logger.debug('[Firebase] Admin initialized with project:', serviceAccount.project_id);
 }
 
 const app = express();
@@ -168,59 +178,78 @@ server.listen(settings.PORT, settings.HOST, () => {
 
 // --- Auto Start Cloudflare Tunnel (if available) ---
 function startCloudflareTunnel() {
-    try {
-        logger.debug('[Cloudflare] Attempting to start tunnel...');
-        const tunnel = spawn('cloudflared', [
-            'tunnel',
-            '--url',
-            `${protocol}://localhost:${settings.PORT}`
-        ]);
+    logger.debug('[Cloudflare] Attempting to start tunnel...');
+    const tunnel = spawn('cloudflared', [
+        'tunnel',
+        '--url',
+        `${protocol}://localhost:${settings.PORT}`
+    ]);
 
-        let hostUpdated = false;
+    // spawn() emits ENOENT via the 'error' event, NOT as a sync throw —
+    // without this listener, a missing cloudflared binary crashes the
+    // process as an Uncaught Exception.
+    tunnel.on('error', (err) => {
+        if (err.code === 'ENOENT') {
+            logger.warn('[Cloudflare] cloudflared not installed — public tunnel disabled.');
+            logger.warn('[Cloudflare]   Install: winget install Cloudflare.cloudflared  (Windows)');
+            logger.warn('[Cloudflare]            brew install cloudflared              (macOS)');
+            logger.warn('[Cloudflare]            https://github.com/cloudflare/cloudflared/releases');
+        } else {
+            logger.warn('[Cloudflare] Tunnel error:', err.message);
+        }
+    });
 
-        function handleTunnelOutput(raw) {
-            const output = raw.toString().trim();
-            if (output) {
-                logger.debug(`[Cloudflare] ${output}`);
-            }
+    let hostUpdated = false;
 
-            const match = output.match(/https:\/\/[-a-zA-Z0-9]+\.trycloudflare\.com/);
-            if (match && !hostUpdated) {
-                hostUpdated = true;
-                const publicUrl = match[0];
-                logger.debug(`[Cloudflare] Public URL detected: ${publicUrl}`);
-
-                // --- Update Firestore with new host ---
-                updateHostInFirestore(publicUrl);
-            }
+    function handleTunnelOutput(raw) {
+        const output = raw.toString().trim();
+        if (output) {
+            logger.debug(`[Cloudflare] ${output}`);
         }
 
-        tunnel.stdout.on('data', handleTunnelOutput);
-        tunnel.stderr.on('data', handleTunnelOutput);
+        const match = output.match(/https:\/\/[-a-zA-Z0-9]+\.trycloudflare\.com/);
+        if (match && !hostUpdated) {
+            hostUpdated = true;
+            const publicUrl = match[0];
+            logger.debug(`[Cloudflare] Public URL detected: ${publicUrl}`);
 
-        tunnel.on('close', (code) => {
-            logger.debug(`[Cloudflare] Tunnel process exited with code ${code}`);
-        });
-
-    } catch (err) {
-        logger.warn('[Cloudflare] cloudflared not found or failed to start:', err.message);
+            // --- Update Firestore with new host ---
+            updateHostInFirestore(publicUrl);
+        }
     }
+
+    tunnel.stdout.on('data', handleTunnelOutput);
+    tunnel.stderr.on('data', handleTunnelOutput);
+
+    tunnel.on('close', (code) => {
+        logger.debug(`[Cloudflare] Tunnel process exited with code ${code}`);
+    });
 }
 
 async function updateHostInFirestore(hostUrl) {
+    if (!firebaseReady) {
+        logger.debug('[Firebase] Skipping host update — Firebase not initialized.');
+        return;
+    }
+
     try {
         logger.debug('[Firebase] Updating host in Firestore (Admin SDK)...');
 
         const db = admin.firestore();
 
-        // Try to get proper macOS LocalHostName (for mDNS .local access)
+        // `scutil` is a macOS-only tool for retrieving the Bonjour
+        // LocalHostName (used for mDNS `.local` access). Skip on other
+        // platforms — `os.hostname()` is a fine fallback.
         let localHostname = null;
-
-        try {
-            const { execSync } = require('child_process');
-            localHostname = execSync('scutil --get LocalHostName', { encoding: 'utf8' }).trim();
-        } catch (e) {
-            // Fallback to OS hostname
+        if (process.platform === 'darwin') {
+            try {
+                const { execSync } = require('child_process');
+                localHostname = execSync('scutil --get LocalHostName', { encoding: 'utf8' }).trim();
+            } catch (e) {
+                // scutil failed on macOS — fall through to os.hostname()
+            }
+        }
+        if (!localHostname) {
             localHostname = os.hostname();
         }
 
@@ -240,7 +269,9 @@ async function updateHostInFirestore(hostUrl) {
 
         logger.debug('[Firebase] Host updated successfully.');
     } catch (err) {
-        logger.error('[Firebase] Admin update failed:', err.message);
+        // Common cases: Firestore API not enabled, permission denied,
+        // network offline. Server shouldn't crash — just log.
+        logger.warn('[Firebase] Host update skipped:', err.message);
     }
 }
 
