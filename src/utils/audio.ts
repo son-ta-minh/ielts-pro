@@ -5,7 +5,7 @@
  * - Supports multi-language switching based on content.
  */
 
-import { getConfig, getServerUrl } from '../app/settingsManager';
+import { getConfig, getServerUrl, saveConfig } from '../app/settingsManager';
 
 const MAX_SPEECH_LENGTH = 1500; 
 const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/;
@@ -349,9 +349,14 @@ export const resolveCoachVoiceForLanguage = (
     return { voiceName: coach.enVoice, accentCode: coach.enAccent };
 };
 
-export const getPreferredSpeakLanguage = (): Exclude<SpokenLanguage, 'vi'> => {
+export const getPreferredSpeakLanguage = (): string => {
     const config = getConfig();
-    return config.interface.speakLanguage === 'ja' ? 'ja' : 'en';
+    return config.interface.speakLanguage;
+};
+
+export const setPreferredSpeakLanguage = (lang: string) => {
+    const config = getConfig();
+    saveConfig({ ...config, interface: { ...config.interface, speakLanguage: lang } });
 };
 
 export const prefetchSpeech = async (text: string, forcedLang?: SpokenLanguage): Promise<Blob | null> => {

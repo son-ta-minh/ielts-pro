@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, StudyItemQuality, StudyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily, LearnedStatus } from '../../app/types';
 import { MessageSquare, Languages, Binary, Loader2, Search, Pause, Play, Square, Sparkles } from 'lucide-react';
 import { getConfig, saveConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
-import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech, getPreferredSpeakLanguage, resolveCoachVoiceForLanguage } from '../../utils/audio';
+import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech, getPreferredSpeakLanguage, setPreferredSpeakLanguage, resolveCoachVoiceForLanguage } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
 import { SimpleMimicModal } from './SimpleMimicModal';
 import * as dataStore from '../../app/dataStore';
@@ -1101,6 +1101,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             hasAutoGreetedRef.current = true;
             void streamInitialGreeting();
         }
+    };
+
+    const toggleLangMode = () => {
+        const currentLang = getPreferredSpeakLanguage();
+        const nextLang = currentLang === 'en' ? 'ja' : 'en';
+        setPreferredSpeakLanguage(nextLang);
+        showToast(`Studying language set to ${nextLang === 'ja' ? 'Japanese' : 'English'}.`, 'success', 1800);
     };
 
     useEffect(() => {
@@ -2686,6 +2693,16 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 )}
                             </div>
                         )}
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleLangMode();
+                            }}
+                            className={'absolute -top-2 -left-2 w-8 h-8 rounded-xl text-white flex items-center justify-center hover:scale-105 transition-all z-30'}
+                            title="Study mode"
+                        >{getPreferredSpeakLanguage() === 'ja' ? '🇯🇵' : '🇬🇧'}
+                        </button>
                         <button
                             type="button"
                             onClick={(e) => {

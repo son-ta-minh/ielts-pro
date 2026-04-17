@@ -1525,19 +1525,6 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
     window.addEventListener('config-updated', handleConfigUpdate);
     return () => window.removeEventListener('config-updated', handleConfigUpdate);
   }, []);
-
-  const handleSpeakLanguageChange = (nextLanguage: 'en' | 'ja') => {
-    setSpeakLanguage(nextLanguage);
-    const config = getConfig();
-    saveConfig({
-      ...config,
-      interface: {
-        ...config.interface,
-        speakLanguage: nextLanguage
-      }
-    });
-    showToast(`Speak language set to ${nextLanguage === 'ja' ? 'Japanese' : 'English'}.`, 'success', 1800);
-  };
   
   const [focusTimers, setFocusTimers] = useState<FocusTimerRecord[]>([]);
   const [focusHistory, setFocusHistory] = useState<FocusTimerHistory[]>([]);
@@ -1915,17 +1902,6 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                     New
                 </span>
              </button>
-        </div>
-        <div className="relative">
-            <label className="mr-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Speak Language</label>
-            <select
-                value={speakLanguage}
-                onChange={(e) => handleSpeakLanguageChange(e.target.value === 'ja' ? 'ja' : 'en')}
-                className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs font-bold text-neutral-700 shadow-sm outline-none focus:ring-2 focus:ring-neutral-900"
-            >
-                <option value="en">English</option>
-                <option value="ja">Japanese</option>
-            </select>
         </div>
       </div>
 
