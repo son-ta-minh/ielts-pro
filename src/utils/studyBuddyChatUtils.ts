@@ -345,31 +345,57 @@ Rules:
 Vocabulary record:
 ${record}`;
         case 'verifyData':
-            return `Audit the saved vocabulary data for "${headword}" and report only what should be improved.
+    return `Audit the saved vocabulary data for "${headword}" and report in table format below.
 
 Strict output rules:
-- Do not write any intro, outro, praise, summary, or confirmation that items are correct
-- Report only problems, doubtful items, awkward items, misleading items, or low-value items
+- Do not write any intro, outro, summary, or explanation outside tables
 - If there are no issues worth fixing, reply exactly: No critical data issues found.
-- Keep each point concrete and action-oriented
+- Output MUST contain exactly 2 markdown tables
 
-What to verify:
-- whether the main register is accurate. The app only support to choose one of Academic, Casual, Neutral (meaning both Academic and Casual are fine). You don't need to suggest me, you only tell me whether the Register is accurate or not based on the meaning, usage, and examples of the word. If the register is inaccurate, just say "Register issue -> the correct register should be [the correct register]".
-- whether collocations are natural, common enough, and worth learning. Only verify collection text, and skip the descriptive text ("d").
-- whether paraphrases are natural and truly usable paraphrases for this headword
-- whether each paraphrase register is accurate
-- whether the current groups fit this word well
-- whether this word is missing one or more useful groups from the available app groups
-- whether any item is too broad, too narrow, misleading, duplicate, or unnecessary for study
-- whether any item should be ignored or removed
+====================
+TABLE 1: Core Usage
+====================
+| Item | Correct? | Reason |
+|------|----------|--------|
+
+Scope:
+- Register
+- Meaning (if misleading / unclear)
+- Prepositions
+- Group
+
+Rules:
+- Item = exact element (e.g. "Register: Academic", "depend on", meaning phrase)
+- Correct? = Yes / No / Questionable
+- Reason = short, concrete issue (wrong register, unnatural usage, misleading meaning, uncommon pattern, etc.)
+- If no issues → still output one row: "No issues" | Yes | -
+
+====================
+TABLE 2: Usage Items
+====================
+| Text | Natural? | Worth Learning (IELTS)? | Reason |
+|------|----------|------------------------|--------|
+
+Scope:
+- Collocations (ONLY text, ignore "d")
+- Paraphrases (ONLY text, ignore "c")
+- Idioms (ONLY text, ignore "c")
+
+Rules:
+- Natural? = Yes / No / Questionable
+- Worth Learning (IELTS)? = Yes / No
+- "Yes" ONLY if item is common in Band 7+ usage
+- Reason = concrete explanation (awkward, low frequency, too informal, not idiomatic, misleading, duplicate, etc.)
+
+Additional checks:
+- Paraphrase register accuracy
+- Whether current groups fit the word well; flag if weak/misaligned
+- Whether useful groups are missing from available app groups
+- Remove low-value, redundant, or misleading items
 
 IMPORTANT:
-- Register "Neutral" in this app content means "can be used in both academic and casual depend on context."
-- Don't forget to feedback for "Group" field, which is important for the learner's organization and review. If the word is currently in groups that don't fit well, point it out. If there are useful groups that the word is missing from, mention them.
-
-Preferred format:
-- [Field] issue -> suggested fix
-- [Groups] weak/missing grouping -> suggested app group(s)
+- "Neutral" = usable in both academic and casual contexts
+- Be strict: prioritize high-frequency, natural, IELTS-useful items
 
 Vocabulary record:
 ${record}`;

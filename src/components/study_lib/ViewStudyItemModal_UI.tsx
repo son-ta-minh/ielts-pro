@@ -210,8 +210,11 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
         return normalized;
     }, []);
     const syncSelectedDisplayText = useCallback(() => {
-        const normalized = readSelectionText();
-        setSelectedDisplayText(prev => (prev === normalized ? prev : normalized));
+        const selection = window.getSelection();
+        if (!selection || selection.type !== 'Range') return;
+
+        // ONLY update ref, DO NOT trigger React state (prevents re-render → keeps selection)
+        readSelectionText();
     }, [readSelectionText]);
     const isLibraryWord = (value: string) => {
         const normalized = value.trim().toLowerCase();
@@ -437,16 +440,29 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
     }, []);
 
     useEffect(() => {
-        readSelectionText();
-        document.addEventListener('selectionchange', readSelectionText);
-        window.addEventListener('mouseup', syncSelectedDisplayText);
-        window.addEventListener('keyup', syncSelectedDisplayText);
-        return () => {
-            document.removeEventListener('selectionchange', readSelectionText);
-            window.removeEventListener('mouseup', syncSelectedDisplayText);
-            window.removeEventListener('keyup', syncSelectedDisplayText);
+        const handleMouseUp = (e: MouseEvent) => {
+            // Double click needs extra delay because selection finalizes later
+            const delay = e.detail === 2 ? 50 : 0;
+
+            setTimeout(() => {
+                syncSelectedDisplayText();
+            }, delay);
         };
-    }, [readSelectionText, syncSelectedDisplayText]);
+
+        const handleKeyUp = () => {
+            setTimeout(() => {
+                syncSelectedDisplayText();
+            }, 0);
+        };
+
+        window.addEventListener('mouseup', handleMouseUp);
+        window.addEventListener('keyup', handleKeyUp);
+
+        return () => {
+            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, [syncSelectedDisplayText]);
 
     useEffect(() => {
         (window as any).handleLessonSpeak = (text: string, lang?: 'en' | 'vi') => {
@@ -692,7 +708,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
     const hasTest = Boolean(lessonTestHtml?.trim());
     const exampleSentences = useMemo(() => splitExampleIntoSentences(word.example || ''), [word.example]);
     const hasAiActions = Boolean(onAskAiRequest || onVerifyWordRequest || onAskAiSectionRequest || onAddAIExample);
-    const trimmedSelectionText = selectedDisplayText.trim();
+    const trimmedSelectionText = (selectedDisplayText || selectedDisplayTextRef.current || '').trim();
     const displayActionLabel = trimmedSelectionText
         ? `Set Display As "${trimmedSelectionText.length > 24 ? `${trimmedSelectionText.slice(0, 24)}...` : trimmedSelectionText}"`
         : 'Set Display Auto';
@@ -792,7 +808,6 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                     className="relative shrink-0"
                                     ref={actionMenuRef}
                                     onMouseEnter={() => {
-                                        syncSelectedDisplayText();
                                         setIsActionMenuOpen(true);
                                     }}
                                     onMouseLeave={() => setIsActionMenuOpen(false)}
@@ -826,16 +841,17 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                                     <span>Review</span>
                                                 </button>
                                                 {hasSetDisplayAction ? (
-                                                    <button
-                                                        type="button"
-                                                        disabled={isSettingDisplay}
-                                                        title='Show display text instead of headword in the app. For example, if the word is "run" but you want to be reminded of "running", you can select "running" in the text and choose "Set Display As".'
-                                                        onClick={() => handleActionMenuAction(() => {
-                                                            const latestSelectedText = readSelectionText() || trimmedSelectionText;
-                                                            void onSetDisplayRequest?.(latestSelectedText || undefined);
-                                                        })}
-                                                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-cyan-50 disabled:opacity-50"
-                                                    >
+                                                <button
+                                                    type="button"
+                                                    disabled={isSettingDisplay}
+                                                    title='Show display text instead of headword in the app. For example, if the word is "run" but you want to be reminded of "running", you can select "running" in the text and choose "Set Display As".'
+                                                    onClick={() => handleActionMenuAction(() => {
+                                                        const latestSelectedText = readSelectionText() || trimmedSelectionText;
+                                                        setSelectedDisplayText(latestSelectedText);
+                                                        void onSetDisplayRequest?.(latestSelectedText || undefined);
+                                                    })}
+                                                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-[10px] font-black uppercase tracking-wide text-neutral-700 transition-colors hover:bg-cyan-50 disabled:opacity-50"
+                                                >
                                                         {isSettingDisplay ? <Loader2 size={12} className="animate-spin" /> : <BookOpenText size={12} />}
                                                         <span>{isSettingDisplay ? 'Setting Display...' : displayActionLabel}</span>
                                                     </button>
