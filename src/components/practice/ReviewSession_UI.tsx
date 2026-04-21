@@ -1,6 +1,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Bot, Sparkles } from 'lucide-react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Sparkles } from 'lucide-react';
 import { StudyItem, ReviewGrade, SessionType, User, StudyItemQuality, LearnedStatus } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditStudyItemModal from '../study_lib/EditStudyItemModal';
@@ -411,7 +411,7 @@ const MasteryScoreCalculator: React.FC<{ word: StudyItem }> = ({ word }) => {
         <div className="relative group/score">
             <MasteryScoreGauge score={score} />
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max px-3 py-1.5 bg-neutral-800 text-white text-[10px] font-black rounded-lg opacity-0 group-hover/score:opacity-100 transition-opacity pointer-events-none z-10 uppercase tracking-wider">
-                Mastery Score
+                Mastery
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-2 h-2 bg-neutral-800 rotate-45"></div>
             </div>
         </div>
@@ -450,8 +450,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [spellInput, setSpellInput] = useState('');
     const [spellResult, setSpellResult] = useState<'correct' | 'wrong' | null>(null);
     const [isStudyBuddyExampleVisible, setIsStudyBuddyExampleVisible] = useState(false);
-    const [isExampleTextRevealed, setIsExampleTextRevealed] = useState(false);
-    const [hoveredActionMenu, setHoveredActionMenu] = useState<'view' | 'ai' | null>(null);
+    const [isExampleTextRevealed, setIsExampleTextRevealed] = useState(true);
+    const [hoveredActionMenu, setHoveredActionMenu] = useState<'view' | 'practice' | null>(null);
     const [activeFastReviewPanel, setActiveFastReviewPanel] = useState<'meaning' | 'collocation' | 'paraphrase' | 'preposition' | 'idiom' | null>(null);
     const [studyBuddyExample, setStudyBuddyExample] = useState<string | null>(null);
     const [studyBuddyExampleBuffer, setStudyBuddyExampleBuffer] = useState<string[]>([]);
@@ -546,11 +546,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     );
     const actionButtonBaseClass = 'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border bg-white px-3 py-2 text-[9px] font-black uppercase tracking-[0.18em] shadow-none transition-all active:scale-95 sm:px-3.5 sm:text-[10px]';
     const speakButtonClass = `${actionButtonBaseClass} border-cyan-600 text-cyan-600 hover:bg-cyan-50 hover:text-cyan-700`;
-    const mimicButtonClass = `${actionButtonBaseClass} border-violet-600 text-violet-600 hover:bg-violet-50 hover:text-violet-700`;
-    const typingButtonClass = `${actionButtonBaseClass} border-emerald-600 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 ${showSpellBox ? 'ring-2 ring-emerald-200 ring-offset-2 ring-offset-white' : ''}`;
     const viewButtonClass = `${actionButtonBaseClass} border-sky-600 text-sky-600 hover:bg-sky-50 hover:text-sky-700 ${activeFastReviewPanel ? 'ring-2 ring-sky-200 ring-offset-2 ring-offset-white' : ''}`;
-    const aiButtonClass = `${actionButtonBaseClass} border-fuchsia-600 text-fuchsia-600 hover:bg-fuchsia-50 hover:text-fuchsia-700 ${activeBotPanel ? 'ring-2 ring-fuchsia-200 ring-offset-2 ring-offset-white' : ''}`;
-    const practiceButtonClass = `${actionButtonBaseClass} ${hasRetryableFailedTests ? 'border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700' : 'border-amber-600 text-amber-600 hover:bg-amber-50 hover:text-amber-700'}`;
+    const practiceButtonClass = `${actionButtonBaseClass} ${hasRetryableFailedTests ? 'border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700' : 'border-amber-600 text-amber-600 hover:bg-amber-50 hover:text-amber-700'} ${(showSpellBox || activeBotPanel === 'quiz') ? 'ring-2 ring-amber-200 ring-offset-2 ring-offset-white' : ''}`;
     const floatingMenuClass = 'absolute left-1/2 top-full z-20 w-max -translate-x-1/2 pt-2 transition-all duration-150';
 
     const extractFreshExamples = useCallback((rawText: string): string[] => {
@@ -1558,7 +1555,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
-                                        className={speakButtonClass}
+                                        className="p-1.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
                                         title="Speak"
                                     >
                                         <Volume2 size={14} />
@@ -1571,43 +1568,6 @@ Reply with exactly one very short sentence or phrase in English.`
                                     )}
                                 </div>
                                 <div className="relative z-10 flex w-full max-w-full items-center justify-center gap-1.5 overflow-visible px-2 sm:gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFastReviewPanel(null);
-                                            setActiveBotPanel(null);
-                                            setHoveredActionMenu(null);
-                                            setShowSpellBox(false);
-                                            setMimicTarget(reviewHeadword);
-                                        }}
-                                        className={mimicButtonClass}
-                                        title="Mimic"
-                                    >
-                                        <Mic size={14} />
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFastReviewPanel(null);
-                                            setActiveBotPanel(null);
-                                            setHoveredActionMenu(null);
-                                            setShowSpellBox((prev) => {
-                                                const next = !prev;
-                                                if (next) {
-                                                    setSpellInput('');
-                                                    setSpellResult(null);
-                                                }
-                                                return next;
-                                            });
-                                        }}
-                                        className={typingButtonClass}
-                                        title="Typing check"
-                                    >
-                                        <Keyboard size={14} />
-                                    </button>
                                     <div
                                         className="relative"
                                         onMouseEnter={() => setHoveredActionMenu('view')}
@@ -1624,6 +1584,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                         <div className={`${floatingMenuClass} ${hoveredActionMenu === 'view' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
                                             <div className="flex min-w-[220px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
                                                 <button type="button" onClick={() => { setShowSpellBox(false); setHoveredActionMenu(null); void onOpenWordDetails(currentWord); }} className="inline-flex items-center gap-1.5 rounded-xl bg-sky-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-sky-700 transition-colors hover:bg-sky-100"><Eye size={11} /><span>Detail</span></button>
+                                                <button type="button" onClick={() => { setHoveredActionMenu('view'); void showNextStudyBuddyExample(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeBotPanel === 'example' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}><BookCopy size={11} /><span>AI Example</span></button>
                                                 <button type="button" onClick={() => handleFastReviewAction('meaning')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeFastReviewPanel === 'meaning' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}><BookOpen size={11} /><span>Meaning</span></button>
                                                 {visibleCollocations.length > 0 && <button type="button" onClick={() => handleFastReviewAction('collocation')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeFastReviewPanel === 'collocation' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}><Combine size={11} /><span>Collocation</span></button>}
                                                 {visibleParaphrases.length > 0 && <button type="button" onClick={() => handleFastReviewAction('paraphrase')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeFastReviewPanel === 'paraphrase' ? 'bg-cyan-600 text-white' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100'}`}><Zap size={11} /><span>Paraphrase</span></button>}
@@ -1634,31 +1595,26 @@ Reply with exactly one very short sentence or phrase in English.`
                                     </div>
                                     <div
                                         className="relative"
-                                        onMouseEnter={() => setHoveredActionMenu('ai')}
-                                        onMouseLeave={() => setHoveredActionMenu((current) => current === 'ai' ? null : current)}
+                                        onMouseEnter={() => setHoveredActionMenu('practice')}
+                                        onMouseLeave={() => setHoveredActionMenu((current) => current === 'practice' ? null : current)}
                                     >
                                         <button
                                             type="button"
-                                            className={aiButtonClass}
-                                            onFocus={() => setHoveredActionMenu('ai')}
-                                            onClick={() => setHoveredActionMenu((current) => current === 'ai' ? null : 'ai')}
+                                            className={practiceButtonClass}
+                                            onFocus={() => setHoveredActionMenu('practice')}
+                                            onClick={() => setHoveredActionMenu((current) => current === 'practice' ? null : 'practice')}
                                         >
-                                            <Bot size={14}/>
+                                            <BrainCircuit size={14}/>
                                         </button>
-                                        <div className={`${floatingMenuClass} ${hoveredActionMenu === 'ai' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
+                                        <div className={`${floatingMenuClass} ${hoveredActionMenu === 'practice' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
                                             <div className="flex min-w-[180px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
-                                                <button type="button" onClick={() => { setHoveredActionMenu('ai'); void showNextStudyBuddyExample(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeBotPanel === 'example' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}><BookCopy size={11} /><span>Example</span></button>
-                                                <button type="button" onClick={() => { setHoveredActionMenu('ai'); void showNextStudyBuddyQuiz(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeBotPanel === 'quiz' ? 'bg-fuchsia-600 text-white' : 'bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100'}`}><Sparkles size={11} /><span>Quiz</span></button>
+                                                <button type="button" onClick={() => { setActiveFastReviewPanel(null); setActiveBotPanel(null); setHoveredActionMenu(null); setShowSpellBox(false); setMimicTarget(reviewHeadword); }} className="inline-flex items-center gap-1.5 rounded-xl bg-violet-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-violet-700 transition-colors hover:bg-violet-100"><Mic size={11} /><span>Mimic</span></button>
+                                                <button type="button" onClick={() => { setActiveFastReviewPanel(null); setActiveBotPanel(null); setHoveredActionMenu('practice'); setShowSpellBox((prev) => { const next = !prev; if (next) { setSpellInput(''); setSpellResult(null); } return next; }); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${showSpellBox ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}><Keyboard size={11} /><span>SPELLING</span></button>
+                                                <button type="button" onClick={() => { setHoveredActionMenu(null); handleManualPractice(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${hasRetryableFailedTests ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}><BrainCircuit size={11} /><span>Test It</span></button>
+                                                <button type="button" onClick={() => { setHoveredActionMenu('practice'); void showNextStudyBuddyQuiz(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeBotPanel === 'quiz' ? 'bg-fuchsia-600 text-white' : 'bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100'}`}><Sparkles size={11} /><span>AI Quiz</span></button>
                                             </div>
                                         </div>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleManualPractice}
-                                        className={practiceButtonClass}
-                                    >
-                                        <BrainCircuit size={14}/>
-                                    </button>
                                 </div>
                                 <div className="w-full max-w-lg min-h-[216px]">
                                 {showSpellBox && (
@@ -1795,18 +1751,6 @@ Reply with exactly one very short sentence or phrase in English.`
                                                             <Volume2 size={12} />
                                                         </button>
                                                     </div>
-                                                    <label className="flex items-center gap-1 cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isExampleTextRevealed}
-                                                            onChange={(e) => {
-                                                                e.stopPropagation();
-                                                                setIsExampleTextRevealed(e.target.checked);
-                                                            }}
-                                                            className="w-3 h-3 accent-blue-600"
-                                                        />
-                                                        <span className="text-[9px] font-bold text-blue-600">Reveal</span>
-                                                    </label>
                                                 </div>
                                                 <button
                                                     onClick={(e) => {
@@ -1826,9 +1770,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                             </div>
                                             {studyBuddyExample ? (
                                                 <p
-                                                    className={`text-sm font-semibold leading-relaxed transition-all select-text ${
-                                                        isExampleTextRevealed ? 'text-neutral-800' : 'text-neutral-400 blur-sm'
-                                                    }`}
+                                                    className="text-sm font-semibold leading-relaxed transition-all select-text text-neutral-800"
                                                 >
                                                     {studyBuddyExample}
                                                 </p>
