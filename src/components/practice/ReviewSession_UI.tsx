@@ -1,6 +1,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Image, Bot, Sparkles } from 'lucide-react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Bot, Sparkles } from 'lucide-react';
 import { StudyItem, ReviewGrade, SessionType, User, StudyItemQuality, LearnedStatus } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditStudyItemModal from '../study_lib/EditStudyItemModal';
@@ -11,7 +11,7 @@ import { generateAvailableChallenges } from '../../utils/challengeUtils';
 import { ChallengeType, Challenge, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge, PrepositionQuizChallenge } from './TestModalTypes';
 import { calculateMasteryScore, getAllValidTestKeys } from '../../utils/srs';
 import { normalizeTestResultKeys } from '../../utils/testResultUtils';
-import { getServerUrl, getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
+import { getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
 
 const GENERATED_EXAMPLE_BUFFER_SIZE = 5;
 const GENERATED_QUIZ_BUFFER_SIZE = 4;
@@ -484,7 +484,6 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const studyBuddyQuizAnswerSeenRef = useRef<Set<string>>(new Set());
     const studyBuddyQuizRevealRef = useRef(false);
     const studyBuddyQuizRetryMessageRef = useRef<string | null>(null);
-    const serverUrl = getServerUrl(getConfig());
     const studyBuddyAiUrl = getStudyBuddyAiUrl(getConfig());
     const normalizeComparableText = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
     const hasRetryableFailedTests = React.useMemo(() => {
@@ -545,10 +544,13 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         () => (currentWord.collocationsArray || []).filter((item) => !item.isIgnored && String(item.text || '').trim()),
         [currentWord.collocationsArray]
     );
-    const actionButtonBaseClass = 'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-wide transition-all active:scale-95';
-    const viewButtonClass = `${actionButtonBaseClass} bg-white text-sky-600 border border-sky-600 hover:bg-sky-50 hover:text-sky-700 shadow-none ${activeFastReviewPanel || showSpellBox ? 'ring-2 ring-sky-200 ring-offset-2 ring-offset-white' : ''}`;
-    const aiButtonClass = `${actionButtonBaseClass} bg-white text-fuchsia-600 border border-fuchsia-600 hover:bg-fuchsia-50 hover:text-fuchsia-700 shadow-none ${activeBotPanel ? 'ring-2 ring-fuchsia-200 ring-offset-2 ring-offset-white' : ''}`;
-    const practiceButtonClass = `${actionButtonBaseClass} bg-white text-${hasRetryableFailedTests ? 'red-600 border border-red-600 hover:bg-red-50 hover:text-red-700 shadow-none' : 'amber-600 border border-amber-600 hover:bg-amber-50 hover:text-amber-700 shadow-none'}`;
+    const actionButtonBaseClass = 'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border bg-white px-3 py-2 text-[9px] font-black uppercase tracking-[0.18em] shadow-none transition-all active:scale-95 sm:px-3.5 sm:text-[10px]';
+    const speakButtonClass = `${actionButtonBaseClass} border-cyan-600 text-cyan-600 hover:bg-cyan-50 hover:text-cyan-700`;
+    const mimicButtonClass = `${actionButtonBaseClass} border-violet-600 text-violet-600 hover:bg-violet-50 hover:text-violet-700`;
+    const typingButtonClass = `${actionButtonBaseClass} border-emerald-600 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 ${showSpellBox ? 'ring-2 ring-emerald-200 ring-offset-2 ring-offset-white' : ''}`;
+    const viewButtonClass = `${actionButtonBaseClass} border-sky-600 text-sky-600 hover:bg-sky-50 hover:text-sky-700 ${activeFastReviewPanel ? 'ring-2 ring-sky-200 ring-offset-2 ring-offset-white' : ''}`;
+    const aiButtonClass = `${actionButtonBaseClass} border-fuchsia-600 text-fuchsia-600 hover:bg-fuchsia-50 hover:text-fuchsia-700 ${activeBotPanel ? 'ring-2 ring-fuchsia-200 ring-offset-2 ring-offset-white' : ''}`;
+    const practiceButtonClass = `${actionButtonBaseClass} ${hasRetryableFailedTests ? 'border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700' : 'border-amber-600 text-amber-600 hover:bg-amber-50 hover:text-amber-700'}`;
     const floatingMenuClass = 'absolute left-1/2 top-full z-20 w-max -translate-x-1/2 pt-2 transition-all duration-150';
 
     const extractFreshExamples = useCallback((rawText: string): string[] => {
@@ -1559,15 +1561,14 @@ Reply with exactly one very short sentence or phrase in English.`
                                         <MasteryScoreCalculator word={currentWord} />
                                     )}
                                 </div>
-                                <div className="flex w-full max-w-xl items-center justify-center gap-2 overflow-x-auto pb-1">
+                                <div className="relative z-10 flex w-full max-w-full items-center justify-center gap-1.5 overflow-visible px-2 sm:gap-2">
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
-                                        className={viewButtonClass}
+                                        className={speakButtonClass}
                                         title="Speak"
                                     >
                                         <Volume2 size={14} />
-                                        <span>Speak</span>
                                     </button>
 
                                     <button
@@ -1580,11 +1581,10 @@ Reply with exactly one very short sentence or phrase in English.`
                                             setShowSpellBox(false);
                                             setMimicTarget(reviewHeadword);
                                         }}
-                                        className={viewButtonClass}
+                                        className={mimicButtonClass}
                                         title="Mimic"
                                     >
                                         <Mic size={14} />
-                                        <span>Mimic</span>
                                     </button>
 
                                     <button
@@ -1603,11 +1603,10 @@ Reply with exactly one very short sentence or phrase in English.`
                                                 return next;
                                             });
                                         }}
-                                        className={viewButtonClass}
+                                        className={typingButtonClass}
                                         title="Typing check"
                                     >
                                         <Keyboard size={14} />
-                                        <span>Typing Check</span>
                                     </button>
                                     <div
                                         className="relative"
@@ -1621,7 +1620,6 @@ Reply with exactly one very short sentence or phrase in English.`
                                             className={viewButtonClass}
                                         >
                                             <Eye size={14}/>
-                                            <span>Details</span>
                                         </button>
                                         <div className={`${floatingMenuClass} ${hoveredActionMenu === 'view' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
                                             <div className="flex min-w-[220px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
@@ -1646,7 +1644,6 @@ Reply with exactly one very short sentence or phrase in English.`
                                             onClick={() => setHoveredActionMenu((current) => current === 'ai' ? null : 'ai')}
                                         >
                                             <Bot size={14}/>
-                                            <span>AI</span>
                                         </button>
                                         <div className={`${floatingMenuClass} ${hoveredActionMenu === 'ai' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
                                             <div className="flex min-w-[180px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
@@ -1661,7 +1658,6 @@ Reply with exactly one very short sentence or phrase in English.`
                                         className={practiceButtonClass}
                                     >
                                         <BrainCircuit size={14}/>
-                                        <span>Practice</span>
                                     </button>
                                 </div>
                                 <div className="w-full max-w-lg min-h-[216px]">
