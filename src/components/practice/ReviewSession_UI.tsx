@@ -545,7 +545,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         () => (currentWord.collocationsArray || []).filter((item) => !item.isIgnored && String(item.text || '').trim()),
         [currentWord.collocationsArray]
     );
-    const actionButtonBaseClass = 'flex items-center gap-2 px-6 py-3 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg transition-all active:scale-95';
+    const actionButtonBaseClass = 'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase tracking-wide transition-all active:scale-95';
     const viewButtonClass = `${actionButtonBaseClass} bg-white text-sky-600 border border-sky-600 hover:bg-sky-50 hover:text-sky-700 shadow-none ${activeFastReviewPanel || showSpellBox ? 'ring-2 ring-sky-200 ring-offset-2 ring-offset-white' : ''}`;
     const aiButtonClass = `${actionButtonBaseClass} bg-white text-fuchsia-600 border border-fuchsia-600 hover:bg-fuchsia-50 hover:text-fuchsia-700 shadow-none ${activeBotPanel ? 'ring-2 ring-fuchsia-200 ring-offset-2 ring-offset-white' : ''}`;
     const practiceButtonClass = `${actionButtonBaseClass} bg-white text-${hasRetryableFailedTests ? 'red-600 border border-red-600 hover:bg-red-50 hover:text-red-700 shadow-none' : 'amber-600 border border-amber-600 hover:bg-amber-50 hover:text-amber-700 shadow-none'}`;
@@ -1559,13 +1559,15 @@ Reply with exactly one very short sentence or phrase in English.`
                                         <MasteryScoreCalculator word={currentWord} />
                                     )}
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex w-full max-w-xl items-center justify-center gap-2 overflow-x-auto pb-1">
                                     <button
+                                        type="button"
                                         onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
-                                        className="text-neutral-400 bg-neutral-50 hover:bg-neutral-100 hover:text-neutral-900 rounded-full transition-colors"
-                                        title="Pronounce"
+                                        className={viewButtonClass}
+                                        title="Speak"
                                     >
-                                        <Volume2 size={22} />
+                                        <Volume2 size={14} />
+                                        <span>Speak</span>
                                     </button>
 
                                     <button
@@ -1578,10 +1580,11 @@ Reply with exactly one very short sentence or phrase in English.`
                                             setShowSpellBox(false);
                                             setMimicTarget(reviewHeadword);
                                         }}
-                                        className="p-2 bg-neutral-50 text-neutral-400 hover:bg-neutral-100 hover:text-violet-700 rounded-full transition-colors"
+                                        className={viewButtonClass}
                                         title="Mimic"
                                     >
-                                        <Mic size={18} />
+                                        <Mic size={14} />
+                                        <span>Mimic</span>
                                     </button>
 
                                     <button
@@ -1600,60 +1603,12 @@ Reply with exactly one very short sentence or phrase in English.`
                                                 return next;
                                             });
                                         }}
-                                        className={`p-2 rounded-full transition-colors ${showSpellBox ? 'bg-neutral-900 text-white' : 'bg-neutral-50 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900'}`}
+                                        className={viewButtonClass}
                                         title="Typing check"
                                     >
-                                        <Keyboard size={18} />
+                                        <Keyboard size={14} />
+                                        <span>Typing Check</span>
                                     </button>
-
-                                    {currentWord.img && currentWord.img.length > 0 && (
-                                        <div className="relative group/img">
-                                            <button
-                                                onClick={() => onOpenWordDetails(currentWord)}
-                                                className="p-2 bg-neutral-50 text-neutral-400 hover:bg-neutral-100 hover:text-indigo-600 rounded-full transition-colors"
-                                                title="View Images"
-                                            >
-                                                <Image size={18} />
-                                            </button>
-
-                                            <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-3 w-max max-w-[90vw] max-h-80 overflow-auto p-4 bg-white border border-neutral-200 rounded-2xl shadow-xl opacity-0 group-hover/img:opacity-100 transition-opacity z-30">
-                                                <div
-                                                    className={`grid ${currentWord.img.slice(0, 4).length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}
-                                                >
-                                                    {currentWord.img.slice(0, 4).map((raw, idx) => {
-                                                        let caption: string | null = null;
-                                                        let imageUrl = raw;
-
-                                                        // Support format: "caption:url"
-                                                        const firstColonIndex = raw.indexOf(':');
-                                                        if (firstColonIndex > -1 && raw.startsWith('http') === false) {
-                                                            caption = raw.slice(0, firstColonIndex).trim();
-                                                            imageUrl = raw.slice(firstColonIndex + 1).trim();
-                                                        }
-
-                                                        return (
-                                                            <div key={idx} className="flex flex-col gap-1">
-                                                                <img
-                                                                    src={imageUrl.startsWith('http')
-                                                                        ? imageUrl
-                                                                        : `${serverUrl}${imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`}`}
-                                                                    alt={`preview-${idx}`}
-                                                                    className="w-full h-32 object-cover rounded-lg border border-neutral-100"
-                                                                />
-                                                                {caption && (
-                                                                    <div className="text-[9px] font-semibold text-neutral-600 text-center truncate">
-                                                                        {caption}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-3">
                                     <div
                                         className="relative"
                                         onMouseEnter={() => setHoveredActionMenu('view')}
@@ -1666,6 +1621,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                             className={viewButtonClass}
                                         >
                                             <Eye size={14}/>
+                                            <span>Details</span>
                                         </button>
                                         <div className={`${floatingMenuClass} ${hoveredActionMenu === 'view' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
                                             <div className="flex min-w-[220px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
@@ -1690,6 +1646,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                             onClick={() => setHoveredActionMenu((current) => current === 'ai' ? null : 'ai')}
                                         >
                                             <Bot size={14}/>
+                                            <span>AI</span>
                                         </button>
                                         <div className={`${floatingMenuClass} ${hoveredActionMenu === 'ai' ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0'}`}>
                                             <div className="flex min-w-[180px] flex-col items-stretch gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-xl">
@@ -1704,6 +1661,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                         className={practiceButtonClass}
                                     >
                                         <BrainCircuit size={14}/>
+                                        <span>Practice</span>
                                     </button>
                                 </div>
                                 <div className="w-full max-w-lg min-h-[216px]">
