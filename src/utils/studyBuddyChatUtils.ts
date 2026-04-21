@@ -350,7 +350,7 @@ ${record}`;
 Strict output rules:
 - Do not write any intro, outro, summary, or explanation outside tables
 - If there are no issues worth fixing, reply exactly: No critical data issues found.
-- Output MUST contain exactly 2 markdown tables
+- Output MUST contain exactly 2 markdown tables (in MD format, DO NOT USE HTML format <table>)
 
 ====================
 TABLE 1: Core Usage

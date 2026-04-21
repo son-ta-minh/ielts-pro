@@ -543,16 +543,11 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
     };
 
     const splitExampleIntoSentences = (text: string) => {
-        const blocks = text
+        return text
             .replace(/\r\n/g, '\n')
-            .split(/\n{2,}/)
-            .map(block => block.trim())
+            .split('\n')
+            .map(line => line.trim())
             .filter(Boolean);
-
-        return blocks.flatMap(block => {
-            const matches = block.match(/[^.!?\n]+(?:[.!?]+["')\]]*)?|[^.!?\n]+$/g);
-            return (matches || [block]).map(sentence => sentence.trim()).filter(Boolean);
-        });
     };
 
     const learnStatusOptions = [
