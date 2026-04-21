@@ -1555,13 +1555,6 @@ Reply with exactly one very short sentence or phrase in English.`
                                         {displayText}
                                     </h2>
 
-                                    {isNewWord ? (
-                                        <ComplexityIndicator complexity={currentWord.complexity ?? 0} />
-                                    ) : (
-                                        <MasteryScoreCalculator word={currentWord} />
-                                    )}
-                                </div>
-                                <div className="relative z-10 flex w-full max-w-full items-center justify-center gap-1.5 overflow-visible px-2 sm:gap-2">
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
@@ -1571,6 +1564,13 @@ Reply with exactly one very short sentence or phrase in English.`
                                         <Volume2 size={14} />
                                     </button>
 
+                                    {isNewWord ? (
+                                        <ComplexityIndicator complexity={currentWord.complexity ?? 0} />
+                                    ) : (
+                                        <MasteryScoreCalculator word={currentWord} />
+                                    )}
+                                </div>
+                                <div className="relative z-10 flex w-full max-w-full items-center justify-center gap-1.5 overflow-visible px-2 sm:gap-2">
                                     <button
                                         type="button"
                                         onClick={(e) => {
