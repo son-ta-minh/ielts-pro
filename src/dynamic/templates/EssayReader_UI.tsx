@@ -395,7 +395,7 @@ export const EssayReaderUI: React.FC<EssayReaderUIProps> = ({
     };
 
     return (
-        <div className={`flex flex-col h-full bg-white relative overflow-hidden ${className || ''}`} onMouseUp={handleMouseUp}>
+        <div className={`flex flex-col h-screen max-h-screen min-h-0 bg-white relative overflow-hidden ${className || ''}`} onMouseUp={handleMouseUp}>
             <div className="px-4 py-1.5 border-b border-neutral-100 bg-neutral-50/30 flex justify-between items-center min-h-[46px] sticky top-0 z-10">
                 <HighlightControls 
                     isUnderlined={isUnderlined} toggleUnderline={() => setIsUnderlined(!isUnderlined)} 
@@ -409,7 +409,7 @@ export const EssayReaderUI: React.FC<EssayReaderUIProps> = ({
                     onClearSelection={handleClearSelection}
                 />
             </div>
-            <div className={`px-5 pb-5 pt-3 md:px-8 md:pb-8 md:pt-4 flex-1 overflow-y-auto stable-scrollbar relative ${isPracticeMode ? 'bg-neutral-50/20' : ''}`}>
+            <div className={`px-5 pb-5 pt-3 md:px-8 md:pb-8 md:pt-4 flex-1 min-h-0 max-h-full overflow-y-auto stable-scrollbar relative ${isPracticeMode ? 'bg-neutral-50/20' : ''}`}>
                 <div 
                     className="text-neutral-800 font-normal whitespace-pre-wrap leading-relaxed transition-all duration-200" 
                     style={{ fontSize: `${fontSize}px`, fontFamily: isSerif ? 'Georgia, serif' : 'Inter, sans-serif' }}

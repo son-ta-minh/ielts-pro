@@ -77,7 +77,7 @@ const ReadingEditView: React.FC<Props> = ({ user, unit, allWords, allLibraryTags
                 finalWordIds.push(existingWord.id);
             } else { 
                 const isPhrase = token.includes(' ');
-                const newWord = await createNewWord(token, '', '', '', '', ['ielts'], false, false, false, isPhrase, false);
+                const newWord = await createNewWord(token, '', '', '', '', [], false, false, false, isPhrase, false);
                 newWord.userId = user.id;
                 newWordsToCreate.push(newWord); 
                 finalWordIds.push(newWord.id); 

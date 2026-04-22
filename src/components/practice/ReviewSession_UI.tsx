@@ -15,6 +15,7 @@ import { getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
 
 const GENERATED_EXAMPLE_BUFFER_SIZE = 5;
 const GENERATED_QUIZ_BUFFER_SIZE = 4;
+const JAPANESE_CHAR_REGEX = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/;
 
 const normalizeExampleLine = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
 
@@ -31,6 +32,10 @@ const ALWAYS_VISIBLE_HINT_WORDS = new Set([
     'to', 'of', 'for', 'in', 'on', 'at', 'by', 'with', 'from', 'as', 'about', 'into', 'over', 'after',
     'and', 'or', 'but'
 ]);
+
+const isJapaneseStudyItem = (word: StudyItem | null | undefined): boolean => word?.libraryType === 'kotoba';
+const hasJapaneseChars = (value: string): boolean => JAPANESE_CHAR_REGEX.test(String(value || ''));
+const countVisibleChars = (value: string): number => Array.from(String(value || '').replace(/\s+/g, '')).length;
 
 const getWordRevealPrefix = (word: string, visibleChars: number): string => {
     const chars = Array.from(word);
@@ -58,7 +63,15 @@ const formatHintWord = (word: string, visibleChars: number): string => {
         : `${prefix}${HINT_MASK_SUFFIX}`;
 };
 
-const createMaskedAnswerHint = (answer: string, hintLevel: number, headword: string): string => {
+const createMaskedAnswerHint = (answer: string, hintLevel: number, headword: string, isJapanese = false): string => {
+    if (isJapanese && !/\s/.test(String(answer || '').trim())) {
+        const chars = Array.from(String(answer || '').trim());
+        if (chars.length === 0) return 'No hint right now.';
+        const revealCount = hintLevel <= 1 ? 1 : hintLevel === 2 ? Math.min(3, chars.length) : chars.length;
+        const revealed = chars.slice(0, revealCount).join('');
+        return revealCount >= chars.length ? chars.join('') : `${revealed}${HINT_MASK_SUFFIX}`;
+    }
+
     const shouldKeepHeadwordVisible = countWords(headword) === 1;
     const normalizedHeadword = normalizeHintToken(headword);
     const masked = String(answer || '')
@@ -137,12 +150,20 @@ type StudyBuddyQuizValidationResult = {
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const maskAnswerInSentence = (sentence: string, answer: string, headword: string): string => {
+const maskAnswerInSentence = (sentence: string, answer: string, headword: string, isJapanese = false): string => {
     const cleanSentence = String(sentence || '').trim();
     const cleanAnswer = String(answer || '').trim();
 
     if (!cleanSentence) return '';
     if (!cleanAnswer) return cleanSentence;
+
+    if (isJapanese || hasJapaneseChars(cleanSentence) || hasJapaneseChars(cleanAnswer) || hasJapaneseChars(headword)) {
+        if (!cleanSentence.includes(cleanAnswer)) return cleanSentence;
+        if (countVisibleChars(headword) === 1) {
+            return cleanSentence.replace(cleanAnswer, `${cleanAnswer.slice(0, 1)}${HINT_MASK_SUFFIX}`);
+        }
+        return cleanSentence.replace(cleanAnswer, '___');
+    }
 
     const pattern = new RegExp(`\\b${escapeRegExp(cleanAnswer)}\\b`, 'iu');
     if (pattern.test(cleanSentence)) {
@@ -165,9 +186,16 @@ const maskAnswerInSentence = (sentence: string, answer: string, headword: string
 
 const countWords = (value: string): number => String(value || '').trim().split(/\s+/).filter(Boolean).length;
 
-const isShortNaturalCollocation = (answer: string, headword: string): boolean => {
+const isShortNaturalCollocation = (answer: string, headword: string, isJapanese = false): boolean => {
     const cleanAnswer = String(answer || '').trim();
     if (!cleanAnswer) return false;
+
+    if (isJapanese || hasJapaneseChars(cleanAnswer) || hasJapaneseChars(headword)) {
+        const cleanHeadword = String(headword || '').trim();
+        const answerCharCount = countVisibleChars(cleanAnswer);
+        const headwordCharCount = Math.max(1, countVisibleChars(cleanHeadword));
+        return cleanAnswer.includes(cleanHeadword) && answerCharCount >= headwordCharCount && answerCharCount <= headwordCharCount + 8;
+    }
 
     const headwordWordCount = Math.max(1, countWords(headword));
     const answerWordCount = countWords(cleanAnswer);
@@ -233,10 +261,11 @@ const mergeHintWithUserInput = (answer: string, nextHint: string, currentInput: 
 };
 
 const getNextDistinctHintState = (answer: string, currentLevel: number, currentInput: string, headword: string) => {
-    const maxHintLevel = countWords(answer) + 3;
+    const isJapanese = hasJapaneseChars(answer) || hasJapaneseChars(headword);
+    const maxHintLevel = isJapanese ? 3 : countWords(answer) + 3;
 
     for (let level = currentLevel + 1; level <= maxHintLevel; level += 1) {
-        const hint = createMaskedAnswerHint(answer, level, headword);
+        const hint = createMaskedAnswerHint(answer, level, headword, isJapanese);
         const mergedHint = mergeHintWithUserInput(answer, hint, currentInput);
         if (mergedHint !== currentInput) {
             return { level, hint: mergedHint };
@@ -244,7 +273,7 @@ const getNextDistinctHintState = (answer: string, currentLevel: number, currentI
     }
 
     const fallbackLevel = Math.max(currentLevel + 1, maxHintLevel);
-    const fallbackHint = createMaskedAnswerHint(answer, fallbackLevel, headword);
+    const fallbackHint = createMaskedAnswerHint(answer, fallbackLevel, headword, isJapanese);
     return {
         level: fallbackLevel,
         hint: mergeHintWithUserInput(answer, fallbackHint, currentInput)
@@ -253,11 +282,11 @@ const getNextDistinctHintState = (answer: string, currentLevel: number, currentI
 
 const remaskQuizAnswerInput = (plainInput: string, answer: string, hintLevel: number, headword: string): string => {
     if (!answer) return plainInput;
-    const baseHint = createMaskedAnswerHint(answer, hintLevel, headword);
+    const baseHint = createMaskedAnswerHint(answer, hintLevel, headword, hasJapaneseChars(answer) || hasJapaneseChars(headword));
     return mergeHintWithUserInput(answer, baseHint, plainInput);
 };
 
-const validateStudyBuddyQuizItem = (item: StudyBuddyQuizItem | null | undefined, headword: string): StudyBuddyQuizValidationResult => {
+const validateStudyBuddyQuizItem = (item: StudyBuddyQuizItem | null | undefined, headword: string, isJapanese = false): StudyBuddyQuizValidationResult => {
     if (!item) {
         return {
             isValid: false,
@@ -277,25 +306,29 @@ const validateStudyBuddyQuizItem = (item: StudyBuddyQuizItem | null | undefined,
         };
     }
 
-    if (!isShortNaturalCollocation(answer, headword)) {
+    if (!isShortNaturalCollocation(answer, headword, isJapanese)) {
         return {
             isValid: false,
-            retryMessage: `The answer is not a short natural collocation with "${headword}". Retry with a shorter natural answer or generate a new question.`
+            retryMessage: isJapanese
+                ? `The answer is not a short natural Japanese phrase with "${headword}". Retry with a shorter natural answer or generate a new question.`
+                : `The answer is not a short natural collocation with "${headword}". Retry with a shorter natural answer or generate a new question.`
         };
     }
 
-    if (maskAnswerInSentence(question, answer, headword) === question) {
+    if (maskAnswerInSentence(question, answer, headword, isJapanese) === question) {
         return {
             isValid: false,
-            retryMessage: 'I cannot find the answer collocation in the question. Retry with a new answer or generate a new question.'
+            retryMessage: isJapanese
+                ? 'I cannot find the answer phrase in the question. Retry with a new answer or generate a new question.'
+                : 'I cannot find the answer collocation in the question. Retry with a new answer or generate a new question.'
         };
     }
 
     return { isValid: true };
 };
 
-const isValidStudyBuddyQuizItem = (item: StudyBuddyQuizItem | null | undefined, headword: string): item is StudyBuddyQuizItem =>
-    validateStudyBuddyQuizItem(item, headword).isValid;
+const isValidStudyBuddyQuizItem = (item: StudyBuddyQuizItem | null | undefined, headword: string, isJapanese = false): item is StudyBuddyQuizItem =>
+    validateStudyBuddyQuizItem(item, headword, isJapanese).isValid;
 
 export interface ReviewSessionUIProps {
   user: User;
@@ -442,6 +475,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         handleQuickReview, handleManualPractice, isQuickReviewMode, autoCloseOnFinish = false
     } = props;
     const currentWord = currentWordProp ?? EMPTY_STUDY_ITEM;
+    const isJapaneseCurrentWord = isJapaneseStudyItem(currentWord);
 
     const { current: currentIndex, max: maxIndexVisited } = progress;
     const isQuickFire = sessionType === 'random_test';
@@ -572,7 +606,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
 
         lines.forEach((line) => {
             const [questionPart, answerPart] = line.split('|||').map((item) => item.trim());
-            const validation = validateStudyBuddyQuizItem({ question: questionPart, answer: answerPart }, currentWord.word);
+            const validation = validateStudyBuddyQuizItem({ question: questionPart, answer: answerPart }, currentWord.word, isJapaneseCurrentWord);
             if (!validation.isValid) {
                 if (!retryMessage) {
                     retryMessage = validation.retryMessage || 'The quiz item is invalid. Retry with a new answer or generate a new question.';
@@ -591,7 +625,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         });
 
         return { items: result, retryMessage };
-    }, [currentWord.word]);
+    }, [currentWord.word, isJapaneseCurrentWord]);
 
     const mergeBufferedExamples = useCallback((incomingExamples: string[], options?: { replace?: boolean }) => {
         console.log('[StudyBuddy][Buffer] MERGE INCOMING', {
@@ -639,6 +673,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     }, []);
 
     const requestStudyBuddyExamples = useCallback(async (word: StudyItem, signal?: AbortSignal, replaceBuffer = false): Promise<string[]> => {
+        const isJapaneseWord = isJapaneseStudyItem(word);
         const bannedExamples = [
             ...splitExampleLines(word.example || ''),
             ...Array.from(studyBuddyExampleSeenRef.current)
@@ -655,11 +690,28 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are an expert IELTS coach and native English teacher. Reply with only English example sentences. No bullets, no numbering, no markdown, no commentary.'
+                        content: isJapaneseWord
+                            ? 'You are an expert Japanese coach and native Japanese teacher. Reply with only natural Japanese example sentences. No bullets, no numbering, no markdown, no commentary.'
+                            : 'You are an expert IELTS coach and native English teacher. Reply with only English example sentences. No bullets, no numbering, no markdown, no commentary.'
                     },
                     {
                         role: 'user',
-                        content: `Write exactly ${GENERATED_EXAMPLE_BUFFER_SIZE} distinct example sentences for the word "${word.word}".
+                        content: isJapaneseWord
+                            ? `Write exactly ${GENERATED_EXAMPLE_BUFFER_SIZE} distinct natural Japanese example sentences for the word "${word.word}".
+
+Rules:
+- ${audienceInstruction}
+- ${levelInstruction}
+- ${targetInstruction}
+- Match the learner profile above.
+- Use the exact target word naturally in Japanese context.
+- Keep the sentences in Japanese.
+- One sentence per line.
+- Keep each sentence concise.
+- Do not repeat the same pattern.
+- Do not explain anything.
+${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these examples (strictly avoid duplicates or similar structures):\n${bannedExamples.map((item) => `  • ${item}`).join('\n')}` : ''}`
+                            : `Write exactly ${GENERATED_EXAMPLE_BUFFER_SIZE} distinct example sentences for the word "${word.word}".
 
 Rules:
 - ${audienceInstruction}
@@ -771,6 +823,7 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         replaceBuffer = false,
         onFirstItem?: (item: StudyBuddyQuizItem) => void
     ): Promise<StudyBuddyQuizItem[]> => {
+        const isJapaneseWord = isJapaneseStudyItem(word);
         const bannedQuestions = Array.from(studyBuddyQuizSeenRef.current);
         const bannedAnswers = Array.from(studyBuddyQuizAnswerSeenRef.current);
         const audienceInstruction = getAudienceInstruction(user);
@@ -787,11 +840,32 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         let messages = [
             {
                 role: 'system',
-                content: 'You are an expert IELTS coach. Write only natural English example sentences and answers. No bullets, no numbering, no markdown, no explanations.'
+                content: isJapaneseWord
+                    ? 'You are an expert Japanese vocabulary coach. Write only natural Japanese example sentences and short Japanese answer phrases. No bullets, no numbering, no markdown, no explanations.'
+                    : 'You are an expert IELTS coach. Write only natural English example sentences and answers. No bullets, no numbering, no markdown, no explanations.'
             },
             {
                 role: 'user',
-                content: `Write exactly ${GENERATED_QUIZ_BUFFER_SIZE} distinct collocation quiz items for this learner and the current review word "${word.word}".
+                content: isJapaneseWord
+                    ? `Write exactly ${GENERATED_QUIZ_BUFFER_SIZE} distinct Japanese phrase quiz items for this learner and the current review word "${word.word}".
+
+Rules:
+- This test is for practicing natural Japanese usage patterns with the word "${word.word}".
+- ${audienceInstruction}
+- ${profileInstruction}
+- Each line must use this exact format: question ||| answer
+- "question" = one natural Japanese example sentence that already contains the answer phrase in the sentence. Do not use blanks.
+- answer = the exact short Japanese phrase taken from that sentence.
+- The answer must include "${word.word}" exactly.
+- Use the existing known collocations or common usage phrases for "${word.word}" first. Only invent new ones after you have already used all suitable known ones.
+- Keep the answer phrase short and natural. Avoid long descriptive clauses.
+- Prefer everyday, school, work, or daily-life situations that fit the learner profile.
+- The answer phrase must appear exactly and contiguously inside the sentence.
+- Make all ${GENERATED_QUIZ_BUFFER_SIZE} questions target different natural usage patterns. Avoid overlap in answers, even with different wording.
+- Known collocations for "${word.word}": ${collocationList.length > 0 ? collocationList.join(' | ') : 'none provided'}.
+${bannedQuestions.length > 0 ? `- Do not repeat any of these previous quiz questions:\n${bannedQuestions.map((item) => `  • ${item}`).join('\n')}` : ''}
+${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer phrases:\n${bannedAnswers.map((item) => `  • ${item}`).join('\n')}` : ''}`
+                    : `Write exactly ${GENERATED_QUIZ_BUFFER_SIZE} distinct collocation quiz items for this learner and the current review word "${word.word}".
 
 Rules:
 - This test is for practicing collocations with the word "${word.word}". A collocation is a popular and natural combination of words that native speakers commonly use together (e.g., "make a decision", "conduct research", "raise awareness"). Bad collocation is "keep fit regularly" because we don't say "keep fit" with an adverb in between. Good collocation is "keep fit" or "do exercise regularly".
@@ -1076,12 +1150,12 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         studyBuddyQuizRetryMessageRef.current = null;
 
         const applyQuizItemToUi = (item: StudyBuddyQuizItem) => {
-            if (!isValidStudyBuddyQuizItem(item, word.word)) {
+            if (!isValidStudyBuddyQuizItem(item, word.word, isJapaneseStudyItem(word))) {
                 setStudyBuddyQuizItem(null);
                 return false;
             }
 
-            const firstHint = createMaskedAnswerHint(item.answer, 1, word.word);
+            const firstHint = createMaskedAnswerHint(item.answer, 1, word.word, isJapaneseStudyItem(word));
             setStudyBuddyQuizItem(item);
             setStudyBuddyQuizStreamText('');
             setStudyBuddyQuizHint(firstHint);
@@ -1226,7 +1300,7 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         setStudyBuddyQuizAnswer('');
 
         if (bufferSnapshot.length > 0) {
-            const firstValidIndex = bufferSnapshot.findIndex((item) => isValidStudyBuddyQuizItem(item, currentWord.word));
+            const firstValidIndex = bufferSnapshot.findIndex((item) => isValidStudyBuddyQuizItem(item, currentWord.word, isJapaneseCurrentWord));
             const nextValidItem = firstValidIndex >= 0 ? bufferSnapshot[firstValidIndex] : null;
             const remainingItems = firstValidIndex >= 0 ? bufferSnapshot.slice(firstValidIndex + 1) : [];
 
@@ -1237,7 +1311,7 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
             );
 
             if (nextValidItem) {
-                const firstHint = createMaskedAnswerHint(nextValidItem.answer, 1, currentWord.word);
+                const firstHint = createMaskedAnswerHint(nextValidItem.answer, 1, currentWord.word, isJapaneseCurrentWord);
                 setStudyBuddyQuizItem(nextValidItem);
                 setStudyBuddyQuizHint(firstHint);
                 setStudyBuddyQuizHintLevel(1);
@@ -1270,7 +1344,7 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         const answer = studyBuddyQuizAnswer.trim();
         const question = studyBuddyQuizItem?.question.trim() || '';
         const expectedAnswer = studyBuddyQuizItem?.answer.trim() || '';
-        const maskedQuestion = maskAnswerInSentence(question, expectedAnswer, currentWord.word);
+        const maskedQuestion = maskAnswerInSentence(question, expectedAnswer, currentWord.word, isJapaneseCurrentWord);
         if (!answer || !question) return;
 
         setIsStudyBuddyQuizChecking(true);
@@ -1465,7 +1539,7 @@ Reply with exactly one very short sentence or phrase in English.`
 
     useEffect(() => {
         if (activeBotPanel !== 'quiz' || !studyBuddyQuizItem) return;
-        if (isValidStudyBuddyQuizItem(studyBuddyQuizItem, currentWord.word)) return;
+        if (isValidStudyBuddyQuizItem(studyBuddyQuizItem, currentWord.word, isJapaneseCurrentWord)) return;
 
         setStudyBuddyQuizItem(null);
         setStudyBuddyQuizHint(null);
@@ -1475,7 +1549,7 @@ Reply with exactly one very short sentence or phrase in English.`
         setStudyBuddyQuizError(null);
         studyBuddyQuizRevealRef.current = true;
         void prefetchStudyBuddyQuizQuestions(currentWord);
-    }, [activeBotPanel, currentWord, prefetchStudyBuddyQuizQuestions, studyBuddyQuizItem]);
+    }, [activeBotPanel, currentWord, isJapaneseCurrentWord, prefetchStudyBuddyQuizQuestions, studyBuddyQuizItem]);
 
     // Conditional returns moved below hooks
     if (initialWords.length === 0) {
@@ -1827,7 +1901,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                                         </div>
                                                     ) : (
                                                         <p className="text-sm font-semibold leading-relaxed text-neutral-800">
-                                                            {maskAnswerInSentence(studyBuddyQuizItem.question, studyBuddyQuizItem.answer, currentWord.word)}
+                                                            {maskAnswerInSentence(studyBuddyQuizItem.question, studyBuddyQuizItem.answer, currentWord.word, isJapaneseCurrentWord)}
                                                         </p>
                                                     )}
                                                     <div className="space-y-2">

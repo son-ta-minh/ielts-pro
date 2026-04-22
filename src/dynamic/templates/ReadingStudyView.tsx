@@ -317,7 +317,7 @@ export const ReadingStudyView: React.FC<Props> = ({ user, unit, allWords, onData
               '',
               '',
               '',
-              ['ielts'],
+              [],
               false,
               false,
               false,

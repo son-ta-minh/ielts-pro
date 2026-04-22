@@ -2476,7 +2476,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                         onOpenTools={handleOpenTools}
                         onExamples={(selectedText) => handleChatCoachPromptToChat('examples', 'Examples', (text) => getStudyBuddyCoachPrompt(text, 'examples'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                         onExplain={(selectedText) => handleChatCoachExplain(selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
-                        onBriefExplain={(selectedText) => handleBackgroundChatRequest(`Briefly explain for ${selectedText || ''}`)}
+                        onBriefExplain={(selectedText) => handleBackgroundChatRequest(`No intro and outro, concise and to the point, go straight to briefly explain for ${selectedText || ''}`)}
                         onCollocations={(selectedText) => handleChatCoachPromptToChat('collocations', 'Collocations', (text) => getStudyBuddyCoachPrompt(text, 'collocations'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                         onParaphrase={(selectedText) => handleChatCoachPromptToChat('paraphrase', 'Paraphrase', (text) => getStudyBuddyCoachPrompt(text, 'paraphrase'), selectedText ? { inputSource: 'selection', inputText: selectedText } : undefined)}
                     />
