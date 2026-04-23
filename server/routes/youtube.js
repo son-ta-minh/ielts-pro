@@ -35,12 +35,15 @@ function extractVideoId(input) {
     return null;
 }
 
-function fetchText(url, redirects = 3) {
+function fetchText(url, redirects = 3, extraHeaders = {}) {
     return new Promise((resolve, reject) => {
         https.get(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0',
-                'Accept-Language': 'en-US,en;q=0.9'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept': 'text/html,application/json',
+                'Cookie': 'CONSENT=YES+;',
+                ...extraHeaders
             }
         }, (res) => {
             const { statusCode = 0, headers } = res;
@@ -63,7 +66,10 @@ function fetchText(url, redirects = 3) {
             res.setEncoding('utf8');
             res.on('data', (chunk) => { body += chunk; });
             res.on('end', () => resolve(body));
-        }).on('error', reject);
+        }).on('error', (err) => {
+            console.error('HTTPS error:', err.message);
+            reject(err);
+        });
     });
 }
 
@@ -157,18 +163,72 @@ router.get('/youtube/transcript', async (req, res) => {
             return res.status(404).json({ error: 'Unable to load YouTube player data.' });
         }
 
-        const playerResponse = JSON.parse(playerResponseJson);
+        let playerResponse;
+        try {
+            playerResponse = JSON.parse(playerResponseJson);
+        } catch (err) {
+            console.error('Parse playerResponse failed');
+            return res.status(500).json({ error: 'Invalid YouTube player JSON' });
+        }
         const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
         const selectedTrack = pickCaptionTrack(captionTracks);
 
         if (!selectedTrack?.baseUrl) {
+            console.error('No caption track:', captionTracks);
             return res.status(404).json({ error: 'No subtitles found for this video.' });
         }
 
         const transcriptUrl = new URL(selectedTrack.baseUrl);
+
+        // remove bot-like params that break request
+        transcriptUrl.searchParams.delete('ip');
+        transcriptUrl.searchParams.delete('ipbits');
+
+        // keep auth params but enforce format
         transcriptUrl.searchParams.set('fmt', 'json3');
 
-        const transcriptPayload = JSON.parse(await fetchText(transcriptUrl.toString()));
+        let rawTranscript = await fetchText(
+            transcriptUrl.toString(),
+            3,
+            {
+                'Referer': `https://www.youtube.com/watch?v=${videoId}`
+            }
+        );
+
+        if (!rawTranscript) {
+            // try xml with original params
+            const xmlUrl = new URL(selectedTrack.baseUrl);
+
+            xmlUrl.searchParams.delete('ip');
+            xmlUrl.searchParams.delete('ipbits');
+
+            xmlUrl.searchParams.set('fmt', 'xml');
+
+            rawTranscript = await fetchText(
+                xmlUrl.toString(),
+                3,
+                {
+                    'Referer': `https://www.youtube.com/watch?v=${videoId}`
+                }
+            );
+        }
+
+        let transcriptPayload;
+        try {
+            transcriptPayload = JSON.parse(rawTranscript);
+        } catch (err) {
+            console.error('Transcript is not JSON');
+            console.error('Status URL:', transcriptUrl.toString());
+            console.error('Raw length:', rawTranscript.length);
+            console.error('Raw preview (500 chars):', rawTranscript.slice(0, 500));
+            return res.status(500).json({
+                error: 'Invalid transcript format',
+                debug: {
+                    url: transcriptUrl.toString(),
+                    preview: rawTranscript.slice(0, 200)
+                }
+            });
+        }
         const subtitleSegments = normalizeSubtitleEvents(transcriptPayload);
 
         if (subtitleSegments.length === 0) {
