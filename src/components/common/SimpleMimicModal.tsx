@@ -1041,11 +1041,12 @@ Return exactly one JSON object with this shape:
                         <>
                             <div className={`w-full whitespace-pre-wrap break-words text-center leading-relaxed ${getFontSizeClass(editedTarget)}`}>
                                 {guidedSentenceGroups.map((group, groupIndex) => (
-                                    <span
-                                        key={`chunk-${groupIndex}`}
-                                        className={`inline align-baseline box-decoration-clone ${showIpa && group.chunkIndex !== null ? 'border-b-2 border-indigo-300 pb-0.5' : ''}`}
-                                    >
-                                        {group.items.map(({ word, emphasis, originalIndex, prefix }) => {
+                                    <React.Fragment key={`chunk-${groupIndex}`}>
+                                        {group.items[0]?.prefix || ''}
+                                        <span
+                                            className={`inline align-baseline box-decoration-clone ${showIpa && group.chunkIndex !== null ? 'border-b-2 border-indigo-300 pb-0.5' : ''}`}
+                                        >
+                                        {group.items.map(({ word, emphasis, originalIndex, prefix }, itemIndex) => {
                                             const wordAnalysis = analysis?.words[originalIndex];
                                             let colorClass = 'text-neutral-800';
                                             if (wordAnalysis) {
@@ -1061,7 +1062,7 @@ Return exactly one JSON object with this shape:
                                             const emphasisClass = showIpa
                                                 ? emphasis === 'stress'
                                                     ? 'font-black'
-                                                    : emphasis === 'reduce'
+                                                : emphasis === 'reduce'
                                                         ? 'italic text-neutral-400'
                                                         : 'font-bold'
                                                 : 'font-bold';
@@ -1069,7 +1070,7 @@ Return exactly one JSON object with this shape:
 
                                             return (
                                                 <React.Fragment key={originalIndex}>
-                                                    {prefix}
+                                                    {itemIndex > 0 ? prefix : ''}
                                                     <span
                                                         onClick={() => speak(word)}
                                                         onMouseEnter={() => setHoverIndex(originalIndex)}
@@ -1081,7 +1082,8 @@ Return exactly one JSON object with this shape:
                                                 </React.Fragment>
                                             );
                                         })}
-                                    </span>
+                                        </span>
+                                    </React.Fragment>
                                 ))}
                                 {guidedSentenceSuffix}
                             </div>
