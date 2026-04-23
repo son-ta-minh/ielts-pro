@@ -7,7 +7,7 @@ import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 import { analyzeSpeechLocally, AnalysisResult } from '../../utils/speechAnalysis';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
-import { getConfig, getServerUrl } from '../../app/settingsManager';
+import { getConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import * as dataStore from '../../app/dataStore';
 
 const SILENCE_TIMEOUT = 3000;
@@ -33,6 +33,62 @@ interface Props {
     onSaveScore?: (score: number) => void;
     allowMinimized?: boolean; // default: false
 }
+
+interface IpaRhythmGuide {
+    stressWords: string[];
+    reduceWords: string[];
+    ipaChunks: string[];
+}
+
+const normalizeGuideToken = (value: string) =>
+    String(value || '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, '')
+        .trim();
+
+const chunkArray = <T,>(items: T[], size: number): T[][] => {
+    const result: T[][] = [];
+    for (let index = 0; index < items.length; index += size) {
+        result.push(items.slice(index, index + size));
+    }
+    return result;
+};
+
+const extractJsonObject = (value: string): string | null => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return null;
+
+    const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fencedMatch?.[1]) {
+        return fencedMatch[1].trim();
+    }
+
+    const start = trimmed.indexOf('{');
+    const end = trimmed.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+        return trimmed.slice(start, end + 1);
+    }
+
+    return null;
+};
+
+const buildFallbackIpaGuide = (sentence: string, ipaValue: string, ipaWordList?: string[] | null): IpaRhythmGuide => {
+    const tokens = sentence.split(/\s+/).filter(Boolean);
+    const ipaTokens = (ipaWordList && ipaWordList.length > 0
+        ? ipaWordList
+        : String(ipaValue || '')
+            .replace(/\//g, '')
+            .replace(/\/\/+/g, ' ')
+            .split(/\s+/)
+            .filter(Boolean)
+    );
+
+    const stressWords = tokens.filter((_, index) => index % 3 === 0).slice(0, Math.max(1, Math.ceil(tokens.length / 4)));
+    const reduceWords = tokens.filter((_, index) => index % 3 === 2).slice(0, Math.max(0, Math.floor(tokens.length / 4)));
+    const ipaChunks = chunkArray(ipaTokens, 3).map((chunk) => chunk.join(' ')).filter(Boolean);
+
+    return { stressWords, reduceWords, ipaChunks };
+};
 
 export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore, allowMinimized = false }) => {
     const [isRecording, setIsRecording] = useState(false);
@@ -61,6 +117,8 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const [isIpaLoading, setIsIpaLoading] = useState(false);
     const [showIpa, setShowIpa] = useState(false);
     const [ipaWords, setIpaWords] = useState<string[] | null>(null);
+    const [ipaRhythmGuide, setIpaRhythmGuide] = useState<IpaRhythmGuide | null>(null);
+    const [isIpaRhythmLoading, setIsIpaRhythmLoading] = useState(false);
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
     const [isAutoPlaying, setIsAutoPlaying] = useState(false);
@@ -83,6 +141,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const stopInFlightRef = useRef(false);
     const { showToast } = useToast();
     const isFreeTalkMode = !editedTarget.trim();
+    const studyBuddyAiUrl = getStudyBuddyAiUrl(getConfig());
     const isSingleWordTarget = useMemo(() => {
         const tokens = (editedTarget || '')
             .toLowerCase()
@@ -109,11 +168,103 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         setTranscript('');
         setUserAudio(null);
         setShowIpa(false);
+        setIpaRhythmGuide(null);
         setHoverIndex(null);
         setActiveTab('session');
         setSkipRestoreAnimation(false);
         setIsMinimized(false);
     }, [target]);
+
+    const fetchIpaRhythmGuide = useCallback(async (sentence: string, fetchedIpa: string, fetchedIpaWords?: string[] | null) => {
+        const trimmedSentence = sentence.trim();
+        const trimmedIpa = String(fetchedIpa || '').trim();
+        if (!trimmedSentence || !trimmedIpa) {
+            setIpaRhythmGuide(null);
+            return;
+        }
+
+        setIsIpaRhythmLoading(true);
+        try {
+            const language = detectLanguage(trimmedSentence) === 'ja' ? 'Japanese' : 'English';
+            const response = await fetch(studyBuddyAiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'You are an expert pronunciation and speech rhythm coach. Return strict JSON only with no markdown and no extra commentary.'
+                        },
+                        {
+                            role: 'user',
+                            content: `Analyze this ${language} sentence for natural speaking rhythm.
+
+Sentence:
+${trimmedSentence}
+
+Fetched IPA:
+${trimmedIpa}
+
+${fetchedIpaWords && fetchedIpaWords.length > 0 ? `IPA tokens:
+${fetchedIpaWords.join(' | ')}
+` : ''}Task:
+- Choose the most important words to stress in natural speech.
+- Choose words that are usually read lighter or faster for smoother rhythm.
+- Break the IPA into short spoken chunks so the learner can read each chunk in one breath, not word by word.
+- Keep the original wording. Do not rewrite the sentence.
+- Keep chunks short and practical for shadowing.
+- For Japanese, focus on natural phrasing chunks and key focus words, not exaggerated English-style stress.
+
+Return exactly one JSON object with this shape:
+{
+  "stressWords": ["word1", "word2"],
+  "reduceWords": ["word3", "word4"],
+  "ipaChunks": ["chunk 1", "chunk 2", "chunk 3"]
+}`
+                        }
+                    ],
+                    searchEnabled: false,
+                    temperature: 0.3,
+                    top_p: 0.85,
+                    repetition_penalty: 1.02,
+                    stream: false
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`IPA rhythm request failed (${response.status})`);
+            }
+
+            const payload = await response.json().catch(() => null);
+            const rawContent = String(payload?.choices?.[0]?.message?.content || '').trim();
+            const jsonText = extractJsonObject(rawContent);
+            const parsed = jsonText ? JSON.parse(jsonText) : null;
+
+            const guide: IpaRhythmGuide = {
+                stressWords: Array.isArray(parsed?.stressWords) ? parsed.stressWords.map((item: unknown) => String(item || '').trim()).filter(Boolean) : [],
+                reduceWords: Array.isArray(parsed?.reduceWords) ? parsed.reduceWords.map((item: unknown) => String(item || '').trim()).filter(Boolean) : [],
+                ipaChunks: Array.isArray(parsed?.ipaChunks) ? parsed.ipaChunks.map((item: unknown) => String(item || '').trim()).filter(Boolean) : []
+            };
+
+            if (guide.stressWords.length === 0 && guide.reduceWords.length === 0 && guide.ipaChunks.length === 0) {
+                setIpaRhythmGuide(buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords));
+                return;
+            }
+
+            setIpaRhythmGuide({
+                stressWords: guide.stressWords,
+                reduceWords: guide.reduceWords,
+                ipaChunks: guide.ipaChunks.length > 0 ? guide.ipaChunks : buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords).ipaChunks
+            });
+        } catch (error) {
+            console.error(error);
+            setIpaRhythmGuide(buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords));
+        } finally {
+            setIsIpaRhythmLoading(false);
+        }
+    }, [studyBuddyAiUrl]);
 
     const fetchIpa = useCallback(async () => {
         if (isFreeTalkMode) return;
@@ -130,7 +281,9 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
             if (existing && existing.ipaUs) {
                 setIpa(existing.ipaUs);
+                setIpaWords(null);
                 setShowIpa(true);
+                void fetchIpaRhythmGuide(editedTarget, existing.ipaUs, null);
                 setIsIpaLoading(false);
                 return;
             }
@@ -144,6 +297,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                 const data = await res.json();
                 setIpa(data.ipa);
                 setIpaWords(data.ipaWords || null);
+                void fetchIpaRhythmGuide(editedTarget, data.ipa, data.ipaWords || null);
                 setShowIpa(true);
             } else {
                 showToast("IPA server unavailable", "error");
@@ -153,7 +307,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         } finally {
             setIsIpaLoading(false);
         }
-    }, [editedTarget, ipa, showIpa, showToast, isFreeTalkMode]);
+    }, [editedTarget, fetchIpaRhythmGuide, ipa, showIpa, showToast, isFreeTalkMode]);
 
     const resetActivity = useCallback(() => {
         lastActivityRef.current = Date.now();
@@ -609,6 +763,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         setShowIpa(false);
         setIpa(null);
         setIpaWords(null);
+        setIpaRhythmGuide(null);
         setHoverIndex(null);
         if (isAutoPlaying) {
             clearTimeout(autoPlayRef.current);
@@ -624,6 +779,48 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             minute: '2-digit'
         });
 
+    const stressWordCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        (ipaRhythmGuide?.stressWords || []).forEach((word) => {
+            const key = normalizeGuideToken(word);
+            if (!key) return;
+            counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        return counts;
+    }, [ipaRhythmGuide]);
+
+    const reduceWordCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        (ipaRhythmGuide?.reduceWords || []).forEach((word) => {
+            const key = normalizeGuideToken(word);
+            if (!key) return;
+            counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        return counts;
+    }, [ipaRhythmGuide]);
+
+    const guidedSentenceWords = useMemo(() => {
+        const stressRemaining = new Map(stressWordCounts);
+        const reduceRemaining = new Map(reduceWordCounts);
+        return editedTarget
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((word) => {
+                const key = normalizeGuideToken(word);
+                const stressCount = key ? (stressRemaining.get(key) || 0) : 0;
+                const reduceCount = key ? (reduceRemaining.get(key) || 0) : 0;
+                const emphasis = stressCount > 0 ? 'stress' : reduceCount > 0 ? 'reduce' : 'normal';
+
+                if (key && stressCount > 0) {
+                    stressRemaining.set(key, stressCount - 1);
+                } else if (key && reduceCount > 0) {
+                    reduceRemaining.set(key, reduceCount - 1);
+                }
+
+                return { word, emphasis };
+            });
+    }, [editedTarget, reduceWordCounts, stressWordCounts]);
+
     const handleRestore = useCallback(() => {
         const selectedText = window.getSelection()?.toString().trim() || '';
         if (selectedText) {
@@ -635,6 +832,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
             setShowIpa(false);
             setIpa(null);
             setIpaWords(null);
+            setIpaRhythmGuide(null);
             setHoverIndex(null);
             setActiveTab('session');
         }
@@ -780,10 +978,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     ) : isFreeTalkMode ? null : (
                         <>
                             <div className="flex flex-wrap justify-center gap-x-1.5 gap-y-1 w-full">
-                                {editedTarget
-                                    .split(/\s+/)
-                                    .filter(Boolean)
-                                    .map((word, wIdx) => {
+                                {guidedSentenceWords.map(({ word, emphasis }, wIdx) => {
                                         const wordAnalysis = analysis?.words[wIdx];
                                         let colorClass = 'text-neutral-800';
                                         if (wordAnalysis) {
@@ -796,13 +991,21 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                                             }
                                         }
 
+                                        const emphasisClass = showIpa
+                                            ? emphasis === 'stress'
+                                                ? 'font-black underline decoration-2 underline-offset-4'
+                                                : emphasis === 'reduce'
+                                                    ? 'font-semibold italic opacity-60'
+                                                    : 'font-bold'
+                                            : 'font-bold';
+
                                         return (
                                             <span 
                                                 key={wIdx} 
                                                 onClick={() => speak(word)}
                                                 onMouseEnter={() => setHoverIndex(wIdx)}
                                                 onMouseLeave={() => setHoverIndex(null)}
-                                                className={`${getFontSizeClass(editedTarget)} font-bold cursor-pointer transition-colors leading-normal px-1 rounded ${colorClass} ${hoverIndex === wIdx ? 'bg-indigo-100/70' : 'bg-transparent'}`}
+                                                className={`${getFontSizeClass(editedTarget)} ${emphasisClass} cursor-pointer transition-colors leading-normal px-1 rounded ${colorClass} ${hoverIndex === wIdx ? 'bg-indigo-100/70' : 'bg-transparent'}`}
                                             >
                                                 {word}
                                             </span>
@@ -813,26 +1016,44 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     )}
                     
                     {showIpa && ipa && !isEditing && !isFreeTalkMode && (
-                        <div className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-mono font-normal text-neutral-600 leading-relaxed animate-in slide-in-from-top-2 duration-300 flex flex-wrap gap-x-2 gap-y-1 text-left">
-                            {(ipaWords && ipaWords.length > 0
-                                ? ipaWords
-                                : ipa
-                                    .replace(/\//g, '')
-                                    .replace(/\/\/+/g, ' ')
-                                    .split(/\s+/)
-                                    .filter(Boolean)
-                            ).map((word, index) => (
-                                <span
-                                    key={index}
-                                    className={`px-1 rounded transition-all ${
-                                        hoverIndex === index
-                                            ? 'bg-indigo-200 text-indigo-900'
-                                            : ''
-                                    }`}
-                                >
-                                    {word}
-                                </span>
-                            ))}
+                        <div className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-mono font-normal text-neutral-600 leading-relaxed animate-in slide-in-from-top-2 duration-300 text-left">
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-400">
+                                    Rhythm IPA Chunks
+                                </p>
+                                {isIpaRhythmLoading && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600">
+                                        <Loader2 size={12} className="animate-spin" />
+                                        <span>AI guiding rhythm...</span>
+                                    </span>
+                                )}
+                            </div>
+                            <div className="mt-3 space-y-2">
+                                {((ipaRhythmGuide?.ipaChunks && ipaRhythmGuide.ipaChunks.length > 0)
+                                    ? ipaRhythmGuide.ipaChunks
+                                    : (ipaWords && ipaWords.length > 0
+                                        ? chunkArray(ipaWords, 3).map((chunk) => chunk.join(' '))
+                                        : ipa
+                                            .replace(/\//g, '')
+                                            .replace(/\/\/+/g, ' ')
+                                            .split(/\s+/)
+                                            .filter(Boolean)
+                                            .reduce<string[]>((chunks, word, index, source) => {
+                                                if (index % 3 === 0) {
+                                                    chunks.push(source.slice(index, index + 3).join(' '));
+                                                }
+                                                return chunks;
+                                            }, [])
+                                    )
+                                ).map((chunk, index) => (
+                                    <div key={index} className="flex items-start gap-2">
+                                        <span className="mt-0.5 text-indigo-500">•</span>
+                                        <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-indigo-950">
+                                            /{chunk}/
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
