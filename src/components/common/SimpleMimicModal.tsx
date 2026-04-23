@@ -38,6 +38,7 @@ interface IpaRhythmGuide {
     stressWords: string[];
     reduceWords: string[];
     ipaChunks: string[];
+    textChunks: string[];
 }
 
 const normalizeGuideToken = (value: string) =>
@@ -86,8 +87,9 @@ const buildFallbackIpaGuide = (sentence: string, ipaValue: string, ipaWordList?:
     const stressWords = tokens.filter((_, index) => index % 3 === 0).slice(0, Math.max(1, Math.ceil(tokens.length / 4)));
     const reduceWords = tokens.filter((_, index) => index % 3 === 2).slice(0, Math.max(0, Math.floor(tokens.length / 4)));
     const ipaChunks = chunkArray(ipaTokens, 3).map((chunk) => chunk.join(' ')).filter(Boolean);
+    const textChunks = chunkArray(tokens, 3).map((chunk) => chunk.join(' ')).filter(Boolean);
 
-    return { stressWords, reduceWords, ipaChunks };
+    return { stressWords, reduceWords, ipaChunks, textChunks };
 };
 
 export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore, allowMinimized = false }) => {
@@ -212,6 +214,7 @@ ${fetchedIpaWords.join(' | ')}
 ` : ''}Task:
 - Choose the most important words to stress in natural speech.
 - Choose words that are usually read lighter or faster for smoother rhythm.
+- Break the original sentence into short natural speaking chunks.
 - Break the IPA into short spoken chunks so the learner can read each chunk in one breath, not word by word.
 - Keep the original wording. Do not rewrite the sentence.
 - Keep chunks short and practical for shadowing.
@@ -221,6 +224,7 @@ Return exactly one JSON object with this shape:
 {
   "stressWords": ["word1", "word2"],
   "reduceWords": ["word3", "word4"],
+  "textChunks": ["chunk 1", "chunk 2", "chunk 3"],
   "ipaChunks": ["chunk 1", "chunk 2", "chunk 3"]
 }`
                         }
@@ -245,18 +249,21 @@ Return exactly one JSON object with this shape:
             const guide: IpaRhythmGuide = {
                 stressWords: Array.isArray(parsed?.stressWords) ? parsed.stressWords.map((item: unknown) => String(item || '').trim()).filter(Boolean) : [],
                 reduceWords: Array.isArray(parsed?.reduceWords) ? parsed.reduceWords.map((item: unknown) => String(item || '').trim()).filter(Boolean) : [],
+                textChunks: Array.isArray(parsed?.textChunks) ? parsed.textChunks.map((item: unknown) => String(item || '').trim()).filter(Boolean) : [],
                 ipaChunks: Array.isArray(parsed?.ipaChunks) ? parsed.ipaChunks.map((item: unknown) => String(item || '').trim()).filter(Boolean) : []
             };
 
-            if (guide.stressWords.length === 0 && guide.reduceWords.length === 0 && guide.ipaChunks.length === 0) {
+            if (guide.stressWords.length === 0 && guide.reduceWords.length === 0 && guide.textChunks.length === 0 && guide.ipaChunks.length === 0) {
                 setIpaRhythmGuide(buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords));
                 return;
             }
 
+            const fallbackGuide = buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords);
             setIpaRhythmGuide({
                 stressWords: guide.stressWords,
                 reduceWords: guide.reduceWords,
-                ipaChunks: guide.ipaChunks.length > 0 ? guide.ipaChunks : buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords).ipaChunks
+                textChunks: guide.textChunks.length > 0 ? guide.textChunks : fallbackGuide.textChunks,
+                ipaChunks: guide.ipaChunks.length > 0 ? guide.ipaChunks : fallbackGuide.ipaChunks
             });
         } catch (error) {
             console.error(error);
@@ -802,10 +809,18 @@ Return exactly one JSON object with this shape:
     const guidedSentenceWords = useMemo(() => {
         const stressRemaining = new Map(stressWordCounts);
         const reduceRemaining = new Map(reduceWordCounts);
-        return editedTarget
-            .split(/\s+/)
-            .filter(Boolean)
-            .map((word) => {
+        const textChunks = (ipaRhythmGuide?.textChunks || []).map((chunk) =>
+            chunk
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((word) => normalizeGuideToken(word))
+                .filter(Boolean)
+        ).filter((chunk) => chunk.length > 0);
+        let activeChunkIndex = 0;
+        let activeChunkOffset = 0;
+
+        return Array.from(editedTarget.matchAll(/\S+/g)).map((match) => {
+                const word = match[0];
                 const key = normalizeGuideToken(word);
                 const stressCount = key ? (stressRemaining.get(key) || 0) : 0;
                 const reduceCount = key ? (reduceRemaining.get(key) || 0) : 0;
@@ -817,9 +832,56 @@ Return exactly one JSON object with this shape:
                     reduceRemaining.set(key, reduceCount - 1);
                 }
 
-                return { word, emphasis };
+                while (activeChunkIndex < textChunks.length && activeChunkOffset >= textChunks[activeChunkIndex].length) {
+                    activeChunkIndex += 1;
+                    activeChunkOffset = 0;
+                }
+
+                let chunkIndex: number | null = null;
+                if (activeChunkIndex < textChunks.length) {
+                    const currentChunk = textChunks[activeChunkIndex];
+                    const expectedKey = currentChunk[activeChunkOffset];
+                    if (!expectedKey || expectedKey === key) {
+                        chunkIndex = activeChunkIndex;
+                        activeChunkOffset += 1;
+                    }
+                }
+
+                return {
+                    word,
+                    emphasis,
+                    chunkIndex,
+                    start: match.index ?? 0,
+                    end: (match.index ?? 0) + word.length
+                };
             });
-    }, [editedTarget, reduceWordCounts, stressWordCounts]);
+    }, [editedTarget, ipaRhythmGuide?.textChunks, reduceWordCounts, stressWordCounts]);
+
+    const guidedSentenceGroups = useMemo(() => {
+        const groups: Array<{ chunkIndex: number | null; items: Array<{ word: string; emphasis: string; originalIndex: number; prefix: string }> }> = [];
+
+        guidedSentenceWords.forEach((item, index) => {
+            const previousWord = guidedSentenceWords[index - 1];
+            const prefix = editedTarget.slice(previousWord ? previousWord.end : 0, item.start);
+            const currentGroup = groups[groups.length - 1];
+            if (!currentGroup || currentGroup.chunkIndex !== item.chunkIndex) {
+                groups.push({
+                    chunkIndex: item.chunkIndex,
+                    items: [{ word: item.word, emphasis: item.emphasis, originalIndex: index, prefix }]
+                });
+                return;
+            }
+
+            currentGroup.items.push({ word: item.word, emphasis: item.emphasis, originalIndex: index, prefix });
+        });
+
+        return groups;
+    }, [editedTarget, guidedSentenceWords]);
+
+    const guidedSentenceSuffix = useMemo(() => {
+        const lastWord = guidedSentenceWords[guidedSentenceWords.length - 1];
+        return editedTarget.slice(lastWord ? lastWord.end : 0);
+    }, [editedTarget, guidedSentenceWords]);
 
     const handleRestore = useCallback(() => {
         const selectedText = window.getSelection()?.toString().trim() || '';
@@ -977,83 +1039,82 @@ Return exactly one JSON object with this shape:
                         </div>
                     ) : isFreeTalkMode ? null : (
                         <>
-                            <div className="flex flex-wrap justify-center gap-x-1.5 gap-y-1 w-full">
-                                {guidedSentenceWords.map(({ word, emphasis }, wIdx) => {
-                                        const wordAnalysis = analysis?.words[wIdx];
-                                        let colorClass = 'text-neutral-800';
-                                        if (wordAnalysis) {
-                                            switch (wordAnalysis.status) {
-                                                case 'correct': colorClass = 'text-emerald-600'; break;
-                                                case 'near': colorClass = 'text-amber-500'; break;
-                                                case 'wrong': colorClass = 'text-rose-500'; break;
-                                                case 'missing': colorClass = 'text-neutral-300'; break;
-                                                default: colorClass = 'text-neutral-800';
+                            <div className={`w-full whitespace-pre-wrap break-words text-center leading-relaxed ${getFontSizeClass(editedTarget)}`}>
+                                {guidedSentenceGroups.map((group, groupIndex) => (
+                                    <span
+                                        key={`chunk-${groupIndex}`}
+                                        className={`inline align-baseline box-decoration-clone ${showIpa && group.chunkIndex !== null ? 'border-b-2 border-indigo-300 pb-0.5' : ''}`}
+                                    >
+                                        {group.items.map(({ word, emphasis, originalIndex, prefix }) => {
+                                            const wordAnalysis = analysis?.words[originalIndex];
+                                            let colorClass = 'text-neutral-800';
+                                            if (wordAnalysis) {
+                                                switch (wordAnalysis.status) {
+                                                    case 'correct': colorClass = 'text-emerald-600'; break;
+                                                    case 'near': colorClass = 'text-amber-500'; break;
+                                                    case 'wrong': colorClass = 'text-rose-500'; break;
+                                                    case 'missing': colorClass = 'text-neutral-300'; break;
+                                                    default: colorClass = 'text-neutral-800';
+                                                }
                                             }
-                                        }
 
-                                        const emphasisClass = showIpa
-                                            ? emphasis === 'stress'
-                                                ? 'font-black underline decoration-2 underline-offset-4'
-                                                : emphasis === 'reduce'
-                                                    ? 'font-semibold italic opacity-60'
-                                                    : 'font-bold'
-                                            : 'font-bold';
+                                            const emphasisClass = showIpa
+                                                ? emphasis === 'stress'
+                                                    ? 'font-black'
+                                                    : emphasis === 'reduce'
+                                                        ? 'italic text-neutral-400'
+                                                        : 'font-bold'
+                                                : 'font-bold';
+                                            const hoverClass = hoverIndex === originalIndex ? 'bg-indigo-100/70 ring-2 ring-indigo-200 ring-offset-1' : 'bg-transparent';
 
-                                        return (
-                                            <span 
-                                                key={wIdx} 
-                                                onClick={() => speak(word)}
-                                                onMouseEnter={() => setHoverIndex(wIdx)}
-                                                onMouseLeave={() => setHoverIndex(null)}
-                                                className={`${getFontSizeClass(editedTarget)} ${emphasisClass} cursor-pointer transition-colors leading-normal px-1 rounded ${colorClass} ${hoverIndex === wIdx ? 'bg-indigo-100/70' : 'bg-transparent'}`}
-                                            >
-                                                {word}
-                                            </span>
-                                        );
-                                    })}
+                                            return (
+                                                <React.Fragment key={originalIndex}>
+                                                    {prefix}
+                                                    <span
+                                                        onClick={() => speak(word)}
+                                                        onMouseEnter={() => setHoverIndex(originalIndex)}
+                                                        onMouseLeave={() => setHoverIndex(null)}
+                                                        className={`${emphasisClass} cursor-pointer transition-colors leading-normal px-1 rounded ${colorClass} ${hoverClass}`}
+                                                    >
+                                                        {word}
+                                                    </span>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </span>
+                                ))}
+                                {guidedSentenceSuffix}
                             </div>
                         </>
                     )}
                     
                     {showIpa && ipa && !isEditing && !isFreeTalkMode && (
-                        <div className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-mono font-normal text-neutral-600 leading-relaxed animate-in slide-in-from-top-2 duration-300 text-left">
-                            <div className="flex items-center justify-between gap-3">
-                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-400">
-                                    Rhythm IPA Chunks
-                                </p>
-                                {isIpaRhythmLoading && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600">
-                                        <Loader2 size={12} className="animate-spin" />
-                                        <span>AI guiding rhythm...</span>
-                                    </span>
-                                )}
-                            </div>
-                            <div className="mt-3 space-y-2">
-                                {((ipaRhythmGuide?.ipaChunks && ipaRhythmGuide.ipaChunks.length > 0)
-                                    ? ipaRhythmGuide.ipaChunks
-                                    : (ipaWords && ipaWords.length > 0
-                                        ? chunkArray(ipaWords, 3).map((chunk) => chunk.join(' '))
-                                        : ipa
-                                            .replace(/\//g, '')
-                                            .replace(/\/\/+/g, ' ')
-                                            .split(/\s+/)
-                                            .filter(Boolean)
-                                            .reduce<string[]>((chunks, word, index, source) => {
-                                                if (index % 3 === 0) {
-                                                    chunks.push(source.slice(index, index + 3).join(' '));
-                                                }
-                                                return chunks;
-                                            }, [])
-                                    )
-                                ).map((chunk, index) => (
-                                    <div key={index} className="flex items-start gap-2">
-                                        <span className="mt-0.5 text-indigo-500">•</span>
-                                        <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-indigo-950">
-                                            /{chunk}/
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
+                        <div className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-mono font-normal text-neutral-600 leading-relaxed animate-in slide-in-from-top-2 duration-300 flex flex-wrap gap-x-2 gap-y-1 text-left">
+                            {(ipaWords && ipaWords.length > 0
+                                ? ipaWords
+                                : ipa
+                                    .replace(/\//g, '')
+                                    .replace(/\/\/+/g, ' ')
+                                    .split(/\s+/)
+                                    .filter(Boolean)
+                            ).map((word, index) => (
+                                <span
+                                    key={index}
+                                    className={`px-1 rounded transition-all ${
+                                        hoverIndex === index
+                                            ? 'bg-indigo-200 text-indigo-900'
+                                            : ''
+                                    }`}
+                                >
+                                    {word}
+                                </span>
+                            ))}
+                            {isIpaRhythmLoading && (
+                                <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600">
+                                    <Loader2 size={12} className="animate-spin" />
+                                    <span>AI guiding chunks...</span>
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>
