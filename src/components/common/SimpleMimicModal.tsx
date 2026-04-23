@@ -36,8 +36,6 @@ interface Props {
 
 interface IpaRhythmGuide {
     stressWords: string[];
-    reduceWords: string[];
-    ipaChunks: string[];
     textChunks: string[];
 }
 
@@ -73,23 +71,12 @@ const extractJsonObject = (value: string): string | null => {
     return null;
 };
 
-const buildFallbackIpaGuide = (sentence: string, ipaValue: string, ipaWordList?: string[] | null): IpaRhythmGuide => {
+const buildFallbackIpaGuide = (sentence: string): IpaRhythmGuide => {
     const tokens = sentence.split(/\s+/).filter(Boolean);
-    const ipaTokens = (ipaWordList && ipaWordList.length > 0
-        ? ipaWordList
-        : String(ipaValue || '')
-            .replace(/\//g, '')
-            .replace(/\/\/+/g, ' ')
-            .split(/\s+/)
-            .filter(Boolean)
-    );
-
     const stressWords = tokens.filter((_, index) => index % 3 === 0).slice(0, Math.max(1, Math.ceil(tokens.length / 4)));
-    const reduceWords = tokens.filter((_, index) => index % 3 === 2).slice(0, Math.max(0, Math.floor(tokens.length / 4)));
-    const ipaChunks = chunkArray(ipaTokens, 3).map((chunk) => chunk.join(' ')).filter(Boolean);
     const textChunks = chunkArray(tokens, 3).map((chunk) => chunk.join(' ')).filter(Boolean);
 
-    return { stressWords, reduceWords, ipaChunks, textChunks };
+    return { stressWords, textChunks };
 };
 
 export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore, allowMinimized = false }) => {
@@ -183,11 +170,10 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
         setIsMinimized(false);
     }, [target]);
 
-    const fetchIpaRhythmGuide = useCallback(async (sentence: string, fetchedIpa: string, fetchedIpaWords?: string[] | null) => {
+    const fetchIpaRhythmGuide = useCallback(async (sentence: string) => {
         const requestId = ipaRequestRef.current;
         const trimmedSentence = sentence.trim();
-        const trimmedIpa = String(fetchedIpa || '').trim();
-        if (!trimmedSentence || !trimmedIpa) {
+        if (!trimmedSentence) {
             setIpaRhythmGuide(null);
             return;
         }
@@ -204,35 +190,24 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
                     messages: [
                         {
                             role: 'system',
-                            content: 'You are an expert pronunciation and speech rhythm coach. Return strict JSON only with no markdown and no extra commentary.'
+                            content: 'Return strict JSON only.'
                         },
                         {
                             role: 'user',
-                            content: `Analyze this ${language} sentence for natural speaking rhythm.
+                            content: `For this ${language} sentence, pick the key stressed words and split it into short speaking chunks.
 
 Sentence:
 ${trimmedSentence}
 
-Fetched IPA:
-${trimmedIpa}
-
-${fetchedIpaWords && fetchedIpaWords.length > 0 ? `IPA tokens:
-${fetchedIpaWords.join(' | ')}
-` : ''}Task:
-- Choose the most important words to stress in natural speech.
-- Choose words that are usually read lighter or faster for smoother rhythm.
-- Break the original sentence into short natural speaking chunks.
-- Break the IPA into short spoken chunks so the learner can read each chunk in one breath, not word by word.
-- Keep the original wording. Do not rewrite the sentence.
-- Keep chunks short and practical for shadowing.
-- For Japanese, focus on natural phrasing chunks and key focus words, not exaggerated English-style stress.
+Rules:
+- Keep original wording.
+- Keep chunks short and natural for shadowing.
+- Choose only the most important stress words.
 
 Return exactly one JSON object with this shape:
 {
   "stressWords": ["word1", "word2"],
-  "reduceWords": ["word3", "word4"],
-  "textChunks": ["chunk 1", "chunk 2", "chunk 3"],
-  "ipaChunks": ["chunk 1", "chunk 2", "chunk 3"]
+  "textChunks": ["chunk 1", "chunk 2", "chunk 3"]
 }`
                         }
                     ],
@@ -255,33 +230,29 @@ Return exactly one JSON object with this shape:
 
             const guide: IpaRhythmGuide = {
                 stressWords: Array.isArray(parsed?.stressWords) ? parsed.stressWords.map((item: unknown) => String(item || '').trim()).filter(Boolean) : [],
-                reduceWords: Array.isArray(parsed?.reduceWords) ? parsed.reduceWords.map((item: unknown) => String(item || '').trim()).filter(Boolean) : [],
-                textChunks: Array.isArray(parsed?.textChunks) ? parsed.textChunks.map((item: unknown) => String(item || '').trim()).filter(Boolean) : [],
-                ipaChunks: Array.isArray(parsed?.ipaChunks) ? parsed.ipaChunks.map((item: unknown) => String(item || '').trim()).filter(Boolean) : []
+                textChunks: Array.isArray(parsed?.textChunks) ? parsed.textChunks.map((item: unknown) => String(item || '').trim()).filter(Boolean) : []
             };
 
             if (ipaRequestRef.current !== requestId) {
                 return;
             }
 
-            if (guide.stressWords.length === 0 && guide.reduceWords.length === 0 && guide.textChunks.length === 0 && guide.ipaChunks.length === 0) {
-                setIpaRhythmGuide(buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords));
+            if (guide.stressWords.length === 0 && guide.textChunks.length === 0) {
+                setIpaRhythmGuide(buildFallbackIpaGuide(trimmedSentence));
                 return;
             }
 
-            const fallbackGuide = buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords);
+            const fallbackGuide = buildFallbackIpaGuide(trimmedSentence);
             setIpaRhythmGuide({
                 stressWords: guide.stressWords,
-                reduceWords: guide.reduceWords,
-                textChunks: guide.textChunks.length > 0 ? guide.textChunks : fallbackGuide.textChunks,
-                ipaChunks: guide.ipaChunks.length > 0 ? guide.ipaChunks : fallbackGuide.ipaChunks
+                textChunks: guide.textChunks.length > 0 ? guide.textChunks : fallbackGuide.textChunks
             });
         } catch (error) {
             console.error(error);
             if (ipaRequestRef.current !== requestId) {
                 return;
             }
-            setIpaRhythmGuide(buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords));
+            setIpaRhythmGuide(buildFallbackIpaGuide(trimmedSentence));
         } finally {
             if (ipaRequestRef.current === requestId) {
                 setIsIpaRhythmLoading(false);
@@ -309,7 +280,7 @@ Return exactly one JSON object with this shape:
                 setIpa(existing.ipaUs);
                 setIpaWords(null);
                 setShowIpa(true);
-                void fetchIpaRhythmGuide(requestedTarget, existing.ipaUs, null);
+                void fetchIpaRhythmGuide(requestedTarget);
                 return;
             }
 
@@ -323,7 +294,7 @@ Return exactly one JSON object with this shape:
                 if (ipaRequestRef.current !== requestId) return;
                 setIpa(data.ipa);
                 setIpaWords(data.ipaWords || null);
-                void fetchIpaRhythmGuide(requestedTarget, data.ipa, data.ipaWords || null);
+                void fetchIpaRhythmGuide(requestedTarget);
                 setShowIpa(true);
             } else {
                 if (ipaRequestRef.current !== requestId) return;
@@ -819,19 +790,8 @@ Return exactly one JSON object with this shape:
         return counts;
     }, [ipaRhythmGuide]);
 
-    const reduceWordCounts = useMemo(() => {
-        const counts = new Map<string, number>();
-        (ipaRhythmGuide?.reduceWords || []).forEach((word) => {
-            const key = normalizeGuideToken(word);
-            if (!key) return;
-            counts.set(key, (counts.get(key) || 0) + 1);
-        });
-        return counts;
-    }, [ipaRhythmGuide]);
-
     const guidedSentenceWords = useMemo(() => {
         const stressRemaining = new Map(stressWordCounts);
-        const reduceRemaining = new Map(reduceWordCounts);
         const textChunks = (ipaRhythmGuide?.textChunks || []).map((chunk) =>
             chunk
                 .split(/\s+/)
@@ -846,13 +806,10 @@ Return exactly one JSON object with this shape:
                 const word = match[0];
                 const key = normalizeGuideToken(word);
                 const stressCount = key ? (stressRemaining.get(key) || 0) : 0;
-                const reduceCount = key ? (reduceRemaining.get(key) || 0) : 0;
-                const emphasis = stressCount > 0 ? 'stress' : reduceCount > 0 ? 'reduce' : 'normal';
+                const emphasis = stressCount > 0 ? 'stress' : 'reduce';
 
                 if (key && stressCount > 0) {
                     stressRemaining.set(key, stressCount - 1);
-                } else if (key && reduceCount > 0) {
-                    reduceRemaining.set(key, reduceCount - 1);
                 }
 
                 while (activeChunkIndex < textChunks.length && activeChunkOffset >= textChunks[activeChunkIndex].length) {
@@ -878,7 +835,7 @@ Return exactly one JSON object with this shape:
                     end: (match.index ?? 0) + word.length
                 };
             });
-    }, [editedTarget, ipaRhythmGuide?.textChunks, reduceWordCounts, stressWordCounts]);
+    }, [editedTarget, ipaRhythmGuide?.textChunks, stressWordCounts]);
 
     const guidedSentenceGroups = useMemo(() => {
         const groups: Array<{ chunkIndex: number | null; items: Array<{ word: string; emphasis: string; originalIndex: number; prefix: string }> }> = [];
@@ -1086,9 +1043,7 @@ Return exactly one JSON object with this shape:
                                             const emphasisClass = showIpa
                                                 ? emphasis === 'stress'
                                                     ? 'font-black'
-                                                : emphasis === 'reduce'
-                                                        ? 'italic text-neutral-400'
-                                                        : 'font-bold'
+                                                    : 'text-neutral-400'
                                                 : 'font-bold';
                                             const hoverClass = hoverIndex === originalIndex ? 'bg-indigo-100/70 ring-2 ring-indigo-200 ring-offset-1' : 'bg-transparent';
 
@@ -1110,7 +1065,7 @@ Return exactly one JSON object with this shape:
                                         {showIpa && group.chunkIndex !== null && (
                                             <span
                                                 aria-hidden="true"
-                                                className="mx-1 inline-block h-2.5 w-2.5 translate-y-[-0.05em] rounded-full bg-rose-500 align-middle"
+                                                className="mx-1 inline-block h-1.5 w-1.5 translate-y-[-0.05em] rounded-full bg-rose-500 align-middle"
                                             />
                                         )}
                                     </React.Fragment>

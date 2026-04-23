@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, ListeningItem, FocusColor } from '../../app/types';
+import { User, ListeningItem, FocusColor, ListeningSubtitleSegment } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
@@ -14,6 +14,162 @@ import { UniversalCard } from '../../components/common/UniversalCard';
 import { TagBrowser } from '../../components/common/TagBrowser';
 import { ResourceActions } from '../page/ResourceActions';
 import { FileSelector } from '../../components/common/FileSelector';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
+
+declare global {
+    interface Window {
+        YT?: any;
+        onYouTubeIframeAPIReady?: () => void;
+    }
+}
+
+let youtubeIframeApiPromise: Promise<any> | null = null;
+
+const loadYouTubeIframeApi = () => {
+    if (window.YT?.Player) {
+        return Promise.resolve(window.YT);
+    }
+
+    if (youtubeIframeApiPromise) {
+        return youtubeIframeApiPromise;
+    }
+
+    youtubeIframeApiPromise = new Promise((resolve, reject) => {
+        const existingScript = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+        if (!existingScript) {
+            const script = document.createElement('script');
+            script.src = 'https://www.youtube.com/iframe_api';
+            script.async = true;
+            script.onerror = () => reject(new Error('Failed to load YouTube iframe API.'));
+            document.body.appendChild(script);
+        }
+
+        window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+
+        const timeout = window.setTimeout(() => {
+            if (!window.YT?.Player) {
+                reject(new Error('YouTube iframe API timeout.'));
+            }
+        }, 10000);
+
+        Promise.resolve().then(() => {
+            if (window.YT?.Player) {
+                window.clearTimeout(timeout);
+                resolve(window.YT);
+            }
+        });
+    });
+
+    return youtubeIframeApiPromise;
+};
+
+const formatMediaTime = (ms: number) => {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const findActiveSubtitleIndex = (segments: ListeningSubtitleSegment[], currentTimeMs: number) => {
+    if (!segments.length) return -1;
+    return segments.findIndex((segment, index) => {
+        const start = segment.startMs;
+        const end = segment.startMs + Math.max(segment.durationMs, 600);
+        const nextStart = segments[index + 1]?.startMs ?? Number.POSITIVE_INFINITY;
+        return currentTimeMs >= start && currentTimeMs < Math.max(end, nextStart);
+    });
+};
+
+const SyncedSubtitleView: React.FC<{
+    segments: ListeningSubtitleSegment[];
+    currentTimeMs: number;
+    onSeek: (timeMs: number) => void;
+}> = ({ segments, currentTimeMs, onSeek }) => {
+    const activeIndex = useMemo(() => findActiveSubtitleIndex(segments, currentTimeMs), [segments, currentTimeMs]);
+    const activeRef = useRef<HTMLSpanElement | null>(null);
+
+    useEffect(() => {
+        activeRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    }, [activeIndex]);
+
+    return (
+        <div className="h-full overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Live Subtitle</p>
+                <p className="text-xs font-bold text-neutral-500">{formatMediaTime(currentTimeMs)}</p>
+            </div>
+            <div className="select-text whitespace-pre-wrap text-lg leading-relaxed text-neutral-700">
+                {segments.map((segment, index) => {
+                    const isActive = index === activeIndex;
+                    return (
+                        <span
+                            key={`${segment.startMs}-${index}`}
+                            ref={isActive ? activeRef : null}
+                            onDoubleClick={() => onSeek(segment.startMs)}
+                            className={`rounded-md px-1 py-0.5 transition-all ${isActive ? 'bg-amber-200 text-neutral-950 shadow-sm' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                            title="Double-click to jump to this subtitle"
+                        >
+                            {segment.text}{' '}
+                        </span>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+const YouTubePlayerPanel: React.FC<{
+    videoId: string;
+    onTimeChange: (timeMs: number) => void;
+    seekToMsRef: React.MutableRefObject<((timeMs: number) => void) | null>;
+}> = ({ videoId, onTimeChange, seekToMsRef }) => {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const playerRef = useRef<any>(null);
+
+    useEffect(() => {
+        let pollingId: number | null = null;
+        let mounted = true;
+
+        loadYouTubeIframeApi()
+            .then((YT) => {
+                if (!mounted || !containerRef.current) return;
+
+                playerRef.current = new YT.Player(containerRef.current, {
+                    videoId,
+                    playerVars: {
+                        rel: 0,
+                        modestbranding: 1
+                    }
+                });
+
+                seekToMsRef.current = (timeMs: number) => {
+                    playerRef.current?.seekTo?.(Math.max(0, timeMs / 1000), true);
+                };
+
+                pollingId = window.setInterval(() => {
+                    const player = playerRef.current;
+                    if (!player?.getCurrentTime) return;
+                    const currentSeconds = Number(player.getCurrentTime() || 0);
+                    onTimeChange(currentSeconds * 1000);
+                }, 200);
+            })
+            .catch(() => {
+                onTimeChange(0);
+            });
+
+        return () => {
+            mounted = false;
+            seekToMsRef.current = null;
+            if (pollingId !== null) window.clearInterval(pollingId);
+            if (playerRef.current?.destroy) {
+                playerRef.current.destroy();
+            }
+            playerRef.current = null;
+        };
+    }, [videoId, onTimeChange, seekToMsRef]);
+
+    return <div ref={containerRef} className="aspect-video w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-950 shadow-sm" />;
+};
 
 interface Props {
   user: User;
@@ -36,15 +192,19 @@ interface ListeningPracticeProps {
 
 const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onClose, item, onUpdate, showDash, onToggleDash }) => {
     const audioLinks = item.audioLinks || [];
+    const subtitleSegments = item.subtitleSegments || [];
+    const isYoutubeItem = item.sourceType === 'youtube_media' && !!item.youtubeVideoId && subtitleSegments.length > 0;
     const [currentIdx, setCurrentIdx] = useState<number>(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [editableText, setEditableText] = useState(item.text);
     const [isEditMode, setIsEditMode] = useState(false); 
+    const [youtubeCurrentTimeMs, setYoutubeCurrentTimeMs] = useState(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const saveTimeoutRef = useRef<any>(null);
     const stopAtTimeRef = useRef<number | null>(null);
+    const youtubeSeekToMsRef = useRef<((timeMs: number) => void) | null>(null);
 
     // Audio Cleanup on Unmount
     useEffect(() => {
@@ -60,9 +220,13 @@ const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onCl
             setCurrentIdx(0);
         } else {
             setEditableText(item.text); 
-            loadTrack(0, false); 
+            setIsEditMode(false);
+            setYoutubeCurrentTimeMs(0);
+            if (!isYoutubeItem) {
+                loadTrack(0, false); 
+            }
         }
-    }, [isOpen, item.id]);
+    }, [isOpen, item.id, isYoutubeItem]);
 
     const handleTextUpdate = (newText: string) => {
         setEditableText(newText);
@@ -269,12 +433,18 @@ const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onCl
                     </div>
                     <div className="flex items-center gap-3">
                          <div className="bg-neutral-100 p-1 rounded-xl flex items-center">
-                            <button onClick={onToggleDash} className={`p-2 rounded-lg transition-all ${showDash ? 'bg-white shadow-sm text-indigo-600' : 'text-neutral-400 hover:text-neutral-600'}`} title="Toggle Audio Marks">
-                                <ScanLine size={16} />
-                            </button>
-                            <div className="w-px h-4 bg-neutral-200 mx-1"></div>
+                            {!isYoutubeItem && (
+                                <>
+                                    <button onClick={onToggleDash} className={`p-2 rounded-lg transition-all ${showDash ? 'bg-white shadow-sm text-indigo-600' : 'text-neutral-400 hover:text-neutral-600'}`} title="Toggle Audio Marks">
+                                        <ScanLine size={16} />
+                                    </button>
+                                    <div className="w-px h-4 bg-neutral-200 mx-1"></div>
+                                </>
+                            )}
                             <button onClick={() => setIsEditMode(false)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${!isEditMode ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500'}`}>Read</button>
-                            <button onClick={() => setIsEditMode(true)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${isEditMode ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500'}`}>Edit Raw</button>
+                            {!isYoutubeItem && (
+                                <button onClick={() => setIsEditMode(true)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${isEditMode ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500'}`}>Edit Raw</button>
+                            )}
                          </div>
                         <button onClick={handleClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full"><X size={20}/></button>
                     </div>
@@ -289,6 +459,25 @@ const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onCl
                                 className="w-full h-full p-6 bg-white border border-neutral-200 rounded-2xl resize-none outline-none text-lg font-medium leading-relaxed font-mono text-neutral-700 shadow-sm"
                                 placeholder="Paste transcript here..."
                             />
+                        ) : isYoutubeItem ? (
+                            <div className="grid h-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)]">
+                                <div className="flex flex-col gap-4">
+                                    <YouTubePlayerPanel
+                                        key={item.youtubeVideoId}
+                                        videoId={item.youtubeVideoId!}
+                                        onTimeChange={setYoutubeCurrentTimeMs}
+                                        seekToMsRef={youtubeSeekToMsRef}
+                                    />
+                                    <div className="rounded-2xl border border-neutral-200 bg-white p-4 text-sm text-neutral-500 shadow-sm">
+                                        Subtitle text is selectable. Double-click a subtitle chunk to jump the video.
+                                    </div>
+                                </div>
+                                <SyncedSubtitleView
+                                    segments={subtitleSegments}
+                                    currentTimeMs={youtubeCurrentTimeMs}
+                                    onSeek={(timeMs) => youtubeSeekToMsRef.current?.(timeMs)}
+                                />
+                            </div>
                         ) : (
                             <div className="h-full flex flex-col bg-white border border-neutral-200 rounded-2xl shadow-sm p-8 overflow-y-auto">
                                 <InteractiveTranscript 
@@ -305,6 +494,18 @@ const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onCl
 
                 {/* Compact Audio Controls Footer */}
                 <div className="px-6 py-3 bg-white border-t border-neutral-100 shrink-0 flex items-center gap-4">
+                    {isYoutubeItem ? (
+                        <>
+                            <div className="w-48 shrink-0">
+                                <h4 className="text-xs font-bold text-neutral-900 truncate">YouTube Video</h4>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-red-500">{subtitleSegments.length} Subtitle Chunks</p>
+                            </div>
+                            <div className="flex-1 rounded-full bg-neutral-100 px-4 py-2 text-xs font-medium text-neutral-500">
+                                Current subtitle sync: {formatMediaTime(youtubeCurrentTimeMs)}
+                            </div>
+                        </>
+                    ) : (
+                        <>
                     {/* Track Info */}
                     <div className="w-48 shrink-0">
                         <h4 className="text-xs font-bold text-neutral-900 truncate">{currentFilename}</h4>
@@ -356,6 +557,8 @@ const ListeningPracticeModal: React.FC<ListeningPracticeProps> = ({ isOpen, onCl
                             <span className="text-[10px] font-mono font-bold text-neutral-400 w-8 text-left">{formatTime(duration)}</span>
                         </div>
                     </div>
+                        </>
+                    )}
                 </div>
              </div>
         </div>
@@ -531,9 +734,79 @@ const AddEditModal: React.FC<AddEditModalProps> = ({ isOpen, onClose, onSave, in
   );
 };
 
+interface YoutubeImportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onImport: (url: string) => Promise<void>;
+}
+
+const YoutubeImportModal: React.FC<YoutubeImportModalProps> = ({ isOpen, onClose, onImport }) => {
+  const [url, setUrl] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setUrl('');
+      setIsSubmitting(false);
+      setError('');
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!url.trim()) return;
+    setIsSubmitting(true);
+    setError('');
+    try {
+      await onImport(url.trim());
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'Import failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-[2rem] border border-neutral-200 bg-white shadow-2xl">
+        <header className="flex items-start justify-between border-b border-neutral-100 px-8 py-6">
+          <div>
+            <h3 className="text-xl font-black text-neutral-900">New YouTube Media</h3>
+            <p className="mt-1 text-sm text-neutral-500">Paste a YouTube URL. The app will fetch subtitles and create a synced listening card.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full p-2 text-neutral-400 hover:bg-neutral-100"><X size={20} /></button>
+        </header>
+        <main className="space-y-3 px-8 py-6">
+          <label className="block text-xs font-bold text-neutral-500">YouTube URL</label>
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-900"
+            autoFocus
+          />
+          <p className="text-[11px] text-neutral-400">If the video has captions, the transcript will be imported as selectable text with real-time highlight.</p>
+          {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
+        </main>
+        <footer className="flex justify-end gap-3 border-t border-neutral-100 bg-neutral-50/50 px-8 py-5">
+          <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold text-neutral-500 hover:bg-neutral-100">Cancel</button>
+          <button type="submit" disabled={isSubmitting || !url.trim()} className="rounded-xl bg-neutral-900 px-5 py-2 text-sm font-black text-white disabled:opacity-50">
+            {isSubmitting ? 'Importing...' : 'Import'}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+};
+
 export const ListeningCardPage: React.FC<Props> = ({ user }) => {
   const [items, setItems] = useState<ListeningItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const serverUrl = useMemo(() => getServerUrl(getConfig()), []);
   
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, {
@@ -567,6 +840,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
   
   // Scripted Audio Creator
   const [isScriptedSelectorOpen, setIsScriptedSelectorOpen] = useState(false);
+  const [isYoutubeModalOpen, setIsYoutubeModalOpen] = useState(false);
 
   const { showToast } = useToast();
 
@@ -696,6 +970,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
           path: folderPath || '/',
           tags: ['scripted-audio'],
           audioLinks: [url],
+          sourceType: 'scripted_audio',
           createdAt: now,
           updatedAt: now
       };
@@ -707,6 +982,36 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
       } catch (e) {
           showToast("Failed to create card.", "error");
       }
+  };
+
+  const handleCreateFromYoutube = async (url: string) => {
+      const response = await fetch(`${serverUrl}/api/youtube/transcript?url=${encodeURIComponent(url)}`);
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+          throw new Error(payload?.error || 'Failed to import YouTube subtitles.');
+      }
+
+      const now = Date.now();
+      const newItem: ListeningItem = {
+          id: `lst-youtube-${now}-${Math.random()}`,
+          userId: user.id,
+          title: payload.title || 'YouTube Media',
+          text: payload.transcript || '',
+          note: 'Imported from YouTube',
+          path: '/',
+          tags: ['youtube-media'],
+          createdAt: now,
+          updatedAt: now,
+          sourceType: 'youtube_media',
+          youtubeUrl: payload.youtubeUrl || url,
+          youtubeVideoId: payload.videoId,
+          subtitleSegments: Array.isArray(payload.subtitleSegments) ? payload.subtitleSegments : []
+      };
+
+      await dataStore.saveListeningItem(newItem);
+      showToast('YouTube media imported!', 'success');
+      await loadData();
   };
 
   const handleUpdatePracticeItem = async (updatedItem: ListeningItem) => {
@@ -820,6 +1125,7 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
             }
             browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }}
             addActions={[
+                { label: 'Youtube Media', icon: Play, onClick: () => setIsYoutubeModalOpen(true) },
                 { label: 'Add Scripted Audio', icon: FileAudio, onClick: () => setIsScriptedSelectorOpen(true) },
                 { label: 'Add Phrase', icon: Plus, onClick: handleNew }
             ]}
@@ -863,8 +1169,12 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
                             <Info size={12}/> {item.note}
                         </div>
                     )}
-                     <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full w-fit uppercase tracking-wider border border-emerald-100 self-start">
-                         <Music size={10} /> {item.audioLinks ? item.audioLinks.length : 0} Tracks
+                     <div className={`flex items-center gap-1.5 text-[10px] font-black px-2 py-1 rounded-full w-fit uppercase tracking-wider border self-start ${
+                        item.sourceType === 'youtube_media'
+                            ? 'border-red-100 bg-red-50 text-red-600'
+                            : 'border-emerald-100 bg-emerald-50 text-emerald-600'
+                     }`}>
+                         <Music size={10} /> {item.sourceType === 'youtube_media' ? `${item.subtitleSegments?.length || 0} Subs` : `${item.audioLinks ? item.audioLinks.length : 0} Tracks`}
                      </div>
                 </div>
             </UniversalCard>
@@ -897,6 +1207,12 @@ export const ListeningCardPage: React.FC<Props> = ({ user }) => {
         onSelect={handleCreateFromScriptedAudio}
         type="audio"
         title="Select Audio" 
+    />
+
+    <YoutubeImportModal
+        isOpen={isYoutubeModalOpen}
+        onClose={() => setIsYoutubeModalOpen(false)}
+        onImport={handleCreateFromYoutube}
     />
     
     <ConfirmationModal 

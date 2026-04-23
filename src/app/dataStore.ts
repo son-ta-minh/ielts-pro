@@ -836,4 +836,22 @@ export async function deletePlanningGoal(id: string): Promise<void> {
     }
 }
 
+export async function saveListeningItem(item: ListeningItem): Promise<void> {
+    if (canWrite()) {
+        _updateLocalLastModified();
+        await db.saveListeningItem(item);
+        _triggerBackup();
+        _notifyChanges();
+    }
+}
+
+export async function deleteListeningItem(id: string): Promise<void> {
+    if (canWrite()) {
+        _updateLocalLastModified();
+        await db.deleteListeningItem(id);
+        _triggerBackup();
+        _notifyChanges();
+    }
+}
+
 export const { getAllUsers, deleteUnit, getUnitsByUserId, getUnitsContainingWord, bulkSaveUnits, saveParaphraseLog, getParaphraseLogs, bulkSaveParaphraseLogs, seedDatabaseIfEmpty, clearVocabularyOnly, getRandomMeanings, getCompositionsByUserId, getPlanningGoalsByUserId, bulkSavePlanningGoals } = db;

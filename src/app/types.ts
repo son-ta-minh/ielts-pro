@@ -333,6 +333,31 @@ export interface Unit {
   note?: string;
 }
 
+export interface ListeningSubtitleSegment {
+  startMs: number;
+  durationMs: number;
+  text: string;
+}
+
+export interface ListeningItem {
+  id: string;
+  userId: string;
+  title?: string;
+  text: string;
+  note?: string;
+  path?: string;
+  tags?: string[];
+  audioLinks?: string[];
+  createdAt: number;
+  updatedAt: number;
+  focusColor?: FocusColor;
+  isFocused?: boolean;
+  sourceType?: 'manual' | 'scripted_audio' | 'youtube_media';
+  youtubeUrl?: string;
+  youtubeVideoId?: string;
+  subtitleSegments?: ListeningSubtitleSegment[];
+}
+
 export interface SpeakingTopic {
   id: string;
   userId: string;
@@ -625,6 +650,10 @@ export interface FreeTalkItem {
   isFocused?: boolean;
   bestScore?: number; 
   sentenceScores?: Record<number, number>; 
+  sourceType?: 'manual' | 'youtube_media';
+  youtubeUrl?: string;
+  youtubeVideoId?: string;
+  subtitleSegments?: ListeningSubtitleSegment[];
 }
 
 export interface WordBookItem {
