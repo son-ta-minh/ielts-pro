@@ -134,6 +134,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
     const audioElementRef = useRef<HTMLAudioElement | null>(null);
     const audioBlobUrlRef = useRef<string | null>(null);
+    const ipaRequestRef = useRef(0);
 
     const recognitionManager = useRef(new SpeechRecognitionManager());
     const silenceTimerRef = useRef<any>(null);
@@ -164,13 +165,18 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
 
     useEffect(() => {
         if (target === null) return;
+        ipaRequestRef.current += 1;
         setEditedTarget(target);
         setIsEditing(false);
         setAnalysis(null);
         setTranscript('');
         setUserAudio(null);
         setShowIpa(false);
+        setIpa(null);
+        setIpaWords(null);
         setIpaRhythmGuide(null);
+        setIsIpaLoading(false);
+        setIsIpaRhythmLoading(false);
         setHoverIndex(null);
         setActiveTab('session');
         setSkipRestoreAnimation(false);
@@ -178,6 +184,7 @@ export const SimpleMimicModal: React.FC<Props> = ({ target, onClose, onSaveScore
     }, [target]);
 
     const fetchIpaRhythmGuide = useCallback(async (sentence: string, fetchedIpa: string, fetchedIpaWords?: string[] | null) => {
+        const requestId = ipaRequestRef.current;
         const trimmedSentence = sentence.trim();
         const trimmedIpa = String(fetchedIpa || '').trim();
         if (!trimmedSentence || !trimmedIpa) {
@@ -253,6 +260,10 @@ Return exactly one JSON object with this shape:
                 ipaChunks: Array.isArray(parsed?.ipaChunks) ? parsed.ipaChunks.map((item: unknown) => String(item || '').trim()).filter(Boolean) : []
             };
 
+            if (ipaRequestRef.current !== requestId) {
+                return;
+            }
+
             if (guide.stressWords.length === 0 && guide.reduceWords.length === 0 && guide.textChunks.length === 0 && guide.ipaChunks.length === 0) {
                 setIpaRhythmGuide(buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords));
                 return;
@@ -267,9 +278,14 @@ Return exactly one JSON object with this shape:
             });
         } catch (error) {
             console.error(error);
+            if (ipaRequestRef.current !== requestId) {
+                return;
+            }
             setIpaRhythmGuide(buildFallbackIpaGuide(trimmedSentence, trimmedIpa, fetchedIpaWords));
         } finally {
-            setIsIpaRhythmLoading(false);
+            if (ipaRequestRef.current === requestId) {
+                setIsIpaRhythmLoading(false);
+            }
         }
     }, [studyBuddyAiUrl]);
 
@@ -281,38 +297,45 @@ Return exactly one JSON object with this shape:
             return;
         }
 
+        const requestId = ++ipaRequestRef.current;
+        const requestedTarget = editedTarget;
         setIsIpaLoading(true);
         try {
             // 1. Check Library first from cached store (reliable and fast)
-            const cleaned = editedTarget.trim().toLowerCase();
+            const cleaned = requestedTarget.trim().toLowerCase();
             const existing = dataStore.getAllWords().find(w => w.word.toLowerCase() === cleaned);
             if (existing && existing.ipaUs) {
+                if (ipaRequestRef.current !== requestId) return;
                 setIpa(existing.ipaUs);
                 setIpaWords(null);
                 setShowIpa(true);
-                void fetchIpaRhythmGuide(editedTarget, existing.ipaUs, null);
-                setIsIpaLoading(false);
+                void fetchIpaRhythmGuide(requestedTarget, existing.ipaUs, null);
                 return;
             }
 
             // 2. Fallback to Server API
             const config = getConfig();
             const serverUrl = getServerUrl(config);
-            const pronunciationLang = detectLanguage(editedTarget) === 'ja' ? 'ja' : 'en';
-            const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(editedTarget)}&lang=${encodeURIComponent(pronunciationLang)}`);
+            const pronunciationLang = detectLanguage(requestedTarget) === 'ja' ? 'ja' : 'en';
+            const res = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(requestedTarget)}&lang=${encodeURIComponent(pronunciationLang)}`);
             if (res.ok) {
                 const data = await res.json();
+                if (ipaRequestRef.current !== requestId) return;
                 setIpa(data.ipa);
                 setIpaWords(data.ipaWords || null);
-                void fetchIpaRhythmGuide(editedTarget, data.ipa, data.ipaWords || null);
+                void fetchIpaRhythmGuide(requestedTarget, data.ipa, data.ipaWords || null);
                 setShowIpa(true);
             } else {
+                if (ipaRequestRef.current !== requestId) return;
                 showToast("IPA server unavailable", "error");
             }
         } catch {
+            if (ipaRequestRef.current !== requestId) return;
             showToast("Failed to fetch IPA", "error");
         } finally {
-            setIsIpaLoading(false);
+            if (ipaRequestRef.current === requestId) {
+                setIsIpaLoading(false);
+            }
         }
     }, [editedTarget, fetchIpaRhythmGuide, ipa, showIpa, showToast, isFreeTalkMode]);
 
@@ -886,6 +909,7 @@ Return exactly one JSON object with this shape:
     const handleRestore = useCallback(() => {
         const selectedText = window.getSelection()?.toString().trim() || '';
         if (selectedText) {
+            ipaRequestRef.current += 1;
             setEditedTarget(selectedText);
             setIsEditing(false);
             setAnalysis(null);
@@ -1044,7 +1068,7 @@ Return exactly one JSON object with this shape:
                                     <React.Fragment key={`chunk-${groupIndex}`}>
                                         {group.items[0]?.prefix || ''}
                                         <span
-                                            className={`inline align-baseline box-decoration-clone ${showIpa && group.chunkIndex !== null ? 'border-b-2 border-indigo-300 pb-0.5' : ''}`}
+                                            className="inline align-baseline"
                                         >
                                         {group.items.map(({ word, emphasis, originalIndex, prefix }, itemIndex) => {
                                             const wordAnalysis = analysis?.words[originalIndex];
@@ -1083,6 +1107,12 @@ Return exactly one JSON object with this shape:
                                             );
                                         })}
                                         </span>
+                                        {showIpa && group.chunkIndex !== null && (
+                                            <span
+                                                aria-hidden="true"
+                                                className="mx-1 inline-block h-2.5 w-2.5 translate-y-[-0.05em] rounded-full bg-rose-500 align-middle"
+                                            />
+                                        )}
                                     </React.Fragment>
                                 ))}
                                 {guidedSentenceSuffix}
