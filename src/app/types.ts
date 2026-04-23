@@ -358,6 +358,23 @@ export interface ListeningItem {
   subtitleSegments?: ListeningSubtitleSegment[];
 }
 
+export interface SpeakingYoutubeItem {
+  id: string;
+  userId: string;
+  title: string;
+  youtubeUrl: string;
+  youtubeVideoId: string;
+  transcript: string;
+  subtitleSegments: ListeningSubtitleSegment[];
+  path?: string;
+  tags?: string[];
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+  focusColor?: FocusColor;
+  isFocused?: boolean;
+}
+
 export interface SpeakingTopic {
   id: string;
   userId: string;
@@ -650,10 +667,6 @@ export interface FreeTalkItem {
   isFocused?: boolean;
   bestScore?: number; 
   sentenceScores?: Record<number, number>; 
-  sourceType?: 'manual' | 'youtube_media';
-  youtubeUrl?: string;
-  youtubeVideoId?: string;
-  subtitleSegments?: ListeningSubtitleSegment[];
 }
 
 export interface WordBookItem {

@@ -1,4 +1,4 @@
-import { StudyItem, User, Unit, StudyItemQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus, StudyLibraryType, QuestionBankItem } from './types';
+import { StudyItem, User, Unit, StudyItemQuality, Composition, WordBook, PlanningGoal, NativeSpeakItem, ConversationItem, SpeakingBook, Lesson, ListeningItem, SpeakingTopic, WritingTopic, ReadingBook, LessonBook, ListeningBook, WritingBook, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, QAItem, WordFamilyGroup, LearnedStatus, StudyLibraryType, QuestionBankItem, SpeakingYoutubeItem } from './types';
 import * as db from './db';
 import { filterItem } from './db'; 
 import { calculateMasteryScore, calculateComplexity, isSrsIgnored } from '../utils/srs';
@@ -671,6 +671,22 @@ export async function deleteFreeTalkItem(id: string) {
     if (!canWrite()) return;
     _updateLocalLastModified();
     await db.deleteFreeTalkItem(id);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function saveSpeakingYoutubeItem(item: SpeakingYoutubeItem) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.saveSpeakingYoutubeItem(item);
+    _triggerBackup();
+    _notifyChanges();
+}
+
+export async function deleteSpeakingYoutubeItem(id: string) {
+    if (!canWrite()) return;
+    _updateLocalLastModified();
+    await db.deleteSpeakingYoutubeItem(id);
     _triggerBackup();
     _notifyChanges();
 }

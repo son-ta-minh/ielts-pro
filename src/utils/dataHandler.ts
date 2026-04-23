@@ -3,8 +3,8 @@
  * Uses short keys to reduce JSON size for storage and transfer.
  */
 
-import { StudyItem, Unit, ParaphraseLog, User, StudyItemQuality, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, WordFamilyGroup, LearnedStatus, StudyLibraryType, QuestionBankItem } from '../app/types';
-import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getPlanningGoalsByUserId, bulkSavePlanningGoals, getConversationItemsByUserId, bulkSaveConversationItems, getFreeTalkItemsByUserId, bulkSaveFreeTalkItems, getWordFamilyGroupsByUserId, bulkSaveWordFamilyGroups, getAllQuestionBankItemsForExport, bulkSaveQuestionBankItems } from '../app/db';
+import { StudyItem, Unit, ParaphraseLog, User, StudyItemQuality, SpeakingLog, SpeakingTopic, WritingTopic, WritingLog, WordFamilyMember, WordFamily, CollocationDetail, PrepositionPattern, ParaphraseOption, IrregularVerb, AdventureProgress, Lesson, ListeningItem, NativeSpeakItem, Composition, DataScope, WordBook, ReadingBook, PlanningGoal, ConversationItem, FreeTalkItem, DailyStreakSnapshot, DailyGoalSnapshot, WordFamilyGroup, LearnedStatus, StudyLibraryType, QuestionBankItem, SpeakingYoutubeItem } from '../app/types';
+import { getAllWordsForExport, bulkSaveWords, getUnitsByUserId, bulkSaveUnits, bulkSaveParaphraseLogs, getParaphraseLogs, saveUser, getAllSpeakingTopicsForExport, getAllSpeakingLogsForExport, bulkSaveSpeakingTopics, bulkSaveSpeakingLogs, getAllWritingTopicsForExport, getAllWritingLogsForExport, bulkSaveWritingTopics, bulkSaveWritingLogs, getIrregularVerbsByUserId, bulkSaveIrregularVerbs, getLessonsByUserId, bulkSaveLessons, getListeningItemsByUserId, bulkSaveListeningItems, getNativeSpeakItemsByUserId, bulkSaveNativeSpeakItems, getCompositionsByUserId, bulkSaveCompositions, getWordBooksByUserId, bulkSaveWordBooks, getReadingBooksByUserId, bulkSaveReadingBooks, getPlanningGoalsByUserId, bulkSavePlanningGoals, getConversationItemsByUserId, bulkSaveConversationItems, getFreeTalkItemsByUserId, bulkSaveFreeTalkItems, getWordFamilyGroupsByUserId, bulkSaveWordFamilyGroups, getAllQuestionBankItemsForExport, bulkSaveQuestionBankItems, getSpeakingYoutubeItemsByUserId, bulkSaveSpeakingYoutubeItems } from '../app/db';
 import { createNewWord, resetProgress, getAllValidTestKeys } from './srs';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 import { generateMap, BOSSES } from '../data/adventure_map';
@@ -464,6 +464,8 @@ export const processJsonImport = async (
 
                 const incomingFreeTalkItemsRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.freeTalkItems || rawJson.fti);
                 const incomingFreeTalkItems = incomingFreeTalkItemsRaw ? incomingFreeTalkItemsRaw.map(_mapToLongKeys) : undefined;
+                const incomingSpeakingYoutubeItemsRaw: any[] | undefined = Array.isArray(rawJson) ? undefined : (rawJson.speakingYoutubeItems || rawJson.syi);
+                const incomingSpeakingYoutubeItems = incomingSpeakingYoutubeItemsRaw ? incomingSpeakingYoutubeItemsRaw.map(_mapToLongKeys) : undefined;
 
                 const incomingCompositions: Composition[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.compositions;
                 const incomingMimicQueue: any[] | undefined = Array.isArray(rawJson) ? undefined : rawJson.mimicQueue;
@@ -546,6 +548,9 @@ export const processJsonImport = async (
                     if (incomingFreeTalkItems) {
                         await bulkSaveFreeTalkItems(incomingFreeTalkItems.map(f => ({ ...f, userId: importedUserId })));
                     }
+                    if (incomingSpeakingYoutubeItems) {
+                        await bulkSaveSpeakingYoutubeItems(incomingSpeakingYoutubeItems.map(item => ({ ...item, userId: importedUserId } as SpeakingYoutubeItem)));
+                    }
                 }
 
                 // --- WRITING ---
@@ -623,7 +628,7 @@ export const processJsonImport = async (
 export const generateJsonExport = async (userId: string, currentUser: User, scopeInput: any = FULL_SCOPE) => {
     const scope = (scopeInput && typeof scopeInput === 'object' && typeof scopeInput.vocabulary === 'boolean') ? scopeInput : FULL_SCOPE;
 
-    const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData, questionBankData] = await Promise.all([
+    const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, speakingYoutubeItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData, questionBankData] = await Promise.all([
         scope.vocabulary ? getAllWordsForExport(userId) : [],
         scope.reading ? getUnitsByUserId(userId) : [],
         scope.reading ? getReadingBooksByUserId(userId) : [],
@@ -633,6 +638,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         scope.speaking ? getNativeSpeakItemsByUserId(userId) : [],
         scope.speaking ? getConversationItemsByUserId(userId) : [],
         scope.speaking ? getFreeTalkItemsByUserId(userId) : [],
+        scope.speaking ? getSpeakingYoutubeItemsByUserId(userId) : [],
         scope.writing ? getAllWritingTopicsForExport(userId) : [],
         scope.writing ? getAllWritingLogsForExport(userId) : [],
         scope.writing ? getCompositionsByUserId(userId) : [],
@@ -671,6 +677,7 @@ export const generateJsonExport = async (userId: string, currentUser: User, scop
         nativeSpeakItems: nativeSpeakItemsDataRaw.map(w => _mapToShortKeys(w)),
         conversationItems: conversationItemsDataRaw.map(w => _mapToShortKeys(w)),
         freeTalkItems: freeTalkItemsDataRaw.map(w => _mapToShortKeys(w)),
+        speakingYoutubeItems: speakingYoutubeItemsDataRaw.map(w => _mapToShortKeys(w)),
         compositions: compositionsData,
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
         wordBooks: wordBooksDataRaw.map(b => _mapToShortKeys(b)),

@@ -1,4 +1,4 @@
-import { StudyItem, User, Unit, ParaphraseLog, StudyItemQuality, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup, QuestionBankItem } from './types';
+import { StudyItem, User, Unit, ParaphraseLog, StudyItemQuality, SpeakingTopic, WritingTopic, Lesson, ListeningItem, NativeSpeakItem, Composition, LearnedStatus, WordBook, ReadingBook, LessonBook, ListeningBook, SpeakingBook, WritingBook, PlanningGoal, ConversationItem, FreeTalkItem, QAItem, WordFamilyGroup, QuestionBankItem, SpeakingYoutubeItem } from './types';
 import { initialVocabulary, DEFAULT_USER_ID, LOCAL_SHIPPED_DATA_PATH } from '../data/user_data';
 import { ADVENTURE_CHAPTERS } from '../data/adventure_content';
 
@@ -18,6 +18,7 @@ const LISTENING_STORE = 'listening_items';
 const NATIVE_SPEAK_STORE = 'native_speak_items';
 const CONVERSATION_STORE = 'conversation_items';
 const FREE_TALK_STORE = 'free_talk_items'; // New Store
+const SPEAKING_YOUTUBE_STORE = 'speaking_youtube_items';
 const QA_CARD_STORE = 'qa_items';
 const COMPOSITIONS_STORE = 'compositions';
 const WORDBOOK_STORE = 'word_books';
@@ -29,7 +30,7 @@ const WRITING_BOOK_STORE = 'writing_books';
 const PLANNING_STORE = 'planning_goals';
 const QUESTION_BANK_STORE = 'question_bank_items';
 
-const DB_VERSION = 31; // Bumped version for Question Bank store
+const DB_VERSION = 32; // Bumped version for speaking YouTube store
 
 let _dbInstance: IDBDatabase | null = null;
 let _dbPromise: Promise<IDBDatabase> | null = null;
@@ -285,6 +286,13 @@ const openDB = (): Promise<IDBDatabase> => {
              }
         }
 
+        if (event.oldVersion < 32) {
+             if (!db.objectStoreNames.contains(SPEAKING_YOUTUBE_STORE)) {
+                 const ytStore = db.createObjectStore(SPEAKING_YOUTUBE_STORE, { keyPath: 'id' });
+                 ytStore.createIndex('userId', 'userId', { unique: false });
+             }
+        }
+
         if (event.oldVersion < 29) {
              if (!db.objectStoreNames.contains(QA_CARD_STORE)) {
                  const qaStore = db.createObjectStore(QA_CARD_STORE, { keyPath: 'id' });
@@ -351,7 +359,7 @@ export const clearVocabularyOnly = async (): Promise<void> => {
   return withRetry(async () => {
       const db = await openDB();
       return new Promise((resolve, reject) => {
-        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, WORD_FAMILY_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, FREE_TALK_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE, QUESTION_BANK_STORE];
+        const stores: string[] = [USER_STORE, STORE_NAME, UNIT_STORE, LOG_STORE, SPEAKING_LOG_STORE, SPEAKING_TOPIC_STORE, WRITING_LOG_STORE, WRITING_TOPIC_STORE, IRREGULAR_VERBS_STORE, WORD_FAMILY_STORE, LESSON_STORE, LISTENING_STORE, NATIVE_SPEAK_STORE, CONVERSATION_STORE, FREE_TALK_STORE, SPEAKING_YOUTUBE_STORE, COMPOSITIONS_STORE, WORDBOOK_STORE, READING_BOOK_STORE, LESSON_BOOK_STORE, LISTENING_BOOK_STORE, SPEAKING_BOOK_STORE, WRITING_BOOK_STORE, PLANNING_STORE, QUESTION_BANK_STORE];
         const tx = db.transaction(stores, 'readwrite');
         stores.forEach(s => {
              if (db.objectStoreNames.contains(s)) {
@@ -850,6 +858,13 @@ export const getFreeTalkItemsByUserId = async (): Promise<FreeTalkItem[]> => awa
 export const deleteFreeTalkItem = async (id: string): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => tx.objectStore(FREE_TALK_STORE).delete(id)); };
 export const bulkSaveFreeTalkItems = async (items: FreeTalkItem[]): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => { const store = tx.objectStore(FREE_TALK_STORE); items.forEach(i => store.put(i)); }); };
 export const bulkDeleteFreeTalkItems = async (ids: string[]): Promise<void> => { await crudTemplate(FREE_TALK_STORE, tx => { const store = tx.objectStore(FREE_TALK_STORE); ids.forEach(id => store.delete(id)); }); };
+
+// --- Speaking YouTube Feature ---
+export const saveSpeakingYoutubeItem = async (item: SpeakingYoutubeItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(SPEAKING_YOUTUBE_STORE, tx => tx.objectStore(SPEAKING_YOUTUBE_STORE).put(item)); };
+export const getSpeakingYoutubeItemsByUserId = async (): Promise<SpeakingYoutubeItem[]> => await crudTemplate(SPEAKING_YOUTUBE_STORE, tx => tx.objectStore(SPEAKING_YOUTUBE_STORE).getAll(), 'readonly');
+export const deleteSpeakingYoutubeItem = async (id: string): Promise<void> => { await crudTemplate(SPEAKING_YOUTUBE_STORE, tx => tx.objectStore(SPEAKING_YOUTUBE_STORE).delete(id)); };
+export const bulkSaveSpeakingYoutubeItems = async (items: SpeakingYoutubeItem[]): Promise<void> => { await crudTemplate(SPEAKING_YOUTUBE_STORE, tx => { const store = tx.objectStore(SPEAKING_YOUTUBE_STORE); items.forEach(i => store.put(i)); }); };
+export const bulkDeleteSpeakingYoutubeItems = async (ids: string[]): Promise<void> => { await crudTemplate(SPEAKING_YOUTUBE_STORE, tx => { const store = tx.objectStore(SPEAKING_YOUTUBE_STORE); ids.forEach(id => store.delete(id)); }); };
 
 // --- QA Card Feature ---
 export const saveQAItem = async (item: QAItem): Promise<void> => { item.updatedAt = Date.now(); await crudTemplate(QA_CARD_STORE, tx => tx.objectStore(QA_CARD_STORE).put(item)); };

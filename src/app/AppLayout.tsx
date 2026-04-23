@@ -26,7 +26,6 @@ const IrregularVerbs = React.lazy(() => import('../components/labs/irregular_ver
 const WordFamily = React.lazy(() => import('../components/labs/word_family/WordFamily'));
 const MimicPractice = React.lazy(() => import('../components/labs/MimicPractice').then(module => ({ default: module.MimicPractice })));
 const WordGalleryPage = React.lazy(() => import('../components/gallery/WordGalleryPage').then(module => ({ default: module.WordGalleryPage })));
-// const ListeningCardPage = React.lazy(() => import('../dynamic/templates/ListeningCardPage').then(module => ({ default: module.ListeningCardPage })));
 const KnowledgeLibrary = React.lazy(() => import('../dynamic/templates/LessonLibraryV2').then(module => ({ default: module.LessonLibraryV2 })));
 const PlanningPage = React.lazy(() => import('../dynamic/templates/PlanningPage').then(module => ({ default: module.PlanningPage })));
 const ExpressionPage = React.lazy(() => import('../dynamic/templates/SpeakingCardPage').then(module => ({ default: module.SpeakingCardPage })));

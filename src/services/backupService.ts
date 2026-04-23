@@ -281,7 +281,7 @@ export const refreshServerLibrary = async (): Promise<boolean> => {
 };
 
 async function getFullExportData(userId: string, user: User) {
-     const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData, questionBankData] = await Promise.all([
+     const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, speakingYoutubeItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData, questionBankData] = await Promise.all([
         db.getAllWordsForExport(userId),
         db.getUnitsByUserId(userId),
         db.getReadingBooksByUserId(userId),
@@ -291,6 +291,7 @@ async function getFullExportData(userId: string, user: User) {
         db.getNativeSpeakItemsByUserId(userId),
         db.getConversationItemsByUserId(userId),
         db.getFreeTalkItemsByUserId(userId),
+        db.getSpeakingYoutubeItemsByUserId(userId),
         db.getAllWritingTopicsForExport(userId),
         db.getAllWritingLogsForExport(userId),
         db.getCompositionsByUserId(userId),
@@ -333,6 +334,7 @@ async function getFullExportData(userId: string, user: User) {
         nativeSpeakItems: nativeSpeakItemsDataRaw.map(w => _mapToShortKeys(w)),
         conversationItems: conversationItemsDataRaw.map(w => _mapToShortKeys(w)),
         freeTalkItems: freeTalkItemsDataRaw.map(w => _mapToShortKeys(w)),
+        speakingYoutubeItems: speakingYoutubeItemsDataRaw.map(w => _mapToShortKeys(w)),
         compositions: compositionsData,
         mimicQueue: mimicQueueData ? JSON.parse(mimicQueueData) : [],
         wordBooks: wordBooksDataRaw.map(b => _mapToShortKeys(b)),

@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { User, NativeSpeakItem, FocusColor, ConversationItem, FreeTalkItem, AppView, QAItem } from '../../app/types';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { User, NativeSpeakItem, FocusColor, ConversationItem, FreeTalkItem, AppView, QAItem, SpeakingYoutubeItem, ListeningSubtitleSegment } from '../../app/types';
 import * as db from '../../app/db';
 import * as dataStore from '../../app/dataStore';
 import { ResourcePage } from '../page/ResourcePage';
-import { Plus, Edit3, Trash2, AudioLines, MessageSquare, Play, Target, Pen, Tag, Shuffle, Search, LayoutGrid } from 'lucide-react';
+import { Plus, Edit3, Trash2, AudioLines, MessageSquare, Play, Target, Pen, Tag, Shuffle, Search, LayoutGrid, X } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { TagBrowser } from '../../components/common/TagBrowser';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
@@ -14,6 +14,7 @@ import { ViewMenu } from '../../components/common/ViewMenu';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { UniversalCard } from '../../components/common/UniversalCard';
 import { ResourceActions } from '../page/ResourceActions';
+import { getConfig, getServerUrl } from '../../app/settingsManager';
 
 // Import extracted components
 import { AddEditNativeSpeakModal } from '../../components/speaking/AddEditNativeSpeakModal';
@@ -37,7 +38,251 @@ type SpeakingItem =
   | { type: 'card'; data: NativeSpeakItem }
   | { type: 'qa'; data: QAItem }
   | { type: 'conversation'; data: ConversationItem }
-  | { type: 'free_talk'; data: FreeTalkItem };
+  | { type: 'free_talk'; data: FreeTalkItem }
+  | { type: 'youtube'; data: SpeakingYoutubeItem };
+
+declare global {
+    interface Window {
+        YT?: any;
+        onYouTubeIframeAPIReady?: () => void;
+    }
+}
+
+let youtubeIframeApiPromise: Promise<any> | null = null;
+
+const loadYouTubeIframeApi = () => {
+    if (window.YT?.Player) return Promise.resolve(window.YT);
+    if (youtubeIframeApiPromise) return youtubeIframeApiPromise;
+
+    youtubeIframeApiPromise = new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+        if (!existing) {
+            const script = document.createElement('script');
+            script.src = 'https://www.youtube.com/iframe_api';
+            script.async = true;
+            script.onerror = () => reject(new Error('Failed to load YouTube iframe API.'));
+            document.body.appendChild(script);
+        }
+
+        window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+
+        window.setTimeout(() => {
+            if (!window.YT?.Player) reject(new Error('YouTube iframe API timeout.'));
+        }, 10000);
+
+        if (window.YT?.Player) resolve(window.YT);
+    });
+
+    return youtubeIframeApiPromise;
+};
+
+const formatMediaTime = (ms: number) => {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+const findActiveSubtitleIndex = (segments: ListeningSubtitleSegment[], currentTimeMs: number) => {
+    return segments.findIndex((segment, index) => {
+        const end = segment.startMs + Math.max(segment.durationMs, 600);
+        const nextStart = segments[index + 1]?.startMs ?? Number.POSITIVE_INFINITY;
+        return currentTimeMs >= segment.startMs && currentTimeMs < Math.max(end, nextStart);
+    });
+};
+
+const SyncedSubtitleView: React.FC<{
+    segments: ListeningSubtitleSegment[];
+    currentTimeMs: number;
+    onSeek: (timeMs: number) => void;
+}> = ({ segments, currentTimeMs, onSeek }) => {
+    const activeIndex = useMemo(() => findActiveSubtitleIndex(segments, currentTimeMs), [segments, currentTimeMs]);
+    const activeRef = useRef<HTMLSpanElement | null>(null);
+
+    useEffect(() => {
+        activeRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, [activeIndex]);
+
+    return (
+        <div className="h-full overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-400">Live Subtitle</p>
+                <p className="text-xs font-bold text-neutral-500">{formatMediaTime(currentTimeMs)}</p>
+            </div>
+            <div className="select-text whitespace-pre-wrap text-lg leading-relaxed text-neutral-700">
+                {segments.map((segment, index) => {
+                    const isActive = index === activeIndex;
+                    return (
+                        <span
+                            key={`${segment.startMs}-${index}`}
+                            ref={isActive ? activeRef : null}
+                            onDoubleClick={() => onSeek(segment.startMs)}
+                            className={`rounded-md px-1 py-0.5 transition-all ${isActive ? 'bg-amber-200 text-neutral-950 shadow-sm' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                            title="Double-click to jump"
+                        >
+                            {segment.text}{' '}
+                        </span>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+const YouTubePlayerPanel: React.FC<{
+    videoId: string;
+    onTimeChange: (timeMs: number) => void;
+    seekToMsRef: React.MutableRefObject<((timeMs: number) => void) | null>;
+}> = ({ videoId, onTimeChange, seekToMsRef }) => {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const playerRef = useRef<any>(null);
+
+    useEffect(() => {
+        let pollingId: number | null = null;
+        let mounted = true;
+
+        loadYouTubeIframeApi()
+            .then((YT) => {
+                if (!mounted || !containerRef.current) return;
+
+                playerRef.current = new YT.Player(containerRef.current, {
+                    videoId,
+                    playerVars: { rel: 0, modestbranding: 1 }
+                });
+
+                seekToMsRef.current = (timeMs: number) => {
+                    playerRef.current?.seekTo?.(Math.max(0, timeMs / 1000), true);
+                };
+
+                pollingId = window.setInterval(() => {
+                    const currentSeconds = Number(playerRef.current?.getCurrentTime?.() || 0);
+                    onTimeChange(currentSeconds * 1000);
+                }, 200);
+            })
+            .catch(() => onTimeChange(0));
+
+        return () => {
+            mounted = false;
+            seekToMsRef.current = null;
+            if (pollingId !== null) window.clearInterval(pollingId);
+            playerRef.current?.destroy?.();
+            playerRef.current = null;
+        };
+    }, [videoId, onTimeChange, seekToMsRef]);
+
+    return <div ref={containerRef} className="aspect-video w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-950 shadow-sm" />;
+};
+
+const YoutubeImportModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onImport: (url: string) => Promise<void>;
+}> = ({ isOpen, onClose, onImport }) => {
+    const [url, setUrl] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setUrl('');
+            setIsSubmitting(false);
+            setError('');
+        }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!url.trim()) return;
+        setIsSubmitting(true);
+        setError('');
+        try {
+            await onImport(url.trim());
+            onClose();
+        } catch (err: any) {
+            setError(err?.message || 'Import failed.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-[2rem] border border-neutral-200 bg-white shadow-2xl">
+                <header className="flex items-start justify-between border-b border-neutral-100 px-8 py-6">
+                    <div>
+                        <h3 className="text-xl font-black text-neutral-900">New Youtube Card</h3>
+                        <p className="mt-1 text-sm text-neutral-500">Paste a YouTube URL to create a speaking card with synced subtitle text.</p>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-full p-2 text-neutral-400 hover:bg-neutral-100"><X size={20} /></button>
+                </header>
+                <main className="space-y-3 px-8 py-6">
+                    <label className="block text-xs font-bold text-neutral-500">YouTube URL</label>
+                    <input
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-900"
+                        autoFocus
+                    />
+                    <p className="text-[11px] text-neutral-400">The card will use subtitle text as selectable transcript and sync highlight to the video.</p>
+                    {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
+                </main>
+                <footer className="flex justify-end gap-3 border-t border-neutral-100 bg-neutral-50/50 px-8 py-5">
+                    <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold text-neutral-500 hover:bg-neutral-100">Cancel</button>
+                    <button type="submit" disabled={isSubmitting || !url.trim()} className="rounded-xl bg-neutral-900 px-5 py-2 text-sm font-black text-white disabled:opacity-50">
+                        {isSubmitting ? 'Importing...' : 'Import'}
+                    </button>
+                </footer>
+            </form>
+        </div>
+    );
+};
+
+const SpeakingYoutubePracticeModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    item: SpeakingYoutubeItem | null;
+}> = ({ isOpen, onClose, item }) => {
+    const [currentTimeMs, setCurrentTimeMs] = useState(0);
+    const seekToMsRef = useRef<((timeMs: number) => void) | null>(null);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setCurrentTimeMs(0);
+        }
+    }, [isOpen, item?.id]);
+
+    if (!isOpen || !item) return null;
+
+    return (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="flex h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2.5rem] border border-neutral-200 bg-white shadow-2xl">
+                <header className="flex items-center justify-between border-b border-neutral-100 px-8 py-6">
+                    <div>
+                        <h3 className="text-xl font-black text-neutral-900">Youtube Speaking Practice</h3>
+                        <p className="mt-1 max-w-[320px] truncate text-xs font-bold text-neutral-500">{item.title}</p>
+                    </div>
+                    <button onClick={onClose} className="rounded-full p-2 text-neutral-400 hover:bg-neutral-100"><X size={20} /></button>
+                </header>
+                <div className="grid flex-1 gap-6 overflow-hidden bg-neutral-50/50 p-8 lg:grid-cols-[minmax(0,1fr)_minmax(360px,1fr)]">
+                    <div className="flex min-h-0 flex-col gap-4">
+                        <YouTubePlayerPanel videoId={item.youtubeVideoId} onTimeChange={setCurrentTimeMs} seekToMsRef={seekToMsRef} />
+                        <div className="rounded-2xl border border-neutral-200 bg-white p-4 text-sm text-neutral-500 shadow-sm">
+                            Subtitle text is selectable. Double-click a subtitle chunk to jump the video.
+                        </div>
+                    </div>
+                    <SyncedSubtitleView
+                        segments={item.subtitleSegments || []}
+                        currentTimeMs={currentTimeMs}
+                        onSeek={(timeMs) => seekToMsRef.current?.(timeMs)}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const ScoreBadge: React.FC<{ score?: number }> = ({ score }) => {
     if (score === undefined) return null;
@@ -51,6 +296,7 @@ const ScoreBadge: React.FC<{ score?: number }> = ({ score }) => {
 export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   const [items, setItems] = useState<SpeakingItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const serverUrl = useMemo(() => getServerUrl(getConfig()), []);
   
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const [viewSettings, setViewSettings] = useState(() => getStoredJSON(VIEW_SETTINGS_KEY, { showTags: true, compact: false, resourceType: 'ALL' }));
@@ -69,13 +315,14 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   const [isConversationModalOpen, setIsConversationModalOpen] = useState(false);
   const [isFreeTalkModalOpen, setIsFreeTalkModalOpen] = useState(false);
   const [isQAModalOpen, setIsQAModalOpen] = useState(false);
+  const [isYoutubeModalOpen, setIsYoutubeModalOpen] = useState(false);
 
   const [editingItem, setEditingItem] = useState<NativeSpeakItem | null>(null);
   const [editingConversation, setEditingConversation] = useState<ConversationItem | null>(null);
   const [editingFreeTalk, setEditingFreeTalk] = useState<FreeTalkItem | null>(null);
   const [editingQA, setEditingQA] = useState<QAItem | null>(null);
 
-  const [itemToDelete, setItemToDelete] = useState<{ id: string, type: 'card' | 'qa' | 'conversation' | 'free_talk' } | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string, type: 'card' | 'qa' | 'conversation' | 'free_talk' | 'youtube' } | null>(null);
   
   // AI Modals
   const [isConversationAiModalOpen, setIsConversationAiModalOpen] = useState(false);
@@ -85,22 +332,25 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   const [practiceConversation, setPracticeConversation] = useState<ConversationItem | null>(null);
   const [practiceFreeTalk, setPracticeFreeTalk] = useState<FreeTalkItem | null>(null);
   const [qaPracticeData, setQaPracticeData] = useState<QAItem[] | null>(null);
+  const [practiceYoutubeItem, setPracticeYoutubeItem] = useState<SpeakingYoutubeItem | null>(null);
 
   const { showToast } = useToast();
   
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
-    const [cards, qas, conversations, freeTalks] = await Promise.all([
+    const [cards, qas, conversations, freeTalks, youtubeCards] = await Promise.all([
         db.getNativeSpeakItemsByUserId(user.id),
         db.getQAItemsByUserId(user.id),
         db.getConversationItemsByUserId(user.id),
-        db.getFreeTalkItemsByUserId(user.id)
+        db.getFreeTalkItemsByUserId(user.id),
+        db.getSpeakingYoutubeItemsByUserId(user.id)
     ]);
     const combined: SpeakingItem[] = [
         ...cards.map(c => ({ type: 'card' as const, data: c })),
         ...qas.map(q => ({ type: 'qa' as const, data: q })),
         ...conversations.map(c => ({ type: 'conversation' as const, data: c })),
-        ...freeTalks.map(c => ({ type: 'free_talk' as const, data: c }))
+        ...freeTalks.map(c => ({ type: 'free_talk' as const, data: c })),
+        ...youtubeCards.map(c => ({ type: 'youtube' as const, data: c }))
     ];
     setItems(combined.sort((a, b) => b.data.createdAt - a.data.createdAt));
     if (!silent) setLoading(false);
@@ -123,6 +373,8 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
               if (!item.data.standard.toLowerCase().includes(q)) return false;
           } else if (item.type === 'conversation') {
                if (!item.data.title.toLowerCase().includes(q) && !(item.data.description || '').toLowerCase().includes(q)) return false;
+          } else if (item.type === 'youtube') {
+               if (!item.data.title.toLowerCase().includes(q) && !(item.data.transcript || '').toLowerCase().includes(q)) return false;
           } else {
                if (!item.data.title.toLowerCase().includes(q) && !item.data.content.toLowerCase().includes(q)) return false;
           }
@@ -188,6 +440,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
     else if (itemToDelete.type === 'qa') await dataStore.deleteQAItem(itemToDelete.id);
     else if (itemToDelete.type === 'conversation') await dataStore.deleteConversationItem(itemToDelete.id);
     else if (itemToDelete.type === 'free_talk') await dataStore.deleteFreeTalkItem(itemToDelete.id);
+    else if (itemToDelete.type === 'youtube') await dataStore.deleteSpeakingYoutubeItem(itemToDelete.id);
 
     setItemToDelete(null); loadData(); showToast("Deleted!", "success");
   };
@@ -200,6 +453,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
       else if (item.type === 'qa') await dataStore.saveQAItem(updated as QAItem);
       else if (item.type === 'conversation') await dataStore.saveConversationItem(updated as ConversationItem);
       else if (item.type === 'free_talk') await dataStore.saveFreeTalkItem(updated as FreeTalkItem);
+      else if (item.type === 'youtube') await dataStore.saveSpeakingYoutubeItem(updated as SpeakingYoutubeItem);
       
       loadData();
   };
@@ -211,6 +465,7 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
       else if (item.type === 'qa') await dataStore.saveQAItem(updated as QAItem);
       else if (item.type === 'conversation') await dataStore.saveConversationItem(updated as ConversationItem);
       else if (item.type === 'free_talk') await dataStore.saveFreeTalkItem(updated as FreeTalkItem);
+      else if (item.type === 'youtube') await dataStore.saveSpeakingYoutubeItem(updated as SpeakingYoutubeItem);
       
       loadData();
   };
@@ -223,6 +478,34 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   const handleRandomize = () => {
     setItems(prev => [...prev].sort(() => Math.random() - 0.5));
     showToast("Deck shuffled!", "success");
+  };
+
+  const handleCreateYoutubeCard = async (url: string) => {
+      const response = await fetch(`${serverUrl}/api/youtube/transcript?url=${encodeURIComponent(url)}`);
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+          throw new Error(payload?.error || 'Failed to import YouTube subtitles.');
+      }
+
+      const now = Date.now();
+      const newItem: SpeakingYoutubeItem = {
+          id: `spk-yt-${now}-${Math.random()}`,
+          userId: user.id,
+          title: payload.title || 'Youtube Card',
+          youtubeUrl: payload.youtubeUrl || url,
+          youtubeVideoId: payload.videoId,
+          transcript: payload.transcript || '',
+          subtitleSegments: Array.isArray(payload.subtitleSegments) ? payload.subtitleSegments : [],
+          tags: ['youtube-media'],
+          note: 'Imported from YouTube',
+          createdAt: now,
+          updatedAt: now
+      };
+
+      await dataStore.saveSpeakingYoutubeItem(newItem);
+      showToast('Youtube card created!', 'success');
+      await loadData();
   };
 
   const QuickFilterBar = () => (
@@ -275,6 +558,12 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
           >
             <Pen size={12} /> Essay
           </button>
+          <button
+            onClick={() => handleSettingChange('resourceType', 'YOUTUBE')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSettings.resourceType === 'YOUTUBE' ? 'bg-red-600 text-white shadow-md' : 'bg-white border border-neutral-200 text-neutral-500 hover:text-red-600'}`}
+          >
+            <Play size={12} /> Youtube
+          </button>
         </div>
       </div>
     </div>
@@ -283,10 +572,11 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
   return (
     <>
     <ResourcePage title="Listen & Speak" subtitle="Master listening comprehension and speaking skills." icon={<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png" className="w-8 h-8 object-contain" alt="Speaking" />} 
-    config={{}} isLoading={loading} isEmpty={filteredItems.length === 0} emptyMessage="No items found." activeFilters={{}} onFilterChange={() => {}} pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }} aboveGrid={<QuickFilterBar />} actions={<ResourceActions viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} hasActiveFilters={hasActiveFilters} filterOptions={[{ label: 'All', value: 'ALL', isActive: viewSettings.resourceType === 'ALL', onClick: () => handleSettingChange('resourceType', 'ALL') }, { label: 'Card', value: 'CARD', isActive: viewSettings.resourceType === 'CARD', onClick: () => handleSettingChange('resourceType', 'CARD') }, { label: 'Conv.', value: 'CONVERSATION', isActive: viewSettings.resourceType === 'CONVERSATION', onClick: () => handleSettingChange('resourceType', 'CONVERSATION') }, { label: 'Essay', value: 'FREE_TALK', isActive: viewSettings.resourceType === 'FREE_TALK', onClick: () => handleSettingChange('resourceType', 'FREE_TALK') }]} customSection={<><div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2"><Target size={10}/> Focus & Status</div><div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2"><button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>{focusFilter === 'focused' ? 'Focused Only' : 'All Items'}</button><div className="flex gap-1"><button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} /></div></div></>} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]} />} browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }} addActions={[
+    config={{}} isLoading={loading} isEmpty={filteredItems.length === 0} emptyMessage="No items found." activeFilters={{}} onFilterChange={() => {}} pagination={{ page, totalPages: Math.ceil(filteredItems.length / pageSize), onPageChange: setPage, pageSize, onPageSizeChange: setPageSize, totalItems: filteredItems.length }} aboveGrid={<QuickFilterBar />} actions={<ResourceActions viewMenu={<ViewMenu isOpen={isViewMenuOpen} setIsOpen={setIsViewMenuOpen} hasActiveFilters={hasActiveFilters} filterOptions={[{ label: 'All', value: 'ALL', isActive: viewSettings.resourceType === 'ALL', onClick: () => handleSettingChange('resourceType', 'ALL') }, { label: 'Card', value: 'CARD', isActive: viewSettings.resourceType === 'CARD', onClick: () => handleSettingChange('resourceType', 'CARD') }, { label: 'Conv.', value: 'CONVERSATION', isActive: viewSettings.resourceType === 'CONVERSATION', onClick: () => handleSettingChange('resourceType', 'CONVERSATION') }, { label: 'Essay', value: 'FREE_TALK', isActive: viewSettings.resourceType === 'FREE_TALK', onClick: () => handleSettingChange('resourceType', 'FREE_TALK') }, { label: 'Youtube', value: 'YOUTUBE', isActive: viewSettings.resourceType === 'YOUTUBE', onClick: () => handleSettingChange('resourceType', 'YOUTUBE') }]} customSection={<><div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 flex items-center gap-2"><Target size={10}/> Focus & Status</div><div className="p-1 flex flex-col gap-1 bg-neutral-100 rounded-xl mb-2"><button onClick={() => setFocusFilter(focusFilter === 'all' ? 'focused' : 'all')} className={`w-full py-1.5 text-[9px] font-black rounded-lg transition-all ${focusFilter === 'focused' ? 'bg-white shadow-sm text-red-600' : 'text-neutral-500 hover:text-neutral-700'}`}>{focusFilter === 'focused' ? 'Focused Only' : 'All Items'}</button><div className="flex gap-1"><button onClick={() => setColorFilter(colorFilter === 'green' ? 'all' : 'green')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'green' ? 'bg-emerald-500 border-emerald-600' : 'bg-white border-neutral-200 hover:bg-emerald-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'yellow' ? 'all' : 'yellow')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'yellow' ? 'bg-amber-400 border-amber-500' : 'bg-white border-neutral-200 hover:bg-amber-50'}`} /><button onClick={() => setColorFilter(colorFilter === 'red' ? 'all' : 'red')} className={`flex-1 h-6 rounded-lg border-2 transition-all ${colorFilter === 'red' ? 'bg-rose-500 border-rose-600' : 'bg-white border-neutral-200 hover:bg-rose-50'}`} /></div></div></>} viewOptions={[{ label: 'Show Tags', checked: viewSettings.showTags, onChange: () => setViewSettings(v => ({...v, showTags: !v.showTags})) }, { label: 'Compact', checked: viewSettings.compact, onChange: () => setViewSettings(v => ({...v, compact: !v.compact})) }]} />} browseTags={{ isOpen: isTagBrowserOpen, onToggle: () => { setIsTagBrowserOpen(!isTagBrowserOpen); } }} addActions={[
       { label: 'Test Simulation', icon: Play, onClick: () => { window.open('https://chatgpt.com/g/g-69064123ce508191a55e2aa3cf07e152-english-language-coach-for-ielts-speaking-test', '_blank'); } },
+      { label: 'Youtube Card', icon: Play, onClick: () => { setIsYoutubeModalOpen(true); } },
       { label: 'New Question & Answer', icon: MessageSquare, onClick: () => { setIsQAModalOpen(true); } },
-      { label: 'New Native Expression', icon: Plus, onClick: () => { setEditingItem(null); setIsModalOpen(true); } },
+      { label: 'New Card', icon: Plus, onClick: () => { setEditingItem(null); setIsModalOpen(true); } },
       { label: 'New Conversation', icon: MessageSquare, onClick: () => { setEditingConversation(null); setIsConversationModalOpen(true); } },
       { label: 'New Essay', icon: Pen, onClick: () => { setEditingFreeTalk(null); setIsFreeTalkModalOpen(true); } }
     ]} extraActions={<><button onClick={handleRandomize} disabled={items.length < 2} className="p-3 bg-white border border-neutral-200 text-neutral-600 rounded-xl hover:bg-neutral-50 active:scale-95 transition-all shadow-sm disabled:opacity-50" title="Randomize"><Shuffle size={16} /></button></>} />}>
@@ -420,6 +710,27 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
                         </div>
                     </UniversalCard>
                   );
+              } else if (item.type === 'youtube') {
+                  const youtubeItem = item.data as SpeakingYoutubeItem;
+                  return (
+                    <UniversalCard
+                        key={youtubeItem.id}
+                        title={youtubeItem.title}
+                        badge={{ label: 'Youtube Card', colorClass: 'bg-red-50 text-red-700 border-red-100', icon: Play }}
+                        tags={viewSettings.showTags ? youtubeItem.tags : undefined}
+                        compact={viewSettings.compact}
+                        onClick={() => setPracticeYoutubeItem(youtubeItem)}
+                        focusColor={youtubeItem.focusColor}
+                        onFocusChange={(c) => handleFocusChange(item, c)}
+                        isFocused={youtubeItem.isFocused}
+                        onToggleFocus={handleToggleFocus.bind(null, item)}
+                        actions={<><button onClick={(e) => { e.stopPropagation(); setPracticeYoutubeItem(youtubeItem); }} className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Practice"><Play size={14}/></button><button onClick={(e) => { e.stopPropagation(); setItemToDelete({ id: youtubeItem.id, type: 'youtube' }); }} className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Delete"><Trash2 size={14}/></button></>}
+                    >
+                        <div className="mt-2 flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">{youtubeItem.subtitleSegments.length} subtitle chunks</span>
+                        </div>
+                    </UniversalCard>
+                  );
               } else {
                   // Calculate metadata for display
                   const sentenceCount = (item.data as FreeTalkItem).content.match(/[^.!?]+[.!?]+["']?|[^.!?]+$/g)?.length || 0;
@@ -484,12 +795,19 @@ export const SpeakingCardPage: React.FC<Props> = ({ user, onNavigate }) => {
     />
 
     <ConfirmationModal isOpen={!!itemToDelete} title="Delete Item?" message="This action cannot be undone." confirmText="Delete" isProcessing={false} onConfirm={handleConfirmDelete} onClose={() => setItemToDelete(null)} icon={<Trash2 size={40} className="text-red-500"/>} />
+
+    <YoutubeImportModal
+      isOpen={isYoutubeModalOpen}
+      onClose={() => setIsYoutubeModalOpen(false)}
+      onImport={handleCreateYoutubeCard}
+    />
     
     {isConversationAiModalOpen && <UniversalAiModal isOpen={isConversationAiModalOpen} onClose={() => setIsConversationAiModalOpen(false)} type="GENERATE_UNIT" title="AI Conversation Creator" description="Enter a topic to generate a dialogue." initialData={{}} onGeneratePrompt={(i) => getGenerateConversationPrompt(i.request)} onJsonReceived={handleConversationAiResult} actionLabel="Generate" closeOnSuccess={true} />}
     
     <SpeakingPracticeModal isOpen={!!practiceModalItem} onClose={() => { setPracticeModalItem(null); loadData(true); }} item={practiceModalItem} />
     <ConversationPracticeModal isOpen={!!practiceConversation} onClose={() => { setPracticeConversation(null); loadData(true); }} item={practiceConversation} />
     <FreeTalkPracticeModal isOpen={!!practiceFreeTalk} onClose={() => { setPracticeFreeTalk(null); loadData(true); }} item={practiceFreeTalk} />
+    <SpeakingYoutubePracticeModal isOpen={!!practiceYoutubeItem} onClose={() => { setPracticeYoutubeItem(null); loadData(true); }} item={practiceYoutubeItem} />
     <QAPracticeModal
       isOpen={!!qaPracticeData}
       onClose={() => setQaPracticeData(null)}
