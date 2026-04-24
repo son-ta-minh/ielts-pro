@@ -55,6 +55,13 @@ export interface StudyStats {
     writing: { completed: number, total: number };
 }
 
+export interface DayProgress {
+    learned: number;
+    reviewed: number;
+    learnedWords: StudyItem[];
+    reviewedWords: StudyItem[];
+}
+
 type FocusTimerCategory = 'Vocabulary' | 'Grammar' | 'Idiom' | 'Speaking' | 'Listening' | 'Writing' | 'Reading' | 'Custom';
 
 type FocusTimerStatus = 'idle' | 'running' | 'paused' | 'completed';
@@ -126,7 +133,6 @@ export interface DashboardUIProps {
     newCount: number;
     learnedCount: number;
     rawCount: number;
-    refinedCount: number;
     reviewStats: { learned: number; mastered: number; statusForgot: number; statusHard: number; statusEasy: number; statusLearned: number; statusFocus: number; };
     wotd: StudyItem | null;
     isWotdComposed: boolean;
@@ -150,7 +156,7 @@ export interface DashboardUIProps {
     lastBackupTime: number | null;
     onBackup: (mode: 'server' | 'file') => void;
     onRestore: (mode: 'server' | 'file') => void;
-    dayProgress: { learned: number; reviewed: number; learnedWords: StudyItem[]; reviewedWords: StudyItem[]; };
+    dayProgress: DayProgress;
     dailyGoals: { max_learn_per_day: number; max_review_per_day: number; };
     dailyStreaks: DailyStreakSnapshot[];
     dailyGoalHistory: DailyGoalSnapshot[];
@@ -208,6 +214,7 @@ const TinyProgressRing: React.FC<{ percent: number, size?: number, stroke?: numb
 const NavButton: React.FC<{ 
     label: string, 
     subLabel?: React.ReactNode,
+    rightLabel?: React.ReactNode,
     progress?: number,
     icon: React.ElementType, 
     color: string, 
@@ -215,7 +222,7 @@ const NavButton: React.FC<{
     onClick: () => void,
     disabled?: boolean,
     largeSub?: boolean
-}> = ({ label, subLabel, progress, icon: Icon, color, bg, onClick, disabled, largeSub }) => {
+}> = ({ label, subLabel, rightLabel, progress, icon: Icon, color, bg, onClick, disabled, largeSub }) => {
     return (
         <button 
             onClick={onClick} 
@@ -233,6 +240,11 @@ const NavButton: React.FC<{
                     </div>
                 )}
             </div>
+            {rightLabel && (
+                <div className="shrink-0 ml-2 text-sm font-black text-neutral-800 group-hover:text-white transition-colors">
+                    {rightLabel}
+                </div>
+            )}
             {typeof progress === 'number' && (
                 <div className="shrink-0 ml-1">
                     <TinyProgressRing percent={progress} />
@@ -314,20 +326,20 @@ const VocabularyCenterPanel: React.FC<{
     subtitle?: string;
     libraryType?: 'vocab' | 'kotoba';
     stats: LibraryDashboardStats;
+    dayProgress: DayProgress;
     onStartNew: () => void;
     onStartDue: () => void;
     onStartStatusReview: (status: 'hard' | 'forgot') => void;
-    onRefineRaw: () => void;
-    onVerifyRefined: () => void;
     onFilterStatus: (filter: string) => void;
 }> = ({
     title = 'Vocabulary Center',
     subtitle = 'Manage and expand your lexical resource.',
     libraryType = 'vocab',
     stats,
-    onStartNew, onStartDue, onStartStatusReview, onRefineRaw, onVerifyRefined, onFilterStatus
+    dayProgress,
+    onStartNew, onStartDue, onStartStatusReview, onFilterStatus
 }) => {
-    const { totalCount, newCount, dueCount, studyingCount, masteredCount, rawCount, refinedCount, forgottenCount, hardCount, easyCount, focusedCount } = stats;
+    const { totalCount, newCount, dueCount, studyingCount, masteredCount, rawCount, forgottenCount, hardCount, easyCount, focusedCount } = stats;
     const newPercent = totalCount > 0 ? (newCount / totalCount) * 100 : 0;
     const studyingPercent = totalCount > 0 ? (studyingCount / totalCount) * 100 : 0;
     const masteredPercent = totalCount > 0 ? (masteredCount / totalCount) * 100 : 0;
@@ -344,7 +356,7 @@ const VocabularyCenterPanel: React.FC<{
                          <p className="text-[10px] font-medium text-neutral-400">{subtitle}</p>
                      </div>
                  </div>
-                 <AutoRefineDashboardControl libraryType={libraryType} />
+                 <AutoRefineDashboardControl libraryType={libraryType} rawCount={rawCount} />
              </div>
 
              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -405,14 +417,14 @@ const VocabularyCenterPanel: React.FC<{
 
                 {/* Actions - 2 Columns (3x2 Grid) */}
                 <div className="lg:col-span-2 grid grid-cols-2 gap-3">
-
                     {/* Row 1 */}
                     <NavButton 
                         label="Learn New" 
                         subLabel={`${newCount} words ready`} 
+                        rightLabel={dayProgress.learned}
                         icon={Sparkles} 
                         color="text-indigo-600" 
-                        bg="bg-indigo-50" 
+                        bg="bg-indigo-50"
                         onClick={onStartNew} 
                         disabled={newCount === 0} 
                     />
@@ -420,6 +432,7 @@ const VocabularyCenterPanel: React.FC<{
                     <NavButton 
                         label="Review Due" 
                         subLabel={`${dueCount} words due`} 
+                        rightLabel={dayProgress.reviewed}
                         icon={RotateCw} 
                         color="text-amber-600" 
                         bg="bg-amber-50" 
@@ -447,28 +460,6 @@ const VocabularyCenterPanel: React.FC<{
                         onClick={() => onStartStatusReview('hard')} 
                         disabled={hardCount === 0} 
                     />
-
-                    {/* Row 3 */}
-                    <NavButton 
-                        label="Refine" 
-                        subLabel={`${rawCount} raw words`} 
-                        icon={Wand2} 
-                        color="text-purple-600" 
-                        bg="bg-purple-50" 
-                        onClick={onRefineRaw} 
-                        disabled={rawCount === 0} 
-                    />
-
-                    <NavButton 
-                        label="Verify" 
-                        subLabel={`${refinedCount} pending`} 
-                        icon={ShieldCheck} 
-                        color="text-emerald-600" 
-                        bg="bg-emerald-50" 
-                        onClick={onVerifyRefined} 
-                        disabled={refinedCount === 0} 
-                    />
-
                 </div>
              </div>
         </div>
@@ -1487,7 +1478,7 @@ const BackupStatus: React.FC<{
 
 
 export const DashboardUI: React.FC<DashboardUIProps> = ({
-  onNavigate, totalCount, newCount, rawCount, refinedCount, reviewStats,
+  onNavigate, totalCount, newCount, rawCount, reviewStats,
   lastBackupTime, onBackup, onRestore,
   serverStatus, onAction, onStartNewLearn, onStartDueReview, onStartStatusReview, onStartKotobaNewLearn, onStartKotobaDueReview, onStartKotobaStatusReview, dayProgress, kotobaDayProgress, dailyGoals, dailyStreaks, dailyGoalHistory, onNavigateToWordList, onNavigateToKotobaList, goalStats,
   studyStats, isStatsLoading,
@@ -1910,11 +1901,10 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
               <VocabularyCenterPanel
                 libraryType="vocab"
                 stats={vocabLibraryStats}
+                dayProgress={dayProgress}
                 onStartNew={onStartNewLearn} 
                 onStartDue={onStartDueReview} 
                 onStartStatusReview={onStartStatusReview}
-                onRefineRaw={() => onNavigateToWordList('raw')}
-                onVerifyRefined={() => onNavigateToWordList('refined')}
                 onFilterStatus={(filter) => onNavigateToWordList(filter)}
               />
               <StudyNowPanel stats={studyStats} isLoading={isStatsLoading} onAction={(action) => onAction(action)} />
@@ -1953,11 +1943,10 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                 title="Vocabulary Center"
                 subtitle="Review and grow your Japanese kotoba library."
                 stats={kotobaLibraryStats}
+                dayProgress={kotobaDayProgress}
                 onStartNew={onStartKotobaNewLearn}
                 onStartDue={onStartKotobaDueReview}
                 onStartStatusReview={onStartKotobaStatusReview}
-                onRefineRaw={() => onNavigateToKotobaList('raw')}
-                onVerifyRefined={() => onNavigateToKotobaList('refined')}
                 onFilterStatus={(filter) => onNavigateToKotobaList(filter)}
               />
               {(() => {

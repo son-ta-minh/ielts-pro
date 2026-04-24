@@ -412,7 +412,8 @@ const useAutoRefine = () => useContext(AutoRefineContext);
 
 export const AutoRefineDashboardControl: React.FC<{
     libraryType?: StudyLibraryType;
-}> = ({ libraryType = 'vocab' }) => {
+    rawCount?: number;
+}> = ({ libraryType = 'vocab', rawCount }) => {
     const { state, startAutoRefine, stopAutoRefine } = useAutoRefine();
     const [isPanelOpen, setIsPanelOpen] = useState(false);
 
@@ -436,14 +437,17 @@ export const AutoRefineDashboardControl: React.FC<{
             <div className="relative">
                 <button
                     onClick={handlePrimaryClick}
+                    disabled={!rawCount || rawCount <= 0}
                     className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-[10px] font-black uppercase tracking-widest shadow-sm transition-all ${
-                        isRunning
-                            ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                            : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'
+                        (!rawCount || rawCount <= 0)
+                            ? 'border-neutral-100 bg-neutral-100 text-neutral-400 cursor-not-allowed'
+                            : isRunning
+                                ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'
                     }`}
                 >
                     {isRunning ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                    <span>{isRunning ? 'Auto Refine Running' : 'Auto Refine'}</span>
+                    <span>{isRunning ? 'Auto Refine Running' : `Auto Refine ${rawCount || 0} words`}</span>
                 </button>
 
                 {isPanelOpen && hasProgress && (
