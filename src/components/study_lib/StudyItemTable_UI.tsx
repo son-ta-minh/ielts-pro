@@ -766,55 +766,6 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className={`px-4 py-3 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isViewMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="View Options">
                         <Eye size={16} /> <span className="hidden sm:inline">View</span>
                     </button>
-                    {isViewMenuOpen && (
-                        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-neutral-100 z-50 p-2 overflow-hidden animate-in fade-in zoom-in-95 flex flex-col gap-1">
-                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50">
-                              Columns
-                            </div>
-                            <VisibilityToggle label={<><Columns size={14}/>Meaning</>} checked={visibility.showMeaning} onChange={() => setVisibility(v => ({...v, showMeaning: !v.showMeaning}))} />
-                            <VisibilityToggle label={<><FolderTree size={14}/>Group</>} checked={visibility.showGroups} onChange={() => setVisibility(v => ({...v, showGroups: !v.showGroups}))} />
-                            {visibility.showMeaning && (<VisibilityToggle label="Hide until hover" subItem checked={visibility.blurMeaning} onChange={() => setVisibility(v => ({...v, blurMeaning: !v.blurMeaning}))} />)}
-                            <VisibilityToggle label={<><Activity size={14}/>Progress Status</>} checked={visibility.showProgress} onChange={() => setVisibility(v => ({...v, showProgress: !v.showProgress}))} />
-                            <VisibilityToggle label={<><Calendar size={14}/>Due Date</>} checked={visibility.showDue} onChange={() => setVisibility(v => ({...v, showDue: !v.showDue}))} />
-                            <VisibilityToggle label={<><Zap size={14}/>Mastery Score</>} checked={visibility.showMastery} onChange={() => setVisibility(v => ({...v, showMastery: !v.showMastery}))} />
-                            <VisibilityToggle label={<><Binary size={14}/>Complexity</>} checked={visibility.showComplexity} onChange={() => setVisibility(v => ({...v, showComplexity: !v.showComplexity}))} />
-
-                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50">
-                              Layout
-                            </div>
-                            <div className="flex gap-2 p-2">
-                              <button
-                                onClick={() => setViewMode('table')}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black border ${
-                                  viewMode === 'table'
-                                    ? 'bg-neutral-900 text-white border-neutral-900'
-                                    : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
-                                }`}
-                              >
-                                <Columns size={14} />
-                                Table
-                              </button>
-                              <button
-                                onClick={() => setViewMode('grid')}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black border ${
-                                  viewMode === 'grid'
-                                    ? 'bg-neutral-900 text-white border-neutral-900'
-                                    : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
-                                }`}
-                              >
-                                <LayoutGrid size={14} />
-                                Grid
-                              </button>
-                            </div>
-
-                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 mt-1">Details</div>
-                            <VisibilityToggle label="IPA Phonetic" checked={visibility.showIPA} onChange={() => setVisibility(v => ({...v, showIPA: !v.showIPA}))} />
-                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 mt-1">Indicators</div>
-                            <VisibilityToggle label={<><Activity size={14} className="text-blue-500"/> Quality Status</>} checked={visibility.showAiIcon} onChange={() => setVisibility(v => ({...v, showAiIcon: !v.showAiIcon}))} />
-                            <VisibilityToggle label={<><Network size={14} className="text-purple-500"/> Word Family</>} checked={visibility.showFamilyIcon} onChange={() => setVisibility(v => ({...v, showFamilyIcon: !v.showFamilyIcon}))} />
-                            <VisibilityToggle label={<><AtSign size={14} className="text-orange-500"/> Prepositions</>} checked={visibility.showPrepIcon} onChange={() => setVisibility(v => ({...v, showPrepIcon: !v.showPrepIcon}))} />
-                        </div>
-                    )}
                 </div>
                 <button onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)} className={`px-4 py-3 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isFilterMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="Filter">
                     <ListFilter size={16} /> <span className="hidden sm:inline">Filter</span>
@@ -933,6 +884,98 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                                 </select>
                             )}
                         </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {isViewMenuOpen && (
+            <div
+              className="bg-white border border-neutral-100 p-4 rounded-2xl grid gap-4 shadow-sm animate-in slide-in-from-top-2"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+                <div className="flex flex-col gap-1">
+                    <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50">
+                      Columns
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 p-2">
+                      {[
+                        { key: 'showMeaning', label: 'Meaning' },
+                        { key: 'showGroups', label: 'Group' },
+                        { key: 'showProgress', label: 'Progress' },
+                        { key: 'showDue', label: 'Due' },
+                        { key: 'showMastery', label: 'Mastery' },
+                        { key: 'showComplexity', label: 'Complexity' },
+                        { key: 'showIPA', label: 'IPA' },
+                        { key: 'showAiIcon', label: 'Quality' },
+                        { key: 'showFamilyIcon', label: 'Family' },
+                        { key: 'showPrepIcon', label: 'Prep' }
+                      ].map(item => {
+                        const key = item.key as keyof VisibilitySettings;
+                        const active = visibility[key];
+
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => setVisibility(v => ({ ...v, [key]: !v[key] }))}
+                            className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                              active
+                                ? 'bg-neutral-900 text-white border-neutral-900'
+                                : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {visibility.showMeaning && (
+                      <div className="flex flex-wrap gap-2 px-2 pb-2">
+                        <button
+                          type="button"
+                          onClick={() => setVisibility(v => ({ ...v, blurMeaning: !v.blurMeaning }))}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                            visibility.blurMeaning
+                              ? 'bg-neutral-900 text-white border-neutral-900'
+                              : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'
+                          }`}
+                        >
+                          Hide on Hover
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 mt-1">
+                      Layout
+                    </div>
+
+                    <div className="flex gap-2 p-2">
+                      <button
+                        onClick={() => setViewMode('table')}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black border ${
+                          viewMode === 'table'
+                            ? 'bg-neutral-900 text-white border-neutral-900'
+                            : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
+                        }`}
+                      >
+                        <Columns size={14} />
+                        Table
+                      </button>
+
+                      <button
+                        onClick={() => setViewMode('grid')}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black border ${
+                          viewMode === 'grid'
+                            ? 'bg-neutral-900 text-white border-neutral-900'
+                            : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
+                        }`}
+                      >
+                        <LayoutGrid size={14} />
+                        Grid
+                      </button>
                     </div>
                 </div>
             </div>
