@@ -1136,7 +1136,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
             <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading...</p>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 relative">
+          <div className="p-4 flex flex-wrap gap-3 relative">
             {words.length === 0 ? (
               <div className="col-span-full text-center text-sm italic text-neutral-300 py-10">
                 No items found.
@@ -1151,14 +1151,14 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     else next.add(item.id);
                     setSelectedIds(next);
                   }}
-                  className={`group relative bg-white border rounded-2xl p-4 hover:shadow-md transition-all cursor-pointer overflow-hidden ${
+                  className={`group relative bg-white border rounded-2xl p-4 w-fit min-w-[140px] max-w-[260px] hover:shadow-md transition-all cursor-pointer overflow-hidden ${
                     selectedIds.has(item.id)
                       ? 'border-blue-500 bg-blue-50/20'
                       : 'border-neutral-200'
                   }`}
                 >
-                  <div className="flex items-center justify-between truncate">
-                    <div className="font-bold text-neutral-900">
+                  <div className="flex items-start justify-between">
+                    <div className="font-bold text-neutral-900 whitespace-nowrap">
                       <div
                       style={{
                       color:
@@ -1177,7 +1177,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
 
                   {visibility.showMeaning && (
                       <div
-                        className={`text-sm text-neutral-600 leading-snug transition-all duration-300 truncate
+                        className={`text-sm text-neutral-600 leading-snug transition-all duration-300 w-full max-w-full break-words
                         ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100' : ''}`}
                       >
                         {item.meaningVi}
