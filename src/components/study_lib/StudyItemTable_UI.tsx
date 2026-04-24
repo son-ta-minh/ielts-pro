@@ -1151,7 +1151,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     else next.add(item.id);
                     setSelectedIds(next);
                   }}
-                  className={`group relative bg-white border rounded-2xl p-4 w-fit min-w-[140px] max-w-[260px] hover:shadow-md transition-all cursor-pointer overflow-hidden ${
+                  className={`group relative bg-white border rounded-2xl p-4 inline-block w-min hover:shadow-md transition-all cursor-pointer overflow-hidden ${
                     selectedIds.has(item.id)
                       ? 'border-blue-500 bg-blue-50/20'
                       : 'border-neutral-200'
@@ -1177,8 +1177,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
 
                   {visibility.showMeaning && (
                       <div
-                        className={`text-sm text-neutral-600 leading-snug transition-all duration-300 w-full max-w-full break-words
-                        ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100' : ''}`}
+                        className={`text-sm text-neutral-600 leading-snug transition-all duration-300 truncate ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100' : ''}`}
                       >
                         {item.meaningVi}
                       </div>
@@ -1278,7 +1277,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
         <div className="p-3 bg-neutral-50/30 flex items-center justify-between border-t border-neutral-100">
             <div className="flex items-center space-x-2">
               <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Size</span>
-              <select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))} className="bg-white border border-neutral-200 rounded-lg px-2 py-1 text-xs font-bold">{[14, 28, 50, 100].map(o => <option key={o} value={o}>{o}</option>)}</select>
+              <select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))} className="bg-white border border-neutral-200 rounded-lg px-2 py-1 text-xs font-bold">{[20, 30, 50, 100].map(o => <option key={o} value={o}>{o}</option>)}</select>
               <button
                 type="button"
                 onClick={() => {
