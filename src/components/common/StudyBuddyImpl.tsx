@@ -1489,6 +1489,21 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
             void handleChatCoachTestMore(focusArea);
         };
+
+        // Unified StudyBuddy command event handler
+        const handleStudyBuddyCommand = (event: Event) => {
+            const custom = event as CustomEvent<{ type?: string; payload?: any }>;
+            const type = custom.detail?.type;
+            const payload = custom.detail?.payload;
+            switch (type) {
+                case 'open-coach-menu':
+                    console.log('Received command to open coach menu with payload:', payload);
+                    openCoachMenu(undefined, payload);
+                    break;
+                default:
+                    break;
+            }
+        };
         window.addEventListener('config-updated', handleConfigUpdate);
         window.addEventListener('audio-status-changed', handleAudioStatus);
         window.addEventListener('coach-cambridge-lookup-request', handleCoachLookupRequest as EventListener);
@@ -1502,6 +1517,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         window.addEventListener('studybuddy-chat-stream-end', handleExternalStudyBuddyChatStreamEnd as EventListener);
         window.addEventListener('studybuddy-chat-stream-error', handleExternalStudyBuddyChatStreamError as EventListener);
         window.addEventListener('studybuddy-test-more', handleExternalStudyBuddyTestMore as EventListener);
+        window.addEventListener('studybuddy-command', handleStudyBuddyCommand as EventListener);
         
         // Initial check
         setIsAudioPlaying(getIsSpeaking());
@@ -1535,6 +1551,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             window.removeEventListener('studybuddy-chat-stream-end', handleExternalStudyBuddyChatStreamEnd as EventListener);
             window.removeEventListener('studybuddy-chat-stream-error', handleExternalStudyBuddyChatStreamError as EventListener);
             window.removeEventListener('studybuddy-test-more', handleExternalStudyBuddyTestMore as EventListener);
+            window.removeEventListener('studybuddy-command', handleStudyBuddyCommand as EventListener);
             if (cambridgeAudioRef.current) {
                 cambridgeAudioRef.current.pause();
                 cambridgeAudioRef.current = null;
@@ -2239,12 +2256,34 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         }
     };
 
-    const openCoachMenu = (e?: React.MouseEvent) => {
-        // Only open on hover if there is already a valid selection
-        if (!selectedRangeRef.current) return;
-        // Do not trigger when hovering inside chat panel
-        if (e && chatPanelRef.current && chatPanelRef.current.contains(e.target as Node)) {
+    const openCoachMenu = (e?: React.MouseEvent, payload?: { text: string; clientX: number; clientY: number }) => {
+        console.log("Attempting to open coach menu on hover", payload?.text);
+        if (payload?.text) {
+            selectedTextRef.current = payload.text;
+
+            setMenuPos({
+                x: payload.clientX,
+                y: payload.clientY,
+                placement: 'bottom'
+            });
+
+            setMessage(null);
+            setIsThinking(false);
+
+            setIsOpen(true);
             return;
+        }
+
+        // Only open on hover if there is already a valid selection
+        if (!selectedRangeRef.current){
+            console.log("No valid selection range, not opening coach menu");
+            return;
+        }
+        // Do not trigger when hovering inside chat panel
+        if (e) {
+            if (chatPanelRef.current && chatPanelRef.current.contains(e.target as Node)) {
+                return;
+            }
         }
 
         // Do not auto-open when chat is open unless user has selected text

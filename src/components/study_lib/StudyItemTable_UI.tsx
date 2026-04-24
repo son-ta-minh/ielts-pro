@@ -980,7 +980,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
             <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading...</p>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 relative">
             {words.length === 0 ? (
               <div className="col-span-full text-center text-sm italic text-neutral-300 py-10">
                 No items found.
@@ -989,8 +989,17 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
               words.map(item => (
                 <div
                   key={item.id}
-                  className="group relative bg-white border border-neutral-200 rounded-2xl p-4 hover:shadow-md transition-all cursor-pointer overflow-hidden"
-                  onClick={() => onViewWord(item)}
+                  onClick={() => {
+                    const next = new Set(selectedIds);
+                    if (next.has(item.id)) next.delete(item.id);
+                    else next.add(item.id);
+                    setSelectedIds(next);
+                  }}
+                  className={`group relative bg-white border rounded-2xl p-4 hover:shadow-md transition-all cursor-pointer overflow-hidden ${
+                    selectedIds.has(item.id)
+                      ? 'border-blue-500 bg-blue-50/20'
+                      : 'border-neutral-200'
+                  }`}
                 >
                   <div className="flex items-center justify-between truncate">
                     <div className="font-bold text-neutral-900">
@@ -1011,7 +1020,6 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                   </div>
 
                   {visibility.showMeaning && (
-
                       <div
                         className={`text-sm text-neutral-600 leading-snug transition-all duration-300 truncate
                         ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100' : ''}`}
@@ -1021,6 +1029,51 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                   )}
 
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewWord(item);
+                      }}
+                      className="p-1 rounded-md bg-white border border-neutral-200 hover:bg-neutral-50"
+                    >
+                      <Eye size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+
+                        const card = (e.currentTarget as HTMLElement).closest('.group');
+                        const el = card?.querySelector('.font-bold.text-neutral-900 div') as HTMLElement | null;
+
+                        if (el) {
+                          const range = document.createRange();
+                          range.selectNodeContents(el);
+
+                          const selection = window.getSelection();
+                          if (selection) {
+                            selection.removeAllRanges();
+                            selection.addRange(range);
+                          }
+                        }
+                        console.log('Selected headword text:', el?.textContent);
+                        window.dispatchEvent(
+                          new CustomEvent('studybuddy-command', {
+                            detail: {
+                              type: 'open-coach-menu',
+                              payload: {
+                                text: el?.textContent || item.word,
+                                clientX: e.clientX,
+                                clientY: e.clientY
+                              }
+                            }
+                          })
+                        );
+                      }}
+                      className="p-1 rounded-md bg-white border border-neutral-200 hover:bg-neutral-50"
+                      title="Select headword"
+                    >
+                      <AtSign size={14} />
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); onEditWord(item); }}
                       className="p-1 rounded-md bg-white border border-neutral-200 hover:bg-neutral-50"
@@ -1067,7 +1120,31 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
           </div>
         )}
         <div className="p-3 bg-neutral-50/30 flex items-center justify-between border-t border-neutral-100">
-            <div className="flex items-center space-x-2"><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Size</span><select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))} className="bg-white border border-neutral-200 rounded-lg px-2 py-1 text-xs font-bold">{[14, 28, 50, 100].map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Size</span>
+              <select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))} className="bg-white border border-neutral-200 rounded-lg px-2 py-1 text-xs font-bold">{[14, 28, 50, 100].map(o => <option key={o} value={o}>{o}</option>)}</select>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedIds.size === words.length && words.length > 0) {
+                    setSelectedIds(new Set());
+                  } else {
+                    setSelectedIds(new Set(words.map(w => w.id)));
+                  }
+                }}
+                className="ml-2 flex items-center gap-2 px-2 py-1 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50"
+                title={selectedIds.size === words.length ? 'Clear All' : 'Select All'}
+              >
+                {selectedIds.size === words.length ? (
+                  <CheckSquare size={14} className="text-neutral-900" />
+                ) : (
+                  <Square size={14} className="text-neutral-400" />
+                )}
+                <span className="text-[10px] font-black text-neutral-600 uppercase">
+                  {selectedIds.size === words.length ? 'Clear Selected' : 'Select All'}
+                </span>
+              </button>
+            </div>
             <div className="flex space-x-2"><button disabled={page === 0} onClick={() => onPageChange(page - 1)} className="px-3 py-1.5 bg-white border border-neutral-200 rounded-lg text-xs font-bold disabled:opacity-30"><ChevronLeft size={14} /></button><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest self-center">Page {page + 1} of {totalPages || 1}</span><button disabled={(page + 1) >= totalPages} onClick={() => onPageChange(page + 1)} className="px-3 py-1.5 bg-white border border-neutral-200 rounded-lg text-xs font-bold disabled:opacity-30"><ChevronRight size={14} /></button></div>
         </div>
       </div>
