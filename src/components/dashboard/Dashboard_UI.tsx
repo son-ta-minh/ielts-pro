@@ -944,7 +944,7 @@ const BackupStatus: React.FC<{
 
   useEffect(() => {
     const updateStatus = () => {
-      if (!lastBackupTime) { setStatusText("Last backup: Never"); return; }
+      if (!lastBackupTime) { setStatusText("Backup: Never"); return; }
       const diff = Date.now() - lastBackupTime;
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
       const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);

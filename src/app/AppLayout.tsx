@@ -42,14 +42,14 @@ interface AppLayoutProps {
 
 const navItems = [
   { id: 'DASHBOARD', view: 'DASHBOARD', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Mobile%20Phone.png", label: 'Dashboard' },
-  { id: 'BROWSE', view: 'BROWSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png", label: 'Word Library' },
+  { id: 'COURSE', view: 'COURSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Graduation%20Cap.png", label: 'Course' },
+  { id: 'BROWSE', view: 'BROWSE', icon: "https://flagcdn.com/w1160/gb.png", label: 'Vocabulary' },
   { id: 'KOTOBA', view: 'KOTOBA', icon: "https://flagcdn.com/w40/jp.png", label: 'Kotoba' },
   { id: 'WORD_GALLERY', view: 'WORD_GALLERY', icon: "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Framed%20picture/3D/framed_picture_3d.png", label: 'Gallery' },
   { id: 'QUESTION_BANK', view: 'QUESTION_BANK', icon: "https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Card%20index%20dividers/3D/card_index_dividers_3d.png", label: 'Question Bank' },
-  { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Knowledge Library' },
-  { id: 'COURSE', view: 'COURSE', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Graduation%20Cap.png", label: 'Course' },
+  { id: 'LESSON', view: 'LESSON', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Notebook.png", label: 'Knowledge' },
   { id: 'UNIT_LIBRARY', view: 'UNIT_LIBRARY', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Open%20Book.png", label: 'Reading' },
-  { id: 'SPEAKING', view: 'SPEAKING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png", label: 'Speaking - Listening' },
+  { id: 'SPEAKING', view: 'SPEAKING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Microphone.png", label: 'Conversation' },
   { id: 'WRITING', view: 'WRITING', icon: "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Memo.png", label: 'Writing' }
 ] as const;
 
@@ -65,6 +65,20 @@ const Sidebar: React.FC<AppLayoutProps & {
   } = controller;
 
   const [timeLeft, setTimeLeft] = useState(0);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [ieltsOpen, setIeltsOpen] = useState(false);
+  const libraryIds = new Set(['BROWSE', 'KOTOBA', 'WORD_GALLERY', 'LESSON', 'QUESTION_BANK']);
+  const ieltsIds = new Set(['UNIT_LIBRARY', 'SPEAKING', 'WRITING']);
+
+  const libraryItems = navItems.filter((item: any) => libraryIds.has(item.id));
+  const ieltsItems = navItems.filter((item: any) => ieltsIds.has(item.id));
+
+  const otherItems = navItems.filter(
+    (item: any) =>
+      !libraryIds.has(item.id) &&
+      !ieltsIds.has(item.id) &&
+      item.id !== 'DASHBOARD'
+  );
 
   useEffect(() => {
     if (!nextAutoBackupTime) { setTimeLeft(0); return; }
@@ -143,6 +157,26 @@ const Sidebar: React.FC<AppLayoutProps & {
            </div>
         </div>
         <nav className="flex-1 overflow-y-auto space-y-1">
+          {/* Dashboard */}
+          <div className="relative group">
+            <button
+              onClick={() => onNavigate('DASHBOARD')}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${
+                view === 'DASHBOARD'
+                  ? 'bg-neutral-900 text-white shadow-sm'
+                  : 'text-neutral-500 hover:bg-neutral-100'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <img
+                  src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Mobile%20Phone.png"
+                  className="w-5 h-5 object-contain"
+                />
+                <span>Dashboard</span>
+              </div>
+            </button>
+          </div>
+          {/* Study Now */}
           {sessionType && view !== 'REVIEW' && (
             <div className="relative group animate-in fade-in duration-300 mb-1">
               <button onClick={() => onNavigate('REVIEW')} className="w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm bg-green-500 text-white shadow-lg shadow-green-500/20">
@@ -151,14 +185,145 @@ const Sidebar: React.FC<AppLayoutProps & {
               </button>
             </div>
           )}
-          {navItems.map((item: any) => {
+          {/* Library Nav Item */}
+          <div className="relative group">
+            <button
+              onClick={() => setLibraryOpen(!libraryOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${
+                libraryOpen
+                  ? 'bg-neutral-100 text-neutral-900'
+                  : 'text-neutral-500 hover:bg-neutral-100'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <img
+                  src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Books.png"
+                  className="w-5 h-5 object-contain"
+                />
+                <span>User Library</span>
+              </div>
+
+              <span className={`transition-transform ${libraryOpen ? 'rotate-180' : 'rotate-0'}`}>
+                ▾
+              </span>
+            </button>
+
+            {libraryOpen && (
+              <div className="mt-1 ml-6 pl-3 border-l border-neutral-200 space-y-1">
+                {libraryItems.map((item: any) => {
+                  const isActive =
+                    view === item.view && (item.id !== 'BROWSE' || !forceExpandAdd);
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onNavigate(item.view as AppView)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl font-bold text-sm transition-colors ${
+                        isActive
+                          ? 'bg-neutral-900 text-white shadow-sm'
+                          : 'text-neutral-500 hover:bg-neutral-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {typeof item.icon === 'string'
+                          ? (
+                            <img
+                              src={item.icon}
+                              className={`w-5 h-5 object-contain ${
+                                isActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'
+                              }`}
+                            />
+                          )
+                          : <item.icon size={18} />
+                        }
+                        <span>{item.label}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* IELTS Group */}
+          <div className="relative group mt-1">
+            <button
+              onClick={() => setIeltsOpen(!ieltsOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${
+                ieltsOpen
+                  ? 'bg-neutral-100 text-neutral-900'
+                  : 'text-neutral-500 hover:bg-neutral-100'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <img
+                  src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Objects/Page%20Facing%20Up.png"
+                  className="w-5 h-5 object-contain"
+                />
+                <span>IELTS</span>
+              </div>
+              <span className={`transition-transform ${ieltsOpen ? 'rotate-180' : 'rotate-0'}`}>
+                ▾
+              </span>
+            </button>
+
+            {ieltsOpen && (
+              <div className="mt-1 ml-6 pl-3 border-l border-neutral-200 space-y-1">
+                {ieltsItems.map((item: any) => {
+                  const isActive =
+                    view === item.view && (item.id !== 'BROWSE' || !forceExpandAdd);
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onNavigate(item.view as AppView)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl font-bold text-sm transition-colors ${
+                        isActive
+                          ? 'bg-neutral-900 text-white shadow-sm'
+                          : 'text-neutral-500 hover:bg-neutral-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {typeof item.icon === 'string'
+                          ? (
+                            <img
+                              src={item.icon}
+                              className={`w-5 h-5 object-contain ${
+                                isActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'
+                              }`}
+                            />
+                          )
+                          : <item.icon size={18} />
+                        }
+                        <span>{item.label}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Other Nav Items */}
+          {otherItems.map((item: any) => {
             const isActive = view === item.view && (item.id !== 'BROWSE' || !forceExpandAdd);
             const isSpeakingActive = item.id === 'SPEAKING' && view === 'SPEAKING';
+
             return (
               <div key={item.id} className="relative group">
-                <button onClick={() => onNavigate(item.view as AppView)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${isActive || isSpeakingActive ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-100'}`}>
+                <button
+                  onClick={() => onNavigate(item.view as AppView)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${
+                    isActive || isSpeakingActive
+                      ? 'bg-neutral-900 text-white shadow-sm'
+                      : 'text-neutral-500 hover:bg-neutral-100'
+                  }`}
+                >
                   <div className="flex items-center space-x-3">
-                    {typeof item.icon === 'string' ? <img src={item.icon} className={`w-5 h-5 object-contain transition-all ${isActive || isSpeakingActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`} alt={item.label} /> : <item.icon size={20} />}
+                    {typeof item.icon === 'string'
+                      ? <img src={item.icon} className={`w-5 h-5 object-contain transition-all ${isActive || isSpeakingActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`} />
+                      : <item.icon size={20} />
+                    }
                     <span>{item.label}</span>
                   </div>
                 </button>
