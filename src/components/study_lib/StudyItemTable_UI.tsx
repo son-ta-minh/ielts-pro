@@ -7,7 +7,7 @@ import { DEFAULT_WORD_REFINE_SETUP, WordRefineSetup } from '../../services/wordR
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 
 export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'lesson' | 'archive' | 'focus' | 'duplicate';
-export type RefinedFilter = 'all' | 'raw' | 'refined' | 'verified' | 'not_refined';
+export type RefinedFilter = 'all' | 'raw' | 'refined';
 export type StatusFilter = 'all' | 'new' | 'forgot' | 'hard' | 'easy' | 'learned' | 'reviewing' | 'ignored' | 'not_ignored';
 export type RegisterFilter = 'all' | 'academic' | 'casual' | 'neutral' | 'raw';
 export type CompositionFilter = 'all' | 'composed' | 'not_composed';
@@ -193,9 +193,7 @@ const getStatusBadge = (item: StudyItem) => {
 
 const getQualityIcon = (quality: StudyItemQuality) => {
     switch (quality) {
-        case StudyItemQuality.VERIFIED: return <span title="Verified Content"><ShieldCheck size={14} className="text-emerald-500" /></span>;
-        case StudyItemQuality.REFINED: return <span title="AI Refined - Needs Verification"><Wand2 size={14} className="text-indigo-500" /></span>;
-        case StudyItemQuality.FAILED: return <span title="Verification Failed"><ShieldX size={14} className="text-rose-500" /></span>;
+        case StudyItemQuality.REFINED: return <span title="Refined Content"><ShieldCheck size={14} className="text-emerald-500" /></span>;
         default: return <span title="Raw Content"><Ghost size={14} className="text-neutral-300" /></span>;
     }
 };
@@ -696,8 +694,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   };
   const qualityOptions = [
     { id: StudyItemQuality.RAW, label: 'Raw' },
-    { id: StudyItemQuality.REFINED, label: 'Refined' },
-    { id: StudyItemQuality.VERIFIED, label: 'Verified' }
+    { id: StudyItemQuality.REFINED, label: 'Refined' }
   ];
   const learnedStatusOptions = [
     { id: LearnedStatus.NEW, label: 'New' },
@@ -854,7 +851,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     <div>
                         <label htmlFor="quality-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1">Quality</label>
                         <select id="quality-filter" value={refinedFilter} onChange={(e) => setRefinedFilter(e.target.value as RefinedFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold text-neutral-900 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
-                             {[ { id: 'all', label: 'Any' }, { id: 'verified', label: 'Verified' }, { id: 'refined', label: 'Refined' }, { id: 'raw', label: 'Raw' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                             {[ { id: 'all', label: 'Any' }, { id: 'refined', label: 'Refined' }, { id: 'raw', label: 'Raw' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                         </select>
                     </div>
                     <div>

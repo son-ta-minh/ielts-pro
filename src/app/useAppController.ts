@@ -999,7 +999,7 @@ export const useAppController = () => {
         if (!currentUser) return; 
         const allWords = getLibraryWords(libraryType);
         const newWords = allWords
-            .filter(w => !w.isPassive && !w.lastReview && w.quality === 'VERIFIED')
+            .filter(w => !w.isPassive && !w.lastReview && w.quality !== 'RAW')
             .sort((a, b) => a.createdAt - b.createdAt)
             .slice(0, 20);
             

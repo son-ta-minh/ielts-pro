@@ -43,7 +43,7 @@ const checkIpaEligibility = (ipa: string): boolean => {
  */
 export const calculateGameEligibility = (item: StudyItem): string[] => {
     // Words must be verified AND already learned/reviewed (i.e., not new) to be eligible for games.
-    if (item.quality !== StudyItemQuality.VERIFIED || !item.lastReview) {
+    if (item.quality !== StudyItemQuality.REFINED || !item.lastReview) {
         return [];
     }
 

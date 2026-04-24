@@ -563,9 +563,7 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
 
     const qualityStatusOptions = [
         { id: StudyItemQuality.RAW, label: 'Raw', icon: <Ghost size={14} className="text-neutral-400" /> },
-        { id: StudyItemQuality.REFINED, label: 'To Review', icon: <Wand2 size={14} className="text-indigo-500" /> },
-        { id: StudyItemQuality.VERIFIED, label: 'Verified', icon: <ShieldCheck size={14} className="text-emerald-500" /> },
-        { id: StudyItemQuality.FAILED, label: 'Incorrect', icon: <ShieldX size={14} className="text-rose-500" /> },
+        { id: StudyItemQuality.REFINED, label: 'Refined', icon: <Wand2 size={14} className="text-indigo-500" /> },
     ];
     const selectedLearnStatus = learnStatusOptions.find((option) => option.id === currentLearnStatus) || learnStatusOptions[0];
     const selectedQualityStatus = qualityStatusOptions.find((option) => option.id === word.quality) || qualityStatusOptions[0];

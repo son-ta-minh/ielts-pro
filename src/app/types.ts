@@ -19,8 +19,7 @@ export enum LearnedStatus {
 
 export enum StudyItemQuality {
   RAW = 'RAW',
-  REFINED = 'REFINED',
-  VERIFIED = 'VERIFIED'
+  REFINED = 'REFINED'
 }
 
 export type FocusColor = 'green' | 'yellow' | 'red';

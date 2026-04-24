@@ -236,9 +236,7 @@ export const EditStudyItemModalUI: React.FC<EditStudyItemModalUIProps> = (props)
 
   const qualityOptions = [
     { id: StudyItemQuality.RAW, label: 'Raw', icon: <Ghost size={14} className="text-neutral-400" /> },
-    { id: StudyItemQuality.REFINED, label: 'Refined', icon: <Wand2 size={14} className="text-indigo-500" /> },
-    { id: StudyItemQuality.VERIFIED, label: 'Verified', icon: <ShieldCheck size={14} className="text-emerald-500" /> },
-    { id: StudyItemQuality.FAILED, label: 'Incorrect', icon: <ShieldX size={14} className="text-rose-500" /> },
+    { id: StudyItemQuality.REFINED, label: 'Refined', icon: <Wand2 size={14} className="text-indigo-500" /> }
   ];
 
   const learnStatusOptions = [

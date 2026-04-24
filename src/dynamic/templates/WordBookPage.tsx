@@ -545,10 +545,8 @@ export const WordBookPage: React.FC<Props> = ({ user }) => {
                                     className="bg-white border border-neutral-200 rounded-xl px-2 py-1.5 text-[9px] font-black uppercase tracking-wider text-neutral-600 focus:ring-2 focus:ring-neutral-900 outline-none cursor-pointer"
                                 >
                                     <option value="all">Any Quality</option>
-                                    <option value={StudyItemQuality.VERIFIED}>Verified</option>
                                     <option value={StudyItemQuality.REFINED}>Refined</option>
                                     <option value={StudyItemQuality.RAW}>Raw</option>
-                                    <option value={StudyItemQuality.FAILED}>Failed</option>
                                 </select>
 
                                 {(filterColor !== 'all' || filterStatus !== 'all' || filterQuality !== 'all') && (

@@ -39,45 +39,6 @@ function findBackupFiles(dir, fileList = []) {
 }
 
 // --- Data Cleaning Helpers (Strict Allowlist + Key Normalization) ---
-
-function cleanVocab(item) {
-    // Construct a new object using ONLY safe fields.
-    // Handles both Long keys (from App) and Short keys (from Backup JSON).
-    return {
-        id: item.id,
-        word: item.word || item.w,
-        ipa: item.ipa || item.i,
-        ipaUs: item.ipaUs || item.i_us,
-        ipaUk: item.ipaUk || item.i_uk,
-        pronSim: item.pronSim || item.ps,
-        ipaMistakes: item.ipaMistakes || item.im,
-        meaningVi: item.meaningVi || item.m,
-        example: item.example || item.ex,
-        
-        // Arrays/Complex Objects (Keep structure, Frontend mapper handles internal short keys)
-        collocationsArray: item.collocationsArray || item.col,
-        idiomsList: item.idiomsList || item.idm,
-        prepositions: item.prepositions || item.prp,
-        paraphrases: item.paraphrases || item.prph,
-        wordFamily: item.wordFamily || item.fam,
-        
-        tags: item.tags || item.tg,
-        register: item.register || item.reg,
-        
-        // Booleans
-        isIdiom: !!(item.isIdiom || item.is_id),
-        isPhrasalVerb: !!(item.isPhrasalVerb || item.is_pv),
-        isCollocation: !!(item.isCollocation || item.is_col),
-        isStandardPhrase: !!(item.isStandardPhrase || item.is_phr),
-        isIrregular: !!(item.isIrregular || item.is_irr),
-        needsPronunciationFocus: !!(item.needsPronunciationFocus || item.is_pron),
-        
-        // Force quality to VERIFIED for master library to prevent re-refining
-        // or preserve existing if it's 'REFINED'
-        quality: (item.quality || item.q) === 'RAW' ? 'REFINED' : (item.quality || item.q || 'VERIFIED')
-    };
-}
-
 function cleanUnit(item) {
     return {
         id: item.id,
@@ -120,31 +81,10 @@ function loadGlobalLibrary() {
         fs.mkdirSync(settings.BACKUP_DIR, { recursive: true });
     }
 
-    const MASTER_FILE = MASTER_LIBRARY_FILE();
     const READING_FILE = MASTER_READING_FILE();
     const PLANNING_FILE = MASTER_PLANNING_FILE();
 
-    // 1. Load existing Master Library first (Vocabulary)
-    if (fs.existsSync(MASTER_FILE)) {
-        try {
-            const rawMaster = fs.readFileSync(MASTER_FILE, 'utf8');
-            const masterData = JSON.parse(rawMaster);
-            if (Array.isArray(masterData)) {
-                masterData.forEach(item => {
-                    // Re-clean just in case file was manually edited dirty
-                    const cleanItem = cleanVocab(item);
-                    if (cleanItem.word) {
-                        globalLibrary.set(cleanItem.word.toLowerCase().trim(), cleanItem);
-                    }
-                });
-                logger.debug(`[Library] Loaded ${masterData.length} words from existing Master File.`);
-            }
-        } catch (e) {
-            logger.error("[Library] Failed to load Master File:", e.message);
-        }
-    }
-
-    // 2. Load existing Master Reading first
+    // Load existing Master Reading first
     if (fs.existsSync(READING_FILE)) {
         try {
             const rawReading = fs.readFileSync(READING_FILE, 'utf8');
@@ -163,7 +103,7 @@ function loadGlobalLibrary() {
         }
     }
 
-    // 3. Load existing Master Planning first
+    // Load existing Master Planning first
     if (fs.existsSync(PLANNING_FILE)) {
         try {
             const rawPlanning = fs.readFileSync(PLANNING_FILE, 'utf8');
@@ -183,7 +123,7 @@ function loadGlobalLibrary() {
     }
 
     try {
-        // 4. Scan and Merge User Backups
+        // Scan and Merge User Backups
         const files = findBackupFiles(settings.BACKUP_DIR);
         // Sort by time ascending so newer user data overrides older user data (and Master data if conflicts)
         files.sort((a, b) => a.mtime - b.mtime);
@@ -196,35 +136,6 @@ function loadGlobalLibrary() {
             try {
                 const raw = fs.readFileSync(f.path, 'utf8');
                 const data = JSON.parse(raw);
-                
-                // --- VOCABULARY MERGE ---
-                // let items = [];
-                // if (Array.isArray(data)) {
-                //     items = data;
-                // } else if (data.vocabulary) {
-                //     items = data.vocabulary;
-                // } else if (data.vocab) {
-                //     items = data.vocab;
-                // }
-
-                // if (Array.isArray(items)) {
-                //     fileCount++;
-                //     items.forEach(item => {
-                //         const wordText = item.word || item.w;
-                //         const quality = item.quality || item.q;
-
-                //         // Only merge good quality items
-                //         const isGoodQuality = 
-                //             quality === 'VERIFIED' || quality === 'REFINED' || 
-                //             quality === 'v' || quality === 'r';
-
-                //         if (wordText && isGoodQuality) {
-                //             const key = wordText.toLowerCase().trim();
-                //             // CLEAN IMMEDIATELY BEFORE STORAGE
-                //             globalLibrary.set(key, cleanVocab(item));
-                //         }
-                //     });
-                // }
 
                 // --- READING UNITS MERGE ---
                 let units = [];
@@ -275,16 +186,7 @@ function loadGlobalLibrary() {
             }
         });
 
-        // 5. Save Updated Master Library (Vocab)
-        const allItems = Array.from(globalLibrary.values());
-        try {
-            fs.writeFileSync(MASTER_FILE, JSON.stringify(allItems, null, 2));
-            logger.debug(`[Library] Master Library updated. Saved ${allItems.length} words to disk.`);
-        } catch (writeErr) {
-            logger.error("[Library] Failed to write Master Library file:", writeErr.message);
-        }
-
-        // 6. Save Updated Master Reading (Units)
+        // Save Updated Master Reading (Units)
         const allUnits = Array.from(globalReadingLibrary.values());
         try {
             fs.writeFileSync(READING_FILE, JSON.stringify(allUnits, null, 2));
@@ -293,7 +195,7 @@ function loadGlobalLibrary() {
             logger.error("[Library] Failed to write Master Reading file:", writeErr.message);
         }
 
-        // 7. Save Updated Master Planning (Goals)
+        // Save Updated Master Planning (Goals)
         const allPlans = Array.from(globalPlanningLibrary.values());
         try {
             fs.writeFileSync(PLANNING_FILE, JSON.stringify(allPlans, null, 2));

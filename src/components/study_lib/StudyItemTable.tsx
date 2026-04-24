@@ -207,9 +207,7 @@ const StudyItemTable: React.FC<Props> = ({
 
     const refinedFilterValues: RefinedFilter[] = [
         'raw',
-        'refined',
-        'verified',
-        'not_refined'
+        'refined'
     ];
 
     const statusValues: StatusFilter[] = [

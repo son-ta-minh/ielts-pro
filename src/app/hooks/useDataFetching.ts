@@ -34,7 +34,7 @@ export const useDataFetching = ({ currentUser, onUpdateUser }: UseDataFetchingPr
         const activeWords = allUserWords.filter(w => !w.isPassive);
         
         // Create a specific pool for Word of the Day from verified words
-        const wotdPool = activeWords.filter(w => w.quality === StudyItemQuality.VERIFIED);
+        const wotdPool = activeWords.filter(w => w.quality === StudyItemQuality.REFINED);
         
         let selectedWotd: StudyItem | null = null;
 
@@ -161,7 +161,7 @@ export const useDataFetching = ({ currentUser, onUpdateUser }: UseDataFetchingPr
     const randomizeWotd = () => {
         if (!currentUser) return;
         const allUserWords = dataStore.getAllWords().filter(w => w.userId === currentUser.id);
-        const wotdPool = allUserWords.filter(w => !w.isPassive && w.quality === StudyItemQuality.VERIFIED);
+        const wotdPool = allUserWords.filter(w => !w.isPassive && w.quality === StudyItemQuality.REFINED);
         if (wotdPool.length > 0) {
             const random = wotdPool[Math.floor(Math.random() * wotdPool.length)];
             setRandomWotd(random);

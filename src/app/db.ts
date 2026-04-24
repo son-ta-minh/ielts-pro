@@ -554,7 +554,7 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
             // userId: targetUser.id, // Stop mapping to specific user to keep data global
             nextReview: item.nextReview || Date.now(),
             lastXpEarnedTime: item.lastXpEarnedTime || undefined, 
-            quality: item.quality || StudyItemQuality.VERIFIED
+            quality: item.quality || StudyItemQuality.REFINED
           }));
           await bulkSaveWords(finalVocab);
       }
@@ -609,7 +609,7 @@ export const getRandomMeanings = async (count: number, excludeId: string): Promi
         req.onsuccess = () => {
           const allItems = req.result as StudyItem[];
           const GENERIC_DISTRACTORS = [ "To express an idea or feeling", "A state of great comfort and luxury", "Happening or developing gradually", "To influence or change someone or something", "A formal meeting for discussion", "Necessary for a particular purpose", "The ability to do something well", "A careful and detailed study of something", "To make something new or original", ];
-          const potential = Array.from(new Set(allItems.filter(i => i.id !== excludeId && i.quality === StudyItemQuality.VERIFIED && i.meaningVi && i.meaningVi.trim().length > 0 && i.meaningVi.length < 150).map(i => i.meaningVi.trim())));
+          const potential = Array.from(new Set(allItems.filter(i => i.id !== excludeId && i.quality === StudyItemQuality.REFINED && i.meaningVi && i.meaningVi.trim().length > 0 && i.meaningVi.length < 150).map(i => i.meaningVi.trim())));
           const shuffled = [...potential].sort(() => Math.random() - 0.5);
           const finalMeanings = shuffled.slice(0, count);
           if (finalMeanings.length < count) {
@@ -650,9 +650,7 @@ export const filterItem = (
 
     if (refinedFilter !== 'all') {
         if (refinedFilter === 'refined' && item.quality !== StudyItemQuality.REFINED) return false;
-        if (refinedFilter === 'verified' && item.quality !== StudyItemQuality.VERIFIED) return false;
         if (refinedFilter === 'raw' && item.quality !== StudyItemQuality.RAW) return false;
-        if (refinedFilter === 'not_refined' && item.quality !== StudyItemQuality.RAW) return false;
     }
 
     if (statusFilter !== 'all') {
@@ -723,8 +721,8 @@ export const getReviewCounts = async (): Promise<{ total: number, due: number, n
         req.onsuccess = () => {
           const all = (req.result || []) as StudyItem[];
           const active = all.filter(w => !w.isPassive && w.learnedStatus !== LearnedStatus.IGNORED);
-          const isDueWord = (w: StudyItem) => w.lastReview && w.nextReview <= now && w.quality !== StudyItemQuality.FAILED && w.learnedStatus !== LearnedStatus.IGNORED;
-          const isNewWord = (w: StudyItem) => !w.lastReview && w.quality === StudyItemQuality.VERIFIED && w.learnedStatus !== LearnedStatus.IGNORED;
+          const isDueWord = (w: StudyItem) => w.lastReview && w.nextReview <= now && w.quality !== StudyItemQuality.RAW && w.learnedStatus !== LearnedStatus.IGNORED;
+          const isNewWord = (w: StudyItem) => !w.lastReview && w.quality === StudyItemQuality.REFINED && w.learnedStatus !== LearnedStatus.IGNORED;
           resolve({ 
               total: active.length, 
               due: active.filter(isDueWord).length, 
@@ -768,7 +766,7 @@ export const getNewWords = async (limit: number = 20): Promise<StudyItem[]> => {
         req.onsuccess = () => {
           const allItems = (req.result || []) as StudyItem[];
           const newWords = allItems
-            .filter(w => !w.isPassive && !w.lastReview && w.quality === StudyItemQuality.VERIFIED)
+            .filter(w => !w.isPassive && !w.lastReview && w.quality === StudyItemQuality.REFINED)
             .sort((a, b) => a.createdAt - b.createdAt)
             .slice(0, limit);
           resolve(newWords);

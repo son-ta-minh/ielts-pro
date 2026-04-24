@@ -93,7 +93,7 @@ const Dashboard: React.FC<Props> = ({
     return {
       totalCount: activeWords.length,
       dueCount: activeWords.filter(w => !!w.lastReview && w.nextReview <= now).length,
-      newCount: activeWords.filter(w => !w.lastReview && w.quality === 'VERIFIED').length,
+      newCount: activeWords.filter(w => !w.lastReview && w.quality === 'REFINED').length,
       studyingCount: learningWords.length,
       masteredCount: activeWords.filter(w => w.interval > 21).length,
       rawCount: activeWords.filter(w => w.quality === 'RAW').length,
@@ -161,7 +161,7 @@ const Dashboard: React.FC<Props> = ({
 
           // Vocab
           const activeWords = words.filter(w => (w.libraryType || 'vocab') === 'vocab' && !w.isPassive && !isSrsIgnored(w));
-          const newVocab = activeWords.filter(w => !w.lastReview && w.quality === 'VERIFIED').length;
+          const newVocab = activeWords.filter(w => !w.lastReview && w.quality === 'REFINED').length;
           const dueVocab = activeWords.filter(w => w.lastReview && w.nextReview <= Date.now()).length;
 
           // Lessons Classification
