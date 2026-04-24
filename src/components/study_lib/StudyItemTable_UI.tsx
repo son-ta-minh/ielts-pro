@@ -625,6 +625,18 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isCompactActions, setIsCompactActions] = useState(false);
+  const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
+  useEffect(() => {
+    const update = () => {
+      // treat < 1024px as non-laptop (compact actions mode)
+      setIsCompactActions(window.innerWidth < 1024);
+    };
+
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
   const [isRefineSetupModalOpen, setIsRefineSetupModalOpen] = useState(false);
   const [isSetAttributeMenuOpen, setIsSetAttributeMenuOpen] = useState(false);
   const [selectedBulkGroup, setSelectedBulkGroup] = useState('');
@@ -740,7 +752,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     </div>
                 </div>
 
-                {context === 'library' && (
+                {context === 'library' && !isCompactActions && (
                     <button
                         type="button"
                         onClick={() => setSearchMeaning(!searchMeaning)}
@@ -755,34 +767,91 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                         <span>Search Meaning</span>
                     </button>
                 )}
-            </div>
-            
-            <div className="flex gap-2">
-                <div className="relative" ref={viewMenuRef}>
-                    <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className={`px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isViewMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="View Options">
-                        <Eye size={16} /> <span className="hidden sm:inline">View</span>
-                    </button>
-                </div>
-                <button onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)} className={`px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isFilterMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="Filter">
-                    <ListFilter size={16} /> <span className="hidden sm:inline">Filter</span>
-                </button>
-                 {showTagBrowserButton && (
-                    <button onClick={() => setIsTagBrowserOpen(!isTagBrowserOpen)} className={`px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isTagBrowserOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="Browse Groups">
-                        <FolderTree size={16} /> <span className="hidden sm:inline">Groups</span>
-                    </button>
-                )}
-                <button onClick={() => setIsAddExpanded(!isAddExpanded)} className={`px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isAddExpanded ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="Add Words">
-                    <Plus size={16} /> <span className="hidden sm:inline">Add</span>
-                </button>
-                {context === 'library' && showWordBook && onOpenWordBook && (
+
+                {isCompactActions ? (
+                  <div className="relative">
                     <button
+                      type="button"
+                      onClick={() => setIsActionsDropdownOpen(prev => !prev)}
+                      className="px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300"
+                    >
+                      <Zap size={16} />
+                      <span>Actions</span>
+                      <ChevronDown size={14} className={isActionsDropdownOpen ? 'rotate-180' : ''} />
+                    </button>
+
+                    {isActionsDropdownOpen && (
+                      <div className="absolute right-0 mt-2 w-56 bg-white border border-neutral-200 rounded-2xl shadow-xl z-50 p-2 space-y-1">
+
+                        {context === 'library' && (
+                          <button
+                            onClick={() => setSearchMeaning(!searchMeaning)}
+                            className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold hover:bg-neutral-100"
+                          >
+                            Search Meaning
+                          </button>
+                        )}
+
+                        <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold hover:bg-neutral-100">
+                          View
+                        </button>
+
+                        <button onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)} className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold hover:bg-neutral-100">
+                          Filter
+                        </button>
+
+                        {showTagBrowserButton && (
+                          <button onClick={() => setIsTagBrowserOpen(!isTagBrowserOpen)} className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold hover:bg-neutral-100">
+                            Group
+                          </button>
+                        )}
+
+                        <button onClick={() => setIsAddExpanded(!isAddExpanded)} className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold hover:bg-neutral-100">
+                          Add
+                        </button>
+
+                        {context === 'library' && showWordBook && onOpenWordBook && (
+                          <button onClick={onOpenWordBook} className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold hover:bg-neutral-100">
+                            Book
+                          </button>
+                        )}
+
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <div className="relative" ref={viewMenuRef}>
+                      <button onClick={() => setIsViewMenuOpen(!isViewMenuOpen)} className={`px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isViewMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="View Options">
+                        <Eye size={16} /> <span className="hidden sm:inline">View</span>
+                      </button>
+                    </div>
+
+                    <button onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)} className={`px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isFilterMenuOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="Filter">
+                      <ListFilter size={16} /> <span className="hidden sm:inline">Filter</span>
+                    </button>
+
+                    {showTagBrowserButton && (
+                      <button onClick={() => setIsTagBrowserOpen(!isTagBrowserOpen)} className={`px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isTagBrowserOpen ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="Browse Groups">
+                        <FolderTree size={16} /> <span className="hidden sm:inline">Groups</span>
+                      </button>
+                    )}
+
+                    <button onClick={() => setIsAddExpanded(!isAddExpanded)} className={`px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs ${isAddExpanded ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'}`} title="Add Words">
+                      <Plus size={16} /> <span className="hidden sm:inline">Add</span>
+                    </button>
+
+                    {context === 'library' && showWordBook && onOpenWordBook && (
+                      <button
                         onClick={onOpenWordBook}
                         className='px-4 py-3 h-12 rounded-xl transition-all shadow-sm border flex items-center gap-2 font-bold text-xs bg-white text-neutral-500 border-neutral-200 hover:text-neutral-900 hover:border-neutral-300'
                         title="Word Book"
-                    >
+                      >
                         <Book size={16} />
                         <span className="hidden sm:inline">Book</span>
-                    </button>
+                      </button>
+                    )}
+                  </div>
                 )}
             </div>
         </div>
