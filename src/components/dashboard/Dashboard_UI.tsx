@@ -241,7 +241,7 @@ const NavButton: React.FC<{
                 )}
             </div>
             {rightLabel && (
-                <div className="shrink-0 ml-2 text-sm font-black text-neutral-800 group-hover:text-white transition-colors">
+                <div className="shrink-0 ml-2 text-xl font-black text-blue-600 leading-none">
                     {rightLabel}
                 </div>
             )}
@@ -421,7 +421,7 @@ const VocabularyCenterPanel: React.FC<{
                     <NavButton 
                         label="Learn New" 
                         subLabel={`${newCount} words ready`} 
-                        rightLabel={dayProgress.learned}
+                        rightLabel={`${dayProgress.learned}`}
                         icon={Sparkles} 
                         color="text-indigo-600" 
                         bg="bg-indigo-50"
@@ -432,7 +432,7 @@ const VocabularyCenterPanel: React.FC<{
                     <NavButton 
                         label="Review Due" 
                         subLabel={`${dueCount} words due`} 
-                        rightLabel={dayProgress.reviewed}
+                        rightLabel={`${dayProgress.reviewed}`}
                         icon={RotateCw} 
                         color="text-amber-600" 
                         bg="bg-amber-50" 
