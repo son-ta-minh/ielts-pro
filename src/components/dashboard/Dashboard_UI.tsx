@@ -949,10 +949,10 @@ const BackupStatus: React.FC<{
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
       const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
       const minutes = Math.floor((diff / (1000 * 60)) % 60);
-      if (days > 0) setStatusText(`Last backup: ${days}d ago`);
-      else if (hours > 0) setStatusText(`Last backup: ${hours}h ago`);
-      else if (minutes > 0) setStatusText(`Last backup: ${minutes}m ago`);
-      else setStatusText('Last backup: < 1m ago');
+      if (days > 0) setStatusText(`Backup: ${days}d ago`);
+      else if (hours > 0) setStatusText(`Backup: ${hours}h ago`);
+      else if (minutes > 0) setStatusText(`Backup: ${minutes}m ago`);
+      else setStatusText('Backup: Just now');
     };
     updateStatus();
     const intervalId = setInterval(updateStatus, 60 * 1000);
