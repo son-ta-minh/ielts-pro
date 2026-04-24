@@ -989,14 +989,25 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
               words.map(item => (
                 <div
                   key={item.id}
-                  className="group relative bg-white border border-neutral-200 rounded-2xl p-4 hover:shadow-md transition-all cursor-pointer"
+                  className="group relative bg-white border border-neutral-200 rounded-2xl p-4 hover:shadow-md transition-all cursor-pointer overflow-hidden"
                   onClick={() => onViewWord(item)}
                 >
                   <div className="flex items-center justify-between truncate">
                     <div className="font-bold text-neutral-900">
+                      <div
+                      style={{
+                      color:
+                        item.learnedStatus === LearnedStatus.NEW ? '#0a0a0a'
+                        : item.learnedStatus === LearnedStatus.IGNORED ? '#a3a3a3'
+                        : item.learnedStatus === LearnedStatus.FORGOT ? '#ee3d0c'
+                        : item.learnedStatus === LearnedStatus.LEARNED ? '#0606d4'
+                        : item.learnedStatus === LearnedStatus.HARD ? '#fbb800'
+                        : item.learnedStatus === LearnedStatus.EASY ? '#048834'
+                        : '#e5e5e5',
+                      }}>
                       {item.display || item.word}
+                      </div>
                     </div>
-                    {getStatusBadge(item)}
                   </div>
 
                   {visibility.showMeaning && (
