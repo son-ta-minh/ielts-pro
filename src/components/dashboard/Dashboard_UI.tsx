@@ -1044,6 +1044,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
     if (saved === 'STUDY' || saved === 'KOTOBA' || saved === 'PRACTICE' || saved === 'INSIGHT') return saved;
     return 'STUDY';
   });
+  const [isTabOpen, setIsTabOpen] = useState(false);
 
   useEffect(() => {
     sessionStorage.setItem('dashboard_active_tab', activeTab);
@@ -1422,7 +1423,9 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
       </div>
 
       <div className="flex items-center justify-between">
-        <div className="inline-flex p-1 bg-white border-2 border-neutral-100 rounded-2xl w-fit shadow-sm self-start">
+        
+        {/* Desktop Tabs */}
+        <div className="hidden md:inline-flex p-1 bg-white border-2 border-neutral-100 rounded-2xl w-fit shadow-sm self-start">
              <button onClick={() => setActiveTab('STUDY')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'STUDY' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><LayoutDashboard size={16} /> Study</button>
              <button onClick={() => setActiveTab('PRACTICE')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'PRACTICE' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><Dumbbell size={16} /> Practice</button>
              <button onClick={() => setActiveTab('INSIGHT')} className={`w-28 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'INSIGHT' ? 'bg-neutral-900 text-white shadow-lg transform scale-[1.02]' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50'}`}><BarChart3 size={16} /> Insight</button>
@@ -1441,6 +1444,27 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                 </span>
              </button>
         </div>
+
+        {/* Mobile Dropdown */}
+        <div className="md:hidden relative">
+            <button
+                onClick={() => setIsTabOpen(v => !v)}
+                className="px-4 py-2.5 rounded-xl bg-white border-2 border-neutral-100 shadow-sm flex items-center gap-2 text-xs font-black uppercase tracking-wider"
+            >
+                {activeTab}
+                <ChevronDown size={14} className={`transition-transform ${isTabOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isTabOpen && (
+                <div className="absolute mt-2 right-2 left-auto bg-white border border-neutral-100 rounded-xl shadow-lg overflow-hidden z-50 w-40 max-w-[90vw]">
+                    <button onClick={() => { setActiveTab('STUDY'); setIsTabOpen(false); }} className="w-full text-right px-4 py-2 text-xs font-bold hover:bg-neutral-50">Study</button>
+                    <button onClick={() => { setActiveTab('PRACTICE'); setIsTabOpen(false); }} className="w-full text-right px-4 py-2 text-xs font-bold hover:bg-neutral-50">Practice</button>
+                    <button onClick={() => { setActiveTab('INSIGHT'); setIsTabOpen(false); }} className="w-full text-right px-4 py-2 text-xs font-bold hover:bg-neutral-50">Insight</button>
+                    <button onClick={() => { setActiveTab('KOTOBA'); setIsTabOpen(false); }} className="w-full text-right px-4 py-2 text-xs font-bold hover:bg-neutral-50">Kotoba</button>
+                </div>
+            )}
+        </div>
+
       </div>
 
       {activeTab === 'STUDY' && (
