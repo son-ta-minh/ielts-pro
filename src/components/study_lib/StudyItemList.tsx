@@ -61,7 +61,7 @@ const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLa
   const savedState = useMemo(() => getStoredJSON<any>(tableFiltersKey, {}), [tableFiltersKey]);
 
   const [page, setPage] = useState(savedState.page || 0);
-  const [pageSize, setPageSize] = useState(savedState.pageSize || 25);
+  const [pageSize, setPageSize] = useState(savedState.pageSize || 14);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   

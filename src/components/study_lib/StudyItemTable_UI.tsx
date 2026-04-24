@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, PenLine, BookMarked, Image, Play, RotateCcw } from 'lucide-react';
+import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Edit3, CheckCircle2, AlertCircle, Wand2, CheckSquare, Square, X, ChevronDown, Tag, AtSign, Plus, Save, Eye, Columns, Activity, Calendar, Network, Unlink, ListFilter, ShieldCheck, ShieldX, Ghost, Zap, Binary, FolderTree, BookOpen, Quote, Layers, Combine, MessageSquare, Archive, PenLine, BookMarked, Image, Play, RotateCcw, LayoutGrid } from 'lucide-react';
 import { StudyItem, LearnedStatus, StudyItemQuality, WordTypeOption, WordBook } from '../../app/types';
 import { getRemainingTime } from '../../utils/srs';
 import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
@@ -623,6 +623,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook, libraryLabel = 'Word Library', showWordBook = true
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isRefineSetupModalOpen, setIsRefineSetupModalOpen] = useState(false);
   const [isSetAttributeMenuOpen, setIsSetAttributeMenuOpen] = useState(false);
@@ -767,7 +768,9 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     </button>
                     {isViewMenuOpen && (
                         <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-neutral-100 z-50 p-2 overflow-hidden animate-in fade-in zoom-in-95 flex flex-col gap-1">
-                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50">Columns</div>
+                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50">
+                              Columns
+                            </div>
                             <VisibilityToggle label={<><Columns size={14}/>Meaning</>} checked={visibility.showMeaning} onChange={() => setVisibility(v => ({...v, showMeaning: !v.showMeaning}))} />
                             <VisibilityToggle label={<><FolderTree size={14}/>Group</>} checked={visibility.showGroups} onChange={() => setVisibility(v => ({...v, showGroups: !v.showGroups}))} />
                             {visibility.showMeaning && (<VisibilityToggle label="Hide until hover" subItem checked={visibility.blurMeaning} onChange={() => setVisibility(v => ({...v, blurMeaning: !v.blurMeaning}))} />)}
@@ -775,6 +778,35 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                             <VisibilityToggle label={<><Calendar size={14}/>Due Date</>} checked={visibility.showDue} onChange={() => setVisibility(v => ({...v, showDue: !v.showDue}))} />
                             <VisibilityToggle label={<><Zap size={14}/>Mastery Score</>} checked={visibility.showMastery} onChange={() => setVisibility(v => ({...v, showMastery: !v.showMastery}))} />
                             <VisibilityToggle label={<><Binary size={14}/>Complexity</>} checked={visibility.showComplexity} onChange={() => setVisibility(v => ({...v, showComplexity: !v.showComplexity}))} />
+
+                            <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50">
+                              Layout
+                            </div>
+                            <div className="flex gap-2 p-2">
+                              <button
+                                onClick={() => setViewMode('table')}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black border ${
+                                  viewMode === 'table'
+                                    ? 'bg-neutral-900 text-white border-neutral-900'
+                                    : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
+                                }`}
+                              >
+                                <Columns size={14} />
+                                Table
+                              </button>
+                              <button
+                                onClick={() => setViewMode('grid')}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black border ${
+                                  viewMode === 'grid'
+                                    ? 'bg-neutral-900 text-white border-neutral-900'
+                                    : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
+                                }`}
+                              >
+                                <LayoutGrid size={14} />
+                                Grid
+                              </button>
+                            </div>
+
                             <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 mt-1">Details</div>
                             <VisibilityToggle label="IPA Phonetic" checked={visibility.showIPA} onChange={() => setVisibility(v => ({...v, showIPA: !v.showIPA}))} />
                             <div className="px-3 py-2 text-[9px] font-black text-neutral-400 uppercase tracking-widest border-b border-neutral-50 mt-1">Indicators</div>
@@ -942,7 +974,60 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
         </div>
       )}
       <div className="bg-white rounded-[2rem] border border-neutral-200 shadow-sm overflow-hidden min-h-[400px]">
-        {loading ? <div className="flex flex-col items-center justify-center h-80 space-y-4"><Loader2 className="animate-spin text-neutral-200" size={32} /><p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading...</p></div> : (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-80 space-y-4">
+            <Loader2 className="animate-spin text-neutral-200" size={32} />
+            <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Loading...</p>
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="p-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {words.length === 0 ? (
+              <div className="col-span-full text-center text-sm italic text-neutral-300 py-10">
+                No items found.
+              </div>
+            ) : (
+              words.map(item => (
+                <div
+                  key={item.id}
+                  className="group relative bg-white border border-neutral-200 rounded-2xl p-4 hover:shadow-md transition-all cursor-pointer"
+                  onClick={() => onViewWord(item)}
+                >
+                  <div className="flex items-center justify-between truncate">
+                    <div className="font-bold text-neutral-900">
+                      {item.display || item.word}
+                    </div>
+                    {getStatusBadge(item)}
+                  </div>
+
+                  {visibility.showMeaning && (
+
+                      <div
+                        className={`text-sm text-neutral-600 leading-snug transition-all duration-300 truncate
+                        ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100' : ''}`}
+                      >
+                        {item.meaningVi}
+                      </div>
+                  )}
+
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEditWord(item); }}
+                      className="p-1 rounded-md bg-white border border-neutral-200 hover:bg-neutral-50"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setWordToDelete(item); }}
+                      className="p-1 rounded-md bg-white border border-neutral-200 hover:bg-rose-50 text-rose-600"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead><tr className="bg-neutral-50/50 border-b border-neutral-100"><th className="px-4 py-3 w-10"><button onClick={() => setSelectedIds(selectedIds.size === words.length && words.length > 0 ? new Set() : new Set(words.map(w => w.id)))} className="text-neutral-300 hover:text-neutral-900">{selectedIds.size === words.length && words.length > 0 ? <CheckSquare size={18} className="text-neutral-900" /> : <Square size={18} />}</button></th><th className="px-2 py-3 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Vocabulary</th>{visibility.showMeaning && <th className="px-4 py-3 text-[10px] font-black text-neutral-400 uppercase tracking-widest max-w-[200px]">Meaning / Definition</th>}{visibility.showGroups && <th className="px-4 py-3 text-[10px] font-black text-neutral-400 uppercase tracking-widest">Group</th>}{(visibility.showProgress || visibility.showDue) && <th className="px-6 py-3 text-center text-[10px] font-black text-neutral-400 uppercase tracking-widest">Progress</th>}{visibility.showComplexity && <th className="px-4 py-3 text-center text-[10px] font-black text-neutral-400 uppercase tracking-widest">Complexity</th>}{visibility.showMastery && <th className="px-4 py-3 text-center text-[10px] font-black text-neutral-400 uppercase tracking-widest">Mastery</th>}<th className="px-6 py-3 text-right text-[10px] font-black text-neutral-400 uppercase tracking-widest">Actions</th></tr></thead>
@@ -968,12 +1053,12 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     </div></div>{visibility.showIPA && (<div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-0.5"><span className="text-[10px] font-mono text-neutral-400">{item.ipaUs || '/?/'}</span></div>)}</td>{visibility.showMeaning && (<td className="px-4 py-2 max-w-[200px] align-middle"><div className={`text-sm text-neutral-600 leading-snug transition-all duration-300 ${visibility.blurMeaning ? 'opacity-0 group-hover:opacity-100 select-none cursor-help' : ''}`}>{item.meaningVi}</div></td>)}{visibility.showGroups && (<td className="px-4 py-2 align-middle"><div className="flex max-w-[280px] flex-wrap gap-1.5">{item.groups && item.groups.length > 0 ? item.groups.map((group) => (<span key={group} className="inline-flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-bold text-neutral-600">{group}</span>)) : <span className="text-[10px] font-medium italic text-neutral-300">None</span>}</div></td>)}{(visibility.showProgress || visibility.showDue) && (<td className="px-6 py-2 text-center"><div className="flex flex-row items-center justify-center gap-2">{visibility.showProgress && getStatusBadge(item)}{visibility.showDue && <div className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${reviewStatus.urgency === 'due' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-neutral-50 text-neutral-400 border border-neutral-100'}`}><span>{reviewStatus.label}</span></div>}</div></td>)}{visibility.showComplexity && <td className="px-4 py-2 text-center align-middle"><span className="text-xs font-black text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-md border border-neutral-200">{item.complexity ?? 0}</span></td>}{visibility.showMastery && (<td className="px-4 py-2 text-center align-middle"><span className={`inline-block px-2 py-0.5 rounded-md text-xs font-black ${getScoreCellClasses(item.masteryScore)}`}>{item.masteryScore ?? 0}</span></td>)}<td className="px-6 py-2 text-right"><div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); onEditWord(item); }} className="p-2 text-neutral-300 hover:text-neutral-900 transition-all"><Edit3 size={16} /></button>{context === 'unit' && item.quality === StudyItemQuality.RAW && onHardDelete && setWordToHardDelete && (<button onClick={(e) => { e.stopPropagation(); setWordToHardDelete(item); }} className="p-2 text-neutral-300 hover:text-red-700 transition-all" title="Delete Raw Word from Library"><Trash2 size={16} /></button>)}<button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setWordToDelete(item); }} className="p-2 text-neutral-300 hover:text-rose-500 transition-all" title={context === 'unit' ? 'Unlink from Unit' : 'Delete from Library'}>{context === 'unit' ? <Unlink size={16}/> : <Trash2 size={16} />}</button></div></td></tr>); }))}
               </tbody>
             </table>
-            <div className="p-6 bg-neutral-50/30 flex items-center justify-between border-t border-neutral-100">
-                <div className="flex items-center space-x-2"><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Size</span><select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))} className="bg-white border border-neutral-200 rounded-lg px-2 py-1 text-xs font-bold">{[10, 25, 50, 100].map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-                <div className="flex space-x-2"><button disabled={page === 0} onClick={() => onPageChange(page - 1)} className="px-3 py-1.5 bg-white border border-neutral-200 rounded-lg text-xs font-bold disabled:opacity-30"><ChevronLeft size={14} /></button><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest self-center">Page {page + 1} of {totalPages || 1}</span><button disabled={(page + 1) >= totalPages} onClick={() => onPageChange(page + 1)} className="px-3 py-1.5 bg-white border border-neutral-200 rounded-lg text-xs font-bold disabled:opacity-30"><ChevronRight size={14} /></button></div>
-            </div>
           </div>
         )}
+        <div className="p-3 bg-neutral-50/30 flex items-center justify-between border-t border-neutral-100">
+            <div className="flex items-center space-x-2"><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Size</span><select value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))} className="bg-white border border-neutral-200 rounded-lg px-2 py-1 text-xs font-bold">{[14, 28, 50, 100].map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+            <div className="flex space-x-2"><button disabled={page === 0} onClick={() => onPageChange(page - 1)} className="px-3 py-1.5 bg-white border border-neutral-200 rounded-lg text-xs font-bold disabled:opacity-30"><ChevronLeft size={14} /></button><span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest self-center">Page {page + 1} of {totalPages || 1}</span><button disabled={(page + 1) >= totalPages} onClick={() => onPageChange(page + 1)} className="px-3 py-1.5 bg-white border border-neutral-200 rounded-lg text-xs font-bold disabled:opacity-30"><ChevronRight size={14} /></button></div>
+        </div>
       </div>
       {selectedIds.size > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-full max-w-5xl px-4 animate-in slide-in-from-bottom-8">
