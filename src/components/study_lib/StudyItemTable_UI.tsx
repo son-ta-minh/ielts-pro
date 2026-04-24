@@ -7,7 +7,7 @@ import { DEFAULT_WORD_REFINE_SETUP, WordRefineSetup } from '../../services/wordR
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 
 export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'lesson' | 'archive' | 'focus' | 'duplicate';
-export type RefinedFilter = 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined';
+export type RefinedFilter = 'all' | 'raw' | 'refined' | 'verified' | 'not_refined';
 export type StatusFilter = 'all' | 'new' | 'forgot' | 'hard' | 'easy' | 'learned' | 'reviewing' | 'ignored' | 'not_ignored';
 export type RegisterFilter = 'all' | 'academic' | 'casual' | 'neutral' | 'raw';
 export type CompositionFilter = 'all' | 'composed' | 'not_composed';
@@ -697,8 +697,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   const qualityOptions = [
     { id: StudyItemQuality.RAW, label: 'Raw' },
     { id: StudyItemQuality.REFINED, label: 'Refined' },
-    { id: StudyItemQuality.VERIFIED, label: 'Verified' },
-    { id: StudyItemQuality.FAILED, label: 'Failed' },
+    { id: StudyItemQuality.VERIFIED, label: 'Verified' }
   ];
   const learnedStatusOptions = [
     { id: LearnedStatus.NEW, label: 'New' },
@@ -855,7 +854,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                     <div>
                         <label htmlFor="quality-filter" className="text-[10px] font-black text-neutral-400 uppercase tracking-widest block mb-1">Quality</label>
                         <select id="quality-filter" value={refinedFilter} onChange={(e) => setRefinedFilter(e.target.value as RefinedFilter)} className="w-full px-3 py-2 rounded-lg text-xs font-bold text-neutral-900 bg-white border border-neutral-200 focus:ring-2 focus:ring-neutral-900 outline-none appearance-none">
-                             {[ { id: 'all', label: 'Any' }, { id: 'verified', label: 'Verified' }, { id: 'refined', label: 'Refined' }, { id: 'raw', label: 'Raw' }, { id: 'failed', label: 'Failed' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                             {[ { id: 'all', label: 'Any' }, { id: 'verified', label: 'Verified' }, { id: 'refined', label: 'Refined' }, { id: 'raw', label: 'Raw' } ].map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                         </select>
                     </div>
                     <div>

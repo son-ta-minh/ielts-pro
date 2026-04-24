@@ -1062,7 +1062,7 @@ Return exactly one JSON object with this shape:
                                             );
                                         })}
                                         </span>
-                                        {showIpa && group.chunkIndex !== null && (
+                                        {showIpa && group.chunkIndex !== null && groupIndex !== guidedSentenceGroups.length - 1 && (
                                             <span
                                                 aria-hidden="true"
                                                 className="mx-1 inline-block h-1.5 w-1.5 translate-y-[-0.05em] rounded-full bg-rose-500 align-middle"

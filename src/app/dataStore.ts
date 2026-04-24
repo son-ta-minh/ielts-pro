@@ -407,7 +407,7 @@ export function getWordById(id: string): StudyItem | undefined { return _allWord
 export function getDailyStreakSnapshots(userId: string): DailyStreakSnapshot[] { return readDailyStreaks(userId); }
 export function getDailyGoalHistory(userId: string): DailyGoalSnapshot[] { return readDailyGoalHistory(userId); }
 
-export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'failed' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = '', searchMeaning: boolean = false, libraryType: StudyLibraryType = 'vocab'): { words: StudyItem[], totalCount: number } {
+export function getWordsPaged(userId: string, page: number, pageSize: number, query = '', filterTypes = ['all'], refinedFilter: 'all' | 'raw' | 'refined' | 'verified' | 'not_refined' = 'all', statusFilter = 'all', registerFilter = 'all', groupFilter: string | null = null, compositionFilter: 'all' | 'composed' | 'not_composed' = 'all', bookFilter: 'all' | 'in_book' | 'not_in_book' | 'specific' = 'all', specificBookId = '', searchMeaning: boolean = false, libraryType: StudyLibraryType = 'vocab'): { words: StudyItem[], totalCount: number } {
     const allItems = Array.from(_allWords.values()).filter(w => w.userId === userId && matchesLibraryType(w, libraryType));
     let baseItems = allItems;
     if (filterTypes.includes('duplicate')) {

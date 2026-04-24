@@ -948,7 +948,7 @@ export const useAppController = () => {
         const allWords = getLibraryWords(libraryType);
         const now = Date.now();
         const dueWords = allWords
-            .filter(w => !w.isPassive && w.learnedStatus !== 'IGNORED' && w.lastReview && w.nextReview <= now && w.quality !== 'FAILED')
+            .filter(w => !w.isPassive && w.learnedStatus !== 'IGNORED' && w.lastReview && w.nextReview <= now)
             .sort((a, b) => a.nextReview - b.nextReview)
             .slice(0, 30);
         

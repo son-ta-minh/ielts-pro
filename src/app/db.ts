@@ -651,7 +651,6 @@ export const filterItem = (
     if (refinedFilter !== 'all') {
         if (refinedFilter === 'refined' && item.quality !== StudyItemQuality.REFINED) return false;
         if (refinedFilter === 'verified' && item.quality !== StudyItemQuality.VERIFIED) return false;
-        if (refinedFilter === 'failed' && item.quality !== StudyItemQuality.FAILED) return false;
         if (refinedFilter === 'raw' && item.quality !== StudyItemQuality.RAW) return false;
         if (refinedFilter === 'not_refined' && item.quality !== StudyItemQuality.RAW) return false;
     }

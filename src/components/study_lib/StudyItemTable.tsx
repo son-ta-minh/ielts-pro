@@ -209,7 +209,6 @@ const StudyItemTable: React.FC<Props> = ({
         'raw',
         'refined',
         'verified',
-        'failed',
         'not_refined'
     ];
 
