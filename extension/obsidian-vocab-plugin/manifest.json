@@ -1,0 +1,9 @@
+{
+  "id": "vocab-plugin",
+  "name": "Vocab Plugin",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Right click vocab actions",
+  "author": "You",
+  "main": "main.js"
+}
