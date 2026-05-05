@@ -203,7 +203,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const [isChatListening, setIsChatListening] = useState(false);
     const [isConversationMode, setIsConversationMode] = useState(false);
     const [studyBuddyConnectionStatus, setStudyBuddyConnectionStatus] = useState<'image' | 'chat' | 'offline'>('offline');
-    const [isInteractiveModeEnabled, setIsInteractiveModeEnabled] = useState(false);
+    const [isInteractiveModeEnabled, setIsInteractiveModeEnabled] = useState(true);
     const [isInteractiveModeConnecting, setIsInteractiveModeConnecting] = useState(false);
     const [interactiveConnectCode, setInteractiveConnectCode] = useState<string | null>(null);
     const [activeChatTarget, setActiveChatTarget] = useState<StudyBuddyChatTarget | null>(null);
@@ -1826,8 +1826,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 text: normalized,
                 icon: <Languages size={18} className="text-blue-500" />
             });
-            setIsOpen(true);
-            speak(normalized, false, 'vi', coach.viVoice, coach.viAccent);
+            //setIsOpen(true);
+            //speak(normalized, false, 'vi', coach.viVoice, coach.viAccent);
             return;
         }
 
@@ -2031,7 +2031,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         const normalized = text.trim();
         if (!normalized) return;
         syncChatSelectionText(normalized);
-        setIsChatOpen(true);
+        // setIsChatOpen(true);
         const preferredSpeakLanguage = getPreferredSpeakLanguage();
         const preferredSpeakVoice = resolveCoachVoiceForLanguage(preferredSpeakLanguage, coach);
         if (normalized.length > MAX_READ_LENGTH) {

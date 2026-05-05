@@ -17,15 +17,66 @@ class VocabWebView extends ItemView {
 
   async onOpen() {
     const container = this.containerEl.children[1];
+    // Remove Obsidian default padding and margin
+    (this.containerEl as HTMLElement).style.padding = "0";
+    (container as HTMLElement).style.padding = "0";
+    (container as HTMLElement).style.margin = "0";
     container.empty();
 
     const iframe = document.createElement("iframe");
-    iframe.src = "https://son-ta-minh.github.io/ielts-pro/";
+    const baseUrl = "https://son-ta-minh.github.io/ielts-pro/";
+    const cacheBuster = `t=${Date.now()}`;
+    iframe.src = baseUrl.includes("?") ? `${baseUrl}&${cacheBuster}` : `${baseUrl}?${cacheBuster}`;
+    iframe.setAttribute("loading", "eager");
     iframe.style.width = "100%";
     iframe.style.height = "100%";
+    iframe.style.display = "block";
     iframe.style.border = "none";
 
-    container.appendChild(iframe);
+    let zoom = 0.9;
+
+    const wrapper = document.createElement("div");
+    wrapper.style.width = "100%";
+    wrapper.style.height = "100%";
+    wrapper.style.overflow = "auto";
+    wrapper.style.position = "relative";
+
+    iframe.style.transformOrigin = "0 0";
+    iframe.style.transform = `scale(${zoom})`;
+    iframe.style.width = `${100 / zoom}%`;
+    iframe.style.height = `${100 / zoom}%`;
+
+    wrapper.appendChild(iframe);
+    container.appendChild(wrapper);
+
+    wrapper.addEventListener("wheel", (event) => {
+      if (event.ctrlKey) {
+        event.preventDefault();
+
+        const prevZoom = zoom;
+        zoom = event.deltaY < 0
+          ? Math.min(zoom + 0.1, 2)
+          : Math.max(zoom - 0.1, 0.5);
+
+        iframe.style.transform = `scale(${zoom})`;
+        iframe.style.width = `${100 / zoom}%`;
+        iframe.style.height = `${100 / zoom}%`;
+      }
+    });
+
+    document.addEventListener("vocab-zoom-in", () => {
+      zoom = Math.min(zoom + 0.1, 2);
+      iframe.style.transform = `scale(${zoom})`;
+      iframe.style.width = `${100 / zoom}%`;
+      iframe.style.height = `${100 / zoom}%`;
+    });
+
+    document.addEventListener("vocab-zoom-out", () => {
+      zoom = Math.max(zoom - 0.1, 0.5);
+      iframe.style.transform = `scale(${zoom})`;
+      iframe.style.width = `${100 / zoom}%`;
+      iframe.style.height = `${100 / zoom}%`;
+    });
   }
 }
 
@@ -40,6 +91,7 @@ export default class VocabPlugin extends Plugin {
   ];
 
   activeServerUrl: string | null = null;
+  serverStatus: "unknown" | "up" | "down" = "unknown";
 
   async getCurrentHostConfig() {
     try {
@@ -70,6 +122,7 @@ export default class VocabPlugin extends Plugin {
 
   async resolveServerUrl() {
     if (this.activeServerUrl) return this.activeServerUrl;
+    if (this.serverStatus === "up" && this.activeServerUrl) return this.activeServerUrl;
 
     const candidates = await this.getDetectedServerCandidates();
 
@@ -78,12 +131,14 @@ export default class VocabPlugin extends Plugin {
         const res = await fetch(`${url}/api/health`);
         if (res.ok) {
           this.activeServerUrl = url;
+          this.serverStatus = "up";
           return url;
         }
       } catch {}
     }
 
-    throw new Error("Cannot reach server");
+    this.serverStatus = "down";
+    throw new Error("Vocab server is not running. Please start your local server.");
   }
 
   async sendCommand(command: string, text: string) {
@@ -98,18 +153,28 @@ export default class VocabPlugin extends Plugin {
         body: JSON.stringify({ command, text }),
       });
 
-      if (!res.ok) throw new Error("Request failed");
+      if (!res.ok) throw new Error(await res.text() || "Request failed");
 
       return await res.json();
     } catch (err) {
-      console.error("Command error:", err);
-      new Notice("Server error");
+      const message = (err as Error).message || "Unknown error";
+
+      if (message.includes("not running")) {
+        new Notice("Vocab is not running. Please start it first.");
+      } else {
+        new Notice("Server error: " + message);
+      }
     }
   }
 
 
   async onload() {
     console.log("Vocab Plugin loaded");
+
+    // Warm up server detection in background
+    this.resolveServerUrl().catch(() => {
+      // ignore error, handled later when user clicks
+    });
 
     this.registerView(
       VIEW_TYPE_VOCAB,
@@ -120,6 +185,13 @@ export default class VocabPlugin extends Plugin {
       id: "open-vocab-web",
       name: "Start Vocab",
       callback: async () => {
+        const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_VOCAB);
+
+        if (existing.length > 0) {
+          this.app.workspace.revealLeaf(existing[0]);
+          return;
+        }
+
         const leaf = this.app.workspace.getRightLeaf(false);
         await leaf.setViewState({
           type: VIEW_TYPE_VOCAB,
@@ -134,6 +206,26 @@ export default class VocabPlugin extends Plugin {
 
         if (!selectedText) return;
 
+        if (this.serverStatus === "down") {
+          menu.addItem((item) => {
+            item
+              .setTitle("⚠️ Vocab server not running")
+              .setDisabled(true);
+          });
+          return;
+        }
+
+        if (this.serverStatus === "unknown") {
+          menu.addItem((item) => {
+            item
+              .setTitle("⏳ Checking Vocab server...")
+              .setDisabled(true);
+          });
+
+          this.resolveServerUrl().catch(() => {});
+          return;
+        }
+
 
         const actions = [
           { label: "Listen", command: "speak" },
@@ -146,6 +238,9 @@ export default class VocabPlugin extends Plugin {
           { label: "Speak", command: "mimic" },
         ];
 
+        menu.addSeparator();
+
+        // Keep main actions below
         actions.forEach(({ label, command }) => {
           menu.addItem((item) => {
             item
@@ -154,6 +249,20 @@ export default class VocabPlugin extends Plugin {
                 new Notice(`${label}...`);
                 await this.sendCommand(command, selectedText);
               });
+          });
+        });
+
+        menu.addSeparator();
+
+        menu.addItem((item) => {
+          item.setTitle("Vocab Settings → Zoom In").onClick(() => {
+            document.dispatchEvent(new CustomEvent("vocab-zoom-in"));
+          });
+        });
+
+        menu.addItem((item) => {
+          item.setTitle("Vocab Settings → Zoom Out").onClick(() => {
+            document.dispatchEvent(new CustomEvent("vocab-zoom-out"));
           });
         });
       })

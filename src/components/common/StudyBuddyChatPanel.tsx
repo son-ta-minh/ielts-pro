@@ -740,13 +740,13 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
     const composerStudyMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
     const selectionStudyMenuWrapRef = React.useRef<HTMLDivElement | null>(null);
     const [panelWidth, setPanelWidth] = useState<number>(() => {
-        if (typeof window === 'undefined') return 832;
+        if (typeof window === 'undefined') return 480;
         try {
             const raw = window.localStorage.getItem(STUDY_BUDDY_CHAT_PANEL_SIZE_KEY);
             const parsed = raw ? JSON.parse(raw) : null;
-            return Number.isFinite(parsed?.width) && parsed.width > 0 ? parsed.width : 832;
+            return Number.isFinite(parsed?.width) && parsed.width > 0 ? parsed.width : 480;
         } catch {
-            return 832;
+            return 480;
         }
     });
     const [panelHeight, setPanelHeight] = useState<number>(() => {
@@ -884,7 +884,7 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
 
     const handleResizeWidth = () => {
         setPanelWidth((current) => {
-            const options = [640, 736, 832, 928, 1024, 1120];
+            const options = [480, 640, 736, 832, 928, 1024, 1120];
             const next = options.find((value) => value > current + 8) ?? options[0];
             return next;
         });
