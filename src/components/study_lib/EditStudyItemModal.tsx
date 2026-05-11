@@ -292,6 +292,16 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
     };
   };
 
+  const fetchWholeIPA = async (phrase: string): Promise<string | null> => {
+    const ipaRes = await fetch(`${serverUrl}/api/convert/pron?text=${encodeURIComponent(phrase)}&mode=2`, {
+
+    });
+    if (!ipaRes.ok) return null;
+
+    const ipaData = await ipaRes.json().catch(() => null);
+    return String(ipaData?.ipa || '').trim() || null;
+  };
+
   const resolveDisplayMetadata = async (item: StudyItem): Promise<Pick<StudyItem, 'displayMeaning' | 'displayIPA'>> => {
     const displayText = String(item.display || '').trim();
     if (!displayText || normalizeComparableText(displayText) === normalizeComparableText(item.word)) {
@@ -310,10 +320,15 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
       const tokens = tokenizeHeadwordForIpa(displayText);
       if (tokens.length > 0) {
         try {
-          const tokenResults = await Promise.all(tokens.map((token) => fetchCambridgeTokenIpa(token)));
-          displayIPA = formatPhraseIpa(tokenResults.map((entry) => entry?.ipaUs))
-            || formatPhraseIpa(tokenResults.map((entry) => entry?.ipaUk || entry?.ipaUs))
-            || '';
+          const tokenResults = (await Promise.all(tokens.map((token) => fetchCambridgeTokenIpa(token)))).filter((result): result is NonNullable<typeof result> => result !== null);
+          if (tokenResults.length == tokens.length) {
+            displayIPA = formatPhraseIpa(tokenResults.map((entry) => entry?.ipaUs))
+              || formatPhraseIpa(tokenResults.map((entry) => entry?.ipaUk || entry?.ipaUs))
+              || '';
+          }
+          else {
+            displayIPA = await fetchWholeIPA(displayText).catch(() => null) || '';
+          }
         } catch {}
       }
 
@@ -325,6 +340,8 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
         } catch {}
       }
     }
+
+    console.log(`Resolved display metadata for "${displayText}": meaning="${displayMeaning}", IPA="${displayIPA}"`);
 
     return {
       displayMeaning,
