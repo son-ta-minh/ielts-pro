@@ -1513,7 +1513,7 @@ Reply with exactly one very short sentence or phrase in English.`
         setShowSpellBox(false);
 
         if (panel === 'meaning') {
-            speak(vietnameseMeaning, false, 'vi');
+            // speak(vietnameseMeaning, false, 'vi');
             return;
         }
 
