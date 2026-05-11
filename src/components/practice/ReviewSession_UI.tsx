@@ -1,17 +1,16 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Sparkles } from 'lucide-react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Sparkles, Pen } from 'lucide-react';
 import { StudyItem, ReviewGrade, SessionType, User, StudyItemQuality, LearnedStatus } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditStudyItemModal from '../study_lib/EditStudyItemModal';
 import ViewStudyItemModal from '../study_lib/ViewStudyItemModal';
 import TestModal from './TestModal';
 import { SimpleMimicModal } from '../common/SimpleMimicModal';
-import { generateAvailableChallenges } from '../../utils/challengeUtils';
-import { ChallengeType, Challenge, CollocationQuizChallenge, IdiomQuizChallenge, ParaphraseQuizChallenge, PrepositionQuizChallenge } from './TestModalTypes';
-import { calculateMasteryScore, getAllValidTestKeys } from '../../utils/srs';
+import { getAllValidTestKeys } from '../../utils/srs';
 import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
+import { parseMarkdown } from '../../utils/markdownParser';
 
 const GENERATED_EXAMPLE_BUFFER_SIZE = 5;
 const GENERATED_QUIZ_BUFFER_SIZE = 4;
@@ -491,7 +490,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [studyBuddyExampleBuffer, setStudyBuddyExampleBuffer] = useState<string[]>([]);
     const [isStudyBuddyExampleLoading, setIsStudyBuddyExampleLoading] = useState(false);
     const [studyBuddyExampleError, setStudyBuddyExampleError] = useState<string | null>(null);
-    const [activeBotPanel, setActiveBotPanel] = useState<'example' | 'quiz' | null>(null);
+    const [activeBotPanel, setActiveBotPanel] = useState<'example' | 'quiz' | 'sentence' | null>(null);
     const [studyBuddyQuizItem, setStudyBuddyQuizItem] = useState<StudyBuddyQuizItem | null>(null);
     const [studyBuddyQuizBuffer, setStudyBuddyQuizBuffer] = useState<StudyBuddyQuizItem[]>([]);
     const [isStudyBuddyQuizLoading, setIsStudyBuddyQuizLoading] = useState(false);
@@ -504,6 +503,9 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [isStudyBuddyQuizChecking, setIsStudyBuddyQuizChecking] = useState(false);
     const [isStudyBuddyQuizHintLoading, setIsStudyBuddyQuizHintLoading] = useState(false);
     const [isStudyBuddyQuizInputFocused, setIsStudyBuddyQuizInputFocused] = useState(false);
+    const [studyBuddySentenceInput, setStudyBuddySentenceInput] = useState('');
+    const [studyBuddySentenceFeedback, setStudyBuddySentenceFeedback] = useState<string | null>(null);
+    const [isStudyBuddySentenceChecking, setIsStudyBuddySentenceChecking] = useState(false);
     const studyBuddyQuizInputRef = useRef<HTMLInputElement | null>(null);
     const touchStartX = useRef<number | null>(null);
     const studyBuddyExampleAbortRef = useRef<AbortController | null>(null);
@@ -816,6 +818,67 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         flushAssistantText(true);
         return finalExamples;
     }, [extractFreshExamples, mergeBufferedExamples, studyBuddyAiUrl, user]);
+
+    const requestStudyBuddySentenceReview = useCallback(async (sentence: string) => {
+        const response = await fetch(studyBuddyAiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    {
+                        role: 'system',
+                        content:
+                            'You are an expert IELTS writing coach. Briefly evaluate the learner sentence. If unnatural, provide a corrected natural version.'
+                    },
+                    {
+                        role: 'user',
+                        content: `
+    Current review word: "${currentWord.word}"
+    Learner sentence: "${sentence}"
+
+    Rules:
+    - Check grammar and naturalness
+    - Check collocation usage
+    - If needed, provide a corrected sentence
+    - Keep reply concise
+    `
+                    }
+                ],
+                searchEnabled: false,
+                temperature: 0.4,
+                stream: false
+            })
+        });
+
+        const payload = await response.json();
+
+        return String(payload?.choices?.[0]?.message?.content || '').trim();
+    }, [currentWord.word, studyBuddyAiUrl]);
+
+    const handleStudyBuddySentenceCheck = useCallback(async () => {
+        if (!studyBuddySentenceInput.trim()) return;
+
+        setIsStudyBuddySentenceChecking(true);
+        setStudyBuddySentenceFeedback(null);
+
+        try {
+            const reply = await requestStudyBuddySentenceReview(
+                studyBuddySentenceInput
+            );
+
+            setStudyBuddySentenceFeedback(parseMarkdown(reply));
+        } catch (err) {
+            console.error(err);
+            setStudyBuddySentenceFeedback('Could not review now.');
+        } finally {
+            setIsStudyBuddySentenceChecking(false);
+        }
+    }, [
+        requestStudyBuddySentenceReview,
+        studyBuddySentenceInput
+    ]);
 
     const requestStudyBuddyQuizQuestions = useCallback(async (
         word: StudyItem,
@@ -1508,6 +1571,9 @@ Reply with exactly one very short sentence or phrase in English.`
         setStudyBuddyQuizHint(null);
         setStudyBuddyQuizHintLevel(0);
         studyBuddyQuizRevealRef.current = false;
+        setStudyBuddySentenceInput('');
+        setStudyBuddySentenceFeedback(null);
+        setIsStudyBuddySentenceChecking(false);
 
         return () => {
             studyBuddyExampleAbortRef.current?.abort();
@@ -1685,7 +1751,8 @@ Reply with exactly one very short sentence or phrase in English.`
                                                 <button type="button" onClick={() => { setActiveFastReviewPanel(null); setActiveBotPanel(null); setHoveredActionMenu(null); setShowSpellBox(false); setMimicTarget(reviewHeadword); }} className="inline-flex items-center gap-1.5 rounded-xl bg-violet-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-violet-700 transition-colors hover:bg-violet-100"><Mic size={11} /><span>Mimic</span></button>
                                                 <button type="button" onClick={() => { setActiveFastReviewPanel(null); setActiveBotPanel(null); setHoveredActionMenu('practice'); setShowSpellBox((prev) => { const next = !prev; if (next) { setSpellInput(''); setSpellResult(null); } return next; }); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${showSpellBox ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}><Keyboard size={11} /><span>SPELLING</span></button>
                                                 <button type="button" onClick={() => { setHoveredActionMenu(null); handleManualPractice(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${hasRetryableFailedTests ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}><BrainCircuit size={11} /><span>Test It</span></button>
-                                                <button type="button" onClick={() => { setHoveredActionMenu('practice'); void showNextStudyBuddyQuiz(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeBotPanel === 'quiz' ? 'bg-fuchsia-600 text-white' : 'bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100'}`}><Sparkles size={11} /><span>AI Quiz</span></button>
+                                                <button type="button" onClick={() => { setHoveredActionMenu('practice'); void showNextStudyBuddyQuiz(); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeBotPanel === 'quiz' ? 'bg-fuchsia-600 text-white' : 'bg-fuchsia-50 text-fuchsia-700 hover:bg-fuchsia-100'}`}><Sparkles size={11} /><span>Fill the blank</span></button>
+                                                <button type="button" onClick={() => { setHoveredActionMenu('practice'); setActiveBotPanel('sentence'); }} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${activeBotPanel === 'sentence' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}><Pen size={11} /><span>Make sentence</span></button>
                                             </div>
                                         </div>
                                     </div>
@@ -1971,6 +2038,53 @@ Reply with exactly one very short sentence or phrase in English.`
                                         </div>
                                     </div>
                                 )}
+                                {activeBotPanel === 'sentence' && (
+                                <div className="w-full rounded-[1.75rem] border border-indigo-200 bg-indigo-50/70 px-5 py-4 text-left shadow-sm">
+                                    <div className="mb-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                                        <Pen size={12} />
+                                        <span>Make Sentence</span>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <textarea
+                                            value={studyBuddySentenceInput}
+                                            onChange={(e) => {
+                                                setStudyBuddySentenceInput(e.target.value);
+                                                setStudyBuddySentenceFeedback(null);
+                                            }}
+                                            placeholder={`Write a sentence using "${currentWord.word}"...`}
+                                            className="w-full min-h-[120px] rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm outline-none resize-none"
+                                        />
+
+                                        <button
+                                            onClick={() => void handleStudyBuddySentenceCheck()}
+                                            disabled={
+                                                !studyBuddySentenceInput.trim() ||
+                                                isStudyBuddySentenceChecking
+                                            }
+                                            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-indigo-700"
+                                        >
+                                            {isStudyBuddySentenceChecking
+                                                ? <Loader2 size={11} className="animate-spin" />
+                                                : <Sparkles size={11} />
+                                            }
+
+                                            <span>AI Review</span>
+                                        </button>
+
+                                        {studyBuddySentenceFeedback && (
+                                            <div className="rounded-2xl border border-indigo-200 bg-white/80 px-4 py-3">
+                                                <div
+                                                    className="text-sm font-semibold leading-relaxed text-neutral-800"
+                                                    dangerouslySetInnerHTML={{
+                                                        __html: studyBuddySentenceFeedback
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                                 </div>
                             </div>
                         </>)}
