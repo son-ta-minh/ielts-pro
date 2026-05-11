@@ -11,6 +11,7 @@ import { getAllValidTestKeys } from '../../utils/srs';
 import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { parseMarkdown } from '../../utils/markdownParser';
+import { SpeechRecognitionManager } from '../../utils/speechRecognition';
 
 const GENERATED_EXAMPLE_BUFFER_SIZE = 5;
 const GENERATED_QUIZ_BUFFER_SIZE = 4;
@@ -507,6 +508,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [studyBuddySentenceFeedback, setStudyBuddySentenceFeedback] = useState<string | null>(null);
     const [isStudyBuddySentenceChecking, setIsStudyBuddySentenceChecking] = useState(false);
     const studyBuddyQuizInputRef = useRef<HTMLInputElement | null>(null);
+    const sentenceRecognitionManagerRef = useRef<SpeechRecognitionManager | null>(null);
+    const [isSentenceRecording, setIsSentenceRecording] = useState(false);
     const touchStartX = useRef<number | null>(null);
     const studyBuddyExampleAbortRef = useRef<AbortController | null>(null);
     const studyBuddyExampleRequestRef = useRef<Promise<string[]> | null>(null);
@@ -1539,6 +1542,39 @@ Reply with exactly one very short sentence or phrase in English.`
         if (text) speak(text);
     }, [vietnameseMeaning, visibleCollocations, visibleIdioms, visibleParaphrases, visiblePrepositions]);
 
+    const handleSentenceSpeechToText = useCallback(async () => {
+        try {
+            if (isSentenceRecording) {
+                sentenceRecognitionManagerRef.current?.stop();
+                setIsSentenceRecording(false);
+                return;
+            }
+
+            if (!sentenceRecognitionManagerRef.current) {
+                sentenceRecognitionManagerRef.current = new SpeechRecognitionManager();
+            }
+
+            setIsSentenceRecording(true);
+
+            await sentenceRecognitionManagerRef.current.start(
+                (finalTranscript: string, interimTranscript: string) => {
+                    setStudyBuddySentenceInput(
+                        `${finalTranscript}${interimTranscript}`.trim()
+                    );
+
+                    setStudyBuddySentenceFeedback(null);
+                },
+                () => {
+                    setIsSentenceRecording(false);
+                },
+                isJapaneseCurrentWord ? 'ja-JP' : 'en-US'
+            );
+        } catch (error) {
+            console.error(error);
+            setIsSentenceRecording(false);
+        }
+    }, [isJapaneseCurrentWord, isSentenceRecording]);
+
     useEffect(() => {
         studyBuddyExampleAbortRef.current?.abort();
         studyBuddyExampleRequestRef.current = null;
@@ -1574,10 +1610,14 @@ Reply with exactly one very short sentence or phrase in English.`
         setStudyBuddySentenceInput('');
         setStudyBuddySentenceFeedback(null);
         setIsStudyBuddySentenceChecking(false);
+        setIsSentenceRecording(false);
+        sentenceRecognitionManagerRef.current?.stop();
 
         return () => {
             studyBuddyExampleAbortRef.current?.abort();
             studyBuddyQuizAbortRef.current?.abort();
+            sentenceRecognitionManagerRef.current?.stop();
+            sentenceRecognitionManagerRef.current = null;
         };
     }, [currentWord.id]);
 
@@ -2056,21 +2096,42 @@ Reply with exactly one very short sentence or phrase in English.`
                                             className="w-full min-h-[120px] rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm outline-none resize-none"
                                         />
 
-                                        <button
-                                            onClick={() => void handleStudyBuddySentenceCheck()}
-                                            disabled={
-                                                !studyBuddySentenceInput.trim() ||
-                                                isStudyBuddySentenceChecking
-                                            }
-                                            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-indigo-700"
-                                        >
-                                            {isStudyBuddySentenceChecking
-                                                ? <Loader2 size={11} className="animate-spin" />
-                                                : <Sparkles size={11} />
-                                            }
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleSentenceSpeechToText()}
+                                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
+                                                    isSentenceRecording
+                                                        ? 'border-rose-300 bg-rose-100 text-rose-700'
+                                                        : 'border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-100'
+                                                }`}
+                                            >
+                                                <Mic
+                                                    size={11}
+                                                    className={isSentenceRecording ? 'animate-pulse' : ''}
+                                                />
 
-                                            <span>AI Review</span>
-                                        </button>
+                                                <span>
+                                                    {isSentenceRecording ? 'Recording' : 'Voice Input'}
+                                                </span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => void handleStudyBuddySentenceCheck()}
+                                                disabled={
+                                                    !studyBuddySentenceInput.trim() ||
+                                                    isStudyBuddySentenceChecking
+                                                }
+                                                className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-indigo-700"
+                                            >
+                                                {isStudyBuddySentenceChecking
+                                                    ? <Loader2 size={11} className="animate-spin" />
+                                                    : <Sparkles size={11} />
+                                                }
+
+                                                <span>AI Review</span>
+                                            </button>
+                                        </div>
 
                                         {studyBuddySentenceFeedback && (
                                             <div className="rounded-2xl border border-indigo-200 bg-white/80 px-4 py-3">
