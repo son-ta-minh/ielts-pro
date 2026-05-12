@@ -5,6 +5,7 @@ import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/te
 import { ReviewSessionUI } from './ReviewSession_UI';
 import { getStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
+import ConfirmationModal from '../common/ConfirmationModal';
 
 interface Props {
   user: User;
@@ -17,8 +18,6 @@ interface Props {
   onRetry: () => void;
   autoCloseOnFinish?: boolean;
 }
-
-
 
 const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onBulkUpdate, onComplete, onRetry, autoCloseOnFinish = false }) => {
   const { showToast } = useToast();
@@ -47,6 +46,15 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   const [editingWordInModal, setEditingWordInModal] = useState<StudyItem | null>(null);
   const [isTesting, setIsTesting] = useState(sessionType === 'random_test');
   const [isQuickReviewMode, setIsQuickReviewMode] = useState(false);
+  const [finishConfirmState, setFinishConfirmState] = useState<{
+    isOpen: boolean;
+    pendingWord: StudyItem | null;
+    finalize: (() => Promise<void>) | null;
+  }>({
+    isOpen: false,
+    pendingWord: null,
+    finalize: null
+  });
   const latestWordStatesRef = useRef<Map<string, StudyItem>>(new Map());
   
   const queueWord = sessionWords[currentIndex];
@@ -99,6 +107,14 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     setIsTesting(sessionType === 'random_test');
     setIsQuickReviewMode(false);
   }, [currentIndex, sessionType]);
+
+  const closeFinishConfirm = useCallback(() => {
+    setFinishConfirmState({
+      isOpen: false,
+      pendingWord: null,
+      finalize: null
+    });
+  }, []);
 
   const commitSessionResults = useCallback((): Promise<void> => {
     if (isSavingRef.current) {
@@ -221,6 +237,15 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
     onComplete();
   }, [onBulkUpdate, onComplete]);
 
+  const promptFinishSession = useCallback((updatedWord: StudyItem, finalize: () => Promise<void>) => {
+    latestWordStatesRef.current.set(updatedWord.id, updatedWord);
+    setFinishConfirmState({
+      isOpen: true,
+      pendingWord: updatedWord,
+      finalize
+    });
+  }, []);
+
   const handleReview = async (grade: ReviewGrade) => {
     if (!currentWord) return;
     console.log('[InlineReview][ReviewSession] handleReview', {
@@ -254,9 +279,16 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       updated = { ...updated, lastTestResults: latestTestResults, masteryScore: latestMasteryScore };
     }
     lastTestResultsRef.current = null;
-    if (autoCloseOnFinish && currentIndex >= sessionWords.length - 1) {
-      console.log('[InlineReview][ReviewSession] handleReview -> auto close path');
-      await persistInlineReviewAndClose(updated);
+    if (currentIndex >= sessionWords.length - 1) {
+      promptFinishSession(updated, async () => {
+        if (autoCloseOnFinish) {
+          console.log('[InlineReview][ReviewSession] handleReview -> auto close path');
+          await persistInlineReviewAndClose(updated);
+          return;
+        }
+        setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
+        setSessionFinished(true);
+      });
       return;
     }
     latestWordStatesRef.current.set(updated.id, updated);
@@ -329,13 +361,20 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         latestWordStatesRef.current.set(updated.id, updated);
 
         setIsQuickReviewMode(false);
-        if (autoCloseOnFinish && currentIndex >= sessionWords.length - 1) {
-          console.log('[InlineReview][ReviewSession] quick review -> auto close path', {
-            autoGrade,
-            currentWord: updated.word
-          });
+        if (currentIndex >= sessionWords.length - 1) {
           lastTestResultsRef.current = null;
-          await persistInlineReviewAndClose(updated);
+          promptFinishSession(updated, async () => {
+            if (autoCloseOnFinish) {
+              console.log('[InlineReview][ReviewSession] quick review -> auto close path', {
+                autoGrade,
+                currentWord: updated.word
+              });
+              await persistInlineReviewAndClose(updated);
+              return;
+            }
+            setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
+            setSessionFinished(true);
+          });
           return;
         }
         setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
@@ -414,37 +453,61 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   }
   
   return (
-    <ReviewSessionUI
-      user={user}
-      initialWords={initialWords}
-      sessionWords={sessionWords}
-      sessionType={sessionType}
-      newWordIds={newWordIds}
-      progress={progress}
-      setProgress={setProgress}
-      sessionOutcomes={sessionOutcomes}
-      sessionFinished={sessionFinished}
-      wordInModal={wordInModal}
-      setWordInModal={setWordInModal}
-      onOpenWordDetails={handleOpenWordDetails}
-      editingWordInModal={editingWordInModal}
-      setEditingWordInModal={setEditingWordInModal}
-      isTesting={isTesting}
-      setIsTesting={setIsTesting}
-      currentWord={currentWord}
-      isNewWord={isNewWord}
-      onUpdate={handleUpdateWordFromModal}
-      onComplete={() => { void handleCompleteWithFlush(); }}
-      nextItem={nextItem}
-      handleReview={handleReview}
-      handleTestComplete={handleTestComplete}
-      handleRetry={handleRetry}
-      handleEndSession={handleEndSession}
-      handleQuickReview={handleQuickReview}
-      handleManualPractice={handleManualPractice}
-      isQuickReviewMode={isQuickReviewMode}
-      autoCloseOnFinish={autoCloseOnFinish}
-    />
+    <>
+      <ReviewSessionUI
+        user={user}
+        initialWords={initialWords}
+        sessionWords={sessionWords}
+        sessionType={sessionType}
+        newWordIds={newWordIds}
+        progress={progress}
+        setProgress={setProgress}
+        sessionOutcomes={sessionOutcomes}
+        sessionFinished={sessionFinished}
+        wordInModal={wordInModal}
+        setWordInModal={setWordInModal}
+        onOpenWordDetails={handleOpenWordDetails}
+        editingWordInModal={editingWordInModal}
+        setEditingWordInModal={setEditingWordInModal}
+        isTesting={isTesting}
+        setIsTesting={setIsTesting}
+        currentWord={currentWord}
+        isNewWord={isNewWord}
+        onUpdate={handleUpdateWordFromModal}
+        onComplete={() => { void handleCompleteWithFlush(); }}
+        nextItem={nextItem}
+        handleReview={handleReview}
+        handleTestComplete={handleTestComplete}
+        handleRetry={handleRetry}
+        handleEndSession={handleEndSession}
+        handleQuickReview={handleQuickReview}
+        handleManualPractice={handleManualPractice}
+        isQuickReviewMode={isQuickReviewMode}
+        autoCloseOnFinish={autoCloseOnFinish}
+      />
+      <ConfirmationModal
+        isOpen={finishConfirmState.isOpen}
+        title="Finish Session?"
+        message="All words have been reviewed. Finish this session?"
+        confirmText="Finish Session"
+        isProcessing={false}
+        confirmButtonClass="bg-neutral-900 text-white hover:bg-neutral-800 shadow-neutral-200"
+        onClose={() => {
+          if (finishConfirmState.pendingWord) {
+            latestWordStatesRef.current.set(finishConfirmState.pendingWord.id, finishConfirmState.pendingWord);
+            setSessionUpdates(prev => new Map(prev).set(finishConfirmState.pendingWord!.id, finishConfirmState.pendingWord!));
+          }
+          closeFinishConfirm();
+        }}
+        onConfirm={async () => {
+          const finalize = finishConfirmState.finalize;
+          closeFinishConfirm();
+          if (finalize) {
+            await finalize();
+          }
+        }}
+      />
+    </>
   );
 };
 
