@@ -113,6 +113,7 @@ export const selectNewReviewWords = (
     .filter((word) => word.userId === userId)
     .filter((word) => (word.libraryType || 'vocab') === libraryType)
     .filter((word) => !word.isPassive)
+    .filter((word) => word.learnedStatus !== LearnedStatus.IGNORED)
     .filter((word) => !word.lastReview)
     .filter((word) => word.quality !== 'RAW')
     .filter((word) => !scope.group || !!word.groups?.some((group) => String(group || '').trim() === scope.group))
