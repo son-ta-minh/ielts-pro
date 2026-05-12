@@ -39,12 +39,7 @@ async function _executeBackup() {
     if (_maxWaitTimeout) { clearTimeout(_maxWaitTimeout); _maxWaitTimeout = null; }
 
     try {
-        // 1. Local Storage Backup
-        const allItems = Array.from(_allWords.values());
-        const json = JSON.stringify(allItems);
-        localStorage.setItem('vocab_pro_emergency_backup', json);
-        
-        // 2. Server Auto Backup
+        // Server Auto Backup
         if (_currentUserId) {
             // Fetch full user object to ensure sync
             const user = (await db.getAllUsers()).find(u => u.id === _currentUserId);
@@ -229,21 +224,6 @@ export async function init(userId: string) {
 
     try {
         let words = await db.getAllWordsForExport(userId);
-        
-        if (words.length === 0) {
-             const backupJson = localStorage.getItem('vocab_pro_emergency_backup');
-             if (backupJson) {
-                 try {
-                     const backupWords = JSON.parse(backupJson);
-                     if (Array.isArray(backupWords) && backupWords.length > 0) {
-                         await db.bulkSaveWords(backupWords);
-                         words = await db.getAllWordsForExport(userId);
-                     }
-                 } catch (e) {
-                     console.error("[DataStore] Failed to restore from emergency backup:", e);
-                 }
-             }
-        }
         
         const [compositions, books] = await Promise.all([
             db.getCompositionsByUserId(userId),

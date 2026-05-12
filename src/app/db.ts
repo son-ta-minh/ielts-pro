@@ -79,30 +79,6 @@ export const getDatabaseStats = async (): Promise<Record<string, number>> => {
     }
 };
 
-export const checkLocalStorageHealth = (): { hasBackup: boolean, backupSize: number, backupTimestamp: string } => {
-    const backup = localStorage.getItem('vocab_pro_emergency_backup');
-    const hasBackup = !!backup;
-    let size = 0;
-    let timestamp = 'N/A';
-    
-    if (backup) {
-        size = backup.length;
-        // Try to estimate date from file stats (not stored directly, so just checking validity)
-        try {
-            const parsed = JSON.parse(backup);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                // Check timestamp of first item as proxy
-                if (parsed[0].updatedAt) {
-                    timestamp = new Date(parsed[0].updatedAt).toLocaleString();
-                }
-            }
-        } catch {
-            // Silent fail is acceptable here
-        }
-    }
-    return { hasBackup, backupSize: size, backupTimestamp: timestamp };
-};
-
 const openDB = (): Promise<IDBDatabase> => {
   if (_dbInstance) {
     return Promise.resolve(_dbInstance);
@@ -369,7 +345,6 @@ export const clearVocabularyOnly = async (): Promise<void> => {
         tx.oncomplete = () => {
             localStorage.removeItem('vocab_pro_mimic_practice_queue');
             localStorage.removeItem('vocab_pro_db_marker'); // REMOVE SAFETY MARKER
-            localStorage.removeItem('vocab_pro_emergency_backup'); // Remove Emergency Backup
             resolve();
         };
         tx.onerror = () => reject(tx.error);
@@ -425,47 +400,8 @@ export const seedDatabaseIfEmpty = async (force: boolean = false): Promise<User 
           req.onerror = () => reject(req.error);
       });
 
-      // --- AUTO-HEAL: CHECK EMERGENCY BACKUP ---
-      const emergencyBackupJson = localStorage.getItem('vocab_pro_emergency_backup');
       const dbMarker = localStorage.getItem('vocab_pro_db_marker');
       
-      if (existingUsers.length === 0 && emergencyBackupJson) {
-           try {
-               const backup = JSON.parse(emergencyBackupJson);
-               if (Array.isArray(backup) && backup.length > 0) {
-                   await bulkSaveWords(backup);
-                   
-                   if (existingUsers.length === 0) {
-                        const targetUser = {
-                            id: backup[0].userId || DEFAULT_USER_ID,
-                            name: "Recovered User",
-                            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Recovered`,
-                            lastLogin: Date.now(),
-                            role: "Language Learner",
-                            experience: 0,
-                            level: 1,
-                            adventure: {
-                                currentNodeIndex: 0,
-                                energy: 5,
-                                energyShards: 0,
-                                unlockedChapterIds: ADVENTURE_CHAPTERS.map(c => c.id),
-                                completedSegmentIds: [],
-                                segmentStars: {},
-                                badges: [],
-                                keys: 1,
-                                keyFragments: 0,
-                                map: [], 
-                            }
-                        };
-                        await saveUser(targetUser);
-                        return targetUser;
-                   }
-               }
-           } catch (e) {
-               console.error("[DB] 🚑 Failed to restore from Emergency Backup:", e);
-           }
-      }
-
       if (existingUsers.length === 0 && dbMarker === 'exists' && !force) {
           console.error("[DB] 🛑 CRITICAL: LocalStorage marker found but IDB returned 0 users. Aborting auto-seed to prevent data loss.");
           return null;
