@@ -397,6 +397,28 @@ const renderStatusBadge = (outcome: string | undefined, wasNew: boolean, isQuick
     }
 };
 
+const getSessionOutcomeLabel = (outcome: string | undefined, wasNew: boolean, isQuickFire: boolean): string | null => {
+    if (!outcome) return null;
+    if (isQuickFire) {
+        if (outcome === 'GAVE_UP') return 'Gave Up';
+        if (outcome === 'PASS' || outcome === ReviewGrade.EASY) return 'Pass';
+        return 'Fail';
+    }
+    if (wasNew && (outcome === ReviewGrade.EASY || outcome === ReviewGrade.LEARNED)) return 'Learned';
+    switch (outcome) {
+        case ReviewGrade.FORGOT:
+            return 'Forgot';
+        case ReviewGrade.HARD:
+            return 'Hard';
+        case ReviewGrade.EASY:
+            return 'Easy';
+        case ReviewGrade.LEARNED:
+            return 'Learned';
+        default:
+            return null;
+    }
+};
+
 const MasteryScoreGauge: React.FC<{ score: number }> = ({ score }) => {
     const size = 36;
     const strokeWidth = 4;
@@ -537,6 +559,14 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
             return validBaseTypes.has(baseType);
         });
     }, [currentWord]);
+    const desktopReviewItems = useMemo(() => (
+        sessionWords.map((word, index) => ({
+            id: word.id,
+            index,
+            label: (word.display || '').trim() || word.word,
+            outcomeLabel: getSessionOutcomeLabel(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)
+        }))
+    ), [sessionWords, sessionOutcomes, newWordIds, isQuickFire]);
 
     const handleEditRequest = (word: StudyItem) => {
       setWordInModal(null);
@@ -1696,7 +1726,8 @@ Reply with exactly one very short sentence or phrase in English.`
 
     return (
         <>
-            <div className="max-w-3xl mx-auto h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] flex flex-col animate-in fade-in duration-300 px-3 sm:px-0">
+            <div className="max-w-[1380px] mx-auto h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] flex animate-in fade-in duration-300 px-3 sm:px-0 gap-6">
+                <div className="min-w-0 flex-1 max-w-3xl mx-auto flex flex-col">
                 <div className="px-6 shrink-0 pb-4">
                     <div className="flex justify-between items-center mb-1">
                         <div className="w-24"></div> {/* Left spacer */}
@@ -2188,6 +2219,47 @@ Reply with exactly one very short sentence or phrase in English.`
                         </div>
                     )}
                 </div>
+                </div>
+
+                {!isTesting && !isQuickFire && (
+                    <aside className="hidden xl:flex w-[310px] shrink-0">
+                        <div className="w-full h-full rounded-[2rem] border border-neutral-200 bg-white shadow-sm p-4 flex flex-col overflow-hidden">
+                            <div className="px-2 pb-3 border-b border-neutral-100">
+                                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">Review Queue</div>
+                                <div className="mt-1 text-sm font-black text-neutral-900">{sessionWords.length} words</div>
+                            </div>
+                            <div className="mt-3 flex-1 overflow-y-auto pr-1 space-y-2">
+                                {desktopReviewItems.map((item) => {
+                                    const isActive = item.index === currentIndex;
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => setProgress((prev) => ({ current: item.index, max: Math.max(prev.max, item.index) }))}
+                                            className={`w-full text-left rounded-2xl border px-3 py-3 transition-all ${
+                                                isActive
+                                                    ? 'border-neutral-900 bg-neutral-900 text-white shadow-lg'
+                                                    : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50'
+                                            }`}
+                                        >
+                                            <div className="flex items-start gap-2">
+                                                <span className={`mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full text-[10px] font-black ${
+                                                    isActive ? 'bg-white/15 text-white' : 'bg-neutral-100 text-neutral-500'
+                                                }`}>
+                                                    {item.index + 1}
+                                                </span>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className={`text-xs font-black break-words ${isActive ? 'text-white' : 'text-neutral-900'}`}>
+                                                        {item.outcomeLabel ? `[${item.outcomeLabel}] ` : ''}{item.label}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </aside>
+                )}
             </div>
             {wordInModal && <ViewStudyItemModal word={wordInModal} onUpdate={onUpdate} onClose={() => setWordInModal(null)} onNavigateToWord={setWordInModal} onEditRequest={handleEditRequest} onGainXp={async () => 0} isViewOnly={false} />}
             {editingWordInModal && <EditStudyItemModal user={user} word={editingWordInModal} onSave={handleSaveEdit} onClose={() => setEditingWordInModal(null)} onSwitchToView={(word) => { setEditingWordInModal(null); setWordInModal(word); }} />}
