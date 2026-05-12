@@ -23,60 +23,8 @@ interface Props {
 const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onBulkUpdate, onComplete, onRetry, autoCloseOnFinish = false }) => {
   const { showToast } = useToast();
   const AUTOSAVE_DELAY_MS = 1500;
-  // --- Learn session: persist queue for the day, only update if needed ---
-  const LEARN_QUEUE_KEY = `vocab_pro_learn_queue_${user.id}`;
-  const LEARN_QUEUE_DATE_KEY = `vocab_pro_learn_queue_date_${user.id}`;
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const deriveLearnQueue = (words: StudyItem[]): StudyItem[] => {
-    let queueIds: string[] = [];
-    let storedDate = '';
 
-    try {
-      queueIds = JSON.parse(sessionStorage.getItem(LEARN_QUEUE_KEY) || '[]');
-      storedDate = sessionStorage.getItem(LEARN_QUEUE_DATE_KEY) || '';
-    } catch {}
-
-    let queue: StudyItem[] = [];
-    if (storedDate === todayStr && queueIds.length > 0) {
-      // Only remove words that are no longer 'New', keep order
-      queue = queueIds
-        .map(id => words.find(w => w.id === id))
-        .filter(w => w && !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED)) as StudyItem[];
-    } else {
-      // Only create a new queue if none exists for today
-      const newWords = words.filter(w => !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED));
-      queue = newWords.slice(0, 20);
-    }
-
-    // If queue is less than 20, append new 'New' words not already in queue
-    const alreadyInQueue = new Set(queue.map(w => w.id));
-    const newWords = words.filter(w => !isSrsIgnored(w) && (!w.lastReview || w.learnedStatus !== LearnedStatus.LEARNED));
-    for (const w of newWords) {
-      if (queue.length >= 20) break;
-      if (!alreadyInQueue.has(w.id)) queue.push(w);
-    }
-
-    sessionStorage.setItem(LEARN_QUEUE_KEY, JSON.stringify(queue.map(w => w.id)));
-    sessionStorage.setItem(LEARN_QUEUE_DATE_KEY, todayStr);
-    return queue;
-  };
-
-  const [learnQueue, setLearnQueue] = useState<StudyItem[]>(() => {
-    if (sessionType === 'new' || sessionType === 'new_study') {
-      return deriveLearnQueue(initialWords);
-    }
-    return initialWords;
-  });
-
-  useEffect(() => {
-    if (sessionType === 'new' || sessionType === 'new_study') {
-      setLearnQueue(deriveLearnQueue(initialWords));
-    } else {
-      setLearnQueue(initialWords);
-    }
-  }, [initialWords, sessionType]);
-
-  const sessionWords = (sessionType === 'new' || sessionType === 'new_study') ? learnQueue : initialWords;
+  const sessionWords = initialWords;
   const sessionIdentityRef = useRef<string | null>(null);
   const [newWordIds, setNewWordIds] = useState<Set<string>>(new Set());
 
