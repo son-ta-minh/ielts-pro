@@ -101,16 +101,16 @@ const ReviewDueConfigModal: React.FC<{
           </button>
         </div>
 
-        <div className="flex flex-col gap-6 min-h-0 flex-1">
+        <div className="flex flex-col min-h-0 flex-1">
           <div className="p-5 border-b border-neutral-100 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div className="text-xs font-black text-neutral-600">Words</div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-1 justify-start">
                 {[10, 20, 30].map((count) => (
                   <button
                     key={count}
                     onClick={() => onScopeChange({ ...scope, wordCount: count as 10 | 20 | 30 })}
-                    className={`w-16 h-9 flex items-center justify-center rounded-xl text-xs font-black border transition-all ${scope.wordCount === count ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}
+                    className={`w-16 h-8 flex items-center justify-center rounded-xl text-xs font-black border transition-all ${scope.wordCount === count ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}
                   >
                     {count}
                   </button>
@@ -186,7 +186,7 @@ const ReviewDueConfigModal: React.FC<{
             <div className="flex items-start justify-between gap-3">
               <div className="text-xs font-black text-neutral-600 pt-2">Type</div>
 
-              <div className="grid grid-cols-3 gap-2 flex-1">
+              <div className="grid grid-cols-6 gap-1 flex-1">
                 {TYPE_OPTIONS.map((type) => {
                   const active = scope.types.includes(type);
                   return (
@@ -196,7 +196,7 @@ const ReviewDueConfigModal: React.FC<{
                         ...scope,
                         types: active ? scope.types.filter((item) => item !== type) : [...scope.types, type]
                       })}
-                      className={`w-full h-8 flex items-center justify-center rounded-lg text-xs font-black border transition-all ${active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'}`}
+                      className={`w-full h-8 flex items-center justify-center rounded-lg text-[10px] font-black border transition-all ${active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'}`}
                     >
                       {type}
                     </button>
@@ -204,7 +204,7 @@ const ReviewDueConfigModal: React.FC<{
                 })}
                 <button
                   onClick={() => onScopeChange({ ...scope, focusOnly: !scope.focusOnly })}
-                  className={`w-full h-8 flex items-center justify-center rounded-lg text-xs font-black border transition-all ${scope.focusOnly ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}
+                  className={`w-full h-8 flex items-center justify-center rounded-lg text-[10px] font-black border transition-all ${scope.focusOnly ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}
                 >
                   FOCUS
                 </button>
@@ -213,12 +213,12 @@ const ReviewDueConfigModal: React.FC<{
 
             <div className="flex items-center justify-between gap-3">
               <div className="text-xs font-black text-neutral-600">Recall</div>
-              <div className="grid grid-cols-3 gap-2 flex-1">
+              <div className="flex gap-2 flex-1 justify-start">
                 {RECALL_MODE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     onClick={() => onScopeChange({ ...scope, recallMode: option.value })}
-                    className={`w-full h-8 flex items-center justify-center rounded-lg text-xs font-black border transition-all ${
+                    className={`w-24 h-8 flex items-center justify-center rounded-lg text-xs font-black border transition-all ${
                       scope.recallMode === option.value
                         ? 'bg-neutral-900 text-white border-neutral-900'
                         : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'
@@ -231,44 +231,15 @@ const ReviewDueConfigModal: React.FC<{
             </div>
           </div>
 
-          <div className="p-6 overflow-y-auto">
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500">Preview</div>
-                <div className="text-2xl font-black text-neutral-900 mt-1">{previewWords.length} word{previewWords.length === 1 ? '' : 's'}</div>
-              </div>
+          <div className="p-2 overflow-y-auto">
+            <div className="flex items-center justify-end mb-4">
               <button
                 onClick={onStart}
                 disabled={previewWords.length === 0}
-                className="px-5 py-3 rounded-2xl bg-neutral-900 text-white text-sm font-black hover:bg-neutral-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-3 rounded-2xl bg-indigo-600 text-white text-sm font-black hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Start Review
               </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {previewWords.length === 0 ? (
-                <div className="p-4 rounded-2xl border border-dashed border-neutral-200 text-sm text-neutral-500 bg-neutral-50">
-                  No {mode === 'new' ? 'new' : 'due'} words match the current scope.
-                </div>
-              ) : (
-                previewWords.map((word) => (
-                  <div
-                    key={word.id}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-neutral-200 bg-white text-xs font-black text-neutral-800"
-                  >
-                    <span className="max-w-[140px] truncate">
-                      {word.display || word.word}
-                    </span>
-                    <button
-                      onClick={() => onRemoveWord(word.id)}
-                      className="text-neutral-400 hover:text-red-500"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))
-              )}
             </div>
           </div>
         </div>

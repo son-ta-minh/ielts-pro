@@ -644,6 +644,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [recallQuizFeedback, setRecallQuizFeedback] = useState<string | null>(null);
     const [isRecallQuizChecking, setIsRecallQuizChecking] = useState(false);
     const [recallRevealLevel, setRecallRevealLevel] = useState(1);
+    const [recallRevealedWords, setRecallRevealedWords] = useState<string[]>([]);
     const [solvedRecallWordIds, setSolvedRecallWordIds] = useState<Set<string>>(new Set());
     const studyBuddyQuizInputRef = useRef<HTMLInputElement | null>(null);
     const sentenceRecognitionManagerRef = useRef<SpeechRecognitionManager | null>(null);
@@ -729,10 +730,33 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         : isRecallMeaningMode
         ? vietnameseMeaning
         : displayText;
-    const recallRevealText = useMemo(
-        () => createMaskedAnswerHint(reviewHeadword, recallRevealLevel, '', isJapaneseCurrentWord),
-        [reviewHeadword, recallRevealLevel, isJapaneseCurrentWord]
-    );
+    const recallRevealText = useMemo(() => {
+        const baseHint = createMaskedAnswerHint(reviewHeadword, recallRevealLevel, '', isJapaneseCurrentWord);
+
+        const expectedWords = reviewHeadword.trim().split(/\s+/);
+        const hintWords = baseHint.trim().split(/\s+/);
+
+        const mergedWords = expectedWords.map((expectedWord, index) => {
+            const revealedWord = recallRevealedWords[index];
+
+            if (
+                revealedWord &&
+                normalizeComparableText(revealedWord) === normalizeComparableText(expectedWord)
+            ) {
+                return expectedWord;
+            }
+
+            return hintWords[index] || '___';
+        });
+
+        return mergedWords.join(' ');
+    }, [
+        reviewHeadword,
+        recallRevealLevel,
+        isJapaneseCurrentWord,
+        recallRevealedWords,
+        normalizeComparableText
+    ]);
     const isRecallHeadwordFullyRevealed = useMemo(
         () => normalizeHintToken(recallRevealText) === normalizeHintToken(reviewHeadword),
         [recallRevealText, reviewHeadword]
@@ -798,7 +822,6 @@ Rules:
 - Do not say or spell the target word.
 - Use short bullet lines starting with "- ".
 - Mix meaning, scenario, register, structure, and memory clues.
-- One bullet should mention word length or syllable count in total when possible.
 - One bullet should mention a realistic usage situation.
 - Keep each bullet concise.`
                             : `Create exactly 5 clue bullets so the learner can guess the target English word without revealing it.
@@ -812,7 +835,6 @@ Rules:
 - Do not say, spell, or directly reveal the target word.
 - Use short bullet lines starting with "- ".
 - Mix meaning, scenario, register, structure, and memory clues.
-- One bullet should mention word length or syllable count in total when possible.
 - One bullet should mention a realistic usage situation.
 - Keep each bullet concise.`
                     }
@@ -878,9 +900,22 @@ Rules:
         const isCorrect = !!normalizedAnswer && normalizedAnswer === normalizedExpected;
         if (isCorrect) {
             setSolvedRecallWordIds((prev) => new Set(prev).add(currentWord.id));
+            setRecallQuizAnswer(reviewHeadword);
             setRecallQuizFeedback('Correct');
             setIsRecallQuizModalOpen(false);
         } else {
+            const expectedWords = reviewHeadword.trim().split(/\s+/);
+            const answerWords = recallQuizAnswer.trim().split(/\s+/);
+
+            const revealedWords = expectedWords.map((expectedWord, index) => {
+                const userWord = answerWords[index] || '';
+
+                return normalizeComparableText(userWord) === normalizeComparableText(expectedWord)
+                    ? expectedWord
+                    : '';
+            });
+
+            setRecallRevealedWords(revealedWords);
             setRecallQuizFeedback('Incorrect');
         }
         setTimeout(() => setIsRecallQuizChecking(false), 120);
