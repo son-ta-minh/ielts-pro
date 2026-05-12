@@ -1,6 +1,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Sparkles, Pen } from 'lucide-react';
+import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Sparkles, Pen, LogOut } from 'lucide-react';
 import { StudyItem, ReviewGrade, SessionType, User, StudyItemQuality, LearnedStatus } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditStudyItemModal from '../study_lib/EditStudyItemModal';
@@ -1735,10 +1735,8 @@ Reply with exactly one very short sentence or phrase in English.`
                             <HeaderIcon size={14} className={headerColor} />
                             <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{currentIndex + 1} / {sessionWords.length}</span>
                         </div>
-                        <div className="w-24 text-right">
-                            <button onClick={handleEndSession} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-neutral-500 hover:bg-neutral-100 transition-colors">
-                                End Session
-                            </button>
+                        <div className="w-36 text-right">
+                            <button onClick={handleEndSession} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-[10px] font-bold uppercase tracking-wider text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"><LogOut size={11} /><span>End Session</span></button>
                         </div>
                     </div>
                     <div className="h-1 w-full bg-neutral-100 rounded-full overflow-hidden">
