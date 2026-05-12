@@ -646,6 +646,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [recallRevealLevel, setRecallRevealLevel] = useState(1);
     const [recallRevealedWords, setRecallRevealedWords] = useState<string[]>([]);
     const [solvedRecallWordIds, setSolvedRecallWordIds] = useState<Set<string>>(new Set());
+    const [isMobileWordListOpen, setIsMobileWordListOpen] = useState(false);
     const studyBuddyQuizInputRef = useRef<HTMLInputElement | null>(null);
     const sentenceRecognitionManagerRef = useRef<SpeechRecognitionManager | null>(null);
     const sentenceTranscriptBufferRef = useRef<string>('');
@@ -1948,6 +1949,8 @@ Reply with exactly one very short sentence or phrase in English.`
         setIsSentenceRecording(false);
         sentenceRecognitionManagerRef.current?.stop();
 
+        setIsMobileWordListOpen(false);
+
         return () => {
             studyBuddyExampleAbortRef.current?.abort();
             studyBuddyQuizAbortRef.current?.abort();
@@ -2022,14 +2025,70 @@ Reply with exactly one very short sentence or phrase in English.`
 
     return (
         <>
+            {isMobileWordListOpen && (
+                <div className="fixed inset-0 z-[120] sm:hidden">
+                    <div
+                        className="absolute inset-0 bg-black/40"
+                        onClick={() => setIsMobileWordListOpen(false)}
+                    />
+
+                    <div className="absolute top-0 right-0 h-full w-[320px] max-w-[85vw] bg-white border-l border-neutral-200 shadow-2xl overflow-y-auto">
+                        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-4 border-b border-neutral-100 bg-white">
+                            <h3 className="text-sm font-black uppercase tracking-wider text-neutral-700">
+                                Word List
+                            </h3>
+
+                            <button
+                                type="button"
+                                onClick={() => setIsMobileWordListOpen(false)}
+                                className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-100 transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="p-3 space-y-2">
+                            {desktopReviewItems.map((item) => {
+                                const isActive = item.index === currentIndex;
+
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setProgress((p) => ({ ...p, current: item.index }));
+                                            setIsMobileWordListOpen(false);
+                                        }}
+                                        className={`w-full flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition-all ${isActive ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+                                    >
+                                        <span className="text-sm font-bold truncate">
+                                            {item.label}
+                                        </span>
+
+                                        <span className={`text-[10px] font-black uppercase tracking-wider ${isActive ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                                            {item.outcomeLabel || ''}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="max-w-[1380px] mx-auto h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)] flex animate-in fade-in duration-300 px-3 sm:px-0 gap-6">
                 <div className="min-w-0 flex-1 max-w-3xl mx-auto flex flex-col">
                 <div className="px-6 shrink-0 pb-4">
                     <div className="flex justify-between items-center mb-1">
-                        <div className="w-24"></div> {/* Left spacer */}
+                        <div className="w-24"></div>
                         <div className="flex items-center space-x-2">
-                            <HeaderIcon size={14} className={headerColor} />
-                            <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{currentIndex + 1} / {sessionWords.length}</span>
+                            <button
+                                type="button"
+                                onClick={() => setIsMobileWordListOpen(true)}
+                                className="inline-flex flex-col items-center gap-1 sm:pointer-events-none"
+                            >
+                                <HeaderIcon size={14} className={headerColor} />
+                                <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{currentIndex + 1} / {sessionWords.length}</span>
+                            </button>
                         </div>
                         <div className="w-36 text-right">
                             <button onClick={handleEndSession} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-[10px] font-bold uppercase tracking-wider text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"><LogOut size={11} /><span>End Session</span></button>
