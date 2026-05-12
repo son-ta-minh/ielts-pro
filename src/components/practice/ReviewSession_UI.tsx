@@ -2221,7 +2221,7 @@ Reply with exactly one very short sentence or phrase in English.`
                 </div>
                 </div>
 
-                {!isTesting && !isQuickFire && (
+                {!isTesting && !isQuickFire && !isNewWord && (
                     <aside className="hidden xl:flex w-[310px] shrink-0">
                         <div className="w-full h-full rounded-[2rem] border border-neutral-200 bg-white shadow-sm p-4 flex flex-col overflow-hidden">
                             <div className="px-2 pb-3 border-b border-neutral-100">
