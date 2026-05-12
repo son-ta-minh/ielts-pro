@@ -2037,7 +2037,7 @@ Reply with exactly one very short sentence or phrase in English.`
     return (
         <>
             {isMobileWordListOpen && (
-                <div className="fixed inset-0 z-[120] sm:hidden">
+                <div className="fixed inset-0 z-[120]">
                     <div
                         className="absolute inset-0 bg-black/40"
                         onClick={() => setIsMobileWordListOpen(false)}
@@ -2128,7 +2128,7 @@ Reply with exactly one very short sentence or phrase in English.`
                             <button
                                 type="button"
                                 onClick={() => setIsMobileWordListOpen(true)}
-                                className="inline-flex flex-col items-center gap-1 sm:pointer-events-none"
+                                className="inline-flex flex-col items-center gap-1"
                             >
                                 <HeaderIcon size={14} className={headerColor} />
                                 <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">{currentIndex + 1} / {sessionWords.length}</span>
