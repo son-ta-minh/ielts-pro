@@ -2007,22 +2007,14 @@ Reply with exactly one very short sentence or phrase in English.`
                                 </div>
                                 <div className="w-full max-w-lg min-h-[216px]">
                                 {isRecallQuizMode && (
-                                    <div className="w-full rounded-[1.75rem] border border-neutral-200 bg-neutral-50/80 px-5 py-5 text-center shadow-sm">
-                                        <div className="space-y-3">
-                                            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Quiz Recall Mode</div>
-                                            <p className="text-sm font-semibold leading-relaxed text-neutral-600">
-                                                Open AI hints, guess the target word, then choose Easy, Hard, or Forgot based on how well you recalled it.
-                                            </p>
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleOpenRecallQuiz()}
-                                                className="inline-flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-3 text-sm font-black text-white hover:bg-neutral-800 transition-colors"
-                                            >
-                                                <Sparkles size={14} />
-                                                <span>Open Quiz Hints</span>
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleOpenRecallQuiz()}
+                                        className="inline-flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-3 text-sm font-black text-white hover:bg-neutral-800 transition-colors"
+                                    >
+                                        <Sparkles size={14} />
+                                        <span>Hints</span>
+                                    </button>
                                 )}
                                 {showSpellBox && (
                                     <div className="w-full rounded-[1.75rem] border border-neutral-200 bg-neutral-50/80 px-5 py-4 text-left shadow-sm">
