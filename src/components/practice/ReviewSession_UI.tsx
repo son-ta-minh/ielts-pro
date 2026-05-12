@@ -2048,6 +2048,7 @@ Reply with exactly one very short sentence or phrase in English.`
                         </div>
 
                         <div className="p-3 space-y-2">
+
                             {desktopReviewItems.map((item) => {
                                 const isActive = item.index === currentIndex;
 
@@ -2061,13 +2062,35 @@ Reply with exactly one very short sentence or phrase in English.`
                                         }}
                                         className={`w-full flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition-all ${isActive ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
                                     >
-                                        <span className="text-sm font-bold truncate">
-                                            {item.label}
-                                        </span>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            {item.outcomeLabel && (
+                                                <span
+                                                    className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${
+                                                        item.outcomeLabel === 'Easy'
+                                                            ? isActive
+                                                                ? 'bg-emerald-400/20 text-emerald-100 border border-emerald-300/20'
+                                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                            : item.outcomeLabel === 'Hard'
+                                                                ? isActive
+                                                                    ? 'bg-orange-400/20 text-orange-100 border border-orange-300/20'
+                                                                    : 'bg-orange-50 text-orange-700 border border-orange-200'
+                                                                : item.outcomeLabel === 'Forgot'
+                                                                    ? isActive
+                                                                        ? 'bg-rose-400/20 text-rose-100 border border-rose-300/20'
+                                                                        : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                                    : isActive
+                                                                        ? 'bg-white/15 text-white border border-white/10'
+                                                                        : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                                                    }`}
+                                                >
+                                                    {item.outcomeLabel}
+                                                </span>
+                                            )}
 
-                                        <span className={`text-[10px] font-black uppercase tracking-wider ${isActive ? 'text-neutral-300' : 'text-neutral-400'}`}>
-                                            {item.outcomeLabel || ''}
-                                        </span>
+                                            <div className={`text-xs font-black break-words truncate ${isActive ? 'text-white' : 'text-neutral-900'}`}>
+                                                {item.label}
+                                            </div>
+                                        </div>
                                     </button>
                                 );
                             })}
