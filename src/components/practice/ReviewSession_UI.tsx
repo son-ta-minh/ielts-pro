@@ -2248,8 +2248,34 @@ Reply with exactly one very short sentence or phrase in English.`
                                                     {item.index + 1}
                                                 </span>
                                                 <div className="min-w-0 flex-1">
-                                                    <div className={`text-xs font-black break-words ${isActive ? 'text-white' : 'text-neutral-900'}`}>
-                                                        {item.outcomeLabel ? `[${item.outcomeLabel}] ` : ''}{item.label}
+                                                    <div className="flex items-center gap-2">
+                                                        {item.outcomeLabel && (
+                                                            <span
+                                                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${
+                                                                    item.outcomeLabel === 'Easy'
+                                                                        ? isActive
+                                                                            ? 'bg-emerald-400/20 text-emerald-100 border border-emerald-300/20'
+                                                                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                                        : item.outcomeLabel === 'Hard'
+                                                                            ? isActive
+                                                                                ? 'bg-orange-400/20 text-orange-100 border border-orange-300/20'
+                                                                                : 'bg-orange-50 text-orange-700 border border-orange-200'
+                                                                            : item.outcomeLabel === 'Forgot'
+                                                                                ? isActive
+                                                                                    ? 'bg-rose-400/20 text-rose-100 border border-rose-300/20'
+                                                                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                                                : isActive
+                                                                                    ? 'bg-white/15 text-white border border-white/10'
+                                                                                    : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                                                                }`}
+                                                            >
+                                                                {item.outcomeLabel}
+                                                            </span>
+                                                        )}
+
+                                                        <div className={`text-xs font-black break-words ${isActive ? 'text-white' : 'text-neutral-900'}`}>
+                                                            {item.label}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
