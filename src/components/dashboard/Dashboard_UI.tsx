@@ -315,7 +315,7 @@ const VocabularyCenterPanel: React.FC<{
                     <div className="flex lg:flex-col gap-2 lg:w-56">
                         <NavButton 
                             label="Learn New" 
-                            subLabel={`${newCount} words ready`} 
+                            subLabel={`${newCount} words`} 
                             rightLabel={`${dayProgress.learned}`}
                             icon={Sparkles} 
                             color="text-indigo-600" 
@@ -326,7 +326,7 @@ const VocabularyCenterPanel: React.FC<{
 
                         <NavButton 
                             label="Review Due" 
-                            subLabel={`${dueCount} words due`} 
+                            subLabel={`${dueCount} words`} 
                             rightLabel={
                                 <div className="text-red-600">
                                     {dayProgress.reviewed}

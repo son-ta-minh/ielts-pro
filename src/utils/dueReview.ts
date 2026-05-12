@@ -12,6 +12,8 @@ export interface DueReviewScope {
   focusOnly: boolean;
 }
 
+export type ReviewSetupMode = 'due' | 'new';
+
 export const DEFAULT_DUE_REVIEW_SCOPE: DueReviewScope = {
   wordCount: 10,
   statuses: ['LEARNED', 'HARD', 'FORGOT'],
@@ -98,5 +100,24 @@ export const selectDueReviewWords = (
     .filter((word) => scope.types.length === 0 || scope.types.includes(getWordType(word)))
     .filter((word) => !scope.focusOnly || !!word.isFocus)
     .sort((a, b) => a.nextReview - b.nextReview)
+    .slice(0, scope.wordCount);
+};
+
+export const selectNewReviewWords = (
+  words: StudyItem[],
+  libraryType: StudyLibraryType,
+  userId: string,
+  scope: DueReviewScope,
+): StudyItem[] => {
+  return words
+    .filter((word) => word.userId === userId)
+    .filter((word) => (word.libraryType || 'vocab') === libraryType)
+    .filter((word) => !word.isPassive)
+    .filter((word) => !word.lastReview)
+    .filter((word) => word.quality !== 'RAW')
+    .filter((word) => !scope.group || !!word.groups?.some((group) => String(group || '').trim() === scope.group))
+    .filter((word) => scope.types.length === 0 || scope.types.includes(getWordType(word)))
+    .filter((word) => !scope.focusOnly || !!word.isFocus)
+    .sort((a, b) => a.createdAt - b.createdAt)
     .slice(0, scope.wordCount);
 };

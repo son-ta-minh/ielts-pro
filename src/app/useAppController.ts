@@ -23,7 +23,7 @@ import { DEFAULT_USER_ID } from '../data/user_data';
 import { generateMap } from '../data/adventure_map';
 
 import { getCurrentHost } from '../utils/firebase';
-import { DEFAULT_DUE_REVIEW_SCOPE, DueReviewScope, selectDueReviewWords } from '../utils/dueReview';
+import { DEFAULT_DUE_REVIEW_SCOPE, DueReviewScope, selectDueReviewWords, selectNewReviewWords } from '../utils/dueReview';
 
 export const calculateWordDifficultyXp = movedCalc;
 const normalizeLibraryType = (value?: StudyLibraryType | string | null): StudyLibraryType => value === 'kotoba' ? 'kotoba' : 'vocab';
@@ -958,14 +958,12 @@ export const useAppController = () => {
         startSession(dueWords, 'due'); 
     }, [currentUser, getLibraryWords, startSession, showToast]);
 
-    const startNewLearnSessionFor = useCallback(async (libraryType: StudyLibraryType) => { 
+    const startNewLearnSessionFor = useCallback(async (libraryType: StudyLibraryType, scope: DueReviewScope = DEFAULT_DUE_REVIEW_SCOPE, preselectedWords?: StudyItem[]) => { 
         if (!currentUser) return; 
         const allWords = getLibraryWords(libraryType);
-        const newWords = allWords
-            .filter(w => !w.isPassive && !w.lastReview && w.quality !== 'RAW')
-            .sort((a, b) => a.createdAt - b.createdAt)
-            .slice(0, 20);
-            
+        const newWords = (preselectedWords && preselectedWords.length > 0)
+            ? preselectedWords
+            : selectNewReviewWords(allWords, libraryType, currentUser.id, scope);
         if (newWords.length === 0) {
             showToast(libraryType === 'kotoba' ? "No new kotoba to learn!" : "No new words to learn!", "success");
             return;
@@ -975,8 +973,8 @@ export const useAppController = () => {
 
     const startDueReviewSession = useCallback(async (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => { await startDueReviewSessionFor('vocab', scope, preselectedWords); }, [startDueReviewSessionFor]);
     const startKotobaDueReviewSession = useCallback(async (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => { await startDueReviewSessionFor('kotoba', scope, preselectedWords); }, [startDueReviewSessionFor]);
-    const startNewLearnSession = useCallback(async () => { await startNewLearnSessionFor('vocab'); }, [startNewLearnSessionFor]);
-    const startKotobaNewLearnSession = useCallback(async () => { await startNewLearnSessionFor('kotoba'); }, [startNewLearnSessionFor]);
+    const startNewLearnSession = useCallback(async (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => { await startNewLearnSessionFor('vocab', scope, preselectedWords); }, [startNewLearnSessionFor]);
+    const startKotobaNewLearnSession = useCallback(async (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => { await startNewLearnSessionFor('kotoba', scope, preselectedWords); }, [startNewLearnSessionFor]);
 
     const handleNavigateToList = (filter: string, libraryType: StudyLibraryType = 'vocab') => { setInitialListFilter(filter); setView(libraryType === 'kotoba' ? 'KOTOBA' : 'BROWSE'); };
     const openAddWordLibrary = () => { setView('BROWSE'); setForceExpandAdd(true); };

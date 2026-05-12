@@ -6,7 +6,7 @@ import { isSrsIgnored } from '../../utils/srs';
 import * as db from '../../app/db';
 import { DashboardUI, DashboardUIProps, StudyStats } from './Dashboard_UI';
 import { getConfig } from '../../app/settingsManager';
-import { addSkippedTodayWordId, DEFAULT_DUE_REVIEW_SCOPE, DueReviewScope, getAvailableReviewGroups, getSkippedTodayWordIds, DueReviewStatusFilter, DueReviewTypeFilter, selectDueReviewWords } from '../../utils/dueReview';
+import { addSkippedTodayWordId, DEFAULT_DUE_REVIEW_SCOPE, DueReviewScope, getAvailableReviewGroups, getSkippedTodayWordIds, DueReviewStatusFilter, DueReviewTypeFilter, ReviewSetupMode, selectDueReviewWords, selectNewReviewWords } from '../../utils/dueReview';
 
 export interface LibraryDashboardStats {
   totalCount: number;
@@ -37,10 +37,10 @@ interface Props {
   onRestore: () => void; // This is now a generic trigger
   onNavigateToWordList: (filter: string) => void;
   onStartDueReview: (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => void;
-  onStartNewLearn: () => void;
+  onStartNewLearn: (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => void;
   onNavigateToKotobaList: (filter: string) => void;
   onStartKotobaDueReview: (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => void;
-  onStartKotobaNewLearn: () => void;
+  onStartKotobaNewLearn: (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => void;
   isWotdComposed?: boolean;
   onComposeWotd?: (word: StudyItem) => void;
   onRandomizeWotd?: () => void;
@@ -66,6 +66,7 @@ const TYPE_OPTIONS: DueReviewTypeFilter[] = ['VOCAB', 'IDIOM', 'PHRASAL', 'COLLO
 const ReviewDueConfigModal: React.FC<{
   isOpen: boolean;
   libraryType: StudyLibraryType;
+  mode: ReviewSetupMode;
   scope: DueReviewScope;
   previewWords: StudyItem[];
   allGroups: string[];
@@ -75,7 +76,7 @@ const ReviewDueConfigModal: React.FC<{
   onRemoveWord: (wordId: string) => void;
   onStart: () => void;
   onClose: () => void;
-}> = ({ isOpen, libraryType, scope, previewWords, allGroups, groupQuery, onScopeChange, onGroupQueryChange, onRemoveWord, onStart, onClose }) => {
+}> = ({ isOpen, libraryType, mode, scope, previewWords, allGroups, groupQuery, onScopeChange, onGroupQueryChange, onRemoveWord, onStart, onClose }) => {
   const filteredGroups = useMemo(() => {
     const normalizedQuery = groupQuery.trim().toLowerCase();
     return allGroups.filter((group) => !normalizedQuery || group.toLowerCase().includes(normalizedQuery)).slice(0, 8);
@@ -88,7 +89,7 @@ const ReviewDueConfigModal: React.FC<{
       <div className="bg-white w-full sm:w-[90vw] md:w-[70vw] lg:w-[45vw] xl:w-[33vw] max-w-[600px] rounded-[2rem] border border-neutral-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
         <div className="px-6 py-5 border-b border-neutral-100 flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-black text-neutral-900">Configure Due Review</h3>
+            <h3 className="text-xl font-black text-neutral-900">{mode === 'new' ? 'Configure New Session' : 'Configure Due Review'}</h3>
           </div>
           <button onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors">
             <X size={20} />
@@ -112,38 +113,40 @@ const ReviewDueConfigModal: React.FC<{
               </div>
             </div>
 
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-xs font-black text-neutral-600 pt-2">Status</div>
-              <div className="flex gap-2 flex-nowrap overflow-x-auto flex-1">
-                {STATUS_OPTIONS.map((status) => {
-                  const active = scope.statuses.includes(status);
-                  return (
-                    <button
-                      key={status}
-                      onClick={() => onScopeChange({
-                        ...scope,
-                        statuses: active
-                          ? scope.statuses.filter((item) => item !== status)
-                          : [...scope.statuses, status]
-                      })}
-                      className={`w-20 h-8 flex-shrink-0 flex items-center justify-center gap-1 rounded-lg text-xs font-black border transition-all ${
-                        active
-                          ? status === 'LEARNED'
-                            ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
-                            : status === 'EASY'
-                            ? 'bg-green-50 text-green-700 border-green-200'
-                            : status === 'HARD'
-                            ? 'bg-orange-50 text-orange-700 border-orange-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200'
-                          : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  );
-                })}
+            {mode === 'due' && (
+              <div className="flex items-start justify-between gap-3">
+                <div className="text-xs font-black text-neutral-600 pt-2">Status</div>
+                <div className="flex gap-2 flex-nowrap overflow-x-auto flex-1">
+                  {STATUS_OPTIONS.map((status) => {
+                    const active = scope.statuses.includes(status);
+                    return (
+                      <button
+                        key={status}
+                        onClick={() => onScopeChange({
+                          ...scope,
+                          statuses: active
+                            ? scope.statuses.filter((item) => item !== status)
+                            : [...scope.statuses, status]
+                        })}
+                        className={`w-20 h-8 flex-shrink-0 flex items-center justify-center gap-1 rounded-lg text-xs font-black border transition-all ${
+                          active
+                            ? status === 'LEARNED'
+                              ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                              : status === 'EASY'
+                              ? 'bg-green-50 text-green-700 border-green-200'
+                              : status === 'HARD'
+                              ? 'bg-orange-50 text-orange-700 border-orange-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                            : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'
+                        }`}
+                      >
+                        {status}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex items-center justify-between gap-3">
               <div className="text-xs font-black text-neutral-600">Group</div>
@@ -222,7 +225,7 @@ const ReviewDueConfigModal: React.FC<{
             <div className="flex flex-wrap gap-2">
               {previewWords.length === 0 ? (
                 <div className="p-4 rounded-2xl border border-dashed border-neutral-200 text-sm text-neutral-500 bg-neutral-50">
-                  No due words match the current scope.
+                  No {mode === 'new' ? 'new' : 'due'} words match the current scope.
                 </div>
               ) : (
                 previewWords.map((word) => (
@@ -267,7 +270,7 @@ const Dashboard: React.FC<Props> = ({
   const [goalStats, setGoalStats] = useState({ totalTasks: 0, completedTasks: 0 });
   
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
-  const [dueConfigState, setDueConfigState] = useState<{ isOpen: boolean; libraryType: StudyLibraryType }>({ isOpen: false, libraryType: 'vocab' });
+  const [dueConfigState, setDueConfigState] = useState<{ isOpen: boolean; libraryType: StudyLibraryType; mode: ReviewSetupMode }>({ isOpen: false, libraryType: 'vocab', mode: 'due' });
   const [dueReviewScope, setDueReviewScope] = useState<DueReviewScope>(DEFAULT_DUE_REVIEW_SCOPE);
   const [groupQuery, setGroupQuery] = useState('');
   const [skippedTodayWordIds, setSkippedTodayWordIds] = useState<string[]>([]);
@@ -284,8 +287,10 @@ const Dashboard: React.FC<Props> = ({
     [allWords, dueConfigState.libraryType, userId]
   );
   const duePreviewWords = useMemo(
-    () => selectDueReviewWords(allWords, dueConfigState.libraryType, userId, dueReviewScope, skippedTodayWordIds),
-    [allWords, dueConfigState.libraryType, userId, dueReviewScope, skippedTodayWordIds]
+    () => dueConfigState.mode === 'new'
+      ? selectNewReviewWords(allWords, dueConfigState.libraryType, userId, dueReviewScope)
+      : selectDueReviewWords(allWords, dueConfigState.libraryType, userId, dueReviewScope, skippedTodayWordIds),
+    [allWords, dueConfigState.libraryType, dueConfigState.mode, userId, dueReviewScope, skippedTodayWordIds]
   );
 
   const calculateLibraryDashboardStats = useCallback((words: StudyItem[], libraryType: StudyLibraryType): LibraryDashboardStats => {
@@ -495,11 +500,11 @@ const Dashboard: React.FC<Props> = ({
       }
   };
 
-  const openDueReviewConfig = (libraryType: StudyLibraryType) => {
+  const openReviewConfig = (libraryType: StudyLibraryType, mode: ReviewSetupMode) => {
     setDueReviewScope(DEFAULT_DUE_REVIEW_SCOPE);
     setGroupQuery('');
     setSkippedTodayWordIds(getSkippedTodayWordIds());
-    setDueConfigState({ isOpen: true, libraryType });
+    setDueConfigState({ isOpen: true, libraryType, mode });
   };
 
   const handleSkipPreviewWord = (wordId: string) => {
@@ -510,9 +515,11 @@ const Dashboard: React.FC<Props> = ({
   const handleStartConfiguredDueReview = () => {
     if (duePreviewWords.length === 0) return;
     if (dueConfigState.libraryType === 'kotoba') {
-      restProps.onStartKotobaDueReview(dueReviewScope, duePreviewWords);
+      if (dueConfigState.mode === 'new') restProps.onStartKotobaNewLearn(dueReviewScope, duePreviewWords);
+      else restProps.onStartKotobaDueReview(dueReviewScope, duePreviewWords);
     } else {
-      restProps.onStartDueReview(dueReviewScope, duePreviewWords);
+      if (dueConfigState.mode === 'new') restProps.onStartNewLearn(dueReviewScope, duePreviewWords);
+      else restProps.onStartDueReview(dueReviewScope, duePreviewWords);
     }
     setDueConfigState((prev) => ({ ...prev, isOpen: false }));
   };
@@ -536,11 +543,11 @@ const Dashboard: React.FC<Props> = ({
     onRefreshStats: fetchStudyStats,
     onNavigate: restProps.setView,
     onNavigateToWordList: restProps.onNavigateToWordList,
-    onStartDueReview: () => openDueReviewConfig('vocab'),
-    onStartNewLearn: restProps.onStartNewLearn,
+    onStartDueReview: () => openReviewConfig('vocab', 'due'),
+    onStartNewLearn: () => openReviewConfig('vocab', 'new'),
     onNavigateToKotobaList: restProps.onNavigateToKotobaList,
-    onStartKotobaDueReview: () => openDueReviewConfig('kotoba'),
-    onStartKotobaNewLearn: restProps.onStartKotobaNewLearn,
+    onStartKotobaDueReview: () => openReviewConfig('kotoba', 'due'),
+    onStartKotobaNewLearn: () => openReviewConfig('kotoba', 'new'),
     vocabLibraryStats: libraryStats.vocab,
     kotobaLibraryStats: libraryStats.kotoba,
     lastBackupTime: restProps.lastBackupTime,
@@ -566,6 +573,7 @@ const Dashboard: React.FC<Props> = ({
         <ReviewDueConfigModal
           isOpen={dueConfigState.isOpen}
           libraryType={dueConfigState.libraryType}
+          mode={dueConfigState.mode}
           scope={dueReviewScope}
           previewWords={duePreviewWords}
           allGroups={dueReviewGroups}
