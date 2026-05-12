@@ -680,19 +680,30 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const isRecallMeaningMode = sessionFocus === ReviewMode.MEANING;
     const isRecallQuizMode = sessionFocus === ReviewMode.QUIZ;
     const isRecallPhoneticMode = sessionFocus === ReviewMode.PHONETIC || sessionFocus === ReviewMode.STANDARD;
-    const isRecallWordUnlocked = useCallback((wordId: string) => {
-        if (solvedRecallWordIds.has(wordId)) return true;
-        const outcome = sessionOutcomes[wordId];
-        return outcome === ReviewGrade.EASY || outcome === ReviewGrade.HARD || outcome === ReviewGrade.FORGOT || outcome === ReviewGrade.LEARNED;
-    }, [sessionOutcomes, solvedRecallWordIds]);
+    const unlockedWordIds = useMemo(() => {
+        const set = new Set<string>(solvedRecallWordIds);
+
+        Object.entries(sessionOutcomes).forEach(([id, outcome]) => {
+            if (
+                outcome === ReviewGrade.EASY ||
+                outcome === ReviewGrade.HARD ||
+                outcome === ReviewGrade.FORGOT ||
+                outcome === ReviewGrade.LEARNED
+            ) {
+                set.add(id);
+            }
+        });
+
+        return set;
+    }, [solvedRecallWordIds, sessionOutcomes]);
     const desktopReviewItems = useMemo(() => (
         sessionWords.map((word, index) => ({
             id: word.id,
             index,
-            label: isRecallQuizMode && !isRecallWordUnlocked(word.id) ? '?' : ((word.display || '').trim() || word.word),
+            label: isRecallQuizMode && !unlockedWordIds.has(word.id) ? '?' : ((word.display || '').trim() || word.word),
             outcomeLabel: getSessionOutcomeLabel(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)
         }))
-    ), [sessionWords, sessionOutcomes, newWordIds, isQuickFire, isRecallQuizMode, isRecallWordUnlocked]);
+    ), [sessionWords, sessionOutcomes, newWordIds, isQuickFire, isRecallQuizMode, unlockedWordIds]);
 
     const handleEditRequest = (word: StudyItem) => {
       setWordInModal(null);
@@ -727,7 +738,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     }
     const vietnameseMeaning = cachedDisplayMeaning || matchedDisplayCollocation?.d?.trim() || fallbackMeaning;
     const reviewHeadlineText = isRecallQuizMode
-        ? (isRecallWordUnlocked(currentWord.id) ? reviewHeadword : 'Hints')
+        ? (unlockedWordIds.has(currentWord.id) ? reviewHeadword : 'Hints')
         : isRecallMeaningMode
         ? vietnameseMeaning
         : displayText;
@@ -2154,7 +2165,7 @@ Reply with exactly one very short sentence or phrase in English.`
                         ) : (<>
                             <div className="flex-1 flex flex-col items-center justify-start pt-36 sm:pt-60 w-full text-center space-y-3 sm:space-y-3">
                                 <div className="flex items-center gap-4 flex-wrap justify-center">
-                                    {isRecallQuizMode && !solvedRecallWordIds.has(currentWord.id) ? (
+                                    {isRecallQuizMode && !unlockedWordIds.has(currentWord.id) ? (
                                         <button
                                             type="button"
                                             onClick={() => void handleOpenRecallQuiz()}
@@ -2169,7 +2180,7 @@ Reply with exactly one very short sentence or phrase in English.`
                                         </h2>
                                     )}
 
-                                    {(!isRecallQuizMode || solvedRecallWordIds.has(currentWord.id) || isRecallHeadwordFullyRevealed) && (
+                                    {(!isRecallQuizMode || unlockedWordIds.has(currentWord.id) || isRecallHeadwordFullyRevealed) && (
                                         <button
                                             type="button"
                                             onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
