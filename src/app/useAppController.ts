@@ -23,6 +23,7 @@ import { DEFAULT_USER_ID } from '../data/user_data';
 import { generateMap } from '../data/adventure_map';
 
 import { getCurrentHost } from '../utils/firebase';
+import { DEFAULT_DUE_REVIEW_SCOPE, DueReviewScope, selectDueReviewWords } from '../utils/dueReview';
 
 export const calculateWordDifficultyXp = movedCalc;
 const normalizeLibraryType = (value?: StudyLibraryType | string | null): StudyLibraryType => value === 'kotoba' ? 'kotoba' : 'vocab';
@@ -943,14 +944,12 @@ export const useAppController = () => {
         return dataStore.getAllWords().filter(w => normalizeLibraryType(w.libraryType) === libraryType);
     }, []);
 
-    const startDueReviewSessionFor = useCallback(async (libraryType: StudyLibraryType) => {
+    const startDueReviewSessionFor = useCallback(async (libraryType: StudyLibraryType, scope: DueReviewScope = DEFAULT_DUE_REVIEW_SCOPE, preselectedWords?: StudyItem[]) => {
         if (!currentUser) return; 
         const allWords = getLibraryWords(libraryType);
-        const now = Date.now();
-        const dueWords = allWords
-            .filter(w => !w.isPassive && w.learnedStatus !== 'IGNORED' && w.lastReview && w.nextReview <= now)
-            .sort((a, b) => a.nextReview - b.nextReview)
-            .slice(0, 30);
+        const dueWords = (preselectedWords && preselectedWords.length > 0)
+            ? preselectedWords
+            : selectDueReviewWords(allWords, libraryType, currentUser.id, scope);
         
         if (dueWords.length === 0) {
             showToast(libraryType === 'kotoba' ? "No kotoba due for review!" : "No words due for review!", "success");
@@ -1010,8 +1009,8 @@ export const useAppController = () => {
         startSession(newWords, 'new'); 
     }, [currentUser, getLibraryWords, startSession, showToast]);
 
-    const startDueReviewSession = useCallback(async () => { await startDueReviewSessionFor('vocab'); }, [startDueReviewSessionFor]);
-    const startKotobaDueReviewSession = useCallback(async () => { await startDueReviewSessionFor('kotoba'); }, [startDueReviewSessionFor]);
+    const startDueReviewSession = useCallback(async (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => { await startDueReviewSessionFor('vocab', scope, preselectedWords); }, [startDueReviewSessionFor]);
+    const startKotobaDueReviewSession = useCallback(async (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => { await startDueReviewSessionFor('kotoba', scope, preselectedWords); }, [startDueReviewSessionFor]);
     const startStatusReviewSession = useCallback(async (status: 'hard' | 'forgot') => { await startStatusReviewSessionFor(status, 'vocab'); }, [startStatusReviewSessionFor]);
     const startKotobaStatusReviewSession = useCallback(async (status: 'hard' | 'forgot') => { await startStatusReviewSessionFor(status, 'kotoba'); }, [startStatusReviewSessionFor]);
     const startNewLearnSession = useCallback(async () => { await startNewLearnSessionFor('vocab'); }, [startNewLearnSessionFor]);

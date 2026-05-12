@@ -1,10 +1,10 @@
-
-/**
+/****
  * STT Manager using native Browser Web Speech API.
  */
 export class SpeechRecognitionManager {
     private recognition: any | null = null;
     private finalTranscript: string = '';
+    private finalSegments: string[] = [];
     private onResultCallback: ((final: string, interim: string) => void) | null = null;
     private onEndCallback: ((finalTranscript: string) => void) | null = null;
     private recognitionLang: string = 'en-US';
@@ -23,19 +23,39 @@ export class SpeechRecognitionManager {
 
             this.recognition.onresult = (event: any) => {
                 let interimTranscript = '';
-                let currentFinal = '';
+                let newFinal = '';
 
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript;
+
                     if (event.results[i].isFinal) {
-                        currentFinal += event.results[i][0].transcript;
+                        const cleaned = transcript.trim();
+
+                        if (cleaned) {
+                            newFinal += cleaned + ' ';
+                        }
                     } else {
-                        interimTranscript += event.results[i][0].transcript;
+                        interimTranscript += transcript;
                     }
                 }
-                
-                this.finalTranscript += currentFinal;
+
+                newFinal = newFinal
+                    .trim()
+                    .replace(/([a-z])([A-Z])/g, '$1 $2')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+                if (newFinal) {
+                    this.finalSegments.push(newFinal);
+                }
+
+                this.finalTranscript = this.finalSegments.join(' ')
+                    .replace(/([a-z])([A-Z])/g, '$1 $2')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
                 if (this.onResultCallback) {
-                    this.onResultCallback(this.finalTranscript, interimTranscript);
+                    this.onResultCallback(this.finalTranscript, interimTranscript.trim());
                 }
             };
             
@@ -67,6 +87,7 @@ export class SpeechRecognitionManager {
         this.onResultCallback = onResult;
         this.onEndCallback = onEnd;
         this.finalTranscript = '';
+        this.finalSegments = [];
 
         if (lang) {
             this.setLanguage(lang);

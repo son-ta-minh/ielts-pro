@@ -176,7 +176,7 @@ router.get('/courses', (req, res) => {
             return res.json([]);
         }
         const dirs = fs.readdirSync(COURSES_DIR, { withFileTypes: true })
-            .filter(dirent => dirent.isDirectory())
+            .filter(dirent => dirent.isDirectory() && dirent.name !== 'backup')
             .map(dirent => dirent.name);
         
         // Read order file

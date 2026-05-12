@@ -509,6 +509,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [isStudyBuddySentenceChecking, setIsStudyBuddySentenceChecking] = useState(false);
     const studyBuddyQuizInputRef = useRef<HTMLInputElement | null>(null);
     const sentenceRecognitionManagerRef = useRef<SpeechRecognitionManager | null>(null);
+    const sentenceTranscriptBufferRef = useRef<string>('');
     const [isSentenceRecording, setIsSentenceRecording] = useState(false);
     const touchStartX = useRef<number | null>(null);
     const studyBuddyExampleAbortRef = useRef<AbortController | null>(null);
@@ -1555,13 +1556,21 @@ Reply with exactly one very short sentence or phrase in English.`
             }
 
             setIsSentenceRecording(true);
+            sentenceTranscriptBufferRef.current = '';
 
             await sentenceRecognitionManagerRef.current.start(
                 (finalTranscript: string, interimTranscript: string) => {
-                    setStudyBuddySentenceInput(
-                        `${finalTranscript}${interimTranscript}`.trim()
-                    );
+                    // Web Speech API interimTranscript is usually a full snapshot, not a delta.
+                    // So we MUST NOT accumulate it, otherwise it causes duplicated words.
+                    const base = (finalTranscript || '').trim();
+                    const interim = (interimTranscript || '').trim();
 
+                    const displayTranscript = [base, interim].filter(Boolean).join(' ').trim();
+
+                    // overwrite buffer instead of appending
+                    sentenceTranscriptBufferRef.current = displayTranscript;
+
+                    setStudyBuddySentenceInput(displayTranscript);
                     setStudyBuddySentenceFeedback(null);
                 },
                 () => {
