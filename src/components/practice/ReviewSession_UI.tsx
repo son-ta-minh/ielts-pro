@@ -2058,6 +2058,16 @@ Reply with exactly one very short sentence or phrase in English.`
                                         type="button"
                                         onClick={() => {
                                             setProgress((p) => ({ ...p, current: item.index }));
+
+                                            // sync recall solved state with sidebar outcome
+                                            if (item.outcomeLabel && ['Easy', 'Hard', 'Forgot'].includes(item.outcomeLabel)) {
+                                                setSolvedRecallWordIds((prev: Set<string>) => {
+                                                    const next = new Set(prev);
+                                                    next.add(item.id);
+                                                    return next;
+                                                });
+                                            }
+
                                             setIsMobileWordListOpen(false);
                                         }}
                                         className={`w-full flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition-all ${isActive ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
