@@ -96,11 +96,9 @@ export interface DashboardUIProps {
     onNavigate: (view: AppView) => void;
     onNavigateToWordList: (filter: string) => void;
     onStartDueReview: () => void;
-    onStartStatusReview: (status: 'hard' | 'forgot') => void;
     onStartNewLearn: () => void;
     onNavigateToKotobaList: (filter: string) => void;
     onStartKotobaDueReview: () => void;
-    onStartKotobaStatusReview: (status: 'hard' | 'forgot') => void;
     onStartKotobaNewLearn: () => void;
     vocabLibraryStats: LibraryDashboardStats;
     kotobaLibraryStats: LibraryDashboardStats;
@@ -280,7 +278,6 @@ const VocabularyCenterPanel: React.FC<{
     dayProgress: DayProgress;
     onStartNew: () => void;
     onStartDue: () => void;
-    onStartStatusReview: (status: 'hard' | 'forgot') => void;
     onFilterStatus: (filter: string) => void;
 }> = ({
     title = 'Vocabulary Center',
@@ -288,7 +285,7 @@ const VocabularyCenterPanel: React.FC<{
     libraryType = 'vocab',
     stats,
     dayProgress,
-    onStartNew, onStartDue, onStartStatusReview, onFilterStatus
+    onStartNew, onStartDue, onFilterStatus
 }) => {
     const { totalCount, newCount, dueCount, studyingCount, masteredCount, rawCount, forgottenCount, hardCount, easyCount, focusedCount } = stats;
     const newPercent = totalCount > 0 ? (newCount / totalCount) * 100 : 0;
@@ -393,27 +390,6 @@ const VocabularyCenterPanel: React.FC<{
                         bg="bg-amber-50" 
                         onClick={onStartDue} 
                         disabled={dueCount === 0} 
-                    />
-
-                    {/* Row 2 */}
-                    <NavButton 
-                        label="Review Forgot" 
-                        subLabel={`${forgottenCount} words`} 
-                        icon={AlertCircle} 
-                        color="text-red-600" 
-                        bg="bg-red-50" 
-                        onClick={() => onStartStatusReview('forgot')} 
-                        disabled={forgottenCount === 0} 
-                    />
-
-                    <NavButton 
-                        label="Review Hard" 
-                        subLabel={`${hardCount} words`} 
-                        icon={Flame} 
-                        color="text-orange-600" 
-                        bg="bg-orange-50" 
-                        onClick={() => onStartStatusReview('hard')} 
-                        disabled={hardCount === 0} 
                     />
                 </div>
              </div>
@@ -1027,7 +1003,7 @@ const BackupStatus: React.FC<{
 export const DashboardUI: React.FC<DashboardUIProps> = ({
   onNavigate, totalCount, newCount, rawCount, reviewStats,
   lastBackupTime, onBackup, onRestore,
-  serverStatus, onAction, onStartNewLearn, onStartDueReview, onStartStatusReview, onStartKotobaNewLearn, onStartKotobaDueReview, onStartKotobaStatusReview, dayProgress, kotobaDayProgress, dailyGoals, dailyStreaks, dailyGoalHistory, onNavigateToWordList, onNavigateToKotobaList, goalStats,
+  serverStatus, onAction, onStartNewLearn, onStartDueReview, onStartKotobaNewLearn, onStartKotobaDueReview, dayProgress, kotobaDayProgress, dailyGoals, dailyStreaks, dailyGoalHistory, onNavigateToWordList, onNavigateToKotobaList, goalStats,
   studyStats, isStatsLoading,
   vocabLibraryStats, kotobaLibraryStats,
   onViewWord,
@@ -1475,7 +1451,6 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                 dayProgress={dayProgress}
                 onStartNew={onStartNewLearn} 
                 onStartDue={onStartDueReview} 
-                onStartStatusReview={onStartStatusReview}
                 onFilterStatus={(filter) => onNavigateToWordList(filter)}
               />
               <StudyNowPanel stats={studyStats} isLoading={isStatsLoading} onAction={(action) => onAction(action)} />
@@ -1518,7 +1493,6 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
                 dayProgress={kotobaDayProgress}
                 onStartNew={onStartKotobaNewLearn}
                 onStartDue={onStartKotobaDueReview}
-                onStartStatusReview={onStartKotobaStatusReview}
                 onFilterStatus={(filter) => onNavigateToKotobaList(filter)}
               />
               {(() => {

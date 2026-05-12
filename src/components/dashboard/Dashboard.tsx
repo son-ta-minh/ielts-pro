@@ -38,11 +38,9 @@ interface Props {
   onNavigateToWordList: (filter: string) => void;
   onStartDueReview: (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => void;
   onStartNewLearn: () => void;
-  onStartStatusReview: (status: 'hard' | 'forgot') => void;
   onNavigateToKotobaList: (filter: string) => void;
   onStartKotobaDueReview: (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => void;
   onStartKotobaNewLearn: () => void;
-  onStartKotobaStatusReview: (status: 'hard' | 'forgot') => void;
   isWotdComposed?: boolean;
   onComposeWotd?: (word: StudyItem) => void;
   onRandomizeWotd?: () => void;
@@ -87,27 +85,26 @@ const ReviewDueConfigModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-5xl rounded-[2rem] border border-neutral-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="bg-white w-full sm:w-[90vw] md:w-[70vw] lg:w-[45vw] xl:w-[33vw] max-w-[600px] rounded-[2rem] border border-neutral-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
         <div className="px-6 py-5 border-b border-neutral-100 flex items-start justify-between gap-4">
           <div>
             <h3 className="text-xl font-black text-neutral-900">Configure Due Review</h3>
-            <p className="text-sm text-neutral-500 mt-1">{libraryType === 'kotoba' ? 'Choose your kotoba review scope before starting.' : 'Choose your review scope before starting.'}</p>
           </div>
           <button onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors">
             <X size={20} />
           </button>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[340px,1fr] gap-0 min-h-0 flex-1">
-          <div className="p-6 border-b xl:border-b-0 xl:border-r border-neutral-100 overflow-y-auto space-y-5">
-            <div>
-              <div className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500 mb-2">Words</div>
+        <div className="flex flex-col gap-6 min-h-0 flex-1">
+          <div className="p-5 border-b border-neutral-100 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-black text-neutral-600">Words</div>
               <div className="flex gap-2">
                 {[10, 20, 30].map((count) => (
                   <button
                     key={count}
                     onClick={() => onScopeChange({ ...scope, wordCount: count as 10 | 20 | 30 })}
-                    className={`flex-1 px-3 py-2 rounded-xl text-xs font-black border transition-all ${scope.wordCount === count ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}
+                    className={`w-16 h-9 flex items-center justify-center rounded-xl text-xs font-black border transition-all ${scope.wordCount === count ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}
                   >
                     {count}
                   </button>
@@ -115,9 +112,9 @@ const ReviewDueConfigModal: React.FC<{
               </div>
             </div>
 
-            <div>
-              <div className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500 mb-2">Status</div>
-              <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-xs font-black text-neutral-600 pt-2">Status</div>
+              <div className="flex gap-2 flex-nowrap overflow-x-auto flex-1">
                 {STATUS_OPTIONS.map((status) => {
                   const active = scope.statuses.includes(status);
                   return (
@@ -125,9 +122,21 @@ const ReviewDueConfigModal: React.FC<{
                       key={status}
                       onClick={() => onScopeChange({
                         ...scope,
-                        statuses: active ? scope.statuses.filter((item) => item !== status) : [...scope.statuses, status]
+                        statuses: active
+                          ? scope.statuses.filter((item) => item !== status)
+                          : [...scope.statuses, status]
                       })}
-                      className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${active ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'}`}
+                      className={`w-20 h-8 flex-shrink-0 flex items-center justify-center gap-1 rounded-lg text-xs font-black border transition-all ${
+                        active
+                          ? status === 'LEARNED'
+                            ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                            : status === 'EASY'
+                            ? 'bg-green-50 text-green-700 border-green-200'
+                            : status === 'HARD'
+                            ? 'bg-orange-50 text-orange-700 border-orange-200'
+                            : 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'
+                      }`}
                     >
                       {status}
                     </button>
@@ -136,45 +145,40 @@ const ReviewDueConfigModal: React.FC<{
               </div>
             </div>
 
-            <div>
-              <div className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500 mb-2">Group</div>
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-black text-neutral-600">Group</div>
+
+              <div className="flex-1">
                 <input
                   value={groupQuery}
-                  onChange={(event) => onGroupQueryChange(event.target.value)}
-                  placeholder="Search group..."
-                  className="w-full pl-9 pr-3 py-3 bg-white border border-neutral-200 rounded-2xl text-sm focus:ring-1 focus:ring-neutral-900 outline-none"
-                />
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  onClick={() => {
-                    onGroupQueryChange('');
-                    onScopeChange({ ...scope, group: null });
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    onGroupQueryChange(value);
+
+                    const matchedGroup =
+                      allGroups.find(
+                        (g) => g.toLowerCase() === value.trim().toLowerCase()
+                      ) || null;
+
+                    onScopeChange({ ...scope, group: matchedGroup });
                   }}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${scope.group === null ? 'bg-neutral-900 text-white border-neutral-900' : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'}`}
-                >
-                  All groups
-                </button>
-                {filteredGroups.map((group) => (
-                  <button
-                    key={group}
-                    onClick={() => {
-                      onGroupQueryChange(group);
-                      onScopeChange({ ...scope, group });
-                    }}
-                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${scope.group === group ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'}`}
-                  >
-                    {group}
-                  </button>
-                ))}
+                  list="group-list"
+                  placeholder="All groups"
+                  className="w-full px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-bold text-neutral-700 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+
+                <datalist id="group-list">
+                  {allGroups.map((group) => (
+                    <option key={group} value={group} />
+                  ))}
+                </datalist>
               </div>
             </div>
 
-            <div>
-              <div className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500 mb-2">Type</div>
-              <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-xs font-black text-neutral-600 pt-2">Type</div>
+
+              <div className="grid grid-cols-3 gap-2 flex-1">
                 {TYPE_OPTIONS.map((type) => {
                   const active = scope.types.includes(type);
                   return (
@@ -184,21 +188,20 @@ const ReviewDueConfigModal: React.FC<{
                         ...scope,
                         types: active ? scope.types.filter((item) => item !== type) : [...scope.types, type]
                       })}
-                      className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'}`}
+                      className={`w-full h-8 flex items-center justify-center rounded-lg text-xs font-black border transition-all ${active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'}`}
                     >
                       {type}
                     </button>
                   );
                 })}
+                <button
+                  onClick={() => onScopeChange({ ...scope, focusOnly: !scope.focusOnly })}
+                  className={`w-full h-8 flex items-center justify-center rounded-lg text-xs font-black border transition-all ${scope.focusOnly ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}
+                >
+                  FOCUS
+                </button>
               </div>
             </div>
-
-            <button
-              onClick={() => onScopeChange({ ...scope, focusOnly: !scope.focusOnly })}
-              className={`w-full px-4 py-3 rounded-2xl text-sm font-black border transition-all ${scope.focusOnly ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}
-            >
-              Focus only: {scope.focusOnly ? 'ON' : 'OFF'}
-            </button>
           </div>
 
           <div className="p-6 overflow-y-auto">
@@ -216,31 +219,29 @@ const ReviewDueConfigModal: React.FC<{
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
               {previewWords.length === 0 ? (
-                <div className="p-6 rounded-3xl border border-dashed border-neutral-200 text-sm text-neutral-500 bg-neutral-50">
+                <div className="p-4 rounded-2xl border border-dashed border-neutral-200 text-sm text-neutral-500 bg-neutral-50">
                   No due words match the current scope.
                 </div>
-              ) : previewWords.map((word) => (
-                <div key={word.id} className="flex items-start gap-3 p-4 rounded-3xl border border-neutral-200 bg-white">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-black text-neutral-900 break-words">{word.display || word.word}</div>
-                    <div className="text-xs text-neutral-500 mt-1 break-words">{word.meaningVi}</div>
-                    <div className="flex flex-wrap gap-2 mt-2 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
-                      <span className="px-2 py-1 rounded-full bg-neutral-100">{word.learnedStatus}</span>
-                      {!!word.groups?.length && <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700">{word.groups[0]}</span>}
-                      {!!word.isFocus && <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700">Focus</span>}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => onRemoveWord(word.id)}
-                    className="p-2 rounded-xl text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                    title="Skip for today"
+              ) : (
+                previewWords.map((word) => (
+                  <div
+                    key={word.id}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-neutral-200 bg-white text-xs font-black text-neutral-800"
                   >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
+                    <span className="max-w-[140px] truncate">
+                      {word.display || word.word}
+                    </span>
+                    <button
+                      onClick={() => onRemoveWord(word.id)}
+                      className="text-neutral-400 hover:text-red-500"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -537,11 +538,9 @@ const Dashboard: React.FC<Props> = ({
     onNavigateToWordList: restProps.onNavigateToWordList,
     onStartDueReview: () => openDueReviewConfig('vocab'),
     onStartNewLearn: restProps.onStartNewLearn,
-    onStartStatusReview: restProps.onStartStatusReview,
     onNavigateToKotobaList: restProps.onNavigateToKotobaList,
     onStartKotobaDueReview: () => openDueReviewConfig('kotoba'),
     onStartKotobaNewLearn: restProps.onStartKotobaNewLearn,
-    onStartKotobaStatusReview: restProps.onStartKotobaStatusReview,
     vocabLibraryStats: libraryStats.vocab,
     kotobaLibraryStats: libraryStats.kotoba,
     lastBackupTime: restProps.lastBackupTime,

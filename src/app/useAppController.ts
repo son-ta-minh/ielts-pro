@@ -958,42 +958,6 @@ export const useAppController = () => {
         startSession(dueWords, 'due'); 
     }, [currentUser, getLibraryWords, startSession, showToast]);
 
-    const startStatusReviewSessionFor = useCallback(async (status: 'hard' | 'forgot', libraryType: StudyLibraryType) => {
-        console.log(`[Session] Starting ${status} review session...`);
-        if (!currentUser) return;
-
-        const allWords = getLibraryWords(libraryType);
-
-        const filteredWords = allWords
-            .filter(w => {
-                if (w.isPassive) return false;
-
-                if (status === 'hard') {
-                    return w.learnedStatus === 'HARD';
-                }
-
-                if (status === 'forgot') {
-                    return w.learnedStatus === 'FORGOT';
-                }
-
-                return false;
-            })
-            .sort((a, b) => a.createdAt - b.createdAt)
-            .slice(0, 30);
-
-        if (filteredWords.length === 0) {
-            showToast(
-                status === 'hard'
-                    ? (libraryType === 'kotoba' ? "No hard kotoba to review!" : "No hard words to review!")
-                    : (libraryType === 'kotoba' ? "No forgotten kotoba to review!" : "No forgotten words to review!"),
-                "success"
-            );
-            return;
-        }
-
-        startSession(filteredWords, status);
-    }, [currentUser, getLibraryWords, startSession, showToast]);
-
     const startNewLearnSessionFor = useCallback(async (libraryType: StudyLibraryType) => { 
         if (!currentUser) return; 
         const allWords = getLibraryWords(libraryType);
@@ -1011,8 +975,6 @@ export const useAppController = () => {
 
     const startDueReviewSession = useCallback(async (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => { await startDueReviewSessionFor('vocab', scope, preselectedWords); }, [startDueReviewSessionFor]);
     const startKotobaDueReviewSession = useCallback(async (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => { await startDueReviewSessionFor('kotoba', scope, preselectedWords); }, [startDueReviewSessionFor]);
-    const startStatusReviewSession = useCallback(async (status: 'hard' | 'forgot') => { await startStatusReviewSessionFor(status, 'vocab'); }, [startStatusReviewSessionFor]);
-    const startKotobaStatusReviewSession = useCallback(async (status: 'hard' | 'forgot') => { await startStatusReviewSessionFor(status, 'kotoba'); }, [startStatusReviewSessionFor]);
     const startNewLearnSession = useCallback(async () => { await startNewLearnSessionFor('vocab'); }, [startNewLearnSessionFor]);
     const startKotobaNewLearnSession = useCallback(async () => { await startNewLearnSessionFor('kotoba'); }, [startNewLearnSessionFor]);
 
@@ -1097,7 +1059,7 @@ export const useAppController = () => {
         updateWord: updateWordAndNotify, deleteWord, bulkDeleteWords, bulkUpdateWords: bulkUpdateWordsAndNotify,
         handleNavigateToList, openAddWordLibrary, clearSessionState, handleRetrySession,
         gainExperienceAndLevelUp, recalculateXpAndLevelUp, xpGained, xpToNextLevel,
-        startDueReviewSession, startNewLearnSession, startStatusReviewSession, startKotobaDueReviewSession, startKotobaNewLearnSession, startKotobaStatusReviewSession, lastMasteryScoreUpdateTimestamp,
+        startDueReviewSession, startNewLearnSession, startKotobaDueReviewSession, startKotobaNewLearnSession, lastMasteryScoreUpdateTimestamp,
         writingContextWord, handleComposeWithWord, consumeWritingContext,
         targetLessonId, setTargetLessonId, consumeTargetLessonId, 
         targetLessonTag, consumeTargetLessonTag, 
