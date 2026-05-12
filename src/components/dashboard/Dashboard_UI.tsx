@@ -294,105 +294,109 @@ const VocabularyCenterPanel: React.FC<{
 
     return (
         <div className="bg-white p-5 rounded-3xl border border-neutral-200 shadow-sm flex flex-col gap-4">
-             <div className="flex items-start justify-between gap-3">
-                 <div className="flex items-center gap-3">
-                     <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 shadow-md">
-                         <BookCopy size={18} />
-                     </div>
-                     <div>
-                         <h3 className="text-base font-black text-neutral-900 tracking-tight">{title}</h3>
-                         <p className="text-[10px] font-medium text-neutral-400">{subtitle}</p>
-                     </div>
-                 </div>
-                 <AutoRefineDashboardControl libraryType={libraryType} rawCount={rawCount} />
-             </div>
-
-             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                {/* Chart Section - 2 Columns */}
-                <div className="lg:col-span-2 flex flex-col justify-center gap-4 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-black text-neutral-500 uppercase tracking-wider">Distribution</span>
-                        <span className="text-xs font-bold text-neutral-400">{totalCount} Total Words</span>
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 shadow-md">
+                        <BookCopy size={18} />
                     </div>
-                    
-                    <div className="h-4 bg-white rounded-full flex overflow-hidden border border-neutral-200 shadow-inner">
-                        <div className="h-full bg-purple-500" style={{ width: `${masteredPercent}%` }} />
-                        <div className="h-full bg-cyan-500" style={{ width: `${studyingPercent}%` }} />
-                        <div className="h-full bg-neutral-300" style={{ width: `${newPercent}%` }} />
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-purple-500" />
-                            <span className="text-[10px] font-bold text-neutral-600">Mastered ({masteredCount})</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-cyan-500" />
-                            <span className="text-[10px] font-bold text-neutral-600">Learning ({studyingCount})</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-neutral-300" />
-                            <span className="text-[10px] font-bold text-neutral-600">New ({newCount})</span>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mt-3">
-                        <button
-                            onClick={() => onFilterStatus('easy')}
-                            className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 hover:bg-emerald-100 transition-all"
-                        >
-                            Easy Words ({easyCount})
-                        </button>
-                        <button
-                            onClick={() => onFilterStatus('hard')}
-                            className="px-3 py-2 rounded-xl bg-orange-50 text-orange-700 text-[10px] font-bold border border-orange-200 hover:bg-orange-100 transition-all"
-                        >
-                            Hard Words ({hardCount})
-                        </button>
-                        <button
-                            onClick={() => onFilterStatus('forgot')}
-                            className="px-3 py-2 rounded-xl bg-red-50 text-red-700 text-[10px] font-bold border border-red-200 hover:bg-red-100 transition-all"
-                        >
-                            Forgotten ({forgottenCount})
-                        </button>
-                        <button
-                            onClick={() => onFilterStatus('focus')}
-                            className="px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-200 hover:bg-indigo-100 transition-all"
-                        >
-                            Focused ({focusedCount})
-                        </button>
+                    <div>
+                        <h3 className="text-base font-black text-neutral-900 tracking-tight">{title}</h3>
+                        <p className="text-[10px] font-medium text-neutral-400">{subtitle}</p>
                     </div>
                 </div>
+                <AutoRefineDashboardControl libraryType={libraryType} rawCount={rawCount} />
+            </div>
 
-                {/* Actions - 2 Columns (3x2 Grid) */}
-                <div className="lg:col-span-2 grid grid-cols-2 gap-3">
-                    {/* Row 1 */}
-                    <NavButton 
-                        label="Learn New" 
-                        subLabel={`${newCount} words ready`} 
-                        rightLabel={`${dayProgress.learned}`}
-                        icon={Sparkles} 
-                        color="text-indigo-600" 
-                        bg="bg-indigo-50"
-                        onClick={onStartNew} 
-                        disabled={newCount === 0} 
-                    />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Chart + Actions combined */}
+                <div className="lg:col-span-3 flex flex-col lg:flex-row gap-4">
 
-                    <NavButton 
-                        label="Review Due" 
-                        subLabel={`${dueCount} words due`} 
-                        rightLabel={
-                            <div className="text-red-600">
-                                {dayProgress.reviewed}
+                    {/* Left actions column */}
+                    <div className="flex lg:flex-col gap-2 lg:w-56">
+                        <NavButton 
+                            label="Learn New" 
+                            subLabel={`${newCount} words ready`} 
+                            rightLabel={`${dayProgress.learned}`}
+                            icon={Sparkles} 
+                            color="text-indigo-600" 
+                            bg="bg-indigo-50"
+                            onClick={onStartNew} 
+                            disabled={newCount === 0} 
+                        />
+
+                        <NavButton 
+                            label="Review Due" 
+                            subLabel={`${dueCount} words due`} 
+                            rightLabel={
+                                <div className="text-red-600">
+                                    {dayProgress.reviewed}
+                                </div>
+                            }
+                            icon={RotateCw} 
+                            color="text-amber-600" 
+                            bg="bg-amber-50" 
+                            onClick={onStartDue} 
+                            disabled={dueCount === 0} 
+                        />
+                    </div>
+
+                    {/* Chart section */}
+                    <div className="flex-1 flex flex-col justify-center gap-4 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-black text-neutral-500 uppercase tracking-wider">Distribution</span>
+                            <span className="text-xs font-bold text-neutral-400">{totalCount} Total Words</span>
+                        </div>
+                        
+                        <div className="h-4 bg-white rounded-full flex overflow-hidden border border-neutral-200 shadow-inner">
+                            <div className="h-full bg-purple-500" style={{ width: `${masteredPercent}%` }} />
+                            <div className="h-full bg-cyan-500" style={{ width: `${studyingPercent}%` }} />
+                            <div className="h-full bg-neutral-300" style={{ width: `${newPercent}%` }} />
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-purple-500" />
+                                <span className="text-[10px] font-bold text-neutral-600">Mastered ({masteredCount})</span>
                             </div>
-                        }
-                        icon={RotateCw} 
-                        color="text-amber-600" 
-                        bg="bg-amber-50" 
-                        onClick={onStartDue} 
-                        disabled={dueCount === 0} 
-                    />
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-cyan-500" />
+                                <span className="text-[10px] font-bold text-neutral-600">Learning ({studyingCount})</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-neutral-300" />
+                                <span className="text-[10px] font-bold text-neutral-600">New ({newCount})</span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mt-3">
+                            <button
+                                onClick={() => onFilterStatus('easy')}
+                                className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 hover:bg-emerald-100 transition-all"
+                            >
+                                Easy Words ({easyCount})
+                            </button>
+                            <button
+                                onClick={() => onFilterStatus('hard')}
+                                className="px-3 py-2 rounded-xl bg-orange-50 text-orange-700 text-[10px] font-bold border border-orange-200 hover:bg-orange-100 transition-all"
+                            >
+                                Hard Words ({hardCount})
+                            </button>
+                            <button
+                                onClick={() => onFilterStatus('forgot')}
+                                className="px-3 py-2 rounded-xl bg-red-50 text-red-700 text-[10px] font-bold border border-red-200 hover:bg-red-100 transition-all"
+                            >
+                                Forgotten ({forgottenCount})
+                            </button>
+                            <button
+                                onClick={() => onFilterStatus('focus')}
+                                className="px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-200 hover:bg-indigo-100 transition-all"
+                            >
+                                Focused ({focusedCount})
+                            </button>
+                        </div>
+                    </div>
                 </div>
-             </div>
+            </div>
         </div>
     );
 };
