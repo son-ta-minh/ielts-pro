@@ -341,12 +341,7 @@ const VocabularyCenterPanel: React.FC<{
                     </div>
 
                     {/* Chart section */}
-                    <div className="flex-1 flex flex-col justify-center gap-4 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-black text-neutral-500 uppercase tracking-wider">Distribution</span>
-                            <span className="text-xs font-bold text-neutral-400">{totalCount} Total Words</span>
-                        </div>
-                        
+                    <div className="flex-1 flex flex-col justify-center gap-2 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">                        
                         <div className="h-4 bg-white rounded-full flex overflow-hidden border border-neutral-200 shadow-inner">
                             <div className="h-full bg-purple-500" style={{ width: `${masteredPercent}%` }} />
                             <div className="h-full bg-cyan-500" style={{ width: `${studyingPercent}%` }} />
@@ -354,6 +349,11 @@ const VocabularyCenterPanel: React.FC<{
                         </div>
 
                         <div className="flex items-center justify-between gap-2 mt-1">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-neutral-500" />
+                                <span className="text-[10px] font-bold text-neutral-600">Total Words ({totalCount})</span>
+                            </div>
+
                             <div className="flex items-center gap-1.5">
                                 <div className="w-2 h-2 rounded-full bg-purple-500" />
                                 <span className="text-[10px] font-bold text-neutral-600">Mastered ({masteredCount})</span>
