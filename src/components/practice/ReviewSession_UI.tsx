@@ -1,7 +1,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Volume2, Check, X, HelpCircle, Trophy, BookOpen, Lightbulb, RotateCw, CheckCircle2, Eye, BrainCircuit, ArrowLeft, ArrowRight, BookCopy, Loader2, MinusCircle, Flag, Zap, Mic, AtSign, Combine, MessageSquare, Keyboard, Sparkles, Pen, LogOut } from 'lucide-react';
-import { StudyItem, ReviewGrade, SessionType, User, StudyItemQuality, LearnedStatus } from '../../app/types';
+import { StudyItem, ReviewGrade, SessionType, User, StudyItemQuality, LearnedStatus, ReviewMode } from '../../app/types';
 import { speak } from '../../utils/audio';
 import EditStudyItemModal from '../study_lib/EditStudyItemModal';
 import ViewStudyItemModal from '../study_lib/ViewStudyItemModal';
@@ -335,6 +335,7 @@ export interface ReviewSessionUIProps {
   initialWords: StudyItem[];
   sessionWords: StudyItem[];
   sessionType: SessionType;
+  sessionFocus: ReviewMode;
   newWordIds: Set<string>;
   progress: { current: number; max: number };
   setProgress: React.Dispatch<React.SetStateAction<{ current: number; max: number }>>;
@@ -488,9 +489,64 @@ const ComplexityIndicator: React.FC<{ complexity: number }> = ({ complexity }) =
     );
 };
 
+const RecallQuizModal: React.FC<{
+    isOpen: boolean;
+    hints: string[];
+    isLoading: boolean;
+    error: string | null;
+    onClose: () => void;
+    onGenerate: () => void;
+}> = ({ isOpen, hints, isLoading, error, onClose, onGenerate }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[260] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-2xl rounded-[2rem] border border-neutral-200 shadow-2xl overflow-hidden">
+                <div className="px-6 py-5 border-b border-neutral-100 flex items-center justify-between gap-4">
+                    <div>
+                        <h3 className="text-xl font-black text-neutral-900">Recall Quiz</h3>
+                        <p className="text-sm text-neutral-500 mt-1">Use the hints to guess the target word, then rate yourself.</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors">
+                        <X size={20} />
+                    </button>
+                </div>
+                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                    {isLoading ? (
+                        <div className="space-y-3">
+                            <div className="h-4 w-2/3 rounded-full bg-neutral-100 animate-pulse" />
+                            <div className="h-4 w-full rounded-full bg-neutral-100 animate-pulse" />
+                            <div className="h-4 w-5/6 rounded-full bg-neutral-100 animate-pulse" />
+                        </div>
+                    ) : error ? (
+                        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>
+                    ) : hints.length > 0 ? (
+                        <ul className="space-y-3">
+                            {hints.map((hint, index) => (
+                                <li key={`${index}-${hint}`} className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold leading-relaxed text-neutral-800">
+                                    {hint}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <div className="rounded-2xl border border-dashed border-neutral-200 px-4 py-6 text-sm text-neutral-500">No hints yet. Generate quiz hints to start.</div>
+                    )}
+                </div>
+                <div className="px-6 py-5 border-t border-neutral-100 flex items-center justify-between gap-3">
+                    <button onClick={onClose} className="px-4 py-2.5 rounded-xl bg-neutral-100 text-neutral-600 text-sm font-bold hover:bg-neutral-200 transition-colors">Close</button>
+                    <button onClick={onGenerate} disabled={isLoading} className="px-4 py-2.5 rounded-xl bg-neutral-900 text-white text-sm font-black hover:bg-neutral-800 transition-colors disabled:opacity-50">
+                        {isLoading ? 'Generating...' : 'Refresh Hints'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const {
         user, initialWords, sessionWords, sessionType, newWordIds, progress, setProgress,
+        sessionFocus,
         sessionOutcomes, sessionFinished, wordInModal, setWordInModal, onOpenWordDetails, editingWordInModal, setEditingWordInModal,
         isTesting, setIsTesting, currentWord: currentWordProp, isNewWord, onUpdate, onComplete,
         nextItem, handleReview, handleTestComplete, handleRetry, handleEndSession,
@@ -529,6 +585,10 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [studyBuddySentenceInput, setStudyBuddySentenceInput] = useState('');
     const [studyBuddySentenceFeedback, setStudyBuddySentenceFeedback] = useState<string | null>(null);
     const [isStudyBuddySentenceChecking, setIsStudyBuddySentenceChecking] = useState(false);
+    const [isRecallQuizModalOpen, setIsRecallQuizModalOpen] = useState(false);
+    const [recallQuizHints, setRecallQuizHints] = useState<string[]>([]);
+    const [isRecallQuizLoading, setIsRecallQuizLoading] = useState(false);
+    const [recallQuizError, setRecallQuizError] = useState<string | null>(null);
     const studyBuddyQuizInputRef = useRef<HTMLInputElement | null>(null);
     const sentenceRecognitionManagerRef = useRef<SpeechRecognitionManager | null>(null);
     const sentenceTranscriptBufferRef = useRef<string>('');
@@ -559,6 +619,9 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
             return validBaseTypes.has(baseType);
         });
     }, [currentWord]);
+    const isRecallMeaningMode = sessionFocus === ReviewMode.MEANING;
+    const isRecallQuizMode = sessionFocus === ReviewMode.QUIZ;
+    const isRecallPhoneticMode = sessionFocus === ReviewMode.PHONETIC || sessionFocus === ReviewMode.STANDARD;
     const desktopReviewItems = useMemo(() => (
         sessionWords.map((word, index) => ({
             id: word.id,
@@ -600,6 +663,11 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         : cachedDisplayIpa || (isDisplayDifferentFromHeadword ? reviewHeadword : (currentWord.ipaUs || reviewHeadword));
     }
     const vietnameseMeaning = cachedDisplayMeaning || matchedDisplayCollocation?.d?.trim() || fallbackMeaning;
+    const reviewHeadlineText = isRecallQuizMode
+        ? 'Recall Challenge'
+        : isRecallMeaningMode
+        ? vietnameseMeaning
+        : displayText;
     const existingExampleSet = useMemo(() => {
         const set = new Set<string>();
         splitExampleLines(currentWord.example || '').forEach((line) => {
@@ -632,6 +700,102 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         });
         return result;
     }, [existingExampleSet]);
+
+    const requestRecallQuizHints = useCallback(async (word: StudyItem): Promise<string[]> => {
+        const isJapaneseWord = isJapaneseStudyItem(word);
+        const response = await fetch(studyBuddyAiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    {
+                        role: 'system',
+                        content: isJapaneseWord
+                            ? 'You are an expert Japanese vocabulary coach. Reply with only bullet-list hints. No answer reveal. No markdown fences.'
+                            : 'You are an expert IELTS vocabulary coach. Reply with only bullet-list hints. No answer reveal. No markdown fences.'
+                    },
+                    {
+                        role: 'user',
+                        content: isJapaneseWord
+                            ? `Create exactly 5 clue bullets so the learner can guess the target Japanese word without revealing it.
+
+Target word: "${word.word}"
+Meaning: "${word.meaningVi || ''}"
+Notes: "${word.note || ''}"
+
+Rules:
+- Do not say or spell the target word.
+- Use short bullet lines starting with "- ".
+- Mix meaning, scenario, register, structure, and memory clues.
+- One bullet should mention syllable or mora count when possible.
+- One bullet should mention a realistic usage situation.
+- Keep each bullet concise.`
+                            : `Create exactly 5 clue bullets so the learner can guess the target English word without revealing it.
+
+Target word: "${word.word}"
+Meaning: "${word.meaningVi || ''}"
+Notes: "${word.note || ''}"
+Example: "${word.example || ''}"
+
+Rules:
+- Do not say, spell, or directly reveal the target word.
+- Use short bullet lines starting with "- ".
+- Mix meaning, scenario, register, structure, and memory clues.
+- One bullet should mention syllable count when possible.
+- One bullet should mention a realistic usage situation.
+- Keep each bullet concise.`
+                    }
+                ],
+                searchEnabled: false,
+                temperature: 0.6,
+                top_p: 0.9,
+                repetition_penalty: 1.06,
+                stream: false
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Recall quiz hint request failed (${response.status})`);
+        }
+
+        const payload = await response.json().catch(() => null);
+        const text = String(payload?.choices?.[0]?.message?.content || '').replace(/\r/g, '').trim();
+        return text
+            .split('\n')
+            .map((line) => line.replace(/^\s*[-*•]\s*/, '').trim())
+            .filter(Boolean)
+            .slice(0, 5);
+    }, [studyBuddyAiUrl]);
+
+    const handleOpenRecallQuiz = useCallback(async () => {
+        setIsRecallQuizModalOpen(true);
+        if (recallQuizHints.length > 0 || isRecallQuizLoading) return;
+        setIsRecallQuizLoading(true);
+        setRecallQuizError(null);
+        try {
+            const hints = await requestRecallQuizHints(currentWord);
+            setRecallQuizHints(hints);
+        } catch (error: any) {
+            setRecallQuizError(error?.message || 'Failed to generate recall hints.');
+        } finally {
+            setIsRecallQuizLoading(false);
+        }
+    }, [currentWord, isRecallQuizLoading, recallQuizHints.length, requestRecallQuizHints]);
+
+    const handleRefreshRecallQuiz = useCallback(async () => {
+        setIsRecallQuizLoading(true);
+        setRecallQuizError(null);
+        try {
+            const hints = await requestRecallQuizHints(currentWord);
+            setRecallQuizHints(hints);
+        } catch (error: any) {
+            setRecallQuizError(error?.message || 'Failed to generate recall hints.');
+        } finally {
+            setIsRecallQuizLoading(false);
+        }
+    }, [currentWord, requestRecallQuizHints]);
 
     const extractFreshQuizQuestions = useCallback((rawText: string): { items: StudyBuddyQuizItem[]; retryMessage: string | null } => {
         const seenQuestions = studyBuddyQuizSeenRef.current;
@@ -1649,6 +1813,10 @@ Reply with exactly one very short sentence or phrase in English.`
         setStudyBuddySentenceInput('');
         setStudyBuddySentenceFeedback(null);
         setIsStudyBuddySentenceChecking(false);
+        setIsRecallQuizModalOpen(false);
+        setRecallQuizHints([]);
+        setRecallQuizError(null);
+        setIsRecallQuizLoading(false);
         setIsSentenceRecording(false);
         sentenceRecognitionManagerRef.current?.stop();
 
@@ -1766,18 +1934,20 @@ Reply with exactly one very short sentence or phrase in English.`
                         ) : (<>
                             <div className="flex-1 flex flex-col items-center justify-start pt-36 sm:pt-60 w-full text-center space-y-3 sm:space-y-3">
                                 <div className="flex items-center gap-4 flex-wrap justify-center">
-                                    <h2 className={`font-black text-neutral-900 tracking-tight text-3xl sm:text-4xl break-words ${isIpa ? 'font-serif' : ''}`}>
-                                        {displayText}
+                                    <h2 className={`font-black text-neutral-900 tracking-tight text-3xl sm:text-4xl break-words ${isRecallPhoneticMode && isIpa ? 'font-serif' : ''}`}>
+                                        {reviewHeadlineText}
                                     </h2>
 
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
-                                        className="p-1.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
-                                        title="Speak"
-                                    >
-                                        <Volume2 size={14} />
-                                    </button>
+                                    {!isRecallQuizMode && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); speak(reviewHeadword); }}
+                                            className="p-1.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                                            title="Speak"
+                                        >
+                                            <Volume2 size={14} />
+                                        </button>
+                                    )}
 
                                     {isNewWord ? (
                                         <ComplexityIndicator complexity={currentWord.complexity ?? 0} />
@@ -1836,6 +2006,24 @@ Reply with exactly one very short sentence or phrase in English.`
                                     </div>
                                 </div>
                                 <div className="w-full max-w-lg min-h-[216px]">
+                                {isRecallQuizMode && (
+                                    <div className="w-full rounded-[1.75rem] border border-neutral-200 bg-neutral-50/80 px-5 py-5 text-center shadow-sm">
+                                        <div className="space-y-3">
+                                            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Quiz Recall Mode</div>
+                                            <p className="text-sm font-semibold leading-relaxed text-neutral-600">
+                                                Open AI hints, guess the target word, then choose Easy, Hard, or Forgot based on how well you recalled it.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleOpenRecallQuiz()}
+                                                className="inline-flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-3 text-sm font-black text-white hover:bg-neutral-800 transition-colors"
+                                            >
+                                                <Sparkles size={14} />
+                                                <span>Open Quiz Hints</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                                 {showSpellBox && (
                                     <div className="w-full rounded-[1.75rem] border border-neutral-200 bg-neutral-50/80 px-5 py-4 text-left shadow-sm">
                                         <div className="mb-3 flex items-center justify-between gap-3">
@@ -2292,6 +2480,14 @@ Reply with exactly one very short sentence or phrase in English.`
                 if (isQuickFire) onComplete(); else setIsTesting(false);
             }} onComplete={handleTestComplete} skipSetup={isQuickReviewMode} skipRecap={autoCloseOnFinish} />}
             {mimicTarget !== null && <SimpleMimicModal target={mimicTarget} onClose={() => setMimicTarget(null)} />}
+            <RecallQuizModal
+                isOpen={isRecallQuizModalOpen}
+                hints={recallQuizHints}
+                isLoading={isRecallQuizLoading}
+                error={recallQuizError}
+                onClose={() => setIsRecallQuizModalOpen(false)}
+                onGenerate={() => void handleRefreshRecallQuiz()}
+            />
         </>
     );
 };

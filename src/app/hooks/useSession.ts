@@ -16,10 +16,11 @@ export const useSession = ({ setView, setIsSidebarOpen }: UseSessionProps) => {
         try {
             const savedSession = sessionStorage.getItem('vocab_pro_active_session');
             if (savedSession) {
-                const { words, type } = JSON.parse(savedSession);
+                const { words, type, focus } = JSON.parse(savedSession);
                 if (Array.isArray(words) && words.length > 0) {
                     setSessionWords(words);
                     setSessionType(type);
+                    setSessionFocus(focus || null);
                 }
             }
         } catch (e) {
@@ -37,7 +38,7 @@ export const useSession = ({ setView, setIsSidebarOpen }: UseSessionProps) => {
             setSessionType(type);
             setSessionFocus(focus);
             
-            sessionStorage.setItem('vocab_pro_active_session', JSON.stringify({ words: shuffled, type }));
+            sessionStorage.setItem('vocab_pro_active_session', JSON.stringify({ words: shuffled, type, focus }));
             sessionStorage.removeItem('vocab_pro_session_progress');
             sessionStorage.removeItem('vocab_pro_session_outcomes');
             

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { AppView, User, StudyItem, DiscoverGame, StudyLibraryType } from './types';
+import { AppView, User, StudyItem, DiscoverGame, StudyLibraryType, ReviewMode } from './types';
 import { useToast } from '../contexts/ToastContext';
 import { useAuthAndUser } from './hooks/useAuthAndUser';
 import { useSession } from './hooks/useSession';
@@ -955,7 +955,7 @@ export const useAppController = () => {
             showToast(libraryType === 'kotoba' ? "No kotoba due for review!" : "No words due for review!", "success");
             return;
         }
-        startSession(dueWords, 'due'); 
+        startSession(dueWords, 'due', scope.recallMode || ReviewMode.PHONETIC); 
     }, [currentUser, getLibraryWords, startSession, showToast]);
 
     const startNewLearnSessionFor = useCallback(async (libraryType: StudyLibraryType, scope: DueReviewScope = DEFAULT_DUE_REVIEW_SCOPE, preselectedWords?: StudyItem[]) => { 
@@ -968,7 +968,7 @@ export const useAppController = () => {
             showToast(libraryType === 'kotoba' ? "No new kotoba to learn!" : "No new words to learn!", "success");
             return;
         }
-        startSession(newWords, 'new'); 
+        startSession(newWords, 'new', scope.recallMode || ReviewMode.PHONETIC); 
     }, [currentUser, getLibraryWords, startSession, showToast]);
 
     const startDueReviewSession = useCallback(async (scope?: DueReviewScope, preselectedWords?: StudyItem[]) => { await startDueReviewSessionFor('vocab', scope, preselectedWords); }, [startDueReviewSessionFor]);

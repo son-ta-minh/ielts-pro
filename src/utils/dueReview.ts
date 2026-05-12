@@ -1,4 +1,4 @@
-import { LearnedStatus, StudyItem, StudyLibraryType } from '../app/types';
+import { LearnedStatus, ReviewMode, StudyItem, StudyLibraryType } from '../app/types';
 
 export type DueReviewWordCount = 10 | 20 | 30;
 export type DueReviewStatusFilter = 'LEARNED' | 'EASY' | 'HARD' | 'FORGOT';
@@ -10,6 +10,7 @@ export interface DueReviewScope {
   group: string | null;
   types: DueReviewTypeFilter[];
   focusOnly: boolean;
+  recallMode: ReviewMode.PHONETIC | ReviewMode.MEANING | ReviewMode.QUIZ;
 }
 
 export type ReviewSetupMode = 'due' | 'new';
@@ -19,7 +20,8 @@ export const DEFAULT_DUE_REVIEW_SCOPE: DueReviewScope = {
   statuses: ['LEARNED', 'HARD', 'FORGOT'],
   group: null,
   types: ['VOCAB', 'IDIOM', 'PHRASAL', 'COLLOC', 'PHRASE'],
-  focusOnly: false
+  focusOnly: false,
+  recallMode: ReviewMode.PHONETIC
 };
 
 const SKIPPED_TODAY_KEY = 'skippedTodayWords';

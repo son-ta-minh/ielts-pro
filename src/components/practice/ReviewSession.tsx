@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { StudyItem, ReviewGrade, SessionType, User, LearnedStatus } from '../../app/types';
+import { StudyItem, ReviewGrade, SessionType, User, LearnedStatus, ReviewMode } from '../../app/types';
 import { updateSRS, calculateMasteryScore, isSrsIgnored } from '../../utils/srs';
 import { mergeTestResultsByGroup, normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { ReviewSessionUI } from './ReviewSession_UI';
@@ -458,8 +458,9 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         user={user}
         initialWords={initialWords}
         sessionWords={sessionWords}
-        sessionType={sessionType}
-        newWordIds={newWordIds}
+      sessionType={sessionType}
+      sessionFocus={sessionFocus || ReviewMode.PHONETIC}
+      newWordIds={newWordIds}
         progress={progress}
         setProgress={setProgress}
         sessionOutcomes={sessionOutcomes}

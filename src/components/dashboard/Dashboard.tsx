@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Search, X, Trash2 } from 'lucide-react';
-import { AppView, User, StudyItem, DailyStreakSnapshot, DailyGoalSnapshot, StudyLibraryType } from '../../app/types';
+import { AppView, User, StudyItem, DailyStreakSnapshot, DailyGoalSnapshot, StudyLibraryType, ReviewMode } from '../../app/types';
 import * as dataStore from '../../app/dataStore';
 import { isSrsIgnored } from '../../utils/srs';
 import * as db from '../../app/db';
@@ -62,6 +62,11 @@ interface Props {
 
 const STATUS_OPTIONS: DueReviewStatusFilter[] = ['LEARNED', 'EASY', 'HARD', 'FORGOT'];
 const TYPE_OPTIONS: DueReviewTypeFilter[] = ['VOCAB', 'IDIOM', 'PHRASAL', 'COLLOC', 'PHRASE'];
+const RECALL_MODE_OPTIONS: Array<{ value: ReviewMode.PHONETIC | ReviewMode.MEANING | ReviewMode.QUIZ; label: string }> = [
+  { value: ReviewMode.PHONETIC, label: 'IPA' },
+  { value: ReviewMode.MEANING, label: 'Meaning' },
+  { value: ReviewMode.QUIZ, label: 'Quiz' }
+];
 
 const ReviewDueConfigModal: React.FC<{
   isOpen: boolean;
@@ -203,6 +208,25 @@ const ReviewDueConfigModal: React.FC<{
                 >
                   FOCUS
                 </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-black text-neutral-600">Recall</div>
+              <div className="grid grid-cols-3 gap-2 flex-1">
+                {RECALL_MODE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => onScopeChange({ ...scope, recallMode: option.value })}
+                    className={`w-full h-8 flex items-center justify-center rounded-lg text-xs font-black border transition-all ${
+                      scope.recallMode === option.value
+                        ? 'bg-neutral-900 text-white border-neutral-900'
+                        : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
