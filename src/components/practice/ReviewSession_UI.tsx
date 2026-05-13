@@ -724,12 +724,22 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
             index,
             label: isRecallQuizMode && !unlockedWordIds.has(word.id)
                 ? '?'
-                : sessionOutcomes[word.id]
-                    ? ((word.display || '').trim() || word.word)
-                    : getDisplayTextForWord(word),
+                : isRecallMeaningMode
+                    ? (
+                        sessionOutcomes[word.id]
+                            ? ((word.display || '').trim() || word.word)
+                            : (
+                                word.displayMeaning?.trim()
+                                || word.meaningVi?.trim()
+                                || 'No meaning'
+                            )
+                    )
+                    : sessionOutcomes[word.id]
+                        ? ((word.display || '').trim() || word.word)
+                        : getDisplayTextForWord(word),
             outcomeLabel: getSessionOutcomeLabel(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)
         }))
-    ), [sessionWords, sessionOutcomes, newWordIds, isQuickFire, isRecallQuizMode, unlockedWordIds]);
+    ), [sessionWords, sessionOutcomes, newWordIds, isQuickFire, isRecallQuizMode, unlockedWordIds, isRecallMeaningMode]);
 
     const handleEditRequest = (word: StudyItem) => {
       setWordInModal(null);
