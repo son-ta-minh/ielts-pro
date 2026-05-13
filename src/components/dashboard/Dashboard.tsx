@@ -91,10 +91,10 @@ const ReviewDueConfigModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full sm:w-[90vw] md:w-[70vw] lg:w-[45vw] xl:w-[33vw] max-w-[600px] rounded-[2rem] border border-neutral-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="px-6 py-5 border-b border-neutral-100 flex items-start justify-between gap-4">
+      <div className="bg-white w-full sm:w-[90vw] md:w-[70vw] lg:w-[45vw] xl:w-[28vw] max-w-[600px] rounded-[2rem] border border-neutral-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="px-6 pt-5 border-b border-neutral-100 flex items-start justify-between gap-2">
           <div>
-            <h3 className="text-xl font-black text-neutral-900">{mode === 'new' ? 'Configure New Session' : 'Configure Due Review'}</h3>
+            <h3 className="text-xl font-black text-neutral-900">{mode === 'new' ? 'Configure Learn' : 'Configure Review'}</h3>
           </div>
           <button onClick={onClose} className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors">
             <X size={20} />
@@ -118,6 +118,52 @@ const ReviewDueConfigModal: React.FC<{
               </div>
             </div>
 
+            {/* Scope Due Toggle */}
+            <div className="flex items-center justify-start gap-3">
+              <div className="text-xs font-black text-neutral-600">Scope</div>
+              {mode === 'due' && (
+                <button
+                  onClick={() =>
+                    onScopeChange({
+                      ...scope,
+                      dueOnly: scope.dueOnly === false ? true : false,
+                    } as any)
+                  }
+                  className={`w-20 h-8 flex items-center justify-center rounded-lg text-[10px] font-bold border transition-all uppercase ${
+                    scope.dueOnly
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
+                  }`}
+                >
+                  Due
+                </button>
+              )}
+              <button
+                onClick={() => onScopeChange({ ...scope, focusOnly: !scope.focusOnly })}
+                title="Focus only includes words marked as focus, which can be set in the word details. This is useful for creating a custom session of just your focus words."
+                className={`w-20 h-8 flex items-center justify-center rounded-lg text-[10px] font-bold border transition-all uppercase ${
+                  scope.focusOnly
+                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
+                }`}
+              >
+                Focus
+              </button>
+              {mode === 'due' && (
+                <button
+                  onClick={() => onScopeChange({ ...scope, oldestFirst: !scope.oldestFirst } as any)}
+                  title="Review words that have been waiting the longest for review first. This is based on the oldest last review date"
+                  className={`w-20 h-8 flex items-center justify-center rounded-lg text-[10px] font-bold border transition-all uppercase ${
+                    scope.oldestFirst
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
+                  }`}
+                >
+                  Oldest
+                </button>
+              )}
+            </div>
+
             {mode === 'due' && (
               <div className="flex items-start justify-between gap-3">
                 <div className="text-xs font-black text-neutral-600 pt-2">Status</div>
@@ -133,7 +179,7 @@ const ReviewDueConfigModal: React.FC<{
                             ? scope.statuses.filter((item) => item !== status)
                             : [...scope.statuses, status]
                         })}
-                        className={`w-20 h-8 flex-shrink-0 flex items-center justify-center gap-1 rounded-lg text-xs font-black border transition-all ${
+                        className={`w-20 h-8 flex-shrink-0 flex items-center justify-center gap-1 rounded-lg text-[10px] font-bold border transition-all ${
                           active
                             ? status === 'LEARNED'
                               ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
@@ -186,7 +232,7 @@ const ReviewDueConfigModal: React.FC<{
             <div className="flex items-start justify-between gap-3">
               <div className="text-xs font-black text-neutral-600 pt-2">Type</div>
 
-              <div className="grid grid-cols-6 gap-1 flex-1">
+              <div className="grid grid-cols-5 gap-1 flex-1">
                 {TYPE_OPTIONS.map((type) => {
                   const active = scope.types.includes(type);
                   return (
@@ -202,12 +248,6 @@ const ReviewDueConfigModal: React.FC<{
                     </button>
                   );
                 })}
-                <button
-                  onClick={() => onScopeChange({ ...scope, focusOnly: !scope.focusOnly })}
-                  className={`w-full h-8 flex items-center justify-center rounded-lg text-[10px] font-black border transition-all ${scope.focusOnly ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'}`}
-                >
-                  FOCUS
-                </button>
               </div>
             </div>
 
@@ -236,9 +276,9 @@ const ReviewDueConfigModal: React.FC<{
               <button
                 onClick={onStart}
                 disabled={previewWords.length === 0}
-                className="px-5 py-3 rounded-2xl bg-indigo-600 text-white text-sm font-black hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-3 min-w-[180px] whitespace-nowrap rounded-2xl bg-indigo-600 text-white text-sm font-black hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Start Review
+                {mode === 'new' ? 'Learn' : `Start Review (${previewWords.length})`}
               </button>
             </div>
           </div>
@@ -284,7 +324,23 @@ const Dashboard: React.FC<Props> = ({
   const duePreviewWords = useMemo(
     () => dueConfigState.mode === 'new'
       ? selectNewReviewWords(allWords, dueConfigState.libraryType, userId, dueReviewScope)
-      : selectDueReviewWords(allWords, dueConfigState.libraryType, userId, dueReviewScope, skippedTodayWordIds),
+      : (
+          dueReviewScope.dueOnly === false
+            ? selectDueReviewWords(
+                allWords.filter(w => w.userId === userId && (w.libraryType || 'vocab') === dueConfigState.libraryType && !w.isPassive && w.learnedStatus !== 'IGNORED'),
+                dueConfigState.libraryType,
+                userId,
+                dueReviewScope,
+                skippedTodayWordIds,
+              )
+            : selectDueReviewWords(
+                allWords,
+                dueConfigState.libraryType,
+                userId,
+                dueReviewScope,
+                skippedTodayWordIds,
+              )
+        ),
     [allWords, dueConfigState.libraryType, dueConfigState.mode, userId, dueReviewScope, skippedTodayWordIds]
   );
 
@@ -496,7 +552,10 @@ const Dashboard: React.FC<Props> = ({
   };
 
   const openReviewConfig = (libraryType: StudyLibraryType, mode: ReviewSetupMode) => {
-    setDueReviewScope(DEFAULT_DUE_REVIEW_SCOPE);
+    setDueReviewScope({
+      ...DEFAULT_DUE_REVIEW_SCOPE,
+      dueOnly: true,
+    } as any);
     setGroupQuery('');
     setSkippedTodayWordIds(getSkippedTodayWordIds());
     setDueConfigState({ isOpen: true, libraryType, mode });

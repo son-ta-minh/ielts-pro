@@ -10,6 +10,8 @@ export interface DueReviewScope {
   group: string | null;
   types: DueReviewTypeFilter[];
   focusOnly: boolean;
+  dueOnly: boolean;
+  oldestFirst: boolean;
   recallMode: ReviewMode.PHONETIC | ReviewMode.MEANING | ReviewMode.QUIZ;
 }
 
@@ -21,6 +23,8 @@ export const DEFAULT_DUE_REVIEW_SCOPE: DueReviewScope = {
   group: null,
   types: ['VOCAB', 'IDIOM', 'PHRASAL', 'COLLOC', 'PHRASE'],
   focusOnly: false,
+  dueOnly: true,
+  oldestFirst: false,
   recallMode: ReviewMode.PHONETIC
 };
 
@@ -95,13 +99,18 @@ export const selectDueReviewWords = (
     .filter((word) => (word.libraryType || 'vocab') === libraryType)
     .filter((word) => !word.isPassive)
     .filter((word) => word.learnedStatus !== LearnedStatus.IGNORED)
-    .filter((word) => !!word.lastReview && word.nextReview <= now)
+    .filter((word) => !!word.lastReview && (scope.dueOnly ? word.nextReview <= now : true))
     .filter((word) => !skippedSet.has(word.id))
     .filter((word) => scope.statuses.length === 0 || scope.statuses.includes(word.learnedStatus as DueReviewStatusFilter))
     .filter((word) => !scope.group || !!word.groups?.some((group) => String(group || '').trim() === scope.group))
     .filter((word) => scope.types.length === 0 || scope.types.includes(getWordType(word)))
     .filter((word) => !scope.focusOnly || !!word.isFocus)
-    .sort((a, b) => a.nextReview - b.nextReview)
+    .sort((a, b) => {
+      if (scope.oldestFirst) {
+        return (a.lastReview || 0) - (b.lastReview || 0);
+      }
+      return a.nextReview - b.nextReview;
+    })
     .slice(0, scope.wordCount);
 };
 

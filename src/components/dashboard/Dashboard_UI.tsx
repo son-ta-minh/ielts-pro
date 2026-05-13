@@ -325,7 +325,7 @@ const VocabularyCenterPanel: React.FC<{
                         />
 
                         <NavButton 
-                            label="Review Due" 
+                            label="Review" 
                             subLabel={`${dueCount} words`} 
                             rightLabel={
                                 <div className="text-red-600">
@@ -336,7 +336,6 @@ const VocabularyCenterPanel: React.FC<{
                             color="text-amber-600" 
                             bg="bg-amber-50" 
                             onClick={onStartDue} 
-                            disabled={dueCount === 0} 
                         />
                     </div>
 
