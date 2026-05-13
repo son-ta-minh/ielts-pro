@@ -1876,8 +1876,18 @@ Reply with exactly one very short sentence or phrase in English.`
     const handleSentenceSpeechToText = useCallback(async () => {
         try {
             if (isSentenceRecording) {
+                const rawText = sentenceTranscriptBufferRef.current || studyBuddySentenceInput || '';
+
+                const formattedText = rawText
+                    .toLowerCase()
+                    .replace(/(^\s*\w|[.!?]\s*\w)/g, (match) => match.toUpperCase());
+
                 sentenceRecognitionManagerRef.current?.stop();
                 setIsSentenceRecording(false);
+
+                sentenceTranscriptBufferRef.current = formattedText;
+                setStudyBuddySentenceInput(formattedText);
+
                 return;
             }
 
