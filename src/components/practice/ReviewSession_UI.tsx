@@ -666,6 +666,28 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const studyBuddyQuizRetryMessageRef = useRef<string | null>(null);
     const studyBuddyAiUrl = getStudyBuddyAiUrl(getConfig());
     const normalizeComparableText = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+
+    // Shared display resolver for StudyItem
+    const getDisplayTextForWord = (word: StudyItem): string => {
+        const reviewHeadword = (word.display || '').trim() || word.word;
+
+        const cachedDisplayIpa = String(word.displayIPA || '').trim();
+
+        const isDisplayDifferentFromHeadword =
+            normalizeComparableText(reviewHeadword) !== normalizeComparableText(word.word);
+
+        let displayText = reviewHeadword;
+
+        if (word.libraryType === 'vocab') {
+            displayText = cachedDisplayIpa || (
+                isDisplayDifferentFromHeadword
+                    ? reviewHeadword
+                    : (word.ipaUs || reviewHeadword)
+            );
+        }
+
+        return displayText;
+    };
     const hasRetryableFailedTests = React.useMemo(() => {
         const history = normalizeTestResultKeys(currentWord.lastTestResults || {});
         const validKeys = getAllValidTestKeys(currentWord);
@@ -700,7 +722,11 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         sessionWords.map((word, index) => ({
             id: word.id,
             index,
-            label: isRecallQuizMode && !unlockedWordIds.has(word.id) ? '?' : ((word.display || '').trim() || word.word),
+            label: isRecallQuizMode && !unlockedWordIds.has(word.id)
+                ? '?'
+                : sessionOutcomes[word.id]
+                    ? ((word.display || '').trim() || word.word)
+                    : getDisplayTextForWord(word),
             outcomeLabel: getSessionOutcomeLabel(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)
         }))
     ), [sessionWords, sessionOutcomes, newWordIds, isQuickFire, isRecallQuizMode, unlockedWordIds]);
@@ -730,12 +756,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const fallbackMeaning = currentWord.meaningVi?.trim() || 'No Vietnamese meaning available';
     const cachedDisplayMeaning = String(currentWord.displayMeaning || '').trim();
     const cachedDisplayIpa = String(currentWord.displayIPA || '').trim();
-    let displayText = reviewHeadword;
-    if (currentWord.libraryType === 'vocab') {
-        displayText = isNewWord
-        ? reviewHeadword
-        : cachedDisplayIpa || (isDisplayDifferentFromHeadword ? reviewHeadword : (currentWord.ipaUs || reviewHeadword));
-    }
+    const displayText = getDisplayTextForWord(currentWord);
     const vietnameseMeaning = cachedDisplayMeaning || matchedDisplayCollocation?.d?.trim() || fallbackMeaning;
     const reviewHeadlineText = isRecallQuizMode
         ? (unlockedWordIds.has(currentWord.id) ? reviewHeadword : 'Hints')
