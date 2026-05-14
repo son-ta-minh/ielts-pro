@@ -1024,6 +1024,23 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                 </div>
                             ) : (
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                {word.anchor && (
+                                    <div className="md:col-span-4 flex flex-wrap gap-1">
+                                        🔗
+                                        {word.anchor
+                                            .split(/[;,]/)
+                                            .map((item) => item.trim())
+                                            .filter(Boolean)
+                                            .map((item, idx) => (
+                                                <span
+                                                    key={`${item}-${idx}`}
+                                                    className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-orange-600"
+                                                >
+                                                    {item}
+                                                </span>
+                                            ))}
+                                    </div>
+                                )}
                                 {noteHtml && (
                                     <div className="md:col-span-4">
                                         <div
