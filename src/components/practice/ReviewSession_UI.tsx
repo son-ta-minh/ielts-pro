@@ -1298,6 +1298,52 @@ ${bannedExamples.length > 0 ? `- Do not repeat or closely copy ANY of these exam
         studyBuddySentenceInput
     ]);
 
+    const handleNormalizeSentence = useCallback(async (inputText?: string) => {
+        const text = (inputText ?? '').trim();
+        if (!text) return;
+
+        setIsStudyBuddySentenceChecking(true);
+        setStudyBuddySentenceFeedback(null);
+
+        try {
+            const response = await fetch(studyBuddyAiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You are a speech-to-text correction engine.
+Only fix ASR transcription errors such as misrecognized words, spelling mistakes, and duplicate words.
+Do NOT paraphrase.
+Do NOT add missing words.
+Do NOT remove words except duplicated words or obvious ASR artifacts.
+Preserve original meaning, structure, and order.
+Return only the corrected sentence.`
+                        },
+                        {
+                            role: 'user',
+                            content: `Fix transcript:\n\n${text}`
+                        }
+                    ],
+                    searchEnabled: false,
+                    temperature: 0.2,
+                    stream: false
+                })
+            });
+
+            const payload = await response.json();
+            const corrected = String(payload?.choices?.[0]?.message?.content || '').trim();
+
+            setStudyBuddySentenceInput(corrected);
+        } catch (err) {
+            console.error(err);
+            setStudyBuddySentenceFeedback('Could not normalize sentence.');
+        } finally {
+            setIsStudyBuddySentenceChecking(false);
+        }
+    }, [studyBuddyAiUrl]);
+
     const requestStudyBuddyQuizQuestions = useCallback(async (
         word: StudyItem,
         signal?: AbortSignal,
@@ -1971,6 +2017,10 @@ Reply with exactly one very short sentence or phrase in English.`
 
                 sentenceTranscriptBufferRef.current = formattedText;
                 setStudyBuddySentenceInput(formattedText);
+
+                requestAnimationFrame(() => {
+                    handleNormalizeSentence(formattedText);
+                });
 
                 return;
             }
