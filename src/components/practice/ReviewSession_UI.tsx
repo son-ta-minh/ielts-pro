@@ -595,6 +595,22 @@ const RecallQuizModal: React.FC<{
 };
 
 export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
+    const ANCHOR_DECORATION_PRESETS = [
+        { top: '2%', left: '4%', rotate: '-14deg' },
+        { top: '6%', left: '26%', rotate: '9deg' },
+        { top: '0%', left: '48%', rotate: '-6deg' },
+        { top: '8%', left: '70%', rotate: '13deg' },
+
+        { top: '18%', left: '10%', rotate: '-18deg' },
+        { top: '20%', left: '34%', rotate: '7deg' },
+        { top: '16%', left: '56%', rotate: '-10deg' },
+        { top: '24%', left: '78%', rotate: '15deg' },
+
+        { top: '30%', left: '18%', rotate: '-8deg' },
+        { top: '28%', left: '52%', rotate: '11deg' },
+        { top: '34%', left: '74%', rotate: '-13deg' },
+        { top: '12%', left: '88%', rotate: '6deg' }
+    ];
     const {
         user, initialWords, sessionWords, sessionType, newWordIds, progress, setProgress,
         sessionFocus,
@@ -773,6 +789,37 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         : isRecallMeaningMode
         ? vietnameseMeaning
         : displayText;
+    const anchorDecorations = useMemo(() => {
+        const anchorParts = String(currentWord.anchor || '')
+            .split(/[;,]/)
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .slice(0, 5);
+
+        return anchorParts.map((anchorText, index) => {
+            const seed = Array.from(anchorText)
+                .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+
+            const preset =
+                ANCHOR_DECORATION_PRESETS[
+                    (seed + index) % ANCHOR_DECORATION_PRESETS.length
+                ];
+
+            const jitterX = ((seed % 11) - 5) * 4;
+            const jitterY = (((seed >> 3) % 9) - 4) * 3;
+            const scale = 0.9 + ((seed % 5) * 0.06);
+
+            return {
+                text: anchorText,
+                top: preset.top,
+                left: preset.left,
+                rotate: preset.rotate,
+                jitterX,
+                jitterY,
+                scale
+            };
+        });
+    }, [currentWord.anchor]);
     const recallRevealText = useMemo(() => {
         const baseHint = createMaskedAnswerHint(reviewHeadword, recallRevealLevel, '', isJapaneseCurrentWord);
 
@@ -2205,6 +2252,22 @@ Reply with exactly one very short sentence or phrase in English.`
                             </div>
                         ) : (<>
                             <div className="flex-1 flex flex-col items-center justify-start pt-36 sm:pt-60 w-full text-center space-y-3 sm:space-y-3">
+                                {anchorDecorations.map((anchorItem) => (
+                                    <div
+                                        key={`${currentWord.id}-${anchorItem.text}`}
+                                            className="pointer-events-none absolute select-none text-xs font-black uppercase tracking-[0.35em] text-neutral-400 opacity-95 drop-shadow-[0_1px_1px_rgba(255,255,255,0.7)]"                                        style={{
+                                            top: anchorItem.top,
+                                            left: anchorItem.left,
+                                            transform: `
+                                                translate(${anchorItem.jitterX}px, ${anchorItem.jitterY}px)
+                                                rotate(${anchorItem.rotate})
+                                                scale(${anchorItem.scale})
+                                            `
+                                        }}
+                                    >
+                                        {anchorItem.text}
+                                    </div>
+                                ))}
                                 <div className="flex items-center gap-4 flex-wrap justify-center">
                                     {isRecallQuizMode && !unlockedWordIds.has(currentWord.id) ? (
                                         <button
