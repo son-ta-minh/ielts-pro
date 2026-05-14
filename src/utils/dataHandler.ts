@@ -15,6 +15,7 @@ import { normalizeVocabularyKeywords } from './vocabularyKeywordUtils';
 const keyMap: { [key: string]: string } = {
     // StudyItem top-level - 'ipa' removed, 'ipaUs' uses 'i_us'
     userId: 'uid', libraryType: 'lt', word: 'w', display: 'wd', displayMeaning: 'wdm', displayIPA: 'wdi', keywords: 'kw', wordFamilyGroupId: 'wfgid', ipaUs: 'i_us', ipaUk: 'i_uk', pronSim: 'ps', ipaMistakes: 'im', meaningVi: 'm', example: 'ex', collocationsArray: 'col', idiomsList: 'idm', note: 'nt', tags: 'tg', groups: 'gr', createdAt: 'ca', updatedAt: 'ua', wordFamily: 'fam', prepositions: 'prp', paraphrases: 'prph', register: 'reg', isIdiom: 'is_id', isPhrasalVerb: 'is_pv', isCollocation: 'is_col', isStandardPhrase: 'is_phr', isIrregular: 'is_irr', isPassive: 'is_pas', isFocus: 'is_foc', quality: 'q', nextReview: 'nr', interval: 'iv', easeFactor: 'ef', consecutiveCorrect: 'cc', lastReview: 'lr', learnedStatus: 'lg', forgotCount: 'fc', lastTestResults: 'ltr', lastXpEarnedTime: 'lxp', gameEligibility: 'ge',
+    recall: 'rec',
     masteryScore: 'ms',
     complexity: 'cx',
 

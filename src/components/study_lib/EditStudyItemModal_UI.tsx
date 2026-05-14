@@ -424,12 +424,12 @@ export const EditStudyItemModalUI: React.FC<EditStudyItemModalUIProps> = (props)
                             <input type="text" value={formData.meaningVi} onChange={(e) => setFormData('meaningVi', e.target.value)} className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-base font-medium focus:ring-2 focus:ring-neutral-900 outline-none"/>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Anchor</label>
+                            <label className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Recall</label>
                             <input
                                 type="text"
-                                value={formData.anchor || ''}
-                                onChange={(e) => setFormData('anchor', e.target.value)}
-                                placeholder="Anchor word"
+                                value={formData.recall || ''}
+                                onChange={(e) => setFormData('recall', e.target.value)}
+                                placeholder="Recall words"
                                 className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-lg font-bold focus:ring-2 focus:ring-neutral-900 outline-none"
                             />
                         </div>

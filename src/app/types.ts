@@ -231,7 +231,7 @@ export interface StudyItem {
   meaningVi: string;
   example: string;
   note: string;
-  anchor: string;
+  recall: string;
   createdAt: number;
   updatedAt: number;
 

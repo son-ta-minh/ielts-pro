@@ -790,7 +790,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         ? vietnameseMeaning
         : displayText;
     const anchorDecorations = useMemo(() => {
-        const anchorParts = String(currentWord.anchor || '')
+        const anchorParts = String(currentWord.recall || '')
             .split(/[;,]/)
             .map((item) => item.trim())
             .filter(Boolean)
@@ -819,7 +819,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
                 scale
             };
         });
-    }, [currentWord.anchor]);
+    }, [currentWord.recall]);
     const recallRevealText = useMemo(() => {
         const baseHint = createMaskedAnswerHint(reviewHeadword, recallRevealLevel, '', isJapaneseCurrentWord);
 

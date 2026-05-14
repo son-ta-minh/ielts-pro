@@ -1024,10 +1024,10 @@ export const ViewStudyItemModalUI: React.FC<ViewStudyItemModalUIProps> = ({
                                 </div>
                             ) : (
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                {word.anchor && (
+                                {word.recall && (
                                     <div className="md:col-span-4 flex flex-wrap gap-1">
                                         🔗
-                                        {word.anchor
+                                        {word.recall
                                             .split(/[;,]/)
                                             .map((item) => item.trim())
                                             .filter(Boolean)
