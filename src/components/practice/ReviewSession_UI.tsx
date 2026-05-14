@@ -663,6 +663,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [recallRevealedWords, setRecallRevealedWords] = useState<string[]>([]);
     const [solvedRecallWordIds, setSolvedRecallWordIds] = useState<Set<string>>(new Set());
     const [isMobileWordListOpen, setIsMobileWordListOpen] = useState(false);
+    const [isAnchorVisible, setIsAnchorVisible] = useState(false);
     const studyBuddyQuizInputRef = useRef<HTMLInputElement | null>(null);
     const sentenceRecognitionManagerRef = useRef<SpeechRecognitionManager | null>(null);
     const sentenceTranscriptBufferRef = useRef<string>('');
@@ -820,6 +821,11 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
             };
         });
     }, [currentWord.recall]);
+
+    useEffect(() => {
+        setIsAnchorVisible(false);
+    }, [currentWord.id]);
+
     const recallRevealText = useMemo(() => {
         const baseHint = createMaskedAnswerHint(reviewHeadword, recallRevealLevel, '', isJapaneseCurrentWord);
 
@@ -2252,7 +2258,7 @@ Reply with exactly one very short sentence or phrase in English.`
                             </div>
                         ) : (<>
                             <div className="flex-1 flex flex-col items-center justify-start pt-36 sm:pt-60 w-full text-center space-y-3 sm:space-y-3">
-                                {anchorDecorations.map((anchorItem) => (
+                                {isAnchorVisible && anchorDecorations.map((anchorItem) => (
                                     <div
                                         key={`${currentWord.id}-${anchorItem.text}`}
                                             className="pointer-events-none absolute select-none text-xs font-black uppercase tracking-[0.35em] text-neutral-400 opacity-95 drop-shadow-[0_1px_1px_rgba(255,255,255,0.7)]"                                        style={{
@@ -2268,6 +2274,17 @@ Reply with exactly one very short sentence or phrase in English.`
                                         {anchorItem.text}
                                     </div>
                                 ))}
+                                {!!anchorDecorations.length && !isAnchorVisible && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAnchorVisible(true)}
+                                        className="absolute left-1/2 top-[20%] -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-16 h-16 z-10"                                        aria-label="Show recall anchors"
+                                    >
+                                        {/* expanding circle */}
+                                        <span className="absolute w-6 h-6 rounded-full border-2 border-cyan-300 animate-ping opacity-60" />                                        
+                                        <span className="relative w-2.5 h-2.5 rounded-full bg-cyan-500 shadow-lg shadow-cyan-300/60" />
+                                    </button>
+                                )}
                                 <div className="flex items-center gap-4 flex-wrap justify-center">
                                     {isRecallQuizMode && !unlockedWordIds.has(currentWord.id) ? (
                                         <button
