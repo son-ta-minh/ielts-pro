@@ -12,6 +12,7 @@ import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
+import AI_Quiz from './AI_Quiz';
 
 const GENERATED_EXAMPLE_BUFFER_SIZE = 5;
 const GENERATED_QUIZ_BUFFER_SIZE = 4;
@@ -621,7 +622,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     } = props;
     const currentWord = currentWordProp ?? EMPTY_STUDY_ITEM;
     const isJapaneseCurrentWord = isJapaneseStudyItem(currentWord);
-
+    const [isAIQuizOpen, setIsAIQuizOpen] = useState(false);
     const { current: currentIndex, max: maxIndexVisited } = progress;
     const isQuickFire = sessionType === 'random_test';
     const [mimicTarget, setMimicTarget] = useState<string | null>(null);
@@ -2796,7 +2797,7 @@ Reply with exactly one very short sentence or phrase in English.`
                             <button onClick={() => handleReview(ReviewGrade.FORGOT)} className="py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><X size={20} /><span className="text-[9px] font-black uppercase">FORGOT</span></button>
                             <button onClick={() => handleReview(ReviewGrade.HARD)} className="py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-orange-600 hover:bg-orange-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><HelpCircle size={20} /><span className="text-[9px] font-black uppercase">Hard</span></button>
                             <button onClick={() => handleReview(ReviewGrade.EASY)} className="py-5 bg-white border border-neutral-100 text-neutral-500 hover:text-green-600 hover:bg-green-50 rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all"><Check size={20} /><span className="text-[9px] font-black uppercase">Easy</span></button>
-                            <button onClick={handleQuickReview} className="py-5 bg-indigo-600 text-white rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all hover:bg-indigo-700 shadow-md shadow-indigo-200"><Zap size={20} fill="currentColor" /><span className="text-[9px] font-black uppercase">Quick Review</span></button>
+                            <button onClick={() => setIsAIQuizOpen(true)} className="py-5 bg-indigo-600 text-white rounded-2xl flex flex-col items-center justify-center space-y-1.5 transition-all hover:bg-indigo-700 shadow-md shadow-indigo-200"><Zap size={20} fill="currentColor" /><span className="text-[9px] font-black uppercase">Quick Review</span></button>
                         </div>
                     )}
                 </div>
@@ -2894,6 +2895,14 @@ Reply with exactly one very short sentence or phrase in English.`
                 onReveal={handleRecallQuizReveal}
                 onClose={() => setIsRecallQuizModalOpen(false)}
                 onGenerate={() => void handleRefreshRecallQuiz()}
+            />
+            <AI_Quiz
+                studyBuddyAiUrl={studyBuddyAiUrl}
+                isOpen={isAIQuizOpen}
+                studyItem={currentWord}
+                onClose={() => {
+                    setIsAIQuizOpen(false);
+                }}
             />
         </>
     );
