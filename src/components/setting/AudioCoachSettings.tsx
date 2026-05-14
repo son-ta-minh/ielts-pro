@@ -67,10 +67,12 @@ const VoiceSelector: React.FC<{
             return;
         }
 
-        if (voiceName === 'Random') {
+        if (voiceName === 'Random' || voiceName === 'Google') {
             const defaultAccent = langCode === 'en' ? 'en_US' : (langCode === 'ja' ? 'ja_JP' : 'vi_VN');
             // Keep the same value as the <option> so the combobox remains selected
-            onChange('Random', defaultAccent);
+            onChange(voiceName, defaultAccent);
+
+            setTimeout(() => onPreview(voiceName, defaultAccent), 100);
             return;
         }
 
@@ -101,6 +103,7 @@ const VoiceSelector: React.FC<{
                     className="w-full appearance-none bg-white border border-neutral-200 rounded-xl px-4 py-3 pr-10 text-xs font-bold focus:ring-2 focus:ring-neutral-900 outline-none transition-all"
                 >
                     <option value="">Default System Voice</option>
+                    <option value="Google">Google Voice</option>
                     <option value="Random">Random High Quality Voice</option>
 
                     {(Object.entries(accentsMap) as [string, VoiceDefinition[]][]).map(([accentCode, voices]) => (

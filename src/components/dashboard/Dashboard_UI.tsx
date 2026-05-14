@@ -12,7 +12,7 @@ import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
 import { AutoRefineDashboardControl } from '../common/AutoRefine';
 import type { LibraryDashboardStats } from './Dashboard';
-import { getConfig } from '../../app/settingsManager';
+import { getConfig, saveConfig } from '../../app/settingsManager';
 
 const getFormattedBuildDate = () => {
     const buildTimestamp = (process.env as any).BUILD_TIMESTAMP;
@@ -921,6 +921,8 @@ const BackupStatus: React.FC<{
   const [isRestoreMenuOpen, setIsRestoreMenuOpen] = useState(false);
   const restoreMenuRef = useRef<HTMLDivElement>(null);
 
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState(() => getConfig().sync.autoBackupEnabled !== false);
+
   useEffect(() => {
     const updateStatus = () => {
       if (!lastBackupTime) { setStatusText("Backup: Never"); return; }
@@ -947,6 +949,17 @@ const BackupStatus: React.FC<{
       return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleToggleAutoBackup = () => {
+    const nextValue = !autoBackupEnabled;
+    setAutoBackupEnabled(nextValue);
+
+    const config = getConfig();
+    config.sync.autoBackupEnabled = nextValue;
+    saveConfig(config);
+
+    window.dispatchEvent(new Event('config-updated'));
+  };
+
   return (
     <div className="flex shrink-0 items-center justify-between space-x-3 px-3 py-2 rounded-2xl border-2 shadow-sm bg-white border-neutral-200 text-neutral-800">
       <div className="flex items-center space-x-2">
@@ -962,10 +975,30 @@ const BackupStatus: React.FC<{
                     <ChevronDown size={12} className={`transition-transform ${isBackupMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isBackupMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-36 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
+                    <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
                         <button onClick={() => { onBackup('server'); setIsBackupMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><Cloud size={14} className="text-sky-500" /> To Server</button>
                         <div className="h-px bg-neutral-100 mx-2"></div>
                         <button onClick={() => { onBackup('file'); setIsBackupMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><HardDrive size={14} className="text-indigo-500" /> To File</button>
+
+                        <div className="h-px bg-neutral-100 mx-2"></div>
+
+                        <button
+                            onClick={handleToggleAutoBackup}
+                            className="w-full flex items-center justify-between gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
+                        >
+                            <div className="flex items-center gap-2">
+                                <RotateCw size={14} className="text-emerald-500" />
+                                <span>Auto Backup</span>
+                            </div>
+
+                            <div
+                                className={`w-10 h-5 rounded-full transition-all relative ${autoBackupEnabled ? 'bg-emerald-500' : 'bg-neutral-300'}`}
+                            >
+                                <div
+                                    className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${autoBackupEnabled ? 'left-5' : 'left-0.5'}`}
+                                />
+                            </div>
+                        </button>
                     </div>
                 )}
             </div>

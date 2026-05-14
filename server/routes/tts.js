@@ -17,6 +17,7 @@ const QUALITY_SOUND_MAP_NAME = 'Quality_Sound';
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac', '.webm', '.aiff'];
 let FFMPEG_COMMAND = process.env.FFMPEG_PATH || 'ffmpeg';
 
+
 try {
     const ffmpegStatic = require('ffmpeg-static');
     if (ffmpegStatic) {
@@ -543,6 +544,42 @@ async function downloadCambridgeAudioToQuality(wordText) {
     return null;
 }
 
+// Google Translate TTS synthesis (fetch backend)
+async function synthesizeGoogleTranslateTts(text, language, outputFile) {
+    const tl =
+        language === 'vi'
+            ? 'vi'
+            : language === 'ja'
+                ? 'ja'
+                : 'en';
+
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${tl}&client=tw-ob`;
+
+    const response = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://translate.google.com/'
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`google_translate_tts_failed_${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = Buffer.from(arrayBuffer);
+
+    if (!audioBuffer.length) {
+        throw new Error('google_translate_tts_empty_audio');
+    }
+
+    fs.writeFileSync(outputFile, audioBuffer);
+
+    if (!fs.existsSync(outputFile)) {
+        throw new Error('google_translate_tts_output_missing');
+    }
+}
+
 // Initialize TTS
 async function loadVoicesFromOS() {
     try {
@@ -627,11 +664,17 @@ router.post('/speak', async (req, res) => {
     const effectiveLanguage = language || selectedLanguage || 'en';
 
     let voiceToUse = selectedVoice;
-    if (typeof voice === "string" && voice !== "") {
+    if (typeof voice === "string" && voice !== "" && voice !== "Google") {
         if (voiceIndex[voice]) voiceToUse = voice;
-        else return res.status(404).json({ error: "voice_not_found" });
+        else{
+            logger.error(`[TTS] Voice override requested: "${voice}" → ${voiceIndex[voice] ? 'found' : 'NOT FOUND'}`);
+            return res.status(404).json({ error: "voice_not_found" });
+        }
     }
-    if ((voiceIndex[voiceToUse] && voiceIndex[voiceToUse].language !== effectiveLanguage)) {
+    if (voice === "Google") {
+        voiceToUse = "Google";
+    }
+    else if ((voiceIndex[voiceToUse] && voiceIndex[voiceToUse].language !== effectiveLanguage)) {
         const matchingVoiceEntry = Object.entries(voiceIndex).find(([, info]) => info.language === effectiveLanguage);
         voiceToUse = matchingVoiceEntry?.[0] || "";
     }
@@ -695,8 +738,10 @@ router.post('/speak', async (req, res) => {
     }
 
     logger.debug(`[TTS] /speak source=tts word="${cleanText}"`);
-    
+
     const timestamp = Date.now();
+    const useGoogleTts = voiceToUse === 'Google';
+
     const outFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.aiff`);
     const mp3File = path.join(settings.AUDIO_DIR, `tts_${timestamp}.mp3`);
     const txtFile = path.join(settings.AUDIO_DIR, `tts_${timestamp}.txt`);
@@ -708,20 +753,27 @@ router.post('/speak', async (req, res) => {
         logger.error("[TTS] Failed to write temp text file:", e.message);
         return res.status(500).json({ error: "tts_prep_failed" });
     }
-    
-    // Use -f to read from file
-    const cmd = (voiceToUse)
-        ? `say -v "${voiceToUse}" -f "${txtFile}" -o "${outFile}"`
-        : `say -f "${txtFile}" -o "${outFile}"`;
 
     try {
-        await runCommand(cmd);
+        if (useGoogleTts) {
+            logger.debug(`[TTS] Using Google Translate TTS for "${cleanText}"`);
 
-        if (!fs.existsSync(outFile)) {
-            throw new Error("Output file was not generated.");
+            await synthesizeGoogleTranslateTts(cleanText, effectiveLanguage, mp3File);
+        } else {
+            // Use -f to read from file
+            const cmd = (voiceToUse)
+                ? `say -v "${voiceToUse}" -f "${txtFile}" -o "${outFile}"`
+                : `say -f "${txtFile}" -o "${outFile}"`;
+
+            await runCommand(cmd);
+
+            if (!fs.existsSync(outFile)) {
+                throw new Error("Output file was not generated.");
+            }
+
+            await convertAudioToMp3(outFile, mp3File);
         }
 
-        await convertAudioToMp3(outFile, mp3File);
         if (!fs.existsSync(mp3File)) {
             throw new Error("MP3 output file was not generated.");
         }
@@ -730,9 +782,9 @@ router.post('/speak', async (req, res) => {
         res.setHeader("X-TTS-Word", normalizeLookupWord(cleanText));
         res.setHeader("Content-Type", "audio/mpeg");
         const stream = fs.createReadStream(mp3File);
-        
+
         stream.pipe(res);
-        
+
         stream.on('close', () => {
             deleteIfExists(outFile);
             deleteIfExists(mp3File);
@@ -743,7 +795,7 @@ router.post('/speak', async (req, res) => {
         try { if (fs.existsSync(outFile)) fs.unlinkSync(outFile); } catch(e) {}
         try { if (fs.existsSync(mp3File)) fs.unlinkSync(mp3File); } catch(e) {}
         try { if (fs.existsSync(txtFile)) fs.unlinkSync(txtFile); } catch(e) {}
-        
+
         res.status(500).json({ error: "tts_generation_failed" });
     }
 });
