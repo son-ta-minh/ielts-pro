@@ -20,6 +20,7 @@ let isSingleWordPlayback = false;
 let playbackSerial = 0;
 let speakRequestSerial = 0;
 let currentPlaybackRate = 1;
+let blob: Blob | null = null;
 
 // Cache the successfully connected base URL
 
@@ -278,9 +279,21 @@ const stopSpeakingInternal = (silentRestart: boolean) => {
     playbackSerial += 1;
     speakRequestSerial += 1;
     if (currentServerAudio) {
+        const oldSrc = currentServerAudio.src;
         currentServerAudio.pause();
         currentServerAudio.src = "";
+        currentServerAudio.load();
         currentServerAudio = null;
+
+        if (oldSrc.startsWith('blob:')) {
+            setTimeout(() => {
+                try {
+                    URL.revokeObjectURL(oldSrc);
+                } catch {
+                    // Ignore revoke failures.
+                }
+            }, 1000);
+        }
     }
     if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
@@ -306,10 +319,10 @@ export const setPlaybackRate = (rate: number) => {
     const normalized = Number.isFinite(rate) ? Math.min(2, Math.max(0.5, rate)) : 1;
     currentPlaybackRate = Math.round(normalized * 100) / 100;
     if (currentServerAudio) {
-        currentServerAudio.playbackRate = currentPlaybackRate;
+        currentServerAudio.playbackRate = getPlaybackRate();
     }
     window.dispatchEvent(new CustomEvent('audio-status-changed', {
-        detail: { isSpeaking, isAudioPaused, isSingleWordPlayback, playbackRate: currentPlaybackRate }
+        detail: { isSpeaking, isAudioPaused, isSingleWordPlayback, playbackRate: getPlaybackRate() }
     }));
 };
 
@@ -323,6 +336,8 @@ export const pauseSpeaking = () => {
 export const resumeSpeaking = async () => {
     if (!currentServerAudio || !currentServerAudio.paused) return;
     try {
+        currentServerAudio.playbackRate = getPlaybackRate();
+        console.log("Attempting to resume audio");
         await currentServerAudio.play();
         isAudioPaused = false;
         notifyStatus(true);
@@ -407,19 +422,45 @@ const playBlob = (blob: Blob, meta?: { source?: string; word?: string; isSingleW
     const lookupTask = lookupWord ? triggerCoachLookup(lookupWord) : Promise.resolve(false);
     const audioUrl = URL.createObjectURL(blob);
     const audio = new Audio(audioUrl);
-    audio.playbackRate = currentPlaybackRate;
+    let hasEnded = false;
+    audio.playbackRate = getPlaybackRate();
     currentServerAudio = audio;
-    
+
+    let cleanedUp = false;
+    // REPLACEMENT cleanup function
+    const cleanup = (releaseAudio = false) => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+
+        audio.onended = null;
+        audio.onerror = null;
+
+        // Keep the audio element + blob URL alive after ended
+        // so external replay controls can still reuse it.
+        // Only fully release when playback is interrupted/replaced.
+        if (releaseAudio) {
+            if (currentServerAudio === audio) {
+                currentServerAudio = null;
+            }
+
+            try {
+                URL.revokeObjectURL(audioUrl);
+            } catch {
+                // Ignore revoke failures.
+            }
+        }
+    };
+
     return new Promise<boolean>((resolve, reject) => {
         audio.play()
             .then(() => {
                 audio.onended = () => {
+                    hasEnded = true;
                     if (sessionId !== playbackSerial || currentServerAudio !== audio) {
-                        URL.revokeObjectURL(audioUrl);
+                        cleanup(false);
                         resolve(true);
                         return;
                     }
-                    URL.revokeObjectURL(audioUrl);
                     pendingCoachLookupWord = null;
                     isAudioPaused = false;
                     notifyStatus(false);
@@ -428,16 +469,22 @@ const playBlob = (blob: Blob, meta?: { source?: string; word?: string; isSingleW
                             if (!shown) void triggerCoachLookup(lookupWord);
                         });
                     }
+                    cleanup(false);
                     resolve(true);
                 };
             })
             .catch(e => {
-                if (sessionId !== playbackSerial || currentServerAudio !== audio) {
-                    URL.revokeObjectURL(audioUrl);
+                if (hasEnded) {
+                    cleanup(true);
                     resolve(false);
                     return;
                 }
-                URL.revokeObjectURL(audioUrl);
+                if (sessionId !== playbackSerial || currentServerAudio !== audio) {
+                    cleanup(true);
+                    resolve(false);
+                    return;
+                }
+                cleanup(true);
                 pendingCoachLookupWord = null;
                 isSingleWordPlayback = false;
                 isAudioPaused = false;
@@ -533,12 +580,22 @@ const speakViaServer = async (
         const contentType = res.headers.get('Content-Type');
         
         if (contentType && contentType.includes('audio')) {
-            const blob = await res.blob();
+            const tmp = await res.blob();
+            blob = new Blob([tmp], {
+                type: tmp.type
+            });
             if (requestId !== speakRequestSerial) return true;
+
             const source = res.headers.get('X-TTS-Source') || undefined;
             const word = res.headers.get('X-TTS-Word') || undefined;
             const fallbackWord = singleWord ? normalizeLookupWord(text) : undefined;
-            return await playBlob(blob, { source, word: word || fallbackWord, isSingleWord: singleWord, suppressCoachLookup: !!suppressCoachLookup });
+
+            return await playBlob(blob, {
+                source,
+                word: word || fallbackWord,
+                isSingleWord: singleWord,
+                suppressCoachLookup: !!suppressCoachLookup
+            });
         } else {
             if (requestId !== speakRequestSerial) return true;
             isSingleWordPlayback = false;
@@ -571,7 +628,7 @@ const speakViaBrowser = (text: string, voiceName?: string, langCode: SpokenLangu
                               availableVoices.find(v => v.lang.startsWith(langCode));
 
         if (selectedVoice) utterance.voice = selectedVoice;
-        utterance.rate = Math.min(2, Math.max(0.5, 0.95 * currentPlaybackRate));
+        utterance.rate = Math.min(2, Math.max(0.5, 0.95 * getPlaybackRate()));
         
         utterance.onend = () => {
             if (sessionId !== playbackSerial) return resolve(true);
@@ -606,6 +663,7 @@ const cleanTextForTts = (text: string): string => {
         .trim();
 };
 
+export const getLastAudio = () => lastAudioBlob;
 export const speak = async (
     text: string,
     isDialogue = false,
@@ -676,7 +734,7 @@ export const playSound = async (url: string, startTime?: number, duration?: numb
     }
 
     const audio = new Audio(fullUrl);
-    audio.playbackRate = currentPlaybackRate;
+    audio.playbackRate = getPlaybackRate();
     currentServerAudio = audio;
 
     return new Promise<boolean>((resolve, reject) => {
@@ -747,6 +805,7 @@ export const playSound = async (url: string, startTime?: number, duration?: numb
         }
 
         audio.onerror = (e) => {
+            console.log("Audio playback error", e);
             if (sessionId !== playbackSerial || currentServerAudio !== audio) {
                 resolve(false);
                 return;
@@ -795,6 +854,7 @@ export const stopRecording = (): Promise<{base64: string, mimeType: string} | nu
 export const seekAudio = (time: number) => {
     if (currentServerAudio) {
         currentServerAudio.currentTime = time;
+        currentServerAudio.playbackRate = getPlaybackRate();
     }
 };
 
@@ -802,7 +862,8 @@ export const getAudioProgress = () => {
     if (currentServerAudio) {
         return {
             currentTime: currentServerAudio.currentTime,
-            duration: currentServerAudio.duration || 0
+            duration: currentServerAudio.duration || 0,
+            isFinished: currentServerAudio.ended
         };
     }
     return null;

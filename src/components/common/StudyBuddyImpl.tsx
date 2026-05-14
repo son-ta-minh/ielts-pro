@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, StudyItemQuality, StudyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily, LearnedStatus } from '../../app/types';
-import { MessageSquare, Languages, Binary, Loader2, Search, Pause, Play, Square, Sparkles } from 'lucide-react';
+import { MessageSquare, Languages, Binary, Loader2, Search, Pause, Play, Square, Sparkles, Radio } from 'lucide-react';
 import { getConfig, saveConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech, getPreferredSpeakLanguage, setPreferredSpeakLanguage, resolveCoachVoiceForLanguage } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
@@ -182,7 +182,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const [isSingleWordAudio, setIsSingleWordAudio] = useState(getIsSingleWordPlayback());
     const [showPlaybackControls, setShowPlaybackControls] = useState(false);
     const [playbackRate, setPlaybackRateState] = useState(getPlaybackRate());
-    const [audioProgress, setAudioProgress] = useState({ currentTime: 0, duration: 0 });
+    const [audioProgress, setAudioProgress] = useState({ currentTime: 0, duration: 0, isFinished: true });
     const [markPoints, setMarkPoints] = useState<number[]>([]);
     const [markedTime, setMarkedTime] = useState<number>(0);
     const [isOpen, setIsOpen] = useState(false);
@@ -287,7 +287,6 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
 
     useEffect(() => {
         let cancelled = false;
-
         const loadStudyBuddyConnectionStatus = async () => {
             try {
                 const serverUrl = getServerUrl(getConfig());
@@ -1204,7 +1203,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         playbackControlsHideTimeoutRef.current = window.setTimeout(() => {
             setShowPlaybackControls(false);
             playbackControlsHideTimeoutRef.current = null;
-        }, 260);
+        }, 3000);
     }, [isAudioPlaying, isSingleWordAudio]);
 
     useEffect(() => {
@@ -1218,7 +1217,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             const nextSpeaking = typeof detail?.isSpeaking === 'boolean' ? detail.isSpeaking : getIsSpeaking();
             const nextPaused = typeof detail?.isAudioPaused === 'boolean' ? detail.isAudioPaused : getIsAudioPaused();
             const nextSingle = typeof detail?.isSingleWordPlayback === 'boolean' ? detail.isSingleWordPlayback : getIsSingleWordPlayback();
-            const nextRate = typeof detail?.playbackRate === 'number' ? detail.playbackRate : getPlaybackRate();
+            const nextRate = typeof detail?.playbackRate === 'number'
+                ? detail.playbackRate
+                : (nextSpeaking || nextPaused)
+                    ? playbackRate
+                    : getPlaybackRate();
             setPlaybackRateState(nextRate);
 
             if (nextSpeaking) {
@@ -1556,7 +1559,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                 cambridgeAudioRef.current = null;
             }
         };
-    }, []);
+    }, [playbackRate]);
 
     useEffect(() => {
         const handleClickOutsidePanels = (e: MouseEvent) => {
@@ -2368,8 +2371,14 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                     setAudioProgress(prog);
                 }
             }, 100);
-        } else {
-            setAudioProgress({ currentTime: 0, duration: 0 });
+        }
+        else {
+            setAudioProgress(prev => ({
+                ...prev,
+                currentTime: 0,
+                isFinished: true
+            }));
+
             setMarkPoints([]);
             setIsAudioPaused(false);
             setIsSingleWordAudio(false);
@@ -2395,6 +2404,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         const next = speeds[(idx + 1) % speeds.length];
         setPlaybackRate(next);
         setPlaybackRateState(next);
+        console.log(`Changing playback rate ${playbackRate}`);
     };
 
     const formatCoachRole = (persona?: string) => {
@@ -2414,6 +2424,8 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
         ? (isChatListening ? 'Conversation mode: listening...' : isChatLoading ? 'Conversation mode: AI is replying...' : 'Conversation mode: waiting for voice...')
         : coachIdentityLabel;
     const chatPlaceholder = isConversationMode ? 'Conversation mode is ON. Say something...' : 'Ask me anything...';
+    // Playback controls: determine if audio source is loaded
+    const hasAudioSource = audioProgress.duration > 0;
     const renderStudyMenu = (
         inputSource: 'composer' | 'selection' | 'target',
         hasSelection: boolean
@@ -2709,6 +2721,13 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                         >{getPreferredSpeakLanguage() === 'ja' ? '🇯🇵' : '🇬🇧'}
                         </button>
                         <button
+                            onClick={() => setShowPlaybackControls((prev) => !prev)}
+                            className="absolute -bottom-1 -right-1 w-6 h-6 rounded-xl bg-neutral-900 text-white flex items-center justify-center hover:scale-105 transition-all z-30"
+                            title="Media Controls"
+                        >
+                            <Radio size={14} />
+                        </button>
+                        <button
                             type="button"
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -2725,7 +2744,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                             {isThinking ? <Loader2 size={20} className="animate-spin text-neutral-400"/> : (
                                 <>
                                     <img src={avatarInfo.url} className={`w-10 h-10 object-contain ${showPlaybackControls ? 'opacity-30 scale-90 blur-[1px]' : ''}`} alt="Coach" />
-                                    {showPlaybackControls && (
+                                    {showPlaybackControls && hasAudioSource && !isAudioPaused && !audioProgress.isFinished && (
                                         <div className="absolute inset-0 flex items-center justify-center text-indigo-600 animate-in fade-in zoom-in duration-200">
                                             <Square size={24} fill="currentColor" />
                                         </div>
@@ -2742,7 +2761,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                 onMouseLeave={scheduleCloseCoachMenu}
                             >
                                 <span className="text-[10px] font-mono text-neutral-500 tabular-nums w-8">
-                                    {audioProgress.duration > 0 ? formatTime(audioProgress.currentTime) : '--:--'}
+                                    {audioProgress.duration > 0 ? formatTime(audioProgress.currentTime) : '00:00'}
                                 </span>
                                 <input
                                     type="range"
@@ -2755,7 +2774,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                     className="flex-1 h-1.5 bg-neutral-100 rounded-full appearance-none cursor-pointer accent-indigo-600 hover:accent-indigo-700 transition-all"
                                 />
                                 <span className="text-[10px] font-mono text-neutral-400 tabular-nums w-8">
-                                    {audioProgress.duration > 0 ? formatTime(audioProgress.duration) : '--:--'}
+                                    {audioProgress.duration > 0 ? formatTime(audioProgress.duration) : '00:00'}
                                 </span>
                                 {/* Media Controls Row */}
                                 <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full">
@@ -2782,24 +2801,42 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 8L3 4V12L9 8ZM13 8L7 4V12L13 8Z" fill="currentColor"/></svg>
                                     </button>
                                     <button
+                                        disabled={!hasAudioSource}
                                         onClick={() => {
+                                            if (!hasAudioSource) return;
+
+                                            // replay from beginning
+                                            if (audioProgress.isFinished) {
+
+                                                resumeSpeaking().catch(() =>
+                                                    showToast("Cannot replay audio.", "error")
+                                                );
+
+                                                return;
+                                            }
                                             if (isAudioPaused) {
-                                                resumeSpeaking().catch(() => showToast("Cannot resume audio.", "error"));
+                                                resumeSpeaking().catch(() =>
+                                                    showToast("Cannot resume audio.", "error")
+                                                );
                                             } else {
                                                 pauseSpeaking();
                                             }
                                         }}
-                                        className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center justify-center border border-indigo-100"
+                                        className={`w-6 h-6 rounded-lg transition-colors flex items-center justify-center border ${
+                                            hasAudioSource
+                                                ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100'
+                                                : 'bg-neutral-100 text-neutral-300 border-neutral-200 cursor-not-allowed opacity-60'
+                                        }`}
                                         title={isAudioPaused ? "Resume audio" : "Pause audio"}
                                     >
-                                        {isAudioPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
+                                        {(isAudioPaused || audioProgress.isFinished) ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
                                     </button>
                                     <button
                                         onClick={cyclePlaybackRate}
                                         className="h-6 px-2 rounded-lg bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors flex items-center justify-center border border-neutral-200 text-[10px] font-black tabular-nums"
                                         title="Playback speed"
                                     >
-                                        {playbackRate.toFixed(playbackRate % 1 === 0 ? 1 : 2)}x
+                                        {playbackRate}x
                                     </button>
                                     {markPoints.length > 0 && audioProgress.duration > 0 && (
                                         <div className="flex items-center gap-1 ml-1 border-l border-neutral-200 pl-2">
