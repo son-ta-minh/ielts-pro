@@ -88,6 +88,27 @@ const AI_Quiz: React.FC<AI_QuizProps> = ({ isOpen, studyItem, onClose, studyBudd
     const [selectedFocus, setSelectedFocus] = useState<QuestionType>('collocation');
     const [showFocusMenu, setShowFocusMenu] = useState<boolean>(false);
     // ---
+    // Valid focus types for current study item
+    const [validFocusTypes, setValidFocusTypes] = useState<QuestionType[]>(focusTypes);
+    // Returns valid focus types for a study item
+    const getValidFocusTypes = (item: StudyItem): QuestionType[] => {
+        const valid: QuestionType[] = [];
+
+        valid.push('collocation');
+
+        if (item.prepositions && item.prepositions.length > 0) {
+            valid.push('preposition');
+        }
+
+        if (item.idioms && item.idioms.trim().length > 0) {
+            valid.push('idiom');
+        }
+
+        valid.push('intensifier');
+        valid.push('context');
+
+        return valid;
+    };
     useEffect(() => {
         localStorage.setItem('quiz_language', language);
     }, [language]);
@@ -331,7 +352,14 @@ Do NOT:
 
     useEffect(() => {
         if (!isOpen || !studyItem) return;
-        generateQuestion('collocation');
+
+        const valid = getValidFocusTypes(studyItem);
+        setValidFocusTypes(valid);
+
+        const defaultFocus = valid.includes('collocation') ? 'collocation' : valid[0];
+
+        setSelectedFocus(defaultFocus);
+        generateQuestion(defaultFocus);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, studyItem]);
@@ -380,7 +408,10 @@ Do NOT:
                             <button
                                 onClick={() => {
                                     setQuestion('');
-                                    generateQuestion('collocation');
+                                    const safeFocus = validFocusTypes.includes(selectedFocus)
+                                        ? selectedFocus
+                                        : (validFocusTypes[0] || 'collocation');
+                                    generateQuestion(safeFocus);
                                 }}
                                 disabled={loading}
                                 style={{
@@ -438,7 +469,7 @@ Do NOT:
                                     }}
                                     onClick={(e) => e.stopPropagation()}
                                 >
-                                    {focusTypes.map((type) => (
+                                    {validFocusTypes.map((type) => (
                                         <div
                                             key={type}
                                             onClick={() => {
