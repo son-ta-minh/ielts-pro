@@ -492,13 +492,14 @@ const StudyItemTable: React.FC<Props> = ({
 
   const handleSetSelectedLearnedStatus = async (learnedStatus: LearnedStatus) => {
     if (selectedIds.size === 0) return;
-
+    const currentTime = Date.now();
     const itemsToUpdate = dataStore.getAllWords()
       .filter(word => selectedIds.has(word.id))
       .map(word => ({
         ...word,
         learnedStatus,
-        updatedAt: Date.now()
+        lastReview: currentTime,
+        updatedAt: currentTime
       }));
 
     if (itemsToUpdate.length === 0) return;
