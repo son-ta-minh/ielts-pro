@@ -149,6 +149,17 @@ const ReviewDueConfigModal: React.FC<{
               >
                 Focus
               </button>
+              <button
+                onClick={() => onScopeChange({ ...scope, prepOnly: !scope.prepOnly })}
+                title="Preposition only includes words that are tagged as prepositions. This is useful for quickly reviewing just prepositions, which can be a tricky category for many learners."
+                className={`w-20 h-8 flex items-center justify-center rounded-lg text-[10px] font-bold border transition-all uppercase ${
+                  scope.prepOnly
+                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
+                }`}
+              >
+                Prep Only
+              </button>
               {mode === 'due' && (
                 <button
                   onClick={() => onScopeChange({ ...scope, oldestFirst: !scope.oldestFirst } as any)}

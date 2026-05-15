@@ -4,6 +4,7 @@ import { ArrowLeft, Play, Check, ChevronRight, Zap, Search } from 'lucide-react'
 import { StudyItem } from '../../../app/types';
 import * as dataStore from '../../../app/dataStore';
 import { useToast } from '../../../contexts/ToastContext';
+import { COMMON_PREPOSITIONS } from '../../../utils/language_helper';
 
 interface Props {
     words: StudyItem[];
@@ -22,12 +23,6 @@ interface PrepositionItem {
 }
 
 type GameMode = 'MASTER' | 'TOTAL';
-
-const COMMON_PREPOSITIONS = [
-    'in', 'on', 'at', 'to', 'for', 'with', 'of', 'from', 'by', 'about', 
-    'into', 'through', 'over', 'under', 'between', 'among', 'against', 
-    'during', 'without', 'before', 'after', 'toward', 'upon', 'within', 'along'
-].sort();
 
 export const PrepositionPower: React.FC<Props> = ({ words, onComplete, onExit }) => {
     const [gameState, setGameState] = useState<'SETUP' | 'PLAYING'>('SETUP');

@@ -12,6 +12,7 @@ import { normalizeTestResultKeys } from '../../utils/testResultUtils';
 import { getConfig, getStudyBuddyAiUrl } from '../../app/settingsManager';
 import { parseMarkdown } from '../../utils/markdownParser';
 import { SpeechRecognitionManager } from '../../utils/speechRecognition';
+import { maskPrepositions } from '../../utils/language_helper';
 import AI_Quiz from './AI_Quiz';
 
 const GENERATED_EXAMPLE_BUFFER_SIZE = 5;
@@ -740,21 +741,32 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         sessionWords.map((word, index) => ({
             id: word.id,
             index,
-            label: isRecallQuizMode && !unlockedWordIds.has(word.id)
-                ? '?'
-                : isRecallMeaningMode
-                    ? (
-                        sessionOutcomes[word.id]
-                            ? ((word.display || '').trim() || word.word)
-                            : (
-                                word.displayMeaning?.trim()
-                                || word.meaningVi?.trim()
-                                || 'No meaning'
-                            )
-                    )
-                    : sessionOutcomes[word.id]
-                        ? ((word.display || '').trim() || word.word)
-                        : getDisplayTextForWord(word),
+            label: (() => {
+                const headword = ((word.display || '').trim() || word.word);
+                const isAnswered = !!sessionOutcomes[word.id];
+
+                if (word.isPrep && !isAnswered) {
+                    return maskPrepositions(headword);
+                }
+
+                if (isRecallQuizMode && !unlockedWordIds.has(word.id)) {
+                    return '?';
+                }
+
+                if (isRecallMeaningMode) {
+                    return isAnswered
+                        ? headword
+                        : (
+                            word.displayMeaning?.trim()
+                            || word.meaningVi?.trim()
+                            || 'No meaning'
+                        );
+                }
+
+                return isAnswered
+                    ? headword
+                    : getDisplayTextForWord(word);
+            })(),
             outcomeLabel: getSessionOutcomeLabel(sessionOutcomes[word.id], newWordIds.has(word.id), isQuickFire)
         }))
     ), [sessionWords, sessionOutcomes, newWordIds, isQuickFire, isRecallQuizMode, unlockedWordIds, isRecallMeaningMode]);
@@ -786,11 +798,19 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const cachedDisplayIpa = String(currentWord.displayIPA || '').trim();
     const displayText = getDisplayTextForWord(currentWord);
     const vietnameseMeaning = cachedDisplayMeaning || matchedDisplayCollocation?.d?.trim() || fallbackMeaning;
-    const reviewHeadlineText = isRecallQuizMode
-        ? (unlockedWordIds.has(currentWord.id) ? reviewHeadword : 'Hints')
-        : isRecallMeaningMode
-        ? vietnameseMeaning
-        : displayText;
+    const isCurrentWordAnswered = !!sessionOutcomes[currentWord.id];
+
+    const reviewHeadlineText = currentWord.isPrep
+        ? (
+            isCurrentWordAnswered
+                ? reviewHeadword
+                : maskPrepositions(reviewHeadword)
+        )
+        : isRecallQuizMode
+            ? (unlockedWordIds.has(currentWord.id) ? reviewHeadword : 'Hints')
+            : isRecallMeaningMode
+                ? vietnameseMeaning
+                : displayText;
     const anchorDecorations = useMemo(() => {
         const anchorParts = String(currentWord.recall || '')
             .split(/[;,]/)
