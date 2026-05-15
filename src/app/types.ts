@@ -272,6 +272,7 @@ export interface StudyItem {
   isStandardPhrase?: boolean;
   isIrregular?: boolean;
   isFreeLesson?: boolean;
+  isPrep?: boolean;
 
   // Phonetic fields
   ipaUs?: string;

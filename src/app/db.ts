@@ -641,6 +641,7 @@ export const filterItem = (
             (type === 'colloc' && item.isCollocation) ||
             (type === 'phrase' && item.isStandardPhrase) ||
             (type === 'lesson' && item.isFreeLesson) ||
+            (type === 'prep' && item.isPrep) ||
             (type === 'vocab' && !item.isIdiom && !item.isPhrasalVerb && !item.isCollocation && !item.isStandardPhrase && !item.isFreeLesson)
         ) return true;
     }

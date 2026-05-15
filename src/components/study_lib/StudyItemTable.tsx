@@ -439,6 +439,23 @@ const StudyItemTable: React.FC<Props> = ({
     setNotification({ type: 'success', message: `${value ? 'Archived' : 'Unarchived'} ${itemsToUpdate.length} word(s).` });
   };
 
+  const handleSetSelectedPrep = async (value: boolean) => {
+    if (selectedIds.size === 0) return;
+
+    const itemsToUpdate = dataStore.getAllWords()
+      .filter(word => selectedIds.has(word.id))
+      .map(word => ({
+        ...word,
+        isPrep: value,
+        updatedAt: Date.now()
+      }));
+
+    if (itemsToUpdate.length === 0) return;
+
+    await dataStore.bulkSaveWords(itemsToUpdate);
+    setNotification({ type: 'success', message: `${value ? 'Marked as preposition' : 'Unmarked as preposition'} ${itemsToUpdate.length} word(s).` });
+  };
+
   const handleSetSelectedFocus = async (value: boolean) => {
     if (selectedIds.size === 0) return;
 
@@ -985,6 +1002,7 @@ const StudyItemTable: React.FC<Props> = ({
     availableGroups,
     onSetSelectedVocabularyType: handleSetSelectedVocabularyType,
     onSetSelectedArchive: handleSetSelectedArchive,
+    onSetSelectedPrep: handleSetSelectedPrep,
     onSetSelectedFocus: handleSetSelectedFocus,
     onSetSelectedQuality: handleSetSelectedQuality,
     onSetSelectedLearnedStatus: handleSetSelectedLearnedStatus,

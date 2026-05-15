@@ -6,7 +6,7 @@ import { TagBrowser, TagTreeNode } from '../common/TagBrowser';
 import { DEFAULT_WORD_REFINE_SETUP, WordRefineSetup } from '../../services/wordRefineApi';
 import { getStoredJSON, setStoredJSON } from '../../utils/storage';
 
-export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'colloc' | 'phrase' | 'lesson' | 'archive' | 'focus' | 'duplicate';
+export type FilterType = 'all' | 'vocab' | 'idiom' | 'phrasal' | 'prep' | 'colloc' | 'phrase' | 'lesson' | 'archive' | 'focus' | 'duplicate';
 export type RefinedFilter = 'all' | 'raw' | 'refined';
 export type StatusFilter = 'all' | 'new' | 'forgot' | 'hard' | 'easy' | 'learned' | 'reviewing' | 'ignored' | 'not_ignored';
 export type RegisterFilter = 'all' | 'academic' | 'casual' | 'neutral' | 'raw';
@@ -590,6 +590,7 @@ export interface WordTableUIProps {
   availableGroups: string[];
   onSetSelectedVocabularyType: (type: Exclude<WordTypeOption, 'archive' | 'focus' | 'duplicate'>) => void | Promise<void>;
   onSetSelectedArchive: (value: boolean) => void | Promise<void>;
+  onSetSelectedPrep: (value: boolean) => void | Promise<void>;
   onSetSelectedFocus: (value: boolean) => void | Promise<void>;
   onSetSelectedQuality: (quality: StudyItemQuality) => void | Promise<void>;
   onSetSelectedLearnedStatus: (status: LearnedStatus) => void | Promise<void>;
@@ -619,7 +620,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   showTagBrowserButton, tagTree, selectedTag, onSelectTag,
   onRenameGroup, onDeleteGroup,
   selectedTypes, toggleType, onOpenWordBook,
-  availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onSetSelectedQuality, onSetSelectedLearnedStatus, onAddSelectedGroup, onClearSelectedGroups, onCopySelectedHeadwords, onResetSelectedWords,
+  availableGroups, onSetSelectedVocabularyType, onSetSelectedArchive, onSetSelectedFocus, onSetSelectedPrep, onSetSelectedQuality, onSetSelectedLearnedStatus, onAddSelectedGroup, onClearSelectedGroups, onCopySelectedHeadwords, onResetSelectedWords,
   isAddToBookModalOpen, setIsAddToBookModalOpen, wordBooks, onConfirmAddToBook, libraryLabel = 'Word Library', showWordBook = true
 }) => {
   const [isTagBrowserOpen, setIsTagBrowserOpen] = useState(false);
@@ -695,6 +696,10 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
   };
   const handleSetFocus = async (value: boolean) => {
     await onSetSelectedFocus(value);
+    setIsSetAttributeMenuOpen(false);
+  };
+  const handleSetPrep = async (value: boolean) => {
+    await onSetSelectedPrep(value);
     setIsSetAttributeMenuOpen(false);
   };
   const handleSetQuality = async (quality: StudyItemQuality) => {
@@ -871,7 +876,7 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest w-16 shrink-0">Type</span>
                     <div className="flex flex-wrap gap-2">
-                        {[ 'all', 'vocab', 'idiom', 'phrasal', 'colloc', 'phrase', 'lesson', 'archive', 'focus', 'duplicate' ].map(id => {
+                        {[ 'all', 'vocab', 'idiom', 'phrasal', 'prep', 'colloc', 'phrase', 'lesson', 'archive', 'focus', 'duplicate' ].map(id => {
                             const isActive = activeFilters.has(id as FilterType);
                             const isDuplicate = id === 'duplicate';
                             let buttonClass = 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300';
@@ -882,9 +887,11 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                                 ? 'All'
                                 : id === 'colloc'
                                     ? 'Colloc'
-                                    : id === 'lesson'
-                                        ? 'Lesson'
-                                        : id.charAt(0).toUpperCase() + id.slice(1);
+                                    : id === 'prep'
+                                        ? 'Prep'
+                                        : id === 'lesson'
+                                            ? 'Lesson'
+                                            : id.charAt(0).toUpperCase() + id.slice(1);
                             return (<button key={id} onClick={() => handleToggleFilter(id as FilterType)} className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${buttonClass}`}>{label}</button>)
                         })}
                     </div>
@@ -1451,6 +1458,25 @@ export const WordTableUI: React.FC<WordTableUIProps> = ({
                             <button
                               type="button"
                               onClick={() => void handleSetFocus(false)}
+                              className="rounded-xl bg-neutral-100 px-3 py-2 text-[11px] font-black text-neutral-700 transition-colors hover:bg-neutral-200"
+                            >
+                              Off
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="px-1 pb-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">Preposition</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleSetPrep(true)}
+                              className="rounded-xl bg-sky-50 px-3 py-2 text-[11px] font-black text-sky-700 transition-colors hover:bg-sky-100"
+                            >
+                              On
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleSetPrep(false)}
                               className="rounded-xl bg-neutral-100 px-3 py-2 text-[11px] font-black text-neutral-700 transition-colors hover:bg-neutral-200"
                             >
                               Off
