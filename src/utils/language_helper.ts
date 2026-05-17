@@ -1,6 +1,6 @@
 export const COMMON_PREPOSITIONS = [
     'in', 'on', 'at', 'to', 'for', 'with', 'of', 'from', 'by', 'about', 
-    'into', 'through', 'over', 'under', 'between', 'among', 'against', 
+    'into', 'through', 'over', 'under', 'between', 'among', 'against', 'forward',
     'during', 'without', 'before', 'after', 'toward', 'upon', 'within', 'along'
 ].sort();
 
