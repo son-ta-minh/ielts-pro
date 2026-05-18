@@ -2112,6 +2112,85 @@ router.post('/studybuddy/chat', async (req, res) => {
     });
 });
 
+router.post('/studybuddy/chat_gpt', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const messages = Array.isArray(body.messages)
+            ? body.messages
+            : [];
+
+        if (!messages.length) {
+            return res.status(400).json({
+                error: 'messages is required'
+            });
+
+        }
+
+        // Combine all messages into ONE text block
+        const combinedMessage = messages
+            .map((m) => {
+                const role = String(m.role || '').trim();
+                const content = String(m.content || '').trim();
+                if (!content) return '';
+                return `[${role.toUpperCase()}]\n${content}`;
+            })
+            .filter(Boolean)
+            .join('\n\n');
+
+        logger.debug(
+            '[StudyBuddyGPT] Combined message:',
+            combinedMessage
+        );
+
+        // SSE headers
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        const response = await fetch(
+            'http://127.0.0.1:8082/message',
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
+                },
+                body: JSON.stringify({
+                    message: combinedMessage
+                })
+            }
+        );
+        const data = await response.json();
+        const payload = {
+            id: "chatcmpl-hkpkmf46d9its3k3fd4lo",
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model: "gemma-4-e4b-it",
+            system_fingerprint: "gemma-4-e4b-it",
+            choices: [
+                {
+                    index: 0,
+                    delta: { content: data["response"] },
+                    logprobs: null,
+                    finish_reason: "stop"
+                }
+            ]
+        };
+
+        // single SSE message
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        // end marker
+        res.write(`data: [DONE]\n\n`);
+        res.end();
+    } catch (error) {
+        console.error('chat_gpt error:', error?.message || error);
+
+        res.write(`data: {"error":"${error.message}"}\n\n`);
+        res.write(`data: [DONE]\n\n`);
+        res.end();
+    }
+});
+
 router.post('/studybuddy/search', (req, res) => {
     const data = String(req.body?.data || '').trim();
     const userName = String(req.body?.userName || '').trim();

@@ -127,6 +127,11 @@ const AI_Quiz: React.FC<AI_QuizProps> = ({ isOpen, studyItem, onClose, studyBudd
         }
     }, [isOpen]);
 
+    // Ensure we use /chat_gpt endpoint if /chat is present
+    const aiUrl = studyBuddyAiUrl.includes('/chat')
+        ? studyBuddyAiUrl.replace('/chat', '/chat_gpt')
+        : studyBuddyAiUrl;
+
     const generateQuestion = useCallback(async (focus: QuestionType) => {
         if (!studyItem) return;
 
@@ -149,7 +154,7 @@ const AI_Quiz: React.FC<AI_QuizProps> = ({ isOpen, studyItem, onClose, studyBudd
                 }
             ];
 
-            const response = await fetch(studyBuddyAiUrl, {
+            const response = await fetch(aiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -200,10 +205,17 @@ const AI_Quiz: React.FC<AI_QuizProps> = ({ isOpen, studyItem, onClose, studyBudd
                     try {
                         const json = JSON.parse(cleaned);
                         const delta = json?.choices?.[0]?.delta?.content;
-
                         if (delta) {
                             accumulated += delta;
-                            setQuestion(accumulated);
+
+                            // Remove any lines starting with "Answer:" from displayed question
+                            const cleaned = accumulated
+                                .split('\n')
+                                .filter(line => !line.trim().startsWith('Answer:'))
+                                .join('\n')
+                                .trim();
+
+                            setQuestion(cleaned);
                         }
                     } catch (e) {
                         // fallback: ignore invalid JSON chunks
@@ -274,7 +286,7 @@ Do NOT:
                 }
             ];
 
-            const response = await fetch(studyBuddyAiUrl, {
+            const response = await fetch(aiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -322,7 +334,7 @@ Do NOT:
                 }
             ];
 
-            const response = await fetch(studyBuddyAiUrl, {
+            const response = await fetch(aiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -333,7 +345,7 @@ Do NOT:
                     temperature: 0.5,
                     top_p: 0.9,
                     repetition_penalty: 1.05,
-                    stream: false
+                    stream: true
                 })
             });
 
@@ -341,10 +353,51 @@ Do NOT:
                 throw new Error(`AI answer failed (${response.status})`);
             }
 
-            const payload = await response.json().catch(() => null);
-            const text = String(payload?.choices?.[0]?.message?.content || '').trim();
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder('utf-8');
 
-            setRevealedAnswer(text);
+            if (!reader) {
+                return;
+            }
+
+            let accumulated = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+
+                const lines = chunk.split('\n').filter(Boolean);
+
+                for (const line of lines) {
+                    let cleaned = line.trim();
+
+                    // remove SSE prefix
+                    if (cleaned.startsWith('data:')) {
+                        cleaned = cleaned.replace('data:', '').trim();
+                    }
+
+                    // ignore end marker
+                    if (!cleaned || cleaned === '[DONE]') continue;
+
+                    try {
+                        const json = JSON.parse(cleaned);
+
+                        const delta = json?.choices?.[0]?.delta?.content;
+
+                        if (delta) {
+                            accumulated += delta;
+
+                            // realtime render
+                            setRevealedAnswer(accumulated);
+                        }
+                    } catch {
+                        continue;
+                    }
+                }
+            }
         } finally {
             setAnswerLoading(false);
         }
