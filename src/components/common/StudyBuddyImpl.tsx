@@ -287,9 +287,18 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const coach = config.audioCoach.coaches[activeType];
     const avatarInfo = getAvatarProps(coach.avatar);
 
+    const prevMode = useRef();
+
     useEffect(() => {
-        setStudyBuddyAiUrl(isChatGPTMode);
-        showToast(`Switched to ${isChatGPTMode ? 'ChatGPT' : 'local AI'} mode.`, 'success');
+    if (prevMode.current === isChatGPTMode) return;
+
+    prevMode.current = isChatGPTMode;
+
+    setStudyBuddyAiUrl(isChatGPTMode);
+    showToast(
+        `Using ${isChatGPTMode ? 'ChatGPT' : 'local AI'}`,
+        'success'
+    );
     }, [isChatGPTMode]);
 
     useEffect(() => {
