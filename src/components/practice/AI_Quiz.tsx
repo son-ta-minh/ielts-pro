@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { X, RefreshCw, Lightbulb } from 'lucide-react';
 import { StudyItem } from '../../app/types';
 import { parseMarkdown } from '../../utils/markdownParser';
@@ -79,6 +79,8 @@ const AI_Quiz: React.FC<AI_QuizProps> = ({ isOpen, studyItem, onClose, studyBudd
     const [evaluation, setEvaluation] = useState<string>('');
     const [evalLoading, setEvalLoading] = useState<boolean>(false);
     const [loading, setLoading] = useState<boolean>(false);
+    const [questionTimer, setQuestionTimer] = useState<number>(0);
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [revealedAnswer, setRevealedAnswer] = useState<string>('');
     const [answerLoading, setAnswerLoading] = useState<boolean>(false);
     const [language, setLanguage] = useState<'en' | 'vi'>(() => {
@@ -124,6 +126,11 @@ const AI_Quiz: React.FC<AI_QuizProps> = ({ isOpen, studyItem, onClose, studyBudd
             setLoading(false);
             setEvalLoading(false);
             setAnswerLoading(false);
+            setQuestionTimer(0);
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
         }
     }, [isOpen]);
 
@@ -134,6 +141,17 @@ const AI_Quiz: React.FC<AI_QuizProps> = ({ isOpen, studyItem, onClose, studyBudd
 
     const generateQuestion = useCallback(async (focus: QuestionType) => {
         if (!studyItem) return;
+
+        setQuestionTimer(0);
+
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+
+        timerRef.current = setInterval(() => {
+            setQuestionTimer(prev => prev + 1);
+        }, 1000);
 
         // reset session state when generating new question
         setRevealedAnswer('');
@@ -238,6 +256,10 @@ const AI_Quiz: React.FC<AI_QuizProps> = ({ isOpen, studyItem, onClose, studyBudd
             }
         } finally {
             setLoading(false);
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
         }
     }, [studyItem, studyBuddyAiUrl, language, questionHistory, selectedFocus]);
     // Handle outside click to close focus menu
@@ -617,7 +639,9 @@ Do NOT:
 
 
                             {loading ? (
-                                <p>Generating AI question...</p>
+                                <p>
+                                    Generating AI question... ({questionTimer}s)
+                                </p>
                             ) : (
                                 <div>
                                     <p
