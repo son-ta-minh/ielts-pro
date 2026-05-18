@@ -135,10 +135,7 @@ const AI_Quiz: React.FC<AI_QuizProps> = ({ isOpen, studyItem, onClose, studyBudd
     }, [isOpen]);
 
     // Ensure we use /chat_gpt endpoint if /chat is present
-    const aiUrl = studyBuddyAiUrl.includes('/chat')
-        ? studyBuddyAiUrl.replace('/chat', '/chat_gpt')
-        : studyBuddyAiUrl;
-
+    const aiUrl = studyBuddyAiUrl;
     const generateQuestion = useCallback(async (focus: QuestionType) => {
         if (!studyItem) return;
 

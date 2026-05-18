@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { User, AppView, StudyItemQuality, StudyItem, CollocationDetail, ParaphraseOption, PrepositionPattern, StudyBuddyImageSettings, StudyBuddyMemoryChunk, WordFamily, LearnedStatus } from '../../app/types';
-import { MessageSquare, Languages, Binary, Loader2, Search, Pause, Play, Square, Sparkles, Radio } from 'lucide-react';
+import { MessageSquare, Languages, Binary, Loader2, Search, Pause, Play, Square, Sparkles, Radio, Bot } from 'lucide-react';
 import { getConfig, saveConfig, SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, getIsSpeaking, getIsAudioPaused, getIsSingleWordPlayback, getPlaybackRate, setPlaybackRate, getAudioProgress, seekAudio, getMarkPoints, detectLanguage, prefetchSpeech, getPreferredSpeakLanguage, setPreferredSpeakLanguage, resolveCoachVoiceForLanguage } from '../../utils/audio';
 import { useToast } from '../../contexts/ToastContext';
@@ -17,6 +17,7 @@ import { StudyBuddySaveModal } from './StudyBuddySaveModal';
 import { StudyBuddyMessageCard } from './StudyBuddyMessageCard';
 import { useStudyBuddyChat } from './useStudyBuddyChat';
 import { getStudyBuddyCoachPrompt } from '../../services/prompts/getStudyBuddyCoachPrompt';
+import { setStudyBuddyAiUrl } from '../../app/settingsManager';
 import {
     CambridgePronunciation,
     cleanExampleSentence,
@@ -265,6 +266,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const hasInitializedLanguageSwitchRef = useRef(false);
     const languageSwitchRequestRef = useRef<((prompt: string, targetOverride?: StudyBuddyChatTarget | null) => Promise<void>) | null>(null);
     const lastLanguageInstructionSentRef = useRef<'vi' | 'en' | null>(null);
+    const [isChatGPTMode, setIsChatGPTMode] = useState(false);
     const interactiveCommandHandlersRef = useRef<{
         translate: (text: string) => Promise<void>;
         read: (text: string) => Promise<void>;
@@ -284,6 +286,11 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const activeType = config.audioCoach.activeCoach;
     const coach = config.audioCoach.coaches[activeType];
     const avatarInfo = getAvatarProps(coach.avatar);
+
+    useEffect(() => {
+        setStudyBuddyAiUrl(isChatGPTMode);
+        showToast(`Switched to ${isChatGPTMode ? 'ChatGPT' : 'local AI'} mode.`, 'success');
+    }, [isChatGPTMode]);
 
     useEffect(() => {
         let cancelled = false;
@@ -2726,6 +2733,17 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
                             title="Media Controls"
                         >
                             <Radio size={14} />
+                        </button>
+                        <button
+                            onClick={() => setIsChatGPTMode((prev) => !prev)}
+                            className={`absolute -bottom-1 -left-1 w-6 h-6 rounded-xl flex items-center justify-center hover:scale-105 transition-all z-30 ${
+
+                                    isChatGPTMode ? 'bg-amber-500 text-black' : 'bg-neutral-900 text-white'
+
+                                }`}                            
+                            title={isChatGPTMode ? "ChatGPT mode: ON" : "ChatGPT mode: OFF"}
+                        >
+                            <Bot size={14} />
                         </button>
                         <button
                             type="button"

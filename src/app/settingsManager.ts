@@ -6,6 +6,7 @@ export interface AiConfig {
   modelForComplexTasks: string;
   modelForBasicTasks: string;
   modelForTts: string;
+  url: string;
 }
 
 export interface SrsConfig {
@@ -241,7 +242,21 @@ export const getServerUrl = (config: SystemConfig): string => {
 };
 
 export const getStudyBuddyAiUrl = (config: SystemConfig): string => {
-  return `${getServerUrl(config)}/api/studybuddy/chat`;
+  if (!config.ai.url) {
+    setStudyBuddyAiUrl(false);
+  }
+  return config.ai.url;
+};
+
+export const setStudyBuddyAiUrl = (
+  isChatGPTMode: boolean
+) => {
+  const path = isChatGPTMode
+    ? '/api/studybuddy/chat_gpt'
+    : '/api/studybuddy/chat';
+  let config = getConfig(); // Get latest config to avoid overwriting other changes
+  config.ai.url = `${getServerUrl(config)}${path}`;
+  saveConfig(config, true); // Save without triggering backup
 };
 
 export function getConfig(): SystemConfig {
