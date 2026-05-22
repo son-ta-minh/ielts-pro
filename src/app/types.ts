@@ -109,6 +109,7 @@ export interface LessonPreferences {
   targetAudience: 'Kid' | 'Adult';
   tone: 'friendly_elementary' | 'professional_professor';
   preferredExampleContexts?: string[];
+  preferredExampleContextMode?: string;
 }
 
 export interface DailyStreakSnapshot {

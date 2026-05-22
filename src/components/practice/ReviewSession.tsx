@@ -13,13 +13,14 @@ interface Props {
   sessionFocus?: ReviewMode | null;
   sessionType: SessionType;
   onUpdate: (word: StudyItem) => void;
+  onUpdateUser: (user: User) => Promise<void>;
   onBulkUpdate: (words: StudyItem[]) => void;
   onComplete: () => void;
   onRetry: () => void;
   autoCloseOnFinish?: boolean;
 }
 
-const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onBulkUpdate, onComplete, onRetry, autoCloseOnFinish = false }) => {
+const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onUpdateUser, onBulkUpdate, onComplete, onRetry, autoCloseOnFinish = false }) => {
   const { showToast } = useToast();
   const AUTOSAVE_DELAY_MS = 1500;
 
@@ -475,6 +476,7 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
         currentWord={currentWord}
         isNewWord={isNewWord}
         onUpdate={handleUpdateWordFromModal}
+        onUpdateUser={onUpdateUser}
         onComplete={() => { void handleCompleteWithFlush(); }}
         nextItem={nextItem}
         handleReview={handleReview}

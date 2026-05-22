@@ -107,7 +107,8 @@ const AuthView: React.FC<Props> = ({ onLogin }) => {
           language: newLanguage as 'English' | 'Vietnamese',
           targetAudience: newAudience,
           tone: newAudience === 'Kid' ? 'friendly_elementary' : 'professional_professor',
-          preferredExampleContexts: []
+          preferredExampleContexts: [],
+          preferredExampleContextMode: 'all'
       }
     };
 

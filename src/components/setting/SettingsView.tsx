@@ -152,7 +152,8 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
             targetAudience: profileData.lessonAudience.trim() as 'Kid' | 'Adult',
             // Persona is now pulled from the active coach in AudioCoachSettings
             tone: config.audioCoach.coaches[config.audioCoach.activeCoach].persona,
-            preferredExampleContexts: profileData.lessonExampleContexts || []
+            preferredExampleContexts: profileData.lessonExampleContexts || [],
+            preferredExampleContextMode: user.lessonPreferences?.preferredExampleContextMode || 'all'
         }
     };
     await onUpdateUser(updatedUser);

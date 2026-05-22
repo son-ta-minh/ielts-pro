@@ -152,6 +152,42 @@ const getPreferredExampleContextInstruction = (user: User): string => {
     return `Preferred example contexts: ${contexts.join(' | ')}. Use these first when they fit naturally.`;
 };
 
+type ExampleContextMode = 'auto' | 'all' | { context: string };
+
+const getStoredExampleContextMode = (user: User): ExampleContextMode => {
+    const raw = String(user.lessonPreferences?.preferredExampleContextMode || '').trim();
+    if (raw === 'auto') return 'auto';
+    if (raw === 'all' || !raw) return 'all';
+    return { context: raw };
+};
+
+const serializeExampleContextMode = (mode: ExampleContextMode): string => {
+    if (mode === 'auto' || mode === 'all') return mode;
+    return mode.context;
+};
+
+const getUserExampleContexts = (user: User): string[] =>
+    (user.lessonPreferences?.preferredExampleContexts || [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+
+const getExampleContextInstruction = (user: User, mode: ExampleContextMode): string => {
+    if (mode === 'auto') {
+        return 'Context mode: Auto. Choose freely and naturally. IELTS-style examples are allowed when suitable.';
+    }
+
+    const contexts = getUserExampleContexts(user);
+
+    if (mode === 'all') {
+        if (contexts.length === 0) {
+            return 'Context mode: My contexts, but no saved user contexts are available. Fall back to natural general English examples.';
+        }
+        return `Context mode: My contexts. Use only these user-preferred contexts across the examples: ${contexts.join(' | ')}.`;
+    }
+
+    return `Context mode: Specific context only. Use only this context for every example unless the word becomes impossible to use naturally: ${mode.context}.`;
+};
+
 type StudyBuddyQuizItem = {
     question: string;
     answer: string;
@@ -373,6 +409,7 @@ export interface ReviewSessionUIProps {
   currentWord?: StudyItem;
   isNewWord: boolean;
   onUpdate: (word: StudyItem) => void;
+  onUpdateUser: (user: User) => Promise<void>;
   onComplete: () => void;
   nextItem: () => void;
   handleReview: (grade: ReviewGrade) => void;
@@ -630,6 +667,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
         sessionFocus,
         sessionOutcomes, sessionFinished, wordInModal, setWordInModal, onOpenWordDetails, editingWordInModal, setEditingWordInModal,
         isTesting, setIsTesting, currentWord: currentWordProp, isNewWord, onUpdate, onComplete,
+        onUpdateUser,
         nextItem, handleReview, handleTestComplete, handleRetry, handleEndSession,
         handleQuickReview, handleManualPractice, isQuickReviewMode, autoCloseOnFinish = false
     } = props;
@@ -650,6 +688,8 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const [studyBuddyExampleBuffer, setStudyBuddyExampleBuffer] = useState<string[]>([]);
     const [isStudyBuddyExampleLoading, setIsStudyBuddyExampleLoading] = useState(false);
     const [studyBuddyExampleError, setStudyBuddyExampleError] = useState<string | null>(null);
+    const [studyBuddyExampleContextMode, setStudyBuddyExampleContextMode] = useState<ExampleContextMode>(() => getStoredExampleContextMode(user));
+    const [isStudyBuddyExampleContextSelectorOpen, setIsStudyBuddyExampleContextSelectorOpen] = useState(false);
     const [activeBotPanel, setActiveBotPanel] = useState<'example' | 'quiz' | 'sentence' | null>(null);
     const [studyBuddyQuizItem, setStudyBuddyQuizItem] = useState<StudyBuddyQuizItem | null>(null);
     const [studyBuddyQuizBuffer, setStudyBuddyQuizBuffer] = useState<StudyBuddyQuizItem[]>([]);
@@ -688,6 +728,7 @@ export const ReviewSessionUI: React.FC<ReviewSessionUIProps> = (props) => {
     const studyBuddyExampleRequestWordIdRef = useRef<string | null>(null);
     const studyBuddyExampleSeenRef = useRef<Set<string>>(new Set());
     const studyBuddyExampleRevealRef = useRef(false);
+    const studyBuddyExampleContextModeRef = useRef<ExampleContextMode>(getStoredExampleContextMode(user));
     const studyBuddyQuizAbortRef = useRef<AbortController | null>(null);
     const studyBuddyQuizRequestRef = useRef<Promise<StudyBuddyQuizItem[]> | null>(null);
     const studyBuddyQuizRequestWordIdRef = useRef<string | null>(null);
@@ -1134,7 +1175,7 @@ Rules:
         const audienceInstruction = getAudienceInstruction(user);
         const levelInstruction = user.currentLevel ? `Learner level: ${user.currentLevel}.` : '';
         const targetInstruction = user.target ? `Learner goal: ${user.target}.` : '';
-        const contextInstruction = getPreferredExampleContextInstruction(user);
+        const contextInstruction = getExampleContextInstruction(user, studyBuddyExampleContextModeRef.current);
         const response = await fetch(studyBuddyAiUrl, {
             method: 'POST',
             headers: {
@@ -1791,13 +1832,14 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         return requestPromise;
     }, [requestStudyBuddyQuizQuestions]);
 
-    const showNextStudyBuddyExample = useCallback(async () => {
+    const showNextStudyBuddyExample = useCallback(async (options?: { forceRefresh?: boolean }) => {
         setActiveFastReviewPanel(null);
         setActiveBotPanel('example');
         setHoveredActionMenu(null);
         setShowSpellBox(false);
         setIsStudyBuddyExampleVisible(true);
         studyBuddyExampleRevealRef.current = false;
+        const forceRefresh = !!options?.forceRefresh;
 
         const bufferSnapshot = studyBuddyExampleBuffer;
 
@@ -1809,7 +1851,7 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         });
 
         // Read from snapshot (sync), not via setState
-        if (bufferSnapshot.length > 0) {
+        if (!forceRefresh && bufferSnapshot.length > 0) {
             const [first, ...rest] = bufferSnapshot;
 
             console.log('[StudyBuddy][NextExample] BUFFER HIT', {
@@ -1826,7 +1868,7 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         }
 
         // Prevent duplicate fetch if a request is already ongoing for this word
-        if (studyBuddyExampleRequestRef.current && studyBuddyExampleRequestWordIdRef.current === currentWord.id) {
+        if (!forceRefresh && studyBuddyExampleRequestRef.current && studyBuddyExampleRequestWordIdRef.current === currentWord.id) {
             console.log('[StudyBuddy][NextExample] WAITING FOR EXISTING REQUEST');
             studyBuddyExampleRevealRef.current = true;
 
@@ -1835,16 +1877,17 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
         }
 
         console.log('[StudyBuddy][NextExample] BUFFER MISS - requesting new examples', {
-            shouldReplace: studyBuddyExampleRequestWordIdRef.current !== currentWord.id,
+            shouldReplace: forceRefresh || studyBuddyExampleRequestWordIdRef.current !== currentWord.id,
             currentWordId: currentWord.id,
-            activeRequestWordId: studyBuddyExampleRequestWordIdRef.current
+            activeRequestWordId: studyBuddyExampleRequestWordIdRef.current,
+            forceRefresh
         });
 
         setStudyBuddyExampleError(null);
         studyBuddyExampleRevealRef.current = true;
 
         try {
-            const shouldReplace = studyBuddyExampleRequestWordIdRef.current !== currentWord.id;
+            const shouldReplace = forceRefresh || studyBuddyExampleRequestWordIdRef.current !== currentWord.id;
             await prefetchStudyBuddyExamples(currentWord, { replace: shouldReplace });
 
             // Do nothing here — auto-consume is handled inside prefetch
@@ -1852,6 +1895,36 @@ ${bannedAnswers.length > 0 ? `- Do not reuse any of these previous answer colloc
             studyBuddyExampleRevealRef.current = false;
         }
     }, [currentWord, prefetchStudyBuddyExamples, studyBuddyExampleBuffer]);
+
+    const handleStudyBuddyExampleContextModeChange = useCallback(async (mode: ExampleContextMode) => {
+        studyBuddyExampleContextModeRef.current = mode;
+        setStudyBuddyExampleContextMode(mode);
+        await onUpdateUser({
+            ...user,
+            lessonPreferences: {
+                language: user.lessonPreferences?.language || 'English',
+                targetAudience: user.lessonPreferences?.targetAudience || 'Adult',
+                tone: user.lessonPreferences?.tone || 'professional_professor',
+                preferredExampleContexts: user.lessonPreferences?.preferredExampleContexts || [],
+                preferredExampleContextMode: serializeExampleContextMode(mode)
+            }
+        });
+        studyBuddyExampleAbortRef.current?.abort();
+        studyBuddyExampleRequestRef.current = null;
+        studyBuddyExampleRequestWordIdRef.current = null;
+        studyBuddyExampleSeenRef.current = new Set();
+        setStudyBuddyExample(null);
+        setStudyBuddyExampleBuffer([]);
+        setStudyBuddyExampleError(null);
+        setIsStudyBuddyExampleVisible(true);
+        studyBuddyExampleRevealRef.current = true;
+        setIsStudyBuddyExampleContextSelectorOpen(true);
+        setActiveFastReviewPanel(null);
+        setActiveBotPanel('example');
+        setHoveredActionMenu(null);
+        setShowSpellBox(false);
+        await showNextStudyBuddyExample({ forceRefresh: true });
+    }, [onUpdateUser, showNextStudyBuddyExample, user]);
 
     const showNextStudyBuddyQuiz = useCallback(async () => {
         setActiveFastReviewPanel(null);
@@ -2098,6 +2171,12 @@ Reply with exactly one very short sentence or phrase in English.`
     }, [isJapaneseCurrentWord, isSentenceRecording]);
 
     useEffect(() => {
+        const nextMode = getStoredExampleContextMode(user);
+        studyBuddyExampleContextModeRef.current = nextMode;
+        setStudyBuddyExampleContextMode(nextMode);
+    }, [user.lessonPreferences?.preferredExampleContextMode]);
+
+    useEffect(() => {
         studyBuddyExampleAbortRef.current?.abort();
         studyBuddyExampleRequestRef.current = null;
         studyBuddyExampleRequestWordIdRef.current = null;
@@ -2108,6 +2187,10 @@ Reply with exactly one very short sentence or phrase in English.`
         studyBuddyExampleRevealRef.current = false;
         setIsStudyBuddyExampleVisible(false);
         setStudyBuddyExampleError(null);
+        const initialContextMode = getStoredExampleContextMode(user);
+        studyBuddyExampleContextModeRef.current = initialContextMode;
+        setStudyBuddyExampleContextMode(initialContextMode);
+        setIsStudyBuddyExampleContextSelectorOpen(false);
         setIsExampleTextRevealed(false);
         studyBuddyExampleRevealRef.current = false;
         studyBuddyQuizAbortRef.current?.abort();
@@ -2593,21 +2676,38 @@ Reply with exactly one very short sentence or phrase in English.`
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        void showNextStudyBuddyExample();
-                                                    }}
-                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-all ${
-                                                        isStudyBuddyExampleLoading
-                                                            ? 'bg-blue-200 text-blue-800 cursor-not-allowed'
-                                                            : 'bg-white text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 active:scale-95'
-                                                    }`}
-                                                    disabled={isStudyBuddyExampleLoading}
-                                                >
-                                                    {isStudyBuddyExampleLoading ? null : <ArrowRight size={11} />}
-                                                    <span>{isStudyBuddyExampleLoading ? 'Loading' : 'Next'}</span>
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setIsStudyBuddyExampleContextSelectorOpen((prev) => !prev);
+                                                        }}
+                                                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-all ${
+                                                            isStudyBuddyExampleContextSelectorOpen
+                                                                ? 'bg-blue-700 text-white border border-blue-700'
+                                                                : 'bg-white text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 active:scale-95'
+                                                        }`}
+                                                    >
+                                                        <BookOpen size={11} />
+                                                        <span>Context</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            void showNextStudyBuddyExample();
+                                                        }}
+                                                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-all ${
+                                                            isStudyBuddyExampleLoading
+                                                                ? 'bg-blue-200 text-blue-800 cursor-not-allowed'
+                                                                : 'bg-white text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 active:scale-95'
+                                                        }`}
+                                                        disabled={isStudyBuddyExampleLoading}
+                                                    >
+                                                        {isStudyBuddyExampleLoading ? null : <ArrowRight size={11} />}
+                                                        <span>{isStudyBuddyExampleLoading ? 'Loading' : 'Next'}</span>
+                                                    </button>
+                                                </div>
                                             </div>
                                             {studyBuddyExample ? (
                                                 <p
@@ -2629,6 +2729,56 @@ Reply with exactly one very short sentence or phrase in English.`
                                                 <p className="text-sm font-semibold leading-relaxed text-neutral-500">
                                                     Tap to show an example sentence.
                                                 </p>
+                                            )}
+                                            {isStudyBuddyExampleContextSelectorOpen && (
+                                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleStudyBuddyExampleContextModeChange('auto')}
+                                                    className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                                                        studyBuddyExampleContextMode === 'auto'
+                                                            ? 'border-blue-700 bg-blue-700 text-white'
+                                                            : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-100'
+                                                    }`}
+                                                >
+                                                    Auto
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleStudyBuddyExampleContextModeChange('all')}
+                                                    className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                                                        studyBuddyExampleContextMode === 'all'
+                                                            ? 'border-blue-700 bg-blue-700 text-white'
+                                                            : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-100'
+                                                    }`}
+                                                >
+                                                    My contexts
+                                                </button>
+                                                {getUserExampleContexts(user).map((context) => {
+                                                    const isSpecificActive = typeof studyBuddyExampleContextMode === 'object' && studyBuddyExampleContextMode.context === context;
+                                                    const isIncludedByAll = studyBuddyExampleContextMode === 'all';
+                                                    const shouldShowTick = isSpecificActive || isIncludedByAll;
+                                                    return (
+                                                        <button
+                                                            key={context}
+                                                            type="button"
+                                                            onClick={() => void handleStudyBuddyExampleContextModeChange({ context })}
+                                                            className={`rounded-full border px-3 py-1 text-[10px] font-black transition-colors ${
+                                                                isSpecificActive
+                                                                    ? 'border-blue-700 bg-blue-700 text-white'
+                                                                    : isIncludedByAll
+                                                                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                                        : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-100'
+                                                            }`}
+                                                        >
+                                                            <span className="inline-flex items-center gap-1.5 uppercase">
+                                                                {shouldShowTick && <Check size={11} className="text-emerald-500" />}
+                                                                <span>{context}</span>
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                             )}
                                         </div>
                                     </div>

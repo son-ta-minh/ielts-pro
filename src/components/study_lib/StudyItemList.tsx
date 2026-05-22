@@ -20,6 +20,7 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
   onBulkDelete: (ids: string[]) => Promise<void>;
   onUpdate: (updated: StudyItem) => void;
+  onUpdateUser: (user: User) => Promise<void>;
   onStartSession: (words: StudyItem[]) => void;
   initialFilter?: string | null;
   onInitialFilterApplied?: () => void;
@@ -50,7 +51,7 @@ const deleteGroupPathValue = (groupPath: string, targetPath: string): string | n
   return groupPath.slice(targetPath.length + 1) || null;
 };
 
-const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLabel = 'Word Library', onDelete, onBulkDelete, onUpdate, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed, onNavigate }) => {
+const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLabel = 'Word Library', onDelete, onBulkDelete, onUpdate, onUpdateUser, onStartSession, initialFilter, onInitialFilterApplied, forceExpandAdd, onExpandAddConsumed, onNavigate }) => {
   const [words, setWords] = useState<StudyItem[]>([]);
   
   // Read storage synchronously for initial state
@@ -467,6 +468,7 @@ const StudyItemList: React.FC<Props> = ({ user, libraryType = 'vocab', libraryLa
                   sessionWords={inlineReviewWords}
                   sessionType="custom"
                   onUpdate={onUpdate}
+                  onUpdateUser={onUpdateUser}
                   onBulkUpdate={async (updatedWords) => {
                     await dataStore.bulkSaveWords(updatedWords);
                   }}
