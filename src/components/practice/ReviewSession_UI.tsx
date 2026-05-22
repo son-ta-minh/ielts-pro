@@ -140,6 +140,18 @@ const getLearnerProfileInstruction = (user: User): string => {
     return `Match this learner profile: ${profileParts.join(' | ')}.`;
 };
 
+const getPreferredExampleContextInstruction = (user: User): string => {
+    const contexts = (user.lessonPreferences?.preferredExampleContexts || [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+
+    if (contexts.length === 0) {
+        return 'Preferred example contexts: general daily life, school, or work when natural.';
+    }
+
+    return `Preferred example contexts: ${contexts.join(' | ')}. Use these first when they fit naturally.`;
+};
+
 type StudyBuddyQuizItem = {
     question: string;
     answer: string;
@@ -1122,6 +1134,7 @@ Rules:
         const audienceInstruction = getAudienceInstruction(user);
         const levelInstruction = user.currentLevel ? `Learner level: ${user.currentLevel}.` : '';
         const targetInstruction = user.target ? `Learner goal: ${user.target}.` : '';
+        const contextInstruction = getPreferredExampleContextInstruction(user);
         const response = await fetch(studyBuddyAiUrl, {
             method: 'POST',
             headers: {
@@ -1144,6 +1157,7 @@ Rules:
 - ${audienceInstruction}
 - ${levelInstruction}
 - ${targetInstruction}
+- ${contextInstruction}
 - Match the learner profile above.
 - Use the exact target word naturally in Japanese context.
 - Keep the sentences in Japanese.
@@ -1158,6 +1172,7 @@ Rules:
 - ${audienceInstruction}
 - ${levelInstruction}
 - ${targetInstruction}
+- ${contextInstruction}
 - Match the learner profile above.
 - Use the target word naturally in context.
 - One sentence per line.
@@ -1376,6 +1391,7 @@ Return only the corrected sentence.`
         const bannedAnswers = Array.from(studyBuddyQuizAnswerSeenRef.current);
         const audienceInstruction = getAudienceInstruction(user);
         const profileInstruction = getLearnerProfileInstruction(user);
+        const contextInstruction = getPreferredExampleContextInstruction(user);
         const headwordWordCount = Math.max(1, countWords(word.word));
         const collocationList = (word.collocationsArray || [])
             .filter((item) => !item.isIgnored && String(item.text || '').trim())
@@ -1401,6 +1417,7 @@ Rules:
 - This test is for practicing natural Japanese usage patterns with the word "${word.word}".
 - ${audienceInstruction}
 - ${profileInstruction}
+- ${contextInstruction}
 - Each line must use this exact format: question ||| answer
 - "question" = one natural Japanese example sentence that already contains the answer phrase in the sentence. Do not use blanks.
 - answer = the exact short Japanese phrase taken from that sentence.
@@ -1419,6 +1436,7 @@ Rules:
 - This test is for practicing collocations with the word "${word.word}". A collocation is a popular and natural combination of words that native speakers commonly use together (e.g., "make a decision", "conduct research", "raise awareness"). Bad collocation is "keep fit regularly" because we don't say "keep fit" with an adverb in between. Good collocation is "keep fit" or "do exercise regularly".
 - ${audienceInstruction}
 - ${profileInstruction}
+- ${contextInstruction}
 - Each line must use this exact format: question ||| answer
 - "question" = one natural example sentence that already contains the answer collocation in the sentence. Do not use blanks.
 - answer = the exact collocation phrase taken from that sentence.

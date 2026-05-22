@@ -108,6 +108,7 @@ export interface LessonPreferences {
   language: 'English' | 'Vietnamese';
   targetAudience: 'Kid' | 'Adult';
   tone: 'friendly_elementary' | 'professional_professor';
+  preferredExampleContexts?: string[];
 }
 
 export interface DailyStreakSnapshot {

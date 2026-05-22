@@ -10,6 +10,7 @@ import { getConfig, saveConfig, SystemConfig, DEFAULT_SRS_CONFIG } from '../../a
 import { SettingsViewUI, SettingView } from './SettingsView_UI';
 import { InterfaceSettings } from './InterfaceSettings'; 
 import { useToast } from '../../contexts/ToastContext';
+import { LessonPreferences } from '../../app/types';
 
 interface Props {
   user: UserType;
@@ -145,11 +146,23 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
             language: profileData.lessonLanguage as 'English' | 'Vietnamese',
             targetAudience: profileData.lessonAudience.trim() as 'Kid' | 'Adult',
             // Persona is now pulled from the active coach in AudioCoachSettings
-            tone: config.audioCoach.coaches[config.audioCoach.activeCoach].persona
+            tone: config.audioCoach.coaches[config.audioCoach.activeCoach].persona,
+            preferredExampleContexts: user.lessonPreferences?.preferredExampleContexts || []
         }
     };
     await onUpdateUser(updatedUser);
     setNotification('Profile & Preferences updated successfully!');
+  };
+
+  const handleSaveLessonPreferences = async (preferences: LessonPreferences) => {
+    await onUpdateUser({
+      ...user,
+      lessonPreferences: {
+        ...user.lessonPreferences,
+        ...preferences
+      }
+    });
+    setNotification('Learning preferences updated successfully!');
   };
 
   const handleSaveApiKeys = () => { localStorage.setItem('gemini_api_keys', apiKeyInput.trim()); setNotification('API Keys have been saved locally.'); };
@@ -207,6 +220,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         onAvatarChange={handleAvatarChange}
         onSaveProfile={handleSaveProfile}
         onUpdateUser={onUpdateUser}
+        onSaveLessonPreferences={handleSaveLessonPreferences}
         onConfigChange={handleConfigChange}
         onAiConfigChange={handleAiConfigChange}
         onApiKeyInputChange={(e) => setApiKeyInput(e.target.value)}
