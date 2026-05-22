@@ -2764,15 +2764,13 @@ Reply with exactly one very short sentence or phrase in English.`
                                                             type="button"
                                                             onClick={() => void handleStudyBuddyExampleContextModeChange({ context })}
                                                             className={`rounded-full border px-3 py-1 text-[10px] font-black transition-colors ${
-                                                                isSpecificActive
+                                                                isSpecificActive || isIncludedByAll
                                                                     ? 'border-blue-700 bg-blue-700 text-white'
-                                                                    : isIncludedByAll
-                                                                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                                                        : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-100'
+                                                                    : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-100'
                                                             }`}
                                                         >
                                                             <span className="inline-flex items-center gap-1.5 uppercase">
-                                                                {shouldShowTick && <Check size={11} className="text-emerald-500" />}
+                                                                {shouldShowTick && <Check size={11} className="text-white" />}
                                                                 <span>{context}</span>
                                                             </span>
                                                         </button>
