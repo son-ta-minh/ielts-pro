@@ -9,7 +9,7 @@ import { DangerZone } from './DangerZone';
 import { ServerSettings } from './ServerSettings';
 import { LearningSettings } from './LearningSettings';
 import { SystemConfig, DailyGoalConfig } from '../../app/settingsManager';
-import { User as UserType, LessonPreferences } from '../../app/types';
+import { User as UserType } from '../../app/types';
 
 export type SettingView = 'PROFILE' | 'INTERFACE' | 'SERVER' | 'AUDIO_COACH' | 'LEARNING' | 'DANGER';
 
@@ -18,7 +18,7 @@ interface SettingsViewUIProps {
     currentView: SettingView;
     isDropdownOpen: boolean;
     notification: string | null;
-    profileData: { name: string; avatar: string; role: string; currentLevel: string; target: string; nativeLanguage: string; };
+    profileData: { name: string; avatar: string; role: string; currentLevel: string; target: string; nativeLanguage: string; lessonLanguage?: string; lessonAudience?: 'Kid' | 'Adult'; lessonExampleContexts?: string[]; };
     user: UserType;
     config: SystemConfig;
     isVoiceLoading: boolean;
@@ -33,10 +33,10 @@ interface SettingsViewUIProps {
     setCurrentView: (view: SettingView) => void;
     setIsDropdownOpen: (isOpen: boolean) => void;
     onProfileChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+    onExampleContextsChange: (contexts: string[]) => void;
     onAvatarChange: (url: string) => void;
     onSaveProfile: () => void;
     onUpdateUser: (user: UserType) => Promise<void>;
-    onSaveLessonPreferences: (preferences: LessonPreferences) => Promise<void>;
     onConfigChange: (section: keyof SystemConfig, key: any, value: any) => void;
     onAiConfigChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onApiKeyInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -77,12 +77,12 @@ export const SettingsViewUI: React.FC<SettingsViewUIProps> = (props) => {
     
     const renderCurrentView = () => {
         switch (currentView) {
-            case 'PROFILE': return <ProfileSettings profileData={props.profileData} onProfileChange={props.onProfileChange} onAvatarChange={props.onAvatarChange} onSaveProfile={props.onSaveProfile} />;
+            case 'PROFILE': return <ProfileSettings profileData={props.profileData} onProfileChange={props.onProfileChange} onExampleContextsChange={props.onExampleContextsChange} onAvatarChange={props.onAvatarChange} onSaveProfile={props.onSaveProfile} />;
             case 'SERVER': return <ServerSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />;
             case 'AUDIO_COACH': return <AudioCoachSettings config={props.config} user={props.user} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} onUpdateUser={props.onUpdateUser} />;
             case 'LEARNING': return (
                 <div className="space-y-6 animate-in fade-in duration-300">
-                    <LearningSettings lessonConfig={props.config.lesson} user={props.user} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} onSaveLessonPreferences={props.onSaveLessonPreferences} />
+                    <LearningSettings lessonConfig={props.config.lesson} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />
                     <GoalSettings goalConfig={props.goalConfig} onGoalConfigChange={props.onGoalConfigChange} onSaveSettings={props.onSaveSettings} />
                     <SrsSettings srsConfig={props.config.srs} onSrsConfigChange={props.onSrsConfigChange} onResetSrsConfig={props.onResetSrsConfig} onSaveSettings={props.onSaveSettings} />
                 </div>

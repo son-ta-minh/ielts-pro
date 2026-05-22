@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { User as UserIcon, Globe, Save, Users, Edit3 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { User as UserIcon, Globe, Save, Users, Edit3, Plus, Trash2 } from 'lucide-react';
 import { AvatarSelectionModal } from '../common/AvatarSelectionModal';
 import { User } from '../../app/types';
 
@@ -30,8 +30,10 @@ interface ProfileSettingsProps {
         nativeLanguage: string;
         lessonLanguage?: string;
         lessonAudience?: 'Kid' | 'Adult';
+        lessonExampleContexts?: string[];
     };
     onProfileChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+    onExampleContextsChange: (contexts: string[]) => void;
     onAvatarChange: (url: string) => void;
     onSaveProfile: () => void;
     // We need the full user object to pass to the modal for level checks
@@ -41,9 +43,18 @@ interface ProfileSettingsProps {
     // Ideally, pass the `user` object from SettingsView. Let's stick to props we have.
 }
 
-export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profileData, onProfileChange, onAvatarChange, onSaveProfile }) => {
+const normalizeExampleContext = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profileData, onProfileChange, onExampleContextsChange, onAvatarChange, onSaveProfile }) => {
     const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+    const [newExampleContext, setNewExampleContext] = useState('');
     const isAutoAssignedRole = RPG_ROLES.some(r => r.title === profileData.role);
+    const exampleContexts = (profileData.lessonExampleContexts || []).map(normalizeExampleContext).filter(Boolean);
+
+    useEffect(() => {
+        onExampleContextsChange(exampleContexts);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Mock user object for the modal since it expects a User type.
     const dummyUserForModal: User = {
@@ -55,6 +66,21 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profileData, o
         level: 100, // Unlock most for manual selection? Or strictly use current?
         peakLevel: 100, // Unlock most
         adventure: {} as any
+    };
+
+    const handleAddExampleContext = () => {
+        const nextContext = normalizeExampleContext(newExampleContext);
+        if (!nextContext) return;
+
+        const exists = exampleContexts.some((item) => item.toLowerCase() === nextContext.toLowerCase());
+        if (exists) return;
+
+        onExampleContextsChange([...exampleContexts, nextContext]);
+        setNewExampleContext('');
+    };
+
+    const handleDeleteExampleContext = (target: string) => {
+        onExampleContextsChange(exampleContexts.filter((item) => item !== target));
     };
 
     return (
@@ -161,7 +187,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profileData, o
                     </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-neutral-100">
-                     <div>
+                    <div>
                         <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 mb-2 flex items-center gap-2"><Globe size={12} /> Content Language</label>
                         <select name="lessonLanguage" value={profileData.lessonLanguage} onChange={onProfileChange} className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl font-medium appearance-none">
                             <option value="English">English</option>
@@ -174,6 +200,58 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profileData, o
                             <option value="Kid">Kid</option>
                             <option value="Adult">Adult</option>
                         </select>
+                    </div>
+                    <div className="md:col-span-2 space-y-4 p-5 bg-amber-50/60 rounded-[1.75rem] border border-amber-100">
+                        <div>
+                            <label className="block text-[10px] font-black text-neutral-400 uppercase tracking-widest px-1 mb-2">Example Context</label>
+                            <p className="text-xs text-neutral-500 px-1">Used when AI generates vocabulary examples in review sessions.</p>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row gap-3">
+                            <input
+                                value={newExampleContext}
+                                onChange={(e) => setNewExampleContext(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddExampleContext();
+                                    }
+                                }}
+                                placeholder="e.g. Workplace, School, Software Project"
+                                className="flex-1 px-4 py-3 bg-white border border-amber-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-neutral-900 outline-none"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleAddExampleContext}
+                                disabled={!normalizeExampleContext(newExampleContext)}
+                                className="px-4 py-3 bg-amber-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-amber-600 disabled:opacity-50"
+                            >
+                                <Plus size={14} />
+                                <span>Add Context</span>
+                            </button>
+                        </div>
+
+                        {exampleContexts.length === 0 ? (
+                            <div className="p-6 text-center text-xs text-neutral-400 bg-white rounded-2xl border border-amber-100">
+                                No preferred contexts yet. AI will fall back to general daily-life examples.
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {exampleContexts.map((item) => (
+                                    <div key={item} className="flex items-center justify-between gap-3 px-4 py-3 bg-white rounded-2xl border border-amber-100">
+                                        <span className="font-bold text-sm text-neutral-800">{item}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteExampleContext(item)}
+                                            className="p-2 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                            title={`Delete ${item}`}
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

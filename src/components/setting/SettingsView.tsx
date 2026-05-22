@@ -10,7 +10,6 @@ import { getConfig, saveConfig, SystemConfig, DEFAULT_SRS_CONFIG } from '../../a
 import { SettingsViewUI, SettingView } from './SettingsView_UI';
 import { InterfaceSettings } from './InterfaceSettings'; 
 import { useToast } from '../../contexts/ToastContext';
-import { LessonPreferences } from '../../app/types';
 
 interface Props {
   user: UserType;
@@ -65,6 +64,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
     nativeLanguage: user.nativeLanguage || 'English',
     lessonLanguage: user.lessonPreferences?.language || 'English',
     lessonAudience: user.lessonPreferences?.targetAudience || 'Adult', // DEFAULT: Adult
+    lessonExampleContexts: user.lessonPreferences?.preferredExampleContexts || [],
   });
   
   useEffect(() => {
@@ -77,6 +77,7 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         nativeLanguage: user.nativeLanguage || 'English',
         lessonLanguage: user.lessonPreferences?.language || 'English',
         lessonAudience: user.lessonPreferences?.targetAudience || 'Adult',
+        lessonExampleContexts: user.lessonPreferences?.preferredExampleContexts || [],
     });
   }, [user]);
 
@@ -133,6 +134,10 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
     setProfileData(prev => ({ ...prev, avatar: url }));
   };
 
+  const handleExampleContextsChange = (contexts: string[]) => {
+    setProfileData(prev => ({ ...prev, lessonExampleContexts: contexts }));
+  };
+
   const handleSaveProfile = async () => {
     const updatedUser: UserType = { 
         ...user, 
@@ -147,22 +152,11 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
             targetAudience: profileData.lessonAudience.trim() as 'Kid' | 'Adult',
             // Persona is now pulled from the active coach in AudioCoachSettings
             tone: config.audioCoach.coaches[config.audioCoach.activeCoach].persona,
-            preferredExampleContexts: user.lessonPreferences?.preferredExampleContexts || []
+            preferredExampleContexts: profileData.lessonExampleContexts || []
         }
     };
     await onUpdateUser(updatedUser);
     setNotification('Profile & Preferences updated successfully!');
-  };
-
-  const handleSaveLessonPreferences = async (preferences: LessonPreferences) => {
-    await onUpdateUser({
-      ...user,
-      lessonPreferences: {
-        ...user.lessonPreferences,
-        ...preferences
-      }
-    });
-    setNotification('Learning preferences updated successfully!');
   };
 
   const handleSaveApiKeys = () => { localStorage.setItem('gemini_api_keys', apiKeyInput.trim()); setNotification('API Keys have been saved locally.'); };
@@ -217,10 +211,10 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         setCurrentView={setCurrentView}
         setIsDropdownOpen={setIsDropdownOpen}
         onProfileChange={handleProfileChange}
+        onExampleContextsChange={handleExampleContextsChange}
         onAvatarChange={handleAvatarChange}
         onSaveProfile={handleSaveProfile}
         onUpdateUser={onUpdateUser}
-        onSaveLessonPreferences={handleSaveLessonPreferences}
         onConfigChange={handleConfigChange}
         onAiConfigChange={handleAiConfigChange}
         onApiKeyInputChange={(e) => setApiKeyInput(e.target.value)}
