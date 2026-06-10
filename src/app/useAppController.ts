@@ -747,7 +747,6 @@ export const useAppController = () => {
              }
         }
         try {
-            await dataStore.clearVocabularyOnly();
             const backups = await fetchServerBackups();
             setAutoRestoreCandidates(backups);
             setIsAutoRestoreOpen(true);

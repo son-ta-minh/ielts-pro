@@ -22,8 +22,6 @@ interface Props {
 
 const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sessionFocus, sessionType, onUpdate, onUpdateUser, onBulkUpdate, onComplete, onRetry, autoCloseOnFinish = false }) => {
   const { showToast } = useToast();
-  const AUTOSAVE_DELAY_MS = 1500;
-
   const sessionWords = initialWords;
   const sessionIdentityRef = useRef<string | null>(null);
   const [newWordIds, setNewWordIds] = useState<Set<string>>(new Set());
@@ -80,7 +78,6 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
   useEffect(() => { sessionUpdatesRef.current = sessionUpdates; }, [sessionUpdates]);
   const sessionFinishedRef = useRef(sessionFinished);
   useEffect(() => { sessionFinishedRef.current = sessionFinished; }, [sessionFinished]);
-  const autosaveTimerRef = useRef<number | null>(null);
   const isSavingRef = useRef(false);
   const savePromiseRef = useRef<Promise<void> | null>(null);
   
@@ -153,15 +150,6 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       } finally {
         isSavingRef.current = false;
         savePromiseRef.current = null;
-        if (sessionUpdatesRef.current.size > 0 && !sessionFinishedRef.current) {
-          if (autosaveTimerRef.current) {
-            window.clearTimeout(autosaveTimerRef.current);
-          }
-          autosaveTimerRef.current = window.setTimeout(() => {
-            autosaveTimerRef.current = null;
-            commitSessionResults();
-          }, AUTOSAVE_DELAY_MS);
-        }
       }
     })();
 
@@ -171,47 +159,20 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
 
   const handleOpenWordDetails = useCallback(async (word: StudyItem) => {
     const latestWord = sessionUpdatesRef.current.get(word.id) || latestWordStatesRef.current.get(word.id) || word;
-
-    if (autosaveTimerRef.current) {
-      window.clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
-    }
-    await commitSessionResults();
     setWordInModal(latestWord);
-  }, [commitSessionResults]);
-
-  const scheduleAutoSave = useCallback(() => {
-    if (autosaveTimerRef.current) {
-      window.clearTimeout(autosaveTimerRef.current);
-    }
-    autosaveTimerRef.current = window.setTimeout(() => {
-      autosaveTimerRef.current = null;
-      commitSessionResults();
-    }, AUTOSAVE_DELAY_MS);
-  }, [commitSessionResults]);
-
-  useEffect(() => {
-    if (!sessionFinished && sessionUpdates.size > 0) {
-      scheduleAutoSave();
-    }
-  }, [sessionUpdates, sessionFinished, scheduleAutoSave]);
+  }, []);
 
   useEffect(() => {
     return () => {
-        if (autosaveTimerRef.current) {
-            window.clearTimeout(autosaveTimerRef.current);
-            autosaveTimerRef.current = null;
-        }
-        // Always flush pending updates on unmount, including when session just finished.
         if (sessionUpdatesRef.current.size > 0) {
-            commitSessionResults();
+            void commitSessionResults();
         }
     };
   }, [commitSessionResults]);
 
   useEffect(() => {
     if (sessionFinished && sessionUpdates.size > 0) {
-        commitSessionResults();
+        void commitSessionResults();
     }
   }, [sessionFinished, commitSessionResults, sessionUpdates.size]);
 
@@ -414,7 +375,6 @@ const ReviewSession: React.FC<Props> = ({ user, sessionWords: initialWords, sess
       updated.masteryScore = calculateMasteryScore(updated);
       latestWordStatesRef.current.set(updated.id, updated);
       setSessionUpdates(prev => new Map(prev).set(updated.id, updated));
-      // Do NOT call nextItem();
       lastTestResultsRef.current = null;
     }
   };
