@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, Pause, Play, Volume2, X } from 'lucide-react';
-import { StudyItem } from '../../../app/types';
+import { LearnedStatus, StudyItem } from '../../../app/types';
 import { speak, getPreferredSpeakLanguage, resolveCoachVoiceForLanguage } from '../../../utils/audio';
 import { fetchImageUrlsForQuery, normalizeImageUrl } from '../../../services/imageSearchService';
 import { getConfig } from '../../../app/settingsManager';
@@ -77,10 +77,11 @@ const ShortSlide: React.FC<{
     index: number;
     activeIndex: number;
     onVisible: (index: number) => void;
+    onBulkUpdate: (words: StudyItem[]) => Promise<void>;
     backgroundMode: BackgroundMode;
     generatedImages: Record<string, string[]>;
     onEnsureImage: (word: StudyItem) => Promise<void>;
-}> = ({ word, index, activeIndex, onVisible, backgroundMode, generatedImages, onEnsureImage }) => {
+}> = ({ word, index, activeIndex, onVisible, onBulkUpdate, backgroundMode, generatedImages, onEnsureImage }) => {
     const slideRef = useRef<HTMLElement | null>(null);
     const [secondsLeft, setSecondsLeft] = useState(REVEAL_SECONDS);
     const [isPaused, setIsPaused] = useState(false);
@@ -177,9 +178,32 @@ const ShortSlide: React.FC<{
                         {word.meaningVi || word.displayMeaning || 'No Vietnamese meaning yet'}
                     </p>
 
-                    <p className="mt-8 font-mono text-4xl font-black tracking-normal text-lime-200 sm:text-6xl lg:text-7xl">
-                        {isRevealed ? word.word : maskWord(word.word)}
-                    </p>
+                    <div className="mt-8 flex items-center gap-4">
+                        <div className="flex flex-col">
+
+                            <p className="font-mono text-4xl font-black tracking-normal text-lime-200 sm:text-6xl lg:text-7xl">
+                                {isRevealed ? word.word : maskWord(word.word)}
+                            </p>
+
+                            {isRevealed && word.ipaUs?.trim() && (
+                                <p className="mt-1 text-lg font-semibold tracking-wide text-white/75 sm:text-2xl">
+                                    {word.ipaUs}
+                                </p>
+                            )}
+
+                        </div>
+
+                    {isRevealed && (
+                        <button
+                            type="button"
+                            onClick={() => speakWithPreferredLanguage(word.word)}
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition-colors hover:bg-white/25 sm:h-14 sm:w-14"
+                            aria-label={`Speak ${word.word}`}
+                        >
+                            <Volume2 size={24} />
+                        </button>
+                    )}
+                </div>
 
                     <p className="mt-8 max-w-3xl text-xl font-bold leading-snug text-white/90 sm:text-3xl">
                         {blankExample(exampleSentence, word.word)}
@@ -211,6 +235,55 @@ const ShortSlide: React.FC<{
                                         ))}
                                     </div>
                                 )}
+                                <div className="flex items-center gap-2 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const currentTime = Date.now();
+                                            onBulkUpdate([{
+                                                ...word,
+                                                learnedStatus: LearnedStatus.FORGOT,
+                                                lastReview: currentTime,
+                                                updatedAt: currentTime,
+                                            }]);
+                                        }}
+                                        className="flex h-12 items-center justify-center rounded-full bg-rose-500/20 px-5 text-sm font-black text-rose-100 backdrop-blur-md transition-colors hover:bg-rose-500/30 sm:h-14"
+                                    >
+                                        Forgot
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const currentTime = Date.now();
+                                            onBulkUpdate([{
+                                                ...word,
+                                                learnedStatus: LearnedStatus.HARD,
+                                                lastReview: currentTime,
+                                                updatedAt: currentTime,
+                                            }]);
+                                        }}
+                                        className="flex h-12 items-center justify-center rounded-full bg-orange-500/20 px-5 text-sm font-black text-orange-100 backdrop-blur-md transition-colors hover:bg-orange-500/30 sm:h-14"
+                                    >
+                                        Hard
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const currentTime = Date.now();
+                                            onBulkUpdate([{
+                                                ...word,
+                                                learnedStatus: LearnedStatus.EASY,
+                                                lastReview: currentTime,
+                                                updatedAt: currentTime,
+                                            }]);
+                                        }}
+                                        className="flex h-12 items-center justify-center rounded-full bg-green-500/20 px-5 text-sm font-black text-green-100 backdrop-blur-md transition-colors hover:bg-green-500/30 sm:h-14"
+                                    >
+                                        Easy
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -336,6 +409,7 @@ export const ShortGame: React.FC<ShortGameProps> = ({ words, onExit, onBulkUpdat
                         index={index}
                         activeIndex={activeIndex}
                         onVisible={setActiveIndex}
+                        onBulkUpdate={onBulkUpdate}
                         backgroundMode={backgroundMode}
                         generatedImages={generatedImages}
                         onEnsureImage={ensureImage}
