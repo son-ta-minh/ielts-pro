@@ -25,6 +25,8 @@ interface SettingsViewUIProps {
     availableVoices: SpeechSynthesisVoice[];
     apiKeyInput: string;
     apiUsage: { count: number; date: string };
+    googleDriveSignedIn: boolean;
+    googleDriveEmail?: string;
     mobileNavRef: React.RefObject<HTMLDivElement>;
     isApplyingAccent: boolean;
     isAdmin: boolean;
@@ -43,6 +45,8 @@ interface SettingsViewUIProps {
     onSaveApiKeys: () => void;
     onResetUsage: () => void;
     onSaveSettings: () => void;
+    onGoogleDriveLogin: () => void;
+    onGoogleDriveLogout: () => void;
     onSrsConfigChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onResetSrsConfig: () => void;
     onOpenClearProgressModal: () => void;
@@ -78,7 +82,7 @@ export const SettingsViewUI: React.FC<SettingsViewUIProps> = (props) => {
     const renderCurrentView = () => {
         switch (currentView) {
             case 'PROFILE': return <ProfileSettings profileData={props.profileData} onProfileChange={props.onProfileChange} onExampleContextsChange={props.onExampleContextsChange} onAvatarChange={props.onAvatarChange} onSaveProfile={props.onSaveProfile} />;
-            case 'SERVER': return <ServerSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} />;
+            case 'SERVER': return <ServerSettings config={props.config} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} googleDriveSignedIn={props.googleDriveSignedIn} googleDriveEmail={props.googleDriveEmail} onGoogleDriveLogin={props.onGoogleDriveLogin} onGoogleDriveLogout={props.onGoogleDriveLogout} />;
             case 'AUDIO_COACH': return <AudioCoachSettings config={props.config} user={props.user} onConfigChange={props.onConfigChange} onSaveSettings={props.onSaveSettings} onUpdateUser={props.onUpdateUser} />;
             case 'LEARNING': return (
                 <div className="space-y-6 animate-in fade-in duration-300">

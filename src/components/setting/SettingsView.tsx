@@ -17,9 +17,13 @@ interface Props {
   onRefresh: () => Promise<void>;
   onNuke: () => void;
   apiUsage: { count: number; date: string };
+  googleDriveSignedIn: boolean;
+  googleDriveEmail?: string;
+  onGoogleDriveLogin: () => Promise<boolean>;
+  onGoogleDriveLogout: () => Promise<void>;
 }
 
-export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, onNuke, apiUsage }) => {
+export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, onNuke, apiUsage, googleDriveSignedIn, googleDriveEmail, onGoogleDriveLogin, onGoogleDriveLogout }) => {
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   
@@ -208,6 +212,8 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         availableVoices={availableVoices}
         apiKeyInput={apiKeyInput}
         apiUsage={apiUsage}
+        googleDriveSignedIn={googleDriveSignedIn}
+        googleDriveEmail={googleDriveEmail}
         mobileNavRef={mobileNavRef}
         setCurrentView={setCurrentView}
         setIsDropdownOpen={setIsDropdownOpen}
@@ -222,6 +228,8 @@ export const SettingsView: React.FC<Props> = ({ user, onUpdateUser, onRefresh, o
         onSaveApiKeys={handleSaveApiKeys}
         onResetUsage={handleResetUsage}
         onSaveSettings={handleSaveSettings}
+        onGoogleDriveLogin={async () => { const signedIn = await onGoogleDriveLogin(); if (signedIn) setCurrentView('SERVER'); }}
+        onGoogleDriveLogout={onGoogleDriveLogout}
         onSrsConfigChange={handleSrsConfigChange}
         onResetSrsConfig={handleResetSrsConfig}
         onOpenClearProgressModal={() => setIsClearProgressModalOpen(true)}

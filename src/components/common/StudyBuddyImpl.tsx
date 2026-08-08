@@ -295,10 +295,12 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     prevMode.current = isChatGPTMode;
 
     setStudyBuddyAiUrl(isChatGPTMode);
-    showToast(
-        `Using ${isChatGPTMode ? 'ChatGPT' : 'local AI'}`,
-        'success'
-    );
+    if (isChatGPTMode) {
+        showToast(
+            `Using ChatGPT API for StudyBuddy responses. This may result in higher latency`,
+            'success'
+        );
+    }
     }, [isChatGPTMode]);
 
     useEffect(() => {
@@ -427,7 +429,7 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             }
             eventSource.close();
             setIsInteractiveModeEnabled(false);
-            showToast('Interactive connection closed.', 'error');
+            // showToast('Interactive connection closed.', 'error');
         };
 
         eventSource.addEventListener('ready', handleReady as EventListener);

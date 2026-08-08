@@ -280,7 +280,7 @@ export const refreshServerLibrary = async (): Promise<boolean> => {
     }
 };
 
-async function getFullExportData(userId: string, user: User) {
+export async function getFullExportData(userId: string, user: User) {
      const [wordsData, unitsData, readingBooksData, logsData, speakingTopicsData, speakingLogsData, nativeSpeakItemsDataRaw, conversationItemsDataRaw, freeTalkItemsDataRaw, speakingYoutubeItemsDataRaw, writingTopicsData, writingLogsData, compositionsData, irregularVerbsData, wordFamilyGroupsData, lessonsData, listeningItemsData, wordBooksDataRaw, planningGoalsData, questionBankData] = await Promise.all([
         db.getAllWordsForExport(userId),
         db.getUnitsByUserId(userId),

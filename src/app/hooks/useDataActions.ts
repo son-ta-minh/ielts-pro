@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, createElement, Fragment } from 'react';
 import { User, StudyItem, DataScope } from '../types';
 import * as dataStore from '../dataStore';
 import { processJsonImport, generateJsonExport, ImportResult } from '../../utils/dataHandler';
@@ -7,6 +7,7 @@ import { useToast } from '../../contexts/ToastContext';
 
 import { calculateMasteryScore } from '../../utils/srs';
 import { restoreFromServer } from '../../services/backupService';
+import { saveBackupToGoogleDrive, restoreBackupFromGoogleDrive, getGoogleDriveErrorDisplay } from '../../services/googleDriveBackupService';
 import { getConfig, saveConfig } from '../../app/settingsManager';
 
 interface UseDataActionsProps {
@@ -69,6 +70,37 @@ export const useDataActions = (props: UseDataActionsProps) => {
         refreshBackupTime();
         sessionStorage.removeItem('vocab_pro_just_restored');
         showToast('Backup file downloaded.', 'success');
+    };
+
+    const handleGoogleDriveBackup = async () => {
+        if (!currentUser) return;
+        try {
+            await saveBackupToGoogleDrive(currentUser.id, currentUser);
+            refreshBackupTime();
+            showToast('Saved to Google Drive.', 'success');
+        } catch (error) {
+            console.error('[Google Drive Backup] Failed:', error);
+            const errorDisplay = getGoogleDriveErrorDisplay(error);
+            if (errorDisplay.enableUrl) {
+                showToast(createElement(
+                    Fragment,
+                    null,
+                    createElement('span', null, 'Google Drive API is not enabled. '),
+                    createElement(
+                        'a',
+                        {
+                            href: errorDisplay.enableUrl,
+                            target: '_blank',
+                            rel: 'noreferrer',
+                            className: 'underline font-black',
+                        },
+                        'Enable it here'
+                    )
+                ), 'error', 10000);
+            } else {
+                showToast(errorDisplay.message || 'Google Drive backup failed.', 'error');
+            }
+        }
     };
     
     const handleRestoreSuccess = async (result: ImportResult, preservedConfigJson: string | null, serverMtime?: number) => {
@@ -164,6 +196,58 @@ export const useDataActions = (props: UseDataActionsProps) => {
         }
     };
 
+    const restoreFromGoogleDriveAction = async () => {
+        const currentActiveConfig = getConfig();
+        const preservedConfigJson = JSON.stringify(currentActiveConfig);
+
+        (window as any).isRestoring = true;
+        dataStore.cancelPendingBackup();
+        showToast('Downloading from Google Drive...', 'info', 10000);
+
+        try {
+            const targetUserId = currentUser?.id || 'temp-google-drive-restore';
+            const targetUserName = currentUser?.name || targetUserId;
+
+            await dataStore.wipeAllLocalData();
+
+            if (preservedConfigJson) {
+                localStorage.setItem('vocab_pro_system_config', preservedConfigJson);
+                window.dispatchEvent(new Event('config-updated'));
+            }
+
+            const result = await restoreBackupFromGoogleDrive(targetUserId, targetUserName);
+            if (result && result.type === 'success') {
+                await handleRestoreSuccess(result, preservedConfigJson);
+            } else {
+                showToast('Google Drive restore failed.', 'error');
+                (window as any).isRestoring = false;
+            }
+        } catch (err) {
+            console.error('[Google Drive Restore] Failed:', err);
+            const errorDisplay = getGoogleDriveErrorDisplay(err);
+            if (errorDisplay.enableUrl) {
+                showToast(createElement(
+                    Fragment,
+                    null,
+                    createElement('span', null, 'Google Drive API is not enabled. '),
+                    createElement(
+                        'a',
+                        {
+                            href: errorDisplay.enableUrl,
+                            target: '_blank',
+                            rel: 'noreferrer',
+                            className: 'underline font-black',
+                        },
+                        'Enable it here'
+                    )
+                ), 'error', 10000);
+            } else {
+                showToast(errorDisplay.message || 'Google Drive restore encountered a fatal error.', 'error');
+            }
+            (window as any).isRestoring = false;
+        }
+    };
+
     const triggerLocalRestore = () => {
         const currentActiveConfig = getConfig();
         const preservedConfigJson = JSON.stringify(currentActiveConfig);
@@ -242,7 +326,7 @@ export const useDataActions = (props: UseDataActionsProps) => {
     const bulkUpdateWords = async (updatedWords: StudyItem[]) => { await dataStore.bulkSaveWords(updatedWords); };
 
     return {
-        lastBackupTime, refreshBackupTime, handleBackup, restoreFromServerAction,
+        lastBackupTime, refreshBackupTime, handleBackup, handleGoogleDriveBackup, restoreFromServerAction, restoreFromGoogleDriveAction,
         triggerLocalRestore, handleLibraryReset, updateWord, deleteWord, bulkDeleteWords, bulkUpdateWords
     };
 };

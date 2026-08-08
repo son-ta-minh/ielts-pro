@@ -103,8 +103,10 @@ export interface DashboardUIProps {
     vocabLibraryStats: LibraryDashboardStats;
     kotobaLibraryStats: LibraryDashboardStats;
     lastBackupTime: number | null;
-    onBackup: (mode: 'server' | 'file') => void;
-    onRestore: (mode: 'server' | 'file') => void;
+    onBackup: (mode: 'server' | 'file' | 'googleDrive') => void;
+    onRestore: (mode: 'server' | 'file' | 'googleDrive') => void;
+    googleDriveSignedIn: boolean;
+    onGoogleDriveLogin: () => void;
     dayProgress: DayProgress;
     dailyGoals: { max_learn_per_day: number; max_review_per_day: number; };
     dailyStreaks: DailyStreakSnapshot[];
@@ -911,10 +913,12 @@ const GoalProgressPanel: React.FC<{
 
 const BackupStatus: React.FC<{ 
     lastBackupTime: number | null; 
-    onBackup: (mode: 'server' | 'file') => void; 
-    onRestore: (mode: 'server' | 'file') => void; 
+    onBackup: (mode: 'server' | 'file' | 'googleDrive') => void; 
+    onRestore: (mode: 'server' | 'file' | 'googleDrive') => void; 
     serverStatus: 'connected' | 'disconnected';
-}> = ({ lastBackupTime, onBackup, onRestore, serverStatus }) => {
+    googleDriveSignedIn: boolean;
+    onGoogleDriveLogin: () => void;
+}> = ({ lastBackupTime, onBackup, onRestore, serverStatus, googleDriveSignedIn, onGoogleDriveLogin }) => {
   const [statusText, setStatusText] = useState('');
   const [isBackupMenuOpen, setIsBackupMenuOpen] = useState(false);
   const backupMenuRef = useRef<HTMLDivElement>(null);
@@ -960,6 +964,18 @@ const BackupStatus: React.FC<{
     window.dispatchEvent(new Event('config-updated'));
   };
 
+  const handleBackupGoogleDrive = () => {
+    if (googleDriveSignedIn) onBackup('googleDrive');
+    else onGoogleDriveLogin();
+    setIsBackupMenuOpen(false);
+  };
+
+  const handleRestoreGoogleDrive = () => {
+    if (googleDriveSignedIn) onRestore('googleDrive');
+    else onGoogleDriveLogin();
+    setIsRestoreMenuOpen(false);
+  };
+
   return (
     <div className="flex shrink-0 items-center justify-between space-x-3 px-3 py-2 rounded-2xl border-2 shadow-sm bg-white border-neutral-200 text-neutral-800">
       <div className="flex items-center space-x-2">
@@ -967,68 +983,59 @@ const BackupStatus: React.FC<{
         <span className="font-medium text-xs whitespace-nowrap">{statusText}</span>
       </div>
       <div className="flex items-center space-x-2 pl-2">
-        {serverStatus === 'connected' ? (
-            <div className="relative" ref={backupMenuRef}>
-                <button onClick={() => setIsBackupMenuOpen(!isBackupMenuOpen)} className={`px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-indigo-100 shadow-sm uppercase tracking-widest ${isBackupMenuOpen ? 'bg-indigo-100' : 'hover:bg-indigo-100'}`}>
-                    <CloudUpload size={14} />
-                    <span>Backup</span>
-                    <ChevronDown size={12} className={`transition-transform ${isBackupMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isBackupMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
-                        <button onClick={() => { onBackup('server'); setIsBackupMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><Cloud size={14} className="text-sky-500" /> To Server</button>
-                        <div className="h-px bg-neutral-100 mx-2"></div>
-                        <button onClick={() => { onBackup('file'); setIsBackupMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><HardDrive size={14} className="text-indigo-500" /> To File</button>
-
-                        <div className="h-px bg-neutral-100 mx-2"></div>
-
-                        <button
-                            onClick={handleToggleAutoBackup}
-                            className="w-full flex items-center justify-between gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
-                        >
-                            <div className="flex items-center gap-2">
-                                <RotateCw size={14} className="text-emerald-500" />
-                                <span>Auto Backup</span>
-                            </div>
-
-                            <div
-                                className={`w-10 h-5 rounded-full transition-all relative ${autoBackupEnabled ? 'bg-emerald-500' : 'bg-neutral-300'}`}
-                            >
-                                <div
-                                    className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${autoBackupEnabled ? 'left-5' : 'left-0.5'}`}
-                                />
-                            </div>
-                        </button>
-                    </div>
-                )}
-            </div>
-        ) : (
-            <button onClick={() => onBackup('file')} className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center gap-2 hover:bg-indigo-100 transition-all active:scale-95 border border-indigo-100 shadow-sm uppercase tracking-widest">
+        <div className="relative" ref={backupMenuRef}>
+            <button onClick={() => setIsBackupMenuOpen(!isBackupMenuOpen)} className={`px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-indigo-100 shadow-sm uppercase tracking-widest ${isBackupMenuOpen ? 'bg-indigo-100' : 'hover:bg-indigo-100'}`}>
                 <CloudUpload size={14} />
                 <span>Backup</span>
+                <ChevronDown size={12} className={`transition-transform ${isBackupMenuOpen ? 'rotate-180' : ''}`} />
             </button>
-        )}
-        {serverStatus === 'connected' ? (
-            <div className="relative" ref={restoreMenuRef}>
-                <button onClick={() => setIsRestoreMenuOpen(!isRestoreMenuOpen)} className={`px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-emerald-100 shadow-sm uppercase tracking-widest ${isRestoreMenuOpen ? 'bg-emerald-100' : 'hover:bg-emerald-100'}`}>
-                    <Download size={14} />
-                    <span>Restore</span>
-                    <ChevronDown size={12} className={`transition-transform ${isRestoreMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isRestoreMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-36 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
-                        <button onClick={() => { onRestore('server'); setIsRestoreMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><Cloud size={14} className="text-sky-500" /> From Server</button>
-                        <div className="h-px bg-neutral-100 mx-2"></div>
-                        <button onClick={() => { onRestore('file'); setIsRestoreMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><FileJson size={14} className="text-amber-500" /> From File</button>
-                    </div>
-                )}
-            </div>
-        ) : (
-            <button onClick={() => onRestore('file')} className="px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center gap-2 hover:bg-emerald-100 transition-all active:scale-95 border border-emerald-100 shadow-sm uppercase tracking-widest">
+            {isBackupMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
+                    {serverStatus === 'connected' && (
+                        <>
+                            <button onClick={() => { onBackup('server'); setIsBackupMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><Cloud size={14} className="text-sky-500" /> To Server</button>
+                            <div className="h-px bg-neutral-100 mx-2"></div>
+                        </>
+                    )}
+                    <button onClick={handleBackupGoogleDrive} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><Chrome size={14} className="text-emerald-500" /> Google Drive</button>
+                    <div className="h-px bg-neutral-100 mx-2"></div>
+                    <button onClick={() => { onBackup('file'); setIsBackupMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><HardDrive size={14} className="text-indigo-500" /> To File</button>
+                    <div className="h-px bg-neutral-100 mx-2"></div>
+                    <button
+                        onClick={handleToggleAutoBackup}
+                        className="w-full flex items-center justify-between gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"
+                    >
+                        <div className="flex items-center gap-2">
+                            <RotateCw size={14} className="text-emerald-500" />
+                            <span>Auto Backup</span>
+                        </div>
+                        <div className={`w-10 h-5 rounded-full transition-all relative ${autoBackupEnabled ? 'bg-emerald-500' : 'bg-neutral-300'}`}>
+                            <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${autoBackupEnabled ? 'left-5' : 'left-0.5'}`} />
+                        </div>
+                    </button>
+                </div>
+            )}
+        </div>
+        <div className="relative" ref={restoreMenuRef}>
+            <button onClick={() => setIsRestoreMenuOpen(!isRestoreMenuOpen)} className={`px-4 py-2 bg-emerald-50 text-emerald-700 rounded-xl font-black text-[10px] flex items-center gap-2 transition-all active:scale-95 border border-emerald-100 shadow-sm uppercase tracking-widest ${isRestoreMenuOpen ? 'bg-emerald-100' : 'hover:bg-emerald-100'}`}>
                 <Download size={14} />
                 <span>Restore</span>
+                <ChevronDown size={12} className={`transition-transform ${isRestoreMenuOpen ? 'rotate-180' : ''}`} />
             </button>
-        )}
+            {isRestoreMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-neutral-100 z-50 overflow-hidden animate-in fade-in zoom-in-95">
+                    {serverStatus === 'connected' && (
+                        <>
+                            <button onClick={() => { onRestore('server'); setIsRestoreMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><Cloud size={14} className="text-sky-500" /> From Server</button>
+                            <div className="h-px bg-neutral-100 mx-2"></div>
+                        </>
+                    )}
+                    <button onClick={handleRestoreGoogleDrive} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><Chrome size={14} className="text-emerald-500" /> Google Drive</button>
+                    <div className="h-px bg-neutral-100 mx-2"></div>
+                    <button onClick={() => { onRestore('file'); setIsRestoreMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-3 text-xs font-bold text-neutral-700 hover:bg-neutral-50 transition-colors text-left"><FileJson size={14} className="text-amber-500" /> From File</button>
+                </div>
+            )}
+        </div>
       </div>
     </div>
   );
@@ -1039,7 +1046,7 @@ const BackupStatus: React.FC<{
 export const DashboardUI: React.FC<DashboardUIProps> = ({
   onNavigate, totalCount, newCount, rawCount, reviewStats,
   lastBackupTime, onBackup, onRestore,
-  serverStatus, onAction, onStartNewLearn, onStartDueReview, onStartKotobaNewLearn, onStartKotobaDueReview, dayProgress, kotobaDayProgress, dailyGoals, dailyStreaks, dailyGoalHistory, onNavigateToWordList, onNavigateToKotobaList, goalStats,
+  serverStatus, googleDriveSignedIn, onGoogleDriveLogin, onAction, onStartNewLearn, onStartDueReview, onStartKotobaNewLearn, onStartKotobaDueReview, dayProgress, kotobaDayProgress, dailyGoals, dailyStreaks, dailyGoalHistory, onNavigateToWordList, onNavigateToKotobaList, goalStats,
   studyStats, isStatsLoading,
   vocabLibraryStats, kotobaLibraryStats,
   onViewWord,
@@ -1345,7 +1352,7 @@ export const DashboardUI: React.FC<DashboardUIProps> = ({
             
         </div>
         <div className="flex flex-col items-end gap-2">
-             <BackupStatus lastBackupTime={lastBackupTime} onBackup={onBackup} onRestore={onRestore} serverStatus={serverStatus} />
+             <BackupStatus lastBackupTime={lastBackupTime} onBackup={onBackup} onRestore={onRestore} serverStatus={serverStatus} googleDriveSignedIn={googleDriveSignedIn} onGoogleDriveLogin={onGoogleDriveLogin} />
         </div>
       </header>
 

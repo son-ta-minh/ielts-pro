@@ -338,7 +338,7 @@ export async function wipeAllLocalData() {
     _isInitialized = false;
     _currentUserId = null;
     await db.clearVocabularyOnly();
-    const preserveKeys = ['vocab_pro_system_config', 'gemini_api_keys'];
+    const preserveKeys = ['vocab_pro_system_config', 'gemini_api_keys', 'vocab_pro_google_drive_auth'];
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Server, Save, CheckCircle2, AlertCircle, Loader2, Link, Info, ChevronDown, Trash2, Plus, Network, Folder, RefreshCw } from 'lucide-react';
+import { Server, Save, CheckCircle2, AlertCircle, Loader2, Link, Info, ChevronDown, Trash2, Plus, Network, Folder, RefreshCw, Chrome, LogOut } from 'lucide-react';
 import { SystemConfig, getServerUrl } from '../../app/settingsManager';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -10,9 +10,13 @@ interface ServerSettingsProps {
     config: SystemConfig;
     onConfigChange: (section: keyof SystemConfig, key: any, value: any) => void;
     onSaveSettings: () => void;
+    googleDriveSignedIn: boolean;
+    googleDriveEmail?: string;
+    onGoogleDriveLogin: () => void;
+    onGoogleDriveLogout: () => void;
 }
 
-export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfigChange, onSaveSettings }) => {
+export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfigChange, onSaveSettings, googleDriveSignedIn, googleDriveEmail, onGoogleDriveLogin, onGoogleDriveLogout }) => {
     const [status, setStatus] = useState<'connected' | 'error' | 'checking'>('checking');
     const [isEditingConnection, setIsEditingConnection] = useState(false);
     
@@ -202,6 +206,31 @@ export const ServerSettings: React.FC<ServerSettingsProps> = ({ config, onConfig
                         </div>
                     </div>
                 )}
+
+                <div className="space-y-3 pt-2 border-t border-neutral-200/50">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Google Drive</div>
+                            <div className="text-xs font-medium text-neutral-500">Save and restore backups in your Drive.</div>
+                        </div>
+                        {googleDriveSignedIn ? (
+                            <button onClick={onGoogleDriveLogout} className="px-4 py-2 rounded-xl bg-neutral-100 text-neutral-700 border border-neutral-200 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-neutral-200 transition-colors">
+                                <LogOut size={12} />
+                                Disconnect
+                            </button>
+                        ) : (
+                            <button onClick={onGoogleDriveLogin} className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-700 transition-colors">
+                                <Chrome size={12} />
+                                Google Drive Login
+                            </button>
+                        )}
+                    </div>
+                    {googleDriveSignedIn && (
+                        <div className="px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-bold">
+                            Google Drive is connected{googleDriveEmail ? ` as ${googleDriveEmail}` : ''}.
+                        </div>
+                    )}
+                </div>
                 
                 {/* Connected Settings */}
                 {status === 'connected' && (

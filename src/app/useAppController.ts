@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, createElement, Fragment } from 'react';
 import { AppView, User, StudyItem, DiscoverGame, StudyLibraryType, ReviewMode } from './types';
 import { useToast } from '../contexts/ToastContext';
 import { useAuthAndUser } from './hooks/useAuthAndUser';
@@ -24,6 +24,7 @@ import { generateMap } from '../data/adventure_map';
 
 import { getCurrentHost } from '../utils/firebase';
 import { DEFAULT_DUE_REVIEW_SCOPE, DueReviewScope, selectDueReviewWords, selectNewReviewWords } from '../utils/dueReview';
+import { getGoogleDriveAuthState, signInToGoogleDrive, signOutOfGoogleDrive, getGoogleDriveErrorDisplay } from '../services/googleDriveBackupService';
 
 export const calculateWordDifficultyXp = movedCalc;
 const normalizeLibraryType = (value?: StudyLibraryType | string | null): StudyLibraryType => value === 'kotoba' ? 'kotoba' : 'vocab';
@@ -62,6 +63,7 @@ export const useAppController = () => {
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [hasWritingUnsavedChanges, setHasWritingUnsavedChanges] = useState(false);
     const [nextAutoBackupTime, setNextAutoBackupTime] = useState<number | null>(null);
+    const [googleDriveAuthState, setGoogleDriveAuthState] = useState(() => getGoogleDriveAuthState());
 
     const [writingContextWord, setWritingContextWord] = useState<StudyItem | null>(null);
     const [targetLessonId, setTargetLessonId] = useState<string | null>(null);
@@ -97,6 +99,13 @@ export const useAppController = () => {
 
     const { sessionWords, setSessionWords, sessionType, sessionFocus, startSession, clearSessionState } = useSession({ setView, setIsSidebarOpen });
     const { stats, wotd, setWotd, apiUsage, refreshGlobalStats, isWotdComposed, randomizeWotd } = useDataFetching({ currentUser, view, onUpdateUser: handleUpdateUser });
+
+    useEffect(() => {
+        const syncGoogleDriveAuth = () => setGoogleDriveAuthState(getGoogleDriveAuthState());
+        syncGoogleDriveAuth();
+        window.addEventListener('google-drive-auth-changed', syncGoogleDriveAuth);
+        return () => window.removeEventListener('google-drive-auth-changed', syncGoogleDriveAuth);
+    }, []);
 
     const probeServerUrl = useCallback(async (targetUrl: string, signal?: AbortSignal): Promise<boolean | 'ssl_error'> => {
         const controller = new AbortController();
@@ -609,12 +618,50 @@ export const useAppController = () => {
         return () => clearTimeout(t);
     }, [isLoaded, serverStatus, isStrictDefaultUser, isConnectionModalOpen]);
 
-    const { lastBackupTime, refreshBackupTime, handleBackup, restoreFromServerAction, triggerLocalRestore, handleLibraryReset, deleteWord, bulkDeleteWords, bulkUpdateWords } = useDataActions({
+    const { lastBackupTime, refreshBackupTime, handleBackup, handleGoogleDriveBackup, restoreFromServerAction, restoreFromGoogleDriveAction, triggerLocalRestore, handleLibraryReset, deleteWord, bulkDeleteWords, bulkUpdateWords } = useDataActions({
         currentUser, setView, refreshGlobalStats,
         sessionWords, setSessionWords, wotd, setWotd, globalViewWord, setGlobalViewWord,
         onUpdateUser: handleUpdateUser,
         serverStatus
     });
+
+    const handleGoogleDriveLogin = useCallback(async () => {
+        try {
+            await signInToGoogleDrive();
+            setGoogleDriveAuthState(getGoogleDriveAuthState());
+            showToast('Google Drive connected.', 'success');
+            return true;
+        } catch (error) {
+            console.error('[Google Drive Login] Failed:', error);
+            const errorDisplay = getGoogleDriveErrorDisplay(error);
+            if (errorDisplay.enableUrl) {
+                showToast(createElement(
+                    Fragment,
+                    null,
+                    createElement('span', null, 'Google Drive API is not enabled. '),
+                    createElement(
+                        'a',
+                        {
+                            href: errorDisplay.enableUrl,
+                            target: '_blank',
+                            rel: 'noreferrer',
+                            className: 'underline font-black',
+                        },
+                        'Enable it here'
+                    )
+                ), 'error', 10000);
+            } else {
+                showToast(errorDisplay.message || 'Google Drive login failed.', 'error');
+            }
+            return false;
+        }
+    }, [showToast]);
+
+    const handleGoogleDriveLogout = useCallback(async () => {
+        await signOutOfGoogleDrive();
+        setGoogleDriveAuthState(getGoogleDriveAuthState());
+        showToast('Google Drive disconnected.', 'success');
+    }, [showToast]);
     
     const handleAutoRestoreAction = async (identifier?: string) => {
         setSyncPrompt(null); setIsAutoRestoreOpen(false); setIsSyncing(true);
@@ -906,6 +953,8 @@ export const useAppController = () => {
     };
 
     const handleBackupWrapper = async () => { if (serverStatus === 'connected' && currentUser) await triggerServerBackup(); else await handleBackup(); };
+    const handleGoogleDriveBackupWrapper = async () => { if (currentUser) await handleGoogleDriveBackup(); };
+    const handleGoogleDriveRestoreWrapper = async () => { if (currentUser) await restoreFromGoogleDriveAction(); };
     const bulkUpdateWordsAndNotify = async (updatedWords: StudyItem[]) => { await bulkUpdateWords(updatedWords); };
     const saveWordAndUserAndUpdateState = async (word: StudyItem, user: User) => {
         await dataStore.saveWordAndUser(word, user);
@@ -1051,7 +1100,9 @@ export const useAppController = () => {
         sessionWords, sessionFocus, sessionType, startSession, handleSessionComplete,
         stats, wotd, refreshGlobalStats, isWotdComposed, randomizeWotd, globalViewWord, setGlobalViewWord,
         lastBackupTime, handleBackup: handleBackupWrapper, triggerLocalBackup: handleBackup, triggerServerBackup,
+        handleGoogleDriveBackup: handleGoogleDriveBackupWrapper,
         restoreFromServerAction: handleAutoRestoreAction, triggerLocalRestore, handleLibraryReset,
+        restoreFromGoogleDriveAction: handleGoogleDriveRestoreWrapper,
         initialListFilter, setInitialListFilter, forceExpandAdd, setForceExpandAdd, apiUsage,
         updateWord: updateWordAndNotify, deleteWord, bulkDeleteWords, bulkUpdateWords: bulkUpdateWordsAndNotify,
         handleNavigateToList, openAddWordLibrary, clearSessionState, handleRetrySession,
@@ -1075,6 +1126,7 @@ export const useAppController = () => {
         selectedArchiveUser, archiveCandidates, isArchiveLoading, handleOpenArchivePicker, handleCloseArchivePicker, handleCreateArchiveForUser, handleRestoreFromArchive, handleDeleteArchive,
         handleNewUserSetup, handleLocalRestoreSetup, handleSwitchUser, isConnectionModalOpen, setIsConnectionModalOpen,
         connectionScanStatus, scanningUrl, handleScanAndConnect, handleStopScan, syncPrompt, setSyncPrompt,
-        isSyncing, handleSyncPush, handleSyncRestore, checkServerConnection, retrySslConnection, handleSpecialAction
+        isSyncing, handleSyncPush, handleSyncRestore, checkServerConnection, retrySslConnection, handleSpecialAction,
+        googleDriveAuthState, handleGoogleDriveLogin, handleGoogleDriveLogout
     };
 };

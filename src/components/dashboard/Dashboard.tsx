@@ -56,6 +56,10 @@ interface Props {
   // Actions passed from controller to handle actual backup logic
   onLocalBackup: () => void;
   onServerBackup?: () => Promise<void>;
+  onGoogleDriveBackup?: () => Promise<void>;
+  onGoogleDriveRestore?: () => Promise<void>;
+  googleDriveSignedIn?: boolean;
+  onGoogleDriveLogin?: () => void;
   onAction?: (action: string) => void;
   onViewWord: (word: StudyItem) => void;
 }
@@ -539,10 +543,16 @@ const Dashboard: React.FC<Props> = ({
     };
   }, [userId, totalCount, fetchStudyStats, calculateLibraryDashboardStats, calculateLibraryDayProgress]);
   
-  const handleRestoreClick = (mode: 'server' | 'file') => {
+  const handleRestoreClick = (mode: 'server' | 'file' | 'googleDrive') => {
       if (mode === 'server' && restoreFromServerAction) {
           // Direct restore without confirmation modal
           restoreFromServerAction();
+      } else if (mode === 'googleDrive') {
+          if (restProps.googleDriveSignedIn && restProps.onGoogleDriveRestore) {
+              restProps.onGoogleDriveRestore();
+          } else if (restProps.onGoogleDriveLogin) {
+              restProps.onGoogleDriveLogin();
+          }
       } else if (mode === 'file' && triggerLocalRestore) {
           triggerLocalRestore();
       } else {
@@ -551,9 +561,15 @@ const Dashboard: React.FC<Props> = ({
       }
   };
   
-  const handleBackupClick = (mode: 'server' | 'file') => {
+  const handleBackupClick = (mode: 'server' | 'file' | 'googleDrive') => {
       if (mode === 'server' && onServerBackup) {
           onServerBackup();
+      } else if (mode === 'googleDrive') {
+          if (restProps.googleDriveSignedIn && restProps.onGoogleDriveBackup) {
+              restProps.onGoogleDriveBackup();
+          } else if (restProps.onGoogleDriveLogin) {
+              restProps.onGoogleDriveLogin();
+          }
       } else if (mode === 'file') {
           onLocalBackup();
       } else {
@@ -624,6 +640,8 @@ const Dashboard: React.FC<Props> = ({
     dailyGoalHistory,
     dailyGoals,
     serverStatus,
+    googleDriveSignedIn: !!restProps.googleDriveSignedIn,
+    onGoogleDriveLogin: restProps.onGoogleDriveLogin || (() => {}),
     serverUrl,
     activeServerMode,
     isSwitchingServerMode,

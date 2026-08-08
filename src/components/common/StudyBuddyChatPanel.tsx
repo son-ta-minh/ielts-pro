@@ -925,9 +925,13 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
         >
         <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100 bg-neutral-50/70">
             <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-neutral-900 text-white flex items-center justify-center shrink-0">
-                    <Sparkles size={16} />
-                </div>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="text-neutral-400 hover:text-neutral-900"
+                >
+                    <X size={16} />
+                </button>
                 <div className="min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                         <span
@@ -1154,13 +1158,6 @@ export const StudyBuddyChatPanel: React.FC<StudyBuddyChatPanelProps> = ({
                     title="Clear chat"
                 >
                     Clear
-                </button>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="text-neutral-400 hover:text-neutral-900"
-                >
-                    <X size={16} />
                 </button>
             </div>
         </div>
