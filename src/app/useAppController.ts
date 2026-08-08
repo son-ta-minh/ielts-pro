@@ -1068,6 +1068,7 @@ export const useAppController = () => {
             case 'PLAN_IMPORT': setPlanningAction('IMPORT'); setView('PLANNING'); break;
             
             // GAMES (Map them to DISCOVER view)
+            case 'SHORT':
             case 'COLLO_CONNECT':
             case 'DICTATION':
             case 'SENTENCE_SCRAMBLE':

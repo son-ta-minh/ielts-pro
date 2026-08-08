@@ -177,6 +177,7 @@ export const failStudyBuddyAssistantStream = (requestId: string, message: string
 
 export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAnyModalOpen, onOpenSearchModal }) => {
     const { showToast } = useToast();
+    const [isShortGameActive, setIsShortGameActive] = useState(() => document.body.classList.contains('short-game-active'));
     const [config, setConfig] = useState<SystemConfig>(getConfig());
     const [isAudioPlaying, setIsAudioPlaying] = useState(getIsSpeaking());
     const [isAudioPaused, setIsAudioPaused] = useState(getIsAudioPaused());
@@ -208,6 +209,22 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
     const [interactiveConnectCode, setInteractiveConnectCode] = useState<string | null>(null);
     const [activeChatTarget, setActiveChatTarget] = useState<StudyBuddyChatTarget | null>(null);
     const [activeChatSelectionText, setActiveChatSelectionText] = useState('');
+
+    useEffect(() => {
+        const handleShortGameActiveChanged = (event: Event) => {
+            const custom = event as CustomEvent<{ isActive?: boolean }>;
+            const isActive = custom.detail?.isActive ?? document.body.classList.contains('short-game-active');
+            setIsShortGameActive(isActive);
+            if (isActive) {
+                setIsOpen(false);
+                setIsChatOpen(false);
+                setShowPlaybackControls(false);
+            }
+        };
+
+        window.addEventListener('short-game-active-changed', handleShortGameActiveChanged as EventListener);
+        return () => window.removeEventListener('short-game-active-changed', handleShortGameActiveChanged as EventListener);
+    }, []);
     const [activeChatCoachAction, setActiveChatCoachAction] = useState<string | null>(null);
     const [coachSelectionText, setCoachSelectionText] = useState('');
     const [chatSaveDraft, setChatSaveDraft] = useState<ChatSaveDraft | null>(null);
@@ -2498,6 +2515,10 @@ export const StudyBuddy: React.FC<Props> = ({ user, onNavigate, onViewWord, isAn
             onSave={handleSaveChatSnippet}
         />
     );
+
+    if (isShortGameActive) {
+        return null;
+    }
 
     return (
         <>

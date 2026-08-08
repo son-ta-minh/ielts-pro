@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   RotateCw, AlertCircle, Flame, SwatchBook,
   Download, History, BookCopy, Sparkles, PenLine, Shuffle, Link, HelpCircle, Cloud, FileJson, ChevronDown, HardDrive, ListTodo, FileClock, Mic, BookText, GraduationCap, AudioLines, BookOpen,
-  Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain, AlertTriangle,
+  Split, LayoutDashboard, BarChart3, Keyboard, AtSign, Puzzle, Brain, AlertTriangle, Smartphone,
   CloudUpload, Percent, MessagesSquare, Scale, Dumbbell, LibraryBig, Chrome
 } from 'lucide-react';
 import { DayProgress } from './DayProgress';
@@ -816,6 +816,11 @@ const PracticeArcadePanel: React.FC<{ onAction: (action: string) => void }> = ({
              </div>
              
              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                <NavButton
+                   label="Short"
+                   subLabel="Swipe through vocabulary in a short-video reveal drill."
+                   largeSub icon={Smartphone} color="text-neutral-900" bg="bg-lime-50" onClick={() => onAction('SHORT')}
+                />
                 <NavButton 
                    label="Pronunciation Focus" 
                    subLabel="Targeted speech practice." 

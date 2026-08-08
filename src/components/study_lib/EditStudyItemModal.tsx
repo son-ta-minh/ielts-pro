@@ -13,6 +13,7 @@ import { getConfig, getServerUrl, getStudyBuddyAiUrl } from '../../app/settingsM
 import { normalizeVocabularyKeywords } from '../../utils/vocabularyKeywordUtils';
 import { normalizeCambridgePronunciations } from '../../utils/studyBuddyUtils';
 import { getStudyBuddyCoachPrompt } from '../../services/prompts/getStudyBuddyCoachPrompt';
+import { fetchImageUrlsForQuery } from '../../services/imageSearchService';
 
 type FormState = StudyItem & {
     groupsString: string;
@@ -782,29 +783,11 @@ const EditStudyItemModal: React.FC<Props> = ({ word, user, onSave, onClose, onSw
       const query = formData.word || '';
       if (!query) return;
 
-      const res = await fetch(`${serverUrl}/api/images/search?q=${encodeURIComponent(query)}`);
-
-      if (!res.ok) {
-        let errorMessage = 'Image generate failed';
-        try {
-          const errData = await res.json();
-          if (errData?.error) errorMessage = errData.error;
-        } catch {}
-        showToast(errorMessage, 'error');
-        return;
-      }
-
-      const data = await res.json();
-      const images = data?.images || [];
-
-      if (!images.length) {
+      const updated = await fetchImageUrlsForQuery(query, serverUrl);
+      if (!updated.length) {
         showToast('No image found', 'error');
         return;
       }
-
-      const updated = images
-        .map((img: any) => img.url)
-        .filter((u: string) => u && u.trim() !== "");
 
       dispatch({
         type: 'SET_FIELD',

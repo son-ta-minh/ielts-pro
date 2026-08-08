@@ -1,7 +1,7 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import { 
-  Menu, X, BookCopy, Loader2, AlertTriangle, Users, Search
+  Menu, X, BookCopy, Loader2, AlertTriangle, Users, Search, Smartphone
 } from 'lucide-react';
 import { AppView, StudyItem } from './types';
 import { useAppController } from './useAppController';
@@ -173,6 +173,25 @@ const Sidebar: React.FC<AppLayoutProps & {
                   className="w-5 h-5 object-contain"
                 />
                 <span>Dashboard</span>
+              </div>
+            </button>
+          </div>
+          {/* Short */}
+          <div className="relative group">
+            <button
+              onClick={() => {
+                controller.handleSpecialAction('SHORT');
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-sm transition-colors ${
+                view === 'DISCOVER'
+                  ? 'bg-neutral-900 text-white shadow-sm'
+                  : 'text-neutral-500 hover:bg-neutral-100'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <Smartphone size={20} />
+                <span>Short</span>
               </div>
             </button>
           </div>

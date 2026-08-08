@@ -18,6 +18,7 @@ import { ComparisonLabGame } from './games/ComparisonLabGame';
 import { MistakeRecognitionGame } from './games/MistakeRecognitionGame';
 import { RegisterPickGame } from './games/RegisterPickGame';
 import { TopicRecallGame } from './games/TopicRecallGame';
+import { ShortGame } from './games/ShortGame';
 import { calculateGameEligibility } from '../../utils/gameEligibility';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -103,6 +104,7 @@ const Discover: React.FC<Props> = ({ user, onExit, onRecalculateXp, xpToNextLeve
 
         switch (gameMode) {
             case 'ADVENTURE': return <Adventure user={user} onUpdateUser={onUpdateUser} onStartSession={onStartSession} onExit={onExit} />;
+            case 'SHORT': return <ShortGame words={allWords} onExit={handleGameExit} onBulkUpdate={onBulkUpdate} />;
             case 'IPA_SORTER': return <IpaSorter {...commonProps} words={getEligibleWords('IPA_SORTER')} onBulkUpdate={onBulkUpdate} />;
             case 'SENTENCE_SCRAMBLE': return <SentenceScramble {...commonProps} words={getEligibleWords('SENTENCE_SCRAMBLE')} />;
             case 'DICTATION': return <Dictation {...commonProps} words={getEligibleWords('DICTATION')} />;
