@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Pause, Play, X } from 'lucide-react';
+import { ArrowUp, Pause, Play, Volume2, X } from 'lucide-react';
 import { StudyItem } from '../../../app/types';
+import { speak, getPreferredSpeakLanguage, resolveCoachVoiceForLanguage } from '../../../utils/audio';
 import { fetchImageUrlsForQuery, normalizeImageUrl } from '../../../services/imageSearchService';
+import { getConfig } from '../../../app/settingsManager';
 
 interface ShortGameProps {
     words: StudyItem[];
@@ -15,6 +17,15 @@ type ShortSource = 'vocab' | 'kotoba';
 type BackgroundMode = 'default' | 'image';
 
 const shuffle = <T,>(items: T[]) => [...items].sort(() => 0.5 - Math.random());
+
+const speakWithPreferredLanguage = (text: string) => {
+    const config = getConfig();
+    const preferredLang = getPreferredSpeakLanguage();
+    const coach = config.audioCoach.coaches[config.audioCoach.activeCoach];
+    const preferredVoice = resolveCoachVoiceForLanguage(preferredLang, coach);
+    console.log('ShortGame: speaking', { text, preferredLang, preferredVoice });
+    speak(text, false, preferredLang, preferredVoice.voiceName, preferredVoice.accentCode);
+};
 
 const getImages = (word: StudyItem): string[] => {
     const raw = (word as any).img;
@@ -74,10 +85,13 @@ const ShortSlide: React.FC<{
     const [secondsLeft, setSecondsLeft] = useState(REVEAL_SECONDS);
     const [isPaused, setIsPaused] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+    const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(() => new Set());
     const isActive = activeIndex === index;
+    const hasAutoSpokenRef = useRef(false);
     const isRevealed = secondsLeft <= 0;
     const images = (generatedImages[word.id] || getImages(word)).map((url) => normalizeImageUrl(url));
-    const bgImage = images[index % Math.max(images.length, 1)];
+    const visibleImages = images.filter((url) => !failedImageUrls.has(url));
+    const bgImage = visibleImages[index % Math.max(visibleImages.length, 1)];
     const collocations = getCollocations(word);
     const exampleSentence = useMemo(() => getRandomExampleSentence(word.example || ''), [word.id, word.example]);
 
@@ -95,12 +109,24 @@ const ShortSlide: React.FC<{
         observer.observe(node);
         return () => observer.disconnect();
     }, [index, onVisible]);
+    
 
     useEffect(() => {
         if (!isActive) return;
         setSecondsLeft(REVEAL_SECONDS);
         setIsPaused(false);
+        hasAutoSpokenRef.current = false;
+        setFailedImageUrls(new Set());
     }, [isActive, word.id]);
+
+    useEffect(() => {
+        if (!isActive || !isRevealed || hasAutoSpokenRef.current) return;
+
+        hasAutoSpokenRef.current = true;
+        window.setTimeout(() => {
+            speakWithPreferredLanguage(word.word);
+        }, 0);
+    }, [isActive, isRevealed, word.word]);
 
     useEffect(() => {
         if (!isActive || isPaused || secondsLeft <= 0) return;
@@ -132,6 +158,7 @@ const ShortSlide: React.FC<{
                         src={bgImage}
                         alt=""
                         className="absolute inset-0 h-full w-full object-cover scale-105 animate-[pulse_8s_ease-in-out_infinite]"
+                        onError={() => setFailedImageUrls((current) => new Set(current).add(bgImage))}
                     />
                     <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/30 to-black/75" />
                 </>
